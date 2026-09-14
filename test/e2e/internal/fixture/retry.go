@@ -117,6 +117,27 @@ func CreateRetryable(err error, enterprise bool) bool {
 		strings.Contains(message, "Internal API error (502)")
 }
 
+// UserCreateRetryable reports whether a user creation failed for a reason a
+// second attempt can fix.
+//
+// Besides the transient ones, there is one that looks permanent and is not:
+// GitLab judges the password against its own weak-password rules, and a random
+// password occasionally lands on something it refuses ("must not contain
+// commonly used combinations of words and letters"). Nothing about the user
+// being created is wrong, and the builder mints a fresh password per attempt,
+// so the next one goes through. One run in this suite hit it once in some
+// forty user creations, which is often enough to redden a suite and rare
+// enough to look like a mystery when it does.
+func UserCreateRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if IsRetryable(err) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "commonly used combinations")
+}
+
 // IsStatus reports whether err is GitLab answering with the given HTTP status.
 // It reads the structured error client-go returns, which every call in this
 // package makes directly, so there is no text to parse.

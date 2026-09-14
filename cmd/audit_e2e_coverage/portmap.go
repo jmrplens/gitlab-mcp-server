@@ -68,6 +68,24 @@ var declaredDrops = map[string]dropDeclaration{
 	"TestBaseline_RewriteSubtestName_SpellsNamesLikeTheTestingPackage": baselineRecorderDrop,
 	"TestBaseline_Outcome_ClassifiesLikeTheHarness":                    baselineRecorderDrop,
 	"TestBaseline_Arguments_NamesTypedAndUntypedInputs":                baselineRecorderDrop,
+
+	// S17 B2: users, access, tokens and to-dos.
+	// The one test of the batch that reached no GitLab: it read tools/list
+	// off the in-process individual session and checked six user management
+	// tools for their required fields, their destructive hint and whether
+	// they carry a confirm property. That is the catalog's projection of a
+	// tool schema, which the golden snapshots under internal/tools pin for
+	// every tool on every surface, and the harness's served-set check holds
+	// the binary's own tools/list to the assemblers on every session start.
+	// Nothing in it was about GitLab, and the user actions those tools
+	// project are driven end to end by the useradmin and useraccount tests.
+	"TestIndividual_UserManagementCatalogProjection": {
+		Category: dropCoveredElsewhere,
+		Reason: "a check of six user tools' projected schemas and annotations read off an in-process tools/list; " +
+			"the golden snapshot tests of internal/tools pin every tool's schema and annotations, and the harness's " +
+			"served-set check compares the binary's tools/list with the assemblers on every session start, so the " +
+			"projection is held in both places and the suite keeps only the calls that reach GitLab",
+	},
 }
 
 // baselineRecorderDrop is the one reason the old suite's recorder tests
