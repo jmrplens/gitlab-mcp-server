@@ -1189,8 +1189,8 @@ func TestPingDirect_NilContext(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	//nolint:staticcheck // intentionally passing nil context to trigger error path
-	pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
+	//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
+	pingErr := client.pingDirect(nil)
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
 	}
@@ -1213,8 +1213,8 @@ func TestCredentialRejected_NilContext(t *testing.T) {
 		t.Fatalf(fmtNewClientErr, err)
 	}
 
-	//nolint:staticcheck // intentionally passing nil context to trigger error path
-	if client.CredentialRejected(nil) { //lint:ignore SA1012 intentionally passing nil context to trigger error path
+	//nolint:staticcheck // SA1012: a nil context is the one input that makes http.NewRequestWithContext fail, which is the branch under test
+	if client.CredentialRejected(nil) {
 		t.Error("CredentialRejected(nil) = true, want false (fail-open) when the probe request cannot be built")
 	}
 }

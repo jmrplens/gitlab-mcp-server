@@ -48,10 +48,10 @@ func Build(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalo
 // and the standalone specs are fixed. The branches reporting their failure
 // exist for the day that changes, and would otherwise never run.
 var (
-	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog                 //nolint:gochecknoglobals // test seam
-	filterActionCatalog  = gitlabtools.FilterActionCatalog               //nolint:gochecknoglobals // test seam
-	addStandaloneCatalog = dynamictools.AddStandaloneCatalog             //nolint:gochecknoglobals // test seam
-	safeModePreviews     = (*actioncatalog.Catalog).WithSafeModePreviews //nolint:gochecknoglobals // test seam
+	sharedBaseCatalog    = gitlabtools.SharedBaseCatalog                 // test seam
+	filterActionCatalog  = gitlabtools.FilterActionCatalog               // test seam
+	addStandaloneCatalog = dynamictools.AddStandaloneCatalog             // test seam
+	safeModePreviews     = (*actioncatalog.Catalog).WithSafeModePreviews // test seam
 )
 
 // build assembles the dynamic catalog for cfg from the shared base catalog,

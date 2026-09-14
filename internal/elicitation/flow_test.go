@@ -468,8 +468,7 @@ func flowTestTool(t *testing.T, fn func(context.Context, *mcp.CallToolRequest, *
 	}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
 		fl, err := FlowFromRequest(req)
 		if err != nil {
-			//nolint:nilerr // the flow error is surfaced in-band as an error tool result
-			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}, IsError: true}, nil, nil
+			return inBandToolError("", err, true)
 		}
 		result, err := fn(ctx, req, fl)
 		return result, nil, err
@@ -496,6 +495,26 @@ func flowTestTool(t *testing.T, fn func(context.Context, *mcp.CallToolRequest, *
 // textResult builds a plain text tool result.
 func textResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+}
+
+// inBandError surfaces err to the model as the text of a tool result rather
+// than as the call's error, which is how the handlers under test report a
+// refused request state: an MCP tool's error return is reserved for protocol
+// faults, and a rejection is an outcome the test reads back from the result
+// text. The nil error is produced here, by a function that checks no error,
+// so each call site reads as the in-band report it is rather than as an
+// error dropped on the floor.
+func inBandError(prefix string, err error) (*mcp.CallToolResult, error) {
+	return textResult(prefix + err.Error()), nil
+}
+
+// inBandToolError is inBandError in the three-value shape mcp.AddTool takes,
+// with no structured output; isError marks the result the way a production
+// handler marks a flow it could not decode.
+func inBandToolError(prefix string, err error, isError bool) (*mcp.CallToolResult, any, error) {
+	result := textResult(prefix + err.Error())
+	result.IsError = isError
+	return result, nil, nil
 }
 
 // resultText concatenates the text content of a tool result.
@@ -647,8 +666,7 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
 		req.Params.RequestState = "{not json"
 		if _, err := FlowFromRequest(req); err != nil {
-			//nolint:nilerr // the rejection is asserted in-band via the result text
-			return textResult("state rejected: " + err.Error()), nil
+			return inBandError("state rejected: ", err)
 		}
 		return textResult("state accepted"), nil
 	}
@@ -681,8 +699,7 @@ func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 		// what it is rather than for failing a check it was never given.
 		req.Params.RequestState = "v99.eyJ2Ijo5OX0.bm90LWEtdmFsaWQtbWFj"
 		if _, err := FlowFromRequest(req); err != nil {
-			//nolint:nilerr // the rejection is asserted in-band via the result text
-			return textResult("state rejected: " + err.Error()), nil
+			return inBandError("state rejected: ", err)
 		}
 		return textResult("state accepted"), nil
 	}
@@ -715,8 +732,7 @@ func TestFlow_MRTR_NoParams_StillUsesMultiRoundTrip(t *testing.T) {
 		req.Params = nil
 		fl, err := FlowFromRequest(req)
 		if err != nil {
-			//nolint:nilerr // the outcome is asserted in-band via the result text
-			return textResult("unexpected error: " + err.Error()), nil
+			return inBandError("unexpected error: ", err)
 		}
 		if !fl.UsesMultiRoundTrip() {
 			return textResult("downgraded to the synchronous path"), nil
@@ -744,8 +760,7 @@ func TestFlow_MRTR_UnexpectedResponseType(t *testing.T) {
 		//nolint:staticcheck // deliberately uses a non-elicitation InputResponse type to exercise the mismatch rejection; all such types are deprecated upstream
 		req.Params.InputResponses = mcp.InputResponseMap{"confirm": &mcp.ListRootsResult{}}
 		if _, err := FlowFromRequest(req); err != nil {
-			//nolint:nilerr // the rejection is asserted in-band via the result text
-			return textResult("response rejected: " + err.Error()), nil
+			return inBandError("response rejected: ", err)
 		}
 		return textResult("response accepted"), nil
 	}
@@ -1110,8 +1125,7 @@ func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
 		func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
 			fl, err := FlowFromRequest(req)
 			if err != nil {
-				//nolint:nilerr // the flow error is surfaced in-band as an error tool result
-				return textResult("flow error: " + err.Error()), nil, nil
+				return inBandToolError("flow error: ", err, false)
 			}
 			if !fl.UsesMultiRoundTrip() {
 				return textResult("not the multi round-trip path"), nil, nil

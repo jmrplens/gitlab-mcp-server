@@ -365,12 +365,13 @@ func (d dockerPath) command(ctx context.Context, args ...string) *exec.Cmd {
 //
 // A variable rather than a constant so a test can reach the expiry, which is
 // the one branch here that says something a maintainer will read at three in
-// the morning: the container is up and the application is not answering.
-var bootTimeout = 20 * time.Minute //nolint:gochecknoglobals // a seam, restored by the test that moves it
+// the morning: the container is up and the application is not answering. The
+// test that moves it puts it back.
+var bootTimeout = 20 * time.Minute
 
 // pollInterval is how long the wait sleeps between attempts, for the same
 // reason and with the same shape.
-var pollInterval = 10 * time.Second //nolint:gochecknoglobals // a seam, restored by the test that moves it
+var pollInterval = 10 * time.Second
 
 // waitForRails polls until gitlab-rails runner answers, which is a stricter
 // readiness than the container's own health check: the health check passes

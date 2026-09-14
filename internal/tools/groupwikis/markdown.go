@@ -6,21 +6,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name that the action specs do not already
-// spell. Group wiki actions are routes on the gitlab_group catalog group, so
-// their IDs carry the group domain.
-//
-// The two are declared one per line with a directive each because gosec reads
-// a constant whose name ends in a verb over a dotted value as a credential;
-// the sibling IDs in action_specs.go are excused by path in .golangci.yml for
-// the same reason.
-const (
-	//nolint:gosec // G101 false positive: a canonical catalog action ID, never a credential.
-	actionGroupWikiCreate = "group.wiki_create"
-	//nolint:gosec // G101 false positive: a canonical catalog action ID, never a credential.
-	actionGroupWikiDelete = "group.wiki_delete"
-)
-
 // FormatOutputMarkdown renders one group wiki page as a card: the page's own
 // fields, then its body under a label of its own.
 func FormatOutputMarkdown(out Output) string {

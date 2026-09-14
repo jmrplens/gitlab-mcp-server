@@ -163,7 +163,7 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 		return CancelledResult("Operation canceled by user."), nil
 	}
 	slog.DebugContext(ctx, "destructive action confirmed by user", "tool", tool)
-	return nil, nil //nolint:nilnil // proceed
+	return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 }
 
 // CancelledResult returns an error tool result indicating the user canceled.

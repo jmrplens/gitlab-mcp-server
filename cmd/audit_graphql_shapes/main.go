@@ -24,20 +24,20 @@ const prefix = "audit_graphql_shapes:"
 
 // auditPatterns are the packages the audit loads: every document this server
 // sends, and every decoder it fills, lives under them.
-var auditPatterns = []string{"./internal/..."} //nolint:gochecknoglobals // the default main hands run
+var auditPatterns = []string{"./internal/..."}
 
 // collectDocuments reads the documents the sibling audit finds, so a document
 // this audit never paired is reported rather than missed. A seam, so the one
 // failure it has (a source tree the collector cannot read) can be reached
 // from a test.
-var collectDocuments = graphqldocs.Collect //nolint:gochecknoglobals // test seam
+var collectDocuments = graphqldocs.Collect
 
 // readInventory reads the committed record of what this server sends GitLab,
 // which is how the report names the GraphQL this walk cannot see: the
 // operations client-go builds inside its own module, where there is neither a
 // document to pair nor a decoder to compare. A seam, so both the run that
 // finds the record and the run that does not are reachable from a test.
-var readInventory = requestinventory.Read //nolint:gochecknoglobals // test seam
+var readInventory = requestinventory.Read
 
 // auditRun is one configured run: where to look, what to judge by, how much to
 // say about what agreed, and where to write what the schema offers and nobody

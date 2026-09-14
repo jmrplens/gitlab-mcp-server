@@ -851,8 +851,7 @@ func TestStartRevalidation_NilContext(t *testing.T) {
 	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
 
 	// Should not panic — nil ctx is replaced with context.Background()
-	//lint:ignore SA1012 intentionally testing nil context guard
-	pool.StartRevalidation(nil) //nolint:staticcheck // SA1012
+	pool.StartRevalidation(nil) //nolint:staticcheck // SA1012: the nil context is the input the guard under test exists for
 }
 
 // TestStartRevalidation_DisabledWithZeroInterval verifies that

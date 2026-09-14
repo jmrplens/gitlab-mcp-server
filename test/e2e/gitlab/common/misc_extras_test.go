@@ -275,8 +275,7 @@ func publishCatalogVersion(e *harness.Env, project fixture.Project) {
 	if err := harness.Poll(e.Ctx, 5*time.Second, 300*time.Second, func() (bool, string, error) {
 		pipelines, _, listErr := e.Client().GL().Pipelines.ListProjectPipelines(project.ID, &gl.ListProjectPipelinesOptions{Ref: new(tagName)}, gl.WithContext(e.Ctx))
 		if listErr != nil {
-			//nolint:nilerr // A transient list error is retried until the poll deadline.
-			return false, "listing tag pipelines: " + listErr.Error(), nil
+			return harness.WaitThrough("listing tag pipelines", listErr)
 		}
 		if len(pipelines) == 0 {
 			return false, "the tag pipeline is not created yet", nil
@@ -296,8 +295,7 @@ func publishCatalogVersion(e *harness.Env, project fixture.Project) {
 	if err := harness.Poll(e.Ctx, 10*time.Second, 8*time.Minute, func() (bool, string, error) {
 		pipeline, _, getErr := e.Client().GL().Pipelines.GetPipeline(project.ID, pipelineID, gl.WithContext(e.Ctx))
 		if getErr != nil {
-			//nolint:nilerr // A transient read is retried until the poll deadline.
-			return false, "reading the release pipeline: " + getErr.Error(), nil
+			return harness.WaitThrough("reading the release pipeline", getErr)
 		}
 		status = pipeline.Status
 		return fixture.IsTerminalPipelineStatus(status), "status=" + status, nil

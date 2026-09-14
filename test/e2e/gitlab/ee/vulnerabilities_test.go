@@ -236,7 +236,7 @@ func waitForProjectVulnerabilities(e *harness.Env, projectPath string) ([]report
 			// A transport failure is the instance under load, which the next
 			// poll asks again; only GitLab's own refusal of the document ends
 			// the wait, since no later poll can change that answer.
-			return false, "the report query failed: " + queryErr.Error(), nil //nolint:nilerr // a failed poll is retried, not reported
+			return harness.WaitThrough("the report query failed", queryErr)
 		case len(answer.Errors) > 0:
 			refusals, _ := json.Marshal(answer.Errors)
 			return false, "", fmt.Errorf("GitLab refused the fixture's own report query: %s", refusals)

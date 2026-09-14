@@ -491,7 +491,7 @@ func TestKindCount_MatchesEveryDocumentThatCitesIt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
-			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(tt.file))) //#nosec G304 -- fixed in-repo path
+			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(tt.file))) // a fixed in-repo path
 			if err != nil {
 				t.Fatalf("read %s: %v", tt.file, err)
 			}

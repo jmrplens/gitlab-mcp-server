@@ -453,7 +453,7 @@ func decorateAdminMeta(options *toolutil.ActionSpecOptions, individualTool strin
 // placeholder; actions handled by dedicated builders with bespoke metadata are
 // intentionally omitted so their tailored text is preserved.
 //
-//nolint:funlen // A flat, reviewable lookup table; one entry per admin action.
+// A flat, reviewable lookup table: one entry per admin action.
 var adminActionMeta = map[string]adminActionMetaEntry{
 	"gitlab_list_topics": {
 		usage:       "List instance project topics, optionally filtered by a search term. Topics group related projects across the instance.",

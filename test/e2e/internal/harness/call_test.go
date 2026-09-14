@@ -348,10 +348,10 @@ func TestCallOptions_Base_PrefersTheCallersContext(t *testing.T) {
 	sweep := context.WithValue(t.Context(), testContextKey{}, "sweep")
 
 	if got := resolveCallOptions(nil).base(env).Value(testContextKey{}); got != "env" {
-		t.Errorf("a call with no Under() runs under %v, want the Env's context", got)
+		t.Errorf("a call with no under() runs under %v, want the Env's context", got)
 	}
-	if got := resolveCallOptions([]CallOption{Under(sweep)}).base(env).Value(testContextKey{}); got != "sweep" {
-		t.Errorf("a call with Under() runs under %v, want the caller's context", got)
+	if got := resolveCallOptions([]CallOption{under(sweep)}).base(env).Value(testContextKey{}); got != "sweep" {
+		t.Errorf("a call with under() runs under %v, want the caller's context", got)
 	}
 }
 
@@ -366,9 +366,31 @@ func TestCallOptions_Under_DeadlineReachesTheCall(t *testing.T) {
 	budgeted, cancel := context.WithTimeout(t.Context(), time.Hour)
 	defer cancel()
 
-	base := resolveCallOptions([]CallOption{Under(budgeted)}).base(t.Context())
+	base := resolveCallOptions([]CallOption{under(budgeted)}).base(t.Context())
 	if _, ok := base.Deadline(); !ok {
 		t.Error("the context a call runs under carries no deadline, so the cleanup budget bounds no call")
+	}
+}
+
+// TestUndoOptions_BindsTheCleanupAndItsContextLast checks what Undo adds to a
+// call: the cleanup purpose and the ledger's context, both after the caller's
+// own options so that neither can be overridden, while an option the caller
+// did pass still reaches the call.
+func TestUndoOptions_BindsTheCleanupAndItsContextLast(t *testing.T) {
+	sweep := context.WithValue(t.Context(), testContextKey{}, "sweep")
+	other := context.WithValue(t.Context(), testContextKey{}, "other")
+
+	resolved := resolveCallOptions(undoOptions(sweep, []CallOption{
+		For(PurposeTest), under(other), Within(time.Minute),
+	}))
+	if resolved.purpose != PurposeCleanup {
+		t.Errorf("purpose = %q, want %q: a cleanup call is a cleanup whatever the caller says", resolved.purpose, PurposeCleanup)
+	}
+	if got := resolved.base(t.Context()).Value(testContextKey{}); got != "sweep" {
+		t.Errorf("the call runs under %v, want the ledger's context", got)
+	}
+	if resolved.timeout != time.Minute {
+		t.Errorf("timeout = %v, want the caller's own option to reach the call", resolved.timeout)
 	}
 }
 

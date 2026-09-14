@@ -151,7 +151,7 @@ func bindUnixSocket(ctx context.Context, path string, mode os.FileMode) (net.Lis
 // probeUnixSocket confirms that the published path reaches the listener. It is
 // a variable so a test can drive the failure branch, which no filesystem this
 // runs on is known to produce.
-var probeUnixSocket = confirmReachable //nolint:gochecknoglobals // test seam
+var probeUnixSocket = confirmReachable
 
 // The system calls this file makes on the staging path, as variables.
 //
@@ -163,16 +163,16 @@ var probeUnixSocket = confirmReachable //nolint:gochecknoglobals // test seam
 // The package already covers this class of branch the same way, through
 // loadTLSKeyPair and buildServerCardFn.
 var (
-	chmodStagedSocket = os.Chmod        //nolint:gochecknoglobals // test seam
-	lstatStagedSocket = os.Lstat        //nolint:gochecknoglobals // test seam
-	mkdirStagingDir   = os.Mkdir        //nolint:gochecknoglobals // test seam
-	readRandomName    = cryptorand.Read //nolint:gochecknoglobals // test seam
+	chmodStagedSocket = os.Chmod
+	lstatStagedSocket = os.Lstat
+	mkdirStagingDir   = os.Mkdir
+	readRandomName    = cryptorand.Read
 	// The two descriptor calls restrictDirToOwner makes on the staging
 	// directory it just opened. fchmod cannot fail for the owner of a fresh
 	// directory, and fstat on an open descriptor cannot fail at all, so the
 	// branches refusing a mode that did not apply exist only through these.
-	fchmodStagingDir = (*os.File).Chmod //nolint:gochecknoglobals // test seam
-	fstatStagingDir  = (*os.File).Stat  //nolint:gochecknoglobals // test seam
+	fchmodStagingDir = (*os.File).Chmod
+	fstatStagingDir  = (*os.File).Stat
 )
 
 // confirmReachable connects to path and hangs up.

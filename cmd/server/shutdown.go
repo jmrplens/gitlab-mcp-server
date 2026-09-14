@@ -18,7 +18,7 @@ const shutdownGracePeriod = 5 * time.Second
 // listProcesses enumerates every process on the machine. A variable because
 // the listing fails only when procfs itself is unreadable, which no input to
 // this binary produces, and the branch that reports it is otherwise never run.
-var listProcesses = process.Processes //nolint:gochecknoglobals // test seam
+var listProcesses = process.Processes
 
 // runShutdown finds all running instances of this binary (excluding self),
 // sends SIGTERM (Unix) / TerminateProcess (Windows), waits up to 5 seconds

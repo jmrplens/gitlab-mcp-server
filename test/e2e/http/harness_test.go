@@ -61,18 +61,30 @@ var (
 	errBuild error
 )
 
-// serverBinary builds cmd/server once for the whole package and returns its
-// path. Building rather than importing is deliberate: the handler chain being
-// tested is assembled in package main and cannot be imported, and a test that
-// reassembled it would be testing its own copy.
+// serverBinary returns the path of the server these tests drive, building it
+// once for the whole package, and ends the test when that build failed.
 func serverBinary(t *testing.T) string {
 	t.Helper()
+	bin, err := buildServerBinary()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	return bin
+}
+
+// buildServerBinary builds cmd/server once for the whole package and returns
+// its path. Building rather than importing is deliberate: the handler chain
+// being tested is assembled in package main and cannot be imported, and a test
+// that reassembled it would be testing its own copy.
+//
+// It takes no testing.T, and the build directory is not a t.TempDir, for one
+// reason: the build is shared by every test in the package, so the first test
+// to arrive would own a directory removed when that test ended, leaving every
+// later test pointing at a path that no longer exists. The package's TestMain
+// removes it instead.
+func buildServerBinary() (string, error) {
 	buildOnce.Do(func() {
-		// t.TempDir cannot be used here: the binary is built once for the
-		// whole package under sync.Once, and the first test to arrive would
-		// own a directory removed when that test ends, leaving every later
-		// test pointing at a path that no longer exists.
-		dir, err := os.MkdirTemp("", "gitlab-mcp-httpe2e") //nolint:usetesting // see above
+		dir, err := os.MkdirTemp("", "gitlab-mcp-httpe2e")
 		if err != nil {
 			errBuild = err
 			return
@@ -89,7 +101,8 @@ func serverBinary(t *testing.T) string {
 		// driving an uninstrumented one (harness_race_test.go).
 		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path this function got from os.MkdirTemp; nothing here comes from outside the test.
+		args := serverBuildArgs(out)
+		cmd := exec.CommandContext(ctx, "go", args...)
 		cmd.Dir = repoRoot()
 		if output, runErr := cmd.CombinedOutput(); runErr != nil {
 			errBuild = fmt.Errorf("building cmd/server: %w\n%s", runErr, output)
@@ -97,10 +110,25 @@ func serverBinary(t *testing.T) string {
 		}
 		builtBinary = out
 	})
-	if errBuild != nil {
-		t.Fatalf("%v", errBuild)
+	return builtBinary, errBuild
+}
+
+// socketDir returns a directory for a unix socket, removed when the test ends.
+//
+// Not t.TempDir, and the reason is a kernel limit rather than a preference: a
+// unix socket address is capped at 108 bytes on Linux and 104 on Darwin
+// (sun_path), and t.TempDir puts the whole test name in its path, which under
+// a subtest and a macOS TMPDIR of the /var/folders kind is past the cap before
+// the socket's own name is added. A short prefix straight under the system
+// temp directory is the whole fix.
+func socketDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sock") //nolint:usetesting // a unix socket path is capped near a hundred bytes and t.TempDir's carries the test name; see above
+	if err != nil {
+		t.Fatalf("creating the socket directory: %v", err)
 	}
-	return builtBinary
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
 
 // repoRoot walks up from the test's working directory to the module root.

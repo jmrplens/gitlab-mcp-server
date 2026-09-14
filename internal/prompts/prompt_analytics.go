@@ -400,16 +400,18 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	// Open MRs
-	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
+	openMRs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open merge requests", err)
 
 	// Open issues
-	openIssues, _, _ := client.GL().Issues.ListGroupIssues(groupID, &gl.ListGroupIssuesOptions{
+	openIssues, _, err := client.GL().Issues.ListGroupIssues(groupID, &gl.ListGroupIssuesOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open issues", err)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Weekly Team Recap: %s (last %d days)\n\n", mdHeading(groupID), days)

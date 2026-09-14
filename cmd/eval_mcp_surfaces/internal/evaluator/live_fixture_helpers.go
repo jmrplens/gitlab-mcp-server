@@ -82,7 +82,6 @@ func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client
 		return nil, fmt.Errorf("get tools group %s: %w", liveFixtureToolsPath, err)
 	}
 	visibility := gl.PrivateVisibility
-	approvalsBeforeMerge := int64(0)
 	mergePipelinesEnabled := false
 	onlyAllowMergeIfAllDiscussionsAreResolved := false
 	onlyAllowMergeIfAllStatusChecksPassed := false
@@ -90,13 +89,14 @@ func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client
 	var lastErr error
 	for range 5 {
 		path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
+		// No approvals_before_merge: a new project requires none, and the
+		// parameter is the one GitLab 16.0 moved to the approvals API.
 		project, _, createErr := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
 			Name:                  new(path),
 			Path:                  new(path),
 			NamespaceID:           new(toolsGroup.ID),
 			InitializeWithReadme:  new(true),
 			Visibility:            &visibility,
-			ApprovalsBeforeMerge:  &approvalsBeforeMerge, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 			MergePipelinesEnabled: &mergePipelinesEnabled,
 			OnlyAllowMergeIfAllDiscussionsAreResolved: &onlyAllowMergeIfAllDiscussionsAreResolved,
 			OnlyAllowMergeIfAllStatusChecksPassed:     &onlyAllowMergeIfAllStatusChecksPassed,

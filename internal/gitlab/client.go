@@ -34,10 +34,13 @@ type Client struct {
 
 	// tier holds the resolved GitLab licensing tier (Free/Premium/Ultimate).
 	// IsEnterprise() derives the legacy Premium/Ultimate notion from it. Stored
-	// as an int32 via atomic for lock-free reads in the hot path. Used to select
-	// EE-specific API queries (e.g. GraphQL branch rules with approval rules,
-	// code owner approval, external status checks).
-	tier atomic.Int32
+	// atomically for lock-free reads in the hot path, and as an int64 because
+	// edition.Tier is an int: int to int64 is a widening on every platform Go
+	// supports, so the store is a plain conversion rather than a narrowing
+	// that would have to be argued safe. Used to select EE-specific API
+	// queries (e.g. GraphQL branch rules with approval rules, code owner
+	// approval, external status checks).
+	tier atomic.Int64
 
 	// bearerAuth selects the auth scheme for the raw probes this client
 	// makes outside the SDK (health/version, credential check): true sends
@@ -122,7 +125,7 @@ const versionAPIPath = "/api/v4/version"
 const GitLabDotComHost = "gitlab.com"
 
 // SetTier records the resolved GitLab licensing tier for this client.
-func (c *Client) SetTier(t edition.Tier) { c.tier.Store(int32(t)) } //nolint:gosec // edition.Tier is a small bounded enum (Free/Premium/Ultimate)
+func (c *Client) SetTier(t edition.Tier) { c.tier.Store(int64(t)) }
 
 // Tier returns the resolved GitLab licensing tier for this client.
 func (c *Client) Tier() edition.Tier { return edition.Tier(c.tier.Load()) }
@@ -499,15 +502,17 @@ func (c *Client) setAuthHeader(req *http.Request) {
 
 // versionDirect queries the GitLab Version API through the raw health client.
 // It bypasses the resilient SDK wrapper so edition detection can run during
-// client initialization and degraded-mode recovery.
+// client initialization and degraded-mode recovery. The URL it asks is
+// healthURL, derived once from the normalized base URL the operator
+// configured, never from a request.
 func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody) //#nosec G704 -- healthURL is built from a normalized GitLab base URL
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.healthURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating health request: %w", err)
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
+	resp, err := c.healthClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("gitlab ping failed: %w", err)
 	}
@@ -540,15 +545,18 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 // Only an explicit 401 or 403 counts as a rejection. Every other outcome — a
 // transport error, a 404 from a stubbed instance, a 5xx — means no verdict was
 // obtained and is reported as false, so callers fail open.
+//
+// The probe URL is built from the normalized base URL the operator configured,
+// never from a request.
 func (c *Client) CredentialRejected(ctx context.Context) bool {
 	probeURL := strings.TrimRight(c.baseURL, "/") + "/api/v4/user"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, http.NoBody) //#nosec G704 -- built from a normalized GitLab base URL
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, http.NoBody)
 	if err != nil {
 		return false
 	}
 	c.setAuthHeader(req)
 
-	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
+	resp, err := c.healthClient.Do(req)
 	if err != nil {
 		return false
 	}
@@ -658,7 +666,7 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 	if skipTLSVerify {
 		return newBaseTransport(&tls.Config{
 			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates via GITLAB_MCP_SKIP_TLS_VERIFY
+			InsecureSkipVerify: true, //nolint:gosec // G402: user-configured opt-in for self-signed certificates via GITLAB_MCP_SKIP_TLS_VERIFY
 		})
 	}
 	return sharedBaseTransport()

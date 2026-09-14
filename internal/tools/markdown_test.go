@@ -1807,31 +1807,41 @@ var allMarkdownFixtureData = []markdownFixture{
 
 // ---------- Structural audit tests ----------.
 
-// TestMarkdownAudit_DispatchCoverage verifies that every type dispatched
-// by markdownForResult returns a non-nil CallToolResult with TextContent.
-// Types not dispatched are logged as audit findings (not hard failures).
+// TestMarkdownAudit_DispatchCoverage verifies that every fixture type is
+// dispatched by markdownForResult to a formatter that returns a non-nil
+// CallToolResult with TextContent.
+//
+// A fixture no formatter answers is a failure, not a finding to log: the
+// fixture table is the one place a nested or list-item type is exercised as
+// Markdown, since assertRoutesHaveFormatters in register_test.go covers only
+// the types a catalog route names as its output, so a formatter lost for one
+// of these would otherwise be seen by nobody. Every fixture dispatches today.
 func TestMarkdownAudit_DispatchCoverage(t *testing.T) {
-	var missing []string
 	for _, fix := range allMarkdownFixtures() {
 		t.Run(fix.name, func(t *testing.T) {
-			result := markdownForResult(fix.result)
-			if result == nil {
-				missing = append(missing, fix.name)
-				t.Logf("FINDING: markdownForResult returned nil: type not dispatched")
-				return
-			}
-			if len(result.Content) == 0 {
-				t.Error("CallToolResult has empty Content array")
-			}
-			md := extractTextContent(result)
+			md := auditedMarkdown(t, fix)
 			if md == "" {
 				t.Error("TextContent.Text is empty")
 			}
 		})
 	}
-	if len(missing) > 0 {
-		t.Logf("AUDIT SUMMARY: %d types lack markdown dispatch: %v", len(missing), missing)
+}
+
+// auditedMarkdown dispatches a fixture through markdownForResult and hands
+// back the Markdown it produced, failing the subtest when the type is not
+// dispatched or the result carries no content. Every structural audit reads
+// its fixture through here, so a formatter that disappears fails each of
+// them rather than being skipped as "not a markdown producer".
+func auditedMarkdown(t *testing.T, fix markdownFixture) string {
+	t.Helper()
+	result := markdownForResult(fix.result)
+	if result == nil {
+		t.Fatalf("markdownForResult returned nil: %s is not dispatched to any formatter", fix.name)
 	}
+	if len(result.Content) == 0 {
+		t.Fatal("CallToolResult has empty Content array")
+	}
+	return extractTextContent(result)
 }
 
 // TestMarkdownAudit_TableStructure verifies that markdown tables produced
@@ -1840,13 +1850,9 @@ func TestMarkdownAudit_DispatchCoverage(t *testing.T) {
 func TestMarkdownAudit_TableStructure(t *testing.T) {
 	for _, fix := range allMarkdownFixtures() {
 		t.Run(fix.name, func(t *testing.T) {
-			result := markdownForResult(fix.result)
-			if result == nil {
-				t.Skip("nil result, not a markdown producer")
-			}
-			md := extractTextContent(result)
+			md := auditedMarkdown(t, fix)
 			if md == "" {
-				t.Skip("empty markdown")
+				t.Fatal("formatter produced empty markdown")
 			}
 
 			issues := validateMarkdownTables(md)
@@ -1857,33 +1863,20 @@ func TestMarkdownAudit_TableStructure(t *testing.T) {
 	}
 }
 
-// TestMarkdownAudit_NoTrailingWhitespace checks that no markdown line
-// ends with trailing spaces or tabs. Findings are logged, not hard failures.
+// TestMarkdownAudit_NoTrailingWhitespace checks that no markdown line ends
+// with trailing spaces or tabs. It used to log its findings and assert
+// nothing, which in a CI run without -v is indistinguishable from not
+// existing; no fixture has ever produced one, so it fails on them now.
 func TestMarkdownAudit_NoTrailingWhitespace(t *testing.T) {
-	var withIssues []string
 	for _, fix := range allMarkdownFixtures() {
 		t.Run(fix.name, func(t *testing.T) {
-			result := markdownForResult(fix.result)
-			if result == nil {
-				t.Skip("nil result")
-			}
-			md := extractTextContent(result)
-			lines := strings.Split(md, "\n")
-			count := 0
-			for i, line := range lines {
+			md := auditedMarkdown(t, fix)
+			for i, line := range strings.Split(md, "\n") {
 				if line != strings.TrimRight(line, " \t") {
-					count++
-					t.Logf("FINDING: line %d has trailing whitespace: %q", i+1, line)
+					t.Errorf("line %d has trailing whitespace: %q", i+1, line)
 				}
 			}
-			if count > 0 {
-				withIssues = append(withIssues, fix.name)
-				t.Logf("FINDING: %d lines with trailing whitespace", count)
-			}
 		})
-	}
-	if len(withIssues) > 0 {
-		t.Logf("AUDIT SUMMARY: %d types have trailing whitespace: %v", len(withIssues), withIssues)
 	}
 }
 
@@ -1892,11 +1885,7 @@ func TestMarkdownAudit_NoTrailingWhitespace(t *testing.T) {
 func TestMarkdownAudit_NoEmptySections(t *testing.T) {
 	for _, fix := range allMarkdownFixtures() {
 		t.Run(fix.name, func(t *testing.T) {
-			result := markdownForResult(fix.result)
-			if result == nil {
-				t.Skip("nil result")
-			}
-			md := extractTextContent(result)
+			md := auditedMarkdown(t, fix)
 			lines := strings.Split(md, "\n")
 			for i := range len(lines) - 1 {
 				curr := strings.TrimSpace(lines[i])

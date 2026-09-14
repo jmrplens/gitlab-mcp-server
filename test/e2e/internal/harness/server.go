@@ -102,7 +102,8 @@ func serverBinary(prebuilt string) (string, error) {
 		// uninstrumented one.
 		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path from os.MkdirTemp
+		args := serverBuildArgs(out)
+		cmd := exec.CommandContext(ctx, "go", args...)
 		cmd.Dir = root
 		output, buildFailed := cmd.CombinedOutput()
 		if buildFailed != nil {
@@ -321,7 +322,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 	p.starts++
 	sink := newStderrSink(p.label, p.starts)
 
-	//#nosec G204 -- the path is this package's own build or E2E_SERVER_BINARY, which only the run's operator sets
+	//#nosec G204 -- the path is this package's own build or E2E_SERVER_BINARY, and the instance URL is the one the run was pointed at; both are the operator's
 	cmd := exec.CommandContext(ctx, p.bin,
 		"--http", "--http-addr", addr,
 		"--gitlab-url", p.env.GitLabURL,

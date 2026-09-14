@@ -29,7 +29,7 @@ import (
 
 // loadTLSKeyPair reads a certificate and its key from disk. It is a variable
 // so a test can drive the failure branch without a filesystem.
-var loadTLSKeyPair = tls.LoadX509KeyPair //nolint:gochecknoglobals // test seam
+var loadTLSKeyPair = tls.LoadX509KeyPair
 
 // staleSocketDialTimeout bounds the probe that tells a socket left behind by
 // a crashed process apart from one a live process is serving. It is a
@@ -154,7 +154,7 @@ func clearStaleSocket(ctx context.Context, path string) error {
 // because the tests run with every permission, so nothing on disk can make
 // the unlink fail, and the branch reporting that failure is otherwise never
 // run.
-var removeStaleSocket = os.Remove //nolint:gochecknoglobals // test seam
+var removeStaleSocket = os.Remove
 
 // repeatedFlag is a flag that may be given more than once, and whose single
 // occurrence may itself be a comma-separated list.
@@ -173,12 +173,20 @@ func (r *repeatedFlag) String() string {
 }
 
 func (r *repeatedFlag) Set(value string) error {
+	r.add(value)
+	return nil
+}
+
+// add appends every non-blank comma-separated entry of value. It is what Set
+// does, without the error flag.Value obliges Set to return and this parser
+// never has: the environment overlay calls this one, so there is no error
+// for it to drop.
+func (r *repeatedFlag) add(value string) {
 	for part := range strings.SplitSeq(value, ",") {
 		if trimmed := strings.TrimSpace(part); trimmed != "" {
 			*r = append(*r, trimmed)
 		}
 	}
-	return nil
 }
 
 // parseSocketMode resolves --http-socket-mode into permission bits.

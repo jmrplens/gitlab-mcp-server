@@ -77,7 +77,7 @@ func capturedRolePermissions(extra roleExtra) map[string]*bool {
 
 // wantRolePermissions is what roleCaptureBody says each key is, in the same
 // alternating order the body writes them.
-var wantRolePermissions = map[string]bool{ //nolint:gochecknoglobals // the expectation table two tests share
+var wantRolePermissions = map[string]bool{
 	"admin_ai_catalog_item":           true,
 	"admin_ai_catalog_item_consumer":  false,
 	"admin_integrations":              true,

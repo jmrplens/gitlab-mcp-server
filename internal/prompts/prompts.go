@@ -173,7 +173,11 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 		return nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
-	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, parseIID(mrIID), nil, gl.WithContext(ctx))
+	iid, err := parseIID(mrIID)
+	if err != nil {
+		return nil, err
+	}
+	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, iid, nil, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +218,10 @@ func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp
 		return "", nil, nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
-	iid := parseIID(mrIID)
+	iid, err := parseIID(mrIID)
+	if err != nil {
+		return "", nil, nil, err
+	}
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
 	if err != nil {
 		return "", nil, nil, fmt.Errorf(fmtGetMRFailed, err)
@@ -225,6 +232,18 @@ func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp
 		return "", nil, nil, fmt.Errorf(fmtGetMRDiffsFailed, err)
 	}
 	return projectID, mr, diffs, nil
+}
+
+// warnFetch records a listing that failed and is about to be rendered as
+// empty. A report prompt renders what it could fetch rather than failing
+// whole on one refused call, so a listing GitLab refused, rate-limited or
+// never answered shows up in the report as a zero. The log line is where the
+// operator learns that the zero means unknown. A nil err is the common case
+// and records nothing, so every listing can hand its error here unguarded.
+func warnFetch(ctx context.Context, what string, err error) {
+	if err != nil {
+		slog.WarnContext(ctx, "failed to fetch "+what+"; the report renders them as none", "error", err)
+	}
 }
 
 // fetchContributionEvents returns the user's contribution events since the
@@ -365,14 +384,12 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, mdHeading(strings.ToUpper(pipeline.Status)))
-	//gitlab:allow-unescaped shortSHA(pipeline.SHA): the first characters of a commit SHA, which is hexadecimal.
-	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), shortSHA(pipeline.SHA))
+	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), mdInline(shortSHA(pipeline.SHA)))
 	fmt.Fprintf(&b, "**URL**: %s\n\n", mdInline(pipeline.WebURL))
 
 	var failed, passed, other []string
 	for _, j := range jobs {
-		//gitlab:allow-unescaped j.Status: a job status GitLab picks from a fixed set (created, running, success, failed and the rest).
-		line := fmt.Sprintf("- **%s** (%s): %s", mdInline(j.Name), mdInline(j.Stage), j.Status)
+		line := fmt.Sprintf("- **%s** (%s): %s", mdInline(j.Name), mdInline(j.Stage), mdInline(j.Status))
 		if j.FailureReason != "" {
 			line += ", reason: " + mdInline(j.FailureReason)
 		}
@@ -454,8 +471,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 		authorName = mr.Author.Username
 	}
 
-	//gitlab:allow-unescaped authorName: mr.Author.Username, a GitLab namespace path, which the instance holds to letters, digits, underscore, dash and dot.
-	fmt.Fprintf(&b, "\n## Project Members (excluding author: %s)\n", authorName)
+	fmt.Fprintf(&b, "\n## Project Members (excluding author: %s)\n", mdHeading(authorName))
 	for _, m := range members {
 		if m.Username == authorName || m.State != "active" {
 			continue
@@ -516,8 +532,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
-		//gitlab:allow-unescaped shortSHA(c.ID): the first characters of a commit SHA, which is hexadecimal.
-		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), mdInline(title), mdInline(c.AuthorName))
+		fmt.Fprintf(&b, "- %s: %s (%s)\n", mdInline(shortSHA(c.ID)), mdInline(title), mdInline(c.AuthorName))
 	}
 
 	fmt.Fprintf(&b, "\n## Files Changed (%d)\n\n", len(comparison.Diffs))
@@ -675,8 +690,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 		age := time.Since(*mr.CreatedAt).Hours() / 24
 		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, mdHeading(mr.Title))
 		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s -> %s\n", mdInline(author), mdInline(mr.SourceBranch), mdInline(mr.TargetBranch))
-		//gitlab:allow-unescaped mr.DetailedMergeStatus: a merge status GitLab computes from a fixed set (mergeable, ci_must_pass, conflict and the rest).
-		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
+		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mdInline(mr.DetailedMergeStatus))
 		if mr.Description != "" {
 			desc := mr.Description
 			if len(desc) > descriptionExcerptBytes {
@@ -740,8 +754,7 @@ func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitla
 		return
 	}
 	fmt.Fprintf(b, "## Latest Pipeline: %s\n", mdHeading(strings.ToUpper(pipeline.Status)))
-	//gitlab:allow-unescaped shortSHA(pipeline.SHA): the first characters of a commit SHA, which is hexadecimal.
-	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), shortSHA(pipeline.SHA))
+	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", mdInline(pipeline.Ref), mdInline(shortSHA(pipeline.SHA)))
 	fmt.Fprintf(b, "- **URL**: %s\n\n", mdInline(pipeline.WebURL))
 }
 
@@ -837,8 +850,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
-		//gitlab:allow-unescaped shortSHA(c.ID): the first characters of a commit SHA, which is hexadecimal.
-		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), mdInline(title), mdInline(c.AuthorName))
+		fmt.Fprintf(&b, "- %s: %s (%s)\n", mdInline(shortSHA(c.ID)), mdInline(title), mdInline(c.AuthorName))
 	}
 
 	fmt.Fprintf(&b, "\n## File Changes (%d)\n\n", len(comparison.Diffs))
@@ -942,9 +954,7 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 		b.WriteString("No events found in the last 24 hours.\n")
 	}
 	for _, e := range events {
-		//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
-		//gitlab:allow-unescaped e.TargetType: the Rails class name of the event's target, which GitLab fills with Issue, MergeRequest, Note and the rest.
-		fmt.Fprintf(&b, "- %s %s: %s\n", e.ActionName, e.TargetType, mdInline(e.TargetTitle))
+		fmt.Fprintf(&b, "- %s %s: %s\n", mdInline(e.ActionName), mdInline(e.TargetType), mdInline(e.TargetTitle))
 	}
 
 	// Authored MRs section
@@ -1554,11 +1564,16 @@ func writeDiffGroup(b *strings.Builder, heading string, diffs []*gl.MergeRequest
 
 // Prompt helpers.
 
-// parseIID converts a string IID to int64.
-func parseIID(s string) int64 {
-	var iid int64
-	_, _ = fmt.Sscanf(s, "%d", &iid)
-	return iid
+// parseIID parses a prompt's merge_request_iid argument. Anything but a
+// positive integer is refused as an invalid parameter, with a message that
+// names the argument: the alternative was reading a malformed value as 0 and
+// asking GitLab for merge request 0, then rendering whatever came back.
+func parseIID(s string) (int64, error) {
+	iid, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil || iid <= 0 {
+		return 0, toolutil.InvalidParams(fmt.Errorf("%s must be a positive integer, got %q", argMRIID, s))
+	}
+	return iid, nil
 }
 
 // changeType returns a human-readable label for a diff entry's change type.

@@ -14,7 +14,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -30,8 +29,9 @@ func runProbe(t *testing.T, probeArgs ...string) (int, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
+	bin := serverBinary(t)
 	args := append([]string{"--probe"}, probeArgs...)
-	out, err := exec.CommandContext(ctx, serverBinary(t), args...).CombinedOutput() //nolint:gosec // the binary and arguments are the test's own
+	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
 	if err == nil {
 		return 0, string(out)
 	}
@@ -163,14 +163,7 @@ func TestProbe_TLS(t *testing.T) {
 // socket, in both spellings the flag documents.
 func TestProbe_UnixSocket(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	// Not t.TempDir: a socket path is limited to about a hundred bytes and
-	// the test name lands in that one.
-	dir, err := os.MkdirTemp("", "probe") //nolint:usetesting // short path, see above
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	socketPath := filepath.Join(dir, "mcp.sock")
+	socketPath := filepath.Join(socketDir(t), "mcp.sock")
 	startServerOnUnixSocket(t, socketPath, "--gitlab-url="+gitlab.url)
 
 	for _, target := range []string{socketPath, "unix:" + socketPath} {

@@ -21,8 +21,8 @@ const (
 // across the issue/MR/snippet resource and note variants to keep the
 // discovery-metadata wording consistent and DRY; awardEmojiDescription looks up
 // the entry an option builder should attach to IndividualTool.Description.
-//
-//nolint:lll // descriptions read better as single lines for grep/diffing.
+// Each description is one line, however long, so it can be grepped and diffed
+// whole.
 var awardEmojiDescriptions = map[string]string{
 	// Issue.
 	"gitlab_issue_emoji_list":   "List all emoji reactions on an issue. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata. See also: gitlab_issue_emoji_get, gitlab_issue_emoji_create, gitlab_issue_get.",
@@ -61,8 +61,8 @@ var awardEmojiDescriptions = map[string]string{
 // Each entry adds 2-4 award-emoji/reaction phrasings unique to that tool so the
 // dynamic find surface can match reaction intents without colliding with other
 // domains. awardEmojiBaseOptions prepends the tool name and appends these.
-//
-//nolint:lll // alias lists read better as single lines for grep/diffing.
+// Each alias list is one line, however long, so it can be grepped and diffed
+// whole.
 var awardEmojiAliases = map[string][]string{
 	// Issue.
 	"gitlab_issue_emoji_list":   {"list issue reactions", "show emoji on issue", "issue award emojis"},

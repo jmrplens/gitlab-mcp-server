@@ -342,7 +342,7 @@ func TestCleanupHandle_NilCleanupAndFallbackContext(t *testing.T) {
 		return nil
 	}}, nil)
 	// A nil context here exercises the documented fallback to the preparation context.
-	if err := handle(nil); err != nil { //nolint:staticcheck,nolintlint // deliberate nil context
+	if err := handle(nil); err != nil {
 		t.Fatalf("handle(nil) error = %v", err)
 	}
 	if seen != "prepare" {

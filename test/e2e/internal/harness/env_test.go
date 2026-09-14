@@ -25,15 +25,20 @@ import (
 func TestLedger_MultipleRecords_CleansInReverseOrder(t *testing.T) {
 	var l ledger
 	var cleaned []string
-
-	// sequential: two records registered in order, which is what the cleanup order is read from
-	for _, label := range []string{"project", "group"} {
-		if err := l.register(ledgerRecord{Label: label, Cleanup: func(context.Context) error {
+	record := func(label string) ledgerRecord {
+		return ledgerRecord{Label: label, Cleanup: func(context.Context) error {
 			cleaned = append(cleaned, label)
 			return nil
-		}}); err != nil {
-			t.Fatalf("register(%s) error = %v, want nil", label, err)
-		}
+		}}
+	}
+
+	// Two ordered steps rather than two cases: the project first, then the
+	// group, which is the order the cleanup order is read from.
+	if err := l.register(record("project")); err != nil {
+		t.Fatalf("register(project) error = %v, want nil", err)
+	}
+	if err := l.register(record("group")); err != nil {
+		t.Fatalf("register(group) error = %v, want nil", err)
 	}
 
 	if failures := l.cleanupAll(context.Background(), t); len(failures) != 0 {

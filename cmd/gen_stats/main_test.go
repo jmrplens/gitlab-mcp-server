@@ -900,6 +900,44 @@ func TestRunMain_ReturnsTheExitCodeForRunsOutcome(t *testing.T) {
 	}
 }
 
+// TestRunMain_FlagParsing_ReturnsTheExitCode verifies the parse failures are
+// exit codes rather than an os.Exit inside the flag package: an unknown flag
+// is the usage exit, 2, and -h is the one parse failure that exits clean,
+// which is what ExitOnError would have done for both. The flag set writes its
+// usage to stderr, so os.Stderr is pointed at /dev/null for the duration.
+func TestRunMain_FlagParsing_ReturnsTheExitCode(t *testing.T) {
+	devnull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open %s: %v", os.DevNull, err)
+	}
+	t.Cleanup(func() { _ = devnull.Close() })
+	origStderr := os.Stderr
+	os.Stderr = devnull
+	t.Cleanup(func() { os.Stderr = origStderr })
+	reached := 0
+	runStats = func(bool) error { reached++; return nil }
+	t.Cleanup(func() { runStats = run })
+
+	tests := []struct {
+		name string
+		args []string
+		want int
+	}{
+		{name: "an unknown flag is a usage error", args: []string{"gen_stats", "--bogus"}, want: 2},
+		{name: "asking for help exits clean", args: []string{"gen_stats", "-h"}, want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := runMain(tt.args); got != tt.want {
+				t.Errorf("runMain(%v) = %d, want %d", tt.args, got, tt.want)
+			}
+			if reached != 0 {
+				t.Errorf("runMain(%v) reached run past a failed parse", tt.args)
+			}
+		})
+	}
+}
+
 // TestMain_HandsTheExitCodeToOsExit verifies main wires runMain's result to the
 // exit seam. os.Args is replaced so the flag set parses no test flags.
 func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {

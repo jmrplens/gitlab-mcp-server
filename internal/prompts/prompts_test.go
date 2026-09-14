@@ -977,19 +977,30 @@ func TestAllPromptArguments_HaveTitle(t *testing.T) {
 // inputs.
 func TestParseIID(t *testing.T) {
 	tests := []struct {
-		input string
-		want  int64
+		input   string
+		want    int64
+		wantErr bool
 	}{
-		{"5", 5},
-		{"100", 100},
-		{"0", 0},
-		{"abc", 0},
-		{"", 0},
+		{"5", 5, false},
+		{"100", 100, false},
+		{" 7 ", 7, false},
+		{"0", 0, true},
+		{"-3", 0, true},
+		{"5abc", 0, true},
+		{"abc", 0, true},
+		{"", 0, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			if got := parseIID(tt.input); got != tt.want {
+			got, err := parseIID(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseIID(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if got != tt.want {
 				t.Errorf("parseIID(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+			if err != nil && !strings.Contains(err.Error(), "merge_request_iid must be a positive integer") {
+				t.Errorf("parseIID(%q) error = %q, want it to name the argument and the rule", tt.input, err.Error())
 			}
 		})
 	}

@@ -111,24 +111,39 @@ func startProxy(t *testing.T, upstreamPort int) string {
 }
 
 // waitProxy polls the proxy until it forwards a health check.
+//
+// Running out of time is told apart two ways on purpose. A proxy that never
+// answered at all is a container that did not come up, which is the
+// environment and a skip. A proxy that answered and kept answering something
+// other than 200 is nginx running on the configuration this file wrote, with
+// an upstream that was already serving before the container started, and that
+// is this module's own defect and a failure.
 func waitProxy(t *testing.T, base string) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
+	var lastErr error
+	lastStatus := 0
 	for time.Now().Before(deadline) {
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, base+"/plain/health", http.NoBody)
 		if err != nil {
 			t.Fatalf("building the proxy health request: %v", err)
 		}
 		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
+		if err != nil {
+			lastErr = err
+		} else {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return
 			}
+			lastStatus = resp.StatusCode
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	t.Skip("nginx never forwarded a request; skipping the proxy layer rather than failing on the environment")
+	if lastStatus != 0 {
+		t.Fatalf("nginx answered the health check but never forwarded it (last status %d); the proxy configuration this file writes is wrong", lastStatus)
+	}
+	t.Skipf("nginx never answered a request (%v); the container did not come up, so the proxy layer is skipped rather than failed on the environment", lastErr)
 }
 
 // TestProxy_ServerAndProxyCORSCollide verifies the failure a browser sees and

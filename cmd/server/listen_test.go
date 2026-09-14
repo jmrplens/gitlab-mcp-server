@@ -33,7 +33,7 @@ import (
 func socketDir(t *testing.T) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "s") //nolint:usetesting // see above
+	dir, err := os.MkdirTemp("", "s") //nolint:usetesting // t.TempDir embeds the test name, which puts a unix socket path over its 103-byte limit
 	if err != nil {
 		t.Fatalf("temp dir: %v", err)
 	}

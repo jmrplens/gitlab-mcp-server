@@ -53,7 +53,7 @@ var errorNames = map[string]bool{"Error": true, "Errorf": true}
 // marshalReport is indirected so that the encoder failure run answers for can
 // be exercised: a Report is strings and counts, which encoding/json cannot be
 // made to refuse, and the branch would otherwise go untested.
-var marshalReport = json.MarshalIndent //nolint:gochecknoglobals // test seam
+var marshalReport = json.MarshalIndent
 
 func main() {
 	jsonPath := flag.String("json", "", "write the JSON work list to this path")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -37,12 +38,22 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	case "fix":
-		fs := flag.NewFlagSet("fix", flag.ExitOnError)
+		// ContinueOnError rather than ExitOnError: a bad flag is then an exit
+		// code this function returns, on the stderr it was handed, instead of
+		// an os.Exit no test can observe. The flag set has already printed the
+		// error and the usage by the time Parse returns; -h is the one parse
+		// failure that exits clean, as ExitOnError would have done.
+		fs := flag.NewFlagSet("fix", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		fs.BoolVar(&dryRun, "dry-run", false, "print what would change without writing files")
 		var movePackageDoc bool
 		fs.BoolVar(&movePackageDoc, "move-package-doc", false, "move each package comment into a doc.go of its own instead of documenting symbols")
-		fs.Parse(args[2:]) //nolint:errcheck // ExitOnError handles parse failures
+		if err := fs.Parse(args[2:]); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return 0
+			}
+			return 2
+		}
 		if fs.NArg() == 0 {
 			fmt.Fprintln(stderr, "fix: at least one file or directory path is required")
 			return 2

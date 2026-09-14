@@ -2,6 +2,7 @@ package golist
 
 import (
 	"fmt"
+	"go/build"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -62,10 +63,17 @@ func ParseRows(output []byte) ([]PackageInfo, error) {
 // this repository runs on a developer's machine cannot be pointed at another
 // program by the environment, which is Sonar's go:S4036; the callers' exec
 // sites cite this function in their `#nosec G204` notes for the same reason.
+//
+// The root is [build.Default]'s, which is the cleaned value of the deprecated
+// [runtime.GOROOT] (the GOROOT variable at process start, else the root the
+// binary was built with) under a name staticcheck does not flag. The
+// deprecation warns that the built-in root is meaningless for a binary
+// copied to another machine; these commands are run with `go run` from this
+// module, so the toolchain that built them is the one running them.
 func Executable() string {
 	name := "go"
 	if runtimeGOOS == "windows" {
 		name += ".exe"
 	}
-	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
+	return filepath.Join(build.Default.GOROOT, "bin", name)
 }

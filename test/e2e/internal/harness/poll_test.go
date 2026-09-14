@@ -205,3 +205,37 @@ func TestRetry_NilOperation_IsRefused(t *testing.T) {
 		t.Fatal("Retry() with a nil operation returned nil, want an error")
 	}
 }
+
+// TestWaitThrough_ReportsTheFailureAsState checks the helper a condition
+// retries through: the error is folded into the state Poll keeps, and the
+// error result stays nil so the wait goes on.
+//
+// The state is asserted through Poll's own timeout message, because that
+// message is the only place a reader ever sees it.
+func TestWaitThrough_ReportsTheFailureAsState(t *testing.T) {
+	err := Poll(context.Background(), time.Millisecond, 20*time.Millisecond, func() (bool, string, error) {
+		return WaitThrough("listing to-dos", errors.New("502 Bad Gateway"))
+	})
+	if !errors.Is(err, ErrPollTimeout) {
+		t.Fatalf("Poll() error = %v, want ErrPollTimeout: WaitThrough must not end the wait", err)
+	}
+	if !strings.Contains(err.Error(), "listing to-dos: 502 Bad Gateway") {
+		t.Fatalf("Poll() error = %q, want the failure WaitThrough reported as the last state", err.Error())
+	}
+}
+
+// TestDoneOnError_EndsTheWait checks the counterpart, for a wait whose success
+// is that a read fails: the condition is done on the first error.
+func TestDoneOnError_EndsTheWait(t *testing.T) {
+	calls := 0
+	err := Poll(context.Background(), time.Millisecond, time.Second, func() (bool, string, error) {
+		calls++
+		return DoneOnError("reading the state", errors.New("404 Not Found"))
+	})
+	if err != nil {
+		t.Fatalf("Poll() error = %v, want nil: DoneOnError is the success condition", err)
+	}
+	if calls != 1 {
+		t.Fatalf("condition calls = %d, want 1", calls)
+	}
+}

@@ -446,13 +446,13 @@ func buildLinePositionOptions(p *DiffLinePositionInput) *gl.LinePositionOptions 
 // validatePosition fetches the MR diff and validates that the given position
 // refers to a line actually present in the diff. This prevents 400/500 errors
 // from GitLab when commenting on out-of-range lines and provides actionable
-// error messages explaining what went wrong.
+// error messages explaining what went wrong. When the diff cannot be listed
+// the check is skipped and the write that follows is judged by GitLab, for
+// the reasons [toolutil.MergeRequestDiffsForPositionCheck] gives.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
-	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, &gl.ListMergeRequestDiffsOptions{
-		PerPage: 100,
-	}, gl.WithContext(ctx))
-	if err != nil {
-		return nil //nolint:nilerr // Best-effort: if we can't fetch diffs, skip validation
+	diffs, ok := toolutil.MergeRequestDiffsForPositionCheck(ctx, client, projectID, mrIID)
+	if !ok {
+		return nil
 	}
 
 	targetPath := pos.NewPath

@@ -349,8 +349,12 @@ func TestBalancer_HAProxyEjectsADrainingInstanceBeforeItCloses(t *testing.T) {
 			pinned = append(pinned, token)
 		}
 	}
+	// Every token on the other instance is the same event the affinity
+	// assertions fail on, at the same odds (about 2^-23 with this many
+	// tokens), so it fails here too rather than skipping: a skip would let a
+	// changed ring or token set retire the drain assertion in silence.
 	if len(pinned) == 0 {
-		t.Skip("the hash sent no credential to the instance under test; nothing to observe")
+		t.Fatalf("the hash sent none of the %d credentials to the instance under test; the ring or the token set no longer splits", len(affinityTokens))
 	}
 
 	if err := signalTermination(draining.cmd.Process); err != nil {
@@ -482,9 +486,12 @@ func hostPortOf(t *testing.T, baseURL string) int {
 // container can bind-mount.
 func writeBalancerConfig(t *testing.T, name, body string) string {
 	t.Helper()
-	// Not t.TempDir: the container runs as another user and the per-test
-	// directory is created 0700, so the bind mount would be unreadable.
-	dir, err := os.MkdirTemp("", "mcp-lb") //nolint:usetesting // see above
+	// Not t.TempDir: the container runs as another user, and t.TempDir is two
+	// levels deep. The leaf it hands out is opened below and could be opened
+	// under t.TempDir just the same; what cannot be is its parent, the
+	// per-test directory t.TempDir creates 0700 and never hands out, and a
+	// bind mount under it stops the container's user at that component.
+	dir, err := os.MkdirTemp("", "mcp-lb") //nolint:usetesting // t.TempDir's own parent is 0700 and not ours to open; see above
 	if err != nil {
 		t.Fatalf("temp dir: %v", err)
 	}

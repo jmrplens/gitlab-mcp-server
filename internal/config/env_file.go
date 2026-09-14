@@ -184,7 +184,7 @@ func ignoredWorkingDirEnvFile(explicitPath string) (path string, keys []string) 
 // most maxDotenvBytes of it. A file that cannot be opened or parsed yields no
 // names, which weakens the warning without suppressing it.
 func dotenvKeys(path string) []string {
-	file, err := os.Open(path) // #nosec G304 -- fixed name in the working directory, read only to name its keys
+	file, err := os.Open(path) // a fixed name in the working directory, read only to name its keys
 	if err != nil {
 		return nil
 	}

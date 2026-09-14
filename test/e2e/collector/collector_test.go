@@ -133,12 +133,14 @@ func startCollector(t *testing.T) *collector {
 	grpcPort := freePort(t)
 	dir := t.TempDir()
 	outDir := filepath.Join(dir, "out")
+	// World-writable, because a throwaway container writes here as its own
+	// user. MkdirAll applies the process umask, which on most machines clears
+	// the group and other write bits that user needs, so the mode is set
+	// again afterwards with Chmod, which does not.
 	if err := os.MkdirAll(outDir, 0o777); err != nil { //#nosec G301 -- a throwaway container writes here as its own user
 		t.Fatalf("creating the collector output directory: %v", err)
 	}
-	// MkdirAll applies the process umask, which on most machines clears the
-	// group and other write bits the container's user needs. Chmod does not.
-	if err := os.Chmod(outDir, 0o777); err != nil { //#nosec G302 -- same
+	if err := os.Chmod(outDir, 0o777); err != nil { //#nosec G302 -- the same directory, with the bits the umask took back
 		t.Fatalf("opening the collector output directory to the container: %v", err)
 	}
 
@@ -277,7 +279,7 @@ func (c *collector) containerLogs(t *testing.T) string {
 func documents[T any](t *testing.T, path string) []T {
 	t.Helper()
 
-	raw, err := os.ReadFile(path) //#nosec G304 -- a path this test created
+	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

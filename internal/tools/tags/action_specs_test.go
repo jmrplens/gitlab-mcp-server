@@ -5,6 +5,7 @@ package tags
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -180,8 +181,11 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 // production call site, so it is verified directly.
 func TestTagSpec_IdempotentNonDestructive(t *testing.T) {
 	route := toolutil.ActionRoute{
+		// The test builds a spec from the route and never dispatches it, so a
+		// handler that is reached reports the premise broken rather than
+		// answering nothing.
 		Handler: func(_ context.Context, _ map[string]any) (any, error) {
-			return nil, nil //nolint:nilnil // test fixture: handler is never invoked
+			return nil, errors.New("the tagSpec fixture's handler was invoked; this test only builds the spec")
 		},
 		Destructive: false,
 	}

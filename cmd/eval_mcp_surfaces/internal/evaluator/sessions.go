@@ -381,14 +381,13 @@ func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 
 // buildCatalog constructs the request parameters from the input.
 func buildCatalog(client *gitlabclient.Client, toolSurface, serverMode string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
-	session, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface, serverMode)
+	_, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface, serverMode)
 	if closeSession != nil {
 		defer closeSession()
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	_ = session
 	return toolsResult, routes, nil
 }
 
@@ -427,8 +426,8 @@ func evalServerConfig(client *gitlabclient.Client, serverMode string) *config.Se
 // catalog already validated. The branches reporting their failure exist for
 // the day one of those facts changes, and would otherwise never run.
 var (
-	buildDynamicCatalog = dynamiccatalog.Build    //nolint:gochecknoglobals // test seam
-	sharedMetaCatalog   = tools.SharedMetaCatalog //nolint:gochecknoglobals // test seam
+	buildDynamicCatalog = dynamiccatalog.Build
+	sharedMetaCatalog   = tools.SharedMetaCatalog
 )
 
 // buildCatalogSession constructs the request parameters from the input.

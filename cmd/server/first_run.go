@@ -76,7 +76,7 @@ Press Enter to close.
 // osExecutable resolves the running binary's path. A variable because the
 // lookup cannot be made to fail from outside the process, and the fallback
 // name below is otherwise never printed by any test.
-var osExecutable = os.Executable //nolint:gochecknoglobals // test seam
+var osExecutable = os.Executable
 
 // executableName is how to spell this program on the reader's command line.
 //

@@ -27,7 +27,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
-	options := repositoryOptionsForAction("compare", "gitlab_repository_compare")
+	options := repositoryOptionsForAction("gitlab_repository_compare")
 	options.Usage = "Diff two refs to see what changed between them. Set params.from to the base ref and params.to to the target ref. Use for release diffs or pre-merge review."
 	options.Aliases = []string{"diff two branches", "compare refs", "git diff between commits", "what changed between tags"}
 	options.RelatedActions = []string{"repository.merge_base", actionRepositoryTree, actionBranchList, "release.list"}
@@ -36,16 +36,18 @@ func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 }
 
 func repositoryReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, repositoryOptionsForAction(name, individualTool))
+	return toolutil.NewReadActionSpec(name, route, repositoryOptionsForAction(individualTool))
 }
 
 func repositoryCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, repositoryOptionsForAction(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, repositoryOptionsForAction(individualTool))
 }
 
-func repositoryOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
-	_ = actionName
-
+// repositoryOptionsForAction builds the discovery metadata for one individual
+// tool. It keys on the individual tool name alone: every action here maps to
+// exactly one individual tool, so the catalog action name would say nothing
+// the tool name does not.
+func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute repository domain action.", Tags: []string{"repository", "git"},
 		RelatedActions: []string{actionBranchList, actionTagList},

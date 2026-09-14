@@ -36,7 +36,7 @@ const (
 // identifier for another, so no tree can produce a read that fails, a rewrite
 // that stops parsing, or a write that is refused — and the branches that
 // answer for those would otherwise go untested.
-var ( //nolint:gochecknoglobals // test seams
+var (
 	readSource     = os.ReadFile
 	writeSource    = os.WriteFile
 	parseRewritten = parseGoSourceText

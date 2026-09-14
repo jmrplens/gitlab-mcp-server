@@ -270,12 +270,11 @@ func writeProjectSnippetTable(b *strings.Builder, snippets []Output) {
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Title", "Project", "Visibility", "Author", "Files"))
 	for _, s := range snippets {
 		proj := resolveProjectLabel(s)
-		//gitlab:allow-unescaped s.Visibility: a snippet visibility GitLab answers as private, internal or public.
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(s.ID, 10),
 			toolutil.MdTitleLink(s.Title, s.WebURL),
 			toolutil.EscapeMdTableCell(proj),
-			s.Visibility,
+			toolutil.EscapeMdTableCell(s.Visibility),
 			toolutil.MdUserHandle(authorUsername(s.Author)),
 			strconv.Itoa(len(s.Files)),
 		))
@@ -302,7 +301,7 @@ func writeSimpleSnippetTable(b *strings.Builder, snippets []Output) {
 		b.WriteString(toolutil.MarkdownTableRow(
 			strconv.FormatInt(s.ID, 10),
 			toolutil.MdTitleLink(s.Title, s.WebURL),
-			s.Visibility,
+			toolutil.EscapeMdTableCell(s.Visibility),
 			toolutil.MdUserHandle(authorUsername(s.Author)),
 			strconv.Itoa(len(s.Files)),
 		))

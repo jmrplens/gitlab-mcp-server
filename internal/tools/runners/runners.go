@@ -172,8 +172,6 @@ type RegTokenOutput struct {
 
 // toOutput converts the GitLab API response to the tool output format, and
 // takes the fields the capture read beside the SDK.
-//
-//nolint:staticcheck // Active and IPAddress are deprecated in client-go but mirrored 1:1.
 func toOutput(r *gl.Runner, extra toolutil.RunnerExtra) Output {
 	out := Output{
 		ID:                 r.ID,
@@ -184,8 +182,8 @@ func toOutput(r *gl.Runner, extra toolutil.RunnerExtra) Output {
 		RunnerType:         r.RunnerType,
 		Online:             r.Online,
 		Status:             r.Status,
-		Active:             r.Active,
-		IPAddress:          r.IPAddress,
+		Active:             r.Active,    //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; use Paused.
+		IPAddress:          r.IPAddress, //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
 		Token:              r.Token,
 		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
 		CreatedBy:          extra.CreatedBy,
@@ -199,8 +197,6 @@ func toOutput(r *gl.Runner, extra toolutil.RunnerExtra) Output {
 
 // toDetailsOutput converts the GitLab API response to the tool output
 // format, and takes the fields the capture read beside the SDK.
-//
-//nolint:staticcheck // Active/Architecture/Platform/Revision/Version/IPAddress are deprecated in client-go but mirrored 1:1.
 func toDetailsOutput(d *gl.RunnerDetails, extra toolutil.RunnerExtra) DetailsOutput {
 	out := DetailsOutput{
 		ID:                 d.ID,
@@ -217,12 +213,12 @@ func toDetailsOutput(d *gl.RunnerDetails, extra toolutil.RunnerExtra) DetailsOut
 		Locked:             d.Locked,
 		AccessLevel:        d.AccessLevel,
 		MaximumTimeout:     d.MaximumTimeout,
-		Active:             d.Active,
-		Architecture:       d.Architecture,
-		Platform:           d.Platform,
-		Revision:           d.Revision,
-		Version:            d.Version,
-		IPAddress:          d.IPAddress,
+		Active:             d.Active,       //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; use Paused.
+		Architecture:       d.Architecture, //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
+		Platform:           d.Platform,     //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
+		Revision:           d.Revision,     //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
+		Version:            d.Version,      //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
+		IPAddress:          d.IPAddress,    //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity.
 		CreatedAt:          toolutil.FormatTimePtr(extra.CreatedAt),
 		CreatedBy:          extra.CreatedBy,
 		JobExecutionStatus: extra.JobExecutionStatus,

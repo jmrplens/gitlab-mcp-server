@@ -338,7 +338,7 @@ func moduleGoSources(t *testing.T, root string) map[string]string {
 
 	sources := make(map[string]string, len(paths))
 	for _, path := range paths {
-		body, readErr := os.ReadFile(path) //#nosec G304 -- paths come from walking this module's own checkout
+		body, readErr := os.ReadFile(path) // paths come from walking this module's own checkout
 		if readErr != nil {
 			t.Fatalf("reading %s: %v", path, readErr)
 		}

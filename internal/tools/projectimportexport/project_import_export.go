@@ -330,7 +330,7 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 		if err != nil {
 			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", err)
 		}
-		file, err := os.Open(archivePath) //#nosec G304 -- archivePath is canonicalized, extension-checked, regular-file checked, and constrained to allowed import directories.
+		file, err := os.Open(archivePath) // archivePath is canonicalized, extension-checked, regular-file checked, and constrained to the allowed import directories by CanonicalImportArchivePath above.
 		if err != nil {
 			return ImportStatusOutput{}, toolutil.WrapErrWithMessage("import_from_file", fmt.Errorf("open archive: %w", err))
 		}

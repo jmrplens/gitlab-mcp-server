@@ -53,7 +53,7 @@ const StubToken = "gen-surface-token" //#nosec G101 -- not a real credential, in
 // newGitLabClient is the client constructor, as a variable so a test can drive
 // the one failure [NewStubClientWithToken] can take. Every input it is given
 // here is fixed by this package, so nothing a caller passes can provoke it.
-var newGitLabClient = gitlabclient.NewClient //nolint:gochecknoglobals // test seam
+var newGitLabClient = gitlabclient.NewClient
 
 // NewStubClient returns a GitLab client backed by an in-process stub that
 // answers every request with a fixed version payload, plus the cleanup func that

@@ -38,9 +38,9 @@ type catalogSnapshot struct {
 
 // loadCatalog constructs the canonical catalog via the production
 // BuildActionCatalog path, including the MCP maintenance group so the
-// capabilities doc's gitlab_server_status is included.
-func loadCatalog(repoRoot string) (*catalogSnapshot, error) {
-	_ = repoRoot // reserved for future repo-root-aware catalog options.
+// capabilities doc's gitlab_server_status is included. It reads nothing from
+// the repository: the catalog is what the compiled specs say it is.
+func loadCatalog() (*catalogSnapshot, error) {
 	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
 	defer cleanup()
 

@@ -79,19 +79,31 @@ var (
 	errBuild    error
 )
 
-// serverBinary builds cmd/server once for the whole package.
+// serverBinary returns the path of the server these tests drive, building it
+// once for the whole package, and ends the test when that build failed.
+func serverBinary(t *testing.T) string {
+	t.Helper()
+	bin, err := buildServerBinary()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	return bin
+}
+
+// buildServerBinary builds cmd/server once for the whole package.
 //
 // Building rather than importing is the point of every module under test/e2e
 // that drives a transport: the telemetry pipeline is assembled in package main
 // from flags and environment variables, and a test that reassembled it would be
 // testing its own copy of the wiring rather than the wiring that ships.
-func serverBinary(t *testing.T) string {
-	t.Helper()
+//
+// It takes no testing.T, and the build directory is not a t.TempDir, for one
+// reason: the build is shared by every test in the package, so the first test
+// to arrive would own a directory removed when that test ended, leaving every
+// later test pointing at nothing. The package's TestMain removes it instead.
+func buildServerBinary() (string, error) {
 	buildOnce.Do(func() {
-		// Not t.TempDir: the binary is built once for the package under
-		// sync.Once, so the first test to arrive would own a directory removed
-		// when that test ends, leaving every later test pointing at nothing.
-		dir, err := os.MkdirTemp("", "gitlab-mcp-collectore2e") //nolint:usetesting // see above
+		dir, err := os.MkdirTemp("", "gitlab-mcp-collectore2e")
 		if err != nil {
 			errBuild = fmt.Errorf("creating the collector e2e build directory: %w", err)
 			return
@@ -108,10 +120,7 @@ func serverBinary(t *testing.T) string {
 		}
 		builtBinary = out
 	})
-	if errBuild != nil {
-		t.Fatalf("%v", errBuild)
-	}
-	return builtBinary
+	return builtBinary, errBuild
 }
 
 // repoRoot walks up from the test's working directory to the module root.

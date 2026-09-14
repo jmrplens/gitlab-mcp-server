@@ -313,7 +313,10 @@ func TestNewCallIdentifier_ResolvesAnAlias(t *testing.T) {
 		}
 	}
 	if alias == "" {
-		t.Skip("no action in the catalog declares an alias")
+		// A claim about this repository's own catalog, not about the
+		// environment: aliases are declared today, and a catalog that stopped
+		// declaring any would silently retire the assertion below.
+		t.Fatal("no action in the catalog declares an alias, so the alias resolution this test exists for is not exercised")
 	}
 
 	identity, ok := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": alias}))

@@ -502,10 +502,12 @@ func TestCollectorPrivacy_ARefusedRequestProducesNoMCPSpan(t *testing.T) {
 	c := startCollector(t)
 	srv := startServer(t, collectorEnv(c))
 
+	// A request served without a credential is the gate failing, not a
+	// precondition missing, and a skip would hide exactly that.
 	for range 5 {
 		got := srv.do(t, request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list"}}}`})
 		if got.status == http.StatusOK {
-			t.Skip("the request was not refused; this test needs a rejection to be meaningful")
+			t.Fatalf("a tools/call with no credential was served (200); the credential gate is not refusing")
 		}
 	}
 

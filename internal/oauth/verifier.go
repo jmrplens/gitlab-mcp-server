@@ -332,7 +332,7 @@ func newVerificationClient(skipTLS bool) *http.Client {
 	if skipTLS {
 		transport.TLSClientConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //#nosec G402 //nolint:gosec // user-configured opt-in for self-signed certificates
+			InsecureSkipVerify: true, //nolint:gosec // G402: user-configured opt-in for self-signed certificates
 		}
 	}
 	return &http.Client{

@@ -1347,7 +1347,9 @@ func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) e
 	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o750); mkdirErr != nil {
 		return fmt.Errorf("create publish doc directory: %w", mkdirErr)
 	}
-	if writeErr := os.WriteFile(path, []byte(updated), 0o644); writeErr != nil { // #nosec G306 -- tracked Markdown docs should remain world-readable.
+	// The document was just read, so the mode never applies: os.WriteFile
+	// keeps the mode of a file that exists, and a checkout gets git's.
+	if writeErr := os.WriteFile(path, []byte(updated), docgen.GeneratedFileMode); writeErr != nil {
 		return fmt.Errorf("write publish doc %s: %w", path, writeErr)
 	}
 	terminalPrintf("updated evaluation docs: %s\n", path)

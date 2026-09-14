@@ -194,24 +194,26 @@ func UnarchiveOutput(ctx context.Context, client *gitlabclient.Client, input Arc
 }
 
 func groupReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, groupOptionsForAction(name, individualTool))
+	return toolutil.NewReadActionSpec(name, route, groupOptionsForAction(individualTool))
 }
 
 func groupCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, groupOptionsForAction(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupOptionsForAction(individualTool))
 }
 
 func groupUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(name, individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(individualTool))
 }
 
 func groupDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, groupOptionsForAction(name, individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, groupOptionsForAction(individualTool))
 }
 
-func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
-	_ = actionName
-
+// groupOptionsForAction builds the discovery metadata for one individual
+// tool. It keys on the individual tool name alone: every action here maps to
+// exactly one individual tool, so the catalog action name would say nothing
+// the tool name does not.
+func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute groups domain action.", Tags: []string{tagGroup},
 		OpenWorld:      true,

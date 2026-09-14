@@ -21,7 +21,7 @@ import (
 // open itself, where the kernel resolves the last component, so the check and
 // the use are one operation.
 func openLeafNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0) //#nosec G304 -- the caller resolves the path through symlinks and confines it to the allowed directories
+	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0) // the caller resolves the path through symlinks and confines it to the allowed directories
 }
 
 // createLeafNoFollow creates or truncates path for writing and refuses a
@@ -31,5 +31,5 @@ func openLeafNoFollow(path string) (*os.File, error) {
 // Truncating an existing regular file is still allowed: overwriting a
 // destination the caller named is what a download does.
 func createLeafNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600) //#nosec G304 -- the caller resolves the path through symlinks and confines it to the allowed directories
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600) // the caller resolves the path through symlinks and confines it to the allowed directories
 }

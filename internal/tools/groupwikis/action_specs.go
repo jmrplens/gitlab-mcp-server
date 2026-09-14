@@ -5,10 +5,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs. Group wiki actions are routes on the gitlab_group
+// catalog group, so their IDs carry the group domain.
 const (
-	actionGroupWikiList = "group.wiki_list"
-	actionGroupWikiGet  = "group.wiki_get"
-	actionGroupWikiEdit = "group.wiki_edit"
+	actionGroupWikiList   = "group.wiki_list"
+	actionGroupWikiGet    = "group.wiki_get"
+	actionGroupWikiCreate = "group.wiki_create"
+	actionGroupWikiEdit   = "group.wiki_edit"
+	actionGroupWikiDelete = "group.wiki_delete"
 )
 
 // ActionSpecs returns canonical specs for group wiki actions.
@@ -103,14 +107,14 @@ var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 	"gitlab_group_wiki_list": {
 		usage:   "List the wiki pages of a group (GitLab Premium). Set with_content only when the page bodies are needed, since it returns the full content of every page.",
 		aliases: []string{"list group wiki pages", "show group wiki", "find group wiki pages"},
-		related: []string{actionGroupWikiGet, "group.wiki_create", "group.get"},
+		related: []string{actionGroupWikiGet, actionGroupWikiCreate, "group.get"},
 		description: "List a group's wiki pages (GitLab Premium). Returns: each page's title, slug, and format (plus content when with_content is set), with hints to read or create pages. " +
 			"See also: gitlab_group_wiki_get, gitlab_group_wiki_create.",
 	},
 	"gitlab_group_wiki_get": {
 		usage:   "Fetch one group wiki page by its slug. Use after group.wiki_list to read a page's content, optionally rendering HTML or retrieving a specific version SHA.",
 		aliases: []string{"get group wiki page", "read group wiki page", "show group wiki page content"},
-		related: []string{actionGroupWikiList, actionGroupWikiEdit, "group.wiki_delete"},
+		related: []string{actionGroupWikiList, actionGroupWikiEdit, actionGroupWikiDelete},
 		description: "Get a single group wiki page by slug. Returns: the page title, slug, format, content, and encoding. " +
 			"See also: gitlab_group_wiki_list, gitlab_group_wiki_edit, gitlab_group_wiki_delete.",
 	},
@@ -124,7 +128,7 @@ var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 	"gitlab_group_wiki_edit": {
 		usage:   "Update an existing group wiki page identified by slug. Provide at least one of title, content, or format to change.",
 		aliases: []string{"edit group wiki page", "update group wiki page", "rename group wiki page"},
-		related: []string{actionGroupWikiGet, actionGroupWikiList, "group.wiki_delete"},
+		related: []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiDelete},
 		description: "Update an existing group wiki page by slug. Returns: the updated page with title, slug, format, content, and encoding. " +
 			"See also: gitlab_group_wiki_get, gitlab_group_wiki_delete, gitlab_group_wiki_list.",
 	},
