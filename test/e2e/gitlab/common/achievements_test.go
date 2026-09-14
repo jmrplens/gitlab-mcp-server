@@ -113,30 +113,11 @@ func TestAchievement_Lifecycle_CreateAwardReorderRevokeDelete(t *testing.T) {
 	})
 
 	t.Run("the user's own awards list", func(t *testing.T) {
-		// The recipients read above saw both awards, so anything missing here
-		// is about this action rather than about the state: same two awards,
-		// same instant, one listed by achievement and one by user. The failure
-		// says so, and names the username it asked for, because the other
-		// explanation is that this action's key and the awards' owner are not
-		// the same person.
-		owned := harness.Do[achievements.UserAchievementListOutput](s, actionAchievementUserList, map[string]any{
-			"username": username,
-		})
-		if awardPosition(owned.UserAchievements, firstAward) < 0 || awardPosition(owned.UserAchievements, secondAward) < 0 {
-			t.Errorf("achievement.user_list for %q answered %s, and the recipients read moments earlier "+
-				"carried awards %d and %d for user %d",
-				username, describeAwards(owned.UserAchievements), firstAward, secondAward, userID)
-		}
+		assertUserListing(t, s, username, userID, firstAward, secondAward)
 	})
 
-	t.Run("an award is hidden from the profile", func(t *testing.T) {
-		// The award's own ID, not the definition's: this changes one award's
-		// visibility and leaves the other showing.
-		hidden := harness.Do[achievements.UserAchievementMutationOutput](s, actionAchievementUserAchievementUpdate,
-			map[string]any{"user_achievement_id": firstAward, "show_on_profile": false})
-		if hidden.UserAchievement.ShowOnProfile {
-			t.Errorf("award %d still shows on the profile after being hidden", firstAward)
-		}
+	t.Run("an award is shown and hidden again", func(t *testing.T) {
+		assertVisibilityRoundTrip(t, s, firstAward)
 	})
 
 	t.Run("the awards are reordered", func(t *testing.T) {
@@ -199,6 +180,58 @@ func awardAchievement(t *testing.T, s *harness.Session, achievementID, userID in
 		t.Fatalf("award answered %+v, want an award with an ID of its own", awarded.UserAchievement)
 	}
 	return awarded.UserAchievement.ID
+}
+
+// assertUserListing holds achievement.user_list to both halves of
+// include_hidden.
+//
+// The first run of this scenario assumed the wrong half and the parameter is
+// the whole difference. A freshly awarded achievement is not on its holder's
+// profile until they put it there, so the default listing does not carry it
+// while the recipients read a moment earlier carries both. Asserting the
+// default too is what keeps this a statement about the parameter rather than a
+// workaround for a surprise.
+func assertUserListing(t *testing.T, s *harness.Session, username string, userID, firstAward, secondAward int64) {
+	t.Helper()
+
+	profile := harness.Do[achievements.UserAchievementListOutput](s, actionAchievementUserList,
+		map[string]any{"username": username})
+	if awardPosition(profile.UserAchievements, firstAward) >= 0 {
+		t.Errorf("award %d is on the profile listing of %q without include_hidden, and a fresh award is not "+
+			"shown until its holder shows it: %s", firstAward, username, describeAwards(profile.UserAchievements))
+	}
+
+	owned := harness.Do[achievements.UserAchievementListOutput](s, actionAchievementUserList, map[string]any{
+		"username": username, "include_hidden": true,
+	})
+	if awardPosition(owned.UserAchievements, firstAward) < 0 || awardPosition(owned.UserAchievements, secondAward) < 0 {
+		t.Errorf("achievement.user_list for %q with include_hidden answered %s, and the recipients read "+
+			"moments earlier carried awards %d and %d for user %d",
+			username, describeAwards(owned.UserAchievements), firstAward, secondAward, userID)
+	}
+}
+
+// assertVisibilityRoundTrip shows an award and hides it again.
+//
+// Both directions, because a fresh award is already hidden: setting
+// show_on_profile to false and reading false back would pass against a handler
+// that wrote nothing at all. The award's own ID throughout, not the
+// definition's, since this changes one award's visibility and leaves the other
+// where it was.
+func assertVisibilityRoundTrip(t *testing.T, s *harness.Session, award int64) {
+	t.Helper()
+
+	shown := harness.Do[achievements.UserAchievementMutationOutput](s, actionAchievementUserAchievementUpdate,
+		map[string]any{"user_achievement_id": award, "show_on_profile": true})
+	if !shown.UserAchievement.ShowOnProfile {
+		t.Errorf("award %d does not show on the profile after being shown", award)
+	}
+
+	hidden := harness.Do[achievements.UserAchievementMutationOutput](s, actionAchievementUserAchievementUpdate,
+		map[string]any{"user_achievement_id": award, "show_on_profile": false})
+	if hidden.UserAchievement.ShowOnProfile {
+		t.Errorf("award %d still shows on the profile after being hidden", award)
+	}
 }
 
 // assertAwardOrder fails unless the reorder took effect, and answers by
