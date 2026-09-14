@@ -113,6 +113,41 @@ const notADocument = "there is no GraphQL here"
 	}
 }
 
+// TestJudge_DocumentsTheCallerAlreadyHolds_AreRefusedOnTheSameTerms verifies
+// the entry the client-go half uses.
+//
+// Those documents come out of a module directory rather than out of a pattern
+// under this repository, so they are collected elsewhere and arrive here as a
+// slice. What must not differ is the judgement: a document the pinned schema
+// refuses has to be refused whether it was written here or in the SDK, because
+// it reaches GitLab through this server either way. The empty case is the same
+// guard [Audit] has, for the same reason: a clean exit over nothing is the
+// silence this package exists to remove.
+func TestJudge_DocumentsTheCallerAlreadyHolds_AreRefusedOnTheSameTerms(t *testing.T) {
+	documents := []Document{
+		{Package: "sdk", Name: "accepted", Text: "query($id: VulnerabilityID!) { vulnerability(id: $id) { id } }"},
+		{Package: "sdk", Name: "refused", Text: "query($id: VulnerabilityID!) { vulnerability(id: $id) { hasSolutions } }"},
+	}
+
+	result, err := Judge(documents, Options{})
+	if err != nil {
+		t.Fatalf("Judge() error = %v, want nil", err)
+	}
+	if len(result.Documents) != 2 {
+		t.Errorf("Judge() kept %d document(s), want both", len(result.Documents))
+	}
+	if len(result.Refusals) != 1 || result.Refusals[0].Document.Name != "refused" {
+		t.Fatalf("Judge() refused %+v, want only the document with the field the type lacks", result.Refusals)
+	}
+	if result.Provenance == "" {
+		t.Error("Judge() gave no provenance, so a reader cannot say whose opinion refused the document")
+	}
+
+	if _, emptyErr := Judge(nil, Options{}); !errors.Is(emptyErr, ErrNoDocuments) {
+		t.Errorf("Judge(nil) error = %v, want ErrNoDocuments", emptyErr)
+	}
+}
+
 // TestAudit_SourceItCannotRead_Fails verifies that a load failure ends the run
 // rather than being reported as a tree with no documents in it.
 func TestAudit_SourceItCannotRead_Fails(t *testing.T) {

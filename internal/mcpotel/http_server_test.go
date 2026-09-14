@@ -80,7 +80,7 @@ func TestServerMiddleware_AnInventedMethodIsNotAMetricDimension(t *testing.T) {
 
 	var sawOriginal bool
 	for _, span := range recorder.Ended() {
-		if value, ok := attrOf(span, attrHTTPRequestMethod); ok && value.AsString() != "_OTHER" {
+		if value, ok := attrOf(span, AttrHTTPRequestMethod); ok && value.AsString() != "_OTHER" {
 			t.Errorf("span records http.request.method = %q for an unknown verb", value.AsString())
 		}
 		if value, ok := attrOf(span, attrHTTPRequestMethodOriginal); ok {

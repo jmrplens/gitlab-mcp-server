@@ -9,7 +9,7 @@
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record \
 	audit-md-escaping check-md-escaping \
@@ -1273,6 +1273,18 @@ audit-1to1-paths:
 audit-1to1-paths-endpoints:
 	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
 	@echo "R-PATH report written to plan/1to1-paths.json"
+
+## audit-1to1-paths-e2e: the same report, plus the observation question asked per ACTION
+## instead of per owning package, read from the shards a Docker end-to-end run left under
+## $(E2E_CALLS_DIR) (make test-e2e-ce or make test-e2e-ee writes them). The committed
+## inventory can only answer at package grain, because nothing on the wire names an
+## action; a trace does, so the record says which actions were themselves seen issuing a
+## request and which ran without issuing one. It changes nothing the gate fails on: the
+## shards are a byproduct of a run CI does not schedule, and the counts are floors, since
+## a batch queue that overflowed drops client spans without saying so.
+audit-1to1-paths-e2e:
+	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls $(E2E_CALLS_DIR) -output plan/1to1-paths-e2e.json
+	@echo "R-PATH report with per-action observation written to plan/1to1-paths-e2e.json"
 
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a

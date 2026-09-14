@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
@@ -190,7 +191,7 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				t.Helper()
 				original := pathsRun
 				t.Cleanup(func() { pathsRun = original })
-				pathsRun = func(context.Context, string, bool, *apidocs.Fetcher) ([]byte, bool, error) {
+				pathsRun = func(context.Context, string, paths.Options) ([]byte, bool, error) {
 					return []byte("{}\n"), false, nil
 				}
 			},
@@ -286,39 +287,47 @@ func TestParseScope(t *testing.T) {
 //
 // Nil is the interesting half. The comparison needs the network and 250 pages
 // of it, and it gates nothing, so a run that did not ask for it must be handed
-// nothing to fetch with rather than a fetcher it might use.
+// nothing to fetch with rather than a fetcher it might use. The shard
+// directory is the same shape of input one layer along: an end-to-end record
+// exists only after a Docker session wrote one, so a run that named none must
+// be handed the empty string and not a path it might read.
 func TestRunSingle_PathsScope_PassesTheEndpointFetcherThrough(t *testing.T) {
 	original := pathsRun
 	t.Cleanup(func() { pathsRun = original })
-	var got *apidocs.Fetcher
-	var sawGapsOnly bool
-	pathsRun = func(_ context.Context, _ string, gapsOnly bool, fetcher *apidocs.Fetcher) ([]byte, bool, error) {
-		got, sawGapsOnly = fetcher, gapsOnly
+	var got paths.Options
+	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+		got = opts
 		return []byte("{}\n"), true, nil
 	}
 
 	cases := []struct {
 		name      string
 		endpoints bool
+		e2eCalls  string
 		wantNil   bool
 	}{
 		{name: "without -check-endpoints", endpoints: false, wantNil: true},
 		{name: "with -check-endpoints", endpoints: true, wantNil: false},
+		{name: "with -e2e-calls", endpoints: false, e2eCalls: "/tmp/e2e-calls", wantNil: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			got = nil
+			got = paths.Options{}
 
-			content, clean, err := runSingle(t.Context(), scopePaths, options{gapsOnly: true, endpoints: testCase.endpoints})
+			content, clean, err := runSingle(t.Context(), scopePaths,
+				options{gapsOnly: true, endpoints: testCase.endpoints, e2eCalls: testCase.e2eCalls})
 
 			if err != nil || !clean || string(content) != "{}\n" {
 				t.Fatalf("runSingle(paths) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
 			}
-			if !sawGapsOnly {
+			if !got.GapsOnly {
 				t.Error("runSingle(paths) did not pass -gaps-only through")
 			}
-			if (got == nil) != testCase.wantNil {
-				t.Errorf("runSingle(paths) fetcher = %v, want nil == %v", got, testCase.wantNil)
+			if (got.Fetcher == nil) != testCase.wantNil {
+				t.Errorf("runSingle(paths) fetcher = %v, want nil == %v", got.Fetcher, testCase.wantNil)
+			}
+			if got.E2ECallsDir != testCase.e2eCalls {
+				t.Errorf("runSingle(paths) e2e calls = %q, want %q", got.E2ECallsDir, testCase.e2eCalls)
 			}
 		})
 	}

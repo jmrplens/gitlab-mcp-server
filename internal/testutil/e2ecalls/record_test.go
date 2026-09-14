@@ -189,3 +189,55 @@ func TestRecord_KeepsTheFieldNamesTheReaderJoinsOn(t *testing.T) {
 		})
 	}
 }
+
+// TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero pins the
+// field R-PATH reads to answer "did this action issue a request" per action
+// rather than per package.
+//
+// Both halves matter. A count that did not survive the round trip would leave
+// the question unanswerable while every line still parsed, which is the
+// silence the whole record exists to remove. And a zero must be absent rather
+// than written: an action that reached no GitLab is the ordinary case for a
+// refusal and a safe-mode preview, and a shard from before this field existed
+// reads the same way, so the reader is told nothing rather than told zero.
+func TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero(t *testing.T) {
+	cases := []struct {
+		name    string
+		line    *Dispatch
+		want    int
+		written bool
+	}{
+		{
+			name:    "a handler that called GitLab",
+			line:    &Dispatch{TraceID: "4bf92f3577b34da6a3ce929d0e0e4736", Action: "issue.list", Requests: 2},
+			want:    2,
+			written: true,
+		},
+		{
+			name: "a refusal that called nobody",
+			line: &Dispatch{TraceID: "4bf92f3577b34da6a3ce929d0e0e4736", Action: "issue.delete", RefusalReason: "safe_mode"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			encoded, err := json.Marshal(testCase.line.record())
+			if err != nil {
+				t.Fatalf("Marshal error = %v", err)
+			}
+
+			var decoded Record
+			if unmarshalErr := json.Unmarshal(encoded, &decoded); unmarshalErr != nil {
+				t.Fatalf("Unmarshal error = %v", unmarshalErr)
+			}
+			if validateErr := decoded.validate(); validateErr != nil {
+				t.Fatalf("validate() error = %v, want nil", validateErr)
+			}
+			if decoded.Dispatch.Requests != testCase.want {
+				t.Errorf("Requests = %d, want %d", decoded.Dispatch.Requests, testCase.want)
+			}
+			if present := strings.Contains(string(encoded), `"requests"`); present != testCase.written {
+				t.Errorf("encoded record = %s, want a requests field present = %t", encoded, testCase.written)
+			}
+		})
+	}
+}

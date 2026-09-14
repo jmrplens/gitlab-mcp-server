@@ -201,6 +201,53 @@ const constrainedFixtureMarker = "constrained"
 	}
 }
 
+// TestLoadWith_Env_ReachesTheToolchain verifies that the environment a caller
+// states is the one the load runs under.
+//
+// It exists for the one caller that loads a module this repository does not
+// own: reading the GraphQL documents client-go builds means loading a module
+// cache directory, and two settings decide whether the toolchain will do that
+// at all. Passed through and ignored, the load fails with a message about
+// workspace mode that names neither cause, so the pass-through is tested here
+// rather than inferred from the caller working.
+//
+// A build tag carried in GOFLAGS is the observable, because it changes which
+// files type-check and so cannot be satisfied by anything but the toolchain
+// really having seen the variable.
+func TestLoadWith_Env_ReachesTheToolchain(t *testing.T) {
+	const constrained = `//go:build goprogramenvfixture
+
+package goprogram
+
+// envFixtureMarker exists only behind the goprogramenvfixture tag.
+const envFixtureMarker = "from the environment"
+`
+	overlay := overlayFor(t, constrained)
+	cases := []struct {
+		name string
+		env  []string
+		want bool
+	}{
+		{name: "without an environment the file is excluded", env: nil, want: false},
+		{
+			name: "a tag carried in GOFLAGS type-checks the file",
+			env:  append(os.Environ(), "GOFLAGS=-tags=goprogramenvfixture"),
+			want: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			loaded, err := LoadWith(repoRoot(t), []string{selfPattern}, Options{Env: tc.env, Overlay: overlay})
+			if err != nil {
+				t.Fatalf("LoadWith() error = %v, want nil", err)
+			}
+			if got := declaresConstant(loaded, "envFixtureMarker"); got != tc.want {
+				t.Errorf("constrained file type-checked = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
 // loadedFile reports whether any loaded package carries a file of that base
 // name in its syntax, which is how a test tells a test variant from the plain
 // package.

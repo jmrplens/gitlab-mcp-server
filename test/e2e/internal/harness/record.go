@@ -274,10 +274,10 @@ func (r *envRecorder) finish(reporter e2ecalls.Reporter, status string) []e2ecal
 	lines := make([]e2ecalls.Line, 0, len(calls)*2+len(skips))
 	for _, call := range calls {
 		call.line.TestStatus = status
-		if record, arrived := dispatchFor(call); arrived {
-			call.line.Dispatched = record.action
-			lines = append(lines, dispatchLine(call.line.TraceID, record))
-			assertDispatch(reporter, call, record)
+		if kept, arrived := dispatchFor(call); arrived {
+			call.line.Dispatched = kept.dispatch.action
+			lines = append(lines, dispatchLine(call.line.TraceID, kept))
+			assertDispatch(reporter, call, kept.dispatch)
 		}
 		lines = append(lines, call.line)
 	}
@@ -364,18 +364,18 @@ func awaitDispatch(calls []*pendingCall) {
 	}
 }
 
-// dispatchFor returns what the server said about one call, marking its session
-// dispatch-observed when a span arrived.
-func dispatchFor(call *pendingCall) (dispatchRecord, bool) {
+// dispatchFor returns what the receiver kept about one call, marking its
+// session dispatch-observed when the server's span arrived.
+func dispatchFor(call *pendingCall) (traceSpans, bool) {
 	received := receiverIfStarted()
 	if received == nil || call.line.TraceID == "" {
-		return dispatchRecord{}, false
+		return traceSpans{}, false
 	}
-	record, arrived := received.lookup(call.line.TraceID)
+	kept, arrived := received.lookup(call.line.TraceID)
 	if arrived && call.conn != nil {
 		call.conn.dispatchObserved.Store(true)
 	}
-	return record, arrived
+	return kept, arrived
 }
 
 // assertDispatch fails the test when the server ran something other than what
@@ -413,17 +413,27 @@ func assertDispatch(reporter e2ecalls.Reporter, call *pendingCall, record dispat
 		call.line.Action, call.line.Surface, record.action, call.line.Action)
 }
 
-// dispatchLine turns what a span said into the record line the audit joins on
-// the trace id.
-func dispatchLine(traceID string, record dispatchRecord) *e2ecalls.Dispatch {
+// dispatchLine turns what a trace's spans said into the record line the audit
+// joins on the trace id.
+//
+// The request count rides here rather than on a line of its own because it
+// answers a question about the action this line already names, and a second
+// line type would be a schema bump for one integer. It is written at the same
+// moment the dispatch is, which is normally after every client span of the
+// trace has arrived: the children end before the parent does, so they are
+// queued and exported first, and the wait for the parent is a wait for them
+// too. Normally, not always — a batch queue that overflowed drops silently —
+// which is why [e2ecalls.Dispatch.Requests] is documented as a floor.
+func dispatchLine(traceID string, kept traceSpans) *e2ecalls.Dispatch {
 	return &e2ecalls.Dispatch{
 		TraceID:       traceID,
-		Tool:          record.tool,
-		Action:        record.action,
-		Domain:        record.domain,
-		RefusalReason: record.refusalReason,
-		ErrorType:     record.errorType,
-		Status:        record.status,
+		Tool:          kept.dispatch.tool,
+		Action:        kept.dispatch.action,
+		Domain:        kept.dispatch.domain,
+		RefusalReason: kept.dispatch.refusalReason,
+		ErrorType:     kept.dispatch.errorType,
+		Status:        kept.dispatch.status,
+		Requests:      kept.requests,
 	}
 }
 
@@ -880,12 +890,20 @@ func sessionLines() []e2ecalls.Line {
 	return lines
 }
 
-// lateDispatchLines writes every span the receiver holds.
+// lateDispatchLines writes every trace the receiver holds that the server
+// spoke about.
 //
 // A call whose span arrived after its test's flush was written with no
 // dispatched action, and this is what lets the audit join one to it anyway.
 // Re-offering a line that was already written costs nothing: the writer drops
-// a line whose JSON it has already seen.
+// a line whose JSON it has already seen, and a line whose request count has
+// since grown is a new line the reader keeps in place of the earlier one,
+// which is what makes a late client span correct itself.
+//
+// A trace holding only GitLab request spans is skipped. It names no action, so
+// there is nothing for the audit to attribute those requests to, and a
+// dispatch line with an empty action would be a record of a call nobody can
+// identify.
 func lateDispatchLines() []e2ecalls.Line {
 	received := receiverIfStarted()
 	if received == nil {
@@ -893,8 +911,11 @@ func lateDispatchLines() []e2ecalls.Line {
 	}
 	all := received.all()
 	lines := make([]e2ecalls.Line, 0, len(all))
-	for traceID, record := range all {
-		lines = append(lines, dispatchLine(traceID, record))
+	for traceID, kept := range all {
+		if !kept.dispatch.carriesFacts() {
+			continue
+		}
+		lines = append(lines, dispatchLine(traceID, kept))
 	}
 	return lines
 }

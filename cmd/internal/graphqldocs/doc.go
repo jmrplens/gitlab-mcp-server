@@ -26,13 +26,20 @@
 //
 // # What it reads, and what it does not
 //
-// It reads [DefaultPatterns], which holds every document this repository
-// writes. It does not read client-go, which builds another 42 of its own for
-// the achievements, work item, security attribute and terraform state services
-// among others. Those reach GitLab through this server too, and the only thing
-// judging them is the test transport, on whichever ones a test happens to
-// drive. A count of documents from here is this repository's, not the server's
-// whole GraphQL surface.
+// [Collect] reads [DefaultPatterns], which holds every document this
+// repository writes, and a count from it is this repository's rather than the
+// server's whole GraphQL surface. The other half of that surface is
+// client-go's own 42 documents, for the achievement, work item, saved view,
+// security attribute, security category, scan profile, target branch rule and
+// Terraform state services, and [SDKDocuments] reads those out of the module
+// directory with the same walk. They stay a separate entry point because the
+// answer is a separate claim: a document refused there is fixed upstream and
+// not here, so its caller reports where the caller of [Collect] gates.
+//
+// Six of the 42 are not sendable text at all, and [IsTemplate] is what tells
+// them apart: client-go writes the work item documents as text/template shells
+// and the Terraform state queries as printf format strings, so the folded
+// value carries a placeholder where a value belongs.
 //
 // # Who calls it
 //

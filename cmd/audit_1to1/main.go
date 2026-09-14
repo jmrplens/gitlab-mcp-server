@@ -46,6 +46,7 @@ func main() {
 	scope := flag.String("scope", "structs,actions,metadata,enums", "one of {structs,actions,metadata,enums,sdk,paths} for a single-scope report, or the first four (default) for the merged backlog; other combinations are not supported")
 	validateDocs := flag.Bool("validate-docs", false, "instead of the audit, verify every doc/api citation in the adjudication tables is still fetchable (exits non-zero on a stale citation)")
 	checkEndpoints := flag.Bool("check-endpoints", false, "with -scope=paths, also compare every recorded REST endpoint against GitLab's API documentation (needs the network and reads ~250 pages; fails on an endpoint no declaration in cmd/audit_1to1/internal/paths accounts for)")
+	e2eCalls := flag.String("e2e-calls", "", "with -scope=paths, the shard directory an end-to-end run recorded its calls into (dist/e2e-calls after `make test-e2e-ce`), which lets the observation question be asked per action rather than per owning package; reports and never gates")
 	refresh := flag.Bool("refresh", false, "with -validate-docs or -check-endpoints, force re-fetch of cited docs even when cached and fresh")
 	offline := flag.Bool("offline", false, "with -validate-docs or -check-endpoints, use only cached docs; do not fetch")
 	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "with -validate-docs or -check-endpoints, re-download cached docs older than this")
@@ -68,6 +69,7 @@ func main() {
 		outputPath: *outputPath,
 		docs:       apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge},
 		endpoints:  *checkEndpoints,
+		e2eCalls:   *e2eCalls,
 	}); err != nil {
 		fatalf("%v", err)
 	}
@@ -83,6 +85,10 @@ type options struct {
 	// through, and is used only when endpoints is set.
 	docs      apidocs.Options
 	endpoints bool
+	// e2eCalls is the shard directory an end-to-end run recorded, read by the
+	// paths scope alone. Empty leaves the per-action observation out, which is
+	// every run outside a Docker session.
+	e2eCalls string
 }
 
 // run resolves the -scope selection, produces the report it names (the merged
@@ -219,7 +225,11 @@ func runSingle(ctx context.Context, scope string, opts options) (content []byte,
 		case "enums":
 			return enumsRun(root, opts.gapsOnly)
 		case scopePaths:
-			return pathsRun(ctx, root, opts.gapsOnly, endpointFetcher(root, opts))
+			return pathsRun(ctx, root, paths.Options{
+				GapsOnly:    opts.gapsOnly,
+				Fetcher:     endpointFetcher(root, opts),
+				E2ECallsDir: opts.e2eCalls,
+			})
 		default:
 			return sdkRun(root, opts.gapsOnly)
 		}

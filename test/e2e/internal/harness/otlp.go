@@ -85,8 +85,28 @@ type dispatchRecord struct {
 // handler made is a child span of it, and none of those carries any of these
 // attributes. Merging one would overwrite the facts with emptiness, so a span
 // that carries none of them is dropped instead.
+//
+// It is also the arrival test [spanReceiver.lookup] answers with, which is why
+// the request count is deliberately not part of it: a trace whose GitLab calls
+// have landed and whose server span has not has not been dispatch-observed,
+// and saying it had would flush the call line with no dispatched action and no
+// assertion about what ran.
 func (d dispatchRecord) carriesFacts() bool {
 	return d.tool != "" || d.action != "" || d.domain != "" || d.refusalReason != "" || d.errorType != ""
+}
+
+// traceSpans is everything the receiver kept about one trace: what the server
+// said it dispatched, and how many GitLab requests it made under it.
+//
+// The two are held in one entry rather than in two maps so that a reader can
+// never take a count from one moment and a dispatch from another, and they are
+// separate fields rather than one merged record because they arrive from
+// different spans and answer different questions.
+type traceSpans struct {
+	// dispatch is what the MCP server span said.
+	dispatch dispatchRecord
+	// requests counts the GitLab client spans of this trace.
+	requests int
 }
 
 // merge fills this record's empty fields from another, first non-empty
@@ -122,7 +142,7 @@ type spanReceiver struct {
 
 	mu     sync.Mutex
 	issued map[string]struct{}
-	seen   map[string]dispatchRecord
+	seen   map[string]traceSpans
 
 	// observed is set the first time any dispatch arrives, so a run whose
 	// telemetry never worked can stop waiting for spans that are not coming.
@@ -178,7 +198,7 @@ func startSpanReceiver() (*spanReceiver, error) {
 	received := &spanReceiver{
 		url:      "http://" + listener.Addr().String(),
 		issued:   map[string]struct{}{},
-		seen:     map[string]dispatchRecord{},
+		seen:     map[string]traceSpans{},
 		listener: listener,
 	}
 
@@ -223,17 +243,21 @@ func (r *spanReceiver) issue(traceID string) {
 	r.issued[traceID] = struct{}{}
 }
 
-// lookup returns what the server said about one trace, and whether any span of
-// it has arrived.
-func (r *spanReceiver) lookup(traceID string) (dispatchRecord, bool) {
+// lookup returns what the receiver kept about one trace, and whether the
+// server's own span has arrived.
+//
+// Arrival is the dispatch half alone. An entry made by a GitLab request span
+// and nothing else says the handler called out and not which action it was
+// running, which is the fact every caller of this is waiting for.
+func (r *spanReceiver) lookup(traceID string) (traceSpans, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	record, found := r.seen[traceID]
-	return record, found
+	kept := r.seen[traceID]
+	return kept, kept.dispatch.carriesFacts()
 }
 
-// all returns every dispatch the receiver has kept, keyed by trace id.
-func (r *spanReceiver) all() map[string]dispatchRecord {
+// all returns everything the receiver has kept, keyed by trace id.
+func (r *spanReceiver) all() map[string]traceSpans {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -272,13 +296,20 @@ func (r *spanReceiver) absorb(export *coltracepb.ExportTraceServiceRequest) {
 
 // absorbSpan keeps one span's facts, if the harness issued its trace and the
 // span carries any.
+//
+// Two kinds of span are kept and they are kept apart. The MCP server span says
+// what ran; a GitLab client span says the handler called out, and is counted
+// rather than merged. Counting it is the whole of the per-action observation
+// this record exists to make possible, and keeping it out of the merge is what
+// stops a failed GitLab call from writing its own error.type over the server's.
 func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	traceID := hex.EncodeToString(span.GetTraceId())
 	if traceID == "" {
 		return
 	}
+	request := isGitLabRequest(span)
 	facts := spanFacts(span)
-	if !facts.carriesFacts() {
+	if !request && !facts.carriesFacts() {
 		return
 	}
 
@@ -287,8 +318,35 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	if _, issued := r.issued[traceID]; !issued {
 		return
 	}
-	r.seen[traceID] = r.seen[traceID].merge(facts)
+	kept := r.seen[traceID]
+	if request {
+		kept.requests++
+		r.seen[traceID] = kept
+		return
+	}
+	kept.dispatch = kept.dispatch.merge(facts)
+	r.seen[traceID] = kept
 	r.observed.Store(true)
+}
+
+// isGitLabRequest reports whether a span is one outbound GitLab call.
+//
+// Both halves of the test are needed. The attribute is what
+// internal/mcpotel.NewTransport puts on every round trip, and it is also on
+// the span the HTTP server middleware opens for an inbound POST, which shares
+// a trace with nothing here only because the harness stamps its traceparent
+// into _meta rather than into a header. The span kind is what separates them
+// for good, and it is the kind the round tripper asks for by name.
+func isGitLabRequest(span *tracepb.Span) bool {
+	if span.GetKind() != tracepb.Span_SPAN_KIND_CLIENT {
+		return false
+	}
+	for _, attribute := range span.GetAttributes() {
+		if attribute.GetKey() == string(mcpotel.AttrHTTPRequestMethod) {
+			return true
+		}
+	}
+	return false
 }
 
 // spanFacts reads the attributes the record is made of off one span.

@@ -36,6 +36,16 @@ type Report struct {
 	// the way to ask for the rest of it. A report and not a gate, for the reason
 	// [PaginationCheck] records.
 	Pagination PaginationCheck `json:"pagination"`
+	// SDKGraphQL is the same "does the document validate" question asked of the
+	// documents client-go builds inside its own module, which nothing here
+	// could see before. A report and not a gate, for the reason
+	// [SDKGraphQLCheck] records.
+	SDKGraphQL SDKGraphQLCheck `json:"sdk_graphql"`
+	// E2E is what a recorded end-to-end run says about which actions were seen
+	// issuing a request, which is the one grain finer than the package the
+	// observation check above is held at. Empty unless a shard directory was
+	// named, and a report rather than a gate either way; see [E2EObservation].
+	E2E E2EObservation `json:"e2e_observation"`
 }
 
 // Summary is the count of everything the report holds.
@@ -137,6 +147,20 @@ type Summary struct {
 	// PaginationGrain says what the collection counts were asked at, for the
 	// same reason Grain does above: the number is what gets quoted.
 	PaginationGrain string `json:"pagination_endpoint_grain"`
+	// SDKGraphQLDocuments and SDKGraphQLRefused count the documents client-go
+	// builds inside its own module and the ones the pinned schema will not
+	// accept. They are beside GraphQLDocuments and GraphQLRefused rather than
+	// folded into them, because a refusal there is a merge request against
+	// somebody else's repository and one here is an edit; see
+	// [SDKGraphQLCheck].
+	SDKGraphQLDocuments int `json:"sdk_graphql_documents"`
+	SDKGraphQLRefused   int `json:"sdk_graphql_refused"`
+	// The end-to-end counts are the observation question asked per action
+	// instead of per package, and they are present only when a shard directory
+	// was named. Observed is the claim a dropped span cannot invent; Silent is
+	// the lead. See [E2EObservation].
+	E2EActionsObserved int `json:"e2e_actions_issuing_requests"`
+	E2EActionsSilent   int `json:"e2e_actions_that_ran_and_issued_nothing"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -187,16 +211,32 @@ var (
 	auditEndpoints = checkEndpoints
 )
 
+// Options is what a run of this scope needs beyond the tree.
+//
+// It is a struct rather than three parameters because two of the three are
+// inputs the run may not have: an API-doc fetcher costs the network, and an
+// end-to-end record exists only after a Docker session wrote one. Naming them
+// at the call site is what keeps "not asked for" and "asked for and empty"
+// from being the same argument.
+type Options struct {
+	// GapsOnly keeps only the findings, matching the other scopes' flag.
+	GapsOnly bool
+	// Fetcher enables the endpoint comparison. Nil leaves it out, which is the
+	// default: it needs the network and two minutes of it on a cold cache, and
+	// it gates nothing, so a run that only wants the gate should not pay for
+	// it.
+	Fetcher *apidocs.Fetcher
+	// E2ECallsDir is the shard directory an end-to-end run recorded its calls
+	// into, which lets the observation question be asked per action rather than
+	// per package. Empty leaves that out, which is every run outside a Docker
+	// session; see [E2EObservation].
+	E2ECallsDir string
+}
+
 // Run builds the report for the given repository root and returns it as
 // indented JSON (with a trailing newline) together with the gate outcome.
-//
-// A nil fetcher leaves the documentation comparison out, which is the default:
-// it needs the network and two minutes of it on a cold cache, and it gates
-// nothing, so a run that only wants the gate should not pay for it.
-//
-// gapsOnly keeps only the findings, matching the other scopes' flag.
-func Run(ctx context.Context, root string, gapsOnly bool, fetcher *apidocs.Fetcher) (content []byte, clean bool, err error) {
-	report, err := buildReport(ctx, root, gapsOnly, fetcher)
+func Run(ctx context.Context, root string, opts Options) (content []byte, clean bool, err error) {
+	report, err := buildReport(ctx, root, opts)
 	if err != nil {
 		return nil, false, err
 	}
@@ -207,7 +247,7 @@ func Run(ctx context.Context, root string, gapsOnly bool, fetcher *apidocs.Fetch
 	return append(content, '\n'), report.Summary.clean(), nil
 }
 
-func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apidocs.Fetcher) (Report, error) {
+func buildReport(ctx context.Context, root string, opts Options) (Report, error) {
 	inventory, err := readInventory(root)
 	if err != nil {
 		return Report{}, err
@@ -227,8 +267,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	undeclaredPackages, undeclaredActions := undeclaredSilent(owners)
 
 	endpoints := EndpointCheck{}
-	if fetcher != nil {
-		if endpoints, err = auditEndpoints(ctx, fetcher, inventory.Requests); err != nil {
+	if opts.Fetcher != nil {
+		if endpoints, err = auditEndpoints(ctx, opts.Fetcher, inventory.Requests); err != nil {
 			return Report{}, fmt.Errorf("compare the recorded endpoints with the API documentation: %w", err)
 		}
 	}
@@ -237,6 +277,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 	sentAlways, sentWhen, sentDeclared := unsurfacedCounts(shapes.Sent.Unsurfaced)
 	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
 	pagination := paginationCheck(root, inventory.Requests, actions)
+	sdkGraphQL := sdkGraphQLCheck(root)
+	e2e := e2eObservation(opts.E2ECallsDir, actions)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
 	stale = append(stale, shapes.Typed.staleDeclarations()...)
@@ -253,6 +295,8 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 		Endpoints:         endpoints,
 		Shapes:            shapes,
 		Pagination:        pagination,
+		SDKGraphQL:        sdkGraphQL,
+		E2E:               e2e,
 		Summary: Summary{
 			InventoryRows:           len(inventory.Requests),
 			GraphQLDocuments:        len(documents.Documents),
@@ -295,12 +339,21 @@ func buildReport(ctx context.Context, root string, gapsOnly bool, fetcher *apido
 			CollectionsUnpaginated:  pagination.Collections.Unpaginated,
 			CollectionsUndeclared:   pagination.Collections.Undeclared,
 			PaginationGrain:         paginationGrain,
+			SDKGraphQLDocuments:     sdkGraphQL.Documents,
+			SDKGraphQLRefused:       len(sdkGraphQL.Refusals),
+			E2EActionsObserved:      len(e2e.Issuing),
+			E2EActionsSilent:        len(e2e.Silent),
 		},
 	}
-	if gapsOnly {
+	if opts.GapsOnly {
 		report.SilentOwners = keepUndeclared(report.SilentOwners)
 		report.Endpoints.Undocumented = keepUndeclaredEndpoints(report.Endpoints.Undocumented)
 		report.Pagination.Unpaginated = keepUndeclaredCollections(report.Pagination.Unpaginated)
+		// The SDK document listing and the per-action observation keep only
+		// their findings too: the document set and the observed actions are
+		// context, and -gaps-only asks for the work.
+		report.SDKGraphQL.Templates = nil
+		report.E2E.Issuing = nil
 	}
 	return report, nil
 }

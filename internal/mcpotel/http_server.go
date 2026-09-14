@@ -72,7 +72,7 @@ func ServerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method, original := knownMethod(r.Method)
 		attrs := []attribute.KeyValue{
-			attrHTTPRequestMethod.String(method),
+			AttrHTTPRequestMethod.String(method),
 			attrURLScheme.String(requestScheme(r)),
 			attrNetworkProtocolName.String("http"),
 		}

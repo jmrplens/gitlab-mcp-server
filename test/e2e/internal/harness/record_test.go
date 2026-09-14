@@ -469,6 +469,45 @@ func TestAssertDispatch_RewriteFailsAScenarioButNotASweep(t *testing.T) {
 	}
 }
 
+// TestDispatchLine_CarriesTheRequestsTheTraceMade checks the one fact on this
+// line that comes from a span other than the server's own.
+//
+// It is what lets a reader ask per action what the committed request inventory
+// can only answer per package, so a line that dropped it would leave the
+// question unanswerable while looking complete. The empty case is here beside
+// it because the field is omitempty: an action that reached no GitLab must
+// write no count rather than a zero that reads as a measurement.
+func TestDispatchLine_CarriesTheRequestsTheTraceMade(t *testing.T) {
+	cases := []struct {
+		name string
+		kept traceSpans
+		want int
+	}{
+		{
+			name: "a handler that called GitLab",
+			kept: traceSpans{dispatch: dispatchRecord{action: "issue.list"}, requests: 3},
+			want: 3,
+		},
+		{
+			name: "a refusal that called nobody",
+			kept: traceSpans{dispatch: dispatchRecord{action: "issue.delete", refusalReason: "safe_mode"}},
+			want: 0,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			line := dispatchLine(testTraceID, testCase.kept)
+
+			if line.Requests != testCase.want {
+				t.Errorf("the dispatch line reports %d requests, want %d", line.Requests, testCase.want)
+			}
+			if line.Action != testCase.kept.dispatch.action {
+				t.Errorf("the dispatch line names %q, want %q", line.Action, testCase.kept.dispatch.action)
+			}
+		})
+	}
+}
+
 // TestNewTraceParent_IsAFreshSampledTraceEveryTime checks the value the server
 // reads the trace off.
 //

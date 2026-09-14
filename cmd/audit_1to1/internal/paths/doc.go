@@ -29,8 +29,26 @@
 // means 990 actions whose owning package issued some request, not 990 actions
 // whose own request anybody has seen. Summary.Grain says so beside the number,
 // since the number is what gets quoted. As a regression guard it is real and
-// as per-action assurance it is nothing, and the layer that closes that gap is
-// a live instance rather than a stronger reading of this file.
+// as per-action assurance it is nothing.
+//
+// The layer that closes that gap is a live instance, and it is here now as a
+// report beside the gate. An end-to-end run has the one thing the unit
+// recording lacks: the harness stamps a trace id into each MCP call, the
+// server's span carries it back with the route the dispatcher actually chose,
+// and every GitLab request the handler made is a child of that span. One trace
+// is one call is one action. [E2EObservation] reads the dispatch lines of such
+// a run when one is offered (-e2e-calls, the shards a Docker session left
+// behind) and says which actions were themselves seen issuing a request and
+// which ran and issued nothing.
+//
+// It reports and never gates, for two reasons that are both about what a
+// missing record means. The shards are a byproduct of a run CI does not
+// schedule and never commits, so an absent record is the ordinary case and
+// failing on it would fail every push. And the counts are floors: the spans
+// travel through a batching processor that drops silently when its queue
+// overflows, so a trace whose client spans were dropped reads as an action
+// that issued nothing. A positive claim here is therefore solid and a negative
+// one is a lead.
 //
 // An action whose declared owner names no package at all is a finding of its
 // own rather than a curiosity. Nothing in the catalog validates that an owner
@@ -71,6 +89,29 @@
 // coverage of this defect family, silently, which is why
 // TestNewTestClient_Recording_WritesTheRequestTheClientMade and its GraphQL
 // counterpart exist there.
+//
+// Until recently the question was asked only of the documents this repository
+// writes, which left half the server's GraphQL surface unjudged: client-go
+// builds another 42 inside its own module, for the achievement, work item,
+// saved view, security attribute, security category, scan profile, target
+// branch rule and Terraform state services, and each of them reaches GitLab
+// through this server. [SDKGraphQLCheck] reads them out of the module source
+// the typed shape comparison already resolves a directory for, and puts them
+// to the same pinned schema.
+//
+// Six of the 42 are not sendable text and are counted apart rather than
+// refused: client-go writes the work item documents as text/template shells
+// and the Terraform state queries as printf format strings, so what the type
+// checker folds carries a placeholder where a value belongs. No schema can
+// judge those, and a refusal list with permanent entries in it is a list a
+// reader learns to skip.
+//
+// That section reports and never gates, for a reason unlike the usual one: the
+// pin is what GitLab serves, so a refusal there is real. What it is not is
+// something this repository can fix — the answer is an upstream merge request
+// and a version bump — and that is not a state to fail a build on. It also
+// keeps this gate's verdict a statement about this repository's own tree,
+// which is what everything else it fails on is.
 //
 // # Does the endpoint exist
 //

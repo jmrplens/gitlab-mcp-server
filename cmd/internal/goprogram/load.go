@@ -57,6 +57,18 @@ type Options struct {
 	// Overlay supplies source that is not on disk, as [Load]'s parameter
 	// does.
 	Overlay map[string][]byte
+	// Env is the whole environment the toolchain runs under, as
+	// [os/exec.Cmd.Env] takes it. Empty inherits this process's, which is what
+	// every caller reading this repository's own source wants.
+	//
+	// It exists for the one load that is not of this repository: reading the
+	// GraphQL documents client-go builds means loading a module directory in
+	// the module cache, which this process neither owns nor configured, and
+	// two settings decide whether that works at all. The reasons are written
+	// down beside the caller that needs them, in cmd/internal/graphqldocs,
+	// because they are a property of loading somebody else's module rather
+	// than of this front end; all this does is carry them through.
+	Env []string
 }
 
 // Load type-checks the packages named by patterns, rooted at dir, and returns
@@ -78,7 +90,7 @@ func Load(dir string, patterns []string, overlay map[string][]byte) ([]*packages
 // LoadWith is [Load] with the options a caller states: test variants, build
 // tags, an overlay. Everything [Load] refuses, this refuses on the same terms.
 func LoadWith(dir string, patterns []string, opts Options) ([]*packages.Package, error) {
-	cfg := &packages.Config{Mode: LoadMode, Dir: dir, Tests: opts.Tests, Overlay: opts.Overlay}
+	cfg := &packages.Config{Mode: LoadMode, Dir: dir, Tests: opts.Tests, Overlay: opts.Overlay, Env: opts.Env}
 	if len(opts.BuildTags) > 0 {
 		cfg.BuildFlags = []string{"-tags=" + strings.Join(opts.BuildTags, ",")}
 	}

@@ -389,6 +389,23 @@ type Dispatch struct {
 	ErrorType string `json:"error_type,omitempty"`
 	// Status is the span status.
 	Status string `json:"status,omitempty"`
+	// Requests is how many GitLab requests the handler made while running this
+	// action, counted from the client spans of the same trace.
+	//
+	// It is the one fact here that comes from a span other than the server's
+	// own, and it is what lets a reader ask per action what the committed
+	// request inventory can only answer per package: nothing on the wire names
+	// an action, but a trace does, and every GitLab call the handler made is a
+	// child of the span that names it.
+	//
+	// Read it as a floor rather than as an exact count. The spans travel
+	// through a batching processor with a bounded queue, so a run that
+	// overflows it drops client spans silently and this reads low; and a retry
+	// is a separate round trip, so two attempts at one endpoint count two. Zero
+	// means no client span of this trace arrived, which is usually an action
+	// that reached no GitLab (a refusal, a safe-mode preview) and is
+	// occasionally that drop.
+	Requests int `json:"requests,omitempty"`
 }
 
 // Skip is a test that did not run, with the reason it gave.
