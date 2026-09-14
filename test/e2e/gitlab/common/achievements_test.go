@@ -23,6 +23,9 @@
 package common
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/achievements"
@@ -110,12 +113,19 @@ func TestAchievement_Lifecycle_CreateAwardReorderRevokeDelete(t *testing.T) {
 	})
 
 	t.Run("the user's own awards list", func(t *testing.T) {
+		// The recipients read above saw both awards, so anything missing here
+		// is about this action rather than about the state: same two awards,
+		// same instant, one listed by achievement and one by user. The failure
+		// says so, and names the username it asked for, because the other
+		// explanation is that this action's key and the awards' owner are not
+		// the same person.
 		owned := harness.Do[achievements.UserAchievementListOutput](s, actionAchievementUserList, map[string]any{
 			"username": username,
 		})
-		if len(owned.UserAchievements) < 2 {
-			t.Errorf("the user holds %d awards by this listing, want at least the two just made",
-				len(owned.UserAchievements))
+		if awardPosition(owned.UserAchievements, firstAward) < 0 || awardPosition(owned.UserAchievements, secondAward) < 0 {
+			t.Errorf("achievement.user_list for %q answered %s, and the recipients read moments earlier "+
+				"carried awards %d and %d for user %d",
+				username, describeAwards(owned.UserAchievements), firstAward, secondAward, userID)
 		}
 	})
 
@@ -191,19 +201,52 @@ func awardAchievement(t *testing.T, s *harness.Session, achievementID, userID in
 	return awarded.UserAchievement.ID
 }
 
-// assertAwardOrder fails unless the answer carries both awards with the
-// earlier argument first, which is the order the reorder asked for.
+// assertAwardOrder fails unless the reorder took effect, and answers by
+// priority where GitLab reports one.
+//
+// Priority is the question and the slice order is only evidence about it. The
+// handler passes the IDs to the SDK and returns what comes back without
+// sorting (internal/tools/achievements/achievements.go:393), so a run where
+// the priorities are right and the slice is in another order means GitLab
+// applied the reorder and our own ReorderOutput doc comment, which promises
+// "the awards in their new priority order", is the thing that is wrong. A run
+// where the priorities are wrong too means the reorder did not happen. The
+// failure prints both so the next run says which.
 func assertAwardOrder(t *testing.T, awards []achievements.UserAchievement, wantFirst, wantSecond int64) {
 	t.Helper()
 
 	first, second := awardPosition(awards, wantFirst), awardPosition(awards, wantSecond)
-	switch {
-	case first < 0 || second < 0:
-		t.Errorf("the reorder answered %+v, want it to carry awards %d and %d", awards, wantFirst, wantSecond)
-	case first > second:
-		t.Errorf("award %d is at position %d and award %d at %d, want the order the call asked for",
-			wantFirst, first, wantSecond, second)
+	if first < 0 || second < 0 {
+		t.Errorf("the reorder answered %s, want it to carry awards %d and %d",
+			describeAwards(awards), wantFirst, wantSecond)
+		return
 	}
+	firstPriority, secondPriority := awards[first].Priority, awards[second].Priority
+	if firstPriority != nil && secondPriority != nil {
+		if *firstPriority >= *secondPriority {
+			t.Errorf("award %d has priority %d and award %d has %d, want the first one the call named to rank higher: %s",
+				wantFirst, *firstPriority, wantSecond, *secondPriority, describeAwards(awards))
+		}
+		return
+	}
+	if first > second {
+		t.Errorf("no priority was reported, and award %d is at position %d with award %d at %d, "+
+			"want the order the call asked for: %s", wantFirst, first, wantSecond, second, describeAwards(awards))
+	}
+}
+
+// describeAwards renders a reorder answer as the id, priority and position of
+// each award, which is what a failure here has to say to be actionable.
+func describeAwards(awards []achievements.UserAchievement) string {
+	parts := make([]string, 0, len(awards))
+	for position, award := range awards {
+		priority := "none"
+		if award.Priority != nil {
+			priority = strconv.FormatInt(*award.Priority, 10)
+		}
+		parts = append(parts, fmt.Sprintf("[%d] id=%d priority=%s", position, award.ID, priority))
+	}
+	return strings.Join(parts, " ")
 }
 
 // awardPosition returns where an award sits in an answer, or -1 when the
