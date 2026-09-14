@@ -1740,7 +1740,7 @@ func newServerShell(
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
-		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
+		Instructions: buildInstructions(toolSurface, capabilitySurface, settings.transport, cfg.Stateless, cfg.ReadOnly),
 		Logger:       sdkLogger(),
 		Capabilities: serverCapabilities,
 		// Session IDs are the SDK's own random ones. They used to carry a tag

@@ -6480,7 +6480,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_interactive_issue_create
 
-Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.
+Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.
 
 **Parameters:**
 
@@ -6490,7 +6490,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_mr_create
 
-Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.
+Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.
 
 **Parameters:**
 
@@ -6500,13 +6500,13 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_release_create
 
-Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.
+Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.
 
 **Parameters:**
 

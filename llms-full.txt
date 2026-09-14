@@ -4331,7 +4331,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 **Interactive Issue Create**
 
-Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.
+Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.
 
 Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.
 
@@ -4342,7 +4342,7 @@ After invocation, the tool elicits in order:
 - confidential (boolean, optional): yes/no confirmation. Defaults to public when declined.
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
-Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.
+Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new issue. NON-idempotent: re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.
 
 When to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation. Use gitlab_issue (action='create') with all fields pre-supplied.
 
@@ -4358,7 +4358,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive MR Create**
 
-Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.
+Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.
 
 Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.
 
@@ -4372,7 +4372,7 @@ After invocation, the tool elicits in order:
 - squash (boolean, optional): yes/no confirmation, default unset.
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
-Behavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
+Behavior: canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues with that field unset. Each confirmed invocation creates ONE new merge request. NON-idempotent: GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.
 
 When to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation. Use gitlab_merge_request (action='create') with all fields pre-supplied.
 
@@ -4388,7 +4388,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Project Create**
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.
 
 Input: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.
 
@@ -4396,13 +4396,13 @@ After invocation, the tool elicits in order:
 - name (string, required): project display name and (when path is omitted) URL slug.
 - description (string, optional): leave empty to skip.
 - visibility (enum, required): one of private, internal, public.
-- initialize_with_readme (boolean, optional): yes/no confirmation. Explicit no, decline, or cancel continues with false.
+- initialize_with_readme (boolean, optional): yes/no confirmation. An explicit no or a decline continues with false. Canceling aborts the flow.
 - default_branch (string, optional): leave empty to use the GitLab default ('main').
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
 When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation. Use gitlab_project (action='create') with all fields pre-supplied.
 
-Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.
+Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent: re-running with the same project path/name can fail with 400/409. Canceling at any prompt aborts with no GitLab API call and no side effects. Declining an optional prompt continues, with initialize_with_readme taking a decline as false. Side effects on success: GitLab may initialize a repository and notify project members.
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.
 
@@ -4416,13 +4416,13 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Interactive Release Create**
 
-Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.
+Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.
 
 Input: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.
 
 After invocation, the tool elicits in order:
 - tag_name (string, required): must reference an existing tag in the project. Create it first via gitlab_tag (action='create').
-- name (string, optional): release title. Defaults to tag_name when left empty.
+- name (string, optional): release title. Answer with an empty value to let GitLab name the release after the tag. Declining the prompt aborts.
 - description (string, optional, multi-line, Markdown): release notes. Leave empty to skip.
 - confirm (boolean, required): final yes/no review of the assembled summary.
 
@@ -4430,7 +4430,7 @@ When to use: human-in-the-loop release publishing. NOT for: CI/automated release
 
 Requires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.
 
-Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.
+Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent: re-running with the same tag returns 409 (release already exists). Canceling or declining any prompt aborts with no GitLab API call and no side effects. This flow's optional fields take an empty answer rather than a decline. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.
 
 Returns: JSON with the created release (tag_name, name, description, web_url).
 
@@ -19838,7 +19838,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_interactive_issue_create
 
-Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.
+Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the issue.
 
 **Parameters:**
 
@@ -19848,7 +19848,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_mr_create
 
-Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.
+Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the MR.
 
 **Parameters:**
 
@@ -19858,13 +19858,13 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_project_create
 
-Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling at any prompt aborts without creating the project. Declining an optional prompt continues with that field unset.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_interactive_release_create
 
-Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.
+Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Canceling or declining any prompt aborts without creating the release.
 
 **Parameters:**
 

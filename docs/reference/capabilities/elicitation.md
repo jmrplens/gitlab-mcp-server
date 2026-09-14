@@ -227,11 +227,15 @@ visibility, err := flow.SelectOne(ctx, "visibility", "Select the project visibil
 func CancelledResult(message string) *mcp.CallToolResult
 ```
 
-Returns a non-error tool result that signals cancellation cleanly to the LLM. Tool handlers should call this when they receive `ErrDeclined` or `ErrCancelled` instead of returning a Go `error`, so the LLM can react with a friendly message rather than treating the cancellation as a fault.
+Returns a tool result carrying the cancellation message, with `isError: true`. Tool handlers call this when they receive `ErrDeclined` or `ErrCancelled` instead of returning a Go `error`, so the model reads why the flow stopped rather than a transport failure.
+
+The error flag is deliberate rather than an oversight: a cancelled flow produced none of the output its `outputSchema` describes, and a result that claimed otherwise would be a successful call with nothing in it. The message is what tells the model this was a person's decision and not a fault.
 
 ### Request Identifiers
 
-Every `elicitation/create` request carries a unique **UUID v4** identifier generated server-side. This complies with the MCP 2025-11-25 requirement that elicitation request IDs be unique per session and unguessable, and ensures correct correlation when multiple elicitation flows run in parallel.
+A URL-mode elicitation carries a server-generated **UUID v4** `elicitationId` on sessions speaking a protocol revision below 2026-07-28, which is the revision that removed the field.
+
+Form-mode elicitation — which is every flow this server actually runs — carries none, and correctly: `elicitationId` belongs to the URL request shape alone, as the SDK's own documentation says. Correlation for a form request is the JSON-RPC request id, like any other server-initiated call.
 
 ## Security
 

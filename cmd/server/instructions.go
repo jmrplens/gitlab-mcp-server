@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
 // surfaceToolRef names one GitLab operation on each of the three tool
@@ -116,7 +117,7 @@ var (
 // that section: on a sessionless transport the legacy resources/subscribe
 // request is refused, so the instructions name subscriptions/listen there
 // instead of teaching the model a method that cannot work.
-func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool) string {
+func buildInstructions(toolSurface, capabilitySurface, transport string, statelessHTTP, readOnly bool) string {
 	var b strings.Builder
 
 	b.WriteString("gitlab-mcp-server exposes GitLab projects, merge requests, issues, branches, " +
@@ -145,22 +146,40 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 		"3. Projects can use any branch as default, so NEVER hardcode 'main' in URLs.\n\n",
 		refProjectGet.render(toolSurface))
 
-	fmt.Fprintf(&b, "PACKAGE + RELEASE WORKFLOW. When uploading packages and linking them to releases:\n"+
-		"1. Preferred: Use %s to upload a file and create the release link in one step.\n"+
-		"2. Alternative: Use %s first, then use the 'url' field from its response as the URL for %s.\n"+
-		"3. NEVER construct package download URLs manually. Always use the actual URL returned by the publish tool.\n"+
-		"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), "+
-		"NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n",
-		refPackagePublishAndLink.render(toolSurface),
-		refPackagePublish.render(toolSurface),
-		refReleaseLinkCreate.render(toolSurface))
+	// Both sections teach mutating calls, and a read-only surface has removed
+	// every one of them from the catalog. Advice about a call the same session's
+	// tools/list does not offer is worse than silence, which is the rule the
+	// capability and transport branches below already follow.
+	//
+	// The narrowing that matters most here needs no flag at all: a read_api
+	// credential is served a read-only surface per pool entry (ADR-0018), so
+	// this was reached by an ordinary deployment rather than by an operator
+	// choice. Safe mode is deliberately not included, since it wraps rather
+	// than removes and the actions still exist, answering with a preview.
+	//
+	// What this does not cover is --exclude-tools naming one of them: that
+	// resolves group names, tool names and action IDs against a catalog which
+	// does not exist yet when the instructions are built, and the SDK takes
+	// them as a construction option. An operator who excluded an action by name
+	// at least knows they did.
+	if !readOnly {
+		fmt.Fprintf(&b, "PACKAGE + RELEASE WORKFLOW. When uploading packages and linking them to releases:\n"+
+			"1. Preferred: Use %s to upload a file and create the release link in one step.\n"+
+			"2. Alternative: Use %s first, then use the 'url' field from its response as the URL for %s.\n"+
+			"3. NEVER construct package download URLs manually. Always use the actual URL returned by the publish tool.\n"+
+			"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), "+
+			"NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n",
+			refPackagePublishAndLink.render(toolSurface),
+			refPackagePublish.render(toolSurface),
+			refReleaseLinkCreate.render(toolSurface))
 
-	fmt.Fprintf(&b, "RELEASE CREATION. When creating releases:\n"+
-		"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in %s and GitLab auto-creates the tag.\n"+
-		"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs. Use those, "+
-		"never construct source archive URLs.\n"+
-		"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n",
-		refReleaseCreate.render(toolSurface))
+		fmt.Fprintf(&b, "RELEASE CREATION. When creating releases:\n"+
+			"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in %s and GitLab auto-creates the tag.\n"+
+			"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs. Use those, "+
+			"never construct source archive URLs.\n"+
+			"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n",
+			refReleaseCreate.render(toolSurface))
+	}
 
 	fmt.Fprintf(&b, "ID vs IID. GitLab uses two identifiers for issues and merge requests:\n"+
 		"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most operations expect IID.\n"+
@@ -168,15 +187,25 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 		refIssueGetByID.render(toolSurface))
 
 	if capabilitySurface == config.CapabilitySurfaceFull {
-		// Both forms, because the instructions are built once per server and
+		// Which method to teach is a property of the transport, and there are
+		// three answers rather than two.
+		//
+		// On stdio nothing narrows the revisions a client may negotiate, and
 		// the revision is decided per request: a client speaking 2026-07-28 is
-		// refused resources/subscribe with -32601 whatever the transport, and
-		// on stdio nothing narrows the revisions advertised, so such a client
-		// is ordinary rather than exotic. Naming only the legacy method sent it
-		// to the one method it is guaranteed to be refused.
+		// refused resources/subscribe with -32601, so naming only the legacy
+		// method sent exactly that client to the one method it cannot call.
+		// Both are named there.
+		//
+		// Stateful HTTP is the opposite case and must keep naming the legacy
+		// method alone: that transport refuses every revision from 2026-07-28,
+		// which is why this binary strips it from the versions it advertises,
+		// so subscriptions/listen is the unreachable one there.
 		subscribeMethod := "MCP resources/subscribe for a client speaking protocol revision 2025-11-25 or " +
 			"earlier, or subscriptions/listen for one speaking 2026-07-28, which is the revision that " +
 			"introduced it and the revision in which the legacy method is refused"
+		if transport == mcpotel.TransportTCP && !statelessHTTP {
+			subscribeMethod = "MCP resources/subscribe"
+		}
 		if statelessHTTP {
 			// Each stateless POST's session closes with the response, so the
 			// legacy request is refused there; only the long-lived
