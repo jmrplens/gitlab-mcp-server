@@ -86,6 +86,13 @@ var declaredDrops = map[string]dropDeclaration{
 			"served-set check compares the binary's tools/list with the assemblers on every session start, so the " +
 			"projection is held in both places and the suite keeps only the calls that reach GitLab",
 	},
+	// S17 B4: repository, CI, environments, releases and packages.
+	"TestMeta_EnvironmentsProtected": {
+		Category: dropSuperseded,
+		Reason: "returned before its first call on an unlicensed runtime, so the CE baseline holds nothing of it; " +
+			"its licensed branch (environment.protected_list, protected_protect, protected_get and protected_unprotect) " +
+			"is the scenario test/e2e/gitlab/ee/protectedenvs_test.go drives on every surface of a licensed runtime",
+	},
 }
 
 // baselineRecorderDrop is the one reason the old suite's recorder tests
