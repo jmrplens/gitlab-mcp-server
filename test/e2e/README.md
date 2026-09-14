@@ -157,8 +157,9 @@ is the same target under its older name. It runs the `common` and `ee`
 packages of the rebuilt suite against the real binary: there is no Enterprise
 build tag, and the package decides the runtime, so `ee` refuses an unlicensed
 instance before it writes anything while `common` runs its Free actions on
-the licensed catalog too. The old suite under `test/e2e/suite` stays with
-`make test-e2e-docker` until its CE half is ported.
+the licensed catalog too. `make test-e2e-docker` is now the CE run under its
+older name: the suite under `test/e2e/suite` is superseded and nothing runs
+it any more.
 After a successful activation-code run, the setup script exports the generated
 license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
 runs prefer that ignored local cache and install it through the License API, so

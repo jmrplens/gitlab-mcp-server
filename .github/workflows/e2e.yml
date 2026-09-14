@@ -3,13 +3,13 @@
 # Runs the e2e suite against an ephemeral Docker-based GitLab CE instance.
 # Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
 #
-# Two jobs, each with a GitLab of its own. `e2e` runs the suite under
-# test/e2e/suite, which gates releases. `e2e-gitlab` runs the rebuilt suite
-# under test/e2e/gitlab, which drives the real binary over stdio and records
-# what the server dispatched; it is non-blocking (continue-on-error) while
-# the old suite's tests are ported, and its coverage report is uploaded
-# beside the results. It becomes the gate, and the old job goes, when the
-# port is complete.
+# Two jobs, each with a GitLab of its own. `e2e-gitlab` runs the rebuilt
+# suite under test/e2e/gitlab, which drives the real binary over stdio and
+# records what the server dispatched; it is the gate, and its coverage report
+# is uploaded beside the results. `e2e` runs the superseded suite under
+# test/e2e/suite and is opt-in from a manual dispatch: the port is complete,
+# so nothing schedules it and the release pipeline does not call it. It is
+# deleted with that directory in the next step.
 #
 # Three ways in. Manually, from the "Use workflow from" dropdown, optionally
 # with a custom ref such as a fork pull request's merge SHA. As a reusable
@@ -39,6 +39,10 @@ on:
         description: "GitLab CE Docker image"
         default: "gitlab/gitlab-ce:latest"
         type: string
+      legacy_suite:
+        description: "Also run the superseded test/e2e/suite job"
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       ref:
@@ -57,8 +61,14 @@ env:
   GITLAB_IMAGE: ${{ inputs.gitlab_image || 'gitlab/gitlab-ce:latest' }}
 
 jobs:
+  # The superseded suite, kept runnable while test/e2e/suite is still in the
+  # tree and reachable only by asking for it from a manual dispatch. The
+  # input is declared under workflow_dispatch alone on purpose: a reusable
+  # call sees no such input, so the release pipeline and the weekly run skip
+  # this job without a condition of their own.
   e2e:
-    name: "🧫 E2E (Docker GitLab)"
+    name: "🧫 E2E (superseded suite, Docker GitLab)"
+    if: ${{ inputs.legacy_suite }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -142,13 +152,12 @@ jobs:
   # The rebuilt suite, on a GitLab CE of its own: the common and ce packages,
   # driven through the real binary by test/e2e/scripts/run-docker-e2e.sh, the
   # same lifecycle `make test-e2e-ce` runs. The licensed ee package stays
-  # local, since the license is renewed by hand. Non-blocking until the port
-  # is complete: a failure here is visible on the run and stops nothing.
+  # local, since the license is renewed by hand. This is the gate: it blocks,
+  # and release.yml reaches it by calling this workflow.
   e2e-gitlab:
-    name: "🧫 E2E (rebuilt suite, Docker GitLab)"
+    name: "🧫 E2E (Docker GitLab)"
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
