@@ -1,10 +1,10 @@
-//go:build httpe2e && race
+//go:build collectore2e && race
 
 // harness_race_test.go is the race-detector half of the harness build seam. The
 // go tool sets the `race` build tag when -race is used, so this file is what is
-// compiled by `go test -race -tags httpe2e ./test/e2e/http/` and
+// compiled by `go test -race -tags collectore2e ./test/e2e/collector/` and
 // harness_norace_test.go is what is compiled otherwise.
-package httpe2e
+package collectore2e
 
 import "time"
 
@@ -15,8 +15,8 @@ import "time"
 // nothing else. The server is a separate process built by the harness, so
 // without passing the flag on, a race run would watch the harness's own
 // goroutines and say nothing about the server's, which are the ones this module
-// exists to reach: the handler chain lives in package main and can only be
-// driven as a process.
+// exists to reach: the telemetry pipeline is assembled in package main and
+// exports from goroutines of its own, on a batch schedule nothing here drives.
 func serverBuildArgs(out string) []string {
 	return []string{"build", "-race", "-o", out, "./cmd/server"}
 }
@@ -30,10 +30,10 @@ const serverBuildTimeout = 15 * time.Minute
 //
 // Without halt_on_error the race runtime prints its report to stderr and lets
 // the process continue, setting the exit status only at a clean exit. A server
-// that is killed at the end of a test, which is most of them here, would then
-// take the report to the log with it and the run would stay green. Halting
-// fails whichever test was talking to it, with the report in the captured
-// output.
+// that is cancelled at the end of a test, which is every one of them here,
+// would then take the report to the log with it and the run would stay green.
+// Halting fails whichever test was talking to it, with the report in the
+// captured output.
 func raceEnviron() []string {
 	return []string{"GORACE=halt_on_error=1"}
 }
@@ -47,9 +47,8 @@ func raceEnviron() []string {
 // not, since the Makefile target that stages one compiles it plainly. Driving
 // an uninstrumented server would leave the run watching the test binary alone
 // and reporting no race because nothing was watching, which is worse than a
-// failure — .github/workflows/race.yml runs this module precisely to watch the
-// server. So the variable is refused here rather than honored, and a race run
-// that wants to skip the build has to say so by unsetting it.
+// failure. So the variable is refused here rather than honored, and a race
+// run that wants to go faster has to say so by unsetting it.
 func prebuiltBinaryRefusal() string {
 	return "this run is under the race detector, which needs the instrumented server this package builds"
 }

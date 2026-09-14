@@ -40,6 +40,19 @@
 // the hundred lines: the alternative is a shared package compiled with no build
 // tag, which the default go test ./... would then build, and a change to it
 // would reach across three suites at once.
+//
+// What it costs is that a lesson learned in one copy stays in that copy, and
+// this one was two behind. A `go test -race` run of this module used to drive
+// an uninstrumented server, because the -race flag reaches only the test binary
+// and the build here did not pass it on; and the health wait polled a port for
+// 45 seconds without ever asking whether the process it was waiting for was
+// still alive, which is how a server that died on the way up is mistaken for a
+// slow one — or, worse, how the port it freed is answered by something else and
+// the module grades another test's telemetry. Both were already answered in
+// test/e2e/http and test/e2e/stdio, and both are answered here now. Keeping the
+// copies is a decision to port such a fix three times rather than to let one
+// change reach three suites at once; it is not a decision to leave two of them
+// wrong.
 package collectore2e
 
 import (
@@ -79,10 +92,40 @@ var (
 	errBuild    error
 )
 
-// serverBinary returns the path of the server these tests drive, building it
-// once for the whole package, and ends the test when that build failed.
+// binaryEnv names a server already built, to drive instead of building one.
+//
+// The Makefile's Docker targets build cmd/server once and hand it to every
+// package that drives it, and until this was read here the three transport
+// modules were the packages that ignored it: a run that had already staged a
+// binary still paid for a compile per module. The variable now means the same
+// thing in all four places.
+const binaryEnv = "E2E_SERVER_BINARY"
+
+// serverBinary returns the path of the server these tests drive: the one
+// E2E_SERVER_BINARY names, or one built once for the whole package, and ends
+// the test when neither can be had.
+//
+// Building rather than importing is the point of every module under test/e2e
+// that drives a transport: the telemetry pipeline is assembled in package main
+// from flags and environment variables, and a test that reassembled it would be
+// testing its own copy of the wiring rather than the wiring that ships.
+//
+// A path that names nothing is refused rather than built around. Falling back
+// to a compile would answer a typo by silently driving a different binary from
+// the one the operator staged, and the run would no longer be testing what
+// they meant to test.
 func serverBinary(t *testing.T) string {
 	t.Helper()
+	if prebuilt := os.Getenv(binaryEnv); prebuilt != "" {
+		if refusal := prebuiltBinaryRefusal(); refusal != "" {
+			t.Fatalf("%s names %s, which cannot be used: %s", binaryEnv, prebuilt, refusal)
+		}
+		//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
+		if _, err := os.Stat(prebuilt); err != nil {
+			t.Fatalf("%s names %s, which cannot be used: %v", binaryEnv, prebuilt, err)
+		}
+		return prebuilt
+	}
 	bin, err := buildServerBinary()
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -91,11 +134,6 @@ func serverBinary(t *testing.T) string {
 }
 
 // buildServerBinary builds cmd/server once for the whole package.
-//
-// Building rather than importing is the point of every module under test/e2e
-// that drives a transport: the telemetry pipeline is assembled in package main
-// from flags and environment variables, and a test that reassembled it would be
-// testing its own copy of the wiring rather than the wiring that ships.
 //
 // It takes no testing.T, and the build directory is not a t.TempDir, for one
 // reason: the build is shared by every test in the package, so the first test
@@ -110,9 +148,12 @@ func buildServerBinary() (string, error) {
 		}
 		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		// The build arguments and the bound come from the race seam, so a
+		// `go test -race` run drives an instrumented server rather than an
+		// uninstrumented one (harness_race_test.go).
+		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", "build", "-o", out, "./cmd/server")
+		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path this function got from os.MkdirTemp; nothing here comes from outside the test.
 		cmd.Dir = repoRoot()
 		if output, runErr := cmd.CombinedOutput(); runErr != nil {
 			errBuild = fmt.Errorf("building cmd/server: %w\n%s", runErr, output)
@@ -179,6 +220,9 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
+	// Before the caller's own entries, so a test that needs to say something
+	// else about GORACE still can.
+	cmd.Env = append(cmd.Env, raceEnviron()...)
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -202,15 +246,34 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 		},
 	}
 
+	// The process is waited on once, here, and the result published by closing
+	// rather than by sending: everything that asks whether the server is still
+	// there has to be able to ask, and a value can only be taken once.
+	//
+	// Cmd.Wait rather than os.Process.Wait, which is what the stdio module
+	// reaps with: stdout and stderr here are an io.Writer, so exec runs its own
+	// copy goroutines, and Cmd.Wait is the only thing that awaits them and
+	// closes the parent ends of the pipes. Reaping the process directly would
+	// close the channel before the last lines were copied and leak two
+	// descriptors per start.
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
+
 	t.Cleanup(func() {
 		// Cancel first, then wait: the process flushes its last telemetry
 		// batch on the way out, and a test that killed it without waiting
-		// would race that flush against its own assertions.
+		// would race that flush against its own assertions. Waiting on the
+		// reaper is that same barrier: the Wait it made is the one that awaits
+		// the copy goroutines, so by the time this returns the flush has been
+		// sent and whatever the server said about it is in the buffer.
 		cancel()
-		_ = cmd.Wait()
+		<-exited
 	})
 
-	waitHealthy(t, srv)
+	waitHealthy(t, srv, exited)
 	return srv
 }
 
@@ -230,11 +293,27 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 // waitHealthy polls /health until the server answers or the deadline passes. A
 // failure dumps the process output, because a server that refuses to start has
 // already said why and nobody should have to go looking.
-func waitHealthy(t *testing.T, s *server) {
+//
+// The process is watched while it is polled, and that is not a refinement of
+// the timeout. freePort above hands back a number rather than a listener, so
+// between the release and the bind the port belongs to nobody: a server that
+// died on the way up leaves it free for anything else to answer on, and a
+// health check answered by somebody else is worse than one that fails, because
+// the test would go on to drive a server configured for another test and grade
+// its telemetry. Asking whether the process is still there is what tells those
+// two apart, and it is why a dead server is reported in a moment rather than
+// after 45 seconds of polling something that will never answer.
+func waitHealthy(t *testing.T, s *server, exited <-chan struct{}) {
 	t.Helper()
 	healthClient := &http.Client{Timeout: 5 * time.Second}
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
+		select {
+		case <-exited:
+			t.Fatalf("the server exited before it served. Output:\n%s", s.logs())
+		default:
+		}
+
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, s.baseURL+"/health", http.NoBody)
 		if err != nil {
 			t.Fatalf("building the health request: %v", err)

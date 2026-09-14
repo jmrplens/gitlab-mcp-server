@@ -16,6 +16,12 @@ Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags`
 
 Those five tags are the whole list. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, so one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. The suite this replaced used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
 
+## One build, four packages
+
+The four packages that drive the real binary — `test/e2e/gitlab` through the harness, and `test/e2e/http`, `test/e2e/stdio` and `test/e2e/collector` through one of their own — each build `cmd/server` once per process, or drive the build `E2E_SERVER_BINARY` names. That is what `make test-e2e-ce` and its siblings stage, so a run compiles the server once rather than once per package; until the three transport modules read it, they were the packages that ignored it. A path that names nothing is refused rather than answered with a build of their own, because a typo would otherwise leave the run testing a binary nobody staged.
+
+A `go test -race` run refuses the variable outright. The detector instruments the test binary and nothing else, so each of these packages passes `-race` on to the build it does itself through a build-tag seam; a staged binary was almost certainly compiled plainly, and driving it would leave the run watching nothing and reporting no race for that reason. `.github/workflows/race.yml` sets it nowhere, and the modules no longer depend on that staying true.
+
 ## HTTP transport module
 
 ```bash

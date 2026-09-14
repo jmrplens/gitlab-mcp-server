@@ -61,10 +61,39 @@ var (
 	errBuild error
 )
 
-// serverBinary returns the path of the server these tests drive, building it
-// once for the whole package, and ends the test when that build failed.
+// binaryEnv names a server already built, to drive instead of building one.
+//
+// The Makefile's Docker targets build cmd/server once and hand it to every
+// package that drives it, and until this was read here the three transport
+// modules were the packages that ignored it: a run that had already staged a
+// binary still paid for a compile per module. The variable now means the same
+// thing in all four places.
+const binaryEnv = "E2E_SERVER_BINARY"
+
+// serverBinary returns the path of the server these tests drive: the one
+// E2E_SERVER_BINARY names, or one built once for the whole package, and ends
+// the test when neither can be had.
+//
+// Building rather than importing is the point of the module: what is under test
+// is the process — its pipes, its streams, its exit — and a test that imported
+// package main would be testing its own assembly of it instead.
+//
+// A path that names nothing is refused rather than built around. Falling back
+// to a compile would answer a typo by silently driving a different binary from
+// the one the operator staged, and the run would no longer be testing what
+// they meant to test.
 func serverBinary(t *testing.T) string {
 	t.Helper()
+	if prebuilt := os.Getenv(binaryEnv); prebuilt != "" {
+		if refusal := prebuiltBinaryRefusal(); refusal != "" {
+			t.Fatalf("%s names %s, which cannot be used: %s", binaryEnv, prebuilt, refusal)
+		}
+		//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
+		if _, err := os.Stat(prebuilt); err != nil {
+			t.Fatalf("%s names %s, which cannot be used: %v", binaryEnv, prebuilt, err)
+		}
+		return prebuilt
+	}
 	bin, err := buildServerBinary()
 	if err != nil {
 		t.Fatalf("building the server binary: %v", err)
@@ -74,10 +103,6 @@ func serverBinary(t *testing.T) string {
 
 // buildServerBinary builds cmd/server once for the whole package and returns
 // its path.
-//
-// Building rather than importing is the point of the module: what is under test
-// is the process — its pipes, its streams, its exit — and a test that imported
-// package main would be testing its own assembly of it instead.
 //
 // It takes no testing.T, and the build directory is not a t.TempDir, for one
 // reason: the build is shared by every test in the package, so the first test

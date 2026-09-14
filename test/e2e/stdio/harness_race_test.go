@@ -37,3 +37,19 @@ const serverBuildTimeout = 15 * time.Minute
 func raceEnviron() []string {
 	return []string{"GORACE=halt_on_error=1"}
 }
+
+// prebuiltBinaryRefusal says why a server staged by something else cannot be
+// driven by this run, or "" when it can.
+//
+// Under the detector it cannot. The seam above passes -race on to the build
+// this package does, and nothing here can tell whether a path handed in
+// through E2E_SERVER_BINARY was built the same way: it almost certainly was
+// not, since the Makefile target that stages one compiles it plainly. Driving
+// an uninstrumented server would leave the run watching the test binary alone
+// and reporting no race because nothing was watching, which is worse than a
+// failure — .github/workflows/race.yml runs this module precisely to watch the
+// server. So the variable is refused here rather than honored, and a race run
+// that wants to skip the build has to say so by unsetting it.
+func prebuiltBinaryRefusal() string {
+	return "this run is under the race detector, which needs the instrumented server this package builds"
+}

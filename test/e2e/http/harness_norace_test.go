@@ -20,3 +20,9 @@ const serverBuildTimeout = 5 * time.Minute
 func raceEnviron() []string {
 	return nil
 }
+
+// prebuiltBinaryRefusal reports that a staged server is usable: an ordinary run
+// drives whatever binary it is pointed at.
+func prebuiltBinaryRefusal() string {
+	return ""
+}

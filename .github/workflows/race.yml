@@ -86,6 +86,12 @@ jobs:
   # detected race stops the server rather than being printed into a log nobody
   # reads.
   #
+  # Which is why this job must never hand the modules a binary through
+  # E2E_SERVER_BINARY to save the build below: a binary staged by anything else
+  # was compiled plainly, and driving it would leave this job watching nothing
+  # and reporting no race for that reason. The modules refuse the variable under
+  # the detector rather than trusting this comment.
+  #
   # A race build shares no cache with an ordinary one, so the first build is a
   # cold build of the whole dependency tree. It is done here rather than inside
   # the test's five-minute bound.
