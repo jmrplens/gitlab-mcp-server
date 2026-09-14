@@ -1,9 +1,11 @@
 package achievements
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -397,8 +399,37 @@ func UserAchievementReorder(ctx context.Context, client *gitlabclient.Client, in
 	return ReorderOutput{
 		Status:           "success",
 		Message:          "Successfully reordered the awards, highest priority first.",
-		UserAchievements: toUserAchievements(awards),
+		UserAchievements: byPriority(toUserAchievements(awards)),
 	}, nil
+}
+
+// byPriority orders awards the way [ReorderOutput] says they come back.
+//
+// GitLab applies the order the mutation asks for and answers with the set in
+// an order of its own, so a caller reading the answer top to bottom saw
+// something other than the order it had just set, while both the type's doc
+// comment and the message beside it promised otherwise. Sorting here is what
+// makes that promise true, and it is done on the way out rather than left to
+// the caller because the caller has no reason to expect a claim this server
+// publishes to need checking.
+//
+// An award GitLab reports no priority for keeps its place, since there is
+// nothing to rank it by, and the sort is stable so those stay in the order
+// they arrived.
+func byPriority(awards []UserAchievement) []UserAchievement {
+	slices.SortStableFunc(awards, func(a, b UserAchievement) int {
+		switch {
+		case a.Priority == nil && b.Priority == nil:
+			return 0
+		case a.Priority == nil:
+			return 1
+		case b.Priority == nil:
+			return -1
+		default:
+			return cmp.Compare(*a.Priority, *b.Priority)
+		}
+	})
+	return awards
 }
 
 // UserList lists the awards one user holds.
