@@ -215,8 +215,15 @@ func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 	// thing under test; none gone at all is the delete, and this is the only
 	// place a test would see that.
 	if len(remaining) == len(userIDs) {
-		e.T.Errorf("none of the deleted users %v had left the instance after %s; the deletes were accepted and nothing was removed: %v",
-			remaining, userDeletionWait, err)
+		// What state they are in decides whose defect this is, and nothing
+		// else in the suite can say it. gitlab_reject_user tells a model the
+		// rejection "permanently deletes the pending user", so an account that
+		// is merely blocked or still pending makes that description false,
+		// while one that is simply slow to go makes this a wait that is too
+		// short. The states are read here rather than guessed at.
+		e.T.Errorf("none of the deleted users %v had left the instance after %s; the deletes were accepted and "+
+			"nothing was removed. Their states now: %s. Error: %v",
+			remaining, userDeletionWait, describeUserStates(e, remaining), err)
 		return
 	}
 	e.T.Logf("the background deletion of users %v had not landed within %s, with %d of %d already gone: %v",
@@ -225,6 +232,26 @@ func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 
 // userIsGone reports whether a user answers 404, which is where a deletion
 // GitLab performs from a background job ends.
+// describeUserStates renders what the instance now holds for each user, for a
+// failure that has to say whether an account survived a rejection and in what
+// condition. It never fails the test: it is called from one that has already
+// failed, and a read that cannot answer says so in place of a state.
+func describeUserStates(e *harness.Env, userIDs []int64) string {
+	parts := make([]string, 0, len(userIDs))
+	for _, userID := range userIDs {
+		user, _, err := e.Client().GL().Users.GetUser(userID, &gl.GetUserOptions{}, gl.WithContext(e.Ctx))
+		switch {
+		case err != nil:
+			parts = append(parts, fmt.Sprintf("%d=unreadable(%v)", userID, err))
+		case user == nil:
+			parts = append(parts, fmt.Sprintf("%d=no user in the answer", userID))
+		default:
+			parts = append(parts, fmt.Sprintf("%d=%s", userID, user.State))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
 func userIsGone(e *harness.Env, userID int64) bool {
 	_, _, err := e.Client().GL().Users.GetUser(userID, &gl.GetUserOptions{}, gl.WithContext(e.Ctx))
 	return err != nil && fixture.IsStatus(err, http.StatusNotFound)
