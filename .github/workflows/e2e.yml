@@ -1,7 +1,8 @@
 # E2E test workflow for gitlab-mcp-server
 #
 # Runs the e2e suite against an ephemeral Docker-based GitLab CE instance.
-# Duration: GitLab boot ~5 min plus the suite itself.
+# Duration: GitLab boot ~6 min plus the suite itself, which is around half an
+# hour and grows with every scenario added to the shared package.
 #
 # One job, `e2e-gitlab`, running the suite under test/e2e/gitlab: it drives
 # the real binary over stdio and records what the server dispatched, it is the
@@ -63,7 +64,13 @@ jobs:
   e2e-gitlab:
     name: "🧫 E2E (Docker GitLab)"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # GitLab boots in about six minutes, and the suite is given an hour per
+    # package binary below, so this has to be the sum plus provisioning and
+    # teardown rather than the 45 it was: at 45 the job would be killed while
+    # a run that is still working has time left on its own clock, which is the
+    # one number a reader would look at. GitHub caps a job at six hours, so
+    # this is well inside what the runner allows.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -92,7 +99,7 @@ jobs:
         run: |
           E2E_COMMIT="$(git rev-parse HEAD)"
           export E2E_COMMIT
-          ./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 1800s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
+          ./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 3600s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
         env:
           E2E_BITBUCKET: "false"
           E2E_SERVER_BINARY: ${{ github.workspace }}/dist/e2e/gitlab-mcp-server

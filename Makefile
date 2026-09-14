@@ -293,7 +293,14 @@ test-e2e-docker: test-e2e-ce
 E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # Per package binary, like E2E_DOCKER_ENTERPRISE_TIMEOUT above: common and ce
 # each get the whole of it.
-E2E_GITLAB_TIMEOUT ?= 1800s
+#
+# It was 1800s and that was not a budget, it was the wall the run hit. A CE
+# run of common measures ~1800s on a developer machine, so the margin was two
+# seconds, and CI, on a slower runner, panicked with "test timed out after
+# 30m0s" after 1800.077s. The figure is the same 3600s the licensed run uses:
+# common grows with every scenario, and a timeout is meant to stop a hang
+# rather than to cap a suite that is doing its work.
+E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
 e2e-server-binary:
