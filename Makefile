@@ -11,6 +11,7 @@
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
@@ -640,22 +641,23 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/16] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/16] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/16] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/16] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/16] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/16] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/16] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/16] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/16] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[10/16] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[12/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[13/16] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[14/16] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[15/16] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[16/16] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[1/17] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/17] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/17] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/17] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/17] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/17] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/17] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/17] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/17] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[10/17] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/17] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[12/17] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[13/17] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[14/17] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[15/17] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[16/17] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[17/17] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1068,8 +1070,11 @@ gen-readme: gen-footprint gen-stats
 # the committed record and measures nothing, which is what check-bench-resources
 # then compares; bench-resources itself stays out, and so does brand-rasters,
 # which needs rsvg-convert and cwebp that only the maintainer's machine has.
+# e2e-coverage-record-render is in on exactly the same terms and
+# e2e-coverage-record is out on the same ones: redrawing the coverage page
+# needs only the committed record, while measuring it needs a booted GitLab.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -1305,6 +1310,46 @@ audit-e2e-gaps:
 audit-e2e-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report -o $(E2E_REPORT_DIR)/e2e-coverage.json -summary -
+
+## e2e-coverage-record: fold both Docker runs into the committed per-runtime
+## coverage record and redraw the page beside it. Needs the shards and the
+## gotestsum streams of a run of each half, so it is a maintainer's command
+## and deliberately not a member of update-all. Each half is written by its
+## own invocation: one -results stream belongs to one runtime, and joining
+## the ce stream to the ee shards would credit each against the other's tests.
+e2e-coverage-record:
+	@for target in e2e-coverage-record-ce e2e-coverage-record-ee; do \
+		$(MAKE) --no-print-directory $$target || exit 1; \
+	done
+
+## e2e-coverage-record-ce: record the unlicensed half alone, for a maintainer
+## who ran only `make test-e2e-ce`. The write folds into the committed
+## document and leaves the ee entry exactly as it was.
+e2e-coverage-record-ce:
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ce -results $(E2E_REPORT_DIR)/e2e-ce-log.json \
+		-runtime ce -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ce.json
+
+## e2e-coverage-record-ee: record the licensed half alone, for a maintainer
+## who ran only `make test-e2e-ee`.
+e2e-coverage-record-ee:
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ee -results $(E2E_REPORT_DIR)/e2e-ee-log.json \
+		-runtime ee -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ee.json
+
+## e2e-coverage-record-render: redraw docs/development/testing/e2e-coverage.md
+## from the committed record, without a GitLab. This is what to run after
+## changing the page's wording; the figures stay exactly as they were measured.
+e2e-coverage-record-render:
+	go run ./cmd/audit_e2e_coverage/ -render-record
+
+## check-e2e-coverage-record: the offline gate over the committed coverage
+## record: both runtimes present, the levels agreeing with the action lists
+## beside them, the floors of -check re-applied, the record inside its own
+## staleness window, and the page byte-equal to a fresh rendering. No GitLab,
+## no Docker and no network; a catalog that has moved under the record is a
+## note rather than a failure, since check-e2e-static already fails on a
+## rename from the scenario's side.
+check-e2e-coverage-record:
+	go run ./cmd/audit_e2e_coverage/ -check-record
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package

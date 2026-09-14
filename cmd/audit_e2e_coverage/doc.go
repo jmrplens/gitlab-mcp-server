@@ -58,6 +58,33 @@
 // declares nothing and the lines that replaced it would otherwise read as
 // naming a test that never existed.
 //
+// # The committed record
+//
+// Everything above describes one run and is written into the gitignored
+// dist/, so nothing on main can say what the suite covers. -record commits an
+// allowlist of the report to docs/development/e2e-coverage.json, one entry per
+// Docker target (ce, ee): the runtime, the run rows with their commit, GitLab
+// version and fixture profile, the session rows, the summary, and the three
+// level lists, which are what make the record an answer to which actions
+// rather than only to how many. The per-action cells stay out, being a
+// thousand rows per runtime that no reviewer would read, and the shard
+// directory stays out for being a path on the machine that ran the suite. The
+// entry's date is read off the run IDs' own timestamps, not the writing
+// clock, so rebuilding the file from old shards does not reset the window.
+// The write insists on -results and -static, because without them the
+// classification frozen would be a more generous one than the gates judge by.
+//
+// -render-record redraws docs/development/testing/e2e-coverage.md from the
+// committed record, which is why that half is a member of make update-all and
+// the measurement is not. -check-record is the offline gate: the schema, the
+// runtime set, the levels against the lists beside them, the floors -check
+// applies, the staleness window, and the page byte-equal to a fresh
+// rendering. A catalog that has moved under the record is reported and does
+// not fail, since -static already fails on the same rename from the
+// scenario's side; so is an entry measured on a revision that is not an
+// ancestor of HEAD, and only when git can resolve that revision at all, since
+// a shallow CI checkout knows none of them.
+//
 // -static needs no GitLab and runs on push. It loads test/e2e/gitlab and
 // test/e2e/internal with their tests under the e2e tag and, from the type
 // checker's own record, collects every constant of the harness's ActionID

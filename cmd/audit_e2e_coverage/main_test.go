@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
@@ -41,6 +42,94 @@ func TestRun_NothingToDo_IsAUsageError(t *testing.T) {
 	code, _, stderr := runFixture(t, options{})
 	if code != exitUsage || !strings.Contains(stderr, "nothing to do") {
 		t.Errorf("run() = %d, %q; want exit %d and the usage message", code, stderr, exitUsage)
+	}
+}
+
+// TestRun_RecordModes_AreNotAUsageError verifies that the two modes which
+// read the committed record rather than a run pass the "nothing to do" guard
+// without -calls. That is what lets the gate run on a machine with no Docker,
+// which is the whole point of committing the record.
+func TestRun_RecordModes_AreNotAUsageError(t *testing.T) {
+	dir := t.TempDir()
+	base := options{
+		dir: dir, recordPath: filepath.Join(dir, "e2e-coverage.json"),
+		recordPage: filepath.Join(dir, "e2e-coverage.md"),
+		catalogs:   func(edition.Tier) (*servedCatalog, error) { return fixtureCatalog(), nil },
+	}
+	cases := []struct {
+		name string
+		opts options
+		want int
+	}{
+		// No record on disk: -check-record reports a finding about the tree
+		// and -render-record cannot run at all, and neither is the usage
+		// error a run that asked for nothing gets.
+		{name: "check-record", opts: func() options { o := base; o.checkRecord = true; return o }(), want: exitFindings},
+		{name: "render-record", opts: func() options { o := base; o.renderRecord = true; return o }(), want: exitUsage},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, stderr := runFixture(t, tc.opts)
+			if code != tc.want {
+				t.Errorf("run() = %d, stderr %q; want %d", code, stderr, tc.want)
+			}
+			if strings.Contains(stderr, "nothing to do") {
+				t.Errorf("stderr = %q, want the record mode to have run", stderr)
+			}
+		})
+	}
+}
+
+// TestRun_Record_WritesBothArtifactsAndPassesItsOwnCheck verifies the whole
+// flag path end to end: -record writes the JSON and the page, and
+// -check-record over the same two passes.
+func TestRun_Record_WritesBothArtifactsAndPassesItsOwnCheck(t *testing.T) {
+	silentProbe(t)
+	dir := t.TempDir()
+	opts := fixtureOptions(t)
+	opts.results = filepath.Join("testdata", "results", "e2e-log.json")
+	opts.record = true
+	// -record insists on the static scan, so the run drives the fixture
+	// module the static tests use; what it classifies is beside the point
+	// here, which is that the two artifacts land and agree.
+	opts.static = true
+	opts.dir = fakeModuleDir(t)
+	opts.staticCatalog = fakeCatalog
+	opts.output = filepath.Join(dir, "report.json")
+	opts.recordPath = filepath.Join(dir, "e2e-coverage.json")
+	opts.recordPage = filepath.Join(dir, "e2e-coverage.md")
+	opts.now = func() time.Time { return checkClock }
+
+	// The fixture module is planted with the findings the static tests assert
+	// on, so the run's status is the static gate's; what this test is about
+	// is that the record was written beside it.
+	code, stdout, stderr := runFixture(t, opts)
+	if code != exitFindings {
+		t.Fatalf("run(-record) = %d, stderr %q; want the planted static findings", code, stderr)
+	}
+	if !strings.Contains(stdout, "record: ce: L1 ") {
+		t.Errorf("stdout = %q, want the record summary line", stdout)
+	}
+	for _, path := range []string{opts.recordPath, opts.recordPage} {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("stat %s: %v", path, err)
+			}
+		})
+	}
+
+	check := options{
+		dir: opts.dir, recordPath: opts.recordPath, recordPage: opts.recordPage,
+		checkRecord: true, catalogs: opts.catalogs, now: opts.now,
+	}
+	code, _, stderr = runFixture(t, check)
+	// The ee half is missing, which is the one finding a ce-only record has;
+	// everything else about it must hold.
+	if !strings.Contains(stderr, "the record holds no ee runtime") {
+		t.Errorf("stderr = %q, want only the missing ee half reported", stderr)
+	}
+	if code != exitFindings {
+		t.Errorf("run(-check-record) = %d, want %d", code, exitFindings)
 	}
 }
 

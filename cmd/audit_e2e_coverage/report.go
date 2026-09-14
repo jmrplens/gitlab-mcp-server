@@ -53,14 +53,28 @@ type report struct {
 }
 
 // runRow is one package's run line.
+//
+// The three provenance fields are here rather than on the report as a whole
+// because the run line is where they are recorded and a directory may hold
+// several: two packages of one runtime that disagree on the commit were built
+// from two trees, and a row that folded them would hide it. The committed
+// coverage record carries these rows verbatim for exactly that reason.
 type runRow struct {
-	Package     string                  `json:"package"`
-	Requirement string                  `json:"requirement"`
-	Status      string                  `json:"status"`
-	Reason      string                  `json:"reason,omitempty"`
-	Filter      string                  `json:"filter,omitempty"`
-	RunID       string                  `json:"run_id"`
-	Fixtures    e2ecalls.FixtureProfile `json:"fixtures"`
+	Package     string `json:"package"`
+	Requirement string `json:"requirement"`
+	Status      string `json:"status"`
+	Reason      string `json:"reason,omitempty"`
+	Filter      string `json:"filter,omitempty"`
+	RunID       string `json:"run_id"`
+	// Commit is the revision under test, from E2E_COMMIT.
+	Commit string `json:"commit,omitempty"`
+	// GitLabVersion is the version the instance reported.
+	GitLabVersion string `json:"gitlab_version,omitempty"`
+	// TierConfirmed is whether the tier came from the instance license rather
+	// than from a setting, which decides whether the catalog the figures are
+	// divided by is the one the instance would really serve.
+	TierConfirmed bool                    `json:"tier_confirmed"`
+	Fixtures      e2ecalls.FixtureProfile `json:"fixtures"`
 }
 
 // sessionRow is one surface and mode, with what its sessions served.
@@ -171,7 +185,8 @@ func runRows(rt *runtimeRecords) []runRow {
 	for _, run := range rt.runs {
 		rows = append(rows, runRow{
 			Package: run.Package, Requirement: run.Requirement, Status: run.Status, Reason: run.Reason,
-			Filter: run.Filter, RunID: run.RunID, Fixtures: run.Fixtures,
+			Filter: run.Filter, RunID: run.RunID, Commit: run.Commit, GitLabVersion: run.GitLabVersion,
+			TierConfirmed: run.TierConfirmed, Fixtures: run.Fixtures,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Package < rows[j].Package })

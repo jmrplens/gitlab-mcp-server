@@ -14,6 +14,7 @@ correctly.
 | Document                                                             | Audience              | Purpose                                                                                                                |
 | -------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | [Testing Reference](testing.md)                                      | Contributors          | Generated unit, integration, E2E, coverage, and package test reference.                                                |
+| [E2E Coverage](e2e-coverage.md)                                      | Maintainers           | Generated per-runtime summary of what the end-to-end suite asserts, from the calls a Docker run recorded.              |
 | [AI Model Evaluation](model-evaluation.md)                           | Users and evaluators  | Explains what AI model evaluations prove, how schema and Docker modes differ, and how to interpret the metrics.        |
 | [AI Model Evaluation Developer Guide](model-evaluation-developer.md) | Maintainers           | Operational guide for running schema and Docker model evaluations, adding cases, reading traces, and updating results. |
 | [AI Model Evaluation Results](model-results.md)                      | Users and maintainers | Current published benchmark result selected from generated reports.                                                    |

@@ -170,6 +170,15 @@ jobs:
       # match the decoder.
       - name: Check every GraphQL decoder against its document
         run: make check-graphql-shapes
+      # What the e2e suite actually asserts, per runtime, committed from a
+      # maintainer's Docker run. Deliberately not behind FRESHNESS: nothing in
+      # this repository can regenerate it, so a stacked layer has nothing to
+      # defer and the window is the only thing that ever makes it fail. A
+      # catalog that has moved under the record is a note here, because
+      # check-e2e-static already fails on the same rename from the scenario's
+      # side and a rename must be committable without booting a GitLab.
+      - name: Check the committed e2e coverage record
+        run: make check-e2e-coverage-record
       # R-PATH, the dimension that reads the request rather than the surface.
       # It reads the committed inventory the coverage job regenerates, so it
       # needs no suite run and no network, and it fails on a package the suite
