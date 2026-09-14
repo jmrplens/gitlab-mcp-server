@@ -1,20 +1,44 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-// TestExemptions_BeforeTheSwitch_ShipEmpty pins the state the tables ship
-// in until the switch: the ratchet off, no exemption, no floor. The step
-// that turns the ratchet on edits this test with it, which is the point:
-// switching the gate on is a change a reader sees in the tests.
-func TestExemptions_BeforeTheSwitch_ShipEmpty(t *testing.T) {
-	if ratchetEnabled {
-		t.Error("ratchetEnabled is on before the switch step")
-	}
-	if len(exemptedActions) != 0 {
-		t.Errorf("exemptedActions holds %d entries before the switch step", len(exemptedActions))
+// TestExemptions_AfterTheSwitch_RatchetIsOn pins the state the tables ship in
+// now that the new suite is the gate: the ratchet on, so a catalog action with
+// neither a scenario nor a declaration fails the push, and no floor, because a
+// floor is read off a run's calls artifact by -check and is not a property of
+// this table.
+//
+// It replaces the test that pinned the opposite, which is the point: switching
+// the gate on is a change a reader sees in the tests rather than one buried in
+// a constant.
+func TestExemptions_AfterTheSwitch_RatchetIsOn(t *testing.T) {
+	if !ratchetEnabled {
+		t.Error("ratchetEnabled is off, so a catalog action with no scenario passes the gate")
 	}
 	if len(assertedFloors) != 0 {
-		t.Errorf("assertedFloors holds %d entries before the switch step", len(assertedFloors))
+		t.Errorf("assertedFloors holds %d entries, and floors belong to -check rather than to this table",
+			len(assertedFloors))
+	}
+}
+
+// TestExemptions_ReachedByToolName_NameTheDrivingFile holds the one category
+// that records a covering scenario rather than a missing one to the promise
+// its own documentation makes: each entry names the file that drives the
+// action, so a reviewer can check the claim instead of taking it.
+//
+// The other categories say why nothing runs an action, and there is no file
+// to name; only this one asserts that something does.
+func TestExemptions_ReachedByToolName_NameTheDrivingFile(t *testing.T) {
+	for id, exemption := range exemptedActions {
+		if exemption.Category != categoryReachedByToolName {
+			continue
+		}
+		if !strings.Contains(exemption.Reason, "_test.go") {
+			t.Errorf("exemption %s claims a scenario drives it and names no file: %q", id, exemption.Reason)
+		}
 	}
 }
 

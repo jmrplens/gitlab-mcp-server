@@ -8,7 +8,7 @@ package main
 // port was complete. It is turned on in the step that makes the new job the
 // release gate, after which every catalog action needs a scenario or an
 // entry in [exemptedActions], and every harness export needs a consumer.
-const ratchetEnabled = false
+const ratchetEnabled = true
 
 // actionExemption records why a catalog action has no scenario in any
 // package that could run it.
@@ -35,6 +35,15 @@ const (
 	// categoryNotYetWritten is a scenario that is owed, named so the backlog
 	// is visible in the gate rather than hidden in a silence.
 	categoryNotYetWritten = "not-yet-written"
+	// categoryReachedByToolName is an action a scenario does drive, by naming
+	// the standalone tool rather than the action, which is the only way the
+	// surface offers it.
+	//
+	// This gate counts typed ActionID sites, so such a scenario is invisible
+	// to it. The exemption records a covering scenario rather than a missing
+	// one, and is the only category that does: each entry must name the file
+	// that drives it, so a reader can check the claim rather than take it.
+	categoryReachedByToolName = "reached-by-tool-name"
 )
 
 // exemptedActions holds every catalog action without a scenario, each with a
@@ -44,7 +53,35 @@ const (
 // a stale entry is a finding on every run: an entry naming an action the
 // catalog no longer has, or one a package can now run, leaves a claim behind
 // that a later reader would trust.
-var exemptedActions = map[string]actionExemption{}
+var exemptedActions = map[string]actionExemption{
+	// The four guided flows are standalone tools: the surfaces register them
+	// by name and no dispatcher takes their action ID, so a scenario has to
+	// name the tool. Each is driven, and by a session carrying the elicitation
+	// policy the flow needs, which is the part that cannot be faked.
+	"interactive.issue_create": {
+		Category: categoryReachedByToolName,
+		Reason: "driven as gitlab_interactive_issue_create with a scripted responder in " +
+			"test/e2e/gitlab/common/mcp_elicitation_test.go, which asserts the created issue carries the elicited title",
+	},
+	"interactive.mr_create": {
+		Category: categoryReachedByToolName,
+		Reason: "driven as gitlab_interactive_mr_create in " +
+			"test/e2e/gitlab/common/mcp_elicitation_policies_test.go, with a responder that answers the two branch " +
+			"prompts with branches the project has",
+	},
+	"interactive.project_create": {
+		Category: categoryReachedByToolName,
+		Reason: "driven as gitlab_interactive_project_create in " +
+			"test/e2e/gitlab/common/mcp_elicitation_policies_test.go, under the auto-accept policy, which is the one " +
+			"flow every prompt of which has a value its own schema admits",
+	},
+	"interactive.release_create": {
+		Category: categoryReachedByToolName,
+		Reason: "driven as gitlab_interactive_release_create in " +
+			"test/e2e/gitlab/common/mcp_elicitation_policies_test.go, against a tag the scenario creates first, since " +
+			"the flow requires one that already exists",
+	},
+}
 
 // assertedFloors is the fewest actions each runtime must have asserted on
 // some surface for -check to pass, keyed by the -runtime selector.
@@ -57,7 +94,8 @@ var assertedFloors = map[string]int{}
 // declaredCategories is the set a category must belong to, so a typo does
 // not invent a fourth kind of exemption.
 var declaredCategories = map[string]bool{
-	categoryGitLabComOnly: true,
-	categoryNoFixture:     true,
-	categoryNotYetWritten: true,
+	categoryGitLabComOnly:     true,
+	categoryNoFixture:         true,
+	categoryNotYetWritten:     true,
+	categoryReachedByToolName: true,
 }
