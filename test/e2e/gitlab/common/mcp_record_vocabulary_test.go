@@ -110,9 +110,11 @@ func TestRecordVocabulary_ASkippedRunSaysWhatItWanted(t *testing.T) {
 			"runner":           harness.NeedRunner.String(),
 			"external network": harness.NeedExternalNetwork.String(),
 		} {
-			if got != want {
-				t.Errorf("a need reads as %q in a skip message, want %q", got, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if got != want {
+					t.Errorf("a need reads as %q in a skip message, want %q", got, want)
+				}
+			})
 		}
 	})
 
@@ -122,9 +124,11 @@ func TestRecordVocabulary_ASkippedRunSaysWhatItWanted(t *testing.T) {
 			"free (no license)":              harness.Free.String(),
 			"licensed (Premium or Ultimate)": harness.Licensed.String(),
 		} {
-			if got != want {
-				t.Errorf("a runtime requirement reads as %q, want %q", got, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if got != want {
+					t.Errorf("a runtime requirement reads as %q, want %q", got, want)
+				}
+			})
 		}
 	})
 }

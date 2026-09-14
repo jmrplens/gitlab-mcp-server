@@ -136,8 +136,10 @@ func TestSession_DescribesItself_AsTheRecordNamesIt(t *testing.T) {
 	}
 	label := s.Label()
 	for _, part := range []string{string(harness.SurfaceMeta), string(harness.ModeReadOnly)} {
-		if !strings.Contains(label, part) {
-			t.Errorf("the session label %q does not name %q, so a record cannot be read back to this shape", label, part)
-		}
+		t.Run("the label names "+part, func(t *testing.T) {
+			if !strings.Contains(label, part) {
+				t.Errorf("the session label %q does not name %q, so a record cannot be read back to this shape", label, part)
+			}
+		})
 	}
 }
