@@ -301,6 +301,30 @@ func (s *Session) Transport() TransportKind { return s.conn.cfg.Transport }
 // Tools returns the tool names the session listed when it started.
 func (s *Session) Tools() []string { return slices.Clone(s.conn.served.tools) }
 
+// ToolDefinitions returns the tools the session serves as the server published
+// them, each with its input and output schema and annotations, for a test of
+// what the served surface says about a tool rather than only its name.
+//
+// It lists afresh rather than reading what the session start kept, because that
+// kept only the names. The listing is not attributed and so is not recorded as
+// coverage: it is a question about the surface, not a call of an action.
+func (s *Session) ToolDefinitions() []*mcp.Tool {
+	s.env.T.Helper()
+
+	ctx, cancel := context.WithTimeout(s.env.Ctx, sessionStartTimeout)
+	defer cancel()
+
+	var tools []*mcp.Tool
+	for tool, err := range s.conn.client().Tools(ctx, nil) {
+		if err != nil {
+			s.env.T.Fatalf("tools/list on the %s session: %v%s", s.Surface(), err, s.conn.failureContext())
+			return nil
+		}
+		tools = append(tools, tool)
+	}
+	return tools
+}
+
 // Resources returns the static resource URIs the session listed.
 func (s *Session) Resources() []string { return slices.Clone(s.conn.served.resources) }
 

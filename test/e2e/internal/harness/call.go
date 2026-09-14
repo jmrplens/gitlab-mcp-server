@@ -31,6 +31,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -244,6 +245,50 @@ func Do[O any](s *Session, id ActionID, params map[string]any, opts ...CallOptio
 		s.env.T.Fatalf("%s: %v", callLabel(id, resolved), err)
 	}
 	return output
+}
+
+// ExecuteStandalone runs a standalone dynamic action through
+// gitlab_execute_action and decodes its answer, for the utilities the base
+// catalog the projection reads does not carry.
+//
+// discover_project.resolve and the gitlab_interactive_* flows are registered
+// outside the base catalog (they come from surfaces.StandaloneToolSpecs, folded
+// into the dynamic catalog only), so [Do] and its siblings would report the
+// catalog has no such action. They are served on the dynamic surface all the
+// same, reached through gitlab_execute_action like any other action, so this
+// sends exactly that call with a test purpose: the span the server records
+// names the action and the recorder credits it, where [Session.Raw] would
+// record a raw envelope credited to nothing. It runs on the dynamic surface
+// only, because every other surface registers these as tools of their own that
+// Raw names directly.
+func ExecuteStandalone[O any](s *Session, action ActionID, params map[string]any, opts ...CallOption) O {
+	s.env.T.Helper()
+
+	var output O
+	if s.Surface() != SurfaceDynamic {
+		s.env.T.Fatalf("ExecuteStandalone runs %s through gitlab_execute_action, which only the dynamic surface serves; "+
+			"the %s surface registers it as a tool of its own, which Raw names", action, s.Surface())
+		return output
+	}
+	resolved := resolveCallOptions(opts)
+	call := standaloneExecuteCall(action, params)
+	answer := s.send(action, call, resolved)
+	if !answer.ok() {
+		s.env.T.Fatalf("%s: %s%s", callLabel(action, resolved), answer.describe(), s.conn.failureContext())
+		return output
+	}
+	if err := decodeResult(answer.result, &output); err != nil {
+		s.env.T.Fatalf("%s: %v", callLabel(action, resolved), err)
+	}
+	return output
+}
+
+// standaloneExecuteCall spells the gitlab_execute_action call a standalone
+// action takes on the dynamic surface, the same shape the projection builds for
+// a catalog action there.
+func standaloneExecuteCall(action ActionID, params map[string]any) toolCall {
+	arguments := map[string]any{"action": string(action), "params": paramsObject(params)}
+	return toolCall{tool: dynamictools.ExecuteActionToolName, arguments: arguments, argumentNames: argumentNames(arguments)}
 }
 
 // DoVoid runs an action whose answer the test does not read, failing the test

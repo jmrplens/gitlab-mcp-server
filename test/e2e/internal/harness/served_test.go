@@ -15,11 +15,61 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
+
+// TestDeclaredCapabilities_ReadsWhatTheServerSaid checks the rule that keeps a
+// session from calling a method the server never declared, which is what the
+// minimal capability surface answers "method not found" to. A missing
+// declaration is read as serving everything, so a listing that then fails is
+// reported rather than skipped in silence.
+func TestDeclaredCapabilities_ReadsWhatTheServerSaid(t *testing.T) {
+	cases := []struct {
+		name   string
+		result *mcp.InitializeResult
+		want   listable
+	}{
+		{
+			name:   "no initialize result",
+			result: nil,
+			want:   listable{tools: true, resources: true, prompts: true},
+		},
+		{
+			name:   "no capabilities",
+			result: &mcp.InitializeResult{},
+			want:   listable{tools: true, resources: true, prompts: true},
+		},
+		{
+			name: "the full surface declares all three",
+			result: &mcp.InitializeResult{Capabilities: &mcp.ServerCapabilities{
+				Tools:     &mcp.ToolCapabilities{},
+				Resources: &mcp.ResourceCapabilities{},
+				Prompts:   &mcp.PromptCapabilities{},
+			}},
+			want: listable{tools: true, resources: true, prompts: true},
+		},
+		{
+			name: "the minimal surface declares no prompts",
+			result: &mcp.InitializeResult{Capabilities: &mcp.ServerCapabilities{
+				Tools:     &mcp.ToolCapabilities{},
+				Resources: &mcp.ResourceCapabilities{},
+			}},
+			want: listable{tools: true, resources: true},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := declaredCapabilities(testCase.result); got != testCase.want {
+				t.Errorf("declaredCapabilities() = %+v, want %+v", got, testCase.want)
+			}
+		})
+	}
+}
 
 // TestCheckServedTools_TheSameSet_Passes checks the ordinary case: a session
 // serving what the assemblers say it should is accepted.
