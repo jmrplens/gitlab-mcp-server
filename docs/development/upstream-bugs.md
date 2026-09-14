@@ -2158,7 +2158,8 @@ The delivery end was the only part of the design with no per-credential seam.
   stream, which is the half this side owns. The delivery half cannot be repaired
   here, because the table that lost the request id is the SDK's.
 
-**What**: `resourceSubscriptions` is keyed by URI and session, so a session's
+**What**: `resourceSubscriptions` is keyed by URI and session
+(`map[string]map[*ServerSession]jsonrpc.ID`, `mcp/server.go`), so a session's
 second listen on a URI overwrites the first's request id, and that second
 listen's deferred unsubscribe deletes the entry outright. After either stream
 closes the session is subscribed in its own view and reachable in neither: no
@@ -2175,6 +2176,10 @@ implements.
 **The fix belongs upstream**: key the table by request id, or refuse a second
 listen for a URI a session already holds. The second is a smaller change and
 would cost a client one working subscription instead of two half-working ones.
+
+**Still present in v1.8.0**, checked against that release's source rather than
+the pinned one. It ships several subscription fixes, including pruning
+completed listen request ids from the session, and the table's key is unchanged.
 
 **How we found it**: auditing every declared capability against the
 specification and the SDK. [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md)

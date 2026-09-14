@@ -1,0 +1,101 @@
+//go:build e2e
+
+// mcp_capability_surface_test.go holds the two capability surfaces to what
+// each one actually serves, through the real binary.
+//
+// GITLAB_MCP_CAPABILITY_SURFACE is the one switch that changes what exists
+// rather than what is allowed: minimal registers no prompt at all and one
+// resource, while full registers the whole catalog of both. Every other
+// scenario runs on full and would pass identically if minimal served the same
+// thing, so nothing else in the suite can tell the switch works.
+//
+// It also pins the session's own account of itself. A record names a session by
+// its label and reports its surfaces, and a reader of a failure has nothing but
+// those to tell one session from another, so a label or an accessor that
+// disagreed with the server would misattribute every finding in the report.
+
+package common
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
+)
+
+// TestCapabilitySurface_Minimal_ServesNoPromptAndOneResource holds the minimal
+// surface to what it is for.
+//
+// The single resource is gitlab://tools, which is registered unconditionally
+// because it is how a client on any surface discovers the call shapes. That it
+// is the *only* one is the assertion: minimal exists so a client pays for the
+// tool surface and nothing else.
+func TestCapabilitySurface_Minimal_ServesNoPromptAndOneResource(t *testing.T) {
+	e := harness.New(t)
+	s := e.Session(harness.ServerConfig{
+		Surface:      harness.SurfaceDynamic,
+		Capabilities: harness.CapabilitiesMinimal,
+	})
+
+	if got := s.Capabilities(); got != harness.CapabilitiesMinimal {
+		t.Errorf("the session reports capability surface %q, want %q", got, harness.CapabilitiesMinimal)
+	}
+	if prompts := s.Prompts(); len(prompts) != 0 {
+		t.Errorf("the minimal surface served %d prompts: %v", len(prompts), prompts)
+	}
+	if resources := s.Resources(); len(resources) != 1 || resources[0] != "gitlab://tools" {
+		t.Errorf("the minimal surface served resources %v, want only gitlab://tools", resources)
+	}
+}
+
+// TestCapabilitySurface_Full_ServesThePromptAndResourceCatalogs is the other
+// half, and the comparison is the point: a switch that changed nothing would
+// pass the minimal test above on its own.
+func TestCapabilitySurface_Full_ServesThePromptAndResourceCatalogs(t *testing.T) {
+	e := harness.New(t)
+	s := e.On(harness.SurfaceDynamic)
+
+	if got := s.Capabilities(); got != harness.CapabilitiesFull {
+		t.Errorf("the session reports capability surface %q, want %q", got, harness.CapabilitiesFull)
+	}
+	prompts := s.Prompts()
+	if len(prompts) == 0 {
+		t.Error("the full surface served no prompt, which is what the minimal one is for")
+	}
+	if resources := s.Resources(); len(resources) <= 1 {
+		t.Errorf("the full surface served %d resources, want the catalog rather than the minimal one", len(resources))
+	}
+	if templates := s.ResourceTemplates(); len(templates) == 0 {
+		t.Error("the full surface served no resource template, so no parameterized resource can be read")
+	}
+}
+
+// TestSession_DescribesItself_AsTheRecordNamesIt checks the accessors a report
+// is written from.
+//
+// A failure in this suite is read through the record, which names the session
+// by its label and its surfaces. If those disagreed with the server the session
+// is actually talking to, every finding attributed to it would name the wrong
+// configuration, and no assertion about GitLab could catch that.
+func TestSession_DescribesItself_AsTheRecordNamesIt(t *testing.T) {
+	e := harness.New(t)
+	s := e.Session(harness.ServerConfig{Surface: harness.SurfaceMeta, Mode: harness.ModeReadOnly})
+
+	if got := s.Surface(); got != harness.SurfaceMeta {
+		t.Errorf("Surface() = %q, want %q", got, harness.SurfaceMeta)
+	}
+	if got := s.Mode(); got != harness.ModeReadOnly {
+		t.Errorf("Mode() = %q, want %q", got, harness.ModeReadOnly)
+	}
+	// Stdio is the only transport wired, and saying so here is what will fail
+	// the day a session is given another one without this being revisited.
+	if got := s.Transport(); got != harness.TransportStdio {
+		t.Errorf("Transport() = %q, want %q", got, harness.TransportStdio)
+	}
+	label := s.Label()
+	for _, part := range []string{string(harness.SurfaceMeta), string(harness.ModeReadOnly)} {
+		if !strings.Contains(label, part) {
+			t.Errorf("the session label %q does not name %q, so a record cannot be read back to this shape", label, part)
+		}
+	}
+}
