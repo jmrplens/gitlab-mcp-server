@@ -31,7 +31,14 @@ import (
 // job, so the record outlives the answer that scheduled its removal.
 const (
 	userDeletionInterval = 2 * time.Second
-	userDeletionWait     = 90 * time.Second
+	// userDeletionWait is generous because what it waits for is a background
+	// job competing with a whole suite's worth of them. Run on its own this
+	// scenario finishes in 66 seconds and the accounts are gone; run after the
+	// other 980-odd tests, 90 seconds was not enough and the failure read as
+	// "the deletes were accepted and nothing was removed", which is a very
+	// different accusation from "the queue is busy". The drain below helps and
+	// does not settle it, since jobs keep arriving behind it.
+	userDeletionWait = 5 * time.Minute
 )
 
 // What a user creation through the server is retried on, for the password
