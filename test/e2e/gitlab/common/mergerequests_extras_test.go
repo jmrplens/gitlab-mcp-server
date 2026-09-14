@@ -171,6 +171,7 @@ func awaitTodoListed(e *harness.Env, todoID int64) {
 	err := harness.Poll(e.Ctx, todoListedInterval, todoListedWait, func() (bool, string, error) {
 		todos, _, listErr := e.Client().GL().Todos.ListTodos(&gl.ListTodosOptions{}, gl.WithContext(e.Ctx))
 		if listErr != nil {
+			//nolint:nilerr // a failed listing is a reason to poll again, not to end the wait: the error returned here is what Poll treats as fatal, and the string is what it reports if the deadline runs out
 			return false, "listing to-dos: " + listErr.Error(), nil
 		}
 		if slices.ContainsFunc(todos, func(todo *gl.Todo) bool { return todo.ID == todoID }) {
