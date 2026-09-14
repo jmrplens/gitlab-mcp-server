@@ -63,6 +63,19 @@ The suite. Every test drives the **real `cmd/server` binary over stdio** through
 
 Coverage is what the server dispatched, in a test that passed, on a named runtime, surface and mode: every child runs with telemetry on and the harness reads its spans, and the calls are recorded under `dist/e2e-calls/<target>` for `cmd/audit_e2e_coverage`. GitLab state is built through client-go by `test/e2e/internal/fixture`, never through the server under test, so fixture traffic is never coverage. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries exactly `//go:build e2e` (doc.go carries none), so one compile and one analysis run see the whole suite; the harness's own tests hold that, and hold the runtime packages to never assembling a server of their own. The Docker lifecycle both targets share lives in `test/e2e/scripts/run-docker-e2e.sh`, and every run carries `-p 1 -count=1`: capability locks are process-local, and a cached PASS records no calls. The licensed run stays local; CI runs `common` and `ce` in the non-blocking `e2e-gitlab` job of `e2e.yml`.
 
+### Go statement coverage of the binary
+
+```bash
+make test-e2e-ce COVER=1   # or test-e2e-ee, or test-e2e-gitlab
+make e2e-go-coverage       # merge, then the per-package table and the total
+```
+
+A second and different coverage question. `cmd/audit_e2e_coverage` says which **catalog actions** dispatched; this says which **statements of the program** ran: the startup path, the catalog build, the middleware chain, the error branches no live-GitLab scenario reaches. Nothing else in the tree asks it.
+
+`COVER=1` builds the shared binary with `-cover` and gives every server child a `GOCOVERDIR` under `dist/e2e-cover/<target>`, through `E2E_COVER_DIR`. That variable must be absolute, like the calls directory and for the same reason (a child runs in its own session directory), and the Docker script clears it, since CI invokes that script directly. A binary built with `-cover` writes one meta-data file when it starts and one counter file when it **exits normally**, so the harness closes every session before it cancels their context and asks a child that is left to terminate rather than killing it: a killed process runs no exit hook, and everything it executed would be missing from the profile. The run's log ends with the count of counter files against the count of children started, which is where a child that died is visible.
+
+`make e2e-go-coverage` merges every directory holding coverage data, so a CE run and a licensed one fold into one figure, which is the honest one: a statement only the licensed catalog reaches was still reached. It writes `dist/e2e-reports/e2e-go-coverage.out`, prints the per-package table and the total, and fails rather than reporting zero when there is nothing to read, which is the shape of an uninstrumented build. Nothing is committed, no floor is applied, and the profile is never merged into `coverage.out`, which Sonar publishes as the unit suite's figure.
+
 ## Quick Start
 
 ### Self-Hosted Mode

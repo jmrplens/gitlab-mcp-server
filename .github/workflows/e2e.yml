@@ -86,8 +86,15 @@ jobs:
 
       # Built once and handed to every package through E2E_SERVER_BINARY, so
       # the three test binaries do not each build cmd/server.
+      #
+      # With -cover, which is what makes the statement coverage below possible
+      # at all: the flag has to be on this line because every documented run
+      # hands the harness a prebuilt binary, so the harness's own build is
+      # reached by nothing here. An instrumented binary writes its meta-data
+      # when it starts and its counters when it exits, into the directory the
+      # run step names below.
       - name: Build the server the suite drives
-        run: go build -o dist/e2e/gitlab-mcp-server ./cmd/server
+        run: go build -cover -o dist/e2e/gitlab-mcp-server ./cmd/server
 
       # The script brings the stack up, provisions it, runs the packages with
       # -p 1 -count=1 and tears the stack down, keeping the run's status. The
@@ -106,6 +113,11 @@ jobs:
           E2E_REPORT_DIR: ${{ github.workspace }}/test-results
           E2E_REPORT_NAME: e2e-gitlab
           GITLAB_MCP_TEST_E2E_CALLS_DIR: ${{ github.workspace }}/test-results/e2e-calls
+          # Absolute for the same reason, and cleared by the script the same
+          # way: a child runs in its own session directory, and a run that
+          # folded an earlier run's counters into this one's would report a
+          # figure about neither.
+          E2E_COVER_DIR: ${{ github.workspace }}/test-results/e2e-cover
 
       # What the run covered, from the calls it recorded and the verdicts
       # gotestsum wrote: the JSON report is uploaded with the results and the
@@ -121,6 +133,30 @@ jobs:
             -check \
             -o test-results/e2e-coverage.json \
             -summary "$GITHUB_STEP_SUMMARY"
+
+      # The other coverage question, which the audit above cannot answer: it
+      # reports which catalog actions dispatched, and this reports which
+      # statements of the program ran: the startup path, the catalog build,
+      # the middleware chain, the branches no scenario reaches. The counters
+      # are in test-results, so the upload below carries them whatever this
+      # step does with them.
+      #
+      # It runs only when the suite passed, deliberately: a run that never
+      # started a server wrote no counters, and a red step saying so beside
+      # the red step that explains it helps nobody. Nothing gates on the
+      # number, and the profile is never merged into coverage.out, which is
+      # what Sonar publishes as the unit suite's figure.
+      - name: Go statement coverage of the server binary
+        run: |
+          make -s e2e-go-coverage E2E_COVER_DIR=test-results/e2e-cover E2E_REPORT_DIR=test-results \
+            | tee test-results/e2e-go-coverage.txt
+          {
+            echo "### Go statement coverage of the server binary"
+            echo
+            echo '```'
+            tail -n 1 test-results/e2e-go-coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # The children's stderr goes with the results: when a test failed
       # because the server refused something, the reason is in the server's

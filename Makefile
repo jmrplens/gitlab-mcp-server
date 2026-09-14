@@ -10,7 +10,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
@@ -70,6 +70,33 @@ E2E_REPORT_DIR=dist/e2e-reports
 # package-list run can answer from the test cache, and a cached PASS records
 # nothing.
 E2E_CALLS_DIR=dist/e2e-calls
+
+# COVER=1 measures how much of the server binary an e2e run executed, which is
+# a different question from the one the calls directory answers: that one says
+# which catalog actions dispatched, and this one says which statements of the
+# program ran at all: startup, the catalog build, the middleware chain, the
+# error branches no scenario reaches. It is off by default because it costs a
+# build of its own and slows every child, and because the merged profile is a
+# report rather than a gate: only a live GitLab produces the input, so no
+# committed artifact could be verified offline and no floor could be moved
+# without booting one.
+#
+# With it on, the shared build carries -cover and each run target hands its
+# children a GOCOVERDIR under here, one directory per target, cleared where the
+# calls directory is cleared: in run-docker-e2e.sh for the two Docker targets,
+# since CI invokes that script rather than the target, and in the recipe for
+# the self-hosted one. `make e2e-go-coverage` merges what the run left. dist/
+# is gitignored, so `make clean` removes all of it.
+COVER ?=
+E2E_COVER_DIR=dist/e2e-cover
+E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
+# Empty unless COVER is set, so an ordinary run's command line is byte for byte
+# what it was and the children carry no GOCOVERDIR at all: a child given an
+# empty one reports at exit that it could not write, on the stderr a failing
+# call quotes.
+e2e_cover_build = $(if $(COVER),-cover)
+e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_DIR)/$(1))
+
 # The revision the e2e run records on its run line, so a recorded baseline
 # says which tree produced it. Overridable for a run of a tree git cannot see.
 E2E_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
@@ -304,15 +331,19 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
+# Instrumented under COVER=1: the binary every documented run drives is the one
+# built here, so this is where -cover has to enter. The target is .PHONY, so an
+# uninstrumented build left by an earlier run can never be reused.
 e2e-server-binary:
 	$(call MKDIR_P,dist/e2e)
-	go build -o $(E2E_SERVER_BINARY) $(CMD_PATH)
+	go build $(e2e_cover_build) -o $(E2E_SERVER_BINARY) $(CMD_PATH)
 
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
+	$(call e2e_cover_env,ce) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
@@ -321,6 +352,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
+	$(call e2e_cover_env,ee) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
@@ -336,7 +368,9 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
 	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_DIR)/self-hosted))
 	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  $(call e2e_cover_env,self-hosted) \
 	  GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
@@ -1350,6 +1384,39 @@ e2e-coverage-record-render:
 ## rename from the scenario's side.
 check-e2e-coverage-record:
 	go run ./cmd/audit_e2e_coverage/ -check-record
+
+## e2e-go-coverage: report which statements of the server binary the e2e runs
+## executed, from the counter files a COVER=1 run left under $(E2E_COVER_DIR):
+## the merged profile in $(E2E_COVER_PROFILE), the per-package table and the
+## total. Its sibling above answers which catalog actions dispatched, which
+## says nothing about the program around them.
+#
+# It reads whatever runs are there, so a CE run and a licensed one merge into
+# one figure, which is the honest one: a statement only the licensed catalog
+# reaches was still reached. Nothing here is committed and nothing gates on
+# the number: the input exists only after a live GitLab has been driven, so a
+# floor could not be moved without booting one, and the profile must never be
+# folded into coverage.out, which sonar-project.properties publishes as the
+# unit suite's figure. The run is refused rather than reported as zero when no
+# meta-data file is there at all, since that is the shape of an uninstrumented
+# build and not of a binary nothing executed.
+e2e-go-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c 'set -eu; \
+	  dirs=""; \
+	  for meta in $$(find $(E2E_COVER_DIR) -name "covmeta.*" -type f 2>/dev/null | sort); do \
+	    dir=$$(dirname "$$meta"); \
+	    case ",$$dirs," in *",$$dir,"*) continue;; esac; \
+	    dirs="$${dirs:+$$dirs,}$$dir"; \
+	  done; \
+	  if [ -z "$$dirs" ]; then \
+	    echo "no coverage data under $(E2E_COVER_DIR): run an e2e target with COVER=1, which builds the server with -cover and gives every child a GOCOVERDIR" >&2; \
+	    exit 1; \
+	  fi; \
+	  echo "merging $$dirs"; \
+	  go tool covdata textfmt -i="$$dirs" -o=$(E2E_COVER_PROFILE); \
+	  go tool covdata percent -i="$$dirs"; \
+	  go tool cover -func=$(E2E_COVER_PROFILE) | tail -n 1'
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package

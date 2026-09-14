@@ -346,6 +346,8 @@ make test-e2e-ce                                          # Ephemeral GitLab CE 
 make test-e2e-ee                                          # The licensed run: common plus the Premium and Ultimate package
 make test-e2e-http                                        # HTTP transport module: no GitLab, no credentials
 make test-e2e-stdio                                       # stdio transport module: no GitLab, no credentials
+make test-e2e-ce COVER=1                                  # The same CE run with the server built -cover and every child given a GOCOVERDIR
+make e2e-go-coverage                                      # Merge what such a run left: the per-package table and the total for the binary itself
 go test -tags e2e -c -o NUL ./test/e2e/gitlab/...          # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...    # Compile-only check (Linux)
 

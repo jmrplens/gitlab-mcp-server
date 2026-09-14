@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -51,6 +52,16 @@ var serverLogDir = filepath.Join("dist", "e2e-reports", "servers")
 // stderrTailBytes is how much of a child's stderr a failure message carries.
 // Enough for a panic with its first frames, short enough to read.
 const stderrTailBytes = 4096
+
+// childrenStarted counts every server process this run launched, restarts
+// included.
+//
+// It is the denominator of the coverage report: one started child is one
+// counter file at the end, unless the child was killed or crashed. Counting
+// starts rather than sessions is deliberate, since a session whose child died
+// is given a fresh process from the same shape and that process writes a file
+// of its own.
+var childrenStarted atomic.Int64
 
 // The build is done once per process, whatever it is for.
 var (
@@ -287,9 +298,11 @@ func (p *serverProcess) transport(ctx context.Context) mcp.Transport {
 		p.sink.close()
 	}
 	p.starts++
+	childrenStarted.Add(1)
 	sink := newStderrSink(p.label, p.starts)
 
 	cmd := exec.CommandContext(ctx, p.bin) //#nosec G204 -- the path is this package's own build or E2E_SERVER_BINARY, which only the run's operator sets
+	terminateOnCancel(cmd)
 	cmd.Env = p.env.environ()
 	cmd.Dir = p.env.Root
 	cmd.Stderr = sink
@@ -320,6 +333,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 		p.sink.close()
 	}
 	p.starts++
+	childrenStarted.Add(1)
 	sink := newStderrSink(p.label, p.starts)
 
 	//#nosec G204 -- the path is this package's own build or E2E_SERVER_BINARY, and the instance URL is the one the run was pointed at; both are the operator's
@@ -327,6 +341,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 		"--http", "--http-addr", addr,
 		"--gitlab-url", p.env.GitLabURL,
 	)
+	terminateOnCancel(cmd)
 	cmd.Env = p.env.environWithoutCredential()
 	cmd.Dir = p.env.Root
 	cmd.Stderr = sink
@@ -435,7 +450,65 @@ const (
 	// collected, so a process that somehow ignores the kill costs one second
 	// rather than the rest of the run.
 	childStopTimeout = 1 * time.Second
+	// childTerminateDelay is how long a child has to act on the termination
+	// signal before exec kills it anyway. Enough for an HTTP child to finish
+	// its own shutdown and for the runtime to write its coverage counters,
+	// short enough that a wedged child costs seconds rather than the run.
+	childTerminateDelay = 10 * time.Second
+	// childrenExitBudget bounds the whole end-of-run wait, not one child's:
+	// they are all signaled at once and shut down at once, so a per-child
+	// bound would multiply by however many shapes the run started.
+	childrenExitBudget = 30 * time.Second
 )
+
+// terminateOnCancel makes canceling a child's context ask it to stop instead
+// of killing it.
+//
+// exec.CommandContext's default Cancel is Process.Kill, and a killed process
+// runs no exit hook. The Go runtime writes a coverage counter file from one,
+// so with the default every child of an instrumented run contributed its
+// meta-data and none of its counters, and the whole measurement read zero. The
+// server takes SIGTERM through signal.NotifyContext and unwinds to a normal
+// return from main, which is both a clean shutdown and the flush.
+//
+// Windows keeps the default kill. It has no SIGTERM; the portable substitute
+// is a console control event delivered to a process group the child has to
+// have been created in, and nothing runs this harness there: the
+// cross-platform matrix compiles it and runs ./cmd/... and ./internal/...
+// only. A termination seam no run exercises is worth less than the kill it
+// would replace.
+func terminateOnCancel(cmd *exec.Cmd) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	// Returned unwrapped: exec compares it with os.ErrProcessDone to tell a
+	// child that had already exited from one that refused the signal.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = childTerminateDelay
+}
+
+// waitForExit blocks until this child has been collected or the deadline has
+// passed, and reports whether it ended.
+//
+// A child that was never started counts as ended: the caller is asking whether
+// anything is still running, and nothing is.
+func (p *serverProcess) waitForExit(deadline time.Time) bool {
+	p.mu.Lock()
+	exited := p.exited
+	p.mu.Unlock()
+	if exited == nil {
+		return true
+	}
+
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case <-exited:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
 
 // stopChild ends a child that started and never became usable, and waits for
 // the reaper to record it.
