@@ -916,10 +916,16 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 		})
 	}
 
+	// One step past the bytes, because the series reserves its last step for
+	// the completion. Without it the reader of the final file reaches the byte
+	// total on its own, the terminal frame carries the same value and the
+	// monotonic guard drops it, so the client's last word is a byte count and
+	// the line naming what was published never arrives.
 	var wantTotal float64
 	for _, size := range files {
 		wantTotal += float64(size)
 	}
+	wantTotal++
 
 	got := progressOfOneCall(t, func(ctx context.Context, req *mcp.CallToolRequest) error {
 		_, err := PublishDirectory(ctx, req, client, PublishDirInput{
@@ -954,8 +960,16 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 		prev = n.Progress
 	}
 
-	if last := got[len(got)-1]; last.Progress != wantTotal {
+	last := got[len(got)-1]
+	if last.Progress != wantTotal {
 		t.Errorf("the last notification reports %v of %v, want the job finished", last.Progress, wantTotal)
+	}
+	// The message too, not only the number. Asserting the value alone is what
+	// let the completion frame be dropped unnoticed: a byte count from the
+	// inner reader reached the same total and satisfied every assertion here,
+	// while the line the handler writes never reached the client at all.
+	if !strings.Contains(last.Message, "Published 2 of 2 files") {
+		t.Errorf("the last notification says %q, want the completion the handler writes", last.Message)
 	}
 
 	assertFilesCountedFromOne(t, got)

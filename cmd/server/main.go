@@ -2617,6 +2617,17 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	if !cfg.Stateless {
 		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	}
+	// A JSON body carries one response and nothing else, so a notification
+	// raised while a call is running has no frame to travel in: the SDK routes
+	// it to the standalone SSE stream, which a stateless deployment never
+	// connects because it answers GET with 405. Progress is then silently
+	// inert. The flag is a reasonable choice for a client that cannot read
+	// SSE, so this is a warning rather than a refusal, but an operator turning
+	// off a declared capability should be told they did.
+	if cfg.JSONResponse {
+		slog.WarnContext(ctx, "--json-response: progress notifications cannot be delivered, "+
+			"since a JSON response body carries no out-of-band frames; tools still work and report nothing while they run")
+	}
 
 	binding, pool := newShapedServerPool(ctx, cfg)
 	defer pool.Close()

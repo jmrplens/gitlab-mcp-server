@@ -30,15 +30,17 @@
 
 Some MCP tools take several seconds to complete — file uploads stream large payloads, and elicitation tools collect multi-step user input. During this time, the user sees nothing. Are they still running? Did they hang?
 
-Progress notifications solve this by sending **real-time step-by-step status updates** to the client. Instead of silence, the user sees:
+Progress notifications solve this by sending **real-time status updates** to the client. Instead of silence, an upload reports as its content is read:
 
 ```text
-Step 1/3: Preparing upload...
-Step 2/3: Uploading file to GitLab...
-Step 3/3: Upload complete
+Read 1048576 / 5242880 bytes, preparing the upload
+Read 2097152 / 5242880 bytes, preparing the upload
+Read 5242880 bytes, uploading to GitLab
 ```
 
 This transforms a "is it frozen?" experience into transparent, predictable behavior.
+
+**The byte counts measure the read, not the transfer, and the messages say so.** The GitLab client assembles the whole request body in memory before it sends anything, so every frame above has already fired by the time the first byte reaches the network; the transfer itself reports nothing until it returns. An earlier version of this page showed a three-step `Preparing / Uploading / Complete` sequence that no upload handler has ever emitted, and described the silent phase as the one being reported.
 
 ## How It Works
 
@@ -49,11 +51,10 @@ sequenceDiagram
     participant GL as 🦊 GitLab API
 
     AI->>S: tools/call (with progressToken)
-    S->>AI: notifications/progress (1/3: "Preparing upload...")
+    S->>AI: notifications/progress ("Read 1048576 / 5242880 bytes, preparing the upload")
+    S->>AI: notifications/progress ("Read 5242880 bytes, uploading to GitLab")
     S->>GL: POST /projects/1835/uploads
-    S->>AI: notifications/progress (2/3: "Uploading file to GitLab...")
     GL-->>S: Upload metadata
-    S->>AI: notifications/progress (3/3: "Upload complete")
     S-->>AI: Tool result
 ```
 
@@ -88,15 +89,18 @@ So a handler that delegates to another must pass its `Tracker` down rather than 
 
 ### Step-Based Progress
 
-The most common pattern in tool handlers:
+The pattern the interactive wizards use, and the only place `Step` is called in
+this server. The upload paths count bytes instead, through `NewProgressReader`:
 
 ```go
 tracker := progress.FromRequest(req)
-tracker.Step(ctx, 1, 3, "Preparing upload...")
-// ... work ...
-tracker.Step(ctx, 2, 3, "Uploading file to GitLab...")
-// ... work ...
-tracker.Step(ctx, 3, 3, "Upload complete")
+tracker.Step(ctx, 1, 4, "Collecting issue details...")
+// ... prompt the user ...
+tracker.Step(ctx, 2, 4, "Gathering optional fields...")
+// ... prompt the user ...
+tracker.Step(ctx, 3, 4, "Confirming creation...")
+// ... prompt the user ...
+tracker.Step(ctx, 4, 4, "Creating the issue...")
 ```
 
 `Step(ctx, 1, 3, msg)` sends `progress=0, total=3` to the client. Starting at zero is this project's convention, not a protocol rule: the specification constrains only that `progress` increase, and it may be a floating-point value. `Step` translates from 1-based step numbers, which are more natural to write, into that convention.
@@ -108,6 +112,16 @@ tracker.Step(ctx, 3, 3, "Upload complete")
 | Token source      | `CallToolRequest.Params.GetProgressToken()` | Provided by the MCP client                 |
 | Error handling    | Silent                                      | Failed notifications logged at debug level |
 | Context awareness | Yes                                         | Returns early if context is canceled       |
+| `--json-response` | Incompatible                                | Progress is undeliverable and is dropped   |
+
+**`--json-response` turns progress off.** A JSON response body carries one
+response and no out-of-band frames, so a notification raised while a call is
+running has nowhere to travel: the SDK routes it to the standalone SSE stream,
+which a stateless deployment never connects because it answers `GET` with `405`.
+Tools still work and still return their results; they simply report nothing
+while they run. The server warns once at startup when the flag is set. On
+`--stateless=false` a client holding a `GET` stream open does receive the
+frames, out of band on that stream rather than alongside its call.
 
 ## Security
 
@@ -141,12 +155,12 @@ You:  "Upload build-artifact.zip to gitlab-mcp-server"
 The client shows:
 
 ```text
-[1/3] Preparing upload...
-[2/3] Uploading file to GitLab...          ← This step can take several seconds for large files
-[3/3] Upload complete
+Read 1048576 / 5242880 bytes, preparing the upload
+Read 3145728 / 5242880 bytes, preparing the upload
+Read 5242880 bytes, uploading to GitLab     ← the transfer runs from here, and reports nothing
 ```
 
-Without progress, you would see nothing while the server streams the file.  With progress, each step provides feedback.
+Without progress you would see nothing at all. With it you see the file being read and the moment the request is handed to GitLab; the transfer that follows is silent, because the GitLab client buffers the request body before it sends it and gives this server nothing to count.
 
 ### Elicitation Tool with Progress
 

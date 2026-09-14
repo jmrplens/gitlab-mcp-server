@@ -241,6 +241,15 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	for _, size := range sizes {
 		totalBytes += size
 	}
+	// The series runs one step past the bytes, and the last step is the
+	// completion. Without it the reader of the final file reaches totalBytes on
+	// its own, the terminal notification carries the same value, and the
+	// monotonic guard drops it: the client's last word was a byte count and the
+	// line saying what was published never arrived. It is also the truer
+	// reading, since the bytes are read well before GitLab has accepted them,
+	// so a bar that filled on the last read claimed a publish that was still in
+	// flight.
+	progressTotal := totalBytes + 1
 
 	var out PublishDirOutput
 	out.Published = make([]PublishDirItem, 0, len(files))
@@ -251,7 +260,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 		}
 
 		if tracker.IsActive() {
-			tracker.Update(ctx, float64(doneBytes), float64(totalBytes),
+			tracker.Update(ctx, float64(doneBytes), float64(progressTotal),
 				fmt.Sprintf("Publishing file %d of %d: %s", i+1, len(files), name))
 		}
 
@@ -266,7 +275,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 
 		var pubOut PublishOutput
 		pubOut, err = publishWithTracker(ctx, client, pubInput,
-			tracker.OnScale(float64(doneBytes), float64(totalBytes)))
+			tracker.OnScale(float64(doneBytes), float64(progressTotal)))
 		doneBytes += sizes[i]
 		if err != nil {
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: %v", name, err))
@@ -286,7 +295,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	out.TotalFiles = len(out.Published)
 
 	if tracker.IsActive() {
-		tracker.Update(ctx, float64(totalBytes), float64(totalBytes),
+		tracker.Update(ctx, float64(progressTotal), float64(progressTotal),
 			fmt.Sprintf("Published %d of %d files", out.TotalFiles, len(files)))
 	}
 

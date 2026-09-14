@@ -581,8 +581,18 @@ type ProgressReader struct {
 	interval   int64
 }
 
-// NewProgressReader creates a ProgressReader that reports upload progress.
-// If the tracker is inactive, the wrapper still works but skips notifications.
+// NewProgressReader creates a ProgressReader that reports on the content being
+// read. If the tracker is inactive, the wrapper still works but skips
+// notifications.
+//
+// The message says read rather than uploaded, and that is the whole point of
+// it. Nothing here measures a transfer: client-go's UploadRequest copies the
+// whole multipart body into a buffer before it builds the request, and
+// retryablehttp reads a plain io.Reader body to the end for the same reason, so
+// every frame this emits has already fired by the time anything reaches the
+// wire. A message that said "Uploaded" asserted something that had not
+// happened, reached its total before the request existed, and left the phase
+// the caller actually waits on reporting nothing.
 func NewProgressReader(ctx context.Context, r io.Reader, total int64, tracker progress.Tracker) *ProgressReader {
 	return &ProgressReader{
 		inner: r,
@@ -590,8 +600,14 @@ func NewProgressReader(ctx context.Context, r io.Reader, total int64, tracker pr
 			if !tracker.IsActive() {
 				return
 			}
-			tracker.Update(ctx, float64(read), float64(total),
-				fmt.Sprintf("Uploaded %d / %d bytes", read, total))
+			message := fmt.Sprintf("Read %d / %d bytes, preparing the upload", read, total)
+			if read >= total && total > 0 {
+				// The handover, which is the only moment this reader can name
+				// the silent phase that follows: from here the bytes are in a
+				// buffer and the transfer reports nothing until it returns.
+				message = fmt.Sprintf("Read %d bytes, uploading to GitLab", read)
+			}
+			tracker.Update(ctx, float64(read), float64(total), message)
 		},
 		total:    total,
 		interval: ProgressReportInterval(total),
@@ -627,6 +643,12 @@ type ProgressWriter struct {
 }
 
 // NewProgressWriter creates a ProgressWriter that reports download progress.
+//
+// A total of zero means the size is not known, which is the ordinary case for
+// a streamed package download: client-go's writer form does not surface the
+// content length. The wire field is omitted for it, which is what the
+// specification asks; the message has to leave it out too, or every frame of
+// that download reads "Downloaded 65536 / 0 bytes".
 func NewProgressWriter(ctx context.Context, w io.Writer, total int64, tracker progress.Tracker) *ProgressWriter {
 	return &ProgressWriter{
 		inner: w,
@@ -634,8 +656,11 @@ func NewProgressWriter(ctx context.Context, w io.Writer, total int64, tracker pr
 			if !tracker.IsActive() {
 				return
 			}
-			tracker.Update(ctx, float64(written), float64(total),
-				fmt.Sprintf("Downloaded %d / %d bytes", written, total))
+			message := fmt.Sprintf("Downloaded %d bytes", written)
+			if total > 0 {
+				message = fmt.Sprintf("Downloaded %d / %d bytes", written, total)
+			}
+			tracker.Update(ctx, float64(written), float64(total), message)
 		},
 		total:    total,
 		interval: ProgressReportInterval(total),
