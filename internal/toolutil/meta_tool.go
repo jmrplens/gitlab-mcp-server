@@ -1914,6 +1914,15 @@ func coerceSchemaParamTypes(params, schema map[string]any) map[string]any {
 }
 
 func coerceSchemaParamValue(name string, value, property any) (any, bool) {
+	// A value the schema already admits is left alone. Coercion is here to
+	// repair a value that does not fit, never to rewrite one that does, and
+	// the difference only became visible once a property could declare two
+	// types: an ID declared as string and integer would otherwise be caught by
+	// the integer branch below, so "42" came back as 42 and the safe mode
+	// preview echoed a number the caller never sent.
+	if valueMatchesDeclaredType(value, property) {
+		return value, false
+	}
 	if schemaPropertyHasType(property, "integer") {
 		if text, ok := value.(string); ok {
 			if integer, err := integerFromString(text); err == nil {
@@ -1965,6 +1974,44 @@ func coerceSchemaArrayValue(value, property any) (any, bool) {
 		changed = changed || itemChanged
 	}
 	return out, changed
+}
+
+// valueMatchesDeclaredType reports whether the value is already one of the
+// types the property declares.
+//
+// It answers only for the scalar kinds the coercion below rewrites. An array
+// or an object is left to the branches that understand their contents, and a
+// property that declares no type at all matches nothing, which keeps the old
+// behavior for schemas that say nothing.
+func valueMatchesDeclaredType(value, property any) bool {
+	switch typed := value.(type) {
+	case string:
+		return schemaPropertyHasType(property, "string")
+	case bool:
+		return schemaPropertyHasType(property, "boolean")
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return schemaPropertyHasType(property, "integer") || schemaPropertyHasType(property, "number")
+	case float32, float64:
+		if schemaPropertyHasType(property, "number") {
+			return true
+		}
+		// A JSON number with no fractional part satisfies an integer type,
+		// which is how every whole number arrives after encoding/json.
+		return isWholeFloat(typed) && schemaPropertyHasType(property, "integer")
+	}
+	return false
+}
+
+// isWholeFloat reports whether a float carries a whole number, which is the
+// shape an integer takes once encoding/json has decoded it.
+func isWholeFloat(value any) bool {
+	switch typed := value.(type) {
+	case float32:
+		return float32(int64(typed)) == typed
+	case float64:
+		return float64(int64(typed)) == typed
+	}
+	return false
 }
 
 func schemaPropertyHasType(property any, expected string) bool {

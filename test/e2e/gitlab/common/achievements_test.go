@@ -254,17 +254,19 @@ func assertAwardOrder(t *testing.T, awards []achievements.UserAchievement, wantF
 			describeAwards(awards), wantFirst, wantSecond)
 		return
 	}
+	// Both, always. The priorities say GitLab applied the order, and the
+	// positions say this server handed it over in that order, which is what
+	// ReorderOutput promises and what byPriority exists to make true. When
+	// this was only a diagnostic the priority check returned early, so a
+	// correctly prioritized answer in the wrong order passed.
 	firstPriority, secondPriority := awards[first].Priority, awards[second].Priority
-	if firstPriority != nil && secondPriority != nil {
-		if *firstPriority >= *secondPriority {
-			t.Errorf("award %d has priority %d and award %d has %d, want the first one the call named to rank higher: %s",
-				wantFirst, *firstPriority, wantSecond, *secondPriority, describeAwards(awards))
-		}
-		return
+	if firstPriority != nil && secondPriority != nil && *firstPriority >= *secondPriority {
+		t.Errorf("award %d has priority %d and award %d has %d, want the first one the call named to rank higher: %s",
+			wantFirst, *firstPriority, wantSecond, *secondPriority, describeAwards(awards))
 	}
 	if first > second {
-		t.Errorf("no priority was reported, and award %d is at position %d with award %d at %d, "+
-			"want the order the call asked for: %s", wantFirst, first, wantSecond, second, describeAwards(awards))
+		t.Errorf("award %d is at position %d and award %d at %d, want them in the order the call asked for: %s",
+			wantFirst, first, wantSecond, second, describeAwards(awards))
 	}
 }
 

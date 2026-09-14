@@ -4334,6 +4334,63 @@ func TestCoerceSchemaParamValue_NumberProperty_NonNumericString_Unchanged(t *tes
 	}
 }
 
+// TestCoerceSchemaParamValue_ValueAlreadyMatchesDeclaredType_Unchanged pins
+// the rule the two-type ID properties made necessary: coercion repairs a value
+// that does not fit the schema and never rewrites one that does.
+//
+// It is a regression test with a history. When project_id began declaring both
+// string and integer, the integer branch ran first and turned the string "42"
+// into the number 42, so a safe mode preview echoed an argument the caller had
+// not sent. Only a cmd/server test noticed, and by accident.
+func TestCoerceSchemaParamValue_ValueAlreadyMatchesDeclaredType_Unchanged(t *testing.T) {
+	bothTypes := map[string]any{"type": []any{"string", "integer"}}
+
+	cases := []struct {
+		name     string
+		param    string
+		value    any
+		property map[string]any
+		want     any
+	}{
+		{"a string ID stays a string", "project_id", "42", bothTypes, "42"},
+		{"a numeric ID stays a number", "project_id", float64(42), bothTypes, float64(42)},
+		{"a path is never numeric", "project_id", "group/project", bothTypes, "group/project"},
+		{"a plain string property is untouched", "name", "42", map[string]any{"type": "string"}, "42"},
+		{"a boolean matching its type is untouched", "archived", true, map[string]any{"type": "boolean"}, true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, changed := coerceSchemaParamValue(testCase.param, testCase.value, testCase.property)
+			if changed {
+				t.Errorf("coerceSchemaParamValue(%v) reported a change to %v, and the value already fits the schema",
+					testCase.value, got)
+			}
+			if got != testCase.want {
+				t.Errorf("coerceSchemaParamValue(%v) = %v, want %v", testCase.value, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestCoerceSchemaParamValue_ValueDoesNotMatch_StillCoerced verifies the other
+// half: a value the schema does not admit is still repaired, so the rule above
+// narrows the coercion rather than disabling it.
+func TestCoerceSchemaParamValue_ValueDoesNotMatch_StillCoerced(t *testing.T) {
+	t.Run("a numeric string for an integer property", func(t *testing.T) {
+		got, changed := coerceSchemaParamValue("per_page", "20", map[string]any{"type": "integer"})
+		if !changed || got != int64(20) {
+			t.Errorf("coerceSchemaParamValue(integer, \"20\") = (%v, %v), want (20, true)", got, changed)
+		}
+	})
+	t.Run("a number for a string ID property", func(t *testing.T) {
+		got, changed := coerceSchemaParamValue("project_id", float64(42), map[string]any{"type": "string"})
+		if !changed || got != "42" {
+			t.Errorf("coerceSchemaParamValue(string ID, 42) = (%v, %v), want (\"42\", true)", got, changed)
+		}
+	})
+}
+
 // TestCoerceSchemaArrayValue_NonSliceValue_Unchanged verifies that a scalar
 // value for an integer-array schema property is returned unchanged when it
 // cannot be interpreted as a list.
