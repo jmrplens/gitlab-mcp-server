@@ -233,3 +233,17 @@ func (r *attributedRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHa
 func attributed(inner promptAdder, base *gitlabclient.Client) promptAdder {
 	return &attributedRegistrar{inner: inner, base: base}
 }
+
+// recordingRegistrar passes every registration through and remembers the name.
+//
+// It sits innermost, under the exclusion filter, so what it collects is what
+// the server ends up serving rather than what this package offers.
+type recordingRegistrar struct {
+	inner promptAdder
+	names []string
+}
+
+func (r *recordingRegistrar) AddPrompt(prompt *mcp.Prompt, handler mcp.PromptHandler) {
+	r.names = append(r.names, prompt.Name)
+	r.inner.AddPrompt(prompt, handler)
+}

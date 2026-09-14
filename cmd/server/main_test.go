@@ -1830,7 +1830,7 @@ func assertCapabilitySurfaceParity(t *testing.T, session *mcp.ClientSession, tc 
 	assertLegacySchemaResourcesOmitted(t, session)
 	assertManifestDetailReadable(t, session, tc.toolSurface)
 	assertPromptSurface(t, session, tc.wantFullCatalog)
-	assertCompletionHandlerAvailable(t, session)
+	assertCompletionHandlerAvailable(t, session, tc.wantFullCatalog)
 }
 
 func assertCapabilityResources(t *testing.T, session *mcp.ClientSession, wantFullCatalog bool) {
@@ -1949,7 +1949,16 @@ func assertPromptSurface(t *testing.T, session *mcp.ClientSession, wantPrompts b
 	}
 }
 
-func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) {
+// assertCompletionHandlerAvailable checks that completion/complete is served
+// and that what it answers agrees with the prompts the same surface serves.
+//
+// The two halves are the same rule seen from either side. On the full surface
+// the prompt exists, so an argument it does not have is answered with an empty
+// list: a completion never blocks the client. On the minimal surface no prompt
+// exists at all, prompts/list and prompts/get already say so with -32601, and a
+// completion naming one is refused with -32602 rather than served live GitLab
+// data for a prompt the server has just denied twice over.
+func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession, servesPrompts bool) {
 	t.Helper()
 	result, err := session.Complete(t.Context(), &mcp.CompleteParams{
 		Ref: &mcp.CompleteReference{
@@ -1961,11 +1970,61 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 			Value: "",
 		},
 	})
+	if !servesPrompts {
+		if err == nil {
+			t.Fatalf("Complete() answered %+v for a prompt this surface does not serve, want a refusal", result)
+		}
+		if !strings.Contains(err.Error(), "unknown prompt") {
+			t.Fatalf("Complete() error = %v, want it to name the unknown prompt", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Fatalf("Complete() values = %v, want empty result for unknown argument", result.Completion.Values)
+	}
+}
+
+// TestCreateServer_CompletionRefusesAPromptTheServerDoesNotServe checks the
+// wiring the refusal depends on, which no test of the completion handler alone
+// can see.
+//
+// The handler is built before the server exists and the prompts are registered
+// on the server that building it returns, so the names have to be handed over
+// afterwards. Forget that hand-over and the handler serves every reference,
+// which is the behavior this replaced; publish the wrong list and it refuses
+// prompts the server does serve. Both failures are invisible until a real
+// server is stood up and asked.
+//
+// It runs on the full surface on purpose: the minimal one refuses every
+// reference and so cannot tell a correct list from an empty one.
+func TestCreateServer_CompletionRefusesAPromptTheServerDoesNotServe(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	session := newInMemorySession(t, server)
+
+	complete := func(name string) error {
+		_, err := session.Complete(t.Context(), &mcp.CompleteParams{
+			Ref:      &mcp.CompleteReference{Type: "ref/prompt", Name: name},
+			Argument: mcp.CompleteParamsArgument{Name: "unknown_argument", Value: ""},
+		})
+		return err
+	}
+
+	if err := complete("summarize_mr_changes"); err != nil {
+		t.Errorf("a prompt this server serves was refused: %v", err)
+	}
+	err := complete("no_such_prompt")
+	if err == nil {
+		t.Fatal("a prompt this server does not serve was completed")
+	}
+	if !strings.Contains(err.Error(), "unknown prompt") {
+		t.Errorf("the refusal is %q, want it to name the unknown prompt", err)
 	}
 }
 

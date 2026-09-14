@@ -2,9 +2,11 @@ package completions
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -25,11 +27,49 @@ type Handler struct {
 	// client is the fallback credential, not the one a request necessarily
 	// runs under. See [Handler.clientFor].
 	client *gitlabclient.Client
+
+	// prompts is the set of prompt names this server serves, or nil when
+	// nothing has published one. See [Handler.PublishPrompts].
+	prompts atomic.Pointer[map[string]struct{}]
 }
 
 // NewHandler creates a completion handler backed by the given GitLab client.
 func NewHandler(client *gitlabclient.Client) *Handler {
 	return &Handler{client: client}
+}
+
+// PublishPrompts records the prompt names this server serves, so a completion
+// naming a prompt it does not serve is refused rather than answered.
+//
+// It is a method rather than a constructor argument because of the order the
+// server is built in: the completion handler is part of the options
+// [mcp.NewServer] is given, and the prompts are registered on the server that
+// call returns, so the names do not exist yet when this handler does. Nothing
+// reads the set until a request arrives, which is after both.
+//
+// Publishing an empty set is meaningful and is not the same as publishing
+// nothing: it says this server serves no prompts, which is what the minimal
+// capability surface does, and every prompt reference is then refused. A
+// handler nobody published to answers as it always did, so a caller that never
+// learned its prompt names is never made worse off.
+func (h *Handler) PublishPrompts(names []string) {
+	served := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		served[name] = struct{}{}
+	}
+	h.prompts.Store(&served)
+}
+
+// servesPrompt reports whether a prompt reference names something this server
+// serves. It answers true when nothing was published, since a handler with no
+// catalog cannot contradict one.
+func (h *Handler) servesPrompt(name string) bool {
+	served := h.prompts.Load()
+	if served == nil {
+		return true
+	}
+	_, ok := (*served)[name]
+	return ok
 }
 
 // clientFor returns the client this request must run against: the one bound to
@@ -83,6 +123,23 @@ func (h *Handler) Complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.
 
 	switch req.Params.Ref.Type {
 	case "ref/prompt":
+		// The one failure this package answers with an error rather than an
+		// empty list, and deliberately: every other cause of an empty
+		// completion is a GitLab hiccup the caller can do nothing about, while
+		// a prompt name this server does not serve is something the caller
+		// sent and has to change. The specification names the code
+		// ("Invalid prompt name: -32602"), prompts/get already answers it for
+		// the same name, and without it a reference to a prompt that does not
+		// exist was served live GitLab data, which reads to a client as
+		// confirmation that it does.
+		//
+		// The resource reference is deliberately not checked the same way: the
+		// specification says nothing about an unserved URI, and a client may
+		// legitimately send a concrete URI where we hold only a template, so
+		// refusing one would break a caller that is conforming.
+		if !h.servesPrompt(req.Params.Ref.Name) {
+			return nil, toolutil.InvalidParams(fmt.Errorf("unknown prompt %q", req.Params.Ref.Name))
+		}
 		return h.completePromptArg(ctx, req)
 	case "ref/resource":
 		return h.completeResourceArg(ctx, req)
@@ -380,6 +437,15 @@ func toResult(values []string) *mcp.CompleteResult {
 // known (e.g. from gitlab.Response.TotalItems). A non-positive total is
 // treated as unknown and omitted.
 func toResultWithTotal(values []string, total int) *mcp.CompleteResult {
+	// A nil slice marshals to null, and the MCP schema requires values to be
+	// an array: a client that validates the response rejects it instead of
+	// showing an empty list, which is the opposite of what this package
+	// promises on a transient GitLab error. Normalized here rather than at the
+	// one completer that can produce a nil today, because every result is
+	// built through this function and a later one would reopen the hole.
+	if values == nil {
+		values = []string{}
+	}
 	hasMore := false
 	if len(values) > maxCompletionResults {
 		values = values[:maxCompletionResults]

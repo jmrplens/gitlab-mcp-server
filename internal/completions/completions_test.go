@@ -7,6 +7,8 @@ package completions
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -17,6 +19,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -1207,6 +1210,167 @@ func TestToResult_Empty(t *testing.T) {
 	}
 	if result.Completion.HasMore {
 		t.Error("expected HasMore=false for empty")
+	}
+}
+
+// TestComplete_PromptReference_IsCheckedAgainstWhatTheServerServes pins the one
+// completion failure answered with an error rather than an empty list.
+//
+// Dispatch used to read the reference type and the argument name and never the
+// prompt name, so a completion for a prompt that does not exist was served live
+// GitLab data, which reads to a client as confirmation that the prompt is
+// there. The specification names the code for it, and prompts/get already
+// answers the same code for the same name.
+//
+// The three cases are the three states the published set can be in, and the
+// empty one is the one that matters: it is the minimal capability surface,
+// where no prompt exists and prompts/list and prompts/get already say so.
+func TestComplete_PromptReference_IsCheckedAgainstWhatTheServerServes(t *testing.T) {
+	cases := []struct {
+		name      string
+		publish   []string
+		published bool
+		refName   string
+		wantError bool
+	}{
+		{name: "served prompt", publish: []string{"summarize_mr_changes"}, published: true, refName: "summarize_mr_changes"},
+		{name: "unserved prompt", publish: []string{"summarize_mr_changes"}, published: true, refName: "no_such_prompt", wantError: true},
+		{name: "no prompt served at all", publish: nil, published: true, refName: "summarize_mr_changes", wantError: true},
+		{name: "nothing published", published: false, refName: "no_such_prompt"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
+			if testCase.published {
+				h.PublishPrompts(testCase.publish)
+			}
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: refPrompt, Name: testCase.refName},
+				Argument: mcp.CompleteParamsArgument{Name: "project_id", Value: "a"},
+			}
+
+			result, err := h.Complete(context.Background(), req)
+			if !testCase.wantError {
+				assertCompleted(t, result, err)
+				return
+			}
+			assertRefusedAsInvalidParams(t, result, err, testCase.refName)
+		})
+	}
+}
+
+// assertCompleted checks that a completion was answered rather than refused.
+func assertCompleted(t *testing.T, result *mcp.CompleteResult, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if result == nil {
+		t.Fatal("the completer answered neither a result nor an error")
+	}
+}
+
+// assertRefusedAsInvalidParams checks the refusal a client actually sees: the
+// JSON-RPC code the specification names, and the name the caller sent so the
+// message says which reference was wrong.
+func assertRefusedAsInvalidParams(t *testing.T, result *mcp.CompleteResult, err error, refName string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("a reference to %q was answered %+v, want a refusal", refName, result)
+	}
+	var wire *jsonrpc.Error
+	if !errors.As(err, &wire) {
+		t.Fatalf("the refusal carries no JSON-RPC code: %v", err)
+	}
+	if wire.Code != jsonrpc.CodeInvalidParams {
+		t.Errorf("the refusal carries code %d, want %d", wire.Code, jsonrpc.CodeInvalidParams)
+	}
+	if !strings.Contains(err.Error(), refName) {
+		t.Errorf("the refusal is %q, want it to name the prompt asked for", err)
+	}
+}
+
+// TestComplete_ResourceReference_IsNotCheckedAgainstTheTemplates pins the half
+// deliberately left lenient.
+//
+// The specification's error list names an invalid prompt name and says nothing
+// about a resource URI, and a client may legitimately send a concrete URI where
+// this server holds only a template. Refusing one would break a caller that is
+// conforming, so an unrecognized URI still answers an empty list.
+func TestComplete_ResourceReference_IsNotCheckedAgainstTheTemplates(t *testing.T) {
+	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
+	h.PublishPrompts(nil)
+	req := &mcp.CompleteRequest{}
+	req.Params = &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: refResource, URI: "gitlab://nothing/serves/this"},
+		Argument: mcp.CompleteParamsArgument{Name: "unknown_argument", Value: ""},
+	}
+
+	result, err := h.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if len(result.Completion.Values) != 0 {
+		t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+	}
+}
+
+// TestToResultWithTotal_NilValues_SerializeAsAnEmptyArray pins the shape of an
+// empty answer on the wire rather than in memory.
+//
+// The MCP schema requires completion.values to be an array, and a nil slice
+// marshals to null, which a client validating the response against that schema
+// rejects instead of showing an empty list. That is the opposite of what this
+// package promises on a transient GitLab error, and no assertion on len() can
+// see it: nil and an empty slice are both zero-length, and only serialization
+// tells them apart. Every result is built through this function, so this is
+// where the guarantee belongs.
+func TestToResultWithTotal_NilValues_SerializeAsAnEmptyArray(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []string
+	}{
+		{name: "nil", values: nil},
+		{name: "empty", values: []string{}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			encoded, err := json.Marshal(toResultWithTotal(testCase.values, 0))
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if !strings.Contains(string(encoded), `"values":[]`) {
+				t.Errorf("completion result serialized as %s, want it to carry an empty array of values", encoded)
+			}
+		})
+	}
+}
+
+// TestCompleteBranchOrTag_BothSearchesFail_SerializesAnEmptyArray drives the
+// one path that produced a nil slice, through the handler rather than through
+// the helper.
+//
+// Both listings failing leaves the branch slice nil, and appending a nil tag
+// slice to a nil branch slice returns the nil receiver unchanged, so the
+// answer went out as null. A project the credential cannot see answers 404 on
+// both calls, which is the ordinary way to reach it.
+func TestCompleteBranchOrTag_BothSearchesFail_SerializesAnEmptyArray(t *testing.T) {
+	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
+
+	result, err := h.completeBranchOrTag(context.Background(), "group/project", "ma")
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if result.Completion.Values == nil {
+		t.Error("the completer answered with a nil slice, which goes on the wire as null")
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if !strings.Contains(string(encoded), `"values":[]`) {
+		t.Errorf("completion result serialized as %s, want it to carry an empty array of values", encoded)
 	}
 }
 

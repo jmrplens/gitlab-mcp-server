@@ -1638,6 +1638,11 @@ type serverShell struct {
 	// sessions records which credential each session belongs to. Nil on stdio,
 	// where there is one credential and nothing to tell apart.
 	sessions *sessionOwners
+	// completions answers completion/complete. It is held so register can tell
+	// it which prompts this server ended up serving: the handler travels in the
+	// options mcp.NewServer is given, and the prompts are registered on the
+	// server that call returns, so the names cannot be known when it is built.
+	completions *completions.Handler
 }
 
 // stateFor returns the credential a request runs under: the one bound to its
@@ -1905,6 +1910,7 @@ func newServerShell(
 	shell.identifier = identifier
 	shell.shared = settings.credentials != nil
 	shell.sessions = settings.sessions
+	shell.completions = completionHandler
 	shell.state = shell.defaultCredentialState()
 	return shell, nil
 }
@@ -2053,7 +2059,12 @@ func (sh *serverShell) register(ctx context.Context) error {
 		}
 	}
 
-	registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	servedPrompts := registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	// Published unconditionally, the empty list included: a completion naming
+	// a prompt this server does not serve is refused, and on the minimal
+	// surface that is every prompt, which is the honest answer where
+	// prompts/list and prompts/get already say the same.
+	sh.completions.PublishPrompts(servedPrompts)
 	publishSubscriptionIndex(sh.subs, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
 
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
@@ -2119,23 +2130,29 @@ func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoute
 // readable through resources/read has been given a guard that does not guard.
 // A subscription would go on polling for it too, which is why
 // [publishSubscriptionIndex] takes the same list.
+//
+// It returns the prompt names it registered, which is none on the minimal
+// surface. That empty answer is as meaningful as a full one and is published
+// just the same: it is what lets a completion naming a prompt be refused on a
+// surface that serves no prompts at all.
 func registerConfiguredCapabilities(
 	server *mcp.Server,
 	client *gitlabclient.Client,
 	capabilitySurface string,
 	excludedActions []string,
-) {
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
-		resources.RegisterWorkflowGuides(server)
-		// Prompts take the same exclusions as resources, and for the same
-		// reason: a prompt is a third request path carrying the same
-		// credential, so a prompt that serves data from an excluded action
-		// would be a way around --exclude-tools rather than a separate
-		// feature. The mechanism arrived with the prompt surface's own
-		// change; this is the line that makes it take effect in the binary.
-		prompts.Register(server, client, prompts.RegisterOptions{ExcludedActions: excludedActions})
+) []string {
+	if capabilitySurface != config.CapabilitySurfaceFull {
+		return nil
 	}
+	resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
+	resources.RegisterWorkflowGuides(server)
+	// Prompts take the same exclusions as resources, and for the same
+	// reason: a prompt is a third request path carrying the same
+	// credential, so a prompt that serves data from an excluded action
+	// would be a way around --exclude-tools rather than a separate
+	// feature. The mechanism arrived with the prompt surface's own
+	// change; this is the line that makes it take effect in the binary.
+	return prompts.Register(server, client, prompts.RegisterOptions{ExcludedActions: excludedActions})
 }
 
 // publishSubscriptionIndex hands the subscription runtime the same narrowed
