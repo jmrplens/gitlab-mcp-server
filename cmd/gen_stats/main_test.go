@@ -945,3 +945,34 @@ func TestCountStructType_CountsOnlyStructTypeSpecs(t *testing.T) {
 		}
 	})
 }
+
+// TestIsE2EPath_CountsTheSuiteAndNotThePlantedFixtures pins which tracked
+// files the end-to-end counters are allowed to see.
+//
+// The predicate used to look for "/e2e/" anywhere in the path, which also
+// matched the trees cmd/audit_e2e_coverage plants under its own testdata. Those
+// are fixtures that command reads, not tests anything runs, and counting them
+// put 19 functions into the README that the testing reference does not carry,
+// since gen_testing_docs scans ./test/e2e/... and never saw them.
+func TestIsE2EPath_CountsTheSuiteAndNotThePlantedFixtures(t *testing.T) {
+	cases := []struct {
+		name string
+		rel  string
+		want bool
+	}{
+		{name: "the suite", rel: "test/e2e/gitlab/common/admin_settings_test.go", want: true},
+		{name: "a transport module", rel: "test/e2e/http/balancer_test.go", want: true},
+		{name: "the harness", rel: "test/e2e/internal/harness/call.go", want: true},
+		{name: "a planted coverage fixture", rel: "cmd/audit_e2e_coverage/testdata/static/test/e2e/gitlab/common/planted_test.go", want: false},
+		{name: "a planted harness fixture", rel: "cmd/audit_e2e_coverage/testdata/static/test/e2e/internal/harness/harness_test.go", want: false},
+		{name: "ordinary source", rel: "internal/tools/issues/issues.go", want: false},
+		{name: "a command named for e2e", rel: "cmd/audit_e2e_coverage/main.go", want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := isE2EPath(testCase.rel); got != testCase.want {
+				t.Errorf("isE2EPath(%q) = %v, want %v", testCase.rel, got, testCase.want)
+			}
+		})
+	}
+}

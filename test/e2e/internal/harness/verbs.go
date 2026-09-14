@@ -27,7 +27,7 @@ import (
 func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 	s.env.T.Helper()
 
-	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: uri})
 	result, err := s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 	if err != nil {
 		s.env.T.Fatalf("resources/read %s: %v%s", uri, err, s.conn.failureContext())
@@ -40,7 +40,7 @@ func (s *Session) ReadResource(uri string) *mcp.ReadResourceResult {
 func (s *Session) TryReadResource(uri string) (*mcp.ReadResourceResult, error) {
 	s.env.T.Helper()
 
-	ctx := s.attribute(PurposeTest, ExpectationAny, callAttribution{target: uri})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationAny, callAttribution{target: uri})
 	return s.conn.client().ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 }
 
@@ -48,7 +48,7 @@ func (s *Session) TryReadResource(uri string) (*mcp.ReadResourceResult, error) {
 func (s *Session) GetPrompt(name string, arguments map[string]string) *mcp.GetPromptResult {
 	s.env.T.Helper()
 
-	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: name})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: name})
 	result, err := s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 	if err != nil {
 		s.env.T.Fatalf("prompts/get %s: %v%s", name, err, s.conn.failureContext())
@@ -60,7 +60,7 @@ func (s *Session) GetPrompt(name string, arguments map[string]string) *mcp.GetPr
 func (s *Session) TryGetPrompt(name string, arguments map[string]string) (*mcp.GetPromptResult, error) {
 	s.env.T.Helper()
 
-	ctx := s.attribute(PurposeTest, ExpectationAny, callAttribution{target: name})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationAny, callAttribution{target: name})
 	return s.conn.client().GetPrompt(ctx, &mcp.GetPromptParams{Name: name, Arguments: arguments})
 }
 
@@ -83,7 +83,7 @@ func (s *Session) complete(ref *mcp.CompleteReference, argument, value string) [
 	// The reference and the argument together are what a completion covers, so
 	// the record names both: a template whose project variable completes says
 	// nothing about its branch variable.
-	ctx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: completionTarget(ref) + " " + argument})
+	ctx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: completionTarget(ref) + " " + argument})
 	result, err := s.conn.client().Complete(ctx, &mcp.CompleteParams{
 		Ref:      ref,
 		Argument: mcp.CompleteParamsArgument{Name: argument, Value: value},
@@ -115,7 +115,7 @@ func (s *Session) Raw(params *mcp.CallToolParams) (*mcp.CallToolResult, error) {
 	// PurposeRaw, so the coverage report never credits an action for a call
 	// that named a tool directly: the subject of a raw call is the envelope,
 	// and what the server made of it is somebody else's evidence.
-	ctx := s.attribute(PurposeRaw, ExpectationAny, callAttribution{})
+	ctx := s.attribute(s.env.Ctx, PurposeRaw, ExpectationAny, callAttribution{})
 	return s.conn.client().CallTool(ctx, params)
 }
 
@@ -145,7 +145,7 @@ func (s *Session) Subscribe(uri string) *Subscription {
 	// subscription it answers.
 	unregister := s.conn.subscribers.add(uri, s.env.recorder)
 
-	subscribeCtx := s.attribute(PurposeTest, ExpectationOK, callAttribution{target: uri})
+	subscribeCtx := s.attribute(s.env.Ctx, PurposeTest, ExpectationOK, callAttribution{target: uri})
 	if err := s.conn.client().Subscribe(subscribeCtx, &mcp.SubscribeParams{URI: uri}); err != nil {
 		s.conn.notifier.forget(uri, updates)
 		unregister()

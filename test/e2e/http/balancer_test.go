@@ -45,13 +45,26 @@ const balancerSalt = "e2e-only-affinity-salt"
 
 // affinityTokens are the credentials the affinity assertions are made with.
 //
-// Eight, because the assertion has two halves: every token must stay on one
-// instance, and the eight together must not all land on the same one. With
-// two backends a smaller set could satisfy the first half while failing the
-// second by chance often enough to make the test flaky.
+// The assertion has two halves: every token must stay on one instance, and the
+// tokens together must not all land on the same one. The second half is a
+// probability, not a property, because the ring the balancer builds is keyed on
+// each backend's name and those names carry a port this test picks freshly on
+// every run, so which side of the ring a fixed token falls on is a fresh draw
+// each time rather than a constant of the token.
+//
+// Eight was the first count, on the reasoning that a smaller set would fail the
+// second half by chance; eight fails it too. Two backends split a ketama ring
+// near enough to evenly that each token is close to a coin flip, so eight
+// tokens land on one side about 2^-8 of the time per assertion, twice per test
+// and in three balancer tests, which is often enough to be seen: it was, on
+// PR 747. Twenty-four puts that at about 2^-24 and costs one more second.
 var affinityTokens = []string{
 	"glpat-alpha", "glpat-bravo", "glpat-charlie", "glpat-delta",
 	"glpat-echo", "glpat-foxtrot", "glpat-golf", "glpat-hotel",
+	"glpat-india", "glpat-juliett", "glpat-kilo", "glpat-lima",
+	"glpat-mike", "glpat-november", "glpat-oscar", "glpat-papa",
+	"glpat-quebec", "glpat-romeo", "glpat-sierra", "glpat-tango",
+	"glpat-uniform", "glpat-victor", "glpat-whiskey", "glpat-xray",
 }
 
 // nginxBalancerConfig is the balancer from the enterprise deployment guide,
@@ -416,7 +429,10 @@ func configDigestOf(t *testing.T, srv *server) string {
 func assertEachCredentialPins(t *testing.T, base string, header func(token string) [2]string) {
 	t.Helper()
 
-	const requestsPerToken = 6
+	// Four, because round robin over two backends shows itself on the second
+	// request and the count multiplies by every token: six across
+	// twenty-four tokens would spend the time the wider set was meant to buy.
+	const requestsPerToken = 4
 	backends := make(map[string]string, len(affinityTokens))
 	for _, token := range affinityTokens {
 		seen := map[string]struct{}{}

@@ -13,6 +13,7 @@
 package harness
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -334,6 +335,40 @@ func TestResolveCallOptions_DefaultsAndOverrides(t *testing.T) {
 	}
 	if overridden.timeout != time.Second {
 		t.Errorf("timeout = %s, want 1s", overridden.timeout)
+	}
+}
+
+// TestCallOptions_Base_PrefersTheCallersContext pins which context a call runs
+// under. A cleanup sweeps under a context of its own, bounded by the cleanup
+// budget, and a call that fell back to the Env's would be bounded by nothing:
+// the Env's is still live when the sweep runs and carries no deadline, so one
+// cleanup that hangs would spend the whole budget unnoticed.
+func TestCallOptions_Base_PrefersTheCallersContext(t *testing.T) {
+	env := context.WithValue(t.Context(), testContextKey{}, "env")
+	sweep := context.WithValue(t.Context(), testContextKey{}, "sweep")
+
+	if got := resolveCallOptions(nil).base(env).Value(testContextKey{}); got != "env" {
+		t.Errorf("a call with no Under() runs under %v, want the Env's context", got)
+	}
+	if got := resolveCallOptions([]CallOption{Under(sweep)}).base(env).Value(testContextKey{}); got != "sweep" {
+		t.Errorf("a call with Under() runs under %v, want the caller's context", got)
+	}
+}
+
+// testContextKey distinguishes the two contexts the base test hands around.
+type testContextKey struct{}
+
+// TestCallOptions_Under_DeadlineReachesTheCall checks that the context a
+// cleanup passes carries its deadline through, which is the whole point of
+// the option: the budget has to bound one call and not only the gaps between
+// them.
+func TestCallOptions_Under_DeadlineReachesTheCall(t *testing.T) {
+	budgeted, cancel := context.WithTimeout(t.Context(), time.Hour)
+	defer cancel()
+
+	base := resolveCallOptions([]CallOption{Under(budgeted)}).base(t.Context())
+	if _, ok := base.Deadline(); !ok {
+		t.Error("the context a call runs under carries no deadline, so the cleanup budget bounds no call")
 	}
 }
 

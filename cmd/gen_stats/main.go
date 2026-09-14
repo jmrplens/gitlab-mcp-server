@@ -142,6 +142,23 @@ type repoStats struct {
 
 // collectStats classifies every tracked .go file under root and returns a
 // populated repoStats. root should be the repository root directory.
+// e2eTreePrefix is the one tree the end-to-end suites live in, as git spells a
+// path.
+const e2eTreePrefix = "test/e2e/"
+
+// isE2EPath reports whether a tracked file belongs to the end-to-end suites.
+//
+// It anchors at the tree rather than looking for "/e2e/" anywhere in the path,
+// because a substring match also takes the trees the coverage auditor plants
+// under its own testdata (cmd/audit_e2e_coverage/testdata/static/test/e2e/...).
+// Those are fixtures the auditor reads, not tests anything runs, and counting
+// them put 19 functions into the README that docs/development/testing/testing.md
+// does not have: gen_testing_docs scans ./test/e2e/... and so never saw them,
+// which is how the two generated counts came to disagree.
+func isE2EPath(rel string) bool {
+	return strings.HasPrefix(rel, e2eTreePrefix)
+}
+
 func collectStats(root string) (*repoStats, error) {
 	s := &repoStats{}
 	dirs := make(map[string]bool)
@@ -155,7 +172,7 @@ func collectStats(root string) (*repoStats, error) {
 	}
 	for _, rel := range files {
 		path := filepath.Join(root, rel)
-		isE2E := strings.Contains(rel, "/e2e/")
+		isE2E := isE2EPath(rel)
 		isTest := strings.HasSuffix(rel, testsource.FileSuffix)
 
 		dirs[filepath.Dir(rel)] = true

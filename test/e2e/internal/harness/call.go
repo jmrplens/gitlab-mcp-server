@@ -114,6 +114,9 @@ type callOptions struct {
 	purpose Purpose
 	confirm bool
 	timeout time.Duration
+	// ctx is the context this call runs under, when the caller has one of
+	// its own. Empty means the Env's, which is what a test body has.
+	ctx context.Context
 	// expectation is what the caller asked to happen, in the record's
 	// vocabulary. Each verb sets it rather than the caller, because the verb
 	// is the assertion: Do expects success, Refused expects a class.
@@ -156,6 +159,19 @@ func Within(timeout time.Duration) CallOption {
 	return func(o *callOptions) { o.timeout = timeout }
 }
 
+// Under runs one call under the caller's own context rather than the Env's.
+//
+// A cleanup is the case it exists for. The ledger sweeps under a context of
+// its own, bounded by the cleanup budget, and a call that ignored it would
+// run under the Env's context instead: that one is still live when the sweep
+// runs, since the sweep is registered after it and t.Cleanup runs in reverse,
+// but it carries no deadline, so the budget bounded the sweep between calls
+// and never a call itself. One cleanup that hangs would spend the whole
+// budget and be noticed only once it returned.
+func Under(ctx context.Context) CallOption {
+	return func(o *callOptions) { o.ctx = ctx }
+}
+
 // resolveCallOptions applies the caller's options over the defaults: a test
 // call, confirmed if destructive, bounded by the test's own context, expected
 // to succeed.
@@ -172,6 +188,15 @@ func resolveCallOptions(opts []CallOption) callOptions {
 func (o callOptions) expecting(expectation string) callOptions {
 	o.expectation = expectation
 	return o
+}
+
+// base is the context a call runs under: the caller's when Under named one,
+// and otherwise the Env's, which is the test's own.
+func (o callOptions) base(env context.Context) context.Context {
+	if o.ctx != nil {
+		return o.ctx
+	}
+	return env
 }
 
 // callResult is one answer, classified.
@@ -537,7 +562,7 @@ func (s *Session) project(id ActionID, params map[string]any, confirm bool) (too
 // its own, which is right: a retry is another call, and two identical lines
 // would be one line in a record deduplicated by content.
 func (s *Session) send(id ActionID, call toolCall, opts callOptions) callResult {
-	ctx := s.attribute(opts.purpose, opts.expectation, callAttribution{
+	ctx := s.attribute(opts.base(s.env.Ctx), opts.purpose, opts.expectation, callAttribution{
 		action:       id,
 		wantDispatch: opts.dispatch,
 	})
