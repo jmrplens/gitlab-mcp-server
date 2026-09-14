@@ -85,7 +85,7 @@ readable without opening the tracker:
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open | No | No | Partial |
-| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, open | No | No | None possible |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, [#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), open | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
@@ -1883,13 +1883,18 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
   tests. Chosen as the first contribution to that SDK because the maintainers
   had already accepted the cause plumbing it builds on (their #1100), it adds
   no exported API, and it answers a SHOULD of the specification.
-- **Merged**: no.
+- **Merged**: **yes, upstream, on 2026-09-14, and in no released version yet.**
+  v1.8.0 was published that morning and the merge landed after it, so the
+  released SDK still drops the reason: its `canceller.Preempt` reads
+  `params.RequestID`, calls `conn.Cancel(id)` and never looks at
+  `params.Reason` (`mcp/transport.go`). The first release carrying it retires
+  the note below.
 - **Blocking**: no.
-- **Workaround**: none possible. The field is dropped inside the SDK; there is
-  no seam to read it from. We log what remains — that the call was cancelled and
-  how long it ran. When the fix lands, `context.Cause(ctx)` in a handler reads
-  `request cancelled by the peer: <reason>`, and the classification in
-  `internal/toolutil` can carry the reason into the log line.
+- **Workaround**: yes, until that release. The field is dropped inside the SDK
+  and there is no seam to read it from, so we log what remains — that the call
+  was cancelled and how long it ran. Once the fix ships, `context.Cause(ctx)` in
+  a handler reads `request cancelled by the peer: <reason>`, and the
+  classification in `internal/toolutil` can carry the reason into the log line.
 
 **What**: "Implementations SHOULD log cancellation reasons for debugging."
 `mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to

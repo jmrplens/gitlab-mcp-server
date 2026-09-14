@@ -1151,11 +1151,22 @@ func TestAttachArgumentLimits_RefusesOverNestedArguments(t *testing.T) {
 		depth     int
 		wantCalls int
 		wantErr   bool
+		// wantNamesLimit asks that the refusal say what was exceeded.
+		//
+		// It is false for the deepest case and deliberately: from go-sdk
+		// v1.8.0 the transport caps its own buffering, so a message that far
+		// over the limit is refused where it is read and the connection ends
+		// before this guard is reached. Both refusals stop the call, which is
+		// what the handler-invocation count below holds; only the wording
+		// belongs to whichever layer got there first. Near the limit — where a
+		// caller has a real chance of fixing the request — it is still this
+		// guard that answers, and it still has to say so.
+		wantNamesLimit bool
 	}{
-		{"shallow", 3, 1, false},
-		{"at_the_limit", 8, 1, false},
-		{"one_over_the_limit", 9, 0, true},
-		{"far_over_the_limit", 4000, 0, true},
+		{name: "shallow", depth: 3, wantCalls: 1},
+		{name: "at_the_limit", depth: 8, wantCalls: 1},
+		{name: "one_over_the_limit", depth: 9, wantErr: true, wantNamesLimit: true},
+		{name: "far_over_the_limit", depth: 4000, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1180,7 +1191,7 @@ func TestAttachArgumentLimits_RefusesOverNestedArguments(t *testing.T) {
 				if err == nil {
 					t.Fatalf("CallTool at depth %d succeeded, want a refusal", tc.depth)
 				}
-				if !strings.Contains(err.Error(), "nest") {
+				if tc.wantNamesLimit && !strings.Contains(err.Error(), "nest") {
 					t.Errorf("refusal = %q, want it to name the nesting limit", err.Error())
 				}
 			} else if err != nil {
