@@ -55,7 +55,14 @@ func newIdentifiedSessions(t *testing.T) *identifiedSessions {
 	// leave the connect below hanging instead of failing.
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if session, ok := req.GetSession().(*mcp.ServerSession); ok {
+			// Only the session a connection initializes on. A client opens a
+			// short-lived session of its own for server/discover first, which
+			// ends as soon as that answer is written, so taking the first
+			// session seen handed every test here a session that was already
+			// over: its Wait returns at once and sessionOwners forgets it,
+			// which is correct for a session that ended and useless as a stand
+			// -in for a pooled one.
+			if session, ok := req.GetSession().(*mcp.ServerSession); ok && method == "initialize" {
 				sessions.note(session)
 			}
 			return next(ctx, method, req)

@@ -363,20 +363,35 @@ Test rules that CI gates:
 - Never `t.Fatal`/`t.Fatalf`/`t.FailNow` inside an `httptest` handler or any other goroutine: `t.Errorf` + a deterministic response + `return`, or record with atomics and assert afterwards (`.github/instructions/test-goroutines.instructions.md`; `make check-test-goroutines`). `testutil.AssertRequestPath` / `AssertRequestMethod` / `AssertQueryParam` and `testutil.ForbiddenHandler` already follow the contract
 - A `_test.go` file is named after the module it tests (`make check-test-file-names`)
 
-## Step 7: Update Documentation
+## Step 7: Write the End-to-End Scenario
+
+A new action needs a scenario under `test/e2e/gitlab/`, and this is a gate rather than a suggestion: `make check-e2e-static` fails on a catalog action no scenario names, and `make analyze` and CI's compile job both run it.
+
+1. Pick the package by what the action needs of the instance: `common` for an action any GitLab serves, `ce` for one only an unlicensed instance does, `ee` for Premium or Ultimate
+2. Declare the action ID as a typed `harness.ActionID` constant in that package's `actions_test.go`, beside the others. A string literal at the call site is invisible to the gate, which reads typed constants out of the type checker's record
+3. Drive it with `harness.Do` for a success, `harness.Refused` or `harness.ExpectToolError` for a refusal whose message is the subject, and `harness.Try` when both halves are
+4. Build what the scenario stands on with `test/e2e/internal/fixture`, never with the server under test: fixture traffic counts as no coverage, and a broken tool then fails the test that exercises it rather than every test that needs a project
+5. An action nothing on a Docker instance can run goes in `cmd/audit_e2e_coverage/exemptions.go` with a category and a reason. A declaration that stops describing the tree is itself a finding, so an exemption is a statement a reviewer can check rather than a way past the gate
+
+```bash
+make check-e2e-static                 # the push-time gate, no GitLab needed
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...
+```
+
+## Step 8: Update Documentation
 
 1. Add the tools to the page under `docs/reference/tools/` that owns the domain (`docs/reference/tools/doc-ownership.json` maps tool-name prefixes to pages, and `go run ./cmd/audit_doc_coverage/` is the gate); create a new page and an ownership entry only for a new area
 2. The catalog tables in `docs/reference/tools/README.md` are generator-owned; do not hand-edit them
 3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/development/testing/testing.md` with new test counts and coverage values
 
-## Step 8: Verify
+## Step 9: Verify
 
 ```bash
 go test ./internal/tools/{domain}/ -count=1 -v
 go run ./cmd/gen_testing_docs/ --check
 npx markdownlint-cli2 docs/development/testing/testing.md
 golangci-lint run --build-tags e2e ./internal/tools/{domain}/
-make check-test-subtests check-test-goroutines check-test-file-names
+make check-test-subtests check-test-goroutines check-test-file-names check-e2e-static
 go run ./cmd/audit_doc_coverage/
 ```
 
@@ -392,5 +407,6 @@ go run ./cmd/audit_doc_coverage/
 - [ ] Error handling uses correct WrapErr variant
 - [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-catalog-first`
 - [ ] Tests cover success, validation, API error, and markdown
+- [ ] An e2e scenario names the action through a typed `harness.ActionID` constant, or an exemption declares why none can, and `make check-e2e-static` passes
 - [ ] `go test` + `golangci-lint` pass
 - [ ] Documentation updated

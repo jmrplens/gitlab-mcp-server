@@ -31,7 +31,14 @@ import (
 // job, so the record outlives the answer that scheduled its removal.
 const (
 	userDeletionInterval = 2 * time.Second
-	userDeletionWait     = 90 * time.Second
+	// userDeletionWait is generous because what it waits for is a background
+	// job competing with a whole suite's worth of them. Run on its own this
+	// scenario finishes in 66 seconds and the accounts are gone; run after the
+	// other 980-odd tests, 90 seconds was not enough and the failure read as
+	// "the deletes were accepted and nothing was removed", which is a very
+	// different accusation from "the queue is busy". The drain below helps and
+	// does not settle it, since jobs keep arriving behind it.
+	userDeletionWait = 5 * time.Minute
 )
 
 // What a user creation through the server is retried on, for the password
@@ -192,6 +199,13 @@ func createUserThroughTheServer(e *harness.Env, s *harness.Session, username str
 func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 	e.T.Helper()
 
+	// GitLab removes a rejected or deleted account in a background job, so the
+	// queue is drained before the wait rather than polled through: on a Docker
+	// instance carrying a whole suite's worth of jobs the removal can sit
+	// behind them for longer than any window this test would be right to keep
+	// open. This is the same drain the fixtures do before a readiness wait.
+	fixture.DrainSidekiq(e.Ctx, e.Client())
+
 	remaining := slices.Clone(userIDs)
 	err := harness.Poll(e.Ctx, userDeletionInterval, userDeletionWait, func() (bool, string, error) {
 		remaining = slices.DeleteFunc(remaining, func(userID int64) bool { return userIsGone(e, userID) })
@@ -208,8 +222,15 @@ func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 	// thing under test; none gone at all is the delete, and this is the only
 	// place a test would see that.
 	if len(remaining) == len(userIDs) {
-		e.T.Errorf("none of the deleted users %v had left the instance after %s; the deletes were accepted and nothing was removed: %v",
-			remaining, userDeletionWait, err)
+		// What state they are in decides whose defect this is, and nothing
+		// else in the suite can say it. gitlab_reject_user tells a model the
+		// rejection "permanently deletes the pending user", so an account that
+		// is merely blocked or still pending makes that description false,
+		// while one that is simply slow to go makes this a wait that is too
+		// short. The states are read here rather than guessed at.
+		e.T.Errorf("none of the deleted users %v had left the instance after %s; the deletes were accepted and "+
+			"nothing was removed. Their states now: %s. Error: %v",
+			remaining, userDeletionWait, describeUserStates(e, remaining), err)
 		return
 	}
 	e.T.Logf("the background deletion of users %v had not landed within %s, with %d of %d already gone: %v",
@@ -218,6 +239,26 @@ func awaitUserRemovals(e *harness.Env, userIDs []int64) {
 
 // userIsGone reports whether a user answers 404, which is where a deletion
 // GitLab performs from a background job ends.
+// describeUserStates renders what the instance now holds for each user, for a
+// failure that has to say whether an account survived a rejection and in what
+// condition. It never fails the test: it is called from one that has already
+// failed, and a read that cannot answer says so in place of a state.
+func describeUserStates(e *harness.Env, userIDs []int64) string {
+	parts := make([]string, 0, len(userIDs))
+	for _, userID := range userIDs {
+		user, _, err := e.Client().GL().Users.GetUser(userID, &gl.GetUserOptions{}, gl.WithContext(e.Ctx))
+		switch {
+		case err != nil:
+			parts = append(parts, fmt.Sprintf("%d=unreadable(%v)", userID, err))
+		case user == nil:
+			parts = append(parts, fmt.Sprintf("%d=no user in the answer", userID))
+		default:
+			parts = append(parts, fmt.Sprintf("%d=%s", userID, user.State))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
 func userIsGone(e *harness.Env, userID int64) bool {
 	_, _, err := e.Client().GL().Users.GetUser(userID, &gl.GetUserOptions{}, gl.WithContext(e.Ctx))
 	return err != nil && fixture.IsStatus(err, http.StatusNotFound)

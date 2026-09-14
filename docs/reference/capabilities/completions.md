@@ -61,7 +61,13 @@ sequenceDiagram
     U->>AI: Selects "group/gitlab-mcp-server"
 ```
 
-Each completion request triggers **at most one GitLab API call**. Results are returned immediately — there is no caching, ensuring data is always fresh. If the API call fails, the server returns an empty result (never an error), so the client flow is never blocked.
+Each completion request triggers **at most one GitLab API call**. Results are returned immediately — there is no caching, ensuring data is always fresh. If the API call fails, the server returns an empty result, so the client flow is never blocked.
+
+There is one exception, and it is the one failure the caller can act on: a `ref/prompt` naming a prompt this server does not serve is refused with `-32602`, the code the specification names for an invalid prompt name and the same one `prompts/get` already answers for that name. Every other empty completion is a GitLab hiccup the caller can do nothing about; this one is something the caller sent. It matters most on `GITLAB_MCP_CAPABILITY_SURFACE=minimal`, where no prompt is served at all: every prompt reference is refused there, rather than answered with live GitLab data for a prompt `prompts/list` and `prompts/get` have already denied.
+
+Completion is also narrowed by `--exclude-tools`, like the tool, resource, subscription and prompt surfaces before it. An operator who removes `issue.list` removes it from here too, so the completion for `issue_iid` answers an empty list without reaching GitLab. An argument served by more than one action keeps the half that was left: removing only the tag listing still completes `from` with branches.
+
+A `ref/resource` URI is deliberately not checked the same way. The specification's error list says nothing about an unserved URI, and a client may legitimately send a concrete URI where this server holds only a template, so an unrecognized one still answers an empty list.
 
 ## API
 
@@ -124,7 +130,7 @@ Two completers take a different context. `milestone` resolves against `project_i
 | Setting         | Value                                  | Notes                                                                                                                                                |
 | --------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Max results     | 10 per request                         | `maxCompletionResults` constant; aligned with MCP spec recommendation                                                                                |
-| Error handling  | Graceful                               | Returns empty results on API errors                                                                                                                  |
+| Error handling  | Graceful                               | Returns empty results on API errors; a prompt name the server does not serve is refused with `-32602`                                                |
 | Caching         | None                                   | Queries GitLab API in real-time for freshness                                                                                                        |
 | `total` field   | Populated from GitLab `X-Total` header | When the underlying GitLab call returns `X-Total`, the value is forwarded to `CompletionResultDetails.Total` so clients can display “N of M matches” |
 | `hasMore` field | Computed from total vs. returned       | Set to `true` when more results exist beyond the returned slice                                                                                      |
@@ -135,7 +141,7 @@ The server returns **bare argument values** in `completion.values` per the MCP 2
 
 ## Security
 
-- **Graceful degradation** — API errors during completion return empty results. The client is never blocked or shown error details from completions.
+- **Graceful degradation** — API errors during completion return empty results. The client is never blocked or shown error details from completions. The one refusal, an unserved prompt name, carries no GitLab detail either: it names the prompt the caller asked for and nothing else.
 - **No credential leakage** — queries use project/group IDs internally. Completion results show human-readable names.
 - **Rate awareness** — each completion triggers at most one GitLab API call per argument type.
 

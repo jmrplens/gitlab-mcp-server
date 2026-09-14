@@ -12,6 +12,13 @@ carry, a behaviour a test had to accommodate, a spec clause we cannot satisfy
 because the dependency does not expose what it needs. Each one records where the
 evidence is, so a contributor does not have to rediscover it.
 
+A defect we **fix upstream** in a project this server depends on belongs here
+too, even when we found it somewhere else. The register's second job is to say
+what is open in our name and what it is waiting on, and a contribution left out
+of it is one nobody here can see the state of. Such an entry says plainly how it
+was found, and says what it costs this server, which for one found elsewhere is
+usually nothing.
+
 See the [upstream contribution skill](../../.github/skills/upstream-contribution/)
 for the fork, branch, fix, test and MR workflow.
 
@@ -78,15 +85,15 @@ readable without opening the tracker:
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | Yes, [#1263](https://github.com/modelcontextprotocol/go-sdk/issues/1263) | No, proposal first | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | Yes, [#1258](https://github.com/modelcontextprotocol/go-sdk/issues/1258) | Yes, [#1266](https://github.com/modelcontextprotocol/go-sdk/pull/1266), open | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | Yes, [#1259](https://github.com/modelcontextprotocol/go-sdk/issues/1259) | Yes, [#1267](https://github.com/modelcontextprotocol/go-sdk/pull/1267), open | No | No | Partial |
-| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, open | No | No | None possible |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | Yes | Yes, [#1255](https://github.com/modelcontextprotocol/go-sdk/pull/1255), merged | **Yes, unreleased** | No | Yes, until it ships |
 | 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | Not by us | No | **Yes, unreleased** | No | None taken |
-| 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), open | No | No | None taken |
+| 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | Yes, [#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260) | Yes, [#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268), merged | **Yes, unreleased** | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Retired |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 | 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | Yes, [#1264](https://github.com/modelcontextprotocol/go-sdk/issues/1264) | No, proposal first | No | No | None possible |
 | 19 | client-go | [Security mutations discard GraphQL errors](#the-security-attribute-and-category-mutations-discard-graphql-errors) | No | No | No | No | Yes |
 | 20 | client-go | [Dependency Firewall lacks `operation` and the enablement endpoint](#the-dependency-firewall-wrapper-is-missing-an-attribute-and-an-endpoint) | No | No | No | No | None |
-| 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), open | No | No | Yes |
+| 21 | go-sdk | [A middleware cannot ask whether a request carries params](#a-middleware-cannot-ask-whether-a-request-carries-params) | Yes, [#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261) | Yes, [#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269), merged | **Yes, unreleased** | No | Yes |
 | 22 | client-go | [Enum constants lag the documented value sets](#enum-constants-lag-the-documented-value-sets) | No | No | No | No | Yes |
 | 23 | go-sdk | [No per-session resource-updated delivery](#a-resource-update-cannot-be-delivered-to-one-session) | Yes, [#1265](https://github.com/modelcontextprotocol/go-sdk/issues/1265) | No, proposal first | No | No | Yes |
 | 24 | gitlab-org/gitlab | [Approvals page documents the POST's response under the GET](#the-merge-request-approvals-page-documents-the-deprecated-posts-response-under-the-get) | No | No | No | No | Yes |
@@ -99,7 +106,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 6 open | **8 of 14, v3.1.0 to v3.6.0** | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 4 open | **10 of 14, v3.1.0 to v3.9.0** | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
@@ -112,13 +119,17 @@ readable without opening the tracker:
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), open | No | Was yes | Yes |
+| 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
+| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
 on the 12th: each entry existed with its five fields and the table had never
 listed it, which is the drift this table exists to prevent. Rows 45 and 46 are
 what the e2e rebuild found, the first from the EE port and the second from the
-CE coverage that closed the gap against the old suite's baseline.
+CE coverage that closed the gap against the old suite's baseline. Row 47 was
+added on the 14th and is the first entry not found from this codebase, on the
+terms the next paragraph sets out.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -882,9 +893,12 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: `!3041`, `!3044`, `!3048`, `!3050`, `!3051` and `!3052` are
-  open, each with a reviewer assigned since 2026-09-12; `!3041` has its one
-  review comment (an experimental-field disclaimer) applied.
+- **In review**: four are open. `!3051` (the eight `Namespace` fields) is
+  approved and waiting on a maintainer; `!3048` (the seven `Hook` fields) has
+  a reviewer LGTM, with both of its threads answered and resolved, one of them
+  by adding the `custom_webhook_template` assertion to the edit test; `!3050`
+  and `!3052` have had a reviewer assigned since 2026-09-12 and no comment
+  since.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
@@ -893,10 +907,13 @@ of change whose test is one assertion on the built URL.
   (`GroupServiceAccount.PublicEmail` and `UnconfirmedEmail`) in **v3.4.0**,
   all on 2026-09-10; then `!3053` (the four `Snippet` fields) in **v3.5.0**
   and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
-  **v3.6.0**, both on 2026-09-11. Do not read a merge as a release: `!3040` sat
+  **v3.6.0**, both on 2026-09-11; then `!3044` (`LicenseTemplate.Popular`) in
+  **v3.7.0** and `!3041` (`Topic.OrganizationID`) in **v3.9.0**, merged on
+  2026-09-12 and 2026-09-13. Do not read a merge as a release: `!3040` sat
   merged and in no tag for hours, so the version is read from which tags
-  contain the merge commit rather than from the newest tag. Six releases in
-  two days is why: the newest tag was wrong for five of these six.
+  contain the merge commit rather than from the newest tag. Nine releases in
+  five days is why: the newest tag was wrong for five of the first six, and
+  `!3044` is in three tags while `!3041` is in one.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
   the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
@@ -1872,13 +1889,18 @@ seconds into a hanging GitLab call: the client's `notifications/cancelled` at
   tests. Chosen as the first contribution to that SDK because the maintainers
   had already accepted the cause plumbing it builds on (their #1100), it adds
   no exported API, and it answers a SHOULD of the specification.
-- **Merged**: no.
+- **Merged**: **yes, upstream, on 2026-09-14, and in no released version yet.**
+  v1.8.0 was published that morning and the merge landed after it, so the
+  released SDK still drops the reason: its `canceller.Preempt` reads
+  `params.RequestID`, calls `conn.Cancel(id)` and never looks at
+  `params.Reason` (`mcp/transport.go`). The first release carrying it retires
+  the note below.
 - **Blocking**: no.
-- **Workaround**: none possible. The field is dropped inside the SDK; there is
-  no seam to read it from. We log what remains — that the call was cancelled and
-  how long it ran. When the fix lands, `context.Cause(ctx)` in a handler reads
-  `request cancelled by the peer: <reason>`, and the classification in
-  `internal/toolutil` can carry the reason into the log line.
+- **Workaround**: yes, until that release. The field is dropped inside the SDK
+  and there is no seam to read it from, so we log what remains — that the call
+  was cancelled and how long it ran. Once the fix ships, `context.Cause(ctx)` in
+  a handler reads `request cancelled by the peer: <reason>`, and the
+  classification in `internal/toolutil` can carry the reason into the log line.
 
 **What**: "Implementations SHOULD log cancellation reasons for debugging."
 `mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to
@@ -2006,8 +2028,9 @@ served. It is upstream by this file's own test: it happens to any caller of
 - **Reported**: yes,
   [modelcontextprotocol/go-sdk#1261](https://github.com/modelcontextprotocol/go-sdk/issues/1261),
   on 2026-09-13.
-- **In review**: yes,
-  [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269):
+- **Merged**: yes, 2026-09-14,
+  [modelcontextprotocol/go-sdk#1269](https://github.com/modelcontextprotocol/go-sdk/pull/1269),
+  unreleased:
   `mcp.HasParams(req Request) bool`. This is the one of the four pull requests
   that adds an exported symbol, and the body says so and offers the smaller
   answer instead, which is the `getRequestMeta` fix plus the guarantee written
@@ -2051,8 +2074,9 @@ guarantee, would keep the next middleware from writing the same line.
 - **Reported**: yes,
   [modelcontextprotocol/go-sdk#1260](https://github.com/modelcontextprotocol/go-sdk/issues/1260),
   on 2026-09-13.
-- **In review**: yes,
-  [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268):
+- **Merged**: yes, 2026-09-14,
+  [modelcontextprotocol/go-sdk#1268](https://github.com/modelcontextprotocol/go-sdk/pull/1268),
+  unreleased:
   classify by membership in the supported set rather than by comparing strings,
   so an unrecognised version is refused with the error the versioning page
   requires instead of being read as a legacy handshake. Writing that pull
@@ -2131,6 +2155,50 @@ middleware, which is why the owner has to travel in the params instead.
 
 **How we found it**: making the pool share one server per configuration shape.
 The delivery end was the only part of the design with no per-credential seam.
+
+### A session's second listen on a URI overwrites the first's subscription, and its close deletes both
+
+- **Reported**: no, not yet. It shares a root cause with the entry above, whose
+  proposal is still waiting on a maintainer decision, and the shape of the fix
+  here depends on what they choose.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. It needs a client that opens two `subscriptions/listen`
+  covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
+  stdio or `--stateless=false`. The SDK's own client does neither.
+- **Workaround**: partial. `sessionBridge.holds` in
+  `cmd/server/subscriptions.go` already keeps the watch alive for the surviving
+  stream, which is the half this side owns. The delivery half cannot be repaired
+  here, because the table that lost the request id is the SDK's.
+
+**What**: `resourceSubscriptions` is keyed by URI and session
+(`map[string]map[*ServerSession]jsonrpc.ID`, `mcp/server.go`), so a session's
+second listen on a URI overwrites the first's request id, and that second
+listen's deferred unsubscribe deletes the entry outright. After either stream
+closes the session is subscribed in its own view and reachable in neither: no
+notification is delivered, and no ending is delivered either, so the client sees
+a stream it believes is live and never hears from again. Meanwhile the watch
+this server correctly kept for the surviving stream goes on polling GitLab on
+the subscriber's token until its lifetime expires.
+
+SEP-2575 makes the listen request the subscription identity and allows several
+per session, which the SDK's own comment cites as "multiple concurrent
+subscriptions", so the table's key is one level coarser than the protocol it
+implements.
+
+**The fix belongs upstream**: key the table by request id, or refuse a second
+listen for a URI a session already holds. The second is a smaller change and
+would cost a client one working subscription instead of two half-working ones.
+
+**Still present in v1.8.0**, checked against that release's source rather than
+the pinned one. It ships several subscription fixes, including pruning
+completed listen request ids from the session, and the table's key is unchanged.
+
+**How we found it**: auditing every declared capability against the
+specification and the SDK. [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md)
+recorded the overwrite half and understated it, saying a session with two
+listens sees the notification "on one of them"; the state after either close is
+neither, and the ADR now says so.
 
 ## OpenAI Codex (`openai/codex`)
 
@@ -2285,6 +2353,62 @@ never acted on. Asserting the answer is what turned it into a failure. The
 handler's unit test mocked a full merge request body, which is why the server's
 contract was wrong in the same direction as the record and no gate could see
 the disagreement.
+
+### A revoked GPG UID is still offered for verification and still verifies commits
+
+- **Reported**: yes, by another user, before us.
+- **In review**: yes,
+  [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300),
+  from the community fork.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible. The verdict is computed inside GitLab and
+  served as one string; nothing on this side can tell a signature verified
+  under a live identity from one verified under a revoked one.
+
+**Where**: `Gitlab::Gpg.user_infos_from_key` in `lib/gitlab/gpg.rb`.
+
+**What**: revoking a UID does not remove it from the key. GnuPG records the
+revocation as another signature on the same UID, so the UID is still in the
+key and still comes back from GPGME. GitLab listed every one of them: the
+revoked addresses were offered for verification in User Settings > GPG keys,
+and `GpgKey#verified_and_belongs_to_email?` accepted them, which is what
+decides the Verified badge on a signed commit. Deleting the key and adding it
+again does not help, because the UID is inside the key.
+
+**What it costs this server**: `commit.get_signature` publishes GitLab's
+`verification_status` verbatim (`internal/tools/commits/commits.go`), so a
+commit signed under an address its owner revoked is served to a model as
+`verified`, which is the one thing that field exists to say. There is nothing
+to work around: the field is GitLab's verdict, and a second opinion computed
+here would be a different answer to the same question rather than a better one.
+
+**The fix**: skip the UIDs GPGME reports as revoked. That matches what
+revocation already means elsewhere in GitLab, where revoking a key withdraws
+the verification of the commits signed with it while removing one leaves them
+untouched. A commit signed under a revoked identity then lands on
+`same_user_different_email` or `other_user`, and a key whose every UID is
+revoked verifies nothing.
+
+Two details are worth keeping, because both were nearly got wrong:
+
+- GPGME's `invalid` flag is deliberately **not** checked, unlike the earlier
+  attempt at
+  [gitlab-org/gitlab!36315](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36315).
+  GnuPG drops a UID with no valid self-signature at import, so such a UID never
+  reaches the listing and no fixture can be built for one through the import
+  path GitLab uses. A check nothing can exercise is a check nobody can trust.
+- The change **does** re-derive signatures that were already verified, which
+  the first reading of it said it would not. `GpgKeys::DestroyService` nulls
+  `gpg_key_id`, and a subkey-signed row never carries one, so
+  `InvalidGpgSignatureUpdater` reaches exactly those rows: the remedy the
+  original reporter was told to apply, deleting the key and adding it again, is
+  what puts a row in that state. The specs pin both halves.
+
+**How we found it**: not from this codebase. The maintainer brought the report
+in from elsewhere and the investigation was done here, against a GitLab checkout
+with fixtures generated by GnuPG 2.2.40. It is recorded under the rule above for
+a fix we carry upstream in our name.
 
 ## Other
 

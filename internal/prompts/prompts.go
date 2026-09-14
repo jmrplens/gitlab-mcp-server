@@ -81,8 +81,16 @@ func mrIIDArg() *mcp.PromptArgument {
 // reaches this request path as well as tools/call and resources/read. Passing
 // none registers all 37, which is what a deployment that excludes nothing
 // wants and what every existing caller gets unchanged.
-func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterOptions) {
-	registerAll(attributed(registrarFor(server, opts), client), client)
+func Register(server *mcp.Server, client *gitlabclient.Client, opts ...RegisterOptions) []string {
+	// The names are taken at the innermost wrapper, which is the only point
+	// every registration that survived the exclusions passes through and no
+	// registration that did not. A list assembled anywhere else would be the
+	// prompts this package knows about rather than the ones this server
+	// serves, and the caller uses it to refuse a reference to a prompt the
+	// server does not serve.
+	registered := &recordingRegistrar{inner: server}
+	registerAll(attributed(registrarFor(registered, opts), client), client)
+	return registered.names
 }
 
 // registerAll performs every prompt registration against the given registrar.

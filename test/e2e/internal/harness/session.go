@@ -107,6 +107,37 @@ const (
 // String returns the transport's name.
 func (t TransportKind) String() string { return string(t) }
 
+// TierPin is a licensing tier a session asks its server to serve instead of
+// detecting one.
+//
+// It is spelled as GITLAB_MCP_TIER takes it rather than as an [edition.Tier],
+// because that type is an ordering whose zero value is Free: a field of it
+// could not tell "serve the Free catalog" from "say nothing and let the child
+// detect", which is the whole of what this field is for.
+type TierPin string
+
+// The tiers a session can pin, and the empty value that pins none.
+const (
+	// TierDetect leaves GITLAB_MCP_TIER unset, so the child reads the license
+	// itself. This is what every ordinary session wants and what a deployment
+	// does.
+	TierDetect TierPin = ""
+	// TierFree pins the Free/CE catalog.
+	TierFree TierPin = "free"
+	// TierPremium pins the Premium catalog.
+	TierPremium TierPin = "premium"
+	// TierUltimate pins the Ultimate catalog.
+	TierUltimate TierPin = "ultimate"
+)
+
+// String returns the pin as the environment variable spells it.
+func (t TierPin) String() string { return string(t) }
+
+// AllTierPins returns every tier a session can pin, in the order Free,
+// Premium, Ultimate. TierDetect is not one of them: it is the absence of a
+// pin, so a scenario sweeping the pinned catalogs never wants it.
+func AllTierPins() []TierPin { return []TierPin{TierFree, TierPremium, TierUltimate} }
+
 // ServerConfig is one shape of server, in the terms the released binary reads.
 //
 // Every field maps onto a variable or a flag cmd/server itself consults. There
@@ -133,13 +164,29 @@ type ServerConfig struct {
 	// Responder answers an elicitation request under ElicitationScripted, and
 	// is ignored under the other two policies.
 	Responder func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)
+	// Tier pins the licensing tier instead of letting the child detect it.
+	//
+	// TierDetect, the zero value, is detection: the child reads GET /license
+	// and falls back to Free, which is what every ordinary session wants and
+	// what a deployment does. Pinning is how a scenario reaches the catalog of
+	// a tier this runtime is not, and how the one product fact the suite knows
+	// about detection is asserted, that a non-administrator token on a
+	// licensed instance is served the Free catalog because that endpoint
+	// answers administrators only.
+	Tier TierPin
 	// Private asks for a server no other test shares, for a test that will
 	// leave the process in a state the next one should not inherit.
 	Private bool
-	// Transport is how the harness reaches the server. Empty is
-	// TransportStdio. TransportHTTP is refused today: the launcher starts the
-	// binary over its standard streams only, and giving it a listener belongs
-	// with the transport scenarios that will want one.
+	// Transport is how the harness reaches the server. Empty is TransportStdio,
+	// which is what a client launching a local server uses and what almost
+	// every scenario wants.
+	//
+	// TransportHTTP starts the binary on a loopback listener and carries the
+	// credential in a header, which is the deployment shape a shared server is
+	// run as. It is worth asking for where the carriage itself is what a
+	// scenario is about: nothing else reaches the pool entry, the per-request
+	// client binding or the header, and the transport module that covers the
+	// HTTP handler chain does it without a GitLab at all.
 	Transport TransportKind
 }
 
@@ -182,14 +229,30 @@ func (c ServerConfig) validate() error {
 	if c.Elicitation == ElicitationScripted && c.Responder == nil {
 		return errors.New("an elicitation policy of scripted needs a Responder to answer with")
 	}
-	if c.Transport == TransportHTTP {
-		return errors.New("the HTTP transport is not wired yet: the launcher starts the binary over its " +
-			"standard streams, and a loopback listener arrives with the transport scenarios that need one")
+	// A misspelled pin would otherwise be served as detection, which is the
+	// one outcome a test that pinned a tier cannot notice: the catalog would
+	// be the runtime's own and every assertion about it would pass.
+	if _, ok := edition.ParseTier(string(c.Tier)); c.Tier != TierDetect && !ok {
+		return fmt.Errorf("unknown tier pin %q", c.Tier)
 	}
-	if c.Transport != TransportStdio {
+	if c.Transport != TransportStdio && c.Transport != TransportHTTP {
 		return fmt.Errorf("unknown transport %q", c.Transport)
 	}
 	return nil
+}
+
+// resolvedTier is the tier this session's server actually serves: the pinned
+// one when there is one, and otherwise what the credential could read off the
+// license. Both the catalog the child registers and the expectation the
+// harness compares it against are built from this one answer.
+//
+// A pin that does not parse cannot reach here: [ServerConfig.validate] refuses
+// it, with the same parser.
+func (c ServerConfig) resolvedTier(detected edition.Tier) edition.Tier {
+	if tier, ok := edition.ParseTier(string(c.Tier)); ok {
+		return tier
+	}
+	return detected
 }
 
 // privateSessions numbers the private sessions one process hands out, so each
@@ -204,8 +267,13 @@ var privateSessions atomic.Int64
 // the scopes it carries narrow the surface before anything is registered. The
 // token is hashed rather than carried, since the key is printed.
 func (c ServerConfig) key(instance, token string) string {
+	// The pinned tier is part of the key for the same reason the token is: it
+	// decides the catalog. A session that pinned one and a session that lets
+	// the child detect it are two different servers, and sharing one process
+	// between them would serve the second whatever the first registered.
 	parts := []string{
 		string(c.Surface), string(c.Mode), string(c.Capabilities), string(c.Elicitation), string(c.Transport),
+		"tier=" + string(c.Tier),
 		"exclude=" + strings.Join(c.ExcludeTools, ","),
 		"instance=" + shortStableHash(instance),
 		"token=" + shortStableHash(token),
@@ -220,6 +288,12 @@ func (c ServerConfig) key(instance, token string) string {
 // the hashes, which are noise to a reader and identical across one run.
 func (c ServerConfig) label(private int64) string {
 	label := strings.Join([]string{string(c.Surface), string(c.Mode), string(c.Capabilities)}, "-")
+	// A pinned tier names the session too: the label is the session's
+	// directory, and two sessions differing only in it would write one
+	// server's log over the other's.
+	if c.Tier != "" {
+		label += "-" + string(c.Tier)
+	}
 	if len(c.ExcludeTools) > 0 {
 		label += "-excluded"
 	}
@@ -249,6 +323,12 @@ func (c ServerConfig) childVariables() map[string]string {
 	}
 	if len(c.ExcludeTools) > 0 {
 		vars["GITLAB_MCP_EXCLUDE_TOOLS"] = strings.Join(c.ExcludeTools, ",")
+	}
+	// Set only when pinned: the variable's absence is what asks the child to
+	// detect the tier, and an empty value would be a configuration error
+	// rather than the default.
+	if c.Tier != "" {
+		vars["GITLAB_MCP_TIER"] = string(c.Tier)
 	}
 	maps.Copy(vars, telemetryVariables())
 	return vars
@@ -286,13 +366,14 @@ func (s *Session) Mode() Mode { return s.conn.cfg.Mode }
 // Capabilities returns the resource and prompt surface this session serves.
 func (s *Session) Capabilities() CapabilitySurface { return s.conn.cfg.Capabilities }
 
-// Tier returns the licensing tier the server detected with this session's
-// credential, which decides which actions exist in its catalog.
+// Tier returns the licensing tier this session's server serves, which decides
+// which actions exist in its catalog.
 //
-// It is the run's tier for a session on the run's own token, and for a
-// session given another token it is what that token could read: the license
-// endpoint answers administrators only, so any other user's token is served
-// the Free catalog on a licensed instance.
+// It is the pinned tier for a session that asked for one, and otherwise what
+// the credential could read: the run's tier for a session on the run's own
+// token, and for a session given another token what that token could read,
+// since the license endpoint answers administrators only and any other user's
+// token is served the Free catalog on a licensed instance.
 func (s *Session) Tier() edition.Tier { return s.conn.tier }
 
 // Transport returns how the harness reaches this session's server.
@@ -394,6 +475,9 @@ type sessionConn struct {
 	// subscribers says whose record a resource-updated notification belongs
 	// in, which the notifier cannot answer: it wakes channels, not tests.
 	subscribers *subscriberIndex
+	// progress collects the progress notifications this session's calls asked
+	// for, keyed by the token each call minted.
+	progress *progressCollector
 
 	// dispatchObserved is set the first time a span of this session's own
 	// arrives. While it is false every call of the session is a claim about
@@ -567,10 +651,11 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 	conn := &sessionConn{
 		label:       label,
 		cfg:         recorded,
-		tier:        cred.tier,
+		tier:        recorded.resolvedTier(cred.tier),
 		inst:        inst,
 		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, cfg.childVariables())),
 		notifier:    newUpdateNotifier(),
+		progress:    newProgressCollector(),
 		subscribers: newSubscriberIndex(),
 	}
 	if connectErr := conn.connect(); connectErr != nil {
@@ -652,7 +737,12 @@ func (c *sessionConn) connect() error {
 	// Connect so the handshake is inside it rather than beside it.
 	client.AddSendingMiddleware(c.recordSending())
 	client.AddReceivingMiddleware(c.recordReceiving())
-	session, err := client.Connect(ctx, c.proc.transport(lifetime), nil)
+
+	transport, err := c.transport(lifetime)
+	if err != nil {
+		return err
+	}
+	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return fmt.Errorf("connecting to the %s server: %w\nserver stderr:\n%s", c.label, err, c.proc.stderrTail())
 	}
@@ -661,6 +751,27 @@ func (c *sessionConn) connect() error {
 	c.session = session
 	c.mu.Unlock()
 	return nil
+}
+
+// transport returns the transport this session's configuration asks for.
+//
+// The two differ in who starts the child. Over stdio the transport does, since
+// the pipes it speaks over are the process's own; over HTTP the process has to
+// be listening before a client can connect, so it is started and waited for
+// here and the transport is a client pointed at the address.
+func (c *sessionConn) transport(lifetime context.Context) (mcp.Transport, error) {
+	if c.cfg.Transport != TransportHTTP {
+		return c.proc.transport(lifetime), nil
+	}
+	addr, err := freeLoopbackAddr(lifetime)
+	if err != nil {
+		return nil, fmt.Errorf("starting the %s server: %w", c.label, err)
+	}
+	transport, err := c.proc.httpTransport(lifetime, addr)
+	if err != nil {
+		return nil, fmt.Errorf("starting the %s server: %w", c.label, err)
+	}
+	return transport, nil
 }
 
 // clientOptions builds the client for this session: what it answers an
@@ -672,12 +783,21 @@ func (c *sessionConn) clientOptions() *mcp.ClientOptions {
 				c.notifier.deliver(req.Params.URI)
 			}
 		},
+		// Progress arrives on the SDK's own goroutine while the call that
+		// asked for it is still in flight, so it is collected against the
+		// token rather than handed to whoever is waiting: the caller reads it
+		// once the call returns.
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			if req != nil && req.Params != nil {
+				c.progress.deliver(req.Params)
+			}
+		},
 	}
 	switch c.cfg.Elicitation {
 	case ElicitationAutoAccept:
-		options.ElicitationHandler = acceptElicitation
+		options.ElicitationHandler = c.recordingElicitationHandler(acceptElicitation)
 	case ElicitationScripted:
-		options.ElicitationHandler = c.cfg.Responder
+		options.ElicitationHandler = c.recordingElicitationHandler(c.cfg.Responder)
 	default:
 		// ElicitationNone: no handler, so the client advertises no elicitation
 		// capability and the server fails closed rather than prompting.
@@ -685,13 +805,128 @@ func (c *sessionConn) clientOptions() *mcp.ClientOptions {
 	return options
 }
 
-// acceptElicitation answers every request with an empty acceptance.
+// recordingElicitationHandler wraps an elicitation handler so the request is
+// written down before it is answered.
 //
-// Empty content is the right answer for what this policy is for: the
-// confirmation prompt a destructive action raises asks for approval and reads
-// no field back. A flow that needs values scripts them instead.
-func acceptElicitation(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-	return &mcp.ElicitResult{Action: "accept", Content: map[string]any{}}, nil
+// The receiving middleware cannot do this. The SDK delivers an elicitation to
+// the handler these options carry, not as an inbound request through the
+// method chain, so the middleware's elicitation/create case never fired and
+// every interactive flow ran uncounted: the coverage report read zero
+// elicitations while the flows themselves were passing. Recording here is the
+// one place that sees every one of them, whatever the policy answered.
+func (c *sessionConn) recordingElicitationHandler(
+	next func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error),
+) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	if next == nil {
+		return nil
+	}
+	return func(ctx context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		c.recordElicitation(req)
+		return next(ctx, req)
+	}
+}
+
+// acceptElicitation answers every request by accepting it, filling in the
+// properties the requested schema demands.
+//
+// It used to answer with empty content, on the reasoning that a confirmation
+// prompt reads no field back. That was wrong twice over, and the policy could
+// never have worked: the SDK validates the accepted content against the
+// requested schema before handing it to the server and before applying the
+// schema's defaults (go-sdk mcp/client.go:591-598), and every schema this
+// server sends marks its one property required (internal/elicitation/schemas.go
+// lines 50, 78, 107, 150, 202 and 258). An empty accept therefore failed the
+// whole call with InvalidParams rather than approving anything.
+//
+// The value chosen for each type is the one that means "yes, go ahead": true
+// for the confirmation boolean, the first option of an enum, and the empty
+// string for free text, which is the only answer a policy that asks nobody can
+// honestly give. A flow that needs particular values scripts them instead.
+func acceptElicitation(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	content := map[string]any{}
+	if req != nil && req.Params != nil {
+		content = acceptedContent(req.Params.RequestedSchema)
+	}
+	return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+}
+
+// acceptedContent builds the answer an auto-accepting client gives one
+// requested schema: a value for every property the schema requires, and
+// nothing else.
+//
+// The schema arrives as whatever the server marshaled, which on this side of
+// the wire is a map. Anything it cannot read it answers nothing for, leaving
+// the SDK's own validation to report a shape this policy cannot satisfy rather
+// than guessing at one.
+func acceptedContent(schema any) map[string]any {
+	content := map[string]any{}
+	object, isObject := schema.(map[string]any)
+	if !isObject {
+		return content
+	}
+	properties, _ := object["properties"].(map[string]any)
+	for _, name := range requiredNames(object["required"]) {
+		property, _ := properties[name].(map[string]any)
+		content[name] = acceptedValue(property)
+	}
+	return content
+}
+
+// requiredNames reads the required property names off a schema, which arrive
+// as a JSON array of strings.
+func requiredNames(required any) []string {
+	items, isList := required.([]any)
+	if !isList {
+		return nil
+	}
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if name, isString := item.(string); isString {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// acceptedValue is the value this policy gives one property.
+func acceptedValue(property map[string]any) any {
+	kind, _ := property["type"].(string)
+	options, _ := property["enum"].([]any)
+	switch kind {
+	case "boolean":
+		return true
+	case "integer", "number":
+		return 0
+	case "array":
+		if choices := itemOptions(property, options); len(choices) > 0 {
+			return []any{choices[0]}
+		}
+		return []any{}
+	default:
+		if len(options) > 0 {
+			return options[0]
+		}
+		return ""
+	}
+}
+
+// itemOptions reads the values a multi-select property admits.
+//
+// The specification puts them on the item schema, so a server that follows it
+// sends `items.enum` and nothing on the array itself; reading only the array's
+// own enum answered such a property with an empty selection, which a required
+// multi-select refuses. The array's enum is still accepted, since a schema
+// this policy can read is better answered than declined.
+func itemOptions(property map[string]any, own []any) []any {
+	items, isObject := property["items"].(map[string]any)
+	if !isObject {
+		return own
+	}
+	options, isList := items["enum"].([]any)
+	if !isList || len(options) == 0 {
+		return own
+	}
+	return options
 }
 
 // client returns the live MCP session.

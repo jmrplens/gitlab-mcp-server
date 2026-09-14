@@ -6,9 +6,9 @@ faq:
   - q: "¿Qué son las notificaciones de progreso MCP?"
     a: "Las notificaciones de progreso son **mensajes de estado en tiempo real** que GitLab MCP Server envía durante operaciones de larga duración para que los clientes MCP puedan mostrar el progreso al usuario. Cuando una herramienta ejecuta varios pasos, transmite una carga grande o sondea GitLab (subidas de archivos, publicación de paquetes, las acciones de espera de pipeline y job, los asistentes interactivos), el servidor emite mensajes `notifications/progress` que informan del paso actual, del total cuando se conoce y de una descripción legible. El progreso es de mejor esfuerzo, así que los clientes que no pueden mostrarlo ignoran los mensajes y la herramienta se completa igualmente."
   - q: "¿Cuándo envía GitLab MCP Server actualizaciones de progreso?"
-    a: "GitLab MCP Server envía actualizaciones de progreso para operaciones que pueden tardar varios segundos: **subidas de archivos** (`project.upload`, paso a paso), **publicación de paquetes** (contando bytes mientras el archivo se transmite), las **acciones de espera** que sondean GitLab hasta que un pipeline o un job se asienta, y los cuatro **asistentes interactivos** (un paso por pregunta, y después la creación final). Cada notificación lleva un `progressToken` que la correlaciona con la llamada original a la herramienta; una llamada sin token no recibe notificaciones y por lo demás se comporta igual."
+    a: "GitLab MCP Server envía actualizaciones de progreso para operaciones que pueden tardar varios segundos: **subidas de archivos** (`project.upload`, contando bytes mientras se lee el contenido y se prepara la petición), **publicación de paquetes** (contando bytes mientras el archivo se transmite), las **acciones de espera** que sondean GitLab hasta que un pipeline o un job se asienta, y los cuatro **asistentes interactivos** (un paso por pregunta, y después la creación final). Cada notificación lleva un `progressToken` que la correlaciona con la llamada original a la herramienta; una llamada sin token no recibe notificaciones y por lo demás se comporta igual."
   - q: "¿Qué contiene una notificación de progreso?"
-    a: 'Una notificación de progreso sigue el formato JSON-RPC `notifications/progress` y lleva cuatro campos en sus `params`: `progressToken` (el ID de correlación que el cliente suministró con la llamada a la herramienta), `progress` (cuánto ha avanzado el trabajo, un valor que solo aumenta; las herramientas por pasos cuentan desde 0), `total` (la cantidad total de trabajo, cuando se conoce) y `message` (una descripción legible como `"Uploading file to GitLab..."`). Los clientes los usan para renderizar barras de progreso o texto de estado.'
+    a: 'Una notificación de progreso sigue el formato JSON-RPC `notifications/progress` y lleva cuatro campos en sus `params`: `progressToken` (el ID de correlación que el cliente suministró con la llamada a la herramienta), `progress` (cuánto ha avanzado el trabajo, un valor que solo aumenta; las herramientas por pasos cuentan desde 0), `total` (la cantidad total de trabajo, cuando se conoce) y `message` (una descripción legible como `"Read 1048576 / 5242880 bytes, preparing the upload"`). Los clientes los usan para renderizar barras de progreso o texto de estado.'
   - q: "¿Qué ocurre si mi cliente no admite las notificaciones de progreso?"
     a: "Las notificaciones de progreso son de mejor esfuerzo. Si el cliente MCP no admite la visualización de progreso, las notificaciones se ignoran silenciosamente y la herramienta se completa con normalidad con su resultado completo. No hace falta ninguna configuración y no se pierde funcionalidad — el progreso es puramente una mejora de la experiencia de usuario sobre la respuesta normal de la herramienta."
 ---
@@ -32,13 +32,14 @@ sequenceDiagram
 
     U->>AI: "Sube build-artifact.zip a my-project"
     AI->>S: project.upload (con progressToken)
-    S-->>AI: Progreso 1/3: "Preparando la subida..."
-    S-->>AI: Progreso 2/3: "Subiendo el archivo a GitLab..."
+    S-->>AI: Progreso: "Read 1048576 / 5242880 bytes, preparing the upload"
+    S-->>AI: Progreso: "Read 5242880 bytes, uploading to GitLab"
     S->>GL: POST /projects/42/uploads
     GL-->>S: Metadatos de la subida
-    S-->>AI: Progreso 3/3: "Subida completada"
     S-->>AI: Resultado de la herramienta con la URL de la subida
 ```
+
+Los bytes miden la lectura, no la transferencia. El cliente de GitLab ensambla el cuerpo completo de la petición en memoria antes de enviar nada, así que todos los avisos se han emitido ya cuando el primer byte llega a la red, y la transferencia en sí no informa de nada hasta que termina.
 
 ## ¿Cuándo envía el servidor actualizaciones de progreso?
 
@@ -46,7 +47,7 @@ El reporte de progreso se utiliza para operaciones que pueden tardar varios segu
 
 | Operación                   | Detalle del Progreso                                                                    |
 | --------------------------- | --------------------------------------------------------------------------------------- |
-| **Subida de archivos**      | Tres pasos para `project.upload`: preparar, transmitir a GitLab, completar              |
+| **Subida de archivos**      | Contado en bytes mientras `project.upload` lee el contenido y prepara la petición       |
 | **Publicación de paquetes** | Contando bytes mientras el archivo del paquete se transmite al registro                 |
 | **Acciones de espera**      | Cada sondeo de `pipeline.wait` y `job.wait` hasta que el pipeline o el job se asienta   |
 | **Asistentes interactivos** | Un paso por pregunta en los cuatro flujos `gitlab_interactive_*`, y después la creación |
@@ -69,9 +70,9 @@ Las notificaciones de progreso siguen el formato JSON-RPC del protocolo MCP. El 
   "method": "notifications/progress",
   "params": {
     "progressToken": "tool-call-123",
-    "progress": 1,
-    "total": 3,
-    "message": "Uploading file to GitLab..."
+    "progress": 1048576,
+    "total": 5242880,
+    "message": "Read 1048576 / 5242880 bytes, preparing the upload"
   }
 }
 ```

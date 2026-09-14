@@ -252,7 +252,7 @@ func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *co
 		GitLabURL:         inst.facts.URL,
 		ToolSurface:       string(cfg.Surface),
 		CapabilitySurface: string(cfg.Capabilities),
-		Tier:              cred.tier,
+		Tier:              cfg.resolvedTier(cred.tier),
 		ReadOnly:          cfg.Mode == ModeReadOnly,
 		SafeMode:          cfg.Mode == ModeSafe,
 		ExcludeTools:      slices.Clone(cfg.ExcludeTools),

@@ -420,8 +420,11 @@ jobs:
         run: go test -tags e2e -count=1 ./test/e2e/internal/...
       # The push-time gate over the rebuilt suite: every typed action id names
       # a catalog action, sits in a package that can run it, and an Ultimate
-      # id in ee declares its tier. Type-checks the tree with go/packages and
-      # needs no GitLab.
+      # id in ee declares its tier. With the ratchet on it also holds the
+      # other direction, which is what a new tool meets: a catalog action no
+      # scenario names and no exemption declares fails here, and so does a
+      # harness export nothing consumes. Type-checks the tree with
+      # go/packages and needs no GitLab.
       - name: Run the E2E static gate
         run: go run ./cmd/audit_e2e_coverage/ -static
 

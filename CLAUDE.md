@@ -20,7 +20,7 @@
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.27.1                                           |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.8.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.0.0        |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
@@ -220,6 +220,7 @@ rewrite across many files, and the result must be verified to build.
 9. Meta-tools automatically get `next_steps` in JSON via `enrichWithHints()` — no extra work needed
 10. Update `docs/reference/tools/{domain}.md` and `docs/reference/tools/README.md`
 11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/development/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
+12. Write an end-to-end scenario for the action under `test/e2e/gitlab/`, and declare its ID as a typed `harness.ActionID` constant in that package's `actions_test.go` — `common` for an action any instance serves, `ce` for one only an unlicensed instance does, `ee` for Premium or Ultimate. **This is a gate, not a suggestion**: `make check-e2e-static` (`cmd/audit_e2e_coverage -static`, run by `make analyze` and by CI's compile job) fails on a catalog action no scenario names. An action nothing on a Docker instance can run is declared in `cmd/audit_e2e_coverage/exemptions.go` with a category and a reason, and a declaration that stops describing the tree is itself a finding. A string literal at the call site is invisible to the gate, which reads typed constants out of the type checker's record
 
 See `docs/reference/output-format.md` for the complete response format specification.
 
@@ -473,7 +474,7 @@ no legacy spelling of either to warn anybody about.
 | `GITLAB_MCP_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `GITLAB_MCP_ENV_FILE`    | No       | One dotenv file to load besides `~/.gitlab-mcp-server.env`, resolved **once** from the process environment before any loaded file could rewrite it, so a file this server loads cannot nominate another. Precedence, highest first: the process environment, this file, the home file. A working-directory `.env` is not loaded at all, only found and named at WARN with the keys it wanted to set. Give an absolute path: a relative one follows the client into every workspace it opens, which is the load this replaced, and startup says so. `internal/config.EnvFileVar`; the `--env-file` flag sets the same thing and wins over it |
 | `GITLAB_MCP_STDIO_MAX_LINE_BYTES` | No | Longest stdio message assembled, in bytes (default 4 MiB, matching the SDK's own HTTP body default so both transports refuse the same messages). A longer line is refused and answered rather than accumulated. A value that is missing, unparseable or non-positive warns and keeps the default, because a mistyped number should not take the client down with the server. `cmd/server.stdioMaxLineBytesEnv` |
-| `GITLAB_MCP_MAX_LISTEN_STREAMS` | No | Concurrent `subscriptions/listen` streams one credential may hold open (default 64; `0` removes the per-credential ceiling). A second ceiling of 512 per process is deliberately not configurable: the per-credential one multiplies by however many tokens a caller holds, so only the process-wide one bounds the process. `MaxWatchers` does not cover this, since a listen asking only for list-changed notifications creates no watcher. Both transports. `cmd/server.maxListenStreamsEnv` |
+| `GITLAB_MCP_MAX_LISTEN_STREAMS` | No | Concurrent `subscriptions/listen` streams one credential may hold open (default 64; `0` removes the per-credential ceiling and nothing else: the same counter is what tells the pool a credential is holding a stream open, so removing the ceiling must not make a listening credential look idle). A second ceiling of 512 per process is deliberately not configurable: the per-credential one multiplies by however many tokens a caller holds, so only the process-wide one bounds the process. `MaxWatchers` does not cover this, since a listen asking only for list-changed notifications creates no watcher. Both transports. `cmd/server.maxListenStreamsEnv` |
 | `GITLAB_MCP_TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; `dynamic` when unset |
 | `GITLAB_MCP_CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
 | `GITLAB_MCP_META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~8.7x), or `full` (~18.3x). Independent of `GITLAB_MCP_TOOL_SURFACE`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |

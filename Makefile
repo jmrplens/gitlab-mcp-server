@@ -199,16 +199,11 @@ test-pkg:
 test-integration:
 	go test -v -tags integration -coverprofile=coverage.out $(PKGS)
 
-## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
-test-e2e: ensure-gotestsum
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
-	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
-	bash -o pipefail -c 'GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
-	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
-	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
-	  -- -tags e2e -count=1 -timeout 300s ./test/e2e/suite/'
+## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env); an alias of test-e2e-gitlab.
+# The self-hosted run under its shortest name. It used to run the suite under
+# test/e2e/suite, which the rebuilt one supersedes, and it points there now so
+# the name a developer already types runs the suite that gates releases.
+test-e2e: test-e2e-gitlab
 
 # ensure-gotestsum installs gotestsum on demand, so the e2e targets work on
 # a fresh checkout without a separate install-tools step. The tool was an
@@ -277,52 +272,14 @@ validate-http-stateless:
 validate-http-stateless-docker:
 	scripts/validate-http-stateless.sh docker
 
-## test-e2e-docker: start ephemeral GitLab CE (+ Bitbucket fixture), run E2E tests, tear down
-test-e2e-docker: ensure-gotestsum
-	@echo "=== Cleaning up previous containers (if any) ==="
-	docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v 2>/dev/null || true
-	@echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
-	@openssl rand -hex 16 > test/e2e/.bitbucket-admin-pass
-	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
-	@echo "=== Waiting for GitLab readiness ==="
-	./test/e2e/scripts/wait-for-gitlab.sh $(E2E_DOCKER_GITLAB_URL) 600
-	@echo "=== Setting up test user and token ==="
-	@set -e; \
-	for attempt in 1 2 3; do \
-		if ./test/e2e/scripts/setup-gitlab.sh $(E2E_DOCKER_GITLAB_URL); then \
-			break; \
-		fi; \
-		if [ "$$attempt" -eq 3 ]; then \
-			echo "ERROR: setup-gitlab.sh failed after 3 attempts"; \
-			exit 1; \
-		fi; \
-		echo "WARN: setup-gitlab.sh failed (attempt $$attempt/3), retrying in 5s..."; \
-		sleep 5; \
-	done
-	@echo "=== Registering GitLab Runner ==="
-	./test/e2e/scripts/register-runner.sh $(E2E_DOCKER_GITLAB_URL)
-	@echo "=== Provisioning Bitbucket import fixture ==="
-	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) ./test/e2e/scripts/setup-bitbucket.sh $(E2E_DOCKER_BITBUCKET_URL)
-	@echo "=== Running E2E tests ==="
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	$(call RM_RF,$(E2E_CALLS_DIR)/ce)
-	$(call MKDIR_P,$(E2E_CALLS_DIR)/ce)
-	@set +e; \
-	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
-	  E2E_MODE=docker GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce $(GOTESTSUM) \
-	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
-	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
-	  -- -tags e2e -count=1 -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-output.txt'; \
-	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-status
-	@echo "=== Tearing down ==="
-	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-status); \
-	  teardown_status=0; \
-	  docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v || teardown_status=$$?; \
-	  echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="; \
-	  rm -f $(E2E_REPORT_DIR)/e2e-docker-status; \
-	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
-	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
+## test-e2e-docker: the ephemeral GitLab CE run under its older name; an alias of test-e2e-ce.
+# It used to carry a Docker lifecycle of its own, written out here, that ran
+# the suite under test/e2e/suite. That lifecycle now lives once in
+# test/e2e/scripts/run-docker-e2e.sh and the suite it started is superseded,
+# so this name points at the rebuilt CE run and keeps working for anything
+# that still spells it: the same GitLab CE, the same Bitbucket fixture, the
+# same runner.
+test-e2e-docker: test-e2e-ce
 
 # The rebuilt suite: three packages under test/e2e/gitlab that drive the real
 # binary over stdio. Each declares the runtime it needs, so the two Docker
@@ -676,21 +633,22 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/15] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/15] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/15] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/15] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/15] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/15] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/15] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/15] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/15] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[10/15] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/15] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[12/15] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[13/15] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[14/15] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[15/15] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[1/16] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/16] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/16] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/16] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/16] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/16] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/16] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/16] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/16] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[10/16] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[12/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[13/16] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[14/16] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[15/16] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[16/16] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1341,8 +1299,9 @@ audit-e2e-coverage:
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package
 ## that can run it, and an Ultimate id in ee declares its tier; a harness
-## result thrown away is a finding. Passes on a tree where test/e2e/gitlab
-## does not exist yet.
+## result thrown away is a finding. With the ratchet on it holds the other
+## direction too: a catalog action no scenario names and no exemption
+## declares fails, and so does a harness export nothing consumes.
 check-e2e-static:
 	go run ./cmd/audit_e2e_coverage/ -static
 

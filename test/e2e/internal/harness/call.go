@@ -117,6 +117,10 @@ type callOptions struct {
 	// ctx is the context this call runs under, when the caller has one of
 	// its own. Empty means the Env's, which is what a test body has.
 	ctx context.Context
+	// progressToken asks the server to report progress for this call, and is
+	// what the notifications are filed under. Empty asks for none, which is
+	// what every ordinary call does.
+	progressToken string
 	// expectation is what the caller asked to happen, in the record's
 	// vocabulary. Each verb sets it rather than the caller, because the verb
 	// is the assertion: Do expects success, Refused expects a class.
@@ -575,12 +579,27 @@ func (s *Session) send(id ActionID, call toolCall, opts callOptions) callResult 
 	var answer callResult
 	for attempt := range callRetries {
 		started := time.Now()
-		result, err := s.conn.client().CallTool(ctx, &mcp.CallToolParams{Name: call.tool, Arguments: call.arguments})
+		callParams := &mcp.CallToolParams{Name: call.tool, Arguments: call.arguments}
+		if opts.progressToken != "" {
+			// The specification sends the token in _meta, and the server only
+			// reports progress for a call that asked; SetProgressToken is the
+			// SDK's spelling of that key.
+			callParams.SetProgressToken(opts.progressToken)
+		}
+		result, err := s.conn.client().CallTool(ctx, callParams)
 		answer = classify(result, err)
 		answer.duration = time.Since(started)
 
 		if answer.err == nil || !retryable(answer, s.conn) || attempt == callRetries-1 {
 			return answer
+		}
+		// A retry is another call and the token is the same, so whatever the
+		// failed attempt reported is still in the collector and would be read
+		// as the answering attempt's. The sequence would then restart from a
+		// lower value and a scenario asserting a monotonic one would fail on
+		// a transport hiccup. Only the attempt that answers keeps its notes.
+		if opts.progressToken != "" {
+			s.conn.progress.expect(opts.progressToken)
 		}
 		// A child that died takes its pipe with it, so reconnecting is the
 		// only thing that can make the next attempt different.

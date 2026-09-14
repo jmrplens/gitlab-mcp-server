@@ -116,8 +116,8 @@ func TestServerConfig_Invalid_IsRefusedWithAReason(t *testing.T) {
 		{name: "unknown mode", config: ServerConfig{Mode: Mode("paranoid")}, want: "unknown protective mode"},
 		{name: "unknown capability surface", config: ServerConfig{Capabilities: CapabilitySurface("some")}, want: "unknown capability surface"},
 		{name: "scripted with no responder", config: ServerConfig{Elicitation: ElicitationScripted}, want: "needs a Responder"},
-		{name: "http transport", config: ServerConfig{Transport: TransportHTTP}, want: "not wired yet"},
 		{name: "unknown transport", config: ServerConfig{Transport: TransportKind("carrier pigeon")}, want: "unknown transport"},
+		{name: "unknown tier pin", config: ServerConfig{Tier: TierPin("enterprise")}, want: "unknown tier pin"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -154,6 +154,7 @@ func TestServerConfig_Key_SeparatesWhatMakesADifferentServer(t *testing.T) {
 		{name: "capabilities", config: ServerConfig{Capabilities: CapabilitiesMinimal}, url: "https://gitlab.test", token: "token-a"},
 		{name: "exclusions", config: ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, url: "https://gitlab.test", token: "token-a"},
 		{name: "elicitation", config: ServerConfig{Elicitation: ElicitationAutoAccept}, url: "https://gitlab.test", token: "token-a"},
+		{name: "tier pin", config: ServerConfig{Tier: TierUltimate}, url: "https://gitlab.test", token: "token-a"},
 		{name: "instance", config: ServerConfig{}, url: "https://other.test", token: "token-a"},
 		{name: "credential", config: ServerConfig{}, url: "https://gitlab.test", token: "token-b"},
 	}
@@ -235,6 +236,19 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 				"GITLAB_MCP_EXCLUDE_TOOLS": "gitlab_issue,gitlab_project_delete",
 			},
 		},
+		{
+			// The absence of the variable is what asks the child to detect the
+			// tier, so an empty value here is the assertion and not a gap: a
+			// GITLAB_MCP_TIER of "" would be a configuration error.
+			name:   "no tier pinned",
+			config: ServerConfig{},
+			want:   map[string]string{"GITLAB_MCP_TIER": ""},
+		},
+		{
+			name:   "pinned tier",
+			config: ServerConfig{Tier: TierUltimate},
+			want:   map[string]string{"GITLAB_MCP_TIER": "ultimate"},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -262,6 +276,7 @@ func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {
 		{name: "excluded", config: ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, want: "dynamic-default-full-excluded"},
 		{name: "auto-accepting", config: ServerConfig{Elicitation: ElicitationAutoAccept}, want: "dynamic-default-full-auto-accept"},
 		{name: "private", config: ServerConfig{Private: true}, private: 3, want: "dynamic-default-full-private3"},
+		{name: "pinned tier", config: ServerConfig{Tier: TierPremium}, want: "dynamic-default-full-premium"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -269,6 +284,58 @@ func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {
 				t.Errorf("label = %q, want %q", label, testCase.want)
 			}
 		})
+	}
+}
+
+// TestServerConfig_ResolvedTier_PrefersThePinOverDetection pins the one answer
+// both the child's catalog and the harness's expectation of it are built from.
+//
+// The two have to agree or nothing else works: the child registers the tier it
+// was given and the harness compares what it served against a catalog it
+// assembles here, so a resolution that differed would fail every session that
+// pinned a tier with a served-set mismatch rather than a message about tiers.
+func TestServerConfig_ResolvedTier_PrefersThePinOverDetection(t *testing.T) {
+	cases := []struct {
+		name     string
+		pin      TierPin
+		detected edition.Tier
+		want     edition.Tier
+	}{
+		{name: "no pin keeps detection", pin: TierDetect, detected: edition.Ultimate, want: edition.Ultimate},
+		{name: "no pin keeps a detected free", pin: TierDetect, detected: edition.Free, want: edition.Free},
+		{name: "free pins below detection", pin: TierFree, detected: edition.Ultimate, want: edition.Free},
+		{name: "premium pins above detection", pin: TierPremium, detected: edition.Free, want: edition.Premium},
+		{name: "ultimate pins above detection", pin: TierUltimate, detected: edition.Free, want: edition.Ultimate},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := ServerConfig{Tier: testCase.pin}.normalized()
+			if tier := cfg.resolvedTier(testCase.detected); tier != testCase.want {
+				t.Errorf("resolvedTier(%s) = %s, want %s", testCase.detected, tier, testCase.want)
+			}
+		})
+	}
+}
+
+// TestAllTierPins_AreEveryPinAndNotTheAbsenceOfOne checks the sweep list a
+// scenario ranges over: every pin the configuration accepts, and never
+// TierDetect, which is not a tier but the absence of a pin.
+func TestAllTierPins_AreEveryPinAndNotTheAbsenceOfOne(t *testing.T) {
+	pins := AllTierPins()
+
+	if slices.Contains(pins, TierDetect) {
+		t.Errorf("AllTierPins carries TierDetect: %v", pins)
+	}
+	for _, pin := range pins {
+		if _, ok := edition.ParseTier(pin.String()); !ok {
+			t.Errorf("AllTierPins carries %q, which the binary's own parser refuses", pin)
+		}
+		if err := (ServerConfig{Tier: pin}).normalized().validate(); err != nil {
+			t.Errorf("AllTierPins carries %q, which the harness refuses: %v", pin, err)
+		}
+	}
+	if want := []TierPin{TierFree, TierPremium, TierUltimate}; !slices.Equal(pins, want) {
+		t.Errorf("AllTierPins = %v, want %v", pins, want)
 	}
 }
 
@@ -333,20 +400,50 @@ func TestSettingsWith_ChangesOneValueAndLeavesTheOriginal(t *testing.T) {
 	}
 }
 
-// TestSession_UnsupportedTransport_FailsTheTestThatAskedForIt checks that a
-// configuration the harness cannot start stops one test rather than being
-// silently downgraded to the one it can.
-func TestSession_UnsupportedTransport_FailsTheTestThatAskedForIt(t *testing.T) {
+// TestSession_HTTPTransport_StartsAndAnswers checks that a session asking for
+// HTTP gets one, rather than being silently downgraded to the transport the
+// launcher finds easier.
+//
+// The two transports differ in who starts the child: over stdio the transport
+// does, because the pipes are the process's own, and over HTTP the process has
+// to be listening before a client can connect. A downgrade would be invisible
+// from the test that asked, since every call would still work — against the
+// wrong deployment shape.
+func TestSession_HTTPTransport_StartsAndAnswers(t *testing.T) {
 	inst := stubInstance(t)
 	env := newEnv(t, inst)
 
-	_, err := env.session(ServerConfig{Transport: TransportHTTP})
+	conn, err := env.session(ServerConfig{Transport: TransportHTTP})
+	if err != nil {
+		t.Fatalf("an HTTP session was refused: %v", err)
+	}
+	// This session is the test's own rather than the pool's, so nothing else
+	// ends it: without this the child outlives the stub GitLab it was pointed
+	// at and holds its port for the rest of the package.
+	t.Cleanup(conn.close)
+	if conn.cfg.Transport != TransportHTTP {
+		t.Errorf("the session runs on %q, want %q: it was downgraded rather than refused",
+			conn.cfg.Transport, TransportHTTP)
+	}
+	if len(conn.served.tools) == 0 {
+		t.Error("the HTTP session listed no tool, so nothing reached the server over it")
+	}
+}
+
+// TestSession_UnknownTransport_FailsTheTestThatAskedForIt checks that a
+// transport the harness has no launcher for stops one test rather than being
+// silently downgraded to one it has.
+func TestSession_UnknownTransport_FailsTheTestThatAskedForIt(t *testing.T) {
+	inst := stubInstance(t)
+	env := newEnv(t, inst)
+
+	_, err := env.session(ServerConfig{Transport: TransportKind("carrier pigeon")})
 
 	if err == nil {
-		t.Fatal("an HTTP session was started, and the launcher serves stdio only")
+		t.Fatal("a session was started on a transport the harness has no launcher for")
 	}
-	if !strings.Contains(err.Error(), "not wired yet") {
-		t.Errorf("the refusal is %q, want it to say the transport is not wired", err)
+	if !strings.Contains(err.Error(), "unknown transport") {
+		t.Errorf("the refusal is %q, want it to name the transport it does not know", err)
 	}
 }
 

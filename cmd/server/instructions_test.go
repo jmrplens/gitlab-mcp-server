@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 )
 
 // instructionSurfaces is every tool surface a server can register.
@@ -155,7 +156,7 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 
 	rendered := make(map[string]string, len(instructionSurfaces))
 	for _, surface := range instructionSurfaces {
-		text := buildInstructions(surface, config.CapabilitySurfaceFull, false)
+		text := buildInstructions(surface, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, false)
 		rendered[surface] = text
 		for _, section := range sections {
 			t.Run(section, func(t *testing.T) {
@@ -174,11 +175,43 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 	}
 }
 
+// TestBuildInstructions_ReadOnly_DropsTheMutatingGuidance verifies that a
+// read-only surface is not told to make calls it has removed.
+//
+// The instructions land in the model's system prompt, so guidance about a call
+// the same session's tools/list does not offer is worse than silence. The
+// trigger that matters needs no operator flag at all: a read_api credential is
+// served a read-only surface per pool entry (ADR-0018), so an ordinary
+// deployment reached this.
+//
+// Safe mode is deliberately not covered, and must not be: it wraps rather than
+// removes, so the actions still exist there and answer with a preview.
+func TestBuildInstructions_ReadOnly_DropsTheMutatingGuidance(t *testing.T) {
+	mutating := []string{"PACKAGE + RELEASE WORKFLOW", "RELEASE CREATION"}
+	reading := []string{"PROJECT DISCOVERY", "DEFAULT BRANCH", "ID vs IID", "WATCHING RESOURCES"}
+
+	readOnly := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, true)
+	for _, section := range mutating {
+		t.Run("dropped "+section, func(t *testing.T) {
+			if strings.Contains(readOnly, section) {
+				t.Errorf("read-only instructions still teach %q, whose actions the catalog removed", section)
+			}
+		})
+	}
+	for _, section := range reading {
+		t.Run("kept "+section, func(t *testing.T) {
+			if !strings.Contains(readOnly, section) {
+				t.Errorf("read-only instructions dropped %q, which reads and still works", section)
+			}
+		})
+	}
+}
+
 // TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow verifies the default
 // surface tells the model how to reach the catalog. Dynamic mode exposes only
 // find and execute, so without this a model sees action IDs and no way in.
 func TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow(t *testing.T) {
-	dynamic := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, false)
+	dynamic := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, false)
 	for _, want := range []string{"gitlab_find_action", "gitlab_execute_action", "FINDING TOOLS"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(dynamic, want) {
@@ -190,7 +223,7 @@ func TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow(t *testing.T) {
 	// The other surfaces must not advertise a workflow they cannot run.
 	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
 		t.Run(surface, func(t *testing.T) {
-			if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull, false), "gitlab_find_action") {
+			if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, false), "gitlab_find_action") {
 				t.Errorf("surface %q instructions mention gitlab_find_action, which only dynamic mode exposes", surface)
 			}
 		})
@@ -256,15 +289,39 @@ func TestSurfaceToolRef_Render_PerSurfaceShapes(t *testing.T) {
 // instructions mentioning it there would teach the model to make requests
 // this server refuses — advice worse than silence.
 func TestBuildInstructions_WatchingSection_FollowsCapabilitySurface(t *testing.T) {
-	full := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, false)
+	full := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportPipe, false, false)
 	if !strings.Contains(full, "WATCHING RESOURCES") {
 		t.Error("full capability surface instructions omit the watching section; the feature is invisible to the model")
 	}
 	if !strings.Contains(full, "via MCP resources/subscribe") {
 		t.Error("the watching section never names resources/subscribe, so the model cannot map it to the protocol")
 	}
+	// On stdio, both forms with the revision that decides between them. These
+	// instructions are built once per server and the revision is decided per
+	// request: a client speaking 2026-07-28 on stdio is refused
+	// resources/subscribe with -32601, and naming only the legacy method sent
+	// exactly that client to the one method it cannot call.
+	if !strings.Contains(full, "subscriptions/listen") {
+		t.Error("the watching section names only the legacy method, which a client speaking 2026-07-28 is refused")
+	}
+	if !strings.Contains(full, "2026-07-28") {
+		t.Error("the watching section names both methods without the revision that decides between them")
+	}
 
-	minimal := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, false)
+	// Stateful HTTP is the opposite case and must keep naming the legacy
+	// method alone. That transport refuses every revision from 2026-07-28,
+	// which is why this binary strips it from the versions it advertises, so
+	// there subscriptions/listen is the unreachable one and naming it would be
+	// the same defect pointing the other way.
+	stateful := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, false, false)
+	if !strings.Contains(stateful, "via MCP resources/subscribe") {
+		t.Error("stateful HTTP instructions do not name resources/subscribe, the one method that transport honors")
+	}
+	if strings.Contains(stateful, "subscriptions/listen") {
+		t.Error("stateful HTTP instructions name subscriptions/listen, which that transport cannot serve")
+	}
+
+	minimal := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, mcpotel.TransportPipe, false, false)
 	if strings.Contains(minimal, "WATCHING RESOURCES") {
 		t.Error("minimal surface instructions advertise subscriptions the server refuses there")
 	}
@@ -290,7 +347,7 @@ func TestBuildInstructions_WatchingSection_FollowsCapabilitySurface(t *testing.T
 // the method without saying which revision it belongs to would leave it
 // looking for something it has no way to call.
 func TestBuildInstructions_StatelessHTTP_NamesTheWorkingMethod(t *testing.T) {
-	stateless := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, true)
+	stateless := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, mcpotel.TransportTCP, true, false)
 	if !strings.Contains(stateless, "WATCHING RESOURCES") {
 		t.Fatal("stateless instructions dropped the watching section entirely; subscriptions/listen does work there")
 	}

@@ -1830,7 +1830,7 @@ func assertCapabilitySurfaceParity(t *testing.T, session *mcp.ClientSession, tc 
 	assertLegacySchemaResourcesOmitted(t, session)
 	assertManifestDetailReadable(t, session, tc.toolSurface)
 	assertPromptSurface(t, session, tc.wantFullCatalog)
-	assertCompletionHandlerAvailable(t, session)
+	assertCompletionHandlerAvailable(t, session, tc.wantFullCatalog)
 }
 
 func assertCapabilityResources(t *testing.T, session *mcp.ClientSession, wantFullCatalog bool) {
@@ -1949,7 +1949,16 @@ func assertPromptSurface(t *testing.T, session *mcp.ClientSession, wantPrompts b
 	}
 }
 
-func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) {
+// assertCompletionHandlerAvailable checks that completion/complete is served
+// and that what it answers agrees with the prompts the same surface serves.
+//
+// The two halves are the same rule seen from either side. On the full surface
+// the prompt exists, so an argument it does not have is answered with an empty
+// list: a completion never blocks the client. On the minimal surface no prompt
+// exists at all, prompts/list and prompts/get already say so with -32601, and a
+// completion naming one is refused with -32602 rather than served live GitLab
+// data for a prompt the server has just denied twice over.
+func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession, servesPrompts bool) {
 	t.Helper()
 	result, err := session.Complete(t.Context(), &mcp.CompleteParams{
 		Ref: &mcp.CompleteReference{
@@ -1961,11 +1970,61 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 			Value: "",
 		},
 	})
+	if !servesPrompts {
+		if err == nil {
+			t.Fatalf("Complete() answered %+v for a prompt this surface does not serve, want a refusal", result)
+		}
+		if !strings.Contains(err.Error(), "unknown prompt") {
+			t.Fatalf("Complete() error = %v, want it to name the unknown prompt", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Fatalf("Complete() values = %v, want empty result for unknown argument", result.Completion.Values)
+	}
+}
+
+// TestCreateServer_CompletionRefusesAPromptTheServerDoesNotServe checks the
+// wiring the refusal depends on, which no test of the completion handler alone
+// can see.
+//
+// The handler is built before the server exists and the prompts are registered
+// on the server that building it returns, so the names have to be handed over
+// afterwards. Forget that hand-over and the handler serves every reference,
+// which is the behavior this replaced; publish the wrong list and it refuses
+// prompts the server does serve. Both failures are invisible until a real
+// server is stood up and asked.
+//
+// It runs on the full surface on purpose: the minimal one refuses every
+// reference and so cannot tell a correct list from an empty one.
+func TestCreateServer_CompletionRefusesAPromptTheServerDoesNotServe(t *testing.T) {
+	client := newMockGitLabClient(t)
+	server := mustCreateServer(t, client, &config.ServerConfig{
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	session := newInMemorySession(t, server)
+
+	complete := func(name string) error {
+		_, err := session.Complete(t.Context(), &mcp.CompleteParams{
+			Ref:      &mcp.CompleteReference{Type: "ref/prompt", Name: name},
+			Argument: mcp.CompleteParamsArgument{Name: "unknown_argument", Value: ""},
+		})
+		return err
+	}
+
+	if err := complete("summarize_mr_changes"); err != nil {
+		t.Errorf("a prompt this server serves was refused: %v", err)
+	}
+	err := complete("no_such_prompt")
+	if err == nil {
+		t.Fatal("a prompt this server does not serve was completed")
+	}
+	if !strings.Contains(err.Error(), "unknown prompt") {
+		t.Errorf("the refusal is %q, want it to name the unknown prompt", err)
 	}
 }
 
@@ -10653,6 +10712,60 @@ func TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing(t *testing.T) {
 	}
 	if manifestShareKey(config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, cfg, shared) == got {
 		t.Error("two capability surfaces produced one manifest key")
+	}
+}
+
+// TestServerCardSubscriptions_AvailabilityFollowsTheTransport checks that the
+// card says which of the two subscription methods this deployment can answer.
+//
+// The block's own contract is that both methods are listed, because the block
+// describes the binary, while `available` states what this deployment answers.
+// On HTTP the two are exactly complementary and nothing in between: a stateful
+// deployment strips protocol 2026-07-28 from the versions it advertises, since
+// listing it would hand a client the one answer that cannot work, so a listen
+// is unreachable there and the legacy subscribe is the one that works. The card
+// used to hard-code the listen as available and contradict the same binary's
+// handshake, which is the one reader that cannot check for itself: a card is
+// fetched before connecting.
+func TestServerCardSubscriptions_AvailabilityFollowsTheTransport(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		stateless  bool
+		wantListen bool
+	}{
+		{name: "stateless serves the listen", stateless: true, wantListen: true},
+		{name: "stateful serves the legacy subscribe", stateless: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			block := serverCardSubscriptions(&config.Config{
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				Stateless:         testCase.stateless,
+			})
+			if block == nil {
+				t.Fatal("the full capability surface published no subscription block")
+			}
+			methods, ok := block["methods"].(map[string]any)
+			if !ok {
+				t.Fatalf("methods = %v, want a map of the two methods", block["methods"])
+			}
+
+			listen, listenOK := methods["subscriptions/listen"].(map[string]any)
+			legacy, legacyOK := methods["resources/subscribe"].(map[string]any)
+			if !listenOK || !legacyOK {
+				t.Fatalf("methods = %v, want both subscription methods listed whatever this deployment answers", methods)
+			}
+			if listen["available"] != testCase.wantListen {
+				t.Errorf("subscriptions/listen available = %v, want %v", listen["available"], testCase.wantListen)
+			}
+			if legacy["available"] != !testCase.wantListen {
+				t.Errorf("resources/subscribe available = %v, want %v", legacy["available"], !testCase.wantListen)
+			}
+		})
 	}
 }
 

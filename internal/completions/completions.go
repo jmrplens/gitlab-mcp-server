@@ -2,9 +2,10 @@ package completions
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
-	"strings"
+	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -25,11 +26,53 @@ type Handler struct {
 	// client is the fallback credential, not the one a request necessarily
 	// runs under. See [Handler.clientFor].
 	client *gitlabclient.Client
+
+	// prompts is the set of prompt names this server serves, or nil when
+	// nothing has published one. See [Handler.PublishPrompts].
+	prompts atomic.Pointer[map[string]struct{}]
+
+	// excluded is the set of catalog actions the operator removed, or nil when
+	// nothing has published one. See [Handler.PublishExcludedActions].
+	excluded atomic.Pointer[map[string]struct{}]
 }
 
 // NewHandler creates a completion handler backed by the given GitLab client.
 func NewHandler(client *gitlabclient.Client) *Handler {
 	return &Handler{client: client}
+}
+
+// PublishPrompts records the prompt names this server serves, so a completion
+// naming a prompt it does not serve is refused rather than answered.
+//
+// It is a method rather than a constructor argument because of the order the
+// server is built in: the completion handler is part of the options
+// [mcp.NewServer] is given, and the prompts are registered on the server that
+// call returns, so the names do not exist yet when this handler does. Nothing
+// reads the set until a request arrives, which is after both.
+//
+// Publishing an empty set is meaningful and is not the same as publishing
+// nothing: it says this server serves no prompts, which is what the minimal
+// capability surface does, and every prompt reference is then refused. A
+// handler nobody published to answers as it always did, so a caller that never
+// learned its prompt names is never made worse off.
+func (h *Handler) PublishPrompts(names []string) {
+	served := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		served[name] = struct{}{}
+	}
+	h.prompts.Store(&served)
+}
+
+// servesPrompt reports whether a prompt reference names something this server
+// serves. It answers true when nothing was published, since a handler with no
+// catalog cannot contradict one.
+func (h *Handler) servesPrompt(name string) bool {
+	served := h.prompts.Load()
+	if served == nil {
+		return true
+	}
+	_, ok := (*served)[name]
+	return ok
 }
 
 // clientFor returns the client this request must run against: the one bound to
@@ -83,6 +126,23 @@ func (h *Handler) Complete(ctx context.Context, req *mcp.CompleteRequest) (*mcp.
 
 	switch req.Params.Ref.Type {
 	case "ref/prompt":
+		// The one failure this package answers with an error rather than an
+		// empty list, and deliberately: every other cause of an empty
+		// completion is a GitLab hiccup the caller can do nothing about, while
+		// a prompt name this server does not serve is something the caller
+		// sent and has to change. The specification names the code
+		// ("Invalid prompt name: -32602"), prompts/get already answers it for
+		// the same name, and without it a reference to a prompt that does not
+		// exist was served live GitLab data, which reads to a client as
+		// confirmation that it does.
+		//
+		// The resource reference is deliberately not checked the same way: the
+		// specification says nothing about an unserved URI, and a client may
+		// legitimately send a concrete URI where we hold only a template, so
+		// refusing one would break a caller that is conforming.
+		if !h.servesPrompt(req.Params.Ref.Name) {
+			return nil, toolutil.InvalidParams(fmt.Errorf("unknown prompt %q", req.Params.Ref.Name))
+		}
 		return h.completePromptArg(ctx, req)
 	case "ref/resource":
 		return h.completeResourceArg(ctx, req)
@@ -96,6 +156,10 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 	argName := req.Params.Argument.Name
 	argValue := req.Params.Argument.Value
 	resolvedArgs := resolvedArguments(req)
+
+	if h.withholds(completionBackingActions[argName]...) {
+		return emptyResult(), nil
+	}
 
 	switch argName {
 	case "project_id":
@@ -132,10 +196,21 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 }
 
 func (h *Handler) completeMilestoneArgument(ctx context.Context, resolvedArgs map[string]string, argValue string) (*mcp.CompleteResult, error) {
+	// Each scope is asked about on its own, like the branch and tag halves
+	// above: the dispatch withheld this argument only if both listings were
+	// excluded, and which one this call would use depends on the arguments
+	// resolved so far. The scope decides, so an excluded project listing
+	// answers empty rather than falling through to the group's.
 	if pid, ok := resolvedArgs["project_id"]; ok && pid != "" {
+		if h.withholds(actionMilestoneList) {
+			return emptyResult(), nil
+		}
 		return h.completeMilestoneTitle(ctx, pid, argValue)
 	}
 	if gid, ok := resolvedArgs["group_id"]; ok && gid != "" {
+		if h.withholds(actionGroupMilestoneLst) {
+			return emptyResult(), nil
+		}
 		return h.completeGroupMilestoneTitle(ctx, gid, argValue)
 	}
 	return emptyResult(), nil
@@ -155,6 +230,10 @@ func (h *Handler) completeResourceArg(ctx context.Context, req *mcp.CompleteRequ
 	argName := req.Params.Argument.Name
 	argValue := req.Params.Argument.Value
 	resolvedArgs := resolvedArguments(req)
+
+	if h.withholds(completionBackingActions[argName]...) {
+		return emptyResult(), nil
+	}
 
 	switch argName {
 	case "project_id":
@@ -234,18 +313,33 @@ func (h *Handler) completeUsername(ctx context.Context, query string) (*mcp.Comp
 
 // completeBranchOrTag returns branches and tags matching the partial value.
 func (h *Handler) completeBranchOrTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	branches, branchTotal, err := searchBranches(ctx, h.clientFor(ctx), projectID, query)
-	if err != nil {
-		slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
-		branches = nil
-		branchTotal = 0
+	// The dispatch already withheld this argument if both listings were
+	// excluded. Here each half is asked about on its own, so an operator who
+	// removed only one still gets the other: this is the one completer that
+	// merges two sources, and withholding it whole would take away data the
+	// operator never excluded.
+	var branches []string
+	var branchTotal int
+	if !h.withholds(actionBranchList) {
+		var err error
+		branches, branchTotal, err = searchBranches(ctx, h.clientFor(ctx), projectID, query)
+		if err != nil {
+			slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
+			branches = nil
+			branchTotal = 0
+		}
 	}
 
-	tags, tagTotal, err := searchTags(ctx, h.clientFor(ctx), projectID, query)
-	if err != nil {
-		slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
-		tags = nil
-		tagTotal = 0
+	var tags []string
+	var tagTotal int
+	if !h.withholds(actionTagList) {
+		var err error
+		tags, tagTotal, err = searchTags(ctx, h.clientFor(ctx), projectID, query)
+		if err != nil {
+			slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
+			tags = nil
+			tagTotal = 0
+		}
 	}
 
 	branches = append(branches, tags...)
@@ -380,6 +474,15 @@ func toResult(values []string) *mcp.CompleteResult {
 // known (e.g. from gitlab.Response.TotalItems). A non-positive total is
 // treated as unknown and omitted.
 func toResultWithTotal(values []string, total int) *mcp.CompleteResult {
+	// A nil slice marshals to null, and the MCP schema requires values to be
+	// an array: a client that validates the response rejects it instead of
+	// showing an empty list, which is the opposite of what this package
+	// promises on a transient GitLab error. Normalized here rather than at the
+	// one completer that can produce a nil today, because every result is
+	// built through this function and a later one would reopen the hole.
+	if values == nil {
+		values = []string{}
+	}
 	hasMore := false
 	if len(values) > maxCompletionResults {
 		values = values[:maxCompletionResults]
@@ -440,19 +543,4 @@ func formatMilestoneEntry(id int64, _ string) string {
 // formatJobEntry returns the job ID as a string.
 func formatJobEntry(id int64, _, _ string) string {
 	return strconv.FormatInt(id, 10)
-}
-
-// filterByPrefix returns only values that contain the query (case-insensitive).
-func filterByPrefix(values []string, query string) []string {
-	if query == "" {
-		return values
-	}
-	q := strings.ToLower(query)
-	var filtered []string
-	for _, v := range values {
-		if strings.Contains(strings.ToLower(v), q) {
-			filtered = append(filtered, v)
-		}
-	}
-	return filtered
 }

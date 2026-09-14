@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,506 |
-| Unit test functions                                   | 15,342 |
-| E2E test functions                                    |  1,164 |
-| cmd test functions                                    |  3,172 |
-| Test files (internal/)                                |    555 |
+| Total test functions                                  | 16,559 |
+| Unit test functions                                   | 15,359 |
+| E2E test functions                                    |  1,200 |
+| cmd test functions                                    |  3,176 |
+| Test files (internal/)                                |    557 |
 | Test files (cmd/)                                     |    221 |
-| Test files (test/e2e/)                                |    449 |
+| Test files (test/e2e/)                                |    460 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,466 | 75.5% |
-| `TestFunc` (no underscore)             |    943 |  5.7% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,097 | 18.8% |
+| `TestFunc_Scenario` (2-part)           | 12,488 | 75.4% |
+| `TestFunc` (no underscore)             |    942 |  5.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,129 | 18.9% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,707 |        160 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,719 |        162 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (178) |          9,097 |        379 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,164 |        449 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          3,172 |        221 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,506** |  **1,225** |                                                                                                 |
+| Tool sub-packages (178) |          9,098 |        379 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,200 |        460 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| cmd packages            |          3,176 |        221 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,559** |  **1,238** |                                                                                                 |
 
 ### Core Packages
 
@@ -60,7 +60,7 @@
 | capguard          |         1 |   100.0% | Package capguard keeps the methods this server answers in step with the capabilities it declares.                                                                                                                                                                  |
 | clientcompat      |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                            |
 | cmdutil           |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                          |
-| completions       |       101 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
+| completions       |       107 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                           |
 | config            |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                   |
 | edition           |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                      |
 | elicitation       |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                       |
@@ -74,12 +74,12 @@
 | prompts           |       295 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                         |
 | resources         |       194 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                |
 | serverpool        |       122 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                             |
-| subscriptions     |        99 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
+| subscriptions     |       100 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry         |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil          |       116 |    99.6% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | testutil/e2ecalls |        24 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
-| toolutil          |     1,021 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**      | **2,707** |          |                                                                                                                                                                                                                                                                    |
+| toolutil          |     1,026 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
+| **Subtotal**      | **2,719** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -120,7 +120,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        50 |          2 |   100.0% |         8 |
 | accesstokens            |       100 |          2 |   100.0% |        18 |
-| achievements            |        58 |          3 |    99.8% |        12 |
+| achievements            |        59 |          3 |    99.8% |        12 |
 | actioncatalog           |        44 |          5 |    99.1% |         0 |
 | actioncompat            |        44 |          2 |   100.0% |         1 |
 | adminspecs              |         6 |          1 |   100.0% |        92 |
@@ -296,7 +296,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,097** |    **379** |          | **1,187** |
+| **Total**               | **9,098** |    **379** |          | **1,187** |
 
 </details>
 
@@ -684,7 +684,7 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. The old suite under `test/e2e/suite` stays with `make test-e2e-docker` until its CE half is ported; the Premium scenarios its CE files still hold run when the instance is licensed and skip when it reports Free.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one: the suite under `test/e2e/suite` is superseded, so no default or release gate runs it and the only way to is to ask for it from a manual dispatch of the E2E workflow with `legacy_suite=true`.
 
 The rebuilt suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. The old suite keeps its own check: when an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, its session downgrades to CE and the Premium scenarios skip with a logged reason instead of failing outright.
 

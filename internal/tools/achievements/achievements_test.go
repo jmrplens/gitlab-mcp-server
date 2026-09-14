@@ -15,11 +15,13 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -807,6 +809,55 @@ func TestUserAchievementReorder_Success(t *testing.T) {
 	}
 	if len(out.UserAchievements) != 2 || out.Status != "success" {
 		t.Errorf("reorder result = (%d awards, %q), want two awards and a success", len(out.UserAchievements), out.Status)
+	}
+}
+
+// TestUserAchievementReorder_Answer_IsSortedByPriority verifies the answer
+// comes back in the order ReorderOutput promises, whatever order GitLab sent.
+//
+// A live run against a Docker GitLab is what asked for this: the mutation
+// applies the order the call gives and answers with the set in an order of its
+// own, so the type's promise of "the awards in their new priority order" was
+// false for every caller. The award carrying no priority at all goes last,
+// because nothing ranks it.
+func TestUserAchievementReorder_Answer_IsSortedByPriority(t *testing.T) {
+	priorityNode := func(id int64, priority string) string {
+		return fmt.Sprintf(`{
+			"id": "gid://gitlab/Achievements::UserAchievement/%d",
+			"achievement": {"id": "gid://gitlab/Achievements::Achievement/1"},
+			"user": {"id": "gid://gitlab/User/2"},
+			"awardedByUser": {"id": "gid://gitlab/User/3"},
+			"revokedByUser": null,
+			"createdAt": "2025-05-25T13:47:41Z",
+			"updatedAt": "2025-05-25T13:47:41Z",
+			"revokedAt": null,
+			"priority": %s,
+			"showOnProfile": true,
+			"awardMessage": null
+		}`, id, priority)
+	}
+
+	var vars map[string]any
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		keyUAReorder: respond(t, `{"data":{"userAchievementPrioritiesUpdate":{"userAchievements":[`+
+			priorityNode(90, "2")+`,`+priorityNode(91, "0")+`,`+
+			priorityNode(92, "null")+`,`+priorityNode(93, "1")+
+			`],"errors":[]}}}`, &vars),
+	}))
+
+	out, err := UserAchievementReorder(t.Context(), client,
+		UserAchievementReorderInput{UserAchievementIDs: []int64{91, 93, 90}})
+	if err != nil {
+		t.Fatalf("UserAchievementReorder() error = %v", err)
+	}
+
+	want := []int64{91, 93, 90, 92}
+	got := make([]int64, 0, len(out.UserAchievements))
+	for _, award := range out.UserAchievements {
+		got = append(got, award.ID)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("reorder answered awards %v, want %v: by priority, with the unranked one last", got, want)
 	}
 }
 

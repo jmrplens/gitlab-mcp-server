@@ -54,7 +54,7 @@ func BuildPipelineInputs(raw map[string]any) (gl.PipelineInputsOption, error) {
 // The generic map[string]any field alone would advertise
 // additionalProperties:true, promising value shapes the converter rejects.
 func PipelineInputsSchema[T any](property string) map[string]any {
-	schema, err := jsonschema.For[T](nil)
+	schema, err := jsonschema.For[T](schemaForOptions())
 	if err != nil {
 		panic(fmt.Sprintf("build input schema for %s: %v; check the input struct tags, unsupported field types, or circular schema references", property, err))
 	}

@@ -113,8 +113,13 @@ func TestMarkdown_Render(t *testing.T) {
 	harness.EachSurface(e, func(e *harness.Env, surface harness.Surface) {
 		s := e.On(surface)
 		rendered := harness.Do[markdowntool.RenderOutput](s, actionRepositoryMarkdownRender, map[string]any{"text": "**bold** text"})
-		if !strings.Contains(rendered.HTML, "<strong>bold</strong>") || !strings.Contains(rendered.HTML, "text") {
-			e.T.Errorf("markdown_render answered %q, want the bold element and the text it was given", rendered.HTML)
+		// The element and its content, not the exact tag: GitLab annotates
+		// every element it renders with data-sourcepos, so an assertion on
+		// "<strong>bold</strong>" fails on a correct answer and would go on
+		// failing for as long as that annotation exists.
+		if !strings.Contains(rendered.HTML, "<strong") || !strings.Contains(rendered.HTML, ">bold</strong>") ||
+			!strings.Contains(rendered.HTML, "text") {
+			e.T.Errorf("markdown_render answered %q, want the bold element around the word it was given", rendered.HTML)
 		}
 	})
 }

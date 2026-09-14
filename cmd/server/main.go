@@ -1638,6 +1638,11 @@ type serverShell struct {
 	// sessions records which credential each session belongs to. Nil on stdio,
 	// where there is one credential and nothing to tell apart.
 	sessions *sessionOwners
+	// completions answers completion/complete. It is held so register can tell
+	// it which prompts this server ended up serving: the handler travels in the
+	// options mcp.NewServer is given, and the prompts are registered on the
+	// server that call returns, so the names cannot be known when it is built.
+	completions *completions.Handler
 }
 
 // stateFor returns the credential a request runs under: the one bound to its
@@ -1735,7 +1740,7 @@ func newServerShell(
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
-		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
+		Instructions: buildInstructions(toolSurface, capabilitySurface, settings.transport, cfg.Stateless, cfg.ReadOnly),
 		Logger:       sdkLogger(),
 		Capabilities: serverCapabilities,
 		// Session IDs are the SDK's own random ones. They used to carry a tag
@@ -1905,6 +1910,7 @@ func newServerShell(
 	shell.identifier = identifier
 	shell.shared = settings.credentials != nil
 	shell.sessions = settings.sessions
+	shell.completions = completionHandler
 	shell.state = shell.defaultCredentialState()
 	return shell, nil
 }
@@ -2053,7 +2059,16 @@ func (sh *serverShell) register(ctx context.Context) error {
 		}
 	}
 
-	registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	servedPrompts := registerConfiguredCapabilities(server, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
+	// Published unconditionally, the empty list included: a completion naming
+	// a prompt this server does not serve is refused, and on the minimal
+	// surface that is every prompt, which is the honest answer where
+	// prompts/list and prompts/get already say the same.
+	sh.completions.PublishPrompts(servedPrompts)
+	// The same list resources and prompts take, for the same reason: a
+	// completion is a fourth request path to the same GitLab data with the
+	// same credential, and it was the last one an operator could not narrow.
+	sh.completions.PublishExcludedActions(surfaceRegistration.excludedActions)
 	publishSubscriptionIndex(sh.subs, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
 
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
@@ -2119,23 +2134,29 @@ func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoute
 // readable through resources/read has been given a guard that does not guard.
 // A subscription would go on polling for it too, which is why
 // [publishSubscriptionIndex] takes the same list.
+//
+// It returns the prompt names it registered, which is none on the minimal
+// surface. That empty answer is as meaningful as a full one and is published
+// just the same: it is what lets a completion naming a prompt be refused on a
+// surface that serves no prompts at all.
 func registerConfiguredCapabilities(
 	server *mcp.Server,
 	client *gitlabclient.Client,
 	capabilitySurface string,
 	excludedActions []string,
-) {
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
-		resources.RegisterWorkflowGuides(server)
-		// Prompts take the same exclusions as resources, and for the same
-		// reason: a prompt is a third request path carrying the same
-		// credential, so a prompt that serves data from an excluded action
-		// would be a way around --exclude-tools rather than a separate
-		// feature. The mechanism arrived with the prompt surface's own
-		// change; this is the line that makes it take effect in the binary.
-		prompts.Register(server, client, prompts.RegisterOptions{ExcludedActions: excludedActions})
+) []string {
+	if capabilitySurface != config.CapabilitySurfaceFull {
+		return nil
 	}
+	resources.Register(server, client, resources.RegisterOptions{ExcludedActions: excludedActions})
+	resources.RegisterWorkflowGuides(server)
+	// Prompts take the same exclusions as resources, and for the same
+	// reason: a prompt is a third request path carrying the same
+	// credential, so a prompt that serves data from an excluded action
+	// would be a way around --exclude-tools rather than a separate
+	// feature. The mechanism arrived with the prompt surface's own
+	// change; this is the line that makes it take effect in the binary.
+	return prompts.Register(server, client, prompts.RegisterOptions{ExcludedActions: excludedActions})
 }
 
 // publishSubscriptionIndex hands the subscription runtime the same narrowed
@@ -2595,6 +2616,17 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	if !cfg.Stateless {
 		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
+	}
+	// A JSON body carries one response and nothing else, so a notification
+	// raised while a call is running has no frame to travel in: the SDK routes
+	// it to the standalone SSE stream, which a stateless deployment never
+	// connects because it answers GET with 405. Progress is then silently
+	// inert. The flag is a reasonable choice for a client that cannot read
+	// SSE, so this is a warning rather than a refusal, but an operator turning
+	// off a declared capability should be told they did.
+	if cfg.JSONResponse {
+		slog.WarnContext(ctx, "--json-response: progress notifications cannot be delivered, "+
+			"since a JSON response body carries no out-of-band frames; tools still work and report nothing while they run")
 	}
 
 	binding, pool := newShapedServerPool(ctx, cfg)
@@ -3912,8 +3944,16 @@ func serverCardSubscriptions(cfg *config.Config) map[string]any {
 	return map[string]any{
 		"supported": true,
 		"methods": map[string]any{
+			// The two are exactly complementary on HTTP, and this card is
+			// built for HTTP alone. A stateful deployment strips 2026-07-28
+			// from the versions it advertises, because listing it would hand a
+			// client the one answer that cannot work, and the SDK's streamable
+			// transport then answers 400 to any request carrying it. So a
+			// listen is unreachable there, and saying "available" of it was
+			// the card contradicting the same binary's own handshake.
 			"subscriptions/listen": map[string]any{
-				"available":      true,
+				"available":      cfg.Stateless,
+				"requires":       "stateless sessions (--stateless, the default)",
 				"since_protocol": protocolVersionStatelessOnly,
 			},
 			"resources/subscribe": map[string]any{
