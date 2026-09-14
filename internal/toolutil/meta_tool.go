@@ -545,7 +545,7 @@ func schemaForType(rt reflect.Type) map[string]any {
 
 // buildSchemaForType reflects one type into a shared JSON Schema map.
 func buildSchemaForType(rt reflect.Type) map[string]any {
-	schema, err := jsonschema.ForType(rt, nil)
+	schema, err := jsonschema.ForType(rt, schemaForOptions())
 	if err != nil {
 		return nil
 	}

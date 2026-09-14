@@ -2023,7 +2023,10 @@
       "properties": {
         "project_id": {
           "description": "Project ID or URL-encoded path where the issue will be created",
-          "type": "string"
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -2748,7 +2751,10 @@
       "properties": {
         "project_id": {
           "description": "Project ID or URL-encoded path where the MR will be created",
-          "type": "string"
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
@@ -4724,7 +4730,10 @@
       "properties": {
         "project_id": {
           "description": "Project ID or URL-encoded path where the release will be created",
-          "type": "string"
+          "type": [
+            "string",
+            "integer"
+          ]
         }
       },
       "required": [
