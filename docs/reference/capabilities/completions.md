@@ -65,6 +65,8 @@ Each completion request triggers **at most one GitLab API call**. Results are re
 
 There is one exception, and it is the one failure the caller can act on: a `ref/prompt` naming a prompt this server does not serve is refused with `-32602`, the code the specification names for an invalid prompt name and the same one `prompts/get` already answers for that name. Every other empty completion is a GitLab hiccup the caller can do nothing about; this one is something the caller sent. It matters most on `GITLAB_MCP_CAPABILITY_SURFACE=minimal`, where no prompt is served at all: every prompt reference is refused there, rather than answered with live GitLab data for a prompt `prompts/list` and `prompts/get` have already denied.
 
+Completion is also narrowed by `--exclude-tools`, like the tool, resource, subscription and prompt surfaces before it. An operator who removes `issue.list` removes it from here too, so the completion for `issue_iid` answers an empty list without reaching GitLab. An argument served by more than one action keeps the half that was left: removing only the tag listing still completes `from` with branches.
+
 A `ref/resource` URI is deliberately not checked the same way. The specification's error list says nothing about an unserved URI, and a client may legitimately send a concrete URI where this server holds only a template, so an unrecognized one still answers an empty list.
 
 ## API

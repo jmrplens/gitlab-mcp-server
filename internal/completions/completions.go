@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -31,6 +30,10 @@ type Handler struct {
 	// prompts is the set of prompt names this server serves, or nil when
 	// nothing has published one. See [Handler.PublishPrompts].
 	prompts atomic.Pointer[map[string]struct{}]
+
+	// excluded is the set of catalog actions the operator removed, or nil when
+	// nothing has published one. See [Handler.PublishExcludedActions].
+	excluded atomic.Pointer[map[string]struct{}]
 }
 
 // NewHandler creates a completion handler backed by the given GitLab client.
@@ -154,6 +157,10 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 	argValue := req.Params.Argument.Value
 	resolvedArgs := resolvedArguments(req)
 
+	if h.withholds(completionBackingActions[argName]...) {
+		return emptyResult(), nil
+	}
+
 	switch argName {
 	case "project_id":
 		return h.completeProjectID(ctx, argValue)
@@ -189,10 +196,21 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 }
 
 func (h *Handler) completeMilestoneArgument(ctx context.Context, resolvedArgs map[string]string, argValue string) (*mcp.CompleteResult, error) {
+	// Each scope is asked about on its own, like the branch and tag halves
+	// above: the dispatch withheld this argument only if both listings were
+	// excluded, and which one this call would use depends on the arguments
+	// resolved so far. The scope decides, so an excluded project listing
+	// answers empty rather than falling through to the group's.
 	if pid, ok := resolvedArgs["project_id"]; ok && pid != "" {
+		if h.withholds(actionMilestoneList) {
+			return emptyResult(), nil
+		}
 		return h.completeMilestoneTitle(ctx, pid, argValue)
 	}
 	if gid, ok := resolvedArgs["group_id"]; ok && gid != "" {
+		if h.withholds(actionGroupMilestoneLst) {
+			return emptyResult(), nil
+		}
 		return h.completeGroupMilestoneTitle(ctx, gid, argValue)
 	}
 	return emptyResult(), nil
@@ -212,6 +230,10 @@ func (h *Handler) completeResourceArg(ctx context.Context, req *mcp.CompleteRequ
 	argName := req.Params.Argument.Name
 	argValue := req.Params.Argument.Value
 	resolvedArgs := resolvedArguments(req)
+
+	if h.withholds(completionBackingActions[argName]...) {
+		return emptyResult(), nil
+	}
 
 	switch argName {
 	case "project_id":
@@ -291,18 +313,33 @@ func (h *Handler) completeUsername(ctx context.Context, query string) (*mcp.Comp
 
 // completeBranchOrTag returns branches and tags matching the partial value.
 func (h *Handler) completeBranchOrTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
-	branches, branchTotal, err := searchBranches(ctx, h.clientFor(ctx), projectID, query)
-	if err != nil {
-		slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
-		branches = nil
-		branchTotal = 0
+	// The dispatch already withheld this argument if both listings were
+	// excluded. Here each half is asked about on its own, so an operator who
+	// removed only one still gets the other: this is the one completer that
+	// merges two sources, and withholding it whole would take away data the
+	// operator never excluded.
+	var branches []string
+	var branchTotal int
+	if !h.withholds(actionBranchList) {
+		var err error
+		branches, branchTotal, err = searchBranches(ctx, h.clientFor(ctx), projectID, query)
+		if err != nil {
+			slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
+			branches = nil
+			branchTotal = 0
+		}
 	}
 
-	tags, tagTotal, err := searchTags(ctx, h.clientFor(ctx), projectID, query)
-	if err != nil {
-		slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
-		tags = nil
-		tagTotal = 0
+	var tags []string
+	var tagTotal int
+	if !h.withholds(actionTagList) {
+		var err error
+		tags, tagTotal, err = searchTags(ctx, h.clientFor(ctx), projectID, query)
+		if err != nil {
+			slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
+			tags = nil
+			tagTotal = 0
+		}
 	}
 
 	branches = append(branches, tags...)
@@ -506,19 +543,4 @@ func formatMilestoneEntry(id int64, _ string) string {
 // formatJobEntry returns the job ID as a string.
 func formatJobEntry(id int64, _, _ string) string {
 	return strconv.FormatInt(id, 10)
-}
-
-// filterByPrefix returns only values that contain the query (case-insensitive).
-func filterByPrefix(values []string, query string) []string {
-	if query == "" {
-		return values
-	}
-	q := strings.ToLower(query)
-	var filtered []string
-	for _, v := range values {
-		if strings.Contains(strings.ToLower(v), q) {
-			filtered = append(filtered, v)
-		}
-	}
-	return filtered
 }

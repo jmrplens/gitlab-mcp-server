@@ -2065,6 +2065,10 @@ func (sh *serverShell) register(ctx context.Context) error {
 	// surface that is every prompt, which is the honest answer where
 	// prompts/list and prompts/get already say the same.
 	sh.completions.PublishPrompts(servedPrompts)
+	// The same list resources and prompts take, for the same reason: a
+	// completion is a fourth request path to the same GitLab data with the
+	// same credential, and it was the last one an operator could not narrow.
+	sh.completions.PublishExcludedActions(surfaceRegistration.excludedActions)
 	publishSubscriptionIndex(sh.subs, client, sh.capabilitySurface, surfaceRegistration.excludedActions)
 
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {

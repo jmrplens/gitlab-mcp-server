@@ -1430,40 +1430,6 @@ func TestFormatIssueEntry(t *testing.T) {
 	}
 }
 
-// TestFilterByPrefix verifies that [filterByPrefix] performs case-insensitive
-// substring matching and returns all values when the query is empty.
-func TestFilterByPrefix(t *testing.T) {
-	values := []string{"alpha", "beta", "GAMMA", "delta-alpha"}
-
-	t.Run("match", func(t *testing.T) {
-		got := filterByPrefix(values, "alpha")
-		if len(got) != 2 {
-			t.Fatalf("expected 2 matches, got %d: %v", len(got), got)
-		}
-	})
-
-	t.Run("case insensitive", func(t *testing.T) {
-		got := filterByPrefix(values, "GAMMA")
-		if len(got) != 1 {
-			t.Fatalf("expected 1 match, got %d: %v", len(got), got)
-		}
-	})
-
-	t.Run("empty query returns all", func(t *testing.T) {
-		got := filterByPrefix(values, "")
-		if len(got) != len(values) {
-			t.Errorf("expected all values for empty query, got %d", len(got))
-		}
-	})
-
-	t.Run("no match", func(t *testing.T) {
-		got := filterByPrefix(values, "zeta")
-		if len(got) != 0 {
-			t.Errorf("expected 0 matches, got %d", len(got))
-		}
-	})
-}
-
 // TestResolvedArguments_Nil uses table-driven subtests to verify that
 // [resolvedArguments] returns an empty map for nil context and nil arguments.
 func TestResolvedArguments_Nil(t *testing.T) {
