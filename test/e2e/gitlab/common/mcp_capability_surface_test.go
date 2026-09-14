@@ -20,6 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/fixture"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
@@ -67,6 +70,45 @@ func TestCapabilitySurface_Full_ServesThePromptAndResourceCatalogs(t *testing.T)
 	}
 	if templates := s.ResourceTemplates(); len(templates) == 0 {
 		t.Error("the full surface served no resource template, so no parameterized resource can be read")
+	}
+}
+
+// TestPrompts_ProjectHealthCheck_RendersAgainstTheWorld renders one prompt and
+// asserts what came back.
+//
+// The sweep in mcp_prompts_test.go renders every prompt it can bind and logs
+// whatever answers an error, deliberately: a prompt whose data the read-only
+// World does not carry is not a defect, and one prompt failing must not stop
+// the other thirty-six from being exercised. The cost is that a prompt could
+// fail for every run and the sweep would stay green.
+//
+// This is the other half: one prompt whose arguments the World always binds,
+// rendered through the strict verb, with its messages asserted. A prompt that
+// answers an error here fails the suite, and a prompt that answers an empty
+// body fails it too, since a rendered prompt with no content is what a client
+// would paste into a model as nothing at all.
+func TestPrompts_ProjectHealthCheck_RendersAgainstTheWorld(t *testing.T) {
+	e := harness.New(t)
+	world := fixture.SharedWorld(e)
+	s := e.On(harness.SurfaceDynamic)
+
+	projectID, bound := world.BindPromptArgument("project_id")
+	if !bound {
+		t.Skip("the World binds no project_id, so there is no prompt argument to render with")
+	}
+
+	result := s.GetPrompt("project_health_check", map[string]string{"project_id": projectID})
+	if result == nil || len(result.Messages) == 0 {
+		t.Fatal("the prompt rendered no message, which is nothing for a client to send a model")
+	}
+	var text strings.Builder
+	for _, message := range result.Messages {
+		if content, ok := message.Content.(*mcp.TextContent); ok {
+			text.WriteString(content.Text)
+		}
+	}
+	if strings.TrimSpace(text.String()) == "" {
+		t.Error("the prompt's messages carry no text at all")
 	}
 }
 

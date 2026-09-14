@@ -69,6 +69,33 @@ func TestTierPin_ServesTheCatalogOfThePinnedTier(t *testing.T) {
 	}
 }
 
+// TestTierPin_DetectionAgreesWithTheRuntimeProbe holds the tier a detecting
+// session resolved against what the harness itself found on the instance.
+//
+// The two answers come from different places and have to agree: the harness
+// probes once at bootstrap with the run's own token, and the child reads GET
+// /license for itself at startup. A disagreement would mean the catalog the
+// suite expects is not the catalog the binary built, and every tier assertion
+// in this package would be measuring the wrong server.
+//
+// It is asserted only where the probe was sure. That endpoint answers
+// administrators only, so a non-administrator token reads no license and falls
+// back to Free, and comparing an unconfirmed tier would be comparing two
+// guesses rather than two readings.
+func TestTierPin_DetectionAgreesWithTheRuntimeProbe(t *testing.T) {
+	e := harness.New(t)
+	runtime := e.Runtime()
+	if !runtime.TierConfirmed {
+		t.Skipf("the run's token read no license, so the probe's tier (%s) is the fallback rather than a reading",
+			runtime.Tier)
+	}
+
+	if got := e.On(harness.SurfaceDynamic).Tier(); got != runtime.Tier {
+		t.Errorf("a detecting session serves tier %s and the instance probe read %s: the suite and the binary "+
+			"disagree about which catalog this runtime has", got, runtime.Tier)
+	}
+}
+
 // TestTierPin_Absent_LetsTheChildDetect checks that the zero value is
 // detection rather than a tier of its own.
 //
