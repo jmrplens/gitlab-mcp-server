@@ -135,6 +135,7 @@ Expect `danger-review` and `autolabels` to fail: both are `allow_failure: true`.
 
 In this order.
 
+0. **Wait until the merge request is prepared**, before any bot command. `prepared_at` null means the diff does not exist yet: the labeller then classifies a change it cannot see, and the automation that runs when preparation finishes resets the workflow label, undoing a `ready` posted before it. See the preparation-lag paragraph below for the label events this produced on `!255300`. Poll until `prepared_at` is non-null and `changes_count` matches the commit.
 1. **Fix the title** if it has no conventional prefix, or has one with no file scope. Title and description are the two fields the author may still edit.
 2. **Fix the description** if it is missing the three headings, the backlink or the `Related to` line for issue 2300, keeping every piece of evidence it already carries. Do it **before** the label command: editing a description re-fires `apply_labels_from_related_issue.rb`, and although that script only labels a merge request carrying no `type::` label at all, and so cannot overwrite one already asked for, doing the edit first removes the question entirely.
 3. **Ask for the label**: post `@gitlab-bot label ~"type::feature"` (or `~"type::bug"`) as a comment, with the command at the start of its own line. `command_mr_label.rb` accepts it from the resource author, and its allowed scopes include `type`. The rate limit is the module default of 60 per hour keyed on the actor.
@@ -162,7 +163,27 @@ Four rules the two merge requests sent so far were shaped by.
 
 Validate before pushing: parse every ` ```json ` block on the page and assert the field is present in exactly the objects that should have it and absent from the rest. A trailing comma left behind by hand-editing is invisible in review and breaks the example for anyone who copies it.
 
-**A new merge request there reports empty for a while.** `prepared_at` is null until a background job fetches the fork ref and builds the diff, and until then the API answers 0 commits and 0 changed files. That is preparation lag on a repository that size, not a failed push: confirm the work from the branch tip on the fork instead.
+**A new merge request there reports empty for a while.** `prepared_at` is null until a background job fetches the fork ref and builds the diff, and until then the API answers 0 commits and 0 changed files. That is preparation lag on a repository that size, not a failed push: confirm the work from the branch tip on the fork instead. Compare the merge request's `sha` with the branch tip on the fork; equal means the push landed and only the diff is missing.
+
+**Wait for `prepared_at` before asking the bot for anything.** Every automation that reacts to a new merge request reads its diff, and the one that runs when preparation *finishes* resets the workflow label, so a `ready` posted before then is undone a minute later. The label events of `!255300` are the whole story, read with `resource_label_events`:
+
+```
+add     docs-only                    10:00:17  <- labelled with no diff to read
+add     workflow::ready for review   10:00     <- the first ready did work
+                                     10:01:15  <- prepared_at completes
+add     workflow::in dev             10:01     <- and preparation resets it
+remove  workflow::ready for review   10:01
+add     workflow::ready for review   10:04     <- the second ready, which stuck
+add     documentation                10:04:42  <- derived from docs-only
+add     tw::triaged                  10:04:42
+remove  docs-only                    10:05:21  <- recalculated, and withdrawn
+```
+
+The cost is two things at once. The ready is wasted, and it is rate limited to one per hour per merge request for a non-member, so a retry can cost an hour.
+
+And the labeller classified an eleven-file change touching `lib/gitlab/gpg.rb` and nine spec files as `docs-only`, on the strength of its single documentation file. **That label is transitory and what it triggers is not.** It was withdrawn five minutes later when the diff existed and the classification was recomputed, but by then it had already pulled in `~documentation` and `~"tw::triaged"` and had the bot request review from two technical writers, and none of those three were undone. A merge request can therefore end up correctly labelled and still sitting in the wrong review queue, which is the state that is easy to miss because the wrong label is no longer there to explain it.
+
+Poll `prepared_at` until it is non-null, confirm `changes_count` is the number of files the commit touches, and only then post the label and the ready commands. If the derived labels have already landed, the author cannot remove them: `command_mr_label.rb` accepts the `type` scope and not those, so it takes a member.
 
 Finally, link both ways: a note on the client-go merge request naming the documentation one, and the client-go merge request named in the documentation description as where the gap was found.
 

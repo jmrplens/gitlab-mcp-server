@@ -12,6 +12,13 @@ carry, a behaviour a test had to accommodate, a spec clause we cannot satisfy
 because the dependency does not expose what it needs. Each one records where the
 evidence is, so a contributor does not have to rediscover it.
 
+A defect we **fix upstream** in a project this server depends on belongs here
+too, even when we found it somewhere else. The register's second job is to say
+what is open in our name and what it is waiting on, and a contribution left out
+of it is one nobody here can see the state of. Such an entry says plainly how it
+was found, and says what it costs this server, which for one found elsewhere is
+usually nothing.
+
 See the [upstream contribution skill](../../.github/skills/upstream-contribution/)
 for the fork, branch, fix, test and MR workflow.
 
@@ -112,13 +119,16 @@ readable without opening the tracker:
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), open | No | Was yes | Yes |
+| 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
 on the 12th: each entry existed with its five fields and the table had never
 listed it, which is the drift this table exists to prevent. Rows 45 and 46 are
 what the e2e rebuild found, the first from the EE port and the second from the
-CE coverage that closed the gap against the old suite's baseline.
+CE coverage that closed the gap against the old suite's baseline. Row 47 was
+added on the 14th and is the first entry not found from this codebase, on the
+terms the next paragraph sets out.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -2285,6 +2295,62 @@ never acted on. Asserting the answer is what turned it into a failure. The
 handler's unit test mocked a full merge request body, which is why the server's
 contract was wrong in the same direction as the record and no gate could see
 the disagreement.
+
+### A revoked GPG UID is still offered for verification and still verifies commits
+
+- **Reported**: yes, by another user, before us.
+- **In review**: yes,
+  [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300),
+  from the community fork.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible. The verdict is computed inside GitLab and
+  served as one string; nothing on this side can tell a signature verified
+  under a live identity from one verified under a revoked one.
+
+**Where**: `Gitlab::Gpg.user_infos_from_key` in `lib/gitlab/gpg.rb`.
+
+**What**: revoking a UID does not remove it from the key. GnuPG records the
+revocation as another signature on the same UID, so the UID is still in the
+key and still comes back from GPGME. GitLab listed every one of them: the
+revoked addresses were offered for verification in User Settings > GPG keys,
+and `GpgKey#verified_and_belongs_to_email?` accepted them, which is what
+decides the Verified badge on a signed commit. Deleting the key and adding it
+again does not help, because the UID is inside the key.
+
+**What it costs this server**: `commit.get_signature` publishes GitLab's
+`verification_status` verbatim (`internal/tools/commits/commits.go`), so a
+commit signed under an address its owner revoked is served to a model as
+`verified`, which is the one thing that field exists to say. There is nothing
+to work around: the field is GitLab's verdict, and a second opinion computed
+here would be a different answer to the same question rather than a better one.
+
+**The fix**: skip the UIDs GPGME reports as revoked. That matches what
+revocation already means elsewhere in GitLab, where revoking a key withdraws
+the verification of the commits signed with it while removing one leaves them
+untouched. A commit signed under a revoked identity then lands on
+`same_user_different_email` or `other_user`, and a key whose every UID is
+revoked verifies nothing.
+
+Two details are worth keeping, because both were nearly got wrong:
+
+- GPGME's `invalid` flag is deliberately **not** checked, unlike the earlier
+  attempt at
+  [gitlab-org/gitlab!36315](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36315).
+  GnuPG drops a UID with no valid self-signature at import, so such a UID never
+  reaches the listing and no fixture can be built for one through the import
+  path GitLab uses. A check nothing can exercise is a check nobody can trust.
+- The change **does** re-derive signatures that were already verified, which
+  the first reading of it said it would not. `GpgKeys::DestroyService` nulls
+  `gpg_key_id`, and a subkey-signed row never carries one, so
+  `InvalidGpgSignatureUpdater` reaches exactly those rows: the remedy the
+  original reporter was told to apply, deleting the key and adding it again, is
+  what puts a row in that state. The specs pin both halves.
+
+**How we found it**: not from this codebase. The maintainer brought the report
+in from elsewhere and the investigation was done here, against a GitLab checkout
+with fixtures generated by GnuPG 2.2.40. It is recorded under the rule above for
+a fix we carry upstream in our name.
 
 ## Other
 
