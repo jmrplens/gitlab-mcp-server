@@ -177,10 +177,16 @@ type ServerConfig struct {
 	// Private asks for a server no other test shares, for a test that will
 	// leave the process in a state the next one should not inherit.
 	Private bool
-	// Transport is how the harness reaches the server. Empty is
-	// TransportStdio. TransportHTTP is refused today: the launcher starts the
-	// binary over its standard streams only, and giving it a listener belongs
-	// with the transport scenarios that will want one.
+	// Transport is how the harness reaches the server. Empty is TransportStdio,
+	// which is what a client launching a local server uses and what almost
+	// every scenario wants.
+	//
+	// TransportHTTP starts the binary on a loopback listener and carries the
+	// credential in a header, which is the deployment shape a shared server is
+	// run as. It is worth asking for where the carriage itself is what a
+	// scenario is about: nothing else reaches the pool entry, the per-request
+	// client binding or the header, and the transport module that covers the
+	// HTTP handler chain does it without a GitLab at all.
 	Transport TransportKind
 }
 
@@ -229,11 +235,7 @@ func (c ServerConfig) validate() error {
 	if _, ok := edition.ParseTier(string(c.Tier)); c.Tier != TierDetect && !ok {
 		return fmt.Errorf("unknown tier pin %q", c.Tier)
 	}
-	if c.Transport == TransportHTTP {
-		return errors.New("the HTTP transport is not wired yet: the launcher starts the binary over its " +
-			"standard streams, and a loopback listener arrives with the transport scenarios that need one")
-	}
-	if c.Transport != TransportStdio {
+	if c.Transport != TransportStdio && c.Transport != TransportHTTP {
 		return fmt.Errorf("unknown transport %q", c.Transport)
 	}
 	return nil
@@ -735,7 +737,12 @@ func (c *sessionConn) connect() error {
 	// Connect so the handshake is inside it rather than beside it.
 	client.AddSendingMiddleware(c.recordSending())
 	client.AddReceivingMiddleware(c.recordReceiving())
-	session, err := client.Connect(ctx, c.proc.transport(lifetime), nil)
+
+	transport, err := c.transport(lifetime)
+	if err != nil {
+		return err
+	}
+	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
 		return fmt.Errorf("connecting to the %s server: %w\nserver stderr:\n%s", c.label, err, c.proc.stderrTail())
 	}
@@ -744,6 +751,27 @@ func (c *sessionConn) connect() error {
 	c.session = session
 	c.mu.Unlock()
 	return nil
+}
+
+// transport returns the transport this session's configuration asks for.
+//
+// The two differ in who starts the child. Over stdio the transport does, since
+// the pipes it speaks over are the process's own; over HTTP the process has to
+// be listening before a client can connect, so it is started and waited for
+// here and the transport is a client pointed at the address.
+func (c *sessionConn) transport(lifetime context.Context) (mcp.Transport, error) {
+	if c.cfg.Transport != TransportHTTP {
+		return c.proc.transport(lifetime), nil
+	}
+	addr, err := freeLoopbackAddr(lifetime)
+	if err != nil {
+		return nil, fmt.Errorf("starting the %s server: %w", c.label, err)
+	}
+	transport, err := c.proc.httpTransport(lifetime, addr)
+	if err != nil {
+		return nil, fmt.Errorf("starting the %s server: %w", c.label, err)
+	}
+	return transport, nil
 }
 
 // clientOptions builds the client for this session: what it answers an

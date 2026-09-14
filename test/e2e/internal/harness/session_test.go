@@ -116,7 +116,6 @@ func TestServerConfig_Invalid_IsRefusedWithAReason(t *testing.T) {
 		{name: "unknown mode", config: ServerConfig{Mode: Mode("paranoid")}, want: "unknown protective mode"},
 		{name: "unknown capability surface", config: ServerConfig{Capabilities: CapabilitySurface("some")}, want: "unknown capability surface"},
 		{name: "scripted with no responder", config: ServerConfig{Elicitation: ElicitationScripted}, want: "needs a Responder"},
-		{name: "http transport", config: ServerConfig{Transport: TransportHTTP}, want: "not wired yet"},
 		{name: "unknown transport", config: ServerConfig{Transport: TransportKind("carrier pigeon")}, want: "unknown transport"},
 		{name: "unknown tier pin", config: ServerConfig{Tier: TierPin("enterprise")}, want: "unknown tier pin"},
 	}
@@ -401,20 +400,46 @@ func TestSettingsWith_ChangesOneValueAndLeavesTheOriginal(t *testing.T) {
 	}
 }
 
-// TestSession_UnsupportedTransport_FailsTheTestThatAskedForIt checks that a
-// configuration the harness cannot start stops one test rather than being
-// silently downgraded to the one it can.
-func TestSession_UnsupportedTransport_FailsTheTestThatAskedForIt(t *testing.T) {
+// TestSession_HTTPTransport_StartsAndAnswers checks that a session asking for
+// HTTP gets one, rather than being silently downgraded to the transport the
+// launcher finds easier.
+//
+// The two transports differ in who starts the child: over stdio the transport
+// does, because the pipes are the process's own, and over HTTP the process has
+// to be listening before a client can connect. A downgrade would be invisible
+// from the test that asked, since every call would still work — against the
+// wrong deployment shape.
+func TestSession_HTTPTransport_StartsAndAnswers(t *testing.T) {
 	inst := stubInstance(t)
 	env := newEnv(t, inst)
 
-	_, err := env.session(ServerConfig{Transport: TransportHTTP})
+	conn, err := env.session(ServerConfig{Transport: TransportHTTP})
+	if err != nil {
+		t.Fatalf("an HTTP session was refused: %v", err)
+	}
+	if conn.cfg.Transport != TransportHTTP {
+		t.Errorf("the session runs on %q, want %q: it was downgraded rather than refused",
+			conn.cfg.Transport, TransportHTTP)
+	}
+	if len(conn.served.tools) == 0 {
+		t.Error("the HTTP session listed no tool, so nothing reached the server over it")
+	}
+}
+
+// TestSession_UnknownTransport_FailsTheTestThatAskedForIt checks that a
+// transport the harness has no launcher for stops one test rather than being
+// silently downgraded to one it has.
+func TestSession_UnknownTransport_FailsTheTestThatAskedForIt(t *testing.T) {
+	inst := stubInstance(t)
+	env := newEnv(t, inst)
+
+	_, err := env.session(ServerConfig{Transport: TransportKind("carrier pigeon")})
 
 	if err == nil {
-		t.Fatal("an HTTP session was started, and the launcher serves stdio only")
+		t.Fatal("a session was started on a transport the harness has no launcher for")
 	}
-	if !strings.Contains(err.Error(), "not wired yet") {
-		t.Errorf("the refusal is %q, want it to say the transport is not wired", err)
+	if !strings.Contains(err.Error(), "unknown transport") {
+		t.Errorf("the refusal is %q, want it to name the transport it does not know", err)
 	}
 }
 

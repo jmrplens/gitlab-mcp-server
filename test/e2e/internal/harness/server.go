@@ -22,6 +22,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -276,6 +279,132 @@ func (p *serverProcess) transport(ctx context.Context) mcp.Transport {
 
 	return &childTransport{proc: p, inner: &mcp.CommandTransport{Command: cmd}, exited: p.exited}
 }
+
+// httpTransport starts this child as an HTTP server and returns the transport
+// that speaks to it over a loopback listener.
+//
+// The shape differs from the stdio one in the way that matters: there, the
+// transport starts the process, because the pipes it speaks over are the
+// process's own. Here the process has to be listening before a client can
+// connect at all, so it is started first and waited for, and the transport is
+// an ordinary streamable client pointed at the address.
+//
+// The credential travels in a header rather than in the environment, which is
+// the whole difference HTTP mode makes to a deployment: the server holds no
+// token and every request carries its caller's. Driving it any other way would
+// be testing a server this binary cannot be configured to be.
+func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Transport, error) {
+	p.mu.Lock()
+	if p.sink != nil {
+		p.sink.close()
+	}
+	p.starts++
+	sink := newStderrSink(p.label, p.starts)
+
+	//#nosec G204 -- the path is this package's own build or E2E_SERVER_BINARY, which only the run's operator sets
+	cmd := exec.CommandContext(ctx, p.bin,
+		"--http", "--http-addr", addr,
+		"--gitlab-url", p.env.GitLabURL,
+	)
+	cmd.Env = p.env.environ()
+	cmd.Dir = p.env.Root
+	cmd.Stderr = sink
+
+	p.sink = sink
+	p.exited = make(chan struct{})
+	p.state.Store(nil)
+	exited := p.exited
+	p.mu.Unlock()
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting the %s server on %s: %w", p.label, addr, err)
+	}
+	p.reap(cmd, exited)
+
+	if err := waitForHTTPServer(ctx, addr, exited); err != nil {
+		return nil, fmt.Errorf("%w\nserver stderr:\n%s", err, p.stderrTail())
+	}
+	return &mcp.StreamableClientTransport{
+		Endpoint:   "http://" + addr,
+		HTTPClient: &http.Client{Transport: credentialHeaders(p.env)},
+	}, nil
+}
+
+// waitForHTTPServer blocks until the child answers its own health endpoint, or
+// until it exits without ever having done so.
+//
+// Polling rather than reading the address off the log: the server writes its
+// listening line before the listener accepts, so a client that raced it saw a
+// connection refused and reported a defect that was a schedule.
+func waitForHTTPServer(ctx context.Context, addr string, exited <-chan struct{}) error {
+	deadline := time.Now().Add(httpStartTimeout)
+	client := &http.Client{Timeout: httpProbeTimeout}
+	for {
+		select {
+		case <-exited:
+			return fmt.Errorf("the server exited before it listened on %s", addr)
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/health", http.NoBody)
+		if err != nil {
+			return fmt.Errorf("building the health probe for %s: %w", addr, err)
+		}
+		resp, err := client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the server did not answer /health on %s within %s", addr, httpStartTimeout)
+		}
+		time.Sleep(httpProbeInterval)
+	}
+}
+
+// credentialHeaders carries the caller's credential on every request, the way
+// an HTTP deployment's client does.
+type credentialHeaders childEnv
+
+func (c credentialHeaders) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Cloned rather than mutated: the SDK may reuse a request across a retry,
+	// and a header set on the caller's own value would outlive this hop.
+	cloned := req.Clone(req.Context())
+	cloned.Header.Set("PRIVATE-TOKEN", c.Token)
+	return http.DefaultTransport.RoundTrip(cloned)
+}
+
+// freeLoopbackAddr reserves a loopback address the child can bind.
+//
+// The port is taken and released rather than left to the child, because the
+// binary does not report the port it chose in a form a test can read, and
+// asking it for one that is already taken fails at startup where the reason is
+// plain. The window between release and bind is the ordinary one every such
+// helper has.
+func freeLoopbackAddr(ctx context.Context) (string, error) {
+	var config net.ListenConfig
+	listener, err := config.Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", fmt.Errorf("reserving a loopback port: %w", err)
+	}
+	addr := listener.Addr().String()
+	return addr, listener.Close()
+}
+
+const (
+	// httpStartTimeout bounds the wait for the child's first answer. Generous,
+	// because it covers building the whole catalog on a loaded machine.
+	httpStartTimeout = 90 * time.Second
+	// httpProbeInterval is how often the health endpoint is asked.
+	httpProbeInterval = 50 * time.Millisecond
+	// httpProbeTimeout bounds one probe, so a hung connection does not eat the
+	// whole start budget.
+	httpProbeTimeout = 5 * time.Second
+)
 
 // reap starts the one goroutine that collects the child.
 //
