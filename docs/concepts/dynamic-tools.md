@@ -371,7 +371,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/toolutil/meta_tool.go`          | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
 | `cmd/server/main.go`                      | Selects `GITLAB_MCP_TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                    |
 | `cmd/eval_mcp_surfaces`                   | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks                                          |
-| `test/e2e/suite/dynamic_ce_test.go`       | E2E coverage for the default dynamic two-tool surface                                                                    |
+| `test/e2e/gitlab/common/`                 | E2E coverage for the default dynamic two-tool surface: every scenario runs on it as a subtest                            |
 
 ### Registering New Actions
 
@@ -390,11 +390,10 @@ When adding or changing GitLab actions, keep these rules in sync:
 
 ## Evaluation
 
-Dynamic mode has dedicated unit coverage for search ranking, schema cloning, registry behavior, and query-shape edge cases. It also has Docker-backed E2E coverage for the default two-tool workflow:
+Dynamic mode has dedicated unit coverage for search ranking, schema cloning, registry behavior, and query-shape edge cases. It also has Docker-backed E2E coverage for the default two-tool workflow: every scenario in `test/e2e/gitlab` runs on the dynamic surface as one of its subtests, so the workflow is exercised by the whole suite rather than by a family of its own.
 
 ```bash
-E2E_MODE=docker go test -v -tags e2e -timeout 600s \
-  -run '^TestDynamicToolSurface_' ./test/e2e/suite/
+make test-e2e-ce
 ```
 
 Model-facing evaluations can compare surfaces with `cmd/eval_mcp_surfaces`:

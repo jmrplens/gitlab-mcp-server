@@ -46,7 +46,7 @@ GO_ANALYSIS_PKGS=./...
 # `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
 # at all, so test/e2e/orbit had gone unlinted since it was written. The same
 # list lives in cmd/gen_testing_docs as e2eTags, for the same reason. Every
-# file under test/e2e/suite, test/e2e/gitlab and test/e2e/internal carries
+# file under test/e2e/gitlab and test/e2e/internal carries
 # `e2e` and nothing else, so this one list is the whole of what the analysis
 # has to know: no package under test/e2e selects between two file sets any
 # more, and one run sees all of them.
@@ -200,9 +200,9 @@ test-integration:
 	go test -v -tags integration -coverprofile=coverage.out $(PKGS)
 
 ## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env); an alias of test-e2e-gitlab.
-# The self-hosted run under its shortest name. It used to run the suite under
-# test/e2e/suite, which the rebuilt one supersedes, and it points there now so
-# the name a developer already types runs the suite that gates releases.
+# The self-hosted run under its shortest name. It used to run the suite the
+# rebuilt one supersedes, and it points at the rebuilt one now so the name a
+# developer already types runs the suite that gates releases.
 test-e2e: test-e2e-gitlab
 
 # ensure-gotestsum installs gotestsum on demand, so the e2e targets work on
@@ -274,8 +274,8 @@ validate-http-stateless-docker:
 
 ## test-e2e-docker: the ephemeral GitLab CE run under its older name; an alias of test-e2e-ce.
 # It used to carry a Docker lifecycle of its own, written out here, that ran
-# the suite under test/e2e/suite. That lifecycle now lives once in
-# test/e2e/scripts/run-docker-e2e.sh and the suite it started is superseded,
+# the suite this one replaced. That lifecycle now lives once in
+# test/e2e/scripts/run-docker-e2e.sh and the suite it started is gone,
 # so this name points at the rebuilt CE run and keeps working for anything
 # that still spells it: the same GitLab CE, the same Bitbucket fixture, the
 # same runner.
@@ -293,7 +293,14 @@ test-e2e-docker: test-e2e-ce
 E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 # Per package binary, like E2E_DOCKER_ENTERPRISE_TIMEOUT above: common and ce
 # each get the whole of it.
-E2E_GITLAB_TIMEOUT ?= 1800s
+#
+# It was 1800s and that was not a budget, it was the wall the run hit. A CE
+# run of common measures ~1800s on a developer machine, so the margin was two
+# seconds, and CI, on a slower runner, panicked with "test timed out after
+# 30m0s" after 1800.077s. The figure is the same 3600s the licensed run uses:
+# common grows with every scenario, and a timeout is meant to stop a hang
+# rather than to cap a suite that is doing its work.
+E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
 e2e-server-binary:
@@ -317,7 +324,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
 ## test-e2e-docker-enterprise: the licensed Docker run under its older name; an alias of test-e2e-ee.
-# The files it used to run, the Enterprise half of test/e2e/suite behind a
+# The files it used to run, the Enterprise half of the retired suite behind a
 # build tag of its own, were deleted once every one of their tests had a
 # successor under test/e2e/gitlab/ee, so the licensed run is the rebuilt
 # suite's and this name keeps working for anything that still spells it.
@@ -1283,9 +1290,12 @@ audit-doc-coverage-check:
 audit-dynamic-aliases:
 	go run ./cmd/audit_dynamic_aliases/
 
-## audit-e2e-gaps: report catalog actions not exercised by the e2e suite (CE+EE).
+## audit-e2e-gaps: report catalog actions the e2e suite does not exercise, as
+## a TSV work list. It reads the same recorded calls audit-e2e-coverage does,
+## so a gap here is an action no test dispatched rather than an action no
+## source file mentions.
 audit-e2e-gaps:
-	go run ./cmd/audit_e2e_gaps/
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report
 
 ## audit-e2e-coverage: report what the e2e suite covered, from the calls it
 ## recorded rather than from mentions in its source: one runtime per directory

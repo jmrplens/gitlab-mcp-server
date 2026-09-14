@@ -176,7 +176,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | File                | Purpose                                                                                                                                                                                |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `register.go`       | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection                                                                                            |
-| `register_meta.go`  | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces                                                            |
+| `register_meta.go`  | `RegisterMetaStandaloneTools()` — the standalone surfaces both registrations add; the visible meta-tool groups come from `RegisterMetaCatalog()` over a catalog the caller built       |
 | `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, the tool manifest, audits, and generators                                            |
 | `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                                                               |
 | `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                                                             |

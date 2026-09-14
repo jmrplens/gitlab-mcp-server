@@ -170,10 +170,10 @@ func TestResolvePortMap_RetiredTests_HeldToTheSameRule(t *testing.T) {
 
 // TestRetiredTests_Table_NamesDeletedTests verifies the production list on
 // the tree it describes: every entry is a name go test would run, none is
-// listed twice, and none is declared under test/e2e/suite any more, since
-// each was retired on the claim that its file is gone. The list goes with
-// the old suite: once test/e2e/suite is deleted there is nothing for it to
-// be held against, and this test says so rather than failing.
+// listed twice, and none is still declared by the retired suite, since each
+// was retired on the claim that its file is gone. The list goes with that
+// suite: now that the tree is deleted there is nothing for it to be held
+// against, and this test says so rather than failing.
 func TestRetiredTests_Table_NamesDeletedTests(t *testing.T) {
 	oldDir := filepath.Join("..", "..", "test", "e2e", "suite")
 	if _, err := os.Stat(oldDir); err != nil {

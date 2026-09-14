@@ -1,15 +1,14 @@
 # E2E test workflow for gitlab-mcp-server
 #
 # Runs the e2e suite against an ephemeral Docker-based GitLab CE instance.
-# Duration: ~15-20 min (GitLab boot ~5 min + tests ~5-10 min).
+# Duration: GitLab boot ~6 min plus the suite itself, which is around half an
+# hour and grows with every scenario added to the shared package.
 #
-# Two jobs, each with a GitLab of its own. `e2e-gitlab` runs the rebuilt
-# suite under test/e2e/gitlab, which drives the real binary over stdio and
-# records what the server dispatched; it is the gate, and its coverage report
-# is uploaded beside the results. `e2e` runs the superseded suite under
-# test/e2e/suite and is opt-in from a manual dispatch: the port is complete,
-# so nothing schedules it and the release pipeline does not call it. It is
-# deleted with that directory in the next step.
+# One job, `e2e-gitlab`, running the suite under test/e2e/gitlab: it drives
+# the real binary over stdio and records what the server dispatched, it is the
+# gate, and its coverage report is uploaded beside the results. The suite this
+# replaced had a job of its own here until the port was complete; both are
+# gone.
 #
 # Three ways in. Manually, from the "Use workflow from" dropdown, optionally
 # with a custom ref such as a fork pull request's merge SHA. As a reusable
@@ -39,10 +38,6 @@ on:
         description: "GitLab CE Docker image"
         default: "gitlab/gitlab-ce:latest"
         type: string
-      legacy_suite:
-        description: "Also run the superseded test/e2e/suite job"
-        default: false
-        type: boolean
   workflow_call:
     inputs:
       ref:
@@ -61,94 +56,6 @@ env:
   GITLAB_IMAGE: ${{ inputs.gitlab_image || 'gitlab/gitlab-ce:latest' }}
 
 jobs:
-  # The superseded suite, kept runnable while test/e2e/suite is still in the
-  # tree and reachable only by asking for it from a manual dispatch. The
-  # input is declared under workflow_dispatch alone on purpose: a reusable
-  # call sees no such input, so the release pipeline and the weekly run skip
-  # this job without a condition of their own.
-  e2e:
-    name: "🧫 E2E (superseded suite, Docker GitLab)"
-    if: ${{ inputs.legacy_suite }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: go.mod
-
-      # No version: gotestsum is a `tool` directive in go.mod, so this installs
-      # the version go.mod names and Dependabot bumps it with the other modules.
-      - name: Install gotestsum
-        run: go install gotest.tools/gotestsum
-
-      - name: Pull GitLab image
-        run: docker pull "${GITLAB_IMAGE}"
-
-      - name: Start GitLab via Docker Compose
-        working-directory: test/e2e
-        run: |
-          GITLAB_IMAGE="${GITLAB_IMAGE}" docker compose up -d
-          echo "GitLab container started — waiting for readiness..."
-
-      - name: Wait for GitLab readiness
-        working-directory: test/e2e
-        run: bash scripts/wait-for-gitlab.sh
-        timeout-minutes: 10
-
-      - name: Setup GitLab user and token
-        working-directory: test/e2e
-        run: bash scripts/setup-gitlab.sh
-
-      - name: Register GitLab Runner
-        working-directory: test/e2e
-        run: bash scripts/register-runner.sh
-
-      - name: Load environment
-        working-directory: test/e2e
-        run: |
-          # setup-gitlab.sh writes .env.docker with GITLAB_URL, GITLAB_TOKEN, etc.
-          cat .env.docker >> "$GITHUB_ENV"
-
-      # The suite records every call it makes and every route the server
-      # dispatched into the calls directory, one shard per test process, and
-      # the JSON stream beside it carries each test's verdict; together they
-      # are what cmd/audit_e2e_coverage reads. Both land under test-results,
-      # which the next step uploads. The directory must be absolute: the test
-      # binary runs in its own package directory and the recorder refuses a
-      # relative path rather than scatter shards under it.
-      - name: Run E2E tests
-        run: |
-          # The checkout is the dispatched ref, which github.sha is not when
-          # a ref was given, so the recorded revision is read off the tree.
-          E2E_COMMIT="$(git rev-parse HEAD)"
-          export E2E_COMMIT
-          gotestsum \
-            --junitfile test-results/e2e-junit.xml \
-            --jsonfile test-results/e2e-log.json \
-            --format standard-verbose \
-            -- -v -tags e2e -timeout 1800s -count=1 ./test/e2e/suite/
-        env:
-          E2E_MODE: "docker"
-          GITLAB_MCP_TEST_E2E_CALLS_DIR: ${{ github.workspace }}/test-results/e2e-calls
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: e2e-test-results
-          path: test-results/
-          retention-days: 14
-
-      - name: Tear down GitLab
-        if: always()
-        working-directory: test/e2e
-        run: docker compose down -v --remove-orphans
-
   # The rebuilt suite, on a GitLab CE of its own: the common and ce packages,
   # driven through the real binary by test/e2e/scripts/run-docker-e2e.sh, the
   # same lifecycle `make test-e2e-ce` runs. The licensed ee package stays
@@ -157,7 +64,13 @@ jobs:
   e2e-gitlab:
     name: "🧫 E2E (Docker GitLab)"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # GitLab boots in about six minutes, and the suite is given an hour per
+    # package binary below, so this has to be the sum plus provisioning and
+    # teardown rather than the 45 it was: at 45 the job would be killed while
+    # a run that is still working has time left on its own clock, which is the
+    # one number a reader would look at. GitHub caps a job at six hours, so
+    # this is well inside what the runner allows.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -186,7 +99,7 @@ jobs:
         run: |
           E2E_COMMIT="$(git rev-parse HEAD)"
           export E2E_COMMIT
-          ./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 1800s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
+          ./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout 3600s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
         env:
           E2E_BITBUCKET: "false"
           E2E_SERVER_BINARY: ${{ github.workspace }}/dist/e2e/gitlab-mcp-server

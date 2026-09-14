@@ -1,6 +1,7 @@
-// register_test.go contains unit tests for tool registration via RegisterAll
-// and RegisterAllMeta. Tests verify tool counts, tool names, annotation
-// presence, and end-to-end MCP call flow using in-memory transports.
+// register_test.go contains unit tests for tool registration: the individual
+// surface through RegisterAll, and the meta surface through the assembly
+// cmd/server makes. Tests verify tool names, annotation presence, and
+// end-to-end MCP call flow using in-memory transports.
 package tools
 
 // testSchemaCache shares resolved tool schemas across every server these
@@ -202,8 +203,28 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 	return slot.session
 }
 
+// registerMetaSurface registers the meta surface the way cmd/server does:
+// the catalog built with IncludeMCP, so gitlab_server is on it, then the
+// catalog groups and the standalone utilities.
+//
+// These sessions used to call RegisterAllMeta, which built without IncludeMCP
+// and so registered one tool fewer than the binary serves, which meant no test
+// here could reach server.health_check through the meta surface at all
+// (issue 616). That function is gone; this is the assembly cmd/server and
+// cmd/internal/mcpsurface both make, so what these tests drive is what a
+// client receives.
+func registerMetaSurface(server *mcp.Server, client *gitlabclient.Client, tier edition.Tier) error {
+	catalog, err := BuildActionCatalog(client, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
+	if err != nil {
+		return fmt.Errorf("build meta action catalog: %w", err)
+	}
+	RegisterMetaCatalog(server, catalog)
+	RegisterMetaStandaloneTools(server, client)
+	return nil
+}
+
 // sharedMetaSessions caches the CE (index 0) and enterprise (index 1)
-// meta-tools sessions, mirroring sharedIndividualSessions: RegisterAllMeta
+// meta-tools sessions, mirroring sharedIndividualSessions: registerMetaSurface
 // builds the full action catalog per call, and that cost depends only on the
 // tier, not on the per-test HTTP mock. Tests using this fixture must not run
 // with t.Parallel (concurrent handler swaps would cross-wire backends).
@@ -245,8 +266,8 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 		}
 
 		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
-		if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); registerErr != nil {
-			slot.err = fmt.Errorf("RegisterAllMeta() error = %w", registerErr)
+		if registerErr := registerMetaSurface(server, client, edition.TierForEnterprise(enterprise)); registerErr != nil {
+			slot.err = fmt.Errorf("registerMetaSurface() error = %w", registerErr)
 			return
 		}
 		toolutil.LockdownInputSchemas(server)
@@ -291,8 +312,8 @@ func newIsolatedMetaMCPSession(t *testing.T, handler http.Handler, enterprise bo
 	client := newTestClient(t, handler)
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
-	if err := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
-		t.Fatalf("RegisterAllMeta() error = %v", err)
+	if err := registerMetaSurface(server, client, edition.TierForEnterprise(enterprise)); err != nil {
+		t.Fatalf("registerMetaSurface() error = %v", err)
 	}
 	toolutil.LockdownInputSchemas(server)
 
@@ -400,53 +421,51 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 	}
 }
 
-// TestRegisterAllMeta_ToolCount verifies that RegisterAllMeta registers
-// the expected number of meta-tools: 33 base, 50 with enterprise.
-// Base count is 29 meta-tools + 4 standalone gitlab_interactive_* elicitation
-// tools that cannot be folded into action+params meta-tools (they require
-// multi-round MCP elicitation/create exchanges with the client).
-func TestRegisterAllMeta_ToolCount(t *testing.T) {
+// TestMetaSurface_WidensWithTheTier verifies that the enterprise catalog is a
+// strict superset of the Free one, by name.
+//
+// It replaces a pair of exact counts, 33 and 50, that were the counts
+// RegisterAllMeta produced rather than the counts the binary serves: that
+// function built without IncludeMCP and so was one tool short of 34 and 51
+// (issue 616). The served figures are asserted where they are observable, over
+// a real tools/list round-trip in cmd/internal/mcpsurface; what is worth
+// holding here is the relationship between the two tiers, which no catalog
+// change may invert.
+func TestMetaSurface_WidensWithTheTier(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
 	})
 
-	t.Run("Base", func(t *testing.T) {
-		session := newMetaMCPSession(t, handler, false)
-		result, err := session.ListTools(context.Background(), nil)
+	listed := func(enterprise bool) map[string]bool {
+		t.Helper()
+		result, err := newMetaMCPSession(t, handler, enterprise).ListTools(context.Background(), nil)
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		// 33 = 32 + gitlab_achievement meta-tool (Free, client-go v2.64.0).
-		const expectedTools = 33
-		if len(result.Tools) != expectedTools {
-			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
-			for _, tool := range result.Tools {
-				t.Logf("  tool: %s", tool.Name)
-			}
+		names := make(map[string]bool, len(result.Tools))
+		for _, tool := range result.Tools {
+			names[tool.Name] = true
 		}
-	})
+		return names
+	}
 
-	t.Run("Enterprise", func(t *testing.T) {
-		session := newMetaMCPSession(t, handler, true)
-		result, err := session.ListTools(context.Background(), nil)
-		if err != nil {
-			t.Fatalf(fmtListToolsErr, err)
+	base, enterprise := listed(false), listed(true)
+	if len(enterprise) <= len(base) {
+		t.Fatalf("enterprise registers %d meta-tools and Free %d, want the wider tier to carry more", len(enterprise), len(base))
+	}
+	for name := range base {
+		if !enterprise[name] {
+			t.Errorf("the enterprise surface is missing %q, which the Free one carries", name)
 		}
-		// 50 = 49 + gitlab_achievement meta-tool (Free, client-go v2.64.0).
-		// The 49 was 48 + gitlab_security_scan_profile (Ultimate, client-go v2.45.0).
-		const expectedTools = 50
-		if len(result.Tools) != expectedTools {
-			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
-			for _, tool := range result.Tools {
-				t.Logf("  tool: %s", tool.Name)
-			}
-		}
-	})
+	}
+	if !base["gitlab_server"] {
+		t.Error("the Free surface carries no gitlab_server, so the catalog was not built with IncludeMCP")
+	}
 }
 
-// TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise verifies that
+// TestMetaSurface_OrbitMetaToolRequiresGitLabDotComEnterprise verifies that
 // the GitLab.com-only Orbit meta-tool also requires the Enterprise catalog.
-func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.T) {
+func TestMetaSurface_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.T) {
 	tests := []struct {
 		name       string
 		gitlabURL  string
@@ -465,11 +484,11 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
 			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
-			if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(tt.enterprise)); registerErr != nil {
-				t.Fatalf("RegisterAllMeta() error = %v", registerErr)
+			if registerErr := registerMetaSurface(server, client, edition.TierForEnterprise(tt.enterprise)); registerErr != nil {
+				t.Fatalf("registerMetaSurface() error = %v", registerErr)
 			}
 			if gotOrbit := slices.Contains(toolNamesFromServer(t, server), "gitlab_orbit"); gotOrbit != tt.wantOrbit {
-				t.Fatalf("RegisterAllMeta() Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
+				t.Fatalf("the meta surface's Orbit registration = %t, want %t", gotOrbit, tt.wantOrbit)
 			}
 		})
 	}
@@ -529,7 +548,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 // expectedRegisterAllToolNames returns the set of meta-tool names that
 // the catalog projection plus standalone utilities should register for
 // the given enterprise flag. The map is used to compare against the
-// live RegisterAllMeta output to detect name drift.
+// live meta surface to detect name drift.
 func expectedRegisterAllToolNames(t *testing.T, enterprise bool) map[string]bool {
 	t.Helper()
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
@@ -560,11 +579,11 @@ func expectedRegisterAllToolNames(t *testing.T, enterprise bool) map[string]bool
 	return names
 }
 
-// TestRegisterAllMeta_ToolNames verifies that every expected meta-tool
-// name is present after RegisterAllMeta (enterprise=true) and that no
-// unexpected tools are registered. The expected name set is sourced from
-// the catalog projection and the standalone utility spec list.
-func TestRegisterAllMeta_ToolNames(t *testing.T) {
+// TestMetaSurface_ToolNames verifies that every expected meta-tool name is
+// present on the enterprise surface and that no unexpected tool is
+// registered. The expected name set is sourced from the catalog projection
+// and the standalone utility spec list.
+func TestMetaSurface_ToolNames(t *testing.T) {
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
 	}), true)
@@ -614,12 +633,18 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		"gitlab_security_category":     true,
 		"gitlab_security_finding":      true,
 		"gitlab_security_scan_profile": true,
-		"gitlab_snippet":               true,
-		"gitlab_storage_move":          true,
-		"gitlab_tag":                   true,
-		"gitlab_template":              true,
-		"gitlab_user":                  true,
-		"gitlab_vulnerability":         true,
+		// The diagnostics tool the MCP group contributes. It is on the surface
+		// because the catalog is built with IncludeMCP, the way cmd/server
+		// builds the one it registers; the assembly these sessions used before
+		// issue 616 left it out, and with it any way for a test here to reach
+		// server.health_check through a meta tool.
+		"gitlab_server":        true,
+		"gitlab_snippet":       true,
+		"gitlab_storage_move":  true,
+		"gitlab_tag":           true,
+		"gitlab_template":      true,
+		"gitlab_user":          true,
+		"gitlab_vulnerability": true,
 
 		"gitlab_wiki": true,
 
@@ -691,9 +716,9 @@ func TestRegisterAll_CallToolThroughMCP(t *testing.T) {
 	}
 }
 
-// TestRegisterAllMeta_CallToolThroughMCP verifies a single meta-tool call
+// TestMetaSurface_CallToolThroughMCP verifies a single meta-tool call
 // round-trip through an in-memory MCP session.
-func TestRegisterAllMeta_CallToolThroughMCP(t *testing.T) {
+func TestMetaSurface_CallToolThroughMCP(t *testing.T) {
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v4/version":

@@ -31,6 +31,13 @@ const (
 	relatedIssuesWait     = 120 * time.Second
 )
 
+// The wait for a created to-do to be listed. It is short because the to-do
+// exists by the time create_todo answers and only its listing lags.
+const (
+	todoListedInterval = 500 * time.Millisecond
+	todoListedWait     = 30 * time.Second
+)
+
 // mrPipelineCIYAML runs one job for merge request pipelines only, so that
 // creating a pipeline for the request produces one and pushing to the
 // branch does not. The job may stay pending without a runner; the pipeline
@@ -129,6 +136,7 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 			e.T.Fatalf("create_todo answered %+v, want a pending to-do with an ID", todo)
 		}
 		defer markTodoDone(e, todo.ID)
+		awaitTodoListed(e, todo.ID)
 		refusal := harness.ExpectToolError(s, actionMergeRequestCreateTodo, params, "already exists")
 		assertMentions(e, "the refusal of a second to-do", refusal, "gitlab_todo_list")
 
@@ -146,6 +154,36 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 // markTodoDone marks a to-do done through client-go, failing the test when
 // GitLab refuses: a to-do left pending would make the next surface's create
 // answer the refusal where it expects the to-do.
+// awaitTodoListed waits for a to-do to appear among the caller's pending
+// ones, which is the state that makes GitLab refuse a second to-do for the
+// same merge request.
+//
+// The refusal is what the assertion after it is about, and it is not
+// immediate: GitLab answers create_todo before the to-do is listed, so under
+// load the second call can be served while the first is still invisible, and
+// what comes back is a created to-do rather than "already exists". That is
+// how this test failed on a loaded CI runner while passing on a developer
+// machine. The wait goes through client-go rather than the server, because
+// only what the server dispatched is credited as coverage and a wait is not
+// a scenario.
+func awaitTodoListed(e *harness.Env, todoID int64) {
+	e.T.Helper()
+	err := harness.Poll(e.Ctx, todoListedInterval, todoListedWait, func() (bool, string, error) {
+		todos, _, listErr := e.Client().GL().Todos.ListTodos(&gl.ListTodosOptions{}, gl.WithContext(e.Ctx))
+		if listErr != nil {
+			//nolint:nilerr // a failed listing is a reason to poll again, not to end the wait: the error returned here is what Poll treats as fatal, and the string is what it reports if the deadline runs out
+			return false, "listing to-dos: " + listErr.Error(), nil
+		}
+		if slices.ContainsFunc(todos, func(todo *gl.Todo) bool { return todo.ID == todoID }) {
+			return true, "", nil
+		}
+		return false, fmt.Sprintf("to-do %d is not listed among the %d pending ones yet", todoID, len(todos)), nil
+	})
+	if err != nil {
+		e.T.Fatalf("waiting for to-do %d to be listed: %v", todoID, err)
+	}
+}
+
 func markTodoDone(e *harness.Env, todoID int64) {
 	e.T.Helper()
 	if _, err := e.Client().GL().Todos.MarkTodoAsDone(todoID, gl.WithContext(e.Ctx)); err != nil {

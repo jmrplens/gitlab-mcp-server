@@ -16,8 +16,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                                                                  | `make audit-doc-coverage`                                                           |
 | `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                                                                | `make check-doc-tool-names`                                                         |
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                                                                           | `make audit-dynamic-aliases`                                                        |
-| `audit_e2e_gaps`               | Catalog & metadata audits     | Catalog actions the e2e suite never exercises                                                                                                                                                                                                      | `make audit-e2e-gaps`                                                               |
-| `audit_e2e_coverage`           | Catalog & metadata audits     | What the e2e suite covered, from the calls it recorded and the actions the server dispatched: every runtime x surface x mode x action classified, the levels L1 to L3, the non-tool capabilities; `-static` is the push gate over typed action ids | `make audit-e2e-coverage`, `make check-e2e-static`                                  |
+| `audit_e2e_coverage`           | Catalog & metadata audits     | What the e2e suite covered, from the calls it recorded and the actions the server dispatched: every runtime x surface x mode x action classified, the levels L1 to L3, the non-tool capabilities; `-static` is the push gate over typed action ids | `make audit-e2e-coverage`, `make audit-e2e-gaps`, `make check-e2e-static`           |
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                                                               | `make audit-edition-tier`                                                           |
 | `audit_graphql_documents`      | Catalog & metadata audits     | Every raw GraphQL document in the source is one the pinned GitLab schema accepts; `-live` judges by what an instance serves now and reports the drift under our own documents                                                                      | `make check-graphql-documents`, `make check-graphql-documents-live`                 |
 | `audit_graphql_shapes`         | Catalog & metadata audits     | Every struct a GraphQL response is decoded into can hold what its document selects and declares nothing the document never selects; `-report` writes the reverse, what the schema offers there and no document of the decoding package selects     | `make check-graphql-shapes`, `make audit-graphql-shapes`, `make audit-graphql-sent` |
@@ -347,32 +346,6 @@ With `-output tsv` (default): tab-separated values to stdout (`Severity\tProblem
 
 The TSV schema is the machine-readable contract consumed by CI; `-output json` is available for programmatic consumers.
 
-### audit_e2e_gaps
-
-Reports which canonical catalog actions the e2e suite under `test/e2e/suite` never exercises. It builds the Ultimate-tier action catalog offline and scans the suite sources for the three invocation shapes: individual tool names (`gitlab_branch_create`), meta calls (a `gitlab_branch` literal followed by an `"action": "create"` pair within a short window), and dynamic execute calls naming canonical `domain.action` IDs. An action counts as exercised when any surface references it.
-
-#### Usage
-
-```bash
-go run ./cmd/audit_e2e_gaps/
-go run ./cmd/audit_e2e_gaps/ -output json
-```
-
-#### Flags
-
-| Flag      | Type     | Default          | Description                    |
-| --------- | -------- | ---------------- | ------------------------------ |
-| `-suite`  | `string` | `test/e2e/suite` | e2e suite source directory     |
-| `-output` | `string` | `tsv`            | Output format: `tsv` or `json` |
-
-#### Output
-
-With `tsv`, one tab-separated row per uncovered action (`id`, group, edition, `readonly=`, `destructive=`) and a summary line, `e2e gap audit: N/M actions exercised (P%), K uncovered`. With `json`, a report carrying the catalog count, the exercised count and the uncovered rows. Any other format is rejected with exit `2`; a catalog that cannot be built or a suite that cannot be scanned exits `1`. Gaps alone do not fail the command: it is a work list, not a gate.
-
-#### Make targets
-
-- `make audit-e2e-gaps`
-
 ### audit_e2e_coverage
 
 Says what the end-to-end suite covers, from what happened rather than from what the source mentions. The suite records every call a test makes and every dispatch the server's own span reports (through `internal/testutil/e2ecalls`, when `GITLAB_MCP_TEST_E2E_CALLS_DIR` is set); this command reads those shards, joins each dispatch to its call on the trace id, compares them with the catalog the runtime served, and gives every runtime x surface x mode x action exactly one state: `asserted` (a passing test asked for it, expected success, got it, and the server dispatched exactly that action), `unobserved` (the same with no span to confirm the dispatch), the shallower credits `sweep-only`, `error-path-only`, `refused-only`, `preview-only` and `cleanup-only`, and the reasons there is no credit: `unasserted` (every result-bearing call site discards the answer, which only the source can say), `unservable` (no individual tool, a shadowed name, withheld by scope or by read-only mode), `skipped`, `failed`, `absent`. L1 is asserted on any surface in the default mode, L2 on the dynamic surface, L3 on all three. Resources (by template), prompts, completions (by reference and argument), subscriptions (by kind), the elicitation flows and the protective modes are classified on the same terms.
@@ -413,7 +386,7 @@ go run ./cmd/audit_e2e_coverage/ -port-map
 | `-summary`   | `string` |                   | Write a Markdown summary to this path, or `-` for stdout, where it takes the JSON's place (give `-o` to keep both); what a CI step puts in `GITHUB_STEP_SUMMARY`                                                                                     |
 | `-static`    | `bool`   | `false`           | The push-time gate over `test/e2e/gitlab`, loaded with its tests under the `e2e` tag                                                                                                                                                                 |
 | `-port-map`  | `bool`   | `false`           | Check that every `Test` function of the old suite has a `// Replaces:` successor in the new one or a declared drop in `portmap.go`; an old test whose file is already deleted stays on the map through the retired list there, held to the same rule |
-| `-old-suite` | `string` | `test/e2e/suite`  | Where the port map reads the old `Test` functions from                                                                                                                                                                                               |
+| `-old-suite` | `string` |                   | Where the port map reads the retired suite's `Test` functions from. Required, and deliberately without a default: that tree is no longer in this repository, so it has to name a checkout that still carries it                                      |
 | `-new-suite` | `string` | `test/e2e/gitlab` | Where the port map reads the `Replaces:` lines from                                                                                                                                                                                                  |
 | `-dir`       | `string` |                   | Repository root; found from the working directory when empty                                                                                                                                                                                         |
 

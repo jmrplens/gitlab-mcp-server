@@ -239,13 +239,23 @@ type listKey struct {
 // it: what cmd/server registers for config.ToolSurfaceIndividual, listed over
 // a real tools/list round-trip through [Session]'s served-schema chain.
 //
-// [tools.RegisterAll] is the server's own pair for this surface: the catalog
-// built with IncludeMCP, projected with the standalone utilities, so the
-// gitlab_server_* tools are in the result.
+// The assembly is the server's own, [tools.SharedIndividualCatalog] followed
+// by the two registrations, rather than the [tools.RegisterAll] convenience
+// that builds a catalog of its own. A configuration with nothing but the tier
+// set narrows nothing, so the listing is the same today; what it buys is that
+// a change to how the server builds this catalog reaches this listing instead
+// of leaving it describing a copy, which is the mistake the meta surface made
+// until issue 616.
 func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
 	return listSurface(listKey{client: client, surface: config.ToolSurfaceIndividual, tier: tier, schemaMode: tools.MetaParamSchema()},
 		func(server *mcp.Server) {
-			tools.RegisterAll(server, client, tier)
+			catalog, _, err := tools.SharedIndividualCatalog(client, &config.ServerConfig{Tier: tier})
+			cmdutil.MustDo(err)
+			tools.RegisterIndividualCatalogTools(server, catalog, tools.IndividualCatalogRegisterOptions{
+				IncludeStandaloneUtilities: true,
+				SchemaCacheKey:             "individual|" + tier.String(),
+			})
+			tools.RegisterMetaStandaloneTools(server, client)
 		})
 }
 
@@ -255,9 +265,10 @@ func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool
 //
 // The catalog is built with IncludeMCP, which is how cmd/server builds the one
 // it registers (tools.SharedMetaCatalog, keyed with includeMCP true), so
-// gitlab_server is present. [tools.RegisterAllMeta] builds without it and is
-// therefore one tool short of the served surface: the difference that had the
-// published meta counts saying 33 where the binary serves 34.
+// gitlab_server is present. The RegisterAllMeta convenience that used to build
+// without it, and was therefore one tool short of the served surface, is gone:
+// it is the difference that had the published meta counts saying 33 where the
+// binary serves 34 (issue 616).
 func MetaTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
 	return listSurface(listKey{client: client, surface: config.ToolSurfaceMeta, tier: tier, schemaMode: tools.MetaParamSchema()},
 		func(server *mcp.Server) {

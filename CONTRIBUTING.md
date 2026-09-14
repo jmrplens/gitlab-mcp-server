@@ -163,7 +163,7 @@ docs(readme): update tool count after wiki tools
 ```text
 internal/tools/
 ├── register.go              # RegisterAll() — projects individual tools from the canonical catalog
-├── register_meta.go         # RegisterAllMeta() — meta-tool registration
+├── register_meta.go         # RegisterMetaStandaloneTools() — the standalone surfaces
 ├── meta_tool.go              # Meta-tool registration infrastructure
 ├── pagination.go            # Pagination type aliases
 ├── errors.go                # Error helpers (bridge to toolutil)
@@ -200,7 +200,7 @@ go test ./internal/tools/... -coverprofile=cover.out
 go tool cover -func=cover.out
 
 # E2E tests (requires real GitLab)
-go test -tags e2e -timeout 300s ./test/e2e/suite/
+go test -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/...
 ```
 
 ## Documentation

@@ -1,13 +1,12 @@
 # End-to-End Tests
 
-E2E tests validate the full MCP server against a real GitLab instance using in-memory transport (`mcp.NewInMemoryTransports()`). Build tag: `e2e`.
+E2E tests validate the full MCP server against a real GitLab instance by driving the real `cmd/server` binary. Build tag: `e2e`.
 
-There are six modules, answering different questions:
+There are five modules, answering different questions:
 
 | Module               | Build tag      | Needs GitLab | What it covers                                                                       |
 | -------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
-| `test/e2e/suite`     | `e2e`          | yes          | Tool behaviour against a real instance, over in-memory MCP transport                  |
-| `test/e2e/gitlab`    | `e2e`          | yes          | The rebuilt suite: the real binary over stdio, one package per runtime (`common`, `ce`, `ee`), coverage recorded from what the server dispatched |
+| `test/e2e/gitlab`    | `e2e`          | yes          | Tool behaviour: the real binary over stdio, one package per runtime (`common`, `ce`, `ee`), coverage recorded from what the server dispatched |
 | `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy  |
 | `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration  |
 | `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                  |
@@ -15,7 +14,7 @@ There are six modules, answering different questions:
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 
-Those five tags are the whole list. Every file under `test/e2e/suite`, `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, so one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. `test/e2e/suite` used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
+Those five tags are the whole list. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries `e2e` alone, so one compile and one analysis run see all of them, and the runtime a test needs is decided by the package it is in rather than by a tag. The suite this replaced used to be two halves behind a second tag that excluded each other, which meant a single run could only see one half and the Enterprise one needed a compile step and an analysis pass of its own; that half was ported to `test/e2e/gitlab/ee` and deleted, and both passes went with it.
 
 ## HTTP transport module
 
@@ -60,7 +59,7 @@ make test-e2e-gitlab    # a self-hosted instance from .env; a package the instan
 make e2e-clean-orphans  # delete what earlier runs left on a self-hosted instance, by prefix
 ```
 
-The suite that replaces `test/e2e/suite`, built beside it while its tests are ported. Every test drives the **real `cmd/server` binary over stdio** through `test/e2e/internal/harness`, names its actions by canonical catalog ID, and runs each scenario on the dynamic, meta and individual surfaces as subtests. The runtime a test needs is decided by its package: `common` runs on every runtime (Free actions are verified on the CE catalog and on the licensed EE one, where schema pruning differs), `ce` holds the few facts that only hold without a license, and `ee` needs a Premium or Ultimate one. A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that into skips.
+The suite. Every test drives the **real `cmd/server` binary over stdio** through `test/e2e/internal/harness`, names its actions by canonical catalog ID, and runs each scenario on the dynamic, meta and individual surfaces as subtests. The runtime a test needs is decided by its package: `common` runs on every runtime (Free actions are verified on the CE catalog and on the licensed EE one, where schema pruning differs), `ce` holds the few facts that only hold without a license, and `ee` needs a Premium or Ultimate one. A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that into skips.
 
 Coverage is what the server dispatched, in a test that passed, on a named runtime, surface and mode: every child runs with telemetry on and the harness reads its spans, and the calls are recorded under `dist/e2e-calls/<target>` for `cmd/audit_e2e_coverage`. GitLab state is built through client-go by `test/e2e/internal/fixture`, never through the server under test, so fixture traffic is never coverage. Every file under `test/e2e/gitlab` and `test/e2e/internal` carries exactly `//go:build e2e` (doc.go carries none), so one compile and one analysis run see the whole suite; the harness's own tests hold that, and hold the runtime packages to never assembling a server of their own. The Docker lifecycle both targets share lives in `test/e2e/scripts/run-docker-e2e.sh`, and every run carries `-p 1 -count=1`: capability locks are process-local, and a cached PASS records no calls. The licensed run stays local; CI runs `common` and `ce` in the non-blocking `e2e-gitlab` job of `e2e.yml`.
 
@@ -83,7 +82,7 @@ E2E_GITLAB_INTERNAL_URL=https://gitlab.example.com
 EOF
 
 # Run
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
+make test-e2e-gitlab
 ```
 
 ### Docker Mode
@@ -111,7 +110,7 @@ docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 ./test/e2e/scripts/setup-bitbucket.sh
 
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+go test -v -tags e2e -p 1 -timeout 2700s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
 # Cleanup
 docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
@@ -157,10 +156,8 @@ is the same target under its older name. It runs the `common` and `ee`
 packages of the rebuilt suite against the real binary: there is no Enterprise
 build tag, and the package decides the runtime, so `ee` refuses an unlicensed
 instance before it writes anything while `common` runs its Free actions on
-the licensed catalog too. `make test-e2e-docker` is now the CE run under its
-older name: the suite under `test/e2e/suite` is superseded, so no default or
-release gate runs it, and the only way to is to ask for it from a manual
-dispatch of the E2E workflow with `legacy_suite=true`.
+the licensed catalog too. `make test-e2e-docker` is the CE run under its
+older name.
 After a successful activation-code run, the setup script exports the generated
 license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
 runs prefer that ignored local cache and install it through the License API, so
@@ -188,11 +185,6 @@ E2E_MODE=docker go test -v -tags e2e -p 1 -count=1 -timeout 3600s ./test/e2e/git
 
 env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
-
-The old suite runs against the same licensed stack with its usual line,
-`set -a && source test/e2e/.env.docker && set +a` and then
-`go test -v -tags e2e -timeout 600s ./test/e2e/suite/`; a Premium scenario a
-CE file still holds runs there rather than skipping.
 
 Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
@@ -312,18 +304,17 @@ E2E tests are grouped by the resource scope they touch. New tests that mutate re
 
 ## Running Individual Workflows
 
+A surface is a subtest of every scenario rather than a test family of its own, so `-run` names the subtest:
+
 ```bash
-# Individual tools only
-go test -v -tags e2e -timeout 300s -run TestFullWorkflow ./test/e2e/suite/
+# One scenario, on all three surfaces
+go test -v -tags e2e -p 1 -timeout 600s -run TestIssue_Lifecycle ./test/e2e/gitlab/common/
 
-# Meta-tools only
-go test -v -tags e2e -timeout 300s -run TestMetaToolWorkflow ./test/e2e/suite/
+# One scenario on the dynamic surface alone
+go test -v -tags e2e -p 1 -timeout 600s -run 'TestIssue_Lifecycle/dynamic' ./test/e2e/gitlab/common/
 
-# Dynamic find/execute surface only
-go test -v -tags e2e -timeout 300s -run '^TestDynamicToolSurface_' ./test/e2e/suite/
-
-# Dynamic surface only in Docker mode after setup-gitlab.sh and register-runner.sh
-E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/
+# Every scenario, dynamic surface only
+go test -v -tags e2e -p 1 -timeout 2700s -run '/dynamic$' ./test/e2e/gitlab/common/
 ```
 
 ## Compile-Only Check
@@ -331,8 +322,8 @@ E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface
 Verify E2E code compiles without needing a GitLab instance:
 
 ```bash
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux/macOS
-go test -tags e2e -c -o NUL ./test/e2e/suite/         # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux/macOS
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...         # Windows
 ```
 
 ## Domain Coverage

@@ -236,7 +236,7 @@ func (c *credentialStates) remove(owner string, orphaned []*mcp.ServerSession, e
 // look.
 //
 // A request with no token, or one whose carrier is already gone, is left
-// unbound. That is stdio, the in-memory transport the e2e suite drives, and
+// unbound. That is stdio, an in-memory transport, and
 // every test that builds a server directly: there the server's own client is
 // the answer, and [gitlabclient.Client.For] returns it. On a shape server the
 // same absence means the request fails closed, because the client it falls back

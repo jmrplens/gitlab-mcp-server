@@ -36,12 +36,14 @@
 // [RegisterAll] registers the individual tools by projecting the canonical
 // action catalog. [BuildActionCatalog] builds the catalog used by
 // [RegisterIndividualCatalogTools], [RegisterMetaCatalog], and dynamic
-// mode. [RegisterAllMeta] preserves the meta registration entry point by
-// building and registering that catalog, one tool short of the meta surface
-// cmd/server serves: the binary asks [BuildActionCatalog] for the
-// gitlab_server diagnostics group through [ActionCatalogOptions].IncludeMCP,
-// which [RegisterAllMeta] does not. [SafeModePreview] describes the preview
-// payload returned when safe mode intercepts mutating calls.
+// mode. There is deliberately no one-call entry point for the meta surface:
+// the RegisterAllMeta that used to be one built its catalog without
+// [ActionCatalogOptions].IncludeMCP and so registered one tool fewer than the
+// binary serves, which is how the published meta counts came to be off by one
+// (issue 616). A caller registers the meta surface the way cmd/server does,
+// with [RegisterMetaCatalog] and [RegisterMetaStandaloneTools] over a catalog
+// it built itself. [SafeModePreview] describes the preview payload returned
+// when safe mode intercepts mutating calls.
 //
 // Domain packages document the official GitLab API pages they wrap. Keeping
 // those references in package documentation preserves pkgsite

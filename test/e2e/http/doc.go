@@ -5,7 +5,7 @@
 // runs on every CI push.
 //
 // The tests carry the httpe2e build tag; this file is what a plain build sees
-// of the package. The in-process suite under test/e2e/suite cannot observe any
-// of this, since it builds the server directly and drives an in-memory
-// transport, which is why transport behavior is tested here and not there.
+// of the package. The suite under test/e2e/gitlab drives the real binary over
+// stdio, so it observes the stdio transport and none of the HTTP handler
+// chain, which is why transport behavior for HTTP is tested here and not there.
 package httpe2e

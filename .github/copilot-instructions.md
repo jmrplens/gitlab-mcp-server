@@ -24,7 +24,7 @@ gitlab-mcp-server/
 │   ├── audit_doc_coverage/ # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
 │   ├── audit_doc_tool_names/ # Every `gitlab_*` name the docs mention exists on the surface it claims (make check-doc-tool-names)
 │   ├── audit_dynamic_aliases/ # Dynamic-toolset alias governance
-│   ├── audit_e2e_gaps/     # Catalog actions the e2e suite never exercises
+│   ├── audit_e2e_coverage/ # What the e2e suite dispatched, and the catalog actions it never reached (make audit-e2e-coverage, make check-e2e-static)
 │   ├── audit_edition_tier/ # Doc-grounded licensing tier vs binary gating
 │   ├── audit_gateway_chars/ # Served descriptions/titles vs strict gateway validators (make check-gateway-chars)
 │   ├── audit_install_buttons/ # One-click install payloads decode to one configuration per command
@@ -65,7 +65,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 177 internal/tools packages
 │   │   ├── action_catalog.go # Canonical action catalog built from domain ActionSpecs
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
-│   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
+│   │   ├── register_meta.go # RegisterMetaStandaloneTools() — the standalone surfaces; catalog groups come from RegisterMetaCatalog
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── dynamiccatalog/ # Build(): the dynamic catalog assembled the way the server assembles it
 │   │   ├── toolvisibility/ # Apply(): the post-registration pass over the tools outside the catalog, shared by cmd/server and the evaluator
@@ -158,35 +158,28 @@ go run ./cmd/format_md_tables/ --check
 
 ### End-to-End Tests
 
-E2E tests run against a real GitLab instance via in-memory MCP transport (build tag `e2e`):
+E2E tests under `test/e2e/gitlab` drive the **real `cmd/server` binary over stdio** against a real GitLab instance (build tag `e2e`):
 
 ```bash
-# Run full E2E suite
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
-make test-e2e
+# Ephemeral GitLab CE, with the runner and the Bitbucket fixture
+make test-e2e-ce
 
-# Docker mode (ephemeral GitLab CE with CI runner and fixture service)
-export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh && ./test/e2e/scripts/setup-bitbucket.sh
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
+# The licensed run: the same shared package plus the Premium and Ultimate one
+make test-e2e-ee
 
-# Or via Makefile
-make test-e2e-docker
+# A self-hosted instance from .env (GITLAB_URL, GITLAB_TOKEN)
+make test-e2e-gitlab
 
 # Compile-only check (no GitLab needed)
-go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...       # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 ```
 
-- Requires `GITLAB_URL` and `GITLAB_TOKEN` in the environment (user needs create/delete project permissions)
-- One test file per domain (172 files), in three families named by the surface they drive: `TestIndividual_*` (individual tools), `TestMeta_*` (meta-tools; `TestEE_*` for the Enterprise-only domains on an EE runtime) and `TestDynamicToolSurface_*`
-- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default two-tool find/execute workflow against the same E2E GitLab fixture. To run only that family in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
-- Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, elicitation
-- Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
-- Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
+- Requires `GITLAB_URL` and `GITLAB_TOKEN` (the user needs create/delete project permissions); the Docker targets provision both
+- The runtime a test needs is decided by its **package**, not by a build tag or a name: `common` runs anywhere, `ce` holds what only holds without a license, `ee` needs Premium or Ultimate. A package pointed at the wrong runtime refuses before writing anything
+- Every scenario names its actions by canonical catalog ID as typed `harness.ActionID` constants and runs on the dynamic, meta and individual surfaces as subtests. `make check-e2e-static` fails on a catalog action no scenario names and on an ID written as a bare string
+- The suite records what the server actually dispatched; `make audit-e2e-coverage` reports it and `make audit-e2e-gaps` prints the work list
+- Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies. Tests that call public URLs are opt-in behind `E2E_EXTERNAL_NETWORK=true`
 
 ### Surface Evaluator (Docker)
 

@@ -397,12 +397,6 @@ jobs:
           go-version-file: go.mod
       - run: go mod download
       - run: go build -o /dev/null ./cmd/server
-      # One compile sees the whole of the old suite now that every file in it
-      # carries `e2e` alone. It used to take two, because its Enterprise half
-      # sat behind a second tag that excluded the other half; that half was
-      # ported to test/e2e/gitlab/ee and deleted, and the second compile with it.
-      - name: Verify E2E tests compile
-        run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
       # The harness is the library every rebuilt e2e test goes through, and its
       # own tests need no GitLab: the ledger, the waits, the names, the runtime
       # guard's message, the environment a child is given, and one run of the
@@ -488,9 +482,12 @@ jobs:
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
 
   # stdio is the primary transport and nothing drove it until this module
-  # existed: the e2e suite uses an in-memory transport in the same process, so
-  # no pipes, no process, no separation of stdout from stderr, and none of the
-  # environment-variable configuration stdio mode actually uses. Two defects
+  # existed: the e2e suite of the day built the server in its own process and
+  # drove an in-memory transport, so no pipes, no process, no separation of
+  # stdout from stderr, and none of the environment-variable configuration
+  # stdio mode actually uses. The GitLab suite drives the real binary over
+  # stdio now, and this module still owns the questions that are about the
+  # transport rather than about a tool. Two defects
   # that shipped were reachable here and invisible everywhere else, one of them
   # held in place by a unit test asserting the opposite.
   e2e-stdio:

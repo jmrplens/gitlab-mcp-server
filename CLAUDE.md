@@ -59,7 +59,7 @@ gitlab-mcp-server/
 │   ├── audit_doc_coverage/      # Audits docs/reference/tools/*.md vs canonical action catalog (DOC-002); reads doc-ownership.json
 │   ├── audit_doc_tool_names/    # Checks every `gitlab_*` name the docs mention against the names the server registers (make check-doc-tool-names)
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
-│   ├── audit_e2e_gaps/          # Reports catalog actions not exercised by the e2e suite (make audit-e2e-gaps)
+│   ├── audit_e2e_coverage/      # The one command that says what e2e covers, from the calls the suite recorded rather than from mentions in its source: every runtime x surface x mode x action classified (make audit-e2e-coverage), the gap work list (make audit-e2e-gaps), and the push-time gate over the typed action ids with the ratchet on (make check-e2e-static)
 │   ├── audit_edition_tier/      # Audits doc-grounded edition tier gating (Free/Premium/Ultimate)
 │   ├── audit_gateway_chars/     # Audits served descriptions/titles for characters MCP gateway validators reject (make check-gateway-chars)
 │   ├── audit_graphql_documents/ # The standalone gate over `cmd/internal/graphqldocs`: fails when a raw GraphQL document in the source is one the pinned GitLab schema refuses, naming the file and line; it loads the program with go/packages so a document assembled from a shared fragment is judged as the string GitLab receives, and reads `.graphql` files too since a go:embed var folds to nothing (make check-graphql-documents). `-live <endpoint>` introspects an instance now and judges by what it serves, refusing an answer too short to be a GitLab schema, and reports where the pin and that instance disagree about a type, field or argument one of our documents touches (make check-graphql-documents-live; `-schema` does the same against an SDL file on disk). It reads `./internal/...` only: the ~42 documents client-go builds are judged by the test transport alone. `audit_1to1 -scope=paths` folds the same result into R-PATH; two commands because this one answers a question a reader asks on its own and is what CI and the Makefile already point at
@@ -112,7 +112,7 @@ gitlab-mcp-server/
 │   │   ├── catalog_filter.go    # FilterActionCatalog: read-only, token-scope and --exclude-tools filters, with what each removed
 │   │   ├── scope_filter.go      # MetaToolScopes and FilterScopeFilteredCatalog: the PAT scopes a catalog group needs, applied to the catalog before registration so one map reaches all three surfaces (see PAT scope filtering below)
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
-│   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
+│   │   ├── register_meta.go     # RegisterMetaStandaloneTools() — the standalone surfaces the meta and individual registrations both add; the catalog groups come from RegisterMetaCatalog
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
 │   │   ├── dynamiccatalog/      # Build(): the dynamic catalog assembled the way the server assembles it (cmd/server and the e2e suite alike)
 │   │   ├── toolvisibility/      # Apply(): the pass over the tools registered outside the catalog (exclusions, read-only removal, safe-mode wrapping with the catalog-backed dispatchers exempt), run after registration by cmd/server and by the surface evaluator alike
@@ -178,9 +178,13 @@ gitlab-mcp-server/
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait, Bitbucket, EE activation)
-│   └── suite/                   # Go test package (172 test files)
-│       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
-│       └── fixture_ce_test.go   # Self-contained GitLab resource builders; the EE half was ported to test/e2e/gitlab/ee and deleted
+│   ├── internal/                # The harness every scenario goes through, and the fixture library it provisions with
+│   │   ├── harness/             # Starts the real binary over stdio, drives each scenario on all three surfaces, records what the server dispatched
+│   │   └── fixture/             # Self-contained GitLab resource builders, each cleaning up after itself
+│   └── gitlab/                  # The suite: the runtime a test needs is decided by its package
+│       ├── common/              # Runs on every runtime, licensed or not
+│       ├── ce/                  # What only holds on an unlicensed instance
+│       └── ee/                  # Needs Premium or Ultimate
 ├── plan/                        # Implementation plans for features
 ├── mcpb/                        # Claude Desktop extension (.mcpb) manifest + icon (packed by scripts/build-mcpb.sh)
 ├── .github/                     # AI assistance infrastructure
@@ -262,11 +266,12 @@ without GitLab or credentials, and both run on every CI push:
   stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
   variables stdio configuration actually uses.
 
-**They exist because the e2e suite cannot see any of this.** `test/e2e/suite`
-drives an in-memory transport in the same process, which is the right shape for
-questions about tool behavior and answers none about the transport: no streams,
-no process, no separation of stdout from stderr, and no flags or environment
-variables, since it builds the server directly.
+**They exist because the GitLab suite cannot see any of this.**
+`test/e2e/gitlab` drives the real binary over stdio, which answers the stdio
+half and none of the HTTP one: no handler chain, no cross-origin decisions, no
+authentication modes, no rate limiting. The suite it replaced could see less
+still, since it built the server in its own process and drove an in-memory
+transport: no streams, no process, no separation of stdout from stderr.
 
 stdio is the primary transport and nothing drove it until `test/e2e/stdio`
 existed. Two defects shipped through that gap: a nil dereference that killed the
@@ -336,13 +341,13 @@ go test ./internal/tools/ -run TestBranch -count=1  # Run specific tests
 make golangci-lint                       # Consolidated Go formatting and linting
 
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
-make test-e2e                                          # Same via Makefile
-make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
-make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
-make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
-go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
+make test-e2e                                             # The rebuilt suite against a self-hosted instance
+make test-e2e-ce                                          # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
+make test-e2e-ee                                          # The licensed run: common plus the Premium and Ultimate package
+make test-e2e-http                                        # HTTP transport module: no GitLab, no credentials
+make test-e2e-stdio                                       # stdio transport module: no GitLab, no credentials
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...          # Compile-only check (Windows)
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...    # Compile-only check (Linux)
 
 # Orbit live tests against GitLab.com (requires GITLAB_COM_TOKEN; auto-provisions fixtures)
 GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
@@ -518,6 +523,10 @@ no legacy spelling of either to warn anybody about.
 | `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
 | `GITLAB_MCP_TEST_INVENTORY_DIR` | No | `internal/testutil`: absolute directory the test transport records every request it sees into, one shard per test process, merged by `cmd/gen_request_inventory`. Empty (default) records nothing. A relative path is refused rather than resolved, because a test binary runs in its own package directory and would scatter a shard under each of 178 of them |
 | `GITLAB_MCP_TEST_SNAPSHOT_PARITY` | No | Every unit test that compares a **committed, generated artifact** with what the tree generates now: `deferred` skips it with a message saying why, through the one reader, `internal/freshness`. Five packages read it: `internal/tools` (the golden snapshots: `TestToolSnapshots_*` and the two `GoldenSnapshotParity` tests), `cmd/audit_tokens` (the token footprint targets), `cmd/gen_llms` (one subtest per committed llms file, and only those: the surface facts asserted beside them are not about a committed artifact and keep running), `cmd/audit_metrics` (`site/src/data/stats.json`) and `cmd/gen_lhm_manifest` (`lhm.plugin.json`). CI sets it from `FRESHNESS` in `ci.yml`, in the coverage job and the cross-platform matrix alike, which is `deferred` on every layer of a GitHub stack below its top (told by `github.event.pull_request.stack.position`, since a stacked layer is tested as the stack merged into `main` and `github.base_ref` is `main` for all of them) and on a pull request outside a stack whose base is not `main`, and `checked` at the top of a stack, on a pull request to `main` and on a push to `main`: every freshness gate (stats, llms, footprint, testing reference, manifests, request inventory, snapshots) compares a committed artifact with what the tree generates now, and a stack refreshes those once at its top. Empty (default) compares, which is also what the race workflow and a developer's machine do. A test that pins the value to `checked` must therefore compare no committed artifact, or it fails on exactly the layer the deferral exempts |
+| `GITLAB_MCP_TEST_E2E_CALLS_DIR` | No | `test/e2e/internal/harness`: absolute directory the e2e suite records every call and every dispatch into, one shard per test process, read by `cmd/audit_e2e_coverage`. Empty records nothing, and a run that recorded nothing is not a coverage claim, which is what `-check` refuses. The `make test-e2e-*` targets set it to `dist/e2e-calls/<target>`; a relative path is refused for the reason the inventory's is |
+| `E2E_EXTERNAL_NETWORK`   | No       | `test/e2e/internal/harness`: `true` admits the scenarios that call public Internet endpoints, which are the GitHub, gists and Bitbucket Cloud importers. Opt-in because a test that reaches the Internet fails for reasons that have nothing to do with this server; without it those scenarios skip, naming the variable. The credentials they need (`GH_TOKEN`, the `BITBUCKET_*` set) come from the repository `.env`, which the harness reads last |
+| `E2E_RUNTIME_MISMATCH`   | No       | `test/e2e/internal/harness`: `skip` turns a package pointed at the wrong runtime into skips instead of the refusal it is by default. The refusal is the default because a licensed package silently skipping on an unlicensed instance is how a suite reports green having run nothing |
+| `E2E_MODE`, `E2E_SERVER_BINARY`, `E2E_REPORT_DIR`, `E2E_COMMIT` | No | `test/e2e/internal/harness` and `test/e2e/scripts/run-docker-e2e.sh`: which fixture a run drives, the server binary every child starts (built once rather than by each test package), where the reports land, and the revision written on the run line the coverage audit reads |
 | `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
 None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/file_utils.go`, so a deployment that never heard of this policy still gets the right answer.
@@ -885,49 +894,35 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 ### Running E2E tests
 
-E2E tests run against a real GitLab instance; only the MCP transport between the test client and the server is in memory, and every tool call still reaches the configured GitLab over the network. Two modes are supported:
+E2E tests drive the **real `cmd/server` binary over stdio**, through `test/e2e/internal/harness`, against a real GitLab instance. Two modes are supported:
 
 **Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
 
 ```bash
-# Run full E2E suite (per-domain tests on the individual, meta and dynamic surfaces)
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
-make test-e2e
+make test-e2e                                            # or make test-e2e-gitlab, the same thing
 
 # Compile-only check (no GitLab needed)
-go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...         # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...   # Linux
 ```
 
-**Docker mode** — ephemeral GitLab CE container with CI runner and fixture service (enables pipeline/job tests and deterministic webhook/custom-emoji/mirror endpoints):
+**Docker mode** — ephemeral GitLab CE container with CI runner and Bitbucket fixture (enables pipeline/job tests and deterministic webhook/custom-emoji/mirror endpoints). One target provisions the stack, runs the suite and tears it down:
 
 ```bash
-export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh && ./test/e2e/scripts/setup-bitbucket.sh
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
+make test-e2e-ce    # unlicensed: the common and ce packages
+make test-e2e-ee    # licensed: the common and ee packages
 ```
 
-The suite is one test file per domain (172 files), each self-contained against the shared fixture from `setup_test.go`, in three families named by the surface they drive:
+**The runtime a test needs is decided by its package, not by a build tag or a name.** Every file carries `e2e` alone, and the three packages divide the suite by what an instance has to be:
 
-- **`TestIndividual_*`**: the individual surface (`gitlab_issue_list`-style tools) through each domain's lifecycle: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, elicitation, cleanup
-- **`TestMeta_*`**: the same operations through the meta-tools, plus the domains only reachable there (admin, epics, group extras, wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji). The Enterprise-only ones are no longer here: their `TestEE_*` half was ported to `test/e2e/gitlab/ee`, the rebuilt suite's licensed package, and deleted with the build tag that used to select it, so `make test-e2e-ee` (or its older name `make test-e2e-docker-enterprise`) is where they run
-- **`TestDynamicToolSurface_*`**: the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this family in Docker mode after the Docker GitLab setup scripts complete:
+- **`test/e2e/gitlab/common`**: everything any instance serves. It runs on the CE runtime and on the licensed one alike, because schema pruning differs between them and a Free action has to work on both
+- **`test/e2e/gitlab/ce`**: the few facts that hold only without a license, such as a Premium action being absent from the catalog rather than refused
+- **`test/e2e/gitlab/ee`**: Premium and Ultimate, which is where the epic, iteration, vulnerability, compliance and Geo scenarios live
 
-	```bash
-	E2E_MODE=docker \
-		go test -v -tags e2e -timeout 600s \
-		-run '^TestDynamicToolSurface' \
-		./test/e2e/suite/
-	```
+A package pointed at the wrong runtime refuses before it writes anything, naming what it found and the target to run instead; `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips.
 
-Domains **added in Docker mode** (require CI runner):
+**Each scenario runs on all three surfaces as subtests** (`dynamic`, `meta`, `individual`), so a surface is a subtest rather than a test family. It names its actions by canonical catalog ID as typed `harness.ActionID` constants, which is what `make check-e2e-static` reads: a catalog action no scenario names fails the gate, and so does an ID written as a bare string, which the type checker cannot see.
 
-- Pipeline create/get/cancel/retry/delete
-- Job get/log/retry/cancel
+**Coverage is what the server dispatched, not what the source mentions.** Every call is recorded while the tests run, and `cmd/audit_e2e_coverage` compares the record with each runtime's served catalog: `make audit-e2e-coverage` for the report, `make audit-e2e-gaps` for the work list.
 
-**MCP capability tests** (mock handlers, always available):
-
-- Elicitation tools (1 test): confirm destructive action
+Scenarios that call **public Internet endpoints** (the GitHub, gists and Bitbucket Cloud importers) are opt-in behind `E2E_EXTERNAL_NETWORK=true` and read their credentials from `.env`, since a test that reaches the Internet fails for reasons that have nothing to do with this server.

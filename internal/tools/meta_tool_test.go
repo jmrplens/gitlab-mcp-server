@@ -310,8 +310,8 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 	}))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
-	if err := RegisterAllMeta(server, client, edition.Free); err != nil {
-		t.Fatalf("RegisterAllMeta() error = %v", err)
+	if err := registerMetaSurface(server, client, edition.Free); err != nil {
+		t.Fatalf("registerMetaSurface() error = %v", err)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()

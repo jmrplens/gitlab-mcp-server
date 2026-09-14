@@ -426,7 +426,9 @@ func TestRun_Static_WithCalls_ReachesTheClassification(t *testing.T) {
 // TestRun_PortMap_OverTheFixtures verifies -port-map through run(): the
 // unresolved tests and the findings are printed, the retired list is
 // counted in the summary and the exit code says the map is incomplete; an
-// old suite that does not exist is a usage error.
+// old suite that does not exist is a usage error, and so is naming none,
+// since the retired tree left this repository and there is no path to
+// default to.
 func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	opts := fixtureOptions(t)
 	opts.calls = ""
@@ -452,6 +454,10 @@ func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	opts.oldSuite = "absent"
 	if absentCode, _, absentErr := runFixture(t, opts); absentCode != exitUsage || !strings.Contains(absentErr, "port map") {
 		t.Errorf("run() with no old suite = %d, %q; want exit 2", absentCode, absentErr)
+	}
+	opts.oldSuite = ""
+	if emptyCode, _, emptyErr := runFixture(t, opts); emptyCode != exitUsage || !strings.Contains(emptyErr, "-old-suite is required") {
+		t.Errorf("run() with -old-suite unset = %d, %q; want exit 2 naming the flag", emptyCode, emptyErr)
 	}
 	opts.oldSuite = filepath.Join("portmap", "new")
 	if flatCode, _, flatErr := runFixture(t, opts); flatCode != exitUsage || !strings.Contains(flatErr, "no Test function") {

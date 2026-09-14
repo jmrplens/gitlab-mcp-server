@@ -151,7 +151,7 @@ func TestIsE2ETree_PathShapes(t *testing.T) {
 		want bool
 	}{
 		{path: "test/e2e", want: true},
-		{path: "test/e2e/suite", want: true},
+		{path: "test/e2e/gitlab/common", want: true},
 		{path: "/repo/test/e2e", want: true},
 		{path: "/repo/test/e2e/http", want: true},
 		{path: "test/e2ex", want: false},
@@ -173,13 +173,13 @@ func TestIsE2ETree_PathShapes(t *testing.T) {
 // in directory order, and skips the test/e2e tree entirely.
 func TestCheckFileNamesInDir_WalksTreeAndExemptsE2E(t *testing.T) {
 	root := t.TempDir()
-	writeFixtureDir(t, root, []string{"pkg/nested", "test/e2e/suite"}, []fileSpec{
+	writeFixtureDir(t, root, []string{"pkg/nested", "test/e2e/gitlab/common"}, []fileSpec{
 		{"pkg/kind.go", "package kind\n"},
 		{"pkg/kind_test.go", "package kind\n"},
 		{"pkg/theme_test.go", "package kind\n"},
 		{"pkg/nested/other_test.go", "package nested\n"},
 		{"pkg/nested/readme.txt", ""},
-		{"test/e2e/suite/anything_test.go", "package suite\n"},
+		{"test/e2e/gitlab/common/anything_test.go", "package common\n"},
 	})
 
 	got := checkFileNamesInDir(root)

@@ -55,7 +55,7 @@ N/A
 - [ ] New tests added for new functionality (table-driven, with `httptest` mocks)
 - [ ] Coverage on modified packages is ≥ 90% (per project policy)
 - [ ] Edge cases and error scenarios covered
-- [ ] If applicable, E2E tests updated/added under `test/e2e/suite/`
+- [ ] If applicable, E2E tests updated/added under `test/e2e/gitlab/`
 
 ### Documentation
 
