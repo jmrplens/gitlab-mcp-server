@@ -167,7 +167,7 @@ Validate before pushing: parse every ` ```json ` block on the page and assert th
 
 **Wait for `prepared_at` before asking the bot for anything.** Every automation that reacts to a new merge request reads its diff, and the one that runs when preparation *finishes* resets the workflow label, so a `ready` posted before then is undone a minute later. The label events of `!255300` are the whole story, read with `resource_label_events`:
 
-```
+```text
 add     docs-only                    10:00:17  <- labelled with no diff to read
 add     workflow::ready for review   10:00     <- the first ready did work
                                      10:01:15  <- prepared_at completes
