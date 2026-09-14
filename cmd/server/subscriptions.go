@@ -1554,23 +1554,30 @@ type listenCounter struct {
 }
 
 // acquire takes a slot, or reports that the ceiling is reached. A
-// non-positive limit means no ceiling.
+// non-positive limit means no ceiling, and the slot is still counted.
+//
+// Counting and capping are two jobs, and this counter does both: the cap
+// refuses a stream, and the count is the only evidence that a credential is
+// holding one open, which is what keeps it from being idle-swept. Skipping the
+// increment when no cap is configured used to switch both off at once, so
+// removing the ceiling quietly made every listening credential look quiet and
+// evictable. That is the opposite of what removing a ceiling asks for.
 func (c *listenCounter) acquire(limit int) bool {
 	// A nil counter is a request nothing could attribute to a credential. It is
 	// let through here and stopped by the process-wide ceiling, which is the
 	// one that actually bounds the process.
-	if limit <= 0 || c == nil {
+	if c == nil {
 		return true
 	}
-	if c.open.Add(1) > int64(limit) {
+	if held := c.open.Add(1); limit > 0 && held > int64(limit) {
 		c.open.Add(-1)
 		return false
 	}
 	return true
 }
 
-// release gives a slot back. Safe to call only for an acquire that succeeded
-// against a positive limit.
+// release gives a slot back, and is paired with every acquire that returned
+// true, ceiling or none.
 func (c *listenCounter) release() {
 	if c == nil {
 		return
@@ -1698,18 +1705,15 @@ func (l listenLimits) middleware(counterFor func(context.Context) *listenCounter
 	}
 }
 
-// releaseCredential and releaseProcess give a slot back only when one was
-// taken: a non-positive ceiling means acquire never counted.
+// releaseCredential and releaseProcess give back the slot acquire took, which
+// it takes whether or not a ceiling is configured: the count is what says a
+// credential is busy, and only the refusal depends on the limit.
 func (l listenLimits) releaseCredential(counter *listenCounter) {
-	if l.perCredential > 0 {
-		counter.release()
-	}
+	counter.release()
 }
 
 func (l listenLimits) releaseProcess() {
-	if l.perProcess > 0 {
-		l.processOpen.release()
-	}
+	l.processOpen.release()
 }
 
 // busy is the refusal, naming which ceiling was reached so an operator

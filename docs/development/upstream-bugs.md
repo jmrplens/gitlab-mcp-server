@@ -120,6 +120,7 @@ readable without opening the tracker:
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), open | No | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
+| 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2141,6 +2142,45 @@ middleware, which is why the owner has to travel in the params instead.
 
 **How we found it**: making the pool share one server per configuration shape.
 The delivery end was the only part of the design with no per-credential seam.
+
+### A session's second listen on a URI overwrites the first's subscription, and its close deletes both
+
+- **Reported**: no, not yet. It shares a root cause with the entry above, whose
+  proposal is still waiting on a maintainer decision, and the shape of the fix
+  here depends on what they choose.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. It needs a client that opens two `subscriptions/listen`
+  covering one URI, or mixes a legacy `resources/subscribe` with a listen, on
+  stdio or `--stateless=false`. The SDK's own client does neither.
+- **Workaround**: partial. `sessionBridge.holds` in
+  `cmd/server/subscriptions.go` already keeps the watch alive for the surviving
+  stream, which is the half this side owns. The delivery half cannot be repaired
+  here, because the table that lost the request id is the SDK's.
+
+**What**: `resourceSubscriptions` is keyed by URI and session, so a session's
+second listen on a URI overwrites the first's request id, and that second
+listen's deferred unsubscribe deletes the entry outright. After either stream
+closes the session is subscribed in its own view and reachable in neither: no
+notification is delivered, and no ending is delivered either, so the client sees
+a stream it believes is live and never hears from again. Meanwhile the watch
+this server correctly kept for the surviving stream goes on polling GitLab on
+the subscriber's token until its lifetime expires.
+
+SEP-2575 makes the listen request the subscription identity and allows several
+per session, which the SDK's own comment cites as "multiple concurrent
+subscriptions", so the table's key is one level coarser than the protocol it
+implements.
+
+**The fix belongs upstream**: key the table by request id, or refuse a second
+listen for a URI a session already holds. The second is a smaller change and
+would cost a client one working subscription instead of two half-working ones.
+
+**How we found it**: auditing every declared capability against the
+specification and the SDK. [ADR-0015](adr/adr-0015-polled-resource-subscriptions.md)
+recorded the overwrite half and understated it, saying a session with two
+listens sees the notification "on one of them"; the state after either close is
+neither, and the ADR now says so.
 
 ## OpenAI Codex (`openai/codex`)
 

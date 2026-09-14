@@ -263,6 +263,17 @@ func TestBuildInstructions_WatchingSection_FollowsCapabilitySurface(t *testing.T
 	if !strings.Contains(full, "via MCP resources/subscribe") {
 		t.Error("the watching section never names resources/subscribe, so the model cannot map it to the protocol")
 	}
+	// Both forms, with the revision that decides between them. These
+	// instructions are built once per server and the revision is decided per
+	// request: a client speaking 2026-07-28 on stdio is refused
+	// resources/subscribe with -32601, and naming only the legacy method sent
+	// exactly that client to the one method it cannot call.
+	if !strings.Contains(full, "subscriptions/listen") {
+		t.Error("the watching section names only the legacy method, which a client speaking 2026-07-28 is refused")
+	}
+	if !strings.Contains(full, "2026-07-28") {
+		t.Error("the watching section names both methods without the revision that decides between them")
+	}
 
 	minimal := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, false)
 	if strings.Contains(minimal, "WATCHING RESOURCES") {

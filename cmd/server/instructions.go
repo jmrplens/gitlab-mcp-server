@@ -168,7 +168,15 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 		refIssueGetByID.render(toolSurface))
 
 	if capabilitySurface == config.CapabilitySurfaceFull {
-		subscribeMethod := "MCP resources/subscribe"
+		// Both forms, because the instructions are built once per server and
+		// the revision is decided per request: a client speaking 2026-07-28 is
+		// refused resources/subscribe with -32601 whatever the transport, and
+		// on stdio nothing narrows the revisions advertised, so such a client
+		// is ordinary rather than exotic. Naming only the legacy method sent it
+		// to the one method it is guaranteed to be refused.
+		subscribeMethod := "MCP resources/subscribe for a client speaking protocol revision 2025-11-25 or " +
+			"earlier, or subscriptions/listen for one speaking 2026-07-28, which is the revision that " +
+			"introduced it and the revision in which the legacy method is refused"
 		if statelessHTTP {
 			// Each stateless POST's session closes with the response, so the
 			// legacy request is refused there; only the long-lived

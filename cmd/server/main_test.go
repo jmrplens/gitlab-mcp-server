@@ -10715,6 +10715,60 @@ func TestManifestShareKey_NamesTheSharedCatalogAndItsNarrowing(t *testing.T) {
 	}
 }
 
+// TestServerCardSubscriptions_AvailabilityFollowsTheTransport checks that the
+// card says which of the two subscription methods this deployment can answer.
+//
+// The block's own contract is that both methods are listed, because the block
+// describes the binary, while `available` states what this deployment answers.
+// On HTTP the two are exactly complementary and nothing in between: a stateful
+// deployment strips protocol 2026-07-28 from the versions it advertises, since
+// listing it would hand a client the one answer that cannot work, so a listen
+// is unreachable there and the legacy subscribe is the one that works. The card
+// used to hard-code the listen as available and contradict the same binary's
+// handshake, which is the one reader that cannot check for itself: a card is
+// fetched before connecting.
+func TestServerCardSubscriptions_AvailabilityFollowsTheTransport(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		stateless  bool
+		wantListen bool
+	}{
+		{name: "stateless serves the listen", stateless: true, wantListen: true},
+		{name: "stateful serves the legacy subscribe", stateless: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			block := serverCardSubscriptions(&config.Config{
+				CapabilitySurface: config.CapabilitySurfaceFull,
+				Stateless:         testCase.stateless,
+			})
+			if block == nil {
+				t.Fatal("the full capability surface published no subscription block")
+			}
+			methods, ok := block["methods"].(map[string]any)
+			if !ok {
+				t.Fatalf("methods = %v, want a map of the two methods", block["methods"])
+			}
+
+			listen, listenOK := methods["subscriptions/listen"].(map[string]any)
+			legacy, legacyOK := methods["resources/subscribe"].(map[string]any)
+			if !listenOK || !legacyOK {
+				t.Fatalf("methods = %v, want both subscription methods listed whatever this deployment answers", methods)
+			}
+			if listen["available"] != testCase.wantListen {
+				t.Errorf("subscriptions/listen available = %v, want %v", listen["available"], testCase.wantListen)
+			}
+			if legacy["available"] != !testCase.wantListen {
+				t.Errorf("resources/subscribe available = %v, want %v", legacy["available"], !testCase.wantListen)
+			}
+		})
+	}
+}
+
 // TestServerCardSubscriptions_PublishesTheEndingVocabulary pins the list a
 // client branches on.
 //

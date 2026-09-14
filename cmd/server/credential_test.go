@@ -196,6 +196,18 @@ func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
 		t.Fatal("the listen counter refused the first stream")
 	}
 
+	// The same credential as above, with the per-credential ceiling removed.
+	// GITLAB_MCP_MAX_LISTEN_STREAMS=0 is documented as removing a ceiling, and
+	// the counter it switched off is also the only evidence this credential is
+	// holding a stream open: without the count, a client whose only activity is
+	// an open subscriptions/listen reads as quiet, gets idle-swept and has its
+	// stream closed for having done nothing wrong. Counting and capping are two
+	// jobs, and only the second is what the variable turns off.
+	uncapped := credentialTestState(t, "owner-listening-uncapped")
+	if !uncapped.listen.acquire(0) {
+		t.Fatal("the listen counter refused a stream with no ceiling configured")
+	}
+
 	quiet := credentialTestState(t, "owner-quiet")
 	quiet.subs = newTestRuntime(client, subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
 	t.Cleanup(quiet.subs.close)
@@ -207,6 +219,7 @@ func TestCredentialState_Busy_ReportsTheWorkThePoolCannotSee(t *testing.T) {
 	}{
 		{name: "a credential with a watcher", state: watching, want: true},
 		{name: "a credential holding an open listen stream", state: listening, want: true},
+		{name: "a credential holding one with no ceiling configured", state: uncapped, want: true},
 		{name: "a credential with neither", state: quiet},
 		{name: "a credential on a surface with no subscriptions", state: credentialTestState(t, "owner-minimal")},
 		{name: "an owner the registry never held", state: nil},

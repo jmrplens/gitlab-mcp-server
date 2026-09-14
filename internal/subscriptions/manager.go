@@ -414,12 +414,19 @@ func (m *Manager[S]) Subscribe(ctx context.Context, subscriber S, uri string) er
 		return ErrClosed
 	}
 	if w, exists := m.watchers[uri]; exists {
+		// Whether this call added the interest decides what giving up may
+		// take back. A subscriber already in the set is asking for a state it
+		// holds, and a wait that then expires must leave that state alone: it
+		// is one session's second stream on a URI, which the protocol allows,
+		// and releasing the interest wholesale would stop a watch its sibling
+		// is still holding.
+		_, alreadyHeld := w.subscribers[subscriber]
 		w.subscribers[subscriber] = struct{}{}
 		count := len(w.subscribers)
 		m.mu.Unlock()
 		m.opts.Logger.Debug("subscription joined an existing watcher",
 			"uri", uri, "kind", kind.String(), "subscribers", count)
-		return m.awaitStart(ctx, w, subscriber)
+		return m.awaitStart(ctx, w, subscriber, alreadyHeld)
 	}
 	// The shared slot is taken before this manager's own cap is enforced,
 	// because enforcing that cap spends something: it stops the longest-demoted
@@ -575,13 +582,22 @@ func (m *Manager[S]) abandonLocked(w *watcher[S], reason error) {
 
 // awaitStart blocks until the watcher's first read has been decided, and
 // reports its outcome to a subscriber that joined while it was in flight.
-func (m *Manager[S]) awaitStart(ctx context.Context, w *watcher[S], subscriber S) error {
+func (m *Manager[S]) awaitStart(ctx context.Context, w *watcher[S], subscriber S, alreadyHeld bool) error {
+	// A caller whose context is done is told so, even when the watcher is
+	// already running and its answer is there to be read. Preferring the ready
+	// channel would report success to somebody who has gone away, and the
+	// interest it would leave behind belongs to nobody.
 	select {
 	case <-w.ready:
 	case <-ctx.Done():
-		// The joiner gave up. Its own interest has to go with it, or the
-		// watcher would outlive every subscriber that can still act on it.
-		_ = m.Unsubscribe(subscriber, w.uri)
+		// The joiner gave up. Its own interest goes with it, or the watcher
+		// would outlive every subscriber that can still act on it, unless the
+		// subscriber already held this watch before the call: then the interest
+		// is not this call's to release, and taking it would stop a watch the
+		// subscriber's other stream is still holding.
+		if !alreadyHeld {
+			_ = m.Unsubscribe(subscriber, w.uri)
+		}
 		return ctx.Err()
 	}
 

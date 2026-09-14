@@ -240,6 +240,49 @@ func TestSubscribe_SameSubscriberTwice_IsIdempotent(t *testing.T) {
 	}
 }
 
+// TestSubscribe_CancelledDuplicate_LeavesTheHeldSubscriptionAlone verifies
+// that giving up on a subscribe takes back only what that call added.
+//
+// The join path used to add the subscriber and, if the wait then ended on a
+// cancelled context, release its interest wholesale. For a subscriber that
+// already held the watch — one session's second subscriptions/listen on a URI,
+// which the protocol allows — that dropped the original subscription and, at a
+// count of one, stopped the watcher the first stream was still holding. The
+// invariant the join path states is that subscribing twice is a no-op, and a
+// failed duplicate has to leave the state it found untouched.
+//
+// The second subscribe is made on a context that is already cancelled, which
+// is what a client that closed its second stream produces.
+func TestSubscribe_CancelledDuplicate_LeavesTheHeldSubscriptionAlone(t *testing.T) {
+	m, _, _ := newTestManager(t, Options{})
+
+	if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	// The watcher is already running, so its ready channel is closed and the
+	// answer is there to be read: a duplicate on a dead context is served
+	// rather than failed, and either outcome must leave the held watch alone.
+	if err := m.Subscribe(cancelled, subA, testURI); err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("Subscribe(cancelled) error = %v, want nil or context.Canceled", err)
+	}
+
+	if m.Len() != 1 {
+		t.Fatalf("Len() = %d, want 1 — the cancelled duplicate stopped a watch it never created", m.Len())
+	}
+	// One unsubscribe still ends it, which says the interest is exactly the
+	// one the first subscribe took: the duplicate neither released it nor
+	// left a second hold behind that nothing could ever clear.
+	if err := m.Unsubscribe(subA, testURI); err != nil {
+		t.Fatalf("Unsubscribe: %v", err)
+	}
+	if m.Len() != 0 {
+		t.Errorf("Len() = %d after one unsubscribe, want 0", m.Len())
+	}
+}
+
 // TestUnsubscribe_ForeignSubscriber_LeavesTheWatchAlone verifies one
 // session cannot release another's watch.
 //

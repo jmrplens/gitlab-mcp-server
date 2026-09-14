@@ -3933,8 +3933,16 @@ func serverCardSubscriptions(cfg *config.Config) map[string]any {
 	return map[string]any{
 		"supported": true,
 		"methods": map[string]any{
+			// The two are exactly complementary on HTTP, and this card is
+			// built for HTTP alone. A stateful deployment strips 2026-07-28
+			// from the versions it advertises, because listing it would hand a
+			// client the one answer that cannot work, and the SDK's streamable
+			// transport then answers 400 to any request carrying it. So a
+			// listen is unreachable there, and saying "available" of it was
+			// the card contradicting the same binary's own handshake.
 			"subscriptions/listen": map[string]any{
-				"available":      true,
+				"available":      cfg.Stateless,
+				"requires":       "stateless sessions (--stateless, the default)",
 				"since_protocol": protocolVersionStatelessOnly,
 			},
 			"resources/subscribe": map[string]any{
