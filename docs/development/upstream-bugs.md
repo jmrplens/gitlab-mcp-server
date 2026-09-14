@@ -106,11 +106,11 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 4 open | **10 of 14, v3.1.0 to v3.9.0** | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 2 open | **12 of 14; 11 released, v3.1.0 to v3.10.0** | No | Yes |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
-| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Yes, open | No | No | Yes |
+| 38 | gitlab-org/gitlab | [Three job token scope endpoints declare a response entity they do not send](#three-job-token-scope-endpoints-declare-a-response-entity-they-do-not-send) | Yes | Merged | **Yes, unreleased** | No | Yes |
 | 39 | gitlab-org/gitlab | [Two project group listings are annotated with the whole Group entity](#two-project-group-listings-are-annotated-with-the-whole-group-entity) | Yes | Yes, open | No | No | Yes |
 | 40 | client-go | [Ten modelled fields that no Grape entity exposes](#ten-modelled-fields-that-no-grape-entity-exposes-removed-from-this-servers-output) | No | No | No | No | Not needed |
 | 41 | client-go | [IssueRelation models an issue basic where GitLab renders a whole issue](#issuerelation-models-an-issue-basic-where-gitlab-renders-a-whole-issue) | No | No | No | No | Yes |
@@ -893,12 +893,10 @@ of change whose test is one assertion on the built URL.
   where the maintainers had said there was no good way to detect this drift.
   Every merge request references it with a non-closing `Related to`, so the
   first merge does not close the umbrella.
-- **In review**: four are open. `!3051` (the eight `Namespace` fields) is
-  approved and waiting on a maintainer; `!3048` (the seven `Hook` fields) has
-  a reviewer LGTM, with both of its threads answered and resolved, one of them
-  by adding the `custom_webhook_template` assertion to the edit test; `!3050`
-  and `!3052` have had a reviewer assigned since 2026-09-12 and no comment
-  since.
+- **In review**: two are open. `!3048` (the seven `Hook` fields) has a reviewer
+  LGTM, with both of its threads answered and resolved, one of them by adding
+  the `custom_webhook_template` assertion to the edit test; `!3052` has had a
+  reviewer assigned since 2026-09-12 and no comment since.
 - **Merged**: `!3042` (`BroadcastMessage.Color`) in **v3.1.0**, tagged on
   2026-09-09 eighteen minutes after the merge; then `!3040`
   (`Appearance.SiteName`) and `!3046` (the `GroupSCIMIdentity` json tag) in
@@ -909,11 +907,26 @@ of change whose test is one assertion on the built URL.
   and `!3049` (`LastUsedAt` and `UsageType` on both deploy key structs) in
   **v3.6.0**, both on 2026-09-11; then `!3044` (`LicenseTemplate.Popular`) in
   **v3.7.0** and `!3041` (`Topic.OrganizationID`) in **v3.9.0**, merged on
-  2026-09-12 and 2026-09-13. Do not read a merge as a release: `!3040` sat
-  merged and in no tag for hours, so the version is read from which tags
-  contain the merge commit rather than from the newest tag. Nine releases in
-  five days is why: the newest tag was wrong for five of the first six, and
-  `!3044` is in three tags while `!3041` is in one.
+  2026-09-12 and 2026-09-13; then `!3050` (`Imported`, `ImportedFrom` and
+  `WikiPage` on both event structs) in **v3.10.0** on 2026-09-14.
+  `!3051` (the eight `Namespace` fields) was merged the same day and is in no
+  tag: v3.10.0 was cut at 20:17 and the merge landed at 20:36, nineteen
+  minutes later. Do not read a merge as a release: `!3040` sat merged and in no
+  tag for hours, so the version is read from which tags contain the merge
+  commit rather than from the newest tag. Ten releases in six days is why: the
+  newest tag was wrong for five of the first six, `!3044` is in three tags
+  while `!3041` is in one, and `!3051` is in none.
+- **What review asked for, and what it cost**: `!3051` was merged on the
+  second push. A maintainer asked for the five numeric fields as plain `int64`
+  rather than pointers, on the convention that a response struct uses
+  primitives unless a null carries something the zero value does not, and the
+  three date fields stayed pointers. The merge request's own reasoning had
+  argued the opposite, so the description was corrected along with the code
+  rather than left contradicting it. One case is worth keeping in mind here,
+  and is recorded on the merge request: a null `shared_runners_minutes_limit`
+  is how GitLab says there is no limit, which as an `int64` reads as a limit of
+  zero. It is only sent to a caller allowed `:update_subscription_limit`, who
+  is reading the namespace to set those limits rather than to enforce one.
 - **Blocking**: no.
 - **Workaround**: yes. Each field is read from the captured response beside
   the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
@@ -1029,10 +1042,10 @@ merge requests have gone to `gitlab-org/gitlab` from its own
 [!254543](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254543),
 [!254547](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254547) and
 [!254552](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254552).
-`!254507` was merged into `master` on 2026-09-10 and `!254519` on 2026-09-11,
-neither in a tagged release yet; the other seven are open and in review since
-2026-09-12, `!254542` with the technical writer's approval and a pipeline that
-fails only in the fork's `get_sources` step.
+`!254507` was merged into `master` on 2026-09-10, `!254519` on 2026-09-11 and
+`!254511` on 2026-09-14, none in a tagged release yet; the other six are open
+and in review since 2026-09-12, `!254542` with the technical writer's approval
+and a pipeline that fails only in the fork's `get_sources` step.
 `.github/skills/upstream-contribution/SKILL.md` carries the procedure and the
 traps: every example on a page rather than the one that prompted it, the
 response attribute tables as well as the examples, and the other entities
@@ -2241,10 +2254,13 @@ markdown. We keep emitting both.
 ### Three job token scope endpoints declare a response entity they do not send
 
 - **Reported**: yes.
-- **In review**: yes,
-  [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698),
-  labelled `workflow::ready for review` and `tw::triaged`.
-- **Merged**: no.
+- **In review**: no longer; it was merged.
+- **Merged**: yes,
+  [gitlab-org/gitlab!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698)
+  into `master` on 2026-09-14, in no tagged release yet. The declaration below
+  stays until a GitLab carrying it is the one `cmd/gen_api_live` boots, since
+  the record this repository commits is taken from a released image and still
+  carries the three wrong annotations.
 - **Blocking**: no.
 - **Workaround**: yes, a declaration. The 13 findings this produces against
   `internal/tools/groups`' output are answered under
