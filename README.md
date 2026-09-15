@@ -238,7 +238,6 @@ It is a personal service, run by one person and offered as-is: no SLA, no suppor
 - **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
 - **The whole platform — [1000+ tools](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
 - **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window. ([Token footprint →](#token-footprint))
-- **Proven with real models.** An automated evaluator runs Anthropic, Google, OpenAI, and Qwen against live GitLab instances: **99.5% aggregate success** across thousands of operations. ([Results →](#ai-model-tool-use-evaluation))
 - **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) quality/security gates.
 - **Runs anywhere.** One static binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).
 
@@ -303,54 +302,29 @@ Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Wind
 
 ## AI Model Tool-Use Evaluation
 
-The project includes an automated evaluator for model-facing MCP quality. It runs schema-only checks against the tool catalog or executes validated model tool calls through MCP against Docker GitLab CE or licensed Enterprise instances populated with fixtures. It measures whether each model chooses the correct action, sends valid parameters, recovers from actionable GitLab errors, and respects destructive-action safeguards — across Anthropic, Google, OpenAI, and Qwen.
+The project includes an automated evaluator for model-facing MCP quality, and **it currently publishes no result.** Every figure this section used to carry has been withdrawn, including the 99.5% aggregate success this README led with.
 
-The tables below are superseded and the measurement layer behind them is being rewritten: they come from two commits that are not in this history, part of the corpus puts the expected call in the prompt the scorer then checks against, repairs are made from an answer key the harness supplies, and the scorer compares parameter names rather than their values, all of which is set out in [What the numbers measure](docs/development/testing/model-results.md#what-the-numbers-below-measure-and-what-they-do-not).
+They were withdrawn because the measurement did not measure what it claimed. One struct fed the stimulus the model was given, the environment it acted in, the scorer that graded it and the report at the same time, so parts of the corpus put the expected call in the prompt the scorer then checked against, repairs were made from an answer key the harness supplied, and the scorer compared parameter names rather than their values. A run could not have failed for the reasons it was meant to catch. The tables as they last stood can be read at commit `4587cbfb3`; the account of what was wrong with them is kept in [AI Model Evaluation Results](docs/development/testing/model-results.md).
+
+The replacement is being built as a tagged package under `test/e2e/` on the end-to-end harness, which already keeps the stimulus, the environment and the record apart. Numbers return here when that harness produces them.
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker CE dynamic 20260627-232303**.
-
-| Provider  | Model                       | Compatibility | Tool accuracy |      Recovery | Docker live status          |
-| --------- | --------------------------- | ------------- | ------------: | ------------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (2/2) | 100.0% final across 555 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% |  100.0% (4/4) | 100.0% final across 555 ops |
-| OpenAI    | `gpt-5.4-nano`              | Review        |         99.3% | 84.6% (11/13) | 98.0% final across 555 ops  |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |  100.0% (5/5) | 100.0% final across 555 ops |
-
-The published model-evaluation set covers 596 task attempts and 2220 expected MCP operations. Across the selected reports, models emitted 2265 tool calls over 2265 model requests, with 99.5% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
+Withdrawn. The CE dynamic table published here, last refreshed from a Docker run dated 20260627-232303, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <details>
 <summary>Meta-tools and Enterprise evaluation results</summary>
 
 <!-- START MODEL EVAL META SUMMARY -->
-No CE meta-tools run has been published yet: `make eval-surfaces-docker SURFACE=meta` followed by `--publish-docs` fills this block.
+Withdrawn. No CE meta-tools table was ever published here, and none will be until the rebuilt harness produces one.
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
-Current published result: **Docker Enterprise meta 20260527**.
-
-| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status         |
-| --------- | --------------------------- | ------------- | ------------: | -----------: | -------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
-| Google    | `gemini-flash-latest`       | Review        |         78.2% | 100.0% (7/7) | 100.0% final across 84 ops |
-| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% | 100.0% (4/4) | 100.0% final across 84 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
-
-The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 345 tool calls over 350 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
+Withdrawn. The Enterprise meta table published here, last refreshed from a Docker run dated 20260527, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
-Current published result: **Docker Enterprise dynamic 20260628-015421**.
-
-| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status          |
-| --------- | --------------------------- | ------------- | ------------: | -----------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (2/2) | 100.0% final across 202 ops |
-| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 202 ops |
-
-The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.
+Withdrawn. The Enterprise dynamic table published here, last refreshed from a Docker run dated 20260628-015421, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 </details>

@@ -1,16 +1,21 @@
 # AI Model Evaluation Results
 
-This document publishes the current model-evaluation results selected with
-`cmd/eval_mcp_surfaces --publish-docs`. Each surface and edition has its own
-managed section (CE dynamic, CE meta-tools, Enterprise/Premium meta-tools,
-Enterprise/Premium dynamic), so publishing one does not replace the others.
-Raw reports and traces are not committed.
+**This page publishes no results.** Every table it used to carry has been
+withdrawn, and the measurement layer that produced them is being rebuilt as a
+tagged package under `test/e2e/` on the end-to-end harness. The tables as they
+last stood are readable at commit `4587cbfb3`.
 
-## What the numbers below measure, and what they do not
+The four managed sections (CE dynamic, CE meta-tools, Enterprise/Premium
+meta-tools, Enterprise/Premium dynamic) are kept empty rather than deleted, so
+that the first run of the rebuilt harness fills them the way the old publisher
+did. Raw reports and traces are not committed.
 
-Every table on this page is superseded. The measurement layer that produced
-them is being rewritten, and until the first run under the rewritten scorer is
-published, these four facts belong beside the figures:
+## Withdrawn: what the numbers measured, and what they did not
+
+Kept as history, because a reader who followed a link to a figure is owed the
+account of why it is gone. These four facts were published beside the tables
+before they were withdrawn, and each is a reason no run could have failed for
+the reasons it was meant to catch:
 
 - **They were taken from trees that are not in the history.** The CE dynamic
   and Enterprise dynamic tables come from `901ce569286f`, the Enterprise
@@ -36,38 +41,22 @@ published, these four facts belong beside the figures:
 
 The gate that holds this is in the publisher: a report may not be published
 unless its header declares `Stimulus: uncoached`, which only a run whose
-prompts withhold the expected call can write.
+prompts withhold the expected call can write. That gate stays in force and is
+one of the things the rebuild carries over.
+
+The four facts above share one cause, which is why repairing them one at a time
+did not work. A single struct fed the stimulus the model was given, the
+environment it acted in, the scorer that graded it and the report, all at once;
+two of those four are answer-keyed by construction, so no channel-by-channel
+repair could finish. The rebuild separates them, which the end-to-end harness
+already does for the suite that drives the real binary.
 
 ## Dynamic Results
 
 <!-- START MODEL EVAL DYNAMIC RESULTS -->
-### Docker CE dynamic 20260627-232303
 
-| Model                                 | Preset                        | Backend               | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation |    Repair success | Destructive safety | Final task success | Cost/tokens            | Commit / branch / date                                         |
-| ------------------------------------- | ----------------------------- | --------------------- | -------: | -----------: | -------------: | -----------------: | -------------: | ---------------: | --------------------: | ----------------: | -----------------: | -----------------: | ---------------------- | -------------------------------------------------------------- |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-read`                 | Docker GitLab via MCP |       46 |          118 |            118 |                118 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 685628 / out 7323   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-27T23:45:23Z |
-| `google:gemini-flash-latest`          | `docker-read`                 | Docker GitLab via MCP |       46 |          118 |            122 |                122 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 758919 / out 3853   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-27T23:45:23Z |
-| `openai:gpt-5.4-nano`                 | `docker-read`                 | Docker GitLab via MCP |       46 |          118 |            123 |                123 |          97.8% |            97.8% |                100.0% |      100.0% (3/3) |             100.0% |             100.0% | in 596536 / out 4669   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-27T23:45:23Z |
-| `qwen:qwen3.6-flash`                  | `docker-read`                 | Docker GitLab via MCP |       46 |          118 |            118 |                118 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 664094 / out 4819   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-27T23:45:23Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-mutating-safe`        | Docker GitLab via MCP |       33 |           78 |             78 |                 78 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 325737 / out 6175   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T00:11:53Z |
-| `google:gemini-flash-latest`          | `docker-mutating-safe`        | Docker GitLab via MCP |       33 |           78 |             81 |                 81 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 320710 / out 3897   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T00:11:53Z |
-| `openai:gpt-5.4-nano`                 | `docker-mutating-safe`        | Docker GitLab via MCP |       33 |           78 |             81 |                 81 |         100.0% |           100.0% |                100.0% |       50.0% (1/2) |             100.0% |              97.0% | in 282303 / out 4545   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T00:11:53Z |
-| `qwen:qwen3.6-flash`                  | `docker-mutating-safe`        | Docker GitLab via MCP |       33 |           78 |             80 |                 80 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |             100.0% | in 324550 / out 4835   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T00:11:53Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-destructive-safe`     | Docker GitLab via MCP |       63 |          338 |            339 |                339 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 2555010 / out 25922 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:03:42Z |
-| `google:gemini-flash-latest`          | `docker-destructive-safe`     | Docker GitLab via MCP |       63 |          338 |            346 |                346 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |             100.0% | in 2726136 / out 15163 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:03:42Z |
-| `openai:gpt-5.4-nano`                 | `docker-destructive-safe`     | Docker GitLab via MCP |       63 |          338 |            351 |                351 |         100.0% |           100.0% |                100.0% |       80.0% (4/5) |             100.0% |              98.4% | in 2331751 / out 18497 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:03:42Z |
-| `qwen:qwen3.6-flash`                  | `docker-destructive-safe`     | Docker GitLab via MCP |       63 |          338 |            338 |                338 |         100.0% |           100.0% |                100.0% |      100.0% (1/1) |             100.0% |             100.0% | in 2358476 / out 18616 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:03:42Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-capability-discovery` | Docker GitLab via MCP |        4 |           11 |             11 |                 11 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 56642 / out 527     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:04:56Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-error-recovery`       | Docker GitLab via MCP |        3 |           10 |             11 |                 11 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |             100.0% | in 48095 / out 609     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:06:10Z |
-| `google:gemini-flash-latest`          | `docker-capability-discovery` | Docker GitLab via MCP |        4 |           11 |             11 |                 11 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 64508 / out 276     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:04:56Z |
-| `google:gemini-flash-latest`          | `docker-error-recovery`       | Docker GitLab via MCP |        3 |           10 |             11 |                 11 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |             100.0% | in 39010 / out 293     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:06:10Z |
-| `openai:gpt-5.4-nano`                 | `docker-capability-discovery` | Docker GitLab via MCP |        4 |           11 |             13 |                 13 |         100.0% |           100.0% |                100.0% |      100.0% (1/1) |             100.0% |             100.0% | in 61315 / out 380     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:04:56Z |
-| `openai:gpt-5.4-nano`                 | `docker-error-recovery`       | Docker GitLab via MCP |        3 |           10 |             11 |                 11 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |              66.7% | in 38022 / out 358     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:06:10Z |
-| `qwen:qwen3.6-flash`                  | `docker-capability-discovery` | Docker GitLab via MCP |        4 |           11 |             11 |                 11 |         100.0% |           100.0% |                100.0% |                 - |             100.0% |             100.0% | in 50946 / out 362     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:04:56Z |
-| `qwen:qwen3.6-flash`                  | `docker-error-recovery`       | Docker GitLab via MCP |        3 |           10 |             11 |                 11 |         100.0% |           100.0% |                100.0% |      100.0% (2/2) |             100.0% |             100.0% | in 44343 / out 389     | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T01:06:10Z |
-| **Aggregate**                         | **all selected**              | -                     |  **596** |     **2220** |       **2265** |           **2265** |      **99.8%** |        **99.8%** |            **100.0%** | **91.7% (22/24)** |         **100.0%** |          **99.5%** | -                      | -                                                              |
+Withdrawn. The CE dynamic run published here, dated 20260627-232303, is readable at commit `4587cbfb3`.
 
-Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL DYNAMIC RESULTS -->
 
 ## Meta-Tools Results
@@ -80,47 +69,15 @@ Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown rep
 ## Enterprise Meta-Tools Results
 
 <!-- START MODEL EVAL ENTERPRISE META RESULTS -->
-### Docker Enterprise meta 20260527
 
-| Model                                 | Preset                               | Backend               | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation |     Repair success | Destructive safety | Final task success | Cost/tokens           | Commit / branch / date                                                       |
-| ------------------------------------- | ------------------------------------ | --------------------- | -------: | -----------: | -------------: | -----------------: | -------------: | ---------------: | --------------------: | -----------------: | -----------------: | -----------------: | --------------------- | ---------------------------------------------------------------------------- |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-read`             | Docker GitLab via MCP |        5 |            9 |              9 |                  9 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 11164 / out 655    | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:09:41Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-read`             | Docker GitLab via MCP |        5 |            9 |             10 |                  9 |          80.0% |            80.0% |                 80.0% |       100.0% (1/1) |             100.0% |             100.0% | in 676479 / out 358   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:09:41Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-read`             | Docker GitLab via MCP |        5 |            9 |              9 |                  9 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 506607 / out 276   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:09:41Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-read`             | Docker GitLab via MCP |        5 |            9 |              9 |                  9 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 546139 / out 428   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:09:41Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |            8 |              8 |                  8 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 11363 / out 746    | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:23:05Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |            8 |              9 |                  8 |          80.0% |            80.0% |                 80.0% |       100.0% (1/1) |             100.0% |             100.0% | in 608987 / out 467   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:23:05Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |            8 |              8 |                  8 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 450664 / out 354   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:23:05Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |            8 |              8 |                  8 |         100.0% |           100.0% |                100.0% |                  - |             100.0% |             100.0% | in 485748 / out 498   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T01:23:05Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |           67 |             68 |                 68 |         100.0% |           100.0% |                100.0% |       100.0% (1/1) |              92.3% |             100.0% | in 40111 / out 6050   | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T02:45:16Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |           67 |             72 |                 69 |          76.9% |            76.9% |                 76.9% |       100.0% (5/5) |              92.3% |             100.0% | in 4965467 / out 3635 | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T02:45:16Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |           67 |             72 |                 72 |         100.0% |            92.3% |                 92.3% |       100.0% (4/4) |             100.0% |             100.0% | in 4075030 / out 3432 | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T02:45:16Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |           67 |             68 |                 68 |         100.0% |           100.0% |                100.0% |       100.0% (1/1) |              92.3% |             100.0% | in 4150866 / out 4524 | fe2715491ac7 / feature/enterprise-ultimate-validation / 2026-05-27T02:45:16Z |
-| **Aggregate**                         | **all selected**                     | -                     |   **92** |      **336** |        **350** |            **345** |      **94.6%** |        **93.5%** |             **93.5%** | **100.0% (13/13)** |          **96.7%** |         **100.0%** | -                     | -                                                                            |
+Withdrawn. The Enterprise meta-tools run published here, dated 20260527, is readable at commit `4587cbfb3`.
 
-Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL ENTERPRISE META RESULTS -->
 
 ## Enterprise Dynamic Results
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->
-### Docker Enterprise dynamic 20260628-015421
 
-| Model                                 | Preset                               | Backend               | Attempts | Expected ops | Model requests | Tool calls emitted | Tool-selection | Action-selection | First-pass validation |   Repair success | Destructive safety | Final task success | Cost/tokens           | Commit / branch / date                                         |
-| ------------------------------------- | ------------------------------------ | --------------------- | -------: | -----------: | -------------: | -----------------: | -------------: | ---------------: | --------------------: | ---------------: | -----------------: | -----------------: | --------------------- | -------------------------------------------------------------- |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-read`             | Docker GitLab via MCP |       13 |           52 |             53 |                 53 |         100.0% |           100.0% |                100.0% |     100.0% (1/1) |             100.0% |             100.0% | in 266890 / out 3285  | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:08:25Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-read`             | Docker GitLab via MCP |       13 |           52 |             54 |                 54 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 231767 / out 1721  | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:08:25Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-read`             | Docker GitLab via MCP |       13 |           52 |             53 |                 53 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 225880 / out 2077  | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:08:25Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-read`             | Docker GitLab via MCP |       13 |           52 |             53 |                 53 |         100.0% |           100.0% |                100.0% |     100.0% (1/1) |             100.0% |             100.0% | in 243110 / out 2162  | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:08:25Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |           16 |             16 |                 16 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 83019 / out 1138   | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:11:45Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |           16 |             17 |                 17 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 79313 / out 664    | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:11:45Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |           16 |             16 |                 16 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 64194 / out 705    | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:11:45Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-mutating-safe`    | Docker GitLab via MCP |        5 |           16 |             16 |                 16 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 77134 / out 790    | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:11:45Z |
-| `anthropic:claude-haiku-4-5-20251001` | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |          134 |            134 |                134 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 1305621 / out 9519 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:32:10Z |
-| `google:gemini-flash-latest`          | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |          134 |            137 |                137 |         100.0% |           100.0% |                100.0% |     100.0% (2/2) |             100.0% |             100.0% | in 1387371 / out 5484 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:32:10Z |
-| `openai:gpt-5.4-nano`                 | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |          134 |            134 |                134 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 1203262 / out 6410 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:32:10Z |
-| `qwen:qwen3.6-flash`                  | `docker-enterprise-destructive-safe` | Docker GitLab via MCP |       13 |          134 |            134 |                134 |         100.0% |           100.0% |                100.0% |                - |             100.0% |             100.0% | in 1269332 / out 6893 | 901ce569286f / chore/post-pr190-cleanup / 2026-06-28T02:32:10Z |
-| **Aggregate**                         | **all selected**                     | -                     |  **124** |      **808** |        **817** |            **817** |     **100.0%** |       **100.0%** |            **100.0%** | **100.0% (4/4)** |         **100.0%** |         **100.0%** | -                     | -                                                              |
+Withdrawn. The Enterprise dynamic run published here, dated 20260628-015421, is readable at commit `4587cbfb3`.
 
-Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->
