@@ -51,6 +51,12 @@ const protocolVersion = "2026-07-28"
 // answering 20 of 137 under a description that said "List all".
 const fakeGroupTotal = 137
 
+// serverStopGrace is how long a session's cleanup lets the server leave on its
+// own before it cancels the context, which kills it. Bounded rather than
+// unbounded because a server that will not stop is a defect this module is
+// meant to report, not one it should hang on.
+const serverStopGrace = 10 * time.Second
+
 var (
 	buildOnce   sync.Once
 	builtBinary string
@@ -281,6 +287,12 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 	// Before the caller's own entries, so a test that needs to say something
 	// else about GORACE still can.
 	environ = append(environ, raceEnviron()...)
+	// The environment is built from scratch here, so GOCOVERDIR reaches the
+	// child only because this line puts it there: an instrumented binary that
+	// inherited nothing would write its counters nowhere and announce that on
+	// its stderr. A plain binary ignores the variable, so this costs an
+	// ordinary run nothing (coverage_test.go).
+	environ = append(environ, coverEnviron(t)...)
 	for k, v := range env {
 		environ = append(environ, k+"="+v)
 	}
@@ -362,6 +374,17 @@ func startSessionIn(t *testing.T, dir string, env map[string]string, args ...str
 			}
 		}
 		_ = stdin.Close()
+		// Closing stdin is how a client asks this server to stop, and this
+		// wait is what gives it time to go on its own. It used to cancel the
+		// context on the next line, which is a kill, and a killed process runs
+		// no exit hook: an instrumented binary writes its counter file when it
+		// exits normally, so every child of this module was racing a SIGKILL
+		// for the flush and the profile was short by whatever lost. The cancel
+		// stays as the fallback for a server that does not go.
+		select {
+		case <-s.exited:
+		case <-time.After(serverStopGrace):
+		}
 		cancel()
 		// Not Cmd.Wait: the reaper above already collected the child, so this
 		// would answer ErrProcessDone and could not be told from a real

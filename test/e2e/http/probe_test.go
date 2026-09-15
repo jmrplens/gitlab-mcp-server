@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -31,7 +32,15 @@ func runProbe(t *testing.T, probeArgs ...string) (int, string) {
 	defer cancel()
 	bin := serverBinary(t)
 	args := append([]string{"--probe"}, probeArgs...)
-	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, bin, args...)
+	// A probe is a whole run of the binary that exits on its own, so it writes
+	// counters like any other child once it is told where (coverage_test.go).
+	// os.Environ is what this call inherited before it named an environment of
+	// its own, and it stays that rather than the filtered one the servers get:
+	// a probe reads the command line of the instances it finds, not settings
+	// of its own, so nothing here is worth taking away from it.
+	cmd.Env = append(os.Environ(), coverEnviron(t)...)
+	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return 0, string(out)
 	}

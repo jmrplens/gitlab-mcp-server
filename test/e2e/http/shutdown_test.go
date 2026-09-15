@@ -173,6 +173,11 @@ func shutdownStartServer(t *testing.T, flags ...string) *shutdownServer {
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
+	// These servers are asked to stop by the test itself, which is the one
+	// exit an instrumented binary needs to write its counters; without the
+	// variable it would announce that it has nowhere to write them instead
+	// (coverage_test.go).
+	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 
 	var mu sync.Mutex
 	var out bytes.Buffer
