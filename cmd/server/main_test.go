@@ -10969,12 +10969,13 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // the skip it performs, which belongs in a test binary and nowhere else.
 // internal/testutil/e2ecalls is the record the end-to-end harness writes and
 // cmd/audit_e2e_coverage reads, internal/testutil/shardio is the shard
-// mechanism under it, and internal/testutil/modelrecord is the record the model
-// evaluation run writes and cmd/gen_model_results reads; each is named here in
-// its own right because this list matches exact import paths, so
+// mechanism under it, internal/testutil/modelrecord is the record the model
+// evaluation run writes and cmd/gen_model_results reads, and
+// internal/testutil/modelcorpus is the corpus that run is driven from; each is
+// named here in its own right because this list matches exact import paths, so
 // internal/testutil does not cover a subpackage of it.
 //
-// Today all six stay out by accident, because nothing in the server's import
+// Today all seven stay out by accident, because nothing in the server's import
 // graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
@@ -10985,6 +10986,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		"internal/testutil/e2ecalls",
 		"internal/testutil/shardio",
 		"internal/testutil/modelrecord",
+		"internal/testutil/modelcorpus",
 		"internal/graphqlschema",
 		"internal/freshness",
 	}
