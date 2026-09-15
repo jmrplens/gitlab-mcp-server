@@ -29,72 +29,153 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
+// deploymentFacts records what the deployment a catalog was built for actually
+// resolved to, as opposed to what the command line asked for: the licensing
+// tier the client settled on, the scopes the credential carries and the
+// version the instance answered with. Two runs of the same cases against
+// different deployments are not comparable, and nothing in a report says so
+// unless the header does, so these travel from the client that resolved them
+// to [writeReportHeader].
+type deploymentFacts struct {
+	// Resolved is false when no GitLab client was built at all, which is the
+	// --tools-file case: the catalog came out of a snapshot and carries no
+	// deployment with it. The header then reports every field as unknown
+	// rather than as the Free tier the zero value of [edition.Tier] would
+	// otherwise claim.
+	Resolved bool
+	// Enterprise is whether the catalog holds Enterprise routes. For a client
+	// it follows the resolved tier; for a snapshot it is read from the routes
+	// the snapshot carries, which is the only source there is for one.
+	Enterprise bool
+	Tier       edition.Tier
+	// TokenScopes is nil when scope detection was disabled or unavailable,
+	// which every reader of it treats as "every tool", as the server does.
+	TokenScopes   []string
+	GitLabVersion string
+}
+
+// deploymentFactsForClient reads off a client what can be known from it
+// without asking GitLab anything: the tier it resolved and whether that tier
+// is an enterprise one. The instance version and the credential's scopes come
+// from the two calls [newCatalogGitLabClient] already makes and stay empty
+// here, so a caller holding only a client gets a catalog filtered exactly as
+// it was before scopes were detected at all.
+func deploymentFactsForClient(client *gitlabclient.Client) deploymentFacts {
+	if client == nil {
+		return deploymentFacts{}
+	}
+	return deploymentFacts{Resolved: true, Enterprise: client.IsEnterprise(), Tier: client.Tier()}
+}
+
+// tierLabel names the tier the catalog was built for, and nothing at all for a
+// deployment that was never resolved: the zero value of [edition.Tier] is
+// Free, so an unresolved deployment reported through it would name a tier the
+// run never asked any instance about.
+func (d deploymentFacts) tierLabel() string {
+	if !d.Resolved {
+		return ""
+	}
+	return d.Tier.String()
+}
+
+// tokenScopesLabel lists the credential's scopes. Empty means detection was
+// disabled or unavailable, which the catalog filter reads as "every tool" and
+// the header reports as unknown, since that is what it is: nothing here can
+// tell a token with no scopes from a token whose scopes nothing asked for.
+func (d deploymentFacts) tokenScopesLabel() string {
+	if len(d.TokenScopes) == 0 {
+		return ""
+	}
+	return strings.Join(d.TokenScopes, ", ")
+}
+
+// mockGitLabVersion is the version the offline catalog backend answers with,
+// and so the version a mock-backed report records.
+const mockGitLabVersion = "17.0.0"
+
+func newMockGitLabClient() (*gitlabclient.Client, deploymentFacts, func(), error) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
+		fmt.Fprintf(w, `{"version":%q}`, mockGitLabVersion)
 	}))
 	cfg := &config.Config{GitLabURL: srv.URL, GitLabToken: "eval-token", Tier: edition.Ultimate, TierExplicit: true}
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
 		srv.Close()
-		return nil, nil, fmt.Errorf("client: %w", err)
+		return nil, deploymentFacts{}, nil, fmt.Errorf("client: %w", err)
 	}
-	return client, srv.Close, nil
+	facts := deploymentFactsForClient(client)
+	facts.GitLabVersion = mockGitLabVersion
+	return client, facts, srv.Close, nil
 }
 
-// loadCatalog loads catalog from evaluator inputs.
-func loadCatalog(opts options) (catalog []modelTool, routes map[string]toolutil.ActionMap, enterprise bool, err error) {
+// loadCatalog loads catalog from evaluator inputs, along with what the
+// deployment it was built for resolved to.
+func loadCatalog(opts options) (catalog []modelTool, routes map[string]toolutil.ActionMap, facts deploymentFacts, err error) {
 	if opts.ToolsFile != "" {
 		snapshotTools, snapshotRoutes, snapshotErr := loadToolsSnapshot(opts.ToolsFile)
-		return snapshotTools, snapshotRoutes, catalogHasEnterpriseRoutes(snapshotRoutes), snapshotErr
+		return snapshotTools, snapshotRoutes, deploymentFacts{Enterprise: catalogHasEnterpriseRoutes(snapshotRoutes)}, snapshotErr
 	}
 	toolSurface, err := normalizeEvalToolSurface(opts.ToolSurface)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, deploymentFacts{}, err
 	}
-	client, cleanup, err := newCatalogGitLabClient(opts)
+	client, facts, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, deploymentFacts{}, err
 	}
 	defer cleanup()
-	mcpTools, routes, err := buildCatalog(client, toolSurface, opts.ServerMode)
+	mcpTools, routes, err := buildCatalog(client, facts, toolSurface, opts.ServerMode)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, deploymentFacts{}, err
 	}
-	return convertTools(mcpTools), routes, client.IsEnterprise(), nil
+	return convertTools(mcpTools), routes, facts, nil
 }
 
-// newCatalogGitLabClient derives new catalog GitLab client from catalog metadata.
-func newCatalogGitLabClient(opts options) (*gitlabclient.Client, func(), error) {
+// newCatalogGitLabClient derives new catalog GitLab client from catalog
+// metadata, and reports what the instance behind it resolved to.
+//
+// The version comes from the ping the client already has to make, and the
+// credential's scopes from the same detection cmd/server runs at startup,
+// which GITLAB_MCP_IGNORE_SCOPES turns off there and here alike. Both are
+// facts about the catalog a run evaluated: the scopes decide which groups are
+// in it at all, and a report that named neither could not be told apart from
+// a report of a different deployment.
+func newCatalogGitLabClient(opts options) (*gitlabclient.Client, deploymentFacts, func(), error) {
 	switch normalizedBackend(opts.Backend) {
 	case backendMock:
 		return newMockGitLabClient()
 	case backendGitLab:
 		cfg, err := config.Load()
 		if err != nil {
-			return nil, nil, fmt.Errorf("load GitLab config: %w", err)
+			return nil, deploymentFacts{}, nil, fmt.Errorf("load GitLab config: %w", err)
 		}
 		client, err := gitlabclient.NewClient(cfg)
 		if err != nil {
-			return nil, nil, fmt.Errorf("client: %w", err)
+			return nil, deploymentFacts{}, nil, fmt.Errorf("client: %w", err)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if _, pingErr := client.Ping(ctx); pingErr != nil {
-			return nil, nil, fmt.Errorf("ping GitLab backend %s: %w", cfg.GitLabURL, pingErr)
+		version, pingErr := client.Ping(ctx)
+		if pingErr != nil {
+			return nil, deploymentFacts{}, nil, fmt.Errorf("ping GitLab backend %s: %w", cfg.GitLabURL, pingErr)
 		}
 		if cfg.TierExplicit {
 			client.SetTier(cfg.Tier)
 		} else {
 			client.DetectTier(ctx)
 		}
-		return client, func() {
+		facts := deploymentFactsForClient(client)
+		facts.GitLabVersion = version
+		if !cfg.IgnoreScopes {
+			facts.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
+		}
+		return client, facts, func() {
 			// GitLab catalog clients do not own an httptest server or other local resource.
 		}, nil
 	default:
-		return nil, nil, fmt.Errorf("unknown backend %q (valid: %s, %s)", opts.Backend, backendMock, backendGitLab)
+		return nil, deploymentFacts{}, nil, fmt.Errorf("unknown backend %q (valid: %s, %s)", opts.Backend, backendMock, backendGitLab)
 	}
 }
 
@@ -106,12 +187,12 @@ func runMCPSmoke(opts options) error {
 	if normalizedBackend(opts.Backend) != backendGitLab {
 		return errors.New("--mcp-smoke requires --backend=gitlab")
 	}
-	client, cleanup, err := newCatalogGitLabClient(opts)
+	client, facts, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
+	session, closeSession, err := newCatalogSession(client, facts, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		return err
 	}
@@ -150,11 +231,11 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 		session, cleanup, err := newExternalExecutionSession(opts)
 		return session, nil, cleanup, err
 	}
-	client, cleanup, err := newCatalogGitLabClient(opts)
+	client, facts, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
+	session, closeSession, err := newCatalogSession(client, facts, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		cleanup()
 		return nil, nil, nil, err
@@ -167,11 +248,11 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 
 // newResourceLookupSession constructs a read-only MCP session for resource bridge tools.
 func newResourceLookupSession(opts options) (*mcp.ClientSession, func(), error) {
-	client, cleanup, err := newCatalogGitLabClient(opts)
+	client, facts, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
 		return nil, nil, err
 	}
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
+	session, closeSession, err := newCatalogSession(client, facts, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -380,8 +461,8 @@ func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 }
 
 // buildCatalog constructs the request parameters from the input.
-func buildCatalog(client *gitlabclient.Client, toolSurface, serverMode string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
-	_, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface, serverMode)
+func buildCatalog(client *gitlabclient.Client, facts deploymentFacts, toolSurface, serverMode string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
+	_, closeSession, toolsResult, routes, err := buildCatalogSession(client, facts, toolSurface, serverMode)
 	if closeSession != nil {
 		defer closeSession()
 	}
@@ -396,8 +477,8 @@ func buildCatalog(client *gitlabclient.Client, toolSurface, serverMode string) (
 var evalSchemaCache = mcp.NewSchemaCache()
 
 // newCatalogSession constructs catalog session.
-func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (*mcp.ClientSession, func(), error) {
-	session, closeSession, _, _, err := buildCatalogSession(client, toolSurface, serverMode)
+func newCatalogSession(client *gitlabclient.Client, facts deploymentFacts, toolSurface, serverMode string) (*mcp.ClientSession, func(), error) {
+	session, closeSession, _, _, err := buildCatalogSession(client, facts, toolSurface, serverMode)
 	return session, closeSession, err
 }
 
@@ -405,18 +486,22 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode stri
 // for, so the assemblers the server itself uses can be handed the same
 // configuration a server would receive.
 //
-// The tier is the one thing this has to state rather than pass through:
-// [edition.TierForEnterprise] is the mapping the catalog builders apply to the
-// legacy binary "enterprise" notion, so an enterprise client evaluates the
-// Ultimate catalog and a Community one the Free catalog, exactly as before.
+// Every field is passed through rather than restated. The tier used to be
+// collapsed through [edition.TierForEnterprise], which reads a resolved tier
+// back as the binary "is this an enterprise instance" question and answers
+// Ultimate to it: a Premium instance was evaluated against the Ultimate
+// catalog, so a report could name a tier the run never served. The scopes are
+// what [tools.FilterActionCatalog] narrows the catalog by, and leaving them
+// nil evaluated a wider surface than the credential would have been served.
 // GITLAB_MCP_READ_ONLY and GITLAB_MCP_SAFE_MODE both act per action, so
 // evaluating either means evaluating a different catalog, not a different
 // client.
-func evalServerConfig(client *gitlabclient.Client, serverMode string) *config.ServerConfig {
+func evalServerConfig(facts deploymentFacts, serverMode string) *config.ServerConfig {
 	return &config.ServerConfig{
-		Tier:     edition.TierForEnterprise(client.IsEnterprise()),
-		ReadOnly: serverMode == ServerModeReadOnly,
-		SafeMode: serverMode == ServerModeSafe,
+		Tier:        facts.Tier,
+		TokenScopes: facts.TokenScopes,
+		ReadOnly:    serverMode == ServerModeReadOnly,
+		SafeMode:    serverMode == ServerModeSafe,
 	}
 }
 
@@ -431,7 +516,7 @@ var (
 )
 
 // buildCatalogSession constructs the request parameters from the input.
-func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
+func buildCatalogSession(client *gitlabclient.Client, facts deploymentFacts, toolSurface, serverMode string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	completionHandler := completions.NewHandler(client)
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{
 		PageSize: 2000,
@@ -449,7 +534,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 			return completionHandler.Complete(ctx, req)
 		},
 	})
-	cfg := evalServerConfig(client, serverMode)
+	cfg := evalServerConfig(facts, serverMode)
 	var surfaceCatalog *actioncatalog.Catalog
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:

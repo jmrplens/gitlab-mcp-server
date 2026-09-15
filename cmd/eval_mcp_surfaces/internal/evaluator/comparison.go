@@ -154,7 +154,7 @@ func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 			formatMetric(input.Metrics[metricToolSelection]),
 			formatMetric(input.Metrics[metricActionSelection]),
 			formatMetric(input.Metrics[metricFirstCallValidationPassRate]),
-			formatMetric(input.Metrics["Schema lookup use rate"]),
+			formatMetric(input.Metrics[metricSchemaLookupUseRate]),
 			formatMetric(input.Metrics[metricRepairSuccessRate]),
 			formatMetric(input.Metrics[metricDestructiveSafety]),
 			formatMetric(input.Metrics[metricFinalTaskSuccess]),
@@ -176,12 +176,12 @@ func writeMetricDeltaTable(b *strings.Builder, evals []comparisonInput) {
 		fmt.Fprintf(
 			b, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
 			escapeTable(input.Label),
-			formatDelta(input.Metrics[metricToolSelection]-baseline.Metrics[metricToolSelection]),
-			formatDelta(input.Metrics[metricActionSelection]-baseline.Metrics[metricActionSelection]),
-			formatDelta(input.Metrics[metricFirstCallValidationPassRate]-baseline.Metrics[metricFirstCallValidationPassRate]),
-			formatDelta(input.Metrics[metricRepairSuccessRate]-baseline.Metrics[metricRepairSuccessRate]),
-			formatDelta(input.Metrics[metricDestructiveSafety]-baseline.Metrics[metricDestructiveSafety]),
-			formatDelta(input.Metrics[metricFinalTaskSuccess]-baseline.Metrics[metricFinalTaskSuccess]),
+			formatMetricDelta(input.Metrics[metricToolSelection], baseline.Metrics[metricToolSelection]),
+			formatMetricDelta(input.Metrics[metricActionSelection], baseline.Metrics[metricActionSelection]),
+			formatMetricDelta(input.Metrics[metricFirstCallValidationPassRate], baseline.Metrics[metricFirstCallValidationPassRate]),
+			formatMetricDelta(input.Metrics[metricRepairSuccessRate], baseline.Metrics[metricRepairSuccessRate]),
+			formatMetricDelta(input.Metrics[metricDestructiveSafety], baseline.Metrics[metricDestructiveSafety]),
+			formatMetricDelta(input.Metrics[metricFinalTaskSuccess], baseline.Metrics[metricFinalTaskSuccess]),
 		)
 	}
 }
@@ -428,10 +428,15 @@ func cleanReportValue(value string) string {
 	return strings.TrimSpace(value)
 }
 
-// parseReportPercent parses report percent from evaluator input.
+// parseReportPercent parses report percent from evaluator input. A dash is how
+// a report renders a rate with no sample behind it, and reads back as that
+// rather than as zero; so does a cell the report never wrote.
 func parseReportPercent(value string) float64 {
 	value = strings.TrimSuffix(cleanReportValue(value), "%")
 	value = strings.ReplaceAll(value, ",", "")
+	if value == noMetricSample || value == "" {
+		return metricUndefined
+	}
 	parsed, _ := strconv.ParseFloat(value, 64)
 	return parsed
 }
@@ -448,14 +453,38 @@ func parseReportInt(value string) int {
 	return parsed
 }
 
-// formatMetric renders the result as a formatted string.
+// formatMetric renders a metric as a table cell. A rate with no sample behind
+// it is a dash, which is what the recovery column has always printed for an
+// empty repair denominator.
 func formatMetric(value float64) string {
+	if !metricIsDefined(value) {
+		return noMetricSample
+	}
 	return fmt.Sprintf("%.1f%%", value)
+}
+
+// formatMetricInProse renders a metric inside a sentence, where the table's
+// dash would read as a hyphen rather than as a measurement nobody took.
+func formatMetricInProse(value float64) string {
+	if !metricIsDefined(value) {
+		return "no measured"
+	}
+	return formatMetric(value)
 }
 
 // formatDelta renders the result as a formatted string.
 func formatDelta(value float64) string {
 	return fmt.Sprintf("%+.1f pp", value)
+}
+
+// formatMetricDelta renders the distance between two metrics. There is no
+// distance to state unless both were measured, so either side missing prints a
+// dash: subtracting the sentinel would render a difference from nothing.
+func formatMetricDelta(value, baseline float64) string {
+	if !metricIsDefined(value) || !metricIsDefined(baseline) {
+		return noMetricSample
+	}
+	return formatDelta(value - baseline)
 }
 
 // sortedIntKeys sorts int keys deterministically.

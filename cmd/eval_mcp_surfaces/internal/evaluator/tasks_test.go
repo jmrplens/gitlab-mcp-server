@@ -933,12 +933,12 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 	if problems := validateTaskFixture(tasks); len(problems) > 0 {
 		t.Fatalf("fixture validation problems = %+v", problems)
 	}
-	_, routes, catalogEnterprise, err := loadCatalog(options{})
+	_, routes, facts, err := loadCatalog(options{})
 	if err != nil {
 		t.Fatalf("loadCatalog() error = %v", err)
 	}
 	tasks = normalizeTasksForRoutes(tasks, routes)
-	tasks = filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
+	tasks = filterTasksByAvailableRoutes(tasks, routes, facts.Enterprise)
 	if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
 		t.Fatalf("route validation problems = %+v", problems)
 	}

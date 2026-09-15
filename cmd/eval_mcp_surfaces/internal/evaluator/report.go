@@ -3,9 +3,11 @@ package evaluator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,8 +20,12 @@ const (
 	accessRequestedInactive    = "requested but not active"
 )
 
+// shouldWriteStartupReport reports whether a placeholder report is written
+// before the run starts. The prompt audit is excluded because it writes its own
+// artifact to that same path and evaluates nothing: a status report there would
+// be overwritten on success and would clobber the dump on failure.
 func shouldWriteStartupReport(opts options) bool {
-	return opts.Output != "" && !opts.FixturesOnly
+	return opts.Output != "" && !opts.FixturesOnly && !opts.AuditPrompts
 }
 
 func writeStartupReport(path string, opts options) error {
@@ -56,14 +62,9 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "# %s\n\n", reportTitle(opts.ToolSurface))
 	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
-	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
-		if branch != "" {
-			fmt.Fprintf(b, "Git branch: `%s`\n", branch)
-		}
-		if commit != "" {
-			fmt.Fprintf(b, "Git commit: `%s`\n", commit)
-		}
-	}
+	branch, commit := currentGitReportMetadata()
+	writeReportMetadata(b, reportKeyGitBranch, branch)
+	writeReportMetadata(b, reportKeyGitCommit, commit)
 	fmt.Fprintf(b, "Mode: %s\n", reportMode(dryRun))
 	fmt.Fprintf(b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(b, "Tool surface: `%s`\n", opts.ToolSurface)
@@ -84,6 +85,7 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	if opts.Partition != "" {
 		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
 	}
+	writeRunProvenance(b, opts)
 	capabilityAccess := "disabled"
 	resourceAccess := "disabled"
 	promptAccess := "disabled"
@@ -110,6 +112,71 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "Resource access: `%s`\n", resourceAccess)
 	fmt.Fprintf(b, "Prompt access: `%s`\n", promptAccess)
 	fmt.Fprintf(b, "Completion access: `%s`\n", completionAccess)
+}
+
+// writeReportMetadata writes one header line, stating [reportValueUnknown]
+// for a value this run could not resolve rather than leaving the line out.
+// An omitted line and a line a reader could not parse look the same from the
+// outside, so a header that drops what it does not know reads as complete
+// while it is not: the runner that produced the first reports had no `.git`
+// to read, and the branch and commit lines simply were not there.
+func writeReportMetadata(b *strings.Builder, key, value string) {
+	if strings.TrimSpace(value) == "" {
+		value = reportValueUnknown
+	}
+	fmt.Fprintf(b, "%s: `%s`\n", key, value)
+}
+
+// writeRunProvenance writes what the numbers below it were measured on: the
+// deployment the evaluated catalog was built for, the sampling every model
+// request carried, and whether the prompts withheld the answer the scorer
+// checks for. A report that states none of them cannot be compared with
+// another one, and the published tables used to carry six columns naming
+// neither the deployment nor the commit they came from.
+func writeRunProvenance(b *strings.Builder, opts options) {
+	writeReportMetadata(b, reportKeyServerMode, evalServerModeLabel(opts.ServerMode))
+	writeReportMetadata(b, reportKeyTier, opts.Deployment.tierLabel())
+	writeReportMetadata(b, reportKeyTokenScopes, opts.Deployment.tokenScopesLabel())
+	writeReportMetadata(b, reportKeyMetaParamSchema, toolutil.MetaParamSchemaMode())
+	writeReportMetadata(b, reportKeyGitLabVersion, opts.Deployment.GitLabVersion)
+	writeReportMetadata(b, reportKeyTemperature, strconv.FormatFloat(evalSamplingTemperature, 'f', -1, 64))
+	writeReportMetadata(b, reportKeyMaxOutputTokens, maxOutputTokensLabel(opts.MaxTokens))
+	writeReportMetadata(b, reportKeyStimulus, reportStimulus())
+}
+
+// evalServerModeLabel names the protective mode a catalog was built for. An
+// unset mode is the default one rather than an unknown one: every reader of
+// it compares against the read-only and safe-mode names and treats everything
+// else as default, [evalServerConfig] included.
+func evalServerModeLabel(serverMode string) string {
+	if strings.TrimSpace(serverMode) == "" {
+		return ServerModeDefault
+	}
+	return serverMode
+}
+
+// maxOutputTokensLabel states the output ceiling model requests were sent
+// with. A non-positive value is one no request could have carried, so it
+// reports as unknown rather than as a ceiling of zero.
+func maxOutputTokensLabel(maxTokens int) string {
+	if maxTokens <= 0 {
+		return ""
+	}
+	return strconv.Itoa(maxTokens)
+}
+
+// reportStimulus reports what the prompt builder hands the model, which is
+// what decides whether the numbers in this report may be published at all
+// (see requireUncoachedStimulus).
+//
+// It is coached today, and the declaration is not a formality: the meta
+// surface's prompt builder writes the expected call into the prompt for
+// twelve cases (exactToolTaskPrompt), and the retry guidance switches on the
+// expected tool and action for nineteen more. This is the one place that
+// flips once those paths are gone, and until it does nothing this evaluator
+// writes can be published.
+func reportStimulus() string {
+	return stimulusCoached
 }
 
 func reportTitle(toolSurface string) string {
@@ -149,15 +216,15 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	fmt.Fprintf(&b, "## Metrics\n\n")
 	b.WriteString(metricValueTableHeader)
-	fmt.Fprintf(&b, "| Tool-selection accuracy | %.1f%% |\n", metrics.ToolSelection)
-	fmt.Fprintf(&b, "| Action-selection accuracy | %.1f%% |\n", metrics.ActionSelection)
-	fmt.Fprintf(&b, "| First-call validation pass rate | %.1f%% |\n", metrics.FirstPass)
-	fmt.Fprintf(&b, "| Schema lookup use rate | %.1f%% |\n", metrics.SchemaLookup)
-	fmt.Fprintf(&b, "| Resource lookup use rate | %.1f%% |\n", metrics.ResourceLookup)
-	fmt.Fprintf(&b, "| MCP capability bridge use rate | %.1f%% |\n", metrics.CapabilityLookup)
-	fmt.Fprintf(&b, "| Repair success rate | %.1f%% |\n", metrics.RepairSuccess)
-	fmt.Fprintf(&b, "| Destructive safety | %.1f%% |\n", metrics.DestructiveSafety)
-	fmt.Fprintf(&b, "| Final task success proxy | %.1f%% |\n", metrics.FinalSuccess)
+	fmt.Fprintf(&b, metricStringValueTableRow, metricToolSelection, formatMetric(metrics.ToolSelection))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricActionSelection, formatMetric(metrics.ActionSelection))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricFirstCallValidationPassRate, formatMetric(metrics.FirstPass))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricSchemaLookupUseRate, formatMetric(metrics.SchemaLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, "Resource lookup use rate", formatMetric(metrics.ResourceLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, "MCP capability bridge use rate", formatMetric(metrics.CapabilityLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricRepairSuccessRate, formatMetric(metrics.RepairSuccess))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricDestructiveSafety, formatMetric(metrics.DestructiveSafety))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricFinalTaskSuccess, formatMetric(metrics.FinalSuccess))
 	writePerModelMetrics(&b, results)
 	if opts.Repeat > 1 {
 		writePerRunMetrics(&b, results)
@@ -819,23 +886,15 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 		byRun[result.Run] = append(byRun[result.Run], result)
 	}
 	sort.Ints(runs)
-	fmt.Fprintf(b, "\n## Per-Run Metrics\n\n")
+	fmt.Fprintf(b, "\n%s\n\n", perRunMetricsHeading)
 	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
 	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, runIndex := range runs {
 		metrics := calculateMetrics(byRun[runIndex])
 		fmt.Fprintf(
-			b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+			b, "| %d | %s |\n",
 			runIndex,
-			metrics.ToolSelection,
-			metrics.ActionSelection,
-			metrics.FirstPass,
-			metrics.SchemaLookup,
-			metrics.ResourceLookup,
-			metrics.CapabilityLookup,
-			metrics.RepairSuccess,
-			metrics.DestructiveSafety,
-			metrics.FinalSuccess,
+			strings.Join(formattedMetricCells(metrics), " | "),
 		)
 	}
 }
@@ -846,14 +905,35 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 		return
 	}
 	models := sortedStringKeys(byModel)
-	fmt.Fprintf(b, "\n## Per-Model Metrics\n\n")
+	fmt.Fprintf(b, "\n%s\n\n", perModelMetricsHeading)
 	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		metrics := calculateMetrics(byModel[model])
-		fmt.Fprintf(b, "| `%s` | %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
-			escapeTable(model), len(byModel[model]), metrics.ToolSelection, metrics.ActionSelection, metrics.FirstPass, metrics.SchemaLookup, metrics.ResourceLookup, metrics.CapabilityLookup, metrics.RepairSuccess, metrics.DestructiveSafety, metrics.FinalSuccess)
+		fmt.Fprintf(b, "| `%s` | %d | %s |\n",
+			escapeTable(model), len(byModel[model]), strings.Join(formattedMetricCells(metrics), " | "))
 	}
+}
+
+// formattedMetricCells renders one metric set as the per-run and per-model
+// tables order them, each cell already a dash where nothing was measured.
+func formattedMetricCells(metrics metrics) []string {
+	values := []float64{
+		metrics.ToolSelection,
+		metrics.ActionSelection,
+		metrics.FirstPass,
+		metrics.SchemaLookup,
+		metrics.ResourceLookup,
+		metrics.CapabilityLookup,
+		metrics.RepairSuccess,
+		metrics.DestructiveSafety,
+		metrics.FinalSuccess,
+	}
+	cells := make([]string, 0, len(values))
+	for _, value := range values {
+		cells = append(cells, formatMetric(value))
+	}
+	return cells
 }
 
 func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, dryRun bool) {
@@ -1141,9 +1221,6 @@ type metricCounters struct {
 
 // calculateMetrics derives evaluator success metrics from task results.
 func calculateMetrics(results []taskResult) metrics {
-	if len(results) == 0 {
-		return metrics{}
-	}
 	counters := metricCounters{}
 	for _, result := range results {
 		counters.record(result)
@@ -1227,12 +1304,33 @@ func firstOutcomeCandidateSteps(steps []evalStep) []evalStep {
 	return candidates
 }
 
-// percent converts a count and total into a percentage, treating empty samples as complete.
+// percent converts a count and total into a percentage. An empty sample has no
+// rate at all, so it returns metricUndefined rather than a number. Returning
+// 100 is what made a run that attempted no repair at all report a perfect
+// repair success rate, on the published tables as well as in its own report.
 func percent(value, total int) float64 {
 	if total == 0 {
-		return 100
+		return metricUndefined
 	}
 	return float64(value) * 100 / float64(total)
+}
+
+// metricUndefined marks a rate whose denominator was empty. Renderers print it
+// as a dash and aggregation leaves it out of both sides of its average.
+//
+// It is NaN rather than a value off the bottom of the scale because a figure
+// rendered here may legitimately be negative: traceOverheadPercent is negative
+// whenever a run made fewer calls than its tasks expected operations, so a
+// sentinel recognized by its sign would silently print a real measurement as
+// "not measured".
+var metricUndefined = math.NaN()
+
+// noMetricSample is how an undefined metric renders in a table cell.
+const noMetricSample = "-"
+
+// metricIsDefined reports whether a metric was measured over a non-empty sample.
+func metricIsDefined(value float64) bool {
+	return !math.IsNaN(value)
 }
 
 // boolText formats booleans for human-readable Markdown reports.

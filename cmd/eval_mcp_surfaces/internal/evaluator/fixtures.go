@@ -166,7 +166,7 @@ func prepareLiveFixtures(opts options) (*liveFixtureState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load GitLab config: %w", err)
 	}
-	client, cleanup, err := newCatalogGitLabClient(opts)
+	client, _, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
 		return nil, err
 	}

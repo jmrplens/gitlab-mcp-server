@@ -32,6 +32,56 @@ func TestComparisonFormattingHelpers_NormalizeReportValues(t *testing.T) {
 	}
 }
 
+// TestComparisonFormattingHelpers_UnmeasuredMetricsStayUnmeasured verifies that
+// a rate with no sample survives the round trip a comparison makes of it: it
+// renders as a dash, reads back as undefined rather than as zero, has no
+// distance from any baseline, and inside a sentence reads as words rather than
+// as a stray hyphen.
+func TestComparisonFormattingHelpers_UnmeasuredMetricsStayUnmeasured(t *testing.T) {
+	if got := formatMetric(metricUndefined); got != "-" {
+		t.Fatalf("formatMetric(undefined) = %q, want a dash", got)
+	}
+	// A run that made fewer calls than its tasks expected operations has a
+	// negative trace overhead, and that is a measurement. A sentinel
+	// recognized by its sign would print this as "not measured".
+	if got := formatMetric(traceOverheadPercent(traceAggregate{ExpectedOps: 8, ActualCalls: 7})); got != "-12.5%" {
+		t.Fatalf("formatMetric(negative overhead) = %q, want -12.5%%", got)
+	}
+	for _, cell := range []string{"-", " `-` ", "", "  "} {
+		t.Run("parse "+cell, func(t *testing.T) {
+			if got := parseReportPercent(cell); metricIsDefined(got) {
+				t.Fatalf("parseReportPercent(%q) = %v, want undefined", cell, got)
+			}
+		})
+	}
+	if got := parseReportPercent("0.0%"); got != 0 {
+		t.Fatalf("parseReportPercent(zero) = %v, want a measured zero", got)
+	}
+	deltas := []struct {
+		name     string
+		value    float64
+		baseline float64
+		want     string
+	}{
+		{name: "both measured", value: 90, baseline: 100, want: "-10.0 pp"},
+		{name: "value unmeasured", value: metricUndefined, baseline: 100, want: "-"},
+		{name: "baseline unmeasured", value: 90, baseline: metricUndefined, want: "-"},
+	}
+	for _, delta := range deltas {
+		t.Run(delta.name, func(t *testing.T) {
+			if got := formatMetricDelta(delta.value, delta.baseline); got != delta.want {
+				t.Fatalf("formatMetricDelta(%v, %v) = %q, want %q", delta.value, delta.baseline, got, delta.want)
+			}
+		})
+	}
+	if got := formatMetricInProse(metricUndefined); got != "no measured" {
+		t.Fatalf("formatMetricInProse(undefined) = %q, want words", got)
+	}
+	if got := formatMetricInProse(99.9); got != "99.9%" {
+		t.Fatalf("formatMetricInProse(measured) = %q, want the percentage", got)
+	}
+}
+
 // TestWriteComparisonReport_BuildsEvaluationAndTokenSections verifies comparison
 // reports parse evaluation and token audit inputs and write a combined summary.
 func TestWriteComparisonReport_BuildsEvaluationAndTokenSections(t *testing.T) {

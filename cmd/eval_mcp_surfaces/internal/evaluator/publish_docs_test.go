@@ -81,6 +81,75 @@ func TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel(t
 	}
 }
 
+// TestValidatePublishReports_RefusesAReportThatDoesNotDeclareAnUncoachedStimulus
+// verifies that publication is refused unless the report header carries
+// "Stimulus: uncoached", and that the refusal names that declaration.
+//
+// Every report written before this gate existed is silent about its stimulus,
+// and the corpus that produced them supplies the expected tool, action and
+// parameters inside the prompt the scorer then checks against. The refusal has
+// to name the missing line rather than say only that it refused, because the
+// operator reading it has to know what to change and cannot guess a header key.
+// The table drives the header value, since silence and an explicit declaration
+// of coaching are different mistakes that must both be refused.
+func TestValidatePublishReports_RefusesAReportThatDoesNotDeclareAnUncoachedStimulus(t *testing.T) {
+	const withStimulus = "Stimulus: `%s`\n"
+	full := fullDockerAttemptsByPreset[presetDockerRead]
+	declared := fmt.Sprintf(withStimulus, stimulusUncoached)
+
+	cases := []struct {
+		name        string
+		stimulus    string
+		wantErr     bool
+		wantMessage []string
+	}{
+		{
+			name:        "header absent",
+			stimulus:    "",
+			wantErr:     true,
+			wantMessage: []string{"declares no", "Stimulus:", "Stimulus: uncoached"},
+		},
+		{
+			name:        "header declares coaching",
+			stimulus:    fmt.Sprintf(withStimulus, "coached"),
+			wantErr:     true,
+			wantMessage: []string{"Stimulus: coached", "Stimulus: uncoached"},
+		},
+		{
+			name:     "header declares uncoached",
+			stimulus: declared,
+			wantErr:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := strings.Replace(singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, full), declared, tc.stimulus, 1)
+			if strings.Contains(content, declared) != (tc.stimulus == declared) {
+				t.Fatalf("fixture rewrite did not take effect; header still reads %q", declared)
+			}
+			report, err := readPublishReport(writeTempPublishReport(t, content))
+			if err != nil {
+				t.Fatalf("readPublishReport() error = %v", err)
+			}
+			validateErr := validatePublishReports([]publishReport{report}, "2026-05-05 Docker economy models", false)
+			if !tc.wantErr {
+				if validateErr != nil {
+					t.Fatalf("validatePublishReports() error = %v, want nil", validateErr)
+				}
+				return
+			}
+			if validateErr == nil {
+				t.Fatal("validatePublishReports() error = nil, want a stimulus refusal")
+			}
+			for _, want := range tc.wantMessage {
+				if !strings.Contains(validateErr.Error(), want) {
+					t.Errorf("validatePublishReports() error = %q, want it to name %q", validateErr, want)
+				}
+			}
+		})
+	}
+}
+
 // TestSortedPublishRows_ReplacesDuplicateModelPresetRows verifies SortedPublishRows when replaces duplicate model preset rows.
 func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	oldPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, fullDockerAttemptsByPreset[presetDockerMutatingSafe]))
@@ -96,6 +165,64 @@ func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	}
 	if rows[0].SourcePath != newPath {
 		t.Fatalf("replacement source = %q, want latest input %q", rows[0].SourcePath, newPath)
+	}
+}
+
+// TestAggregatePublishRows_UnmeasuredRowsLeaveTheAggregateUnmeasured verifies
+// that a row with no sample behind a metric changes neither side of that
+// metric's average, and that an aggregate no row measured stays undefined.
+// Weighting the sentinel by attempts would have dragged a real average below
+// zero, which is the failure mode a negative sentinel invites.
+func TestAggregatePublishRows_UnmeasuredRowsLeaveTheAggregateUnmeasured(t *testing.T) {
+	rows := []publishRow{
+		{Attempts: 10, DestructiveSafety: metricUndefined, FinalSuccess: metricUndefined},
+		{Attempts: 10, DestructiveSafety: 50, FinalSuccess: metricUndefined},
+	}
+
+	aggregate := aggregatePublishRows(rows)
+	if aggregate.Attempts != 20 {
+		t.Fatalf("aggregate attempts = %d, want every row counted", aggregate.Attempts)
+	}
+	if aggregate.DestructiveSafety != 50 {
+		t.Fatalf("aggregate destructive safety = %v, want the one measured row's 50", aggregate.DestructiveSafety)
+	}
+	if metricIsDefined(aggregate.FinalSuccess) {
+		t.Fatalf("aggregate final success = %v, want undefined when no row measured it", aggregate.FinalSuccess)
+	}
+	if got := formatMetric(aggregate.FinalSuccess); got != "-" {
+		t.Fatalf("formatMetric(aggregate final success) = %q, want a dash", got)
+	}
+	empty := aggregatePublishRows(nil)
+	if metricIsDefined(empty.ToolSelection) || metricIsDefined(empty.RepairSuccess) {
+		t.Fatalf("empty aggregate = %+v, want undefined rates", empty)
+	}
+}
+
+// TestPublishSummaryLabels_SayWhenNothingWasMeasured verifies the two published
+// cells that read a metric without formatting it as a number. A model whose
+// rates have no sample is labeled as unmeasured rather than as compatible or
+// as under review, and its Docker status says so in words instead of printing
+// a dash mid-sentence.
+func TestPublishSummaryLabels_SayWhenNothingWasMeasured(t *testing.T) {
+	unmeasured := publishModelSummary{
+		DockerBacked:    true,
+		ExpectedOps:     12,
+		ToolSelection:   metricUndefined,
+		ActionSelection: metricUndefined,
+		FinalSuccess:    metricUndefined,
+	}
+	if got := compatibilityLabel(unmeasured); got != "No sample" {
+		t.Fatalf("compatibilityLabel(unmeasured) = %q, want No sample", got)
+	}
+	if got := dockerLiveStatus(unmeasured); got != "No final-success sample across 12 ops" {
+		t.Fatalf("dockerLiveStatus(unmeasured) = %q", got)
+	}
+	perfect := publishModelSummary{DockerBacked: true, ExpectedOps: 12, ToolSelection: 100, ActionSelection: 100, FinalSuccess: 100}
+	if got := compatibilityLabel(perfect); got != "OK" {
+		t.Fatalf("compatibilityLabel(perfect) = %q, want OK", got)
+	}
+	if got := dockerLiveStatus(perfect); got != "100.0% final across 12 ops" {
+		t.Fatalf("dockerLiveStatus(perfect) = %q", got)
 	}
 }
 
@@ -815,11 +942,11 @@ func TestPublishParsingHelpers_CoverFallbacks(t *testing.T) {
 		t.Fatal("parseExpectedOps(no slash) != 7")
 	}
 
-	reports := []publishReport{{Path: "report.md", Backend: backendGitLab, ToolExecution: "dry-run", Rows: []publishRow{{Attempts: 1}}}}
+	reports := []publishReport{{Path: "report.md", Backend: backendGitLab, ToolExecution: "dry-run", Stimulus: stimulusUncoached, Rows: []publishRow{{Attempts: 1}}}}
 	if err := validatePublishReports(reports, "targeted", false); err == nil || !strings.Contains(err.Error(), "--execute-tools") {
 		t.Fatalf("validatePublishReports(backend) error = %v, want execute-tools", err)
 	}
-	reports = []publishReport{{Path: "report.md", ToolExecution: "mcp", UnresolvedHarnessNoise: true, Rows: []publishRow{{Attempts: 1}}}}
+	reports = []publishReport{{Path: "report.md", ToolExecution: "mcp", UnresolvedHarnessNoise: true, Stimulus: stimulusUncoached, Rows: []publishRow{{Attempts: 1}}}}
 	if err := validatePublishReports(reports, "targeted", false); err == nil || !strings.Contains(err.Error(), "harness noise") {
 		t.Fatalf("validatePublishReports(noise) error = %v, want harness noise", err)
 	}
@@ -955,9 +1082,11 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		"Mode: model tool-calling\n" +
 		"Model: `" + model + "`\n" +
 		"Tool surface: `" + toolSurface + "`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
+		fixtureRunProvenanceHeader +
 		"Catalog tools: 33\n" +
 		"Runs: 1\n" +
 		"Task attempts: " + strconv.Itoa(attempts) + "\n\n" +
@@ -995,9 +1124,11 @@ func multiModelPublishReport() string {
 		"Mode: model tool-calling\n" +
 		"Model: `anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview`\n" +
 		"Tool surface: `meta`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Preset: `docker-read`\n" +
 		"Tool execution: `mcp`\n" +
+		fixtureRunProvenanceHeader +
 		"Catalog tools: 33\n" +
 		"Runs: 1\n" +
 		"Task attempts: 4\n\n" +
@@ -1039,6 +1170,7 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"Mode: model tool-calling\n" +
 		"Model: `openai:gpt-5.4-nano`\n" +
 		"Tool surface: `dynamic`\n" +
+		"Stimulus: `" + stimulusUncoached + "`\n" +
 		"Backend: `gitlab`\n" +
 		"Tool execution: `mcp`\n" +
 		"Catalog tools: 3\n" +
@@ -1364,5 +1496,110 @@ func TestPublishDocSections_HaveAHomeInTheCommittedDocuments(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fixtureRunProvenanceHeader is the provenance block a report written by this
+// evaluator carries. It is kept beside the fixtures rather than assembled per
+// test so every publish fixture states one deployment, and a test about
+// provenance can name these values without restating the whole header.
+const fixtureRunProvenanceHeader = "Server mode: `default`\n" +
+	"Tier: `ultimate`\n" +
+	"Token scopes: `api, admin_mode`\n" +
+	"Meta param schema: `opaque`\n" +
+	"GitLab version: `18.4.1`\n" +
+	"Temperature: `0`\n" +
+	"Max output tokens: `1024`\n"
+
+// TestPublishedTables_StateWhatEveryRowWasMeasuredOn verifies the provenance a
+// report header carries reaches both published tables, and that rows which
+// disagree about it are not published as though they agreed.
+//
+// The published tables are the only form most readers ever see, and until now
+// they named no deployment, no sampling and no commit: two snapshots taken
+// against different instances, tiers or credentials rendered identically, so
+// nothing in the document could settle whether a difference between them was
+// the model's or the runtime's. The aggregate row is the half worth pinning
+// hardest, because it covers several reports at once: taking the first row's
+// value to stand for the rest is how a table comes to name a deployment half
+// its numbers were not measured on.
+func TestPublishedTables_StateWhatEveryRowWasMeasuredOn(t *testing.T) {
+	path := writeTempPublishReport(t, singleModelPublishReportForSurface("anthropic:claude-haiku-4-5-20251001", presetDockerRead, 38, config.ToolSurfaceMeta))
+	report, err := readPublishReport(path)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	if len(report.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(report.Rows))
+	}
+	row := report.Rows[0]
+
+	t.Run("the header reaches the row", func(t *testing.T) {
+		fields := map[string]struct{ got, want string }{
+			reportKeyServerMode:      {row.ServerMode, ServerModeDefault},
+			reportKeyTier:            {row.Tier, "ultimate"},
+			reportKeyTokenScopes:     {row.TokenScopes, "api, admin_mode"},
+			reportKeyMetaParamSchema: {row.MetaParamSchema, "opaque"},
+			reportKeyGitLabVersion:   {row.GitLabVersion, "18.4.1"},
+			reportKeyTemperature:     {row.Temperature, "0"},
+			reportKeyMaxOutputTokens: {row.MaxOutputTokens, "1024"},
+		}
+		for key, field := range fields {
+			t.Run(key, func(t *testing.T) {
+				if field.got != field.want {
+					t.Fatalf("row %s = %q, want %q", key, field.got, field.want)
+				}
+			})
+		}
+	})
+
+	t.Run("the detailed table", func(t *testing.T) {
+		table := renderModelResultsTable(report.Rows, aggregatePublishRows(report.Rows))
+		for _, want := range []string{
+			"Server mode",
+			"Run conditions",
+			"schema opaque; scopes api, admin_mode; GitLab 18.4.1; T 0; max 1024",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(table, want) {
+					t.Fatalf("table does not carry %q:\n%s", want, table)
+				}
+			})
+		}
+	})
+
+	t.Run("the readme summary", func(t *testing.T) {
+		summary := renderReadmeSummaryTable(publishSummariesByModel(report.Rows))
+		for _, want := range []string{"Server mode", "Tier", "default", "ultimate"} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(summary, want) {
+					t.Fatalf("summary does not carry %q:\n%s", want, summary)
+				}
+			})
+		}
+	})
+}
+
+// TestPublishedProvenanceCells_StateAFactOrSayTheyCannot verifies a cell
+// covering several rows claims a value only when they all carry it, and that a
+// report stating no provenance at all renders as absent rather than as a run
+// measured with no schema, no scopes and no ceiling. Every report written
+// before this provenance existed is in that second state.
+func TestPublishedProvenanceCells_StateAFactOrSayTheyCannot(t *testing.T) {
+	rows := []publishRow{
+		{Model: "a:b", ServerMode: ServerModeDefault, Tier: "ultimate"},
+		{Model: "a:b", ServerMode: ServerModeReadOnly, Tier: "ultimate"},
+	}
+	if got := commonPublishValue(rows, func(row publishRow) string { return row.ServerMode }); got != publishValueMixed {
+		t.Fatalf("common server mode = %q, want %q", got, publishValueMixed)
+	}
+	if got := commonPublishValue(rows, func(row publishRow) string { return row.Tier }); got != "ultimate" {
+		t.Fatalf("common tier = %q, want the one both rows carry", got)
+	}
+	if got := commonPublishValue(nil, func(row publishRow) string { return row.Tier }); got != "" {
+		t.Fatalf("common tier over no rows = %q, want empty", got)
+	}
+	if got := rowRunConditions(publishRow{Model: "a:b"}); got != "schema -; scopes -; GitLab -; T -; max -" {
+		t.Fatalf("run conditions = %q, want every part dashed", got)
 	}
 }

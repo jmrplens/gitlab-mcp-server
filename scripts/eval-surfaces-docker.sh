@@ -12,7 +12,8 @@ Runs the Docker GitLab CE or Enterprise evaluation suite end-to-end for one tool
 2. Provision GitLab and register the CI runner.
 3. Prepare evaluator fixtures.
 4. Run the selected Docker preset, or all Docker presets by default.
-5. Publish docs/testing/model-results.md and README.md summaries after full runs.
+5. Publish docs/testing/model-results.md and README.md summaries after full runs, but only
+   when EVAL_SURFACE_PUBLISH_DOCS asks for it.
 
 Preset values:
   docker-read
@@ -25,11 +26,13 @@ Preset values:
   docker-error-recovery
 
 Environment overrides:
-  EVAL_SURFACE_MODELS       Comma-separated provider:model list.
+  EVAL_SURFACE_MODELS       Comma-separated provider:model list. Unset (the default) leaves the
+                            matrix to the evaluator, which reads EVAL_MODELS from .env.
   EVAL_SURFACE_ENTERPRISE   Set to true to use GitLab EE plus Enterprise-only presets.
   EVAL_SURFACE_CASE_SET     Case set to run: ce, enterprise, or all. Defaults to ce for CE runtime and enterprise for Enterprise runtime.
   EVAL_SURFACE_FIXTURE_SMOKE Set true to prepare and smoke-test fixtures for selected presets without model calls.
-  EVAL_SURFACE_PUBLISH_DOCS Set false to skip README/docs publication for full multi-preset runs.
+  EVAL_SURFACE_PUBLISH_DOCS Set true to publish README/docs after a full multi-preset run. Off by
+                            default: a run measures, it does not publish.
   EVAL_SURFACE_TOLERATE_MODEL_FAILURES Set true to record genuine per-task model failures without blocking docs publish (harness/validation failures still block).
   EVAL_SURFACE_TASK         Comma-separated task IDs to run within the preset (passes --task), e.g. MT-110 or MS-038. Use for targeted re-tests of specific cases.
   EVAL_SURFACE_OUT_ROOT     Artifact root (default: dist/evaluation/surfaces).
@@ -129,8 +132,11 @@ output_root="${EVAL_SURFACE_OUT_ROOT:-dist/evaluation/surfaces}"
 gitlab_url="${EVAL_DOCKER_GITLAB_URL:-http://localhost:8929}"
 compose_file="${EVAL_DOCKER_COMPOSE_FILE:-test/e2e/docker-compose.yml}"
 go_bin="${GO_BIN:-go}"
-default_models="${EVAL_SURFACE_DEFAULT_MODELS:-anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash}"
-models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-$default_models}}"
+# The wrapper holds no model list of its own. Empty here means the evaluator
+# resolves the matrix itself, from --model, --models, the .env EVAL_MODELS it
+# loads, and finally its source default, in that order. A list written here as
+# well would outrank .env and there would be two answers to one question.
+models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-}}"
 requested_preset="${2:-${EVAL_SURFACE_PRESET:-${PRESET:-}}}"
 # Protective server mode under evaluation: default, read-only or safe-mode.
 # read-only and safe-mode reshape the catalog the model is offered, so they
@@ -405,7 +411,18 @@ fi
 if [[ "$fixture_smoke" == "true" ]]; then
   printf 'Mode: fixture smoke only\n'
 fi
-printf 'Models: %s\n' "$models"
+if [[ -n "$models" ]]; then
+  printf 'Models: %s\n' "$models"
+  models_args=(--models "$models")
+else
+  models_args=()
+  env_models="$(dotenv_value EVAL_MODELS)"
+  if [[ -n "$env_models" ]]; then
+    printf 'Models: %s (from .env EVAL_MODELS)\n' "$env_models"
+  else
+    printf 'Models: evaluator default (EVAL_SURFACE_MODELS, EVAL_MODELS and .env all unset)\n'
+  fi
+fi
 
 run_logged docker-down-initial "${compose_env[@]}" "${compose[@]}" down -v
 run_logged docker-up "${compose_env[@]}" "${compose[@]}" up -d
@@ -473,7 +490,7 @@ for preset in "${presets[@]}"; do
     --server-mode "$server_mode" \
     --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
-    --models "$models" \
+    "${models_args[@]}" \
     --backend gitlab \
     --gitlab-env-file test/e2e/.env.docker \
     --fixtures "$fixtures" \
@@ -510,16 +527,18 @@ if [[ "$run_all_presets" == "0" ]]; then
   exit 0
 fi
 
-publish_docs="true"
+# Publication is opt-in. A full multi-preset run used to rewrite README.md and
+# docs/development/testing/model-results.md as a side effect of finishing, so a
+# run started to measure something published it too. Ask for it deliberately.
+publish_docs="false"
+if [[ -n "${EVAL_SURFACE_PUBLISH_DOCS:-}" ]] && bool_enabled "$EVAL_SURFACE_PUBLISH_DOCS"; then
+  publish_docs="true"
+fi
+# An Enterprise runtime running anything but the Enterprise case set publishes
+# nothing, whatever was asked for: those numbers would be CE cases measured on a
+# licensed instance, and the published table says which runtime it came from.
 if [[ "$enterprise" == "true" && "$case_set" != "enterprise" ]]; then
   publish_docs="false"
-fi
-if [[ -n "${EVAL_SURFACE_PUBLISH_DOCS:-}" ]]; then
-  if bool_enabled "$EVAL_SURFACE_PUBLISH_DOCS"; then
-    publish_docs="true"
-  else
-    publish_docs="false"
-  fi
 fi
 if [[ "$publish_docs" != "true" ]]; then
   printf 'Evaluation complete: %s\n' "$run_dir"

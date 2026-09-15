@@ -305,6 +305,8 @@ Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Wind
 
 The project includes an automated evaluator for model-facing MCP quality. It runs schema-only checks against the tool catalog or executes validated model tool calls through MCP against Docker GitLab CE or licensed Enterprise instances populated with fixtures. It measures whether each model chooses the correct action, sends valid parameters, recovers from actionable GitLab errors, and respects destructive-action safeguards — across Anthropic, Google, OpenAI, and Qwen.
 
+The tables below are superseded and the measurement layer behind them is being rewritten: they come from two commits that are not in this history, part of the corpus puts the expected call in the prompt the scorer then checks against, repairs are made from an answer key the harness supplies, and the scorer compares parameter names rather than their values, all of which is set out in [What the numbers measure](docs/development/testing/model-results.md#what-the-numbers-below-measure-and-what-they-do-not).
+
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
 Current published result: **Docker CE dynamic 20260627-232303**.
 
@@ -467,20 +469,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,288 |     285,385 |
-| Unit tests (`_test.go`)  |       790 |     470,288 |
-| End-to-end tests         |       383 |      71,373 |
-| **Total**                | **2,461** | **827,046** |
+| Source (`.go`, non-test) |     1,289 |     286,809 |
+| Unit tests (`_test.go`)  |       791 |     472,113 |
+| End-to-end tests         |       386 |      71,743 |
+| **Total**                | **2,466** | **830,665** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,517 |
+| Source functions                | 10,578 |
 | . Exported (public)             |  3,164 |
-| . Unexported (private)          |  7,353 |
-| Unit test functions (`TestXxx`) | 15,456 |
-| Subtests (`t.Run(...)`)         |  4,725 |
+| . Unexported (private)          |  7,414 |
+| Unit test functions (`TestXxx`) | 15,502 |
+| Subtests (`t.Run(...)`)         |  4,753 |
 | End-to-end test functions       |    910 |
 
 ### Ratios worth noting
@@ -488,18 +490,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.65× more tests than code |
-| Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~595 lines |
-| Comment lines in source            |  57,611 (~20.2% of source) |
+| Average source file length         |                 ~223 lines |
+| Average test file length           |                 ~597 lines |
+| Comment lines in source            |  58,087 (~20.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,594 |
+| `if err != nil` checks             | 8,608 |
 | `defer` statements                 | 1,068 |
-| `struct` types defined             | 3,332 |
+| `struct` types defined             | 3,341 |
 | `//nolint` suppressions            |   207 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
@@ -522,8 +524,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,188 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,501 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,214 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,526 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

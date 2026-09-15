@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -152,6 +153,12 @@ func TestCheckReportCleanContent_RequiresTaskResultsTable(t *testing.T) {
 func TestReportHeaderHelpers_RenderModeAndTitle(t *testing.T) {
 	if !shouldWriteStartupReport(options{Output: "report.md"}) || shouldWriteStartupReport(options{Output: "report.md", FixturesOnly: true}) {
 		t.Fatal("shouldWriteStartupReport() did not respect Output and FixturesOnly")
+	}
+	// A prompt audit writes its own dump to --out, so a placeholder report
+	// there would be clobbered on success and would clobber the dump on
+	// failure.
+	if shouldWriteStartupReport(options{Output: "report.md", AuditPrompts: true}) {
+		t.Fatal("shouldWriteStartupReport() wrote a placeholder over the prompt audit's own dump path")
 	}
 	if got := reportTitle(config.ToolSurfaceMeta); got != "Meta-Tool Model Evaluation" {
 		t.Fatalf("reportTitle(meta) = %q", got)
@@ -348,8 +355,75 @@ func TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors(t *testing.T) {
 	}
 }
 
-// TestCalculateMetrics_HandlesNoRepairs verifies CalculateMetrics handles no repairs.
-func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
+// TestWriteReport_PerRunAndPerModelTables_AppearOnlyWhenThereIsSomethingToCompare
+// verifies the two metric tables that exist to compare one slice of a run with
+// another: the per-run table is written only for a repeated run, the per-model
+// table only when more than one model answered, and each row carries one cell
+// per metric with a dash where nothing was measured.
+//
+// Nothing drove either table before, which is how both of their guards
+// survived mutation while their rows were being rewritten.
+func TestWriteReport_PerRunAndPerModelTables_AppearOnlyWhenThereIsSomethingToCompare(t *testing.T) {
+	task := evalTask{ID: "MT-001", ExpectedTool: "gitlab_project", ExpectedAction: "get"}
+	attempt := func(run int, model string, pass bool) taskResult {
+		return taskResult{
+			Run: run, Model: model, ToolSurface: config.ToolSurfaceDynamic, Task: task,
+			FirstTool: "gitlab_project", FirstAction: "get", FinalTool: "gitlab_project", FinalAction: "get",
+			CompletedSteps: 1, FirstPass: pass, FinalSuccess: pass, DestructiveSafe: true, ModelCalls: 1, ToolCalls: 1,
+		}
+	}
+	write := func(t *testing.T, repeat int, results []taskResult) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "eval.md")
+		opts := options{Model: "model-a", ToolSurface: config.ToolSurfaceDynamic, Backend: backendMock, Repeat: repeat}
+		if err := writeReport(path, opts, results, nil, nil, true); err != nil {
+			t.Fatalf("writeReport() error = %v", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read report: %v", err)
+		}
+		return string(data)
+	}
+
+	single := write(t, 1, []taskResult{attempt(1, "model-a", true)})
+	if strings.Contains(single, perRunMetricsHeading) {
+		t.Fatalf("one run wrote %q:\n%s", perRunMetricsHeading, single)
+	}
+	if strings.Contains(single, perModelMetricsHeading) {
+		t.Fatalf("one model wrote %q:\n%s", perModelMetricsHeading, single)
+	}
+
+	many := write(t, 2, []taskResult{
+		attempt(1, "model-a", true),
+		attempt(2, "model-a", false),
+		attempt(1, "model-b", true),
+	})
+	for _, heading := range []string{perRunMetricsHeading, perModelMetricsHeading} {
+		t.Run(heading, func(t *testing.T) {
+			if !strings.Contains(many, heading) {
+				t.Fatalf("repeated multi-model run missing %q:\n%s", heading, many)
+			}
+		})
+	}
+	// Nine metric cells, the last three of them a repair success rate no
+	// attempt measured, a destructive safety no task called for, and a final
+	// success two of the three attempts reached.
+	if !strings.Contains(many, "| 1 | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 0.0% | - | - | 100.0% |") {
+		t.Fatalf("per-run row missing or reshaped:\n%s", many)
+	}
+	if !strings.Contains(many, "| `model-b` | 1 | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 0.0% | - | - | 100.0% |") {
+		t.Fatalf("per-model row missing or reshaped:\n%s", many)
+	}
+}
+
+// TestCalculateMetrics_NoRepairsOrDestructiveTasks_LeavesThoseMetricsUndefined
+// verifies that a rate nothing was measured for is left undefined rather than
+// scored. The single attempt attempts no repair and names no destructive step,
+// so repair success and destructive safety have an empty denominator; both were
+// reported as 100 before, which is what let a run that dispatched nothing
+// publish perfect scores.
+func TestCalculateMetrics_NoRepairsOrDestructiveTasks_LeavesThoseMetricsUndefined(t *testing.T) {
 	results := []taskResult{{
 		Task:            evalTask{ExpectedTool: "gitlab_user", ExpectedAction: "current"},
 		FirstTool:       "gitlab_user",
@@ -359,8 +433,26 @@ func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
 		DestructiveSafe: true,
 	}}
 	measured := calculateMetrics(results)
-	if measured.ToolSelection != 100 || measured.ActionSelection != 100 || measured.RepairSuccess != 100 {
-		t.Fatalf("metrics = %+v, want all applicable metrics at 100", measured)
+	if measured.ToolSelection != 100 || measured.ActionSelection != 100 || measured.FinalSuccess != 100 {
+		t.Fatalf("metrics = %+v, want the measured rates at 100", measured)
+	}
+	if metricIsDefined(measured.RepairSuccess) || metricIsDefined(measured.DestructiveSafety) {
+		t.Fatalf("metrics = %+v, want repair success and destructive safety undefined", measured)
+	}
+	if got := formatMetric(measured.RepairSuccess); got != "-" {
+		t.Fatalf("formatMetric(repair success) = %q, want a dash", got)
+	}
+}
+
+// TestCalculateMetrics_NoResults_LeavesEveryMetricUndefined verifies that a run
+// with no attempt at all publishes no rate. Every denominator is empty, so
+// every metric is a dash rather than a perfect score.
+func TestCalculateMetrics_NoResults_LeavesEveryMetricUndefined(t *testing.T) {
+	measured := calculateMetrics(nil)
+	for _, cell := range formattedMetricCells(measured) {
+		if cell != "-" {
+			t.Fatalf("metric cells = %q, want every cell a dash", formattedMetricCells(measured))
+		}
 	}
 }
 
@@ -1071,5 +1163,127 @@ func TestWriteUsageSummary_PricingFlags_RendersCostAndSource(t *testing.T) {
 	writeUsageSummary(&dry, opts, results, true)
 	if dry.Len() != 0 {
 		t.Fatalf("dry-run usage summary = %q, want empty", dry.String())
+	}
+}
+
+// TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn verifies that every
+// choice which changes what a run means reaches the header under its own key,
+// and that a reader parses back exactly what was written.
+//
+// Both halves matter and neither implies the other. A value that reaches the
+// report but not under a key the parser reads is invisible to the published
+// tables, and a key the parser reads that the writer never emits is a column
+// of dashes; the round trip through firstMetadataValue is the same read
+// readPublishReport makes, so this asserts the whole path rather than the
+// rendered line alone. The meta-tool schema mode is set for the duration of
+// the test rather than read from the options, because that is where it lives:
+// the header states what the catalog was registered with, so a header that
+// quoted a constant would keep saying "opaque" on a run that was not.
+func TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn(t *testing.T) {
+	t.Cleanup(toolutil.SetMetaParamSchemaModeScoped(toolutil.MetaParamSchemaCompact))
+
+	var b strings.Builder
+	writeReportHeader(&b, options{
+		Model:       "test:model",
+		ToolSurface: config.ToolSurfaceMeta,
+		Backend:     backendGitLab,
+		ServerMode:  ServerModeReadOnly,
+		MaxTokens:   4096,
+		Deployment: deploymentFacts{
+			Resolved:      true,
+			Enterprise:    true,
+			Tier:          edition.Premium,
+			TokenScopes:   []string{"api", "read_user"},
+			GitLabVersion: "18.4.1",
+		},
+	}, false)
+	header := b.String()
+
+	cases := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{name: "tool surface", key: "Tool surface", want: config.ToolSurfaceMeta},
+		{name: "server mode", key: reportKeyServerMode, want: ServerModeReadOnly},
+		{name: "tier", key: reportKeyTier, want: "premium"},
+		{name: "meta param schema", key: reportKeyMetaParamSchema, want: toolutil.MetaParamSchemaCompact},
+		{name: "token scopes", key: reportKeyTokenScopes, want: "api, read_user"},
+		{name: "gitlab version", key: reportKeyGitLabVersion, want: "18.4.1"},
+		{name: "temperature", key: reportKeyTemperature, want: "0"},
+		{name: "max output tokens", key: reportKeyMaxOutputTokens, want: "4096"},
+		{name: "stimulus", key: reportKeyStimulus, want: stimulusCoached},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if line := tc.key + ": `" + tc.want + "`"; !strings.Contains(header, line) {
+				t.Fatalf("header does not carry %q:\n%s", line, header)
+			}
+			if got := firstMetadataValue(header, tc.key); got != tc.want {
+				t.Fatalf("firstMetadataValue(%q) = %q, want %q", tc.key, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine
+// verifies a value the run could not resolve still occupies its line.
+//
+// This is the defect the remote build runner produced: it holds no `.git`, so
+// currentGitReportMetadata answered nothing and the branch and commit lines
+// were simply absent. A reader cannot tell an omitted line from one it failed
+// to parse, so a completeness check over the header would have passed on a
+// report with a hole in it. A test binary runs in its own package directory,
+// which holds no `.git` either, so the git pair is unresolvable here by
+// construction and the assertion is stable.
+func TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{}, true)
+	header := b.String()
+
+	for _, key := range []string{
+		reportKeyGitBranch,
+		reportKeyGitCommit,
+		reportKeyTier,
+		reportKeyTokenScopes,
+		reportKeyGitLabVersion,
+		reportKeyMaxOutputTokens,
+	} {
+		t.Run(key, func(t *testing.T) {
+			if got := firstMetadataValue(header, key); got != reportValueUnknown {
+				t.Fatalf("firstMetadataValue(%q) = %q, want %q; header:\n%s", key, got, reportValueUnknown, header)
+			}
+		})
+	}
+	// The mode a catalog is built for has no unknown state: an unset
+	// ServerMode is the default mode, which is what every reader of it
+	// resolves an empty string to.
+	if got := firstMetadataValue(header, reportKeyServerMode); got != ServerModeDefault {
+		t.Fatalf("firstMetadataValue(%q) = %q, want %q", reportKeyServerMode, got, ServerModeDefault)
+	}
+}
+
+// TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication verifies the
+// header this evaluator writes today is one publication refuses.
+//
+// The declaration and the gate were written a step apart, so nothing until now
+// held them to each other: a header declaring the wrong spelling, or the gate
+// reading a key the writer does not emit, would leave publication either
+// permanently shut or quietly open. The refusal must also name both the value
+// found and the value required, since it is the only place a reader learns why
+// a full run published nothing.
+func TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{}, true)
+	declared := firstMetadataValue(b.String(), reportKeyStimulus)
+	if declared != stimulusCoached {
+		t.Fatalf("declared stimulus = %q, want %q", declared, stimulusCoached)
+	}
+	err := requireUncoachedStimulus(publishReport{Path: "report.md", Stimulus: declared})
+	if err == nil {
+		t.Fatal("requireUncoachedStimulus() = nil; a coached run must not be publishable")
+	}
+	if !strings.Contains(err.Error(), stimulusCoached) || !strings.Contains(err.Error(), stimulusUncoached) {
+		t.Fatalf("refusal = %v, want it to name both %q and %q", err, stimulusCoached, stimulusUncoached)
 	}
 }

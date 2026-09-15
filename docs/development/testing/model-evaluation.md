@@ -159,18 +159,24 @@ the CE wrapper.
 
 Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
 The timestamp is captured once at startup and reused for every report, trace,
-fixture, and log file in that run. By default the wrapper uses the stable
-economy matrix:
+fixture, and log file in that run.
 
-```text
-anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash
-```
+The wrapper holds no model matrix of its own. It passes `--models` only when
+`EVAL_SURFACE_MODELS` is set, so with that variable unset the evaluator resolves
+the matrix itself from `EVAL_MODELS` in `.env` (see `.env.example` for the list a
+fresh clone starts with), and falls back to its source default when that is empty
+too. `google:gemini-flash-latest` is an alias resolved by Google to the latest
+Gemini Flash model available to the API key, so two runs a month apart are not
+necessarily the same model; use ListModels before pinning a different Google model
+ID. Set `EVAL_SURFACE_OUT_ROOT` to change the artifact root, or
+`EVAL_SURFACE_KEEP_DOCKER=1` to leave the Docker GitLab instance running for
+inspection after the run.
 
-Set `EVAL_SURFACE_MODELS` to override the model matrix. `google:gemini-flash-latest`
-is an alias resolved by Google to the latest Gemini Flash model available to the
-API key; use ListModels before pinning a different Google model ID. Set
-`EVAL_SURFACE_OUT_ROOT` to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1`
-to leave the Docker GitLab instance running for inspection after the run.
+Publication is opt-in. A full multi-preset run writes its reports and stops;
+`EVAL_SURFACE_PUBLISH_DOCS=true` is what asks it to update `README.md` and
+`docs/development/testing/model-results.md` afterwards. The publisher refuses a
+report whose header does not declare `Stimulus: uncoached`, so a run whose prompts
+still carry the expected call cannot be published whatever the variable says.
 
 `EVAL_SURFACE_*` keeps its bare name. The rename to `GITLAB_MCP_<NAME>` exists
 because a stdio server shares a shell with every other tool its user runs, and
@@ -197,6 +203,14 @@ as harness noise and should be fixed in fixtures before judging the model.
 | Model requests                  | Number of provider calls made by the evaluator.                                                                                      |
 | Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
 | MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
+
+A rate whose denominator is empty prints `-`, not a percentage, everywhere a
+report or a published table states it: a run that attempted no repair has no
+repair success rate, and one that ran no destructive task has no destructive
+safety. An aggregate leaves such a row out of both sides of its average rather
+than counting it as a pass, and a comparison states no delta against it. Until
+3.1.0 an empty denominator scored 100%, so the emptier the sample the better a
+model looked.
 
 For clear single-operation meta tasks, the target is `model_calls=1` and
 `tool_calls=1`. For Dynamic tasks, one GitLab operation normally requires two
@@ -238,6 +252,30 @@ Published percentages belong in [AI Model Evaluation Results](model-results.md),
 not in this conceptual guide.
 
 ## Reading Results
+
+### What the header says the run was
+
+Every report opens with the run's provenance, and each line is written on every
+run: `Git branch`, `Git commit`, `Server mode`, `Tier`, `Token scopes`,
+`Meta param schema`, `GitLab version`, `Temperature`, `Max output tokens` and
+`Stimulus`. A value the run could not resolve is stated as `unknown` rather
+than left out, because an omitted line and a line a reader failed to parse look
+the same, so a report with a hole in it would read as complete.
+
+They are there because two runs of the same cases are only comparable when they
+were measured on the same thing. The tier and the token scopes decide which
+actions exist in the catalog at all, the server mode decides whether the
+mutating ones were withdrawn or previewed, the schema mode decides how much of
+each action a model was shown, and the sampling decides what the model was
+asked with. `Stimulus` says whether the prompts withheld the answer the scorer
+checks for; it reads `coached` today, and publication refuses any report that
+does not declare `uncoached`.
+
+The published tables carry the same information per row: `Server mode` and
+`Tier` as columns of their own, the rest compressed into `Run conditions`. A
+cell covering several reports states the value only when they all agree and
+`mixed` when they do not, so an aggregate never names a deployment half its
+numbers were not measured on.
 
 Start with final success and first-call validation. If final success is high but
 first-call validation is low, the model can recover but the schema or

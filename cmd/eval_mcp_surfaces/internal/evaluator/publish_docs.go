@@ -93,6 +93,9 @@ const (
 	modelEvaluationSuffix = " Model Evaluation"
 	boldIntFormat         = "**%d**"
 	boldStringFormat      = "**%s**"
+	// publishValueMixed is what a provenance cell covering several reports
+	// says when they do not agree on the value.
+	publishValueMixed = "mixed"
 )
 
 // fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
@@ -106,6 +109,12 @@ var fullDockerAttemptsByPreset = map[string]int{
 }
 
 // publishReport captures publish report data for published evaluation reports.
+//
+// The provenance half of it, from ServerMode down, is what says which run a
+// published number came from. Each field is read from the header line of the
+// same name and published in a column, because a table of six models carrying
+// no deployment, no sampling and no commit cannot be compared with the next
+// one, and a reader has no other way to reach the report it came from.
 type publishReport struct {
 	Path                   string
 	Date                   string
@@ -116,8 +125,16 @@ type publishReport struct {
 	Backend                string
 	Preset                 string
 	ToolExecution          string
+	ServerMode             string
+	Tier                   string
+	MetaParamSchema        string
+	TokenScopes            string
+	GitLabVersion          string
+	Temperature            string
+	MaxOutputTokens        string
 	GitBranch              string
 	GitCommit              string
+	Stimulus               string
 	Diagnostics            map[string]int
 	UnresolvedHarnessNoise bool
 	Rows                   []publishRow
@@ -130,6 +147,13 @@ type publishRow struct {
 	Preset            string
 	Backend           string
 	ToolExecution     string
+	ServerMode        string
+	Tier              string
+	MetaParamSchema   string
+	TokenScopes       string
+	GitLabVersion     string
+	Temperature       string
+	MaxOutputTokens   string
 	Attempts          int
 	ExpectedOps       int
 	ModelRequests     int
@@ -190,6 +214,8 @@ type publishTraceAccumulator struct {
 // publishModelSummary captures publish model summary data for published evaluation reports.
 type publishModelSummary struct {
 	Model           string
+	ServerMode      string
+	Tier            string
 	Attempts        int
 	ExpectedOps     int
 	ToolSelection   float64
@@ -516,8 +542,16 @@ func readPublishReport(path string) (publishReport, error) {
 		Backend:                input.Backend,
 		Preset:                 input.Preset,
 		ToolExecution:          input.ToolExecution,
-		GitBranch:              firstMetadataValue(content, "Git branch"),
-		GitCommit:              firstMetadataValue(content, "Git commit"),
+		ServerMode:             firstMetadataValue(content, reportKeyServerMode),
+		Tier:                   firstMetadataValue(content, reportKeyTier),
+		MetaParamSchema:        firstMetadataValue(content, reportKeyMetaParamSchema),
+		TokenScopes:            firstMetadataValue(content, reportKeyTokenScopes),
+		GitLabVersion:          firstMetadataValue(content, reportKeyGitLabVersion),
+		Temperature:            firstMetadataValue(content, reportKeyTemperature),
+		MaxOutputTokens:        firstMetadataValue(content, reportKeyMaxOutputTokens),
+		GitBranch:              firstMetadataValue(content, reportKeyGitBranch),
+		GitCommit:              firstMetadataValue(content, reportKeyGitCommit),
+		Stimulus:               firstMetadataValue(content, reportKeyStimulus),
 		Diagnostics:            input.Diagnostics,
 		UnresolvedHarnessNoise: reportMentionsHarnessNoise(content),
 	}
@@ -808,6 +842,13 @@ func newPublishRow(report publishReport, model, preset string, stats publishTask
 		Preset:            preset,
 		Backend:           report.Backend,
 		ToolExecution:     report.ToolExecution,
+		ServerMode:        report.ServerMode,
+		Tier:              report.Tier,
+		MetaParamSchema:   report.MetaParamSchema,
+		TokenScopes:       report.TokenScopes,
+		GitLabVersion:     report.GitLabVersion,
+		Temperature:       report.Temperature,
+		MaxOutputTokens:   report.MaxOutputTokens,
 		Attempts:          firstPositive(stats.Attempts, metrics.Attempts),
 		ExpectedOps:       stats.ExpectedOps,
 		ModelRequests:     firstPositive(parseReportInt(usage[usageModelRequests]), parseReportInt(usage["Requests"]), stats.ModelRequests),
@@ -855,7 +896,7 @@ func publishTaskStatsByModel(content, defaultModel string) map[string]publishTas
 // publishMetricsByModel publishes metrics by model for the evaluator package.
 func publishMetricsByModel(content string) map[string]publishModelMetrics {
 	out := map[string]publishModelMetrics{}
-	for _, row := range reportNamedTableRows(content, "## Per-Model Metrics") {
+	for _, row := range reportNamedTableRows(content, perModelMetricsHeading) {
 		model := cleanReportValue(row["Model"])
 		if model == "" {
 			continue
@@ -997,6 +1038,9 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
+		if err := requireUncoachedStimulus(report); err != nil {
+			return err
+		}
 		if publishSectionForSurface(report.ToolSurface) == publishSectionUnknown {
 			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
 		}
@@ -1013,6 +1057,27 @@ func validatePublishReports(reports []publishReport, label string, allowHarnessN
 		}
 	}
 	return nil
+}
+
+// requireUncoachedStimulus refuses a report whose header does not declare that
+// the model was given an uncoached prompt.
+//
+// A published number is read as a measurement of the model. It is only that
+// when the prompt withholds the answer the scorer checks for, so the run says
+// so in its own header and publication refuses anything else. A report that
+// declares nothing is refused by the same rule as one that declares coaching:
+// silence is what every report written so far carries.
+func requireUncoachedStimulus(report publishReport) error {
+	if strings.EqualFold(strings.TrimSpace(report.Stimulus), stimulusUncoached) {
+		return nil
+	}
+	declared := strings.TrimSpace(report.Stimulus)
+	if declared == "" {
+		return fmt.Errorf("publish input %s declares no %q line in its report header; publication requires %q, which only a run whose prompts withhold the expected call may write",
+			report.Path, reportKeyStimulus+":", reportKeyStimulus+": "+stimulusUncoached)
+	}
+	return fmt.Errorf("publish input %s declares %q in its report header; publication requires %q, which only a run whose prompts withhold the expected call may write",
+		report.Path, reportKeyStimulus+": "+declared, reportKeyStimulus+": "+stimulusUncoached)
 }
 
 // reportMentionsHarnessNoise reports whether report mentions harness noise.
@@ -1056,6 +1121,9 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 			fmt.Sprintf("`%s`", escapeTable(row.Model)),
 			fmt.Sprintf("`%s`", emptyDash(row.Preset)),
 			dockerBackendLabel(row),
+			emptyDash(escapeTable(row.ServerMode)),
+			emptyDash(escapeTable(row.Tier)),
+			rowRunConditions(row),
 			strconv.Itoa(row.Attempts),
 			strconv.Itoa(row.ExpectedOps),
 			strconv.Itoa(row.ModelRequests),
@@ -1074,6 +1142,9 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 		"**Aggregate**",
 		"**all selected**",
 		"-",
+		emptyDash(escapeTable(commonPublishValue(rows, func(row publishRow) string { return row.ServerMode }))),
+		emptyDash(escapeTable(commonPublishValue(rows, func(row publishRow) string { return row.Tier }))),
+		"-",
 		fmt.Sprintf(boldIntFormat, aggregate.Attempts),
 		fmt.Sprintf(boldIntFormat, aggregate.ExpectedOps),
 		fmt.Sprintf(boldIntFormat, aggregate.ModelRequests),
@@ -1089,10 +1160,46 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 	})
 
 	return docgen.RenderMarkdownTable(
-		[]string{"Model", "Preset", "Backend", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
-		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
+		[]string{"Model", "Preset", "Backend", "Server mode", "Tier", "Run conditions", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
 		tableRows,
 	)
+}
+
+// rowRunConditions states the conditions a row was measured under that do not
+// have a column of their own: the meta-tool schema mode the catalog was
+// registered with, the credential scopes that narrowed it, the version the
+// instance answered with, and the sampling every model request carried. Each
+// keeps its label, because the cell is read by someone comparing two published
+// snapshots and five bare values in a row is not something anyone can read.
+func rowRunConditions(row publishRow) string {
+	return strings.Join([]string{
+		"schema " + emptyDash(escapeTable(row.MetaParamSchema)),
+		"scopes " + emptyDash(escapeTable(row.TokenScopes)),
+		"GitLab " + emptyDash(escapeTable(row.GitLabVersion)),
+		"T " + emptyDash(escapeTable(row.Temperature)),
+		"max " + emptyDash(escapeTable(row.MaxOutputTokens)),
+	}, "; ")
+}
+
+// commonPublishValue names the value every row agrees on, or [publishValueMixed]
+// when they do not. A published aggregate covers several reports, so a
+// provenance cell over them states a fact only while they all carry the same
+// one; taking the first row's value to stand for the rest is how a table comes
+// to name a deployment half its numbers were not measured on.
+func commonPublishValue(rows []publishRow, value func(publishRow) string) string {
+	common := ""
+	for index, row := range rows {
+		current := strings.TrimSpace(value(row))
+		if index == 0 {
+			common = current
+			continue
+		}
+		if current != common {
+			return publishValueMixed
+		}
+	}
+	return common
 }
 
 // buildReadmeSummaryBlock constructs the request parameters from the input.
@@ -1104,7 +1211,7 @@ func buildReadmeSummaryBlock(label string, reports []publishReport) string {
 	fmt.Fprintf(&b, "Current published result: **%s**.\n\n", label)
 	b.WriteString(renderReadmeSummaryTable(summaries))
 	fmt.Fprintf(&b, "\nThe published model-evaluation set covers %d task attempts and %d expected MCP operations. Across the selected reports, models emitted %d tool calls over %d model requests, with %s aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.\n",
-		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetric(aggregate.FinalSuccess))
+		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetricInProse(aggregate.FinalSuccess))
 	return strings.TrimSpace(b.String()) + "\n"
 }
 
@@ -1115,6 +1222,8 @@ func renderReadmeSummaryTable(summaries []publishModelSummary) string {
 		rows = append(rows, []string{
 			escapeTable(provider),
 			fmt.Sprintf("`%s`", escapeTable(model)),
+			emptyDash(escapeTable(summary.ServerMode)),
+			emptyDash(escapeTable(summary.Tier)),
 			compatibilityLabel(summary),
 			formatMetric(summary.ToolSelection),
 			formatRecoverySummary(summary),
@@ -1122,8 +1231,8 @@ func renderReadmeSummaryTable(summaries []publishModelSummary) string {
 		})
 	}
 	return docgen.RenderMarkdownTable(
-		[]string{"Provider", "Model", "Compatibility", "Tool accuracy", "Recovery", "Docker live status"},
-		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
+		[]string{"Provider", "Model", "Server mode", "Tier", "Compatibility", "Tool accuracy", "Recovery", "Docker live status"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
 		rows,
 	)
 }
@@ -1186,32 +1295,55 @@ func presetRank(preset string) int {
 	}
 }
 
+// weightedMetric averages one metric over the rows that measured it, weighting
+// each row by its attempts. A row whose metric has no sample behind it is left
+// out of both the sum and the weight, so a preset with no destructive task
+// neither raises nor lowers the destructive-safety aggregate.
+type weightedMetric struct {
+	sum    float64
+	weight int
+}
+
+// add folds one row's measurement in, ignoring a row that measured nothing.
+func (w *weightedMetric) add(value float64, weight int) {
+	if !metricIsDefined(value) {
+		return
+	}
+	w.sum += value * float64(weight)
+	w.weight += weight
+}
+
+// value returns the weighted average, or metricUndefined when no row measured it.
+func (w *weightedMetric) value() float64 {
+	if w.weight == 0 {
+		return metricUndefined
+	}
+	return w.sum / float64(w.weight)
+}
+
 // aggregatePublishRows aggregates publish rows across reports.
 func aggregatePublishRows(rows []publishRow) publishRow {
 	var out publishRow
+	var toolSelection, actionSelection, firstPass, destructiveSafety, finalSuccess weightedMetric
 	for _, row := range rows {
 		out.Attempts += row.Attempts
 		out.ExpectedOps += row.ExpectedOps
 		out.ModelRequests += row.ModelRequests
 		out.ToolCalls += row.ToolCalls
-		out.ToolSelection += row.ToolSelection * float64(row.Attempts)
-		out.ActionSelection += row.ActionSelection * float64(row.Attempts)
-		out.FirstPass += row.FirstPass * float64(row.Attempts)
 		out.RepairAttempts += row.RepairAttempts
 		out.RepairSuccesses += row.RepairSuccesses
-		out.DestructiveSafety += row.DestructiveSafety * float64(row.Attempts)
-		out.FinalSuccess += row.FinalSuccess * float64(row.Attempts)
+		toolSelection.add(row.ToolSelection, row.Attempts)
+		actionSelection.add(row.ActionSelection, row.Attempts)
+		firstPass.add(row.FirstPass, row.Attempts)
+		destructiveSafety.add(row.DestructiveSafety, row.Attempts)
+		finalSuccess.add(row.FinalSuccess, row.Attempts)
 	}
-	if out.Attempts == 0 {
-		return out
-	}
-	denominator := float64(out.Attempts)
-	out.ToolSelection /= denominator
-	out.ActionSelection /= denominator
-	out.FirstPass /= denominator
+	out.ToolSelection = toolSelection.value()
+	out.ActionSelection = actionSelection.value()
+	out.FirstPass = firstPass.value()
 	out.RepairSuccess = percent(out.RepairSuccesses, out.RepairAttempts)
-	out.DestructiveSafety /= denominator
-	out.FinalSuccess /= denominator
+	out.DestructiveSafety = destructiveSafety.value()
+	out.FinalSuccess = finalSuccess.value()
 	return out
 }
 
@@ -1227,6 +1359,8 @@ func publishSummariesByModel(rows []publishRow) []publishModelSummary {
 		aggregate := aggregatePublishRows(byModel[model])
 		summary := publishModelSummary{
 			Model:           model,
+			ServerMode:      commonPublishValue(byModel[model], func(row publishRow) string { return row.ServerMode }),
+			Tier:            commonPublishValue(byModel[model], func(row publishRow) string { return row.Tier }),
 			Attempts:        aggregate.Attempts,
 			ExpectedOps:     aggregate.ExpectedOps,
 			ToolSelection:   aggregate.ToolSelection,
@@ -1270,12 +1404,19 @@ func providerModel(model string) (providerName, modelName string) {
 	}
 }
 
-// compatibilityLabel formats compatibility label for report output.
+// compatibilityLabel formats compatibility label for report output. A model one
+// of whose three rates was never measured is neither compatible nor under
+// review: nothing was observed to judge.
 func compatibilityLabel(summary publishModelSummary) string {
-	if summary.ToolSelection == 100 && summary.ActionSelection == 100 && summary.FinalSuccess == 100 {
-		return "OK"
+	for _, value := range []float64{summary.ToolSelection, summary.ActionSelection, summary.FinalSuccess} {
+		if !metricIsDefined(value) {
+			return "No sample"
+		}
+		if value != 100 {
+			return "Review"
+		}
 	}
-	return "Review"
+	return "OK"
 }
 
 // dockerLiveStatus formats docker live status for report output.
@@ -1283,13 +1424,16 @@ func dockerLiveStatus(summary publishModelSummary) string {
 	if !summary.DockerBacked {
 		return "Not Docker-backed"
 	}
+	if !metricIsDefined(summary.FinalSuccess) {
+		return fmt.Sprintf("No final-success sample across %d ops", summary.ExpectedOps)
+	}
 	return fmt.Sprintf("%s final across %d ops", formatMetric(summary.FinalSuccess), summary.ExpectedOps)
 }
 
 // formatRepairMetric renders the result as a formatted string.
 func formatRepairMetric(row publishRow) string {
 	if row.RepairAttempts == 0 {
-		return "-"
+		return noMetricSample
 	}
 	return fmt.Sprintf("%s (%d/%d)", formatMetric(row.RepairSuccess), row.RepairSuccesses, row.RepairAttempts)
 }

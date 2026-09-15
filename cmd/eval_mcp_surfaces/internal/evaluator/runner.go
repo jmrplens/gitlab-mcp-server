@@ -1436,7 +1436,7 @@ func (r *modelRunner) call(ctx context.Context, systemPrompt string, catalog []m
 	request := modelProviderRequest{
 		Model:       r.model,
 		MaxTokens:   r.maxTokens,
-		Temperature: 0,
+		Temperature: evalSamplingTemperature,
 		System:      systemPrompt,
 		Tools:       catalog,
 		Messages:    messages,

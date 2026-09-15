@@ -61,9 +61,16 @@ func Run() (runErr error) {
 	if opts.PrepareFixtures && opts.FixturesOnly {
 		return nil
 	}
-	catalog, routes, tasks, err := prepareRunCatalog(opts, tasks, fixtures)
+	opts, catalog, routes, tasks, err := prepareRunCatalog(opts, tasks, fixtures)
 	if err != nil {
 		return err
+	}
+	// The audit is answered here rather than in runImmediateMode because the
+	// stimulus it renders depends on the catalog: normalizeTasksForCatalog
+	// decides which tool and action each step expects on this surface, and a
+	// prompt built before that is not the prompt a run would send.
+	if opts.AuditPrompts {
+		return runPromptAudit(os.Stdout, opts, tasks)
 	}
 	if opts.DryRun {
 		if dryRunErr := runDryRunEvaluation(context.Background(), opts, tasks, catalog, routes); dryRunErr != nil {
@@ -190,9 +197,16 @@ func runImmediateMode(opts options) (bool, error) {
 	return false, nil
 }
 
+// resolveRunModels resolves the models a run will drive, and the paths its
+// artifacts go to.
+//
+// A dry run and a prompt audit both reach no provider, so neither resolves a
+// model; the audit additionally takes no default output path, because it
+// writes an evaluation report nowhere and an --out it was not given would
+// leave a dump under dist that nobody asked for.
 func resolveRunModels(opts options) (options, []modelSpec, error) {
 	var modelSpecs []modelSpec
-	if !opts.DryRun {
+	if !opts.DryRun && !opts.AuditPrompts {
 		var modelErr error
 		modelSpecs, modelErr = resolveModelSpecs(opts)
 		if modelErr != nil {
@@ -202,10 +216,10 @@ func resolveRunModels(opts options) (options, []modelSpec, error) {
 	} else if opts.Model == "" {
 		opts.Model = "none"
 	}
-	if opts.Output == "" {
+	if opts.Output == "" && !opts.AuditPrompts {
 		opts.Output = defaultOutputPath(opts.Model)
 	}
-	if opts.TraceDir == "" && !opts.DryRun {
+	if opts.TraceDir == "" && !opts.DryRun && !opts.AuditPrompts {
 		opts.TraceDir = defaultTraceDir(opts.Output)
 	}
 	return opts, modelSpecs, nil
@@ -264,42 +278,46 @@ func prepareRunTasks(opts options) ([]evalTask, *liveFixtureState, error) {
 	return tasks, fixtures, nil
 }
 
-func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureState) ([]modelTool, map[string]toolutil.ActionMap, []evalTask, error) {
-	catalog, routes, catalogEnterprise, catalogErr := loadCatalog(opts)
+// prepareRunCatalog loads the catalog the run is measured against and returns
+// the options carrying what the deployment behind it resolved to, which is
+// what the report header states and nothing else in the run can answer.
+func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureState) (options, []modelTool, map[string]toolutil.ActionMap, []evalTask, error) {
+	catalog, routes, facts, catalogErr := loadCatalog(opts)
 	if catalogErr != nil {
-		return nil, nil, nil, catalogErr
+		return options{}, nil, nil, nil, catalogErr
 	}
+	opts.Deployment = facts
 	if opts.MCPSmoke {
 		if smokeErr := runMCPSmoke(opts); smokeErr != nil {
-			return nil, nil, nil, smokeErr
+			return options{}, nil, nil, nil, smokeErr
 		}
 	}
 	tasks = normalizeTasksForCatalog(tasks, routes, opts.ToolSurface)
 	var err error
 	if tasks, err = applyEditionFilter(tasks, opts.Edition); err != nil {
-		return nil, nil, nil, err
+		return options{}, nil, nil, nil, err
 	}
 	if tasks, err = applyPartitionFilter(tasks, opts.Partition); err != nil {
-		return nil, nil, nil, err
+		return options{}, nil, nil, nil, err
 	}
-	if tasks, err = applyAvailabilityFilter(tasks, routes, catalogEnterprise, fixtures, opts.SkipUnavailable); err != nil {
-		return nil, nil, nil, err
+	if tasks, err = applyAvailabilityFilter(tasks, routes, facts.Enterprise, fixtures, opts.SkipUnavailable); err != nil {
+		return options{}, nil, nil, nil, err
 	}
 	if opts.Execute && opts.UseFixtures {
 		tasks = orderSharedFixtureDestructiveLast(tasks)
 	}
 	if tasks, err = applyPresetFilter(tasks, opts.Preset); err != nil {
-		return nil, nil, nil, err
+		return options{}, nil, nil, nil, err
 	}
 	if opts.MaxTasks > 0 && opts.MaxTasks < len(tasks) {
 		tasks = tasks[:opts.MaxTasks]
 	}
 	if opts.ToolsFile == "" {
 		if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
-			return nil, nil, nil, fmt.Errorf("fixture route validation failed:\n- %s", strings.Join(problems, "\n- "))
+			return options{}, nil, nil, nil, fmt.Errorf("fixture route validation failed:\n- %s", strings.Join(problems, "\n- "))
 		}
 	}
-	return catalog, routes, tasks, nil
+	return opts, catalog, routes, tasks, nil
 }
 
 func applyEditionFilter(tasks []evalTask, edition string) ([]evalTask, error) {

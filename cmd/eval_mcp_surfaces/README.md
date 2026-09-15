@@ -17,13 +17,14 @@
 | `--edition` | `all` | Optional task edition filter: `all`, `ce`, or `enterprise`. Docker presets set this automatically unless explicitly overridden. |
 | `--coverage-report` | empty | Optional Markdown file listing uncovered high-risk routes for the selected run. |
 | `--compare` | empty | Repeatable report path for comparison mode. Accepts token reports from `cmd/audit_tokens` and evaluation reports from this command. |
-| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/development/testing/model-results.md`. |
+| `--publish-docs` | `false` | Publish reviewed evaluation reports into managed blocks in `README.md` and `docs/development/testing/model-results.md`. Refused unless every selected report declares `Stimulus: uncoached` in its header. |
 | `--publish-from` | empty | Repeatable reviewed `eval_mcp_surfaces` report path consumed by `--publish-docs` or `--check-docs`. |
 | `--publish-results-doc` | `docs/development/testing/model-results.md` | Results document updated by `--publish-docs`. |
 | `--publish-readme` | `README.md` | README file updated by `--publish-docs`. |
 | `--publish-label` | empty | Human-readable result label used in generated documentation. Defaults to the report date. |
 | `--publish-mode` | `replace-current` | Results block update mode: `replace-current` or `append`. README summary always reflects the current selected reports. |
 | `--check-docs` | `false` | Verify managed documentation blocks match the selected reports without writing files. |
+| `--audit-prompts` | `false` | Report what the stimulus already tells the model. Renders the system prompt and the task prompt every selected case would be sent and reports which of them repeat that case's own expected tool, action, required parameter names, `confirm` literal, or whole marshaled call envelope. Calls no provider and needs no GitLab; `--out` receives the full dump, prompts included. |
 | `--mcp-command` | empty | External stdio MCP server command used by `--execute-tools` instead of the in-process current-source server. |
 | `--mcp-arg` | empty | Repeatable argument passed to `--mcp-command`. |
 | `--mcp-env-file` | empty | Env file passed to the external MCP command, usually `.env` or `test/e2e/.env.docker`. |
@@ -83,6 +84,23 @@ Notes:
 - `eval-surfaces-docker-enterprise` runs Enterprise-only Docker presets (`docker-enterprise-*`).
 - `eval-surfaces-docker-enterprise-all` runs both CE and Enterprise Docker presets in one run (`EVAL_SURFACE_CASE_SET=all`) on GitLab EE.
 - Add `PRESET=...` to any command to run a single preset instead of the full set.
+
+Measure what the prompts give away, without a provider or a GitLab:
+
+```bash
+go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface dynamic
+go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface meta \
+  --out dist/evaluation/mcp-surfaces/prompt-audit-meta.md
+```
+
+The summary is a per-case table and a set of totals. Each cell reads
+`named/declared` followed by where the repetition was found: `system` is the
+system prompt, which says the same thing for every case; `task` is what the
+prompt builder wrote around this case; `case` is the case's own text. The last
+column answers a different question, for coaching that names nothing: each case
+is rendered a second time with its answer key removed, and the column names the
+prompts that came back different. A dry run cannot answer any of this, because
+it builds no prompts at all.
 
 Dry-run the current catalog without model calls:
 

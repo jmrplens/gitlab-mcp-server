@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -602,6 +603,45 @@ func TestResolveRunModels_DryRunAndModelBackedDefaults(t *testing.T) {
 	}
 }
 
+// TestResolveRunModels_PromptAudit_ResolvesNoModelAndNoPaths verifies the
+// three places the prompt audit is excluded from: it reaches no provider, so
+// no model spec is resolved and the label is "none"; it writes its own
+// artifact only where --out names one, so no default report path is derived;
+// and it records no trace, so no trace directory is derived beside a report
+// that does not exist.
+func TestResolveRunModels_PromptAudit_ResolvesNoModelAndNoPaths(t *testing.T) {
+	t.Setenv("EVAL_MODELS", "")
+	cases := []struct {
+		name         string
+		opts         options
+		wantOutput   string
+		wantTraceDir string
+	}{
+		{name: "no paths given", opts: options{AuditPrompts: true}},
+		{
+			name:         "the paths it was given are kept",
+			opts:         options{AuditPrompts: true, Output: "dump.md", TraceDir: "traces"},
+			wantOutput:   "dump.md",
+			wantTraceDir: "traces",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			opts, specs, err := resolveRunModels(testCase.opts)
+			if err != nil {
+				t.Fatalf("resolveRunModels() error = %v", err)
+			}
+			if opts.Model != "none" || len(specs) != 0 {
+				t.Errorf("resolveRunModels() = model %q with %d specs, want \"none\" with none", opts.Model, len(specs))
+			}
+			if opts.Output != testCase.wantOutput || opts.TraceDir != testCase.wantTraceDir {
+				t.Errorf("resolveRunModels() = output %q and trace dir %q, want %q and %q",
+					opts.Output, opts.TraceDir, testCase.wantOutput, testCase.wantTraceDir)
+			}
+		})
+	}
+}
+
 // TestResolveRunModels_UnsupportedProvider_ReturnsError verifies an unknown
 // provider in --models aborts before any evaluation.
 func TestResolveRunModels_UnsupportedProvider_ReturnsError(t *testing.T) {
@@ -680,7 +720,7 @@ func TestPrepareRunCatalog_FiltersTasksAgainstMockCatalog(t *testing.T) {
 		t.Fatalf("prepareRunTasks() error = %v", err)
 	}
 	opts := options{ToolSurface: config.ToolSurfaceMeta, Edition: editionCE, MaxTasks: 3, SkipUnavailable: true}
-	catalog, routes, filtered, err := prepareRunCatalog(opts, tasks, nil)
+	resolved, catalog, routes, filtered, err := prepareRunCatalog(opts, tasks, nil)
 	if err != nil {
 		t.Fatalf("prepareRunCatalog() error = %v", err)
 	}
@@ -690,12 +730,17 @@ func TestPrepareRunCatalog_FiltersTasksAgainstMockCatalog(t *testing.T) {
 	if len(filtered) != 3 {
 		t.Fatalf("filtered tasks = %d, want 3 after --max-tasks", len(filtered))
 	}
+	// The catalog load is the only place the deployment behind it can be
+	// learned, so the options it returns carry it to the report header.
+	if !resolved.Deployment.Resolved || resolved.Deployment.Tier != edition.Ultimate || resolved.Deployment.GitLabVersion != mockGitLabVersion {
+		t.Fatalf("deployment = %+v, want the mock backend's resolved Ultimate tier and version", resolved.Deployment)
+	}
 }
 
 // TestPrepareRunCatalog_UnknownBackend_ReturnsError verifies an unrecognized
 // backend aborts before any catalog is built.
 func TestPrepareRunCatalog_UnknownBackend_ReturnsError(t *testing.T) {
-	_, _, _, err := prepareRunCatalog(options{ToolSurface: config.ToolSurfaceMeta, Backend: "bogus"}, nil, nil)
+	_, _, _, _, err := prepareRunCatalog(options{ToolSurface: config.ToolSurfaceMeta, Backend: "bogus"}, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "unknown backend") {
 		t.Fatalf("prepareRunCatalog() error = %v, want unknown backend error", err)
 	}
