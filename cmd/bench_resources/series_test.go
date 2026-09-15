@@ -212,41 +212,80 @@ func (c *methodConn) count(method string) int {
 	return c.calls[method]
 }
 
-// TestSteadyLoad_AlternatesMethodsAndTimesEveryCall verifies the steady
-// phase keeps every worker calling until the deadline, alternating the two
-// methods, records a duration per completed call and a note per method whose
-// calls failed.
+// forTurns bounds a steady phase by the work itself: every worker takes
+// exactly n turns and the phase ends when the last of them has.
+//
+// This is the test's own bound, and the whole of what it buys is that the
+// counts below are arithmetic rather than a measurement of the machine the
+// test happens to run on. The series itself is bounded by untilDeadline, and
+// the reason it is stays with that function.
+func forTurns(n int) phaseBound {
+	return func(turn int) bool { return turn < n }
+}
+
+// TestSteadyLoad_AlternatesMethodsAndTimesEveryCall verifies the steady phase
+// runs every worker for its whole bound, alternating the two methods starting
+// with tools/call, records a duration for every call that was answered and
+// none for the ones that were not, and one note per method whose calls failed.
+//
+// Bounded by turns rather than by a duration, which is what makes each of
+// those an equality. Driven by a 60 ms deadline it could only assert that
+// something had happened by then, and on a runner where the goroutines were
+// not scheduled inside the window nothing had: both methods came back at zero
+// and the test failed for a reason that was never about steadyLoad (issue
+// 775). What the phase does with a real deadline is left to the one test that
+// asks only that it stops, and to the benchmark itself, where the wall clock
+// is the measurement rather than the assertion.
 func TestSteadyLoad_AlternatesMethodsAndTimesEveryCall(t *testing.T) {
 	call, err := callFor(surfaceDynamic)
 	if err != nil {
 		t.Fatalf("callFor: %v", err)
 	}
-	healthy := &methodConn{}
-	broken := &methodConn{fail: methodToolsList}
-	conns := []*clientConn{{rpc: healthy, label: "a"}, {rpc: broken, label: "b"}}
+	cases := []struct {
+		name     string
+		turns    int
+		parallel int
+		// Per connection, over all of its workers: a turn is a tools/call on
+		// an even count and a tools/list on an odd one.
+		wantCalls, wantLists int
+	}{
+		{name: "whole alternations", turns: 4, parallel: 2, wantCalls: 4, wantLists: 4},
+		{name: "an odd bound ends one call ahead", turns: 3, parallel: 1, wantCalls: 2, wantLists: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			healthy := &methodConn{}
+			broken := &methodConn{fail: methodToolsList}
+			conns := []*clientConn{{rpc: healthy, label: "a"}, {rpc: broken, label: "b"}}
 
-	out := steadyLoad(t.Context(), conns, 2, 60*time.Millisecond, call)
+			out := steadyLoad(t.Context(), conns, tc.parallel, forTurns(tc.turns), call)
 
-	for _, method := range []string{methodToolsCall, methodToolsList} {
-		t.Run(method, func(t *testing.T) {
-			if healthy.count(method) == 0 {
-				t.Errorf("the healthy connection was never asked for %s", method)
+			// Both connections are driven the same way, whatever they answer:
+			// a failing method is retried on its turn and does not cost the
+			// connection its share of the phase.
+			alternated := func(who string, conn *methodConn) {
+				t.Helper()
+				if calls, lists := conn.count(methodToolsCall), conn.count(methodToolsList); calls != tc.wantCalls || lists != tc.wantLists {
+					t.Errorf("the %s connection took %d calls and %d lists, want %d and %d over %d workers of %d turns",
+						who, calls, lists, tc.wantCalls, tc.wantLists, tc.parallel, tc.turns)
+				}
 			}
-			if len(out.samples[method]) == 0 {
-				t.Errorf("no durations recorded for %s", method)
+			alternated("healthy", healthy)
+			alternated("broken", broken)
+			// Both connections answer tools/call and only the healthy one
+			// answers tools/list, so a duration per answered call is twice the
+			// one and once the other. A failed call is timed and not recorded.
+			if got := len(out.samples[methodToolsCall]); got != 2*tc.wantCalls {
+				t.Errorf("%d tools/call durations recorded, want %d", got, 2*tc.wantCalls)
+			}
+			if got := len(out.samples[methodToolsList]); got != tc.wantLists {
+				t.Errorf("%d tools/list durations recorded, want %d from the healthy connection alone", got, tc.wantLists)
+			}
+			wantNote := strconv.Itoa(tc.wantLists) + " tools/list calls failed"
+			if len(out.notes) != 1 || !strings.Contains(out.notes[0], wantNote) {
+				t.Errorf("notes = %v, want one saying %q", out.notes, wantNote)
 			}
 		})
-	}
-	// Alternation: each worker makes as many of one as of the other, give or
-	// take the call it was in the middle of at the deadline.
-	if calls, lists := healthy.count(methodToolsCall), healthy.count(methodToolsList); calls < lists || calls > lists+2 {
-		t.Errorf("calls %d and lists %d do not alternate", calls, lists)
-	}
-	if len(out.notes) != 1 || !strings.Contains(out.notes[0], "tools/list calls failed") {
-		t.Errorf("notes = %v, want one about the failing tools/list", out.notes)
-	}
-	if got := broken.count(methodToolsList); got == 0 || strings.Contains(strings.Join(out.notes, " "), strconv.Itoa(got)+" tools/list calls failed") == false {
-		t.Errorf("the note %v does not count the %d failures", out.notes, got)
 	}
 }
 
@@ -257,7 +296,7 @@ func TestSteadyLoad_CancelledContext_EndsEarly(t *testing.T) {
 	cancel()
 	conn := &methodConn{}
 	started := time.Now()
-	steadyLoad(ctx, []*clientConn{{rpc: conn}}, 1, 5*time.Second, toolCall{Name: "x"})
+	steadyLoad(ctx, []*clientConn{{rpc: conn}}, 1, untilDeadline(5*time.Second), toolCall{Name: "x"})
 	if elapsed := time.Since(started); elapsed > time.Second {
 		t.Errorf("the phase ran %s on a cancelled context", elapsed)
 	}

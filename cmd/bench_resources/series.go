@@ -283,7 +283,7 @@ func (r *runner) runStep(ctx context.Context, in stepInput) SeriesStep {
 		go func() { cpuProfile <- in.profiler.cpuProfile(ctx, seconds) }()
 	}
 
-	load := steadyLoad(ctx, in.conns, in.plan.Parallel, in.plan.StepDuration, in.call)
+	load := steadyLoad(ctx, in.conns, in.plan.Parallel, untilDeadline(in.plan.StepDuration), in.call)
 
 	endCPU, endOK := sampleCPU(in.sampler)
 	step.RSSPeakMiB = mibOf(in.sampler.peakRSS())
@@ -374,16 +374,38 @@ type loadOutcome struct {
 	notes   []string
 }
 
-// steadyLoad keeps clients x parallel workers calling for the duration, each
-// alternating tools/call and tools/list, and times every call.
+// phaseBound is asked before each turn of a steady phase, with the number of
+// turns the worker asking has already taken, and ends that worker when it
+// answers false.
+//
+// It is a parameter rather than a duration because a phase is bounded for two
+// different reasons. The series bounds it by the clock, for the reasons on
+// untilDeadline. A test asking what the workers did must not also be asking
+// whether the host's scheduler reached them inside a wall-clock window: the
+// steady-phase test was doing exactly that, and failed on a loaded Windows
+// runner with both methods at zero (issue 775).
+//
+// One bound is shared by every worker of a phase and called from all of them,
+// so an implementation has to be safe for that and must hold nothing per
+// worker: the clock one closes over an instant fixed before any worker starts,
+// which is what makes a deadline the phase's rather than each worker's.
+type phaseBound func(turn int) bool
+
+// untilDeadline bounds a phase by wall-clock time, counted from now.
 //
 // A fixed duration rather than a fixed count, for two reasons. A CPU profile
 // is taken over wall-clock seconds, so the phase has to be one; and a count
 // that took seconds at one credential would take unbounded time once
 // latency degrades, which is exactly the region the series exists to reach.
 // The per-call figures divide by the calls that were actually made.
-func steadyLoad(ctx context.Context, conns []*clientConn, parallel int, duration time.Duration, call toolCall) loadOutcome {
+func untilDeadline(duration time.Duration) phaseBound {
 	deadline := time.Now().Add(duration)
+	return func(int) bool { return time.Now().Before(deadline) }
+}
+
+// steadyLoad keeps clients x parallel workers calling until the bound ends
+// the phase, each alternating tools/call and tools/list, and times every call.
+func steadyLoad(ctx context.Context, conns []*clientConn, parallel int, bound phaseBound, call toolCall) loadOutcome {
 	tally := &loadTally{samples: map[string][]time.Duration{}, failures: map[string]int{}, firstFailure: map[string]error{}}
 
 	var wg sync.WaitGroup
@@ -392,7 +414,7 @@ func steadyLoad(ctx context.Context, conns []*clientConn, parallel int, duration
 			wg.Add(1)
 			go func(c *clientConn) {
 				defer wg.Done()
-				steadyWorker(ctx, c, deadline, call, tally)
+				steadyWorker(ctx, c, bound, call, tally)
 			}(conn)
 		}
 	}
@@ -433,10 +455,10 @@ func (t *loadTally) outcome() loadOutcome {
 	return out
 }
 
-// steadyWorker keeps one connection calling until the deadline, a tools/call
-// then a tools/list, timing each.
-func steadyWorker(ctx context.Context, c *clientConn, deadline time.Time, call toolCall, tally *loadTally) {
-	for turn := 0; time.Now().Before(deadline) && ctx.Err() == nil; turn++ {
+// steadyWorker keeps one connection calling until the bound ends the phase, a
+// tools/call then a tools/list, timing each.
+func steadyWorker(ctx context.Context, c *clientConn, bound phaseBound, call toolCall, tally *loadTally) {
+	for turn := 0; bound(turn) && ctx.Err() == nil; turn++ {
 		method := methodToolsList
 		var params map[string]any
 		if turn%2 == 0 {
