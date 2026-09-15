@@ -22,11 +22,14 @@ func TestCollectorHTTPSpan_ARefusalIsVisibleWhereTheMCPSpanIsNot(t *testing.T) {
 	c := startCollector(t)
 	srv := startServer(t, collectorEnv(c))
 
-	// No credential, so the request is refused before the MCP handler.
+	// No credential, so the request is refused before the MCP handler. A
+	// request served anyway is not a precondition this test lacks but the
+	// gate it sits behind failing, so it fails rather than skips: a skip here
+	// would be the first and only sign of a server serving anonymous traffic.
 	for range 3 {
 		got := srv.do(t, request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`})
 		if got.status == http.StatusOK {
-			t.Skip("the request was not refused; this test needs a rejection to mean anything")
+			t.Fatalf("a request with no credential was served (200); the credential gate this test measures behind is not refusing")
 		}
 	}
 

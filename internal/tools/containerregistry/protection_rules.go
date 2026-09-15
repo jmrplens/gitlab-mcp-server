@@ -1,4 +1,13 @@
-package containerregistry //nolint:dupl // parallel CRUD wrapper for a distinct GitLab REST surface; mirrors tag_protection_rules.go by design (different field names/types/endpoints, no shared SDK interface)
+// The directive on the package clause below is there because dupl reports this
+// file and tag_protection_rules.go as one block, line 1 to the end of each, so
+// no narrower placement suppresses the finding. The two are parallel by design:
+// GitLab's registry protection rules and tag protection rules are distinct REST
+// surfaces with different field names, option types and endpoints and no shared
+// SDK interface, and every published type here is held 1:1 to its own entity.
+// The cost is that anything added to this file that duplicates a third file is
+// not reported either, so keep additions to this surface.
+
+package containerregistry //nolint:dupl // one dupl block spanning both files; parallel CRUD over a distinct GitLab REST surface, see the comment above
 
 import (
 	"context"

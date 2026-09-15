@@ -881,14 +881,15 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
-			if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
+			form, err := testutil.ReadMultipartForm(r, 1<<20)
+			if err != nil {
 				t.Errorf("parse multipart: %v", err)
 				http.Error(w, "parse multipart", http.StatusInternalServerError)
 				return
 			}
 			for key, want := range wantParams {
 				t.Run(key, func(t *testing.T) {
-					if got := r.FormValue(key); got != want {
+					if got := testutil.FormValue(form, key); got != want {
 						t.Errorf("%s = %q, want %q", key, got, want)
 					}
 				})

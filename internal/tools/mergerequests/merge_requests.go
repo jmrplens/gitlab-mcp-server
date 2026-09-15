@@ -1158,7 +1158,7 @@ func buildGlobalListOptions(input ListGlobalInput) (*gl.ListMergeRequestsOptions
 // globalMRListFilters reads the global list input; see [groupMRListFilters]
 // for why its twin is not a copy of it.
 //
-//nolint:dupl // distinct input types; see groupMRListFilters.
+//nolint:dupl // ListGlobalInput and ListGroupInput are two published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape both schemas.
 func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
@@ -1371,7 +1371,7 @@ func buildGroupListOptions(input ListGroupInput) (*gl.ListGroupMergeRequestsOpti
 // struct shared by two published tool schemas, which is a larger change than
 // the repetition costs.
 //
-//nolint:dupl // distinct input types; see the comment above.
+//nolint:dupl // ListGroupInput and ListGlobalInput are two published tool schemas whose fields happen to share names; the only way to share this body is an embedded input struct, which would reshape both schemas.
 func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 	return mergeRequestListFilters{
 		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,

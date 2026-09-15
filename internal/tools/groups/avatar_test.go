@@ -24,20 +24,21 @@ func TestUploadAvatar_ContentBase64_Multipart(t *testing.T) {
 	var gotFilename, gotField, gotContent string
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/99", func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
-			t.Errorf("ParseMultipartForm: %v", err)
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("ReadMultipartForm: %v", err)
 			http.Error(w, "parse multipart form", http.StatusBadRequest)
 			return
 		}
-		for field, files := range r.MultipartForm.File {
+		for field, files := range form.File {
 			if len(files) == 0 {
 				t.Errorf("multipart field %q has no files", field)
 				continue
 			}
 			gotField = field
-			f, err := files[0].Open()
-			if err != nil {
-				t.Errorf("open multipart file: %v", err)
+			f, openErr := files[0].Open()
+			if openErr != nil {
+				t.Errorf("open multipart file: %v", openErr)
 				continue
 			}
 			buf := make([]byte, 64)
@@ -84,12 +85,21 @@ func TestUploadAvatar_FilePath(t *testing.T) {
 	var gotContent string
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/99", func(w http.ResponseWriter, r *http.Request) {
-		_ = r.ParseMultipartForm(1 << 20) //nolint:gosec // Test handler parses a small in-memory fixture body.
-		for _, files := range r.MultipartForm.File {
-			f, _ := files[0].Open()
-			defer f.Close()
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("ReadMultipartForm: %v", err)
+			http.Error(w, "parse multipart form", http.StatusBadRequest)
+			return
+		}
+		for _, files := range form.File {
+			f, openErr := files[0].Open()
+			if openErr != nil {
+				t.Errorf("open multipart file: %v", openErr)
+				continue
+			}
 			buf := make([]byte, 64)
 			n, _ := f.Read(buf)
+			_ = f.Close()
 			gotContent = string(buf[:n])
 		}
 		testutil.RespondJSON(w, http.StatusOK, groupAvatarRespJSON)

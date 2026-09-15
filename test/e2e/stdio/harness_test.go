@@ -61,19 +61,31 @@ var (
 	errBuild error
 )
 
-// serverBinary builds cmd/server once for the whole package and returns its
-// path.
+// serverBinary returns the path of the server these tests drive, building it
+// once for the whole package, and ends the test when that build failed.
+func serverBinary(t *testing.T) string {
+	t.Helper()
+	bin, err := buildServerBinary()
+	if err != nil {
+		t.Fatalf("building the server binary: %v", err)
+	}
+	return bin
+}
+
+// buildServerBinary builds cmd/server once for the whole package and returns
+// its path.
 //
 // Building rather than importing is the point of the module: what is under test
 // is the process — its pipes, its streams, its exit — and a test that imported
 // package main would be testing its own assembly of it instead.
-func serverBinary(t *testing.T) string {
-	t.Helper()
+//
+// It takes no testing.T, and the build directory is not a t.TempDir, for one
+// reason: the build is shared by every test in the package, so the first test
+// to arrive would own a directory removed when that test ended, leaving every
+// later test pointing at nothing. The package's TestMain removes it instead.
+func buildServerBinary() (string, error) {
 	buildOnce.Do(func() {
-		// Not t.TempDir: the binary is built once under sync.Once for the whole
-		// package, and the first test to arrive would own a directory removed
-		// when that test ends.
-		dir, err := os.MkdirTemp("", "gitlab-mcp-stdioe2e") //nolint:usetesting // see above
+		dir, err := os.MkdirTemp("", "gitlab-mcp-stdioe2e")
 		if err != nil {
 			errBuild = err
 			return
@@ -90,7 +102,8 @@ func serverBinary(t *testing.T) string {
 		// driving an uninstrumented one (harness_race_test.go).
 		ctx, cancel := context.WithTimeout(context.Background(), serverBuildTimeout)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "go", serverBuildArgs(out)...) //#nosec G204 -- every argument is a constant chosen by a build tag, plus a path this function got from os.MkdirTemp; nothing here comes from outside the test.
+		args := serverBuildArgs(out)
+		cmd := exec.CommandContext(ctx, "go", args...)
 		cmd.Dir = repoRoot()
 		if output, runErr := cmd.CombinedOutput(); runErr != nil {
 			errBuild = fmt.Errorf("building cmd/server: %w\n%s", runErr, output)
@@ -98,10 +111,7 @@ func serverBinary(t *testing.T) string {
 		}
 		builtBinary = out
 	})
-	if errBuild != nil {
-		t.Fatalf("building the server binary: %v", errBuild)
-	}
-	return builtBinary
+	return builtBinary, errBuild
 }
 
 // repoRoot walks up to the directory holding go.mod.

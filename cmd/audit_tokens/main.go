@@ -909,14 +909,14 @@ func runFootprint(client *gitlabclient.Client) error {
 		return replaceErr
 	}
 	detailedDoc := renderDetailedFootprint(rows)
-	if writeErr := os.WriteFile(filepath.Clean(detailedFootprintPath), []byte(detailedDoc), 0o600); writeErr != nil { //#nosec G306,G703 -- generated doc path is a compile-time constant
+	if writeErr := os.WriteFile(filepath.Clean(detailedFootprintPath), []byte(detailedDoc), docgen.GeneratedFileMode); writeErr != nil { //#nosec G703 -- generated doc path is a compile-time constant
 		return fmt.Errorf("writing %s: %w", detailedFootprintPath, writeErr)
 	}
 	siteDoc, err := renderSiteFootprintJSON(rows)
 	if err != nil {
 		return err
 	}
-	if writeErr := os.WriteFile(filepath.Clean(siteFootprintPath), siteDoc, 0o600); writeErr != nil { //#nosec G306,G703 -- generated data path is a compile-time constant
+	if writeErr := os.WriteFile(filepath.Clean(siteFootprintPath), siteDoc, docgen.GeneratedFileMode); writeErr != nil { //#nosec G703 -- generated data path is a compile-time constant
 		return fmt.Errorf("writing %s: %w", siteFootprintPath, writeErr)
 	}
 	fmt.Printf("Updated %s token-claim block and token-footprint section, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))

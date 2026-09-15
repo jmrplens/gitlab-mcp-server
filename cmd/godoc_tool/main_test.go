@@ -55,8 +55,8 @@ func assertRunMainExit(t *testing.T, args []string, wantCode int, wantStderr str
 
 // TestRunMain_ExitCodesAndMessages verifies the exit paths that do not write to
 // stdout: the usage message with no subcommand, an audit flag error, the fix
-// subcommand's missing-path and per-path-failure codes, and the unknown
-// subcommand message.
+// subcommand's missing-path, bad-flag, help and per-path-failure codes, and
+// the unknown subcommand message.
 func TestRunMain_ExitCodesAndMessages(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -67,6 +67,8 @@ func TestRunMain_ExitCodesAndMessages(t *testing.T) {
 		{name: "no subcommand prints usage", args: []string{"godoc_tool"}, wantCode: 2, wantErr: "usage: godoc_tool <audit|fix>"},
 		{name: "audit rejects a bad format", args: []string{"godoc_tool", "audit", "--format=xml"}, wantCode: 1, wantErr: "unsupported format"},
 		{name: "fix without a path", args: []string{"godoc_tool", "fix"}, wantCode: 2, wantErr: "at least one file or directory path is required"},
+		{name: "fix with an unknown flag", args: []string{"godoc_tool", "fix", "--bogus"}, wantCode: 2, wantErr: "flag provided but not defined: -bogus"},
+		{name: "fix asked for help exits clean", args: []string{"godoc_tool", "fix", "-h"}, wantCode: 0, wantErr: "Usage of fix:"},
 		{name: "fix with an unprocessable path", args: []string{"godoc_tool", "fix", filepath.Join(t.TempDir(), "missing.go")}, wantCode: 1, wantErr: "stat "},
 		{name: "unknown subcommand", args: []string{"godoc_tool", "bogus"}, wantCode: 2, wantErr: `unknown subcommand "bogus"`},
 	}

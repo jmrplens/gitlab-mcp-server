@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,7 +164,7 @@ func Within(timeout time.Duration) CallOption {
 	return func(o *callOptions) { o.timeout = timeout }
 }
 
-// Under runs one call under the caller's own context rather than the Env's.
+// under runs one call under the caller's own context rather than the Env's.
 //
 // A cleanup is the case it exists for. The ledger sweeps under a context of
 // its own, bounded by the cleanup budget, and a call that ignored it would
@@ -172,7 +173,12 @@ func Within(timeout time.Duration) CallOption {
 // but it carries no deadline, so the budget bounded the sweep between calls
 // and never a call itself. One cleanup that hangs would spend the whole
 // budget and be noticed only once it returned.
-func Under(ctx context.Context) CallOption {
+//
+// It is unexported because [Undo] is the verb a scenario reaches for: it
+// carries both halves of what a cleanup call is, the purpose and the context,
+// so a scenario that named this option separately could set one and forget
+// the other. The seven that used to do so are the reason Undo exists.
+func under(ctx context.Context) CallOption {
 	return func(o *callOptions) { o.ctx = ctx }
 }
 
@@ -346,6 +352,27 @@ func Try[O any](s *Session, id ActionID, params map[string]any, opts ...CallOpti
 		return output, err
 	}
 	return output, nil
+}
+
+// Undo runs an action from a cleanup: under the ledger's context, recorded as
+// a cleanup, and answering with the error rather than ending the test, since
+// one resource nobody can delete must not strand every other cleanup behind
+// it. It is [Try] with the two options every cleanup used to spell by hand.
+//
+// The context is a parameter rather than an option because it is not the
+// caller's to leave out: the ledger sweeps under a budget, and a cleanup that
+// ran under the Env's context instead would be bounded by nothing, which is
+// the case [Under] documents.
+func Undo[O any](ctx context.Context, s *Session, id ActionID, params map[string]any, opts ...CallOption) (O, error) {
+	s.env.T.Helper()
+	return Try[O](s, id, params, undoOptions(ctx, opts)...)
+}
+
+// undoOptions adds what a cleanup call is to the options the caller gave it,
+// after them, since the purpose and the context are the verb's own and not the
+// caller's to override.
+func undoOptions(ctx context.Context, opts []CallOption) []CallOption {
+	return slices.Concat(opts, []CallOption{For(PurposeCleanup), under(ctx)})
 }
 
 // Refused asserts that the server declined the call in the named class, and

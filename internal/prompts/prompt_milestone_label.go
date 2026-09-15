@@ -117,12 +117,14 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	for _, ms := range milestones {
 		fmt.Fprintf(&b, "## %s\n\n", mdHeading(ms.Title))
 
-		issues, _, _ := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
+		issues, _, issuesErr := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
 			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
-		mrs, _, _ := client.GL().Milestones.GetMilestoneMergeRequests(projectID, ms.ID, &gl.GetMilestoneMergeRequestsOptions{
+		warnFetch(ctx, "milestone issues", issuesErr)
+		mrs, _, mrsErr := client.GL().Milestones.GetMilestoneMergeRequests(projectID, ms.ID, &gl.GetMilestoneMergeRequestsOptions{
 			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
+		warnFetch(ctx, "milestone merge requests", mrsErr)
 
 		closedIssues, openIssues := countIssueStates(issues)
 		mergedMRs, openMRs := countMRStates(mrs)
@@ -272,12 +274,14 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	for _, ms := range milestones {
 		fmt.Fprintf(&b, "## %s\n\n", mdHeading(ms.Title))
 
-		issues, _, _ := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
+		issues, _, issuesErr := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
 			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
-		mrs, _, _ := client.GL().GroupMilestones.GetGroupMilestoneMergeRequests(groupID, ms.ID, &gl.GetGroupMilestoneMergeRequestsOptions{
+		warnFetch(ctx, "group milestone issues", issuesErr)
+		mrs, _, mrsErr := client.GL().GroupMilestones.GetGroupMilestoneMergeRequests(groupID, ms.ID, &gl.GetGroupMilestoneMergeRequestsOptions{
 			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
+		warnFetch(ctx, "group milestone merge requests", mrsErr)
 
 		closedIssues, _ := countIssueStates(issues)
 		mergedMRs, _ := countMRStates(mrs)

@@ -74,7 +74,7 @@ const (
 // the first request of a process under the race detector, where building
 // the pool entry's full catalog alone can exceed ten seconds. A passing
 // test is never slowed by the larger value.
-var testHTTPClient = &http.Client{Timeout: 30 * time.Second} //nolint:gochecknoglobals // test-only
+var testHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // closeMCPSession sends an HTTP DELETE to properly terminate an MCP session
 // on the server side, preventing goroutine leaks from StreamableHTTPHandler.

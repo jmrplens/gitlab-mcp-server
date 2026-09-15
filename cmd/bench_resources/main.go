@@ -357,7 +357,7 @@ func memoryBudgetMiB(flagMiB int) float64 {
 // variable so a test can pin the host's answer: the kernel's figure moves by a
 // few kibibytes between two reads on a busy machine, and a test that read it
 // once itself and once through memoryBudgetMiB compared two different hosts.
-var hostAvailableMemoryMiB = availableMemoryMiB //nolint:gochecknoglobals // test seam
+var hostAvailableMemoryMiB = availableMemoryMiB
 
 // defaultBudgetFraction is the share of available memory the series may
 // plan up to when no budget is given.

@@ -112,11 +112,9 @@ func TestSharedServer_LiveHeapDoesNotGrowWithTheNumberOfCredentials(t *testing.T
 					builds, heapCredentials)
 			}
 
-			// Signed, because the growth is a difference and can be negative:
-			// the readings are HeapAlloc, and a later one is often the smaller.
-			// Neither can approach the range of an int64, being the live heap
-			// of a process this test would have run out of memory to hold.
-			growth := int64(last) - int64(first) //nolint:gosec // both figures are a live heap, orders below 2^63
+			// The growth is a difference and can be negative: the readings are
+			// HeapAlloc, and a later one is often the smaller.
+			growth := last - first
 			t.Logf("live heap on %s: %d bytes at 1 credential, %d at %d, growth %d bytes (%.1f MiB)",
 				surface, first, last, heapCredentials, growth, float64(growth)/(1<<20))
 			if growth > heapGrowthBudget {
@@ -191,7 +189,7 @@ func jsonRPCErrorIn(body string) string {
 // wire), and on the individual surface that was worth several mebibytes, which
 // is the same order as the budget this test asserts. Reading twice makes both
 // ends of the comparison a settled heap.
-func liveHeapBytes(t *testing.T, pprofAddr string) uint64 {
+func liveHeapBytes(t *testing.T, pprofAddr string) int64 {
 	t.Helper()
 
 	_ = readHeapAlloc(t, pprofAddr)
@@ -199,7 +197,13 @@ func liveHeapBytes(t *testing.T, pprofAddr string) uint64 {
 }
 
 // readHeapAlloc performs one collection and returns the live heap it reports.
-func readHeapAlloc(t *testing.T, pprofAddr string) uint64 {
+//
+// Signed, though the runtime reports it unsigned, because the only thing done
+// with two readings is to subtract them: the live heap of a process this test
+// can hold is orders below the range of an int64, and a figure that is never
+// used unsigned is better parsed as what it is used as than converted at the
+// subtraction.
+func readHeapAlloc(t *testing.T, pprofAddr string) int64 {
 	t.Helper()
 
 	url := "http://" + pprofAddr + "/debug/pprof/heap?gc=1&debug=1"
@@ -234,7 +238,7 @@ func readHeapAlloc(t *testing.T, pprofAddr string) uint64 {
 		if !ok {
 			continue
 		}
-		value, parseErr := strconv.ParseUint(strings.TrimSpace(rest), 10, 64)
+		value, parseErr := strconv.ParseInt(strings.TrimSpace(rest), 10, 64)
 		if parseErr != nil {
 			t.Fatalf("parsing HeapAlloc from %q: %v", line, parseErr)
 		}

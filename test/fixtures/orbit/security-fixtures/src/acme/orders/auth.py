@@ -10,7 +10,7 @@ def verify_password_weak(stored_hash: str, candidate: str) -> bool:
     `==` pattern on a `md5(...).hexdigest()` value. Real code must use
     a password hasher like bcrypt or argon2."""
     # INTENTIONAL WEAK HASH for fixture SAST detections.
-    candidate_hash = hashlib.md5(candidate.encode("utf-8")).hexdigest()  # nosec
+    candidate_hash = hashlib.md5(candidate.encode("utf-8")).hexdigest()
     return stored_hash == candidate_hash
 
 
@@ -26,4 +26,4 @@ def eval_unsafe(expression: str) -> Optional[float]:
     looks like a calculator helper but the use of `eval` makes it a
     remote code execution sink."""
     # INTENTIONAL eval() USE for fixture SAST detections.
-    return eval(expression, {"__builtins__": {}}, {})  # nosec
+    return eval(expression, {"__builtins__": {}}, {})

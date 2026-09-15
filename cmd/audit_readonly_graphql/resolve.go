@@ -377,8 +377,7 @@ func (r *resolver) returnsOf(callee *types.Func, call *ast.CallExpr, at frame, t
 	}
 	var found []binding
 	ast.Inspect(fn.decl.Body, func(node ast.Node) bool {
-		if lit, isLit := node.(*ast.FuncLit); isLit {
-			_ = lit
+		if _, isLit := node.(*ast.FuncLit); isLit {
 			return false
 		}
 		ret, isReturn := node.(*ast.ReturnStmt)

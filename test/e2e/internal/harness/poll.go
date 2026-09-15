@@ -78,6 +78,30 @@ func Poll(ctx context.Context, interval, timeout time.Duration, condition func()
 	}
 }
 
+// WaitThrough is how a condition reports a failure it wants to wait through:
+// the error becomes the state Poll saw, never the error that ends the wait, so
+// Poll asks again and a timeout names what kept failing. A listing refused by
+// an instance under load, a read that races a job still running: each is
+// worth another poll, and the string is what a reader is left with if the
+// budget runs out first.
+//
+// It exists because a condition that did this by hand looked like the bug
+// it was not. A returned nil error beside a non-nil one is the shape nilerr
+// flags, and six conditions each carried the same explanation in a directive
+// to say it was deliberate. The contract is Poll's, so its spelling lives
+// beside Poll and the conditions say only what failed.
+func WaitThrough(what string, err error) (done bool, state string, fatal error) {
+	return false, fmt.Sprintf("%s: %v", what, err), nil
+}
+
+// DoneOnError is [WaitThrough]'s counterpart for a wait whose success is a
+// failure: a delete is asynchronous, so the wait is for the read of the
+// deleted resource to start failing, and the error is the observation the
+// condition was waiting for rather than a fault of its own.
+func DoneOnError(what string, err error) (done bool, state string, fatal error) {
+	return true, fmt.Sprintf("%s: %v", what, err), nil
+}
+
 // pollContextError reports a cancelled context as a timeout when the context
 // ended because its own deadline passed, and as a cancellation otherwise.
 func pollContextError(err error, timeout time.Duration, lastState string) error {

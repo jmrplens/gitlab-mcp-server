@@ -484,8 +484,14 @@ func nextStatus(statuses *[]string) string {
 
 // statusError builds the structured error client-go returns for an HTTP
 // refusal, with the request a real one carries so its message formats.
+//
+// The request is a literal rather than a built one: nothing sends it, and its
+// message reads only the method and the URL.
 func statusError(code int, message string) error {
-	request, _ := http.NewRequest(http.MethodGet, "https://gitlab.example/api/v4/projects/1", http.NoBody) //nolint:noctx // a fixture error needs a request shape, not a live request
+	request := &http.Request{
+		Method: http.MethodGet,
+		URL:    &url.URL{Scheme: "https", Host: "gitlab.example", Path: "/api/v4/projects/1"},
+	}
 	return &gl.ErrorResponse{
 		Response: &http.Response{StatusCode: code, Request: request},
 		Message:  message,

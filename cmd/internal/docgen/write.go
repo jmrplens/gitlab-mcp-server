@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	// generatedFileMode is the mode a generated artifact is created with. The
+	// GeneratedFileMode is the mode a generated artifact is created with. The
 	// copies this replaced disagreed, 0o644 in one and 0o600 in seven, and
 	// 0o600 wins for two reasons: it is what gosec's G306 accepts without a
 	// suppression, and the mode only ever applies to a file the generator
@@ -16,7 +16,12 @@ const (
 	// changes the mode of a file that already exists. Every artifact these
 	// helpers write is committed, so a checkout gets git's mode and the
 	// difference is invisible in practice.
-	generatedFileMode = 0o600
+	//
+	// Exported for the generators that write through neither helper here (a
+	// binary asset cannot take the trailing newline [WriteOrCheck] adds), so
+	// that they name this decision rather than carry a 0o644 and the
+	// suppression it costs.
+	GeneratedFileMode = 0o600
 
 	// generatedDirMode is the mode a missing parent directory is created with.
 	generatedDirMode = 0o750
@@ -75,7 +80,7 @@ func WriteOrCheck(path string, content []byte, check bool, regenerate string) er
 		}
 		return nil
 	}
-	if writeErr := root.WriteFile(name, content, generatedFileMode); writeErr != nil {
+	if writeErr := root.WriteFile(name, content, GeneratedFileMode); writeErr != nil {
 		return fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return nil
@@ -96,7 +101,7 @@ func WriteReport(path string, content []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), generatedDirMode); err != nil {
 		return err
 	}
-	return os.WriteFile(path, content, generatedFileMode)
+	return os.WriteFile(path, content, GeneratedFileMode)
 }
 
 // NormalizeNewlines strips carriage returns so a comparison of generated text

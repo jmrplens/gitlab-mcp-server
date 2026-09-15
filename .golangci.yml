@@ -21,8 +21,17 @@ run:
   # CI runners have 4 vCPUs, so this matches what CI already does implicitly and
   # only changes behaviour on bigger machines — where it is 6x faster.
   concurrency: 4
+  # Every e2e build tag, so that the invocation the header documents sees the
+  # same files the Makefile's GO_ANALYSIS_TAGS does. A tagged file is invisible
+  # to the linter unless its tag is listed, and with `e2e` alone the four
+  # transport and live modules under test/e2e were analysed only when the
+  # Makefile passed the others on the command line.
   build-tags:
     - e2e
+    - collectore2e
+    - httpe2e
+    - orbitlive
+    - stdioe2e
 
 linters:
   default: none
@@ -259,9 +268,11 @@ linters:
           - gosec
         text: "G101: Potential hardcoded credentials"
 
-      # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
-      # Disable only the t.Parallel() requirement for the e2e suite.
-      - path: "test/e2e/"
+      # The GitLab-backed suite runs sequentially by design: its tests share
+      # one instance and its fixtures across subtests, so the t.Parallel()
+      # requirement is lifted there and nowhere else. The transport, collector
+      # and Orbit modules beside it need no GitLab and are held to the rule.
+      - path: "test/e2e/gitlab/"
         linters:
           - tparallel
 

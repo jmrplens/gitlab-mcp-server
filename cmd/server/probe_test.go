@@ -235,13 +235,7 @@ func serveOnUnixSocket(t *testing.T, handler http.Handler) string {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix sockets are not exercised on Windows")
 	}
-	// A short directory: socket paths are limited to about a hundred bytes.
-	dir, err := os.MkdirTemp("", "probe") //nolint:usetesting // short path, see above
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	path := filepath.Join(dir, "s.sock")
+	path := filepath.Join(socketDir(t), "s.sock")
 	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", path)
 	if err != nil {
 		t.Fatalf("listening on %s: %v", path, err)
@@ -561,7 +555,7 @@ func TestLivePeers_ExcludesThisProcess(t *testing.T) {
 	if err != nil {
 		t.Skipf("the process list is not readable here: %v", err)
 	}
-	self := int32(os.Getpid()) //nolint:gosec // a pid fits
+	self := pid32(t, os.Getpid())
 	for _, p := range peers {
 		if p.pid == self {
 			t.Errorf("livePeers listed this process (pid %d)", self)

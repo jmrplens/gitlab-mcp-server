@@ -3,6 +3,7 @@ package toolutil
 
 import (
 	"bufio"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -265,23 +266,34 @@ func scanRepoForTimeHelpers(t *testing.T, skipDir string) timeHelperScan {
 		".git": {}, "node_modules": {}, "dist": {}, "site": {},
 	}
 	var scan timeHelperScan
-	scan.err = filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+	// The sweep is scoped to the repository root: every open goes through the
+	// root, so a path that resolves outside it, whether a symlink planted in
+	// the tree or one swapped in between the walk seeing an entry and opening
+	// it, is refused rather than read.
+	root, openErr := os.OpenRoot(repoRoot)
+	if openErr != nil {
+		scan.err = openErr
+		return scan
+	}
+	defer func() { _ = root.Close() }()
+	scan.err = fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() {
-			if _, pruned := prunedDirs[info.Name()]; pruned {
-				return filepath.SkipDir
+		if d.IsDir() {
+			if _, pruned := prunedDirs[d.Name()]; pruned {
+				return fs.SkipDir
 			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		if !strings.HasSuffix(rel, ".go") || strings.HasSuffix(rel, "_test.go") {
 			return nil
 		}
-		if filepath.Dir(path) == skipDir {
+		native := filepath.FromSlash(rel)
+		if filepath.Join(repoRoot, filepath.Dir(native)) == skipDir {
 			return nil
 		}
-		f, err := os.Open(path) // #nosec G304,G122 -- test guardrail reads repo files via filepath.Walk
+		f, err := root.Open(native)
 		if err != nil {
 			return nil
 		}
@@ -292,12 +304,10 @@ func scanRepoForTimeHelpers(t *testing.T, skipDir string) timeHelperScan {
 			lineNo++
 			line := scanner.Text()
 			if formatTimePtrFuncDef.MatchString(line) {
-				rel, _ := filepath.Rel(repoRoot, path)
-				scan.formatTimePtr = append(scan.formatTimePtr, rel+":"+itoa(lineNo))
+				scan.formatTimePtr = append(scan.formatTimePtr, native+":"+itoa(lineNo))
 			}
 			if formatISOTimePtrFuncDef.MatchString(line) {
-				rel, _ := filepath.Rel(repoRoot, path)
-				scan.formatISOTimePtr = append(scan.formatISOTimePtr, rel+":"+itoa(lineNo))
+				scan.formatISOTimePtr = append(scan.formatISOTimePtr, native+":"+itoa(lineNo))
 			}
 		}
 		return nil

@@ -16,11 +16,11 @@ import "os"
 // is not a regular file; what is missing is the guarantee that the file opened
 // is the file that was checked.
 func openLeafNoFollow(path string) (*os.File, error) {
-	return os.Open(path) //#nosec G304 -- the caller resolves the path through symlinks and confines it to the allowed directories
+	return os.Open(path) // the caller resolves the path through symlinks and confines it to the allowed directories
 }
 
 // createLeafNoFollow creates or truncates path for writing, with the same
 // caveat [openLeafNoFollow] carries on this platform.
 func createLeafNoFollow(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //#nosec G304 -- the caller resolves the path through symlinks and confines it to the allowed directories
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // the caller resolves the path through symlinks and confines it to the allowed directories
 }

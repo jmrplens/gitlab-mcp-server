@@ -267,10 +267,8 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		actions []actionDetail
 	}
 	domains := map[string]*domainAcc{}
-	var totalActions int
 	unmapped := map[string]struct{}{}
 	for _, a := range eeCatalog.Actions() {
-		totalActions++
 		pkg := a.OwnerPackage
 		if pkg == "" {
 			pkg = a.Domain
@@ -325,7 +323,6 @@ func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 		rep.UnmappedDomains = append(rep.UnmappedDomains, k)
 	}
 	sort.Strings(rep.UnmappedDomains)
-	_ = totalActions
 	return rep, nil
 }
 

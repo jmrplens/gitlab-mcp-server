@@ -3,7 +3,11 @@
 package toolutil
 
 import (
+	"context"
+	"net/http"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
 // sampleDiff is a unified diff with additions, removals, and context lines.
@@ -348,6 +352,71 @@ func TestParseHunkHeader_Invalid(t *testing.T) {
 	old, newLine := parseHunkHeader("not a hunk header")
 	if old != 0 || newLine != 0 {
 		t.Errorf("invalid header should return (0,0), got (%d,%d)", old, newLine)
+	}
+}
+
+// TestParseHunkHeader_MalformedStart verifies that a header whose start is
+// not a number is refused whole rather than read as starting at line 0: a
+// hunk numbered from 0 would validate every position in it against the
+// wrong line, while a refused hunk contributes no lines at all.
+func TestParseHunkHeader_MalformedStart(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+	}{
+		{name: "old start", header: "@@ -x,5 +20,8 @@"},
+		{name: "new start", header: "@@ -10,5 +y,8 @@"},
+		{name: "empty start", header: "@@ -,5 +20,8 @@"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old, newLine := parseHunkHeader(tt.header)
+			if old != 0 || newLine != 0 {
+				t.Errorf("parseHunkHeader(%q) = (%d,%d), want (0,0)", tt.header, old, newLine)
+			}
+			lines := ParseDiffLines(tt.header + "\n+added\n context\n")
+			if len(lines) != 0 {
+				t.Errorf("ParseDiffLines after a malformed header numbered %d lines, want none", len(lines))
+			}
+		})
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_Lists verifies that a listing GitLab
+// answers is handed back with ok set, which is the pre-check's normal path.
+func TestMergeRequestDiffsForPositionCheck_Lists(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/merge_requests/7/diffs" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"a.go","new_path":"a.go","diff":"@@ -1,2 +1,2 @@\n-x\n+y\n"}]`)
+	}))
+	diffs, ok := MergeRequestDiffsForPositionCheck(context.Background(), client, "42", 7)
+	if !ok {
+		t.Fatal("ok = false for a listing GitLab answered")
+	}
+	if len(diffs) != 1 || diffs[0].NewPath != "a.go" {
+		t.Errorf("diffs = %+v, want the one diff the fixture serves", diffs)
+	}
+}
+
+// TestMergeRequestDiffsForPositionCheck_ListingFails verifies that a listing
+// GitLab refuses is reported as not ok with no diffs, so a caller skips the
+// pre-check and the write that follows is judged by GitLab. The status is a
+// 403 because it is the shape of refusal the write is about to get too, which
+// is the argument the helper's doc comment makes for skipping rather than
+// failing.
+func TestMergeRequestDiffsForPositionCheck_ListingFails(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	diffs, ok := MergeRequestDiffsForPositionCheck(context.Background(), client, "42", 7)
+	if ok {
+		t.Fatal("ok = true for a listing GitLab refused")
+	}
+	if diffs != nil {
+		t.Errorf("diffs = %+v, want nil when the listing failed", diffs)
 	}
 }
 

@@ -13,12 +13,12 @@
 //
 // That decision is the reason this is a package rather than two tidy copies.
 // Neither command may resolve `go` through PATH ([Executable] joins it out of
-// [runtime.GOROOT] instead), because a lookup in a directory list the
-// environment controls is what Sonar's go:S4036 refuses, and the same rule is
-// why the exec call sites carry a `#nosec G204` note saying the program name
-// is fixed. Written twice, that is a rule that holds until one of the two
-// copies is edited by somebody who did not read the other; written once, with
-// its `//nolint` comment and the Windows suffix beside it, it is a rule.
+// the running toolchain's GOROOT instead), because a lookup in a directory
+// list the environment controls is what Sonar's go:S4036 refuses, and the
+// same rule is why the exec call sites carry a `#nosec G204` note saying the
+// program name is fixed. Written twice, that is a rule that holds until one
+// of the two copies is edited by somebody who did not read the other; written
+// once, with the reasoning and the Windows suffix beside it, it is a rule.
 //
 // What stays with each command is everything that makes its listing its own.
 // godoc_tool keeps `./...`, its 30-second bound and the seam its tests feed

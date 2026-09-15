@@ -136,23 +136,26 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	}
 
 	// Merged MRs in the period
-	mergedMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
+	mergedMRs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: &since,
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "merged merge requests", err)
 
 	// Open MRs
-	openMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
+	openMRs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open merge requests", err)
 
 	// Open issues
-	openIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
+	openIssues, _, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open issues", err)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Project Activity Report: %s (last %d days)\n\n", mdHeading(projectID), days)
@@ -410,18 +413,20 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	// Unassigned MRs
-	unassignedMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
+	unassignedMRs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:      new("opened"),
 		AssigneeID: gl.AssigneeID(0),
 		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "unassigned merge requests", err)
 
 	// Unassigned issues
-	unassignedIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
+	unassignedIssues, _, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:      new("opened"),
 		AssigneeID: gl.AssigneeID(0),
 		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "unassigned issues", err)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Unassigned Items: %s\n\n", mdHeading(projectID))
@@ -479,18 +484,20 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	staleDate := time.Now().UTC().AddDate(0, 0, -staleDays)
 
 	// Stale MRs (not updated since staleDate)
-	staleMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
+	staleMRs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:         new("opened"),
 		UpdatedBefore: &staleDate,
 		PerPage:       maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "stale merge requests", err)
 
 	// Stale issues
-	staleIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
+	staleIssues, _, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:         new("opened"),
 		UpdatedBefore: &staleDate,
 		PerPage:       maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "stale issues", err)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Stale Items Report: %s (no updates in %d+ days)\n\n", mdHeading(projectID), staleDays)

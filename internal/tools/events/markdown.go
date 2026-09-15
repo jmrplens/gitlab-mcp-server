@@ -197,8 +197,7 @@ func formatEventListMarkdown(title, emptyResource string, events []markdownEvent
 		if strings.Contains(target, "](") {
 			linked = true
 		}
-		//gitlab:allow-unescaped e.ActionName: a contribution-event action GitLab writes from its own vocabulary (opened, closed, pushed to and the rest).
-		fmt.Fprintf(&b, "- **%s**%s%s%s%s%s%s\n", e.ActionName, target,
+		fmt.Fprintf(&b, "- **%s**%s%s%s%s%s%s\n", toolutil.EscapeMdTableCell(e.ActionName), target,
 			formatPushData(e.Push), formatNoteTarget(e.NoteableType, e.NoteableIID), formatWikiPage(e.WikiPage),
 			formatAttribution(formatAuthor(e.AuthorUsername), toolutil.FormatTime(e.CreatedAt)),
 			formatOrigin(e.Imported, e.ImportedFrom))

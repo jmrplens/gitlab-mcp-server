@@ -115,14 +115,7 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 // reach an endpoint whose entire point is that it is not exposed.
 func TestListener_UnixSocket_ServesMCP(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	// A short path: a unix socket address is capped near 100 bytes by the
-	// kernel, and t.TempDir() under a long test name can exceed it.
-	dir, err := os.MkdirTemp("", "sock") //nolint:usetesting // see above
-	if err != nil {
-		t.Fatalf("temp dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	socketPath := filepath.Join(dir, "mcp.sock")
+	socketPath := filepath.Join(socketDir(t), "mcp.sock")
 
 	srv := startServerOnUnixSocket(t, socketPath, "--gitlab-url="+gitlab.url)
 
@@ -182,12 +175,7 @@ func TestListener_UnixSocketMode_IsHonored(t *testing.T) {
 		{flag: "0640", want: 0o640},
 	} {
 		t.Run(tc.flag, func(t *testing.T) {
-			dir, err := os.MkdirTemp("", "sockmode") //nolint:usetesting // short path, see above
-			if err != nil {
-				t.Fatalf("temp dir: %v", err)
-			}
-			t.Cleanup(func() { _ = os.RemoveAll(dir) })
-			socketPath := filepath.Join(dir, "m.sock")
+			socketPath := filepath.Join(socketDir(t), "m.sock")
 
 			startServerOnUnixSocket(t, socketPath,
 				"--gitlab-url="+gitlab.url,
@@ -253,12 +241,7 @@ func TestListener_UnixSocket_SharesOneAuthenticationBudget(t *testing.T) {
 		t.Skip("the peer of an AF_UNIX connection is reported differently on Windows; the property under test is the POSIX one")
 	}
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
-	dir, err := os.MkdirTemp("", "sockbudget") //nolint:usetesting // a short path, as the socket-mode test explains
-	if err != nil {
-		t.Fatalf("temp dir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	socketPath := filepath.Join(dir, "m.sock")
+	socketPath := filepath.Join(socketDir(t), "m.sock")
 	srv := startServerOnUnixSocket(t, socketPath,
 		"--gitlab-url="+gitlab.url,
 		"--trusted-proxy-header=X-Real-IP",

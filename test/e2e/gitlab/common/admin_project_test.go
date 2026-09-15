@@ -183,8 +183,7 @@ func TestAdmin_TerraformStates(t *testing.T) {
 	gone := harness.Poll(e.Ctx, 6*time.Second, 60*time.Second, func() (bool, string, error) {
 		_, err := harness.Try[terraformstates.StateItem](s, actionAdminTerraformStateGet, map[string]any{"project_path": project.Path, "name": stateName})
 		if err != nil {
-			//nolint:nilerr // A failing read is the success condition here: the state is gone.
-			return true, "state read now fails", nil
+			return harness.DoneOnError("the state read now fails", err)
 		}
 		return false, "state still visible after delete", nil
 	})
@@ -376,8 +375,7 @@ func adminWaitBulkTerminal(e *harness.Env, s *harness.Session, importID int64) {
 	err := harness.Poll(e.Ctx, 3*time.Second, 240*time.Second, func() (bool, string, error) {
 		got, tryErr := harness.Try[bulkimports.MigrationSummary](s, actionAdminBulkImportGet, map[string]any{"id": importID})
 		if tryErr != nil {
-			//nolint:nilerr // A transient lookup failure is retried until the poll deadline.
-			return false, "bulk_import_get error", nil
+			return harness.WaitThrough("bulk_import_get", tryErr)
 		}
 		last = got.Status
 		return bulkImportTerminal(got.Status), "status=" + got.Status, nil

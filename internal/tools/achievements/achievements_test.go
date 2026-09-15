@@ -381,30 +381,21 @@ func uploadCapturingHandler(t *testing.T, captured *uploadCapture, body string) 
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
-			t.Errorf("ParseMultipartForm error: %v, want a multipart upload request", err)
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("ReadMultipartForm error: %v, want a multipart upload request", err)
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		captured.operations = formField(r.MultipartForm.Value, "operations")
-		captured.fileMap = formField(r.MultipartForm.Value, "map")
-		for _, headers := range r.MultipartForm.File {
+		captured.operations = testutil.FormValue(form, "operations")
+		captured.fileMap = testutil.FormValue(form, "map")
+		for _, headers := range form.File {
 			for _, header := range headers {
 				captured.part = readUploadedPart(t, header)
 			}
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}
-}
-
-// formField returns the first value of a multipart form field, or an empty
-// string when the request carried none: an absent field is an assertion for the
-// test goroutine to make, not a panic on the server's.
-func formField(values map[string][]string, name string) string {
-	if found := values[name]; len(found) > 0 {
-		return found[0]
-	}
-	return ""
 }
 
 // readUploadedPart returns one multipart file part as "filename:content", or

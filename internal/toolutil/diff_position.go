@@ -1,11 +1,44 @@
 package toolutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
+
+// MergeRequestDiffsForPositionCheck lists a merge request's diffs for a
+// position pre-check and reports whether it could.
+//
+// The pre-check exists to hand a model an actionable message before GitLab
+// answers a line outside the diff with a bare 400 or 500, and it is advisory:
+// when the listing itself fails the second result is false and the caller
+// skips the check rather than refusing the write. What is skipped is the
+// message, never the judgement, because the write that follows goes to the
+// same instance with the same credential and GitLab answers it on its own
+// terms. A 401, 403 or 404 on the listing is the refusal the write is about
+// to get, with the right status; a cancelled context ends the write the same
+// way; and a transient failure on the listing leaves the write judged by
+// GitLab alone, which is exactly what a caller had before the pre-check
+// existed. The cause is logged at debug so that a listing which fails every
+// time can be seen without the write having to fail.
+func MergeRequestDiffsForPositionCheck(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64) ([]*gl.MergeRequestDiff, bool) {
+	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, &gl.ListMergeRequestDiffsOptions{
+		PerPage: 100,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		slog.DebugContext(ctx, "merge request diff listing failed; the position pre-check is skipped and GitLab judges the write",
+			"project_id", projectID, "merge_request_iid", mrIID, "error", err)
+		return nil, false
+	}
+	return diffs, true
+}
 
 // LineType classifies a line within a unified diff hunk.
 type LineType int
@@ -66,19 +99,32 @@ func ParseDiffLines(diff string) []DiffLine {
 
 // parseHunkHeader extracts the starting line numbers from a unified diff hunk
 // header. Format: @@ -oldStart[,oldCount] +newStart[,newCount] @@.
+//
+// A header it cannot read is refused whole, as (0, 0), the same answer a line
+// that is not a hunk header gets: [ParseDiffLines] then skips the hunk's lines
+// until the next header. Reading a start it could not parse as 0 instead
+// would number every line of the hunk wrongly rather than not at all, and a
+// position validated against those numbers would be wrong by the real start.
 func parseHunkHeader(line string) (oldStart, newStart int) {
 	parts := strings.SplitN(line, "@@", 3)
 	if len(parts) < 3 {
 		return 0, 0
 	}
 	for r := range strings.FieldsSeq(strings.TrimSpace(parts[1])) {
-		if strings.HasPrefix(r, "-") {
-			nums := strings.SplitN(r[1:], ",", 2)
-			oldStart, _ = strconv.Atoi(nums[0])
-		} else if strings.HasPrefix(r, "+") {
-			nums := strings.SplitN(r[1:], ",", 2)
-			newStart, _ = strconv.Atoi(nums[0])
+		var target *int
+		switch {
+		case strings.HasPrefix(r, "-"):
+			target = &oldStart
+		case strings.HasPrefix(r, "+"):
+			target = &newStart
+		default:
+			continue
 		}
+		start, err := strconv.Atoi(strings.SplitN(r[1:], ",", 2)[0])
+		if err != nil {
+			return 0, 0
+		}
+		*target = start
 	}
 	return oldStart, newStart
 }

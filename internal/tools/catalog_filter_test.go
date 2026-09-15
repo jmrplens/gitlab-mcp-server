@@ -164,7 +164,11 @@ func TestRemovedActionKeys_CoverCompatibilityAliases(t *testing.T) {
 		break
 	}
 	if wantAlias == "" {
-		t.Skip("no mutating action in the Free catalog declares a compatibility alias")
+		// A claim about this repository's own catalog, not about the
+		// environment: compatibility aliases are declared today, and a catalog
+		// that stopped declaring any on a mutating action would silently
+		// retire the ADR-0018 refusal message this test covers.
+		t.Fatal("no mutating action in the Free catalog declares a compatibility alias, so the withheld-alias report this test exists for is not exercised")
 	}
 
 	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{

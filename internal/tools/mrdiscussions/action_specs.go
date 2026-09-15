@@ -100,9 +100,8 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 
 // decorateMRDiscussionMeta fills in action-specific discovery metadata for each
 // MR discussion individual tool, mirroring the style of the issue discussions
-// domain (R-META; 1:1 audit).
-//
-//nolint:funlen // One self-contained switch arm per individual tool keeps the discovery metadata co-located and readable.
+// domain (R-META; 1:1 audit). One self-contained switch arm per individual
+// tool keeps the discovery metadata co-located and readable.
 func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	switch individualTool {
 	case "gitlab_mr_discussion_create":

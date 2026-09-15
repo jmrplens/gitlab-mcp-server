@@ -470,18 +470,25 @@ func TestRun_PortMap_OverTheFixtures(t *testing.T) {
 	}
 }
 
-// TestRun_Static_RepositoryRoot_FoundFromTheWorkingDirectory verifies the
-// plan's own verification line: with no -dir the root is found from the
-// working directory, and on this tree, where test/e2e/gitlab does not exist
-// yet, -static exits 0.
-func TestRun_Static_RepositoryRoot_FoundFromTheWorkingDirectory(t *testing.T) {
-	if _, err := os.Stat(filepath.Join("..", "..", gitlabTestDir)); err == nil {
-		t.Skip("test/e2e/gitlab exists now; the no-suite answer is pinned by TestRun_Static_NoSuite_Passes")
-	}
-	opts := options{static: true, staticCatalog: fakeCatalog, harnessPath: fakeHarnessPath, staticPatterns: staticPatterns}
+// TestRun_RepositoryRoot_FoundFromTheWorkingDirectory verifies that with no
+// -dir the root is found from the working directory: the port map is pointed
+// at this package's fixtures by a path relative to the repository root, from
+// the package directory go test runs in, and reports exactly what it reports
+// when the root is given. A root found anywhere else would not hold the
+// fixtures and the run would be a usage error naming a missing old suite.
+func TestRun_RepositoryRoot_FoundFromTheWorkingDirectory(t *testing.T) {
+	opts := fixtureOptions(t)
+	opts.dir = ""
+	opts.calls = ""
+	opts.portMap = true
+	fixtures := filepath.Join("cmd", "audit_e2e_coverage", "testdata", "portmap")
+	opts.oldSuite = filepath.Join(fixtures, "old")
+	opts.newSuite = filepath.Join(fixtures, "new")
+	opts.drops = fixtureDrops
+	opts.retired = fixtureRetired
 	code, stdout, stderr := runFixture(t, opts)
-	if code != exitOK || !strings.Contains(stdout, "does not exist yet") {
-		t.Errorf("run() = %d, %q, %q; want 0 and the skip message", code, stdout, stderr)
+	if code != exitFindings || !strings.Contains(stdout, "port map: 7 old tests (1 retired), 4 replaced, 1 dropped, 2 unresolved, 5 findings\n") {
+		t.Errorf("run() with no -dir = %d, %q, %q; want the fixture's port map, found from the working directory", code, stdout, stderr)
 	}
 }
 

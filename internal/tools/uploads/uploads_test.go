@@ -206,14 +206,14 @@ func TestProjectUpload_SendsFileContent(t *testing.T) {
 		}
 
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-		err := r.ParseMultipartForm(10 << 20) //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
+		form, err := testutil.ReadMultipartForm(r, 10<<20)
 		if err != nil {
 			t.Errorf("failed to parse multipart form: %v", err)
 			http.Error(w, "failed to parse multipart form", http.StatusInternalServerError)
 			return
 		}
 
-		file, header, err := r.FormFile("file")
+		file, header, err := testutil.FormFile(form, "file")
 		if err != nil {
 			t.Errorf("failed to get form file: %v", err)
 			http.Error(w, "failed to get form file", http.StatusInternalServerError)
@@ -272,12 +272,13 @@ func TestProjectUpload_WithProgressToken(t *testing.T) {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
+		form, err := testutil.ReadMultipartForm(r, 10<<20)
+		if err != nil {
 			t.Errorf("failed to parse multipart form: %v", err)
 			http.Error(w, "parse multipart form", http.StatusInternalServerError)
 			return
 		}
-		file, _, err := r.FormFile("file")
+		file, _, err := testutil.FormFile(form, "file")
 		if err != nil {
 			t.Errorf("failed to get form file: %v", err)
 			http.Error(w, "failed to get form file", http.StatusInternalServerError)
@@ -367,12 +368,13 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 		}
 
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
-		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
+		form, err := testutil.ReadMultipartForm(r, 10<<20)
+		if err != nil {
 			t.Errorf("failed to parse multipart form: %v", err)
 			http.Error(w, "parse multipart form", http.StatusInternalServerError)
 			return
 		}
-		file, _, err := r.FormFile("file")
+		file, _, err := testutil.FormFile(form, "file")
 		if err != nil {
 			t.Errorf("failed to get form file: %v", err)
 			http.Error(w, "failed to get form file", http.StatusInternalServerError)

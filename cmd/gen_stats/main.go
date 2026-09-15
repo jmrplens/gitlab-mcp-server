@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -50,9 +51,19 @@ func main() {
 // code. It takes its arguments explicitly, the way run takes its options, so a
 // test can drive every exit path.
 func runMain(args []string) int {
-	fs := flag.NewFlagSet(args[0], flag.ExitOnError)
+	// ContinueOnError rather than ExitOnError, so a bad flag is an exit code
+	// this function returns instead of an os.Exit the seam above never sees.
+	// The flag set has already printed the error and the usage by the time
+	// Parse returns; -h is the one failure that exits clean, as the
+	// package's own ExitOnError would.
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	check := fs.Bool("check", false, "verify README stats section is current without writing")
-	fs.Parse(args[1:]) //nolint:errcheck // ExitOnError handles parse failures
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 	if err := runStats(*check); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -227,7 +238,7 @@ func listTrackedGoFiles(root string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("locating git: %w", err)
 	}
-	out, err := exec.CommandContext(context.Background(), bin, "-C", root, "ls-files", "-z", "--", "*.go").Output() //#nosec G204 -- absolute path from LookPath, fixed args
+	out, err := exec.CommandContext(context.Background(), bin, "-C", root, "ls-files", "-z", "--", "*.go").Output() //#nosec G204 -- git has no GOROOT to be joined out of, so unlike `go` (cmd/internal/golist) it is found on PATH; the arguments are fixed
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files in %s: %w", root, err)
 	}

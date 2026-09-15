@@ -76,9 +76,13 @@ func TestCollectorLogs_DebugRecordsAreNotExported(t *testing.T) {
 	}
 	time.Sleep(1500 * time.Millisecond)
 
+	// The floor can only be measured against a record that exists, so the
+	// precondition is asserted rather than skipped on: a server told to log at
+	// debug that emits no debug record has ignored the setting, and a skip
+	// would keep this test green through exactly that regression.
 	logs := srv.logs()
 	if !strings.Contains(logs, `"level":"DEBUG"`) {
-		t.Skip("the server emitted no debug record, so there is nothing to check the floor against")
+		t.Fatalf("the server was started at debug and emitted no debug record on stderr, so the log level was not applied; nothing to check the export floor against")
 	}
 
 	for _, e := range c.received() {

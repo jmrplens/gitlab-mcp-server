@@ -2,7 +2,6 @@ package prompts
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -85,8 +84,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	b.WriteString("| Commit | Title | Author | Hygiene |\n")
 	b.WriteString("|--------|-------|--------|---------|\n")
 	for _, commit := range comparison.Commits {
-		//gitlab:allow-unescaped shortSHA(commit.ID): the first characters of a commit SHA, which is hexadecimal.
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", shortSHA(commit.ID), mdInline(firstLine(commit.Title)), mdInline(commit.AuthorName), commitHygieneLabel(commit))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", mdInline(shortSHA(commit.ID)), mdInline(firstLine(commit.Title)), mdInline(commit.AuthorName), commitHygieneLabel(commit))
 	}
 
 	writeClosingRule(&b, "Please assess the history quality for release/readiness review. Highlight commits that should be squashed, reworded, linked to issues, or marked as breaking changes. Use Conventional Commits categories such as feat, fix, docs, refactor, test, build, ci, chore, perf, and revert.")
@@ -118,9 +116,9 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 		return nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
-	iid := parseIID(mrIID)
-	if iid == 0 {
-		return nil, toolutil.InvalidParams(errors.New("merge_request_iid must be a positive integer"))
+	iid, err := parseIID(mrIID)
+	if err != nil {
+		return nil, err
 	}
 
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))

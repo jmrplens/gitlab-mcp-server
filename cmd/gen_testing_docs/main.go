@@ -1254,7 +1254,7 @@ func updateManagedSection(path, content string, check bool) (changed bool, repor
 	if check {
 		return true, lineDifferenceReport(text, updated, maxReportedDifferences), nil
 	}
-	if writeErr := os.WriteFile(docPath, []byte(updated), 0o644); writeErr != nil { //#nosec G306,G304,G703 -- path constrained to repository root by resolveRepositoryPath.
+	if writeErr := os.WriteFile(docPath, []byte(updated), docgen.GeneratedFileMode); writeErr != nil { //#nosec G304,G703 -- path constrained to repository root by resolveRepositoryPath.
 		return false, "", fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return true, "", nil

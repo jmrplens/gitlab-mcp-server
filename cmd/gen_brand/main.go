@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
 // Palette: the "circuit violet" identity on the GitHub neutral ramp (see
@@ -273,7 +275,10 @@ func run(root string, check bool) error {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
 		}
-		if err := os.WriteFile(path, []byte(a.content), 0o644); err != nil { //nolint:gosec // generated asset, not sensitive
+		// The check above compares the exact bytes, which docgen.WriteOrCheck
+		// would not (it normalizes line endings and appends a newline); the
+		// mode is still its decision.
+		if err := os.WriteFile(path, []byte(a.content), docgen.GeneratedFileMode); err != nil {
 			return fmt.Errorf("write %s: %w", a.path, err)
 		}
 		fmt.Printf("gen_brand: wrote %s\n", a.path)

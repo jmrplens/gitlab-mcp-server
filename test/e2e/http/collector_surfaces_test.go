@@ -221,7 +221,9 @@ func TestCollectorSurfaces_OAuthModeStillRecords(t *testing.T) {
 			headers: map[string]string{"Authorization": "Bearer not-a-real-token"},
 		})
 		if got.status == http.StatusOK {
-			t.Skip("the token was accepted; this test needs a rejection")
+			// The fake GitLab answers 401 to every credential, so a 200 here
+			// is the bearer guard admitting a token the instance refused.
+			t.Fatalf("a bearer token the instance rejects was served (200); the OAuth guard is not refusing")
 		}
 	}
 

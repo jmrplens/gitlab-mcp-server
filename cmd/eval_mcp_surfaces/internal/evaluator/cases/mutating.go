@@ -71,54 +71,37 @@ func baseMutatingEvalCase(id, prompt string, steps ...Step) Case {
 	return evalCase
 }
 
-//nolint:gocyclo // Keeping the ID-to-fixture mapping in one switch makes the migration table auditable.
+// baseMutatingPromptTemplateAndFixtures returns the live prompt for a
+// mutating case, or an empty template for one that has none.
 func baseMutatingPromptTemplateAndFixtures(id string) (template string, fixtures []string) {
-	switch id {
-	case "MT-007":
-		return "Create a subgroup named `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}` under group ID `{{ .Group.ID }}` (`my-org`).", []string{fixtureBootstrapProject, fixtureAttemptNames}
-	case "MT-011":
-		return "Update issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` to add label `evaluation`.", []string{fixtureIssue}
-	case "MT-012":
-		return "Close issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` by setting `state_event` to `close`.", []string{fixtureIssue}
-	case "MT-015":
-		return "Create a merge request in project `{{ .Project.Path }}` from `{{ .Values.mr_source_branch }}` into `{{ .Branch.Default }}` titled `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}
-	case "MT-016":
-		return "Add a note saying `Can we add coverage?` to merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureMergeRequest}
-	case "MT-020":
-		return "Cancel pipeline `{{ .Pipeline.ID }}` in project `{{ .Project.Path }}`.", []string{fixturePipelineJob}
-	case "MT-023":
-		return "Retry job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
-	case "MT-026":
-		return "Create masked CI variable `{{ .Values.ci_variable_key }}` with value `masked-value-123` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
-	case taskFileCreateID:
-		return "Create file `{{ .Values.file_path }}` with content `evaluation file` and commit_message `Create evaluation file` on branch `{{ .Values.feature_branch }}` in project `{{ .Project.Path }}`.", []string{fixtureBranch, fixtureAttemptNames}
-	case "MT-034":
-		return "Create milestone with title `{{ .Values.milestone_title }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
-	case "MT-036":
-		return "Create release with tag_name `{{ .Release.TagName }}`, ref `{{ .Branch.Default }}`, and name `{{ .Release.Name }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
-	case "MT-046":
-		return "Set paused=true on runner ID `{{ .Runner.ID }}`.", []string{fixtureRunnerRemove}
-	case "MT-060":
-		return "Create a merge request discussion on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` asking `Can we add coverage?`.", []string{fixtureMergeRequest}
-	case "MT-061":
-		return "Resolve merge request discussion with discussion_id `{{ .Values.discussion_id }}` on merge_request_iid `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by setting `resolved` to true.", []string{fixtureMergeRequestDiscussion}
-	case "MT-062":
-		return "Create a draft review note on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` saying `Please add a regression test`.", []string{fixtureMergeRequest}
-	case "MT-064":
-		return "Play manual job `{{ .Values.manual_job_id }}` in project `{{ .Project.Path }}` with variable `DEPLOY_ENV=staging`.", []string{fixturePipelineJob}
-	case "MT-067":
-		return "Create group CI variable `{{ .Values.group_ci_variable_key }}` in group `{{ .Group.Path }}` with value `masked-value-123`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
-	case "MT-068":
-		return "Create instance CI variable `{{ .Values.instance_ci_variable_key }}` with value `masked-value-123`.", []string{fixtureAttemptNames}
-	case "MT-081":
-		return "Start the guided merge request creation flow for project `{{ .Project.Path }}`. Do not pass `source_branch`, `target_branch`, or `title` as tool parameters; the guided prompts will use source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}
-	case "MT-083":
-		return "Start the guided release creation flow for project `{{ .Project.Path }}`. Do not pass `tag_name` or `name` as tool parameters; the guided prompts will use tag `{{ .Release.TagName }}` and release name `{{ .Release.Name }}`.", []string{fixtureReleaseCreateSource}
-	case "MS-008":
-		return "Troubleshoot runner ID `{{ .Runner.ID }}` for project `{{ .Project.Path }}`: list project runners, inspect runner jobs, fetch trace for job `{{ .Job.ID }}`, then set paused=true on the runner.", []string{fixtureFailedJobArtifact, fixtureRunnerRemove}
-	case taskPackageReleaseID:
-		return "Publish the local fixture files `{{ .Values.package_release_files_display }}` from directory `{{ .Values.package_release_dir }}` to GitLab Generic Packages in project `{{ .Project.Path }}` as package `{{ .Values.package_release_name }}` version `{{ .Values.package_release_version }}`, then create release `{{ .Values.package_release_tag }}` from ref `{{ .Branch.Default }}` named `Evaluation package release`, and link all of the uploaded package files to that release as package assets in a single batch call, not one call per file. Upload the package files first, then generate the release, then link all the returned package URLs together in one call; do not construct package URLs manually.", []string{fixturePackageRelease, fixtureAttemptNames}
-	default:
-		return "", nil
-	}
+	prompt := baseMutatingLivePrompts[id]
+	return prompt.template, prompt.fixtures
+}
+
+// baseMutatingLivePrompts is the ID-to-fixture table of the mutating cases,
+// in ID order with the workflows last. A table rather than a switch, for the
+// reason baseDestructiveLivePrompts gives.
+var baseMutatingLivePrompts = map[string]livePrompt{
+	"MT-007":             {"Create a subgroup named `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}` under group ID `{{ .Group.ID }}` (`my-org`).", []string{fixtureBootstrapProject, fixtureAttemptNames}},
+	"MT-011":             {"Update issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` to add label `evaluation`.", []string{fixtureIssue}},
+	"MT-012":             {"Close issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` by setting `state_event` to `close`.", []string{fixtureIssue}},
+	"MT-015":             {"Create a merge request in project `{{ .Project.Path }}` from `{{ .Values.mr_source_branch }}` into `{{ .Branch.Default }}` titled `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}},
+	"MT-016":             {"Add a note saying `Can we add coverage?` to merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureMergeRequest}},
+	"MT-020":             {"Cancel pipeline `{{ .Pipeline.ID }}` in project `{{ .Project.Path }}`.", []string{fixturePipelineJob}},
+	"MT-023":             {"Retry job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}},
+	"MT-026":             {"Create masked CI variable `{{ .Values.ci_variable_key }}` with value `masked-value-123` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}},
+	taskFileCreateID:     {"Create file `{{ .Values.file_path }}` with content `evaluation file` and commit_message `Create evaluation file` on branch `{{ .Values.feature_branch }}` in project `{{ .Project.Path }}`.", []string{fixtureBranch, fixtureAttemptNames}},
+	"MT-034":             {"Create milestone with title `{{ .Values.milestone_title }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}},
+	"MT-036":             {"Create release with tag_name `{{ .Release.TagName }}`, ref `{{ .Branch.Default }}`, and name `{{ .Release.Name }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}},
+	"MT-046":             {"Set paused=true on runner ID `{{ .Runner.ID }}`.", []string{fixtureRunnerRemove}},
+	"MT-060":             {"Create a merge request discussion on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` asking `Can we add coverage?`.", []string{fixtureMergeRequest}},
+	"MT-061":             {"Resolve merge request discussion with discussion_id `{{ .Values.discussion_id }}` on merge_request_iid `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by setting `resolved` to true.", []string{fixtureMergeRequestDiscussion}},
+	"MT-062":             {"Create a draft review note on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` saying `Please add a regression test`.", []string{fixtureMergeRequest}},
+	"MT-064":             {"Play manual job `{{ .Values.manual_job_id }}` in project `{{ .Project.Path }}` with variable `DEPLOY_ENV=staging`.", []string{fixturePipelineJob}},
+	"MT-067":             {"Create group CI variable `{{ .Values.group_ci_variable_key }}` in group `{{ .Group.Path }}` with value `masked-value-123`.", []string{fixtureBootstrapProject, fixtureAttemptNames}},
+	"MT-068":             {"Create instance CI variable `{{ .Values.instance_ci_variable_key }}` with value `masked-value-123`.", []string{fixtureAttemptNames}},
+	"MT-081":             {"Start the guided merge request creation flow for project `{{ .Project.Path }}`. Do not pass `source_branch`, `target_branch`, or `title` as tool parameters; the guided prompts will use source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}},
+	"MT-083":             {"Start the guided release creation flow for project `{{ .Project.Path }}`. Do not pass `tag_name` or `name` as tool parameters; the guided prompts will use tag `{{ .Release.TagName }}` and release name `{{ .Release.Name }}`.", []string{fixtureReleaseCreateSource}},
+	"MS-008":             {"Troubleshoot runner ID `{{ .Runner.ID }}` for project `{{ .Project.Path }}`: list project runners, inspect runner jobs, fetch trace for job `{{ .Job.ID }}`, then set paused=true on the runner.", []string{fixtureFailedJobArtifact, fixtureRunnerRemove}},
+	taskPackageReleaseID: {"Publish the local fixture files `{{ .Values.package_release_files_display }}` from directory `{{ .Values.package_release_dir }}` to GitLab Generic Packages in project `{{ .Project.Path }}` as package `{{ .Values.package_release_name }}` version `{{ .Values.package_release_version }}`, then create release `{{ .Values.package_release_tag }}` from ref `{{ .Branch.Default }}` named `Evaluation package release`, and link all of the uploaded package files to that release as package assets in a single batch call, not one call per file. Upload the package files first, then generate the release, then link all the returned package URLs together in one call; do not construct package URLs manually.", []string{fixturePackageRelease, fixtureAttemptNames}},
 }

@@ -19,8 +19,11 @@ import (
 // closing the body before returning so no caller has to.
 func getStub(t *testing.T, url string) (status int, contentType string, body []byte) {
 	t.Helper()
-	//#nosec G107 -- the URL is a loopback stand-in this test just started
-	resp, err := http.Get(url) //nolint:noctx // no deadline to carry in a loopback test
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("build GET %s: %v", url, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
@@ -106,7 +109,12 @@ func TestOTLPSink_AcceptsAnExportAndMeasuresIt(t *testing.T) {
 	defer sink.close()
 
 	payload := strings.Repeat("x", 4096)
-	resp, err := http.Post(sink.url+"/v1/traces", mediaProtobuf, strings.NewReader(payload)) //nolint:noctx // a loopback stand-in, in a test
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, sink.url+"/v1/traces", strings.NewReader(payload))
+	if err != nil {
+		t.Fatalf("build the export request: %v", err)
+	}
+	req.Header.Set(headerContentType, mediaProtobuf)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST to the sink: %v", err)
 	}
@@ -144,7 +152,7 @@ func TestDrain_EmptyAndAbsentBodies_MeasureZero(t *testing.T) {
 	}{
 		{"no body at all", &http.Request{}},
 		{"an empty body", func() *http.Request {
-			req, err := http.NewRequest(http.MethodPost, "http://sink.invalid/", strings.NewReader("")) //nolint:noctx // no request is sent
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://sink.invalid/", strings.NewReader(""))
 			if err != nil {
 				panic(err)
 			}

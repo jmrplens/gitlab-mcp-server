@@ -35,7 +35,7 @@ const pprofReadHeaderTimeout = 5 * time.Second
 
 // pprofServe runs the accept loop. A variable so a test can make the loop
 // fail, which no network condition does on demand.
-var pprofServe = func(srv *http.Server, ln net.Listener) error { return srv.Serve(ln) } //nolint:gochecknoglobals // test seam
+var pprofServe = func(srv *http.Server, ln net.Listener) error { return srv.Serve(ln) }
 
 // pprofListenAddr is the address the profiling handlers are served on, empty
 // when nothing was asked for. Read through config so the deprecated bare

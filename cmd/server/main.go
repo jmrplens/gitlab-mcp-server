@@ -1403,7 +1403,7 @@ func runStdio(ctx context.Context) error {
 // A var only so a test can shorten it below the time a catalog takes to
 // build, which is the one piece of startup work no cancellation cuts short;
 // nothing at runtime writes it.
-var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test seam
+var stdioStartupDrainTimeout = 5 * time.Second
 
 // stdioStartupGate runs first on the stdio startup goroutine and does nothing
 // at runtime. A test replaces it to hold the catalog build until serving has
@@ -1411,7 +1411,7 @@ var stdioStartupDrainTimeout = 5 * time.Second //nolint:gochecknoglobals // test
 // binary is a cache hit and finishes before a closed pipe has even been
 // noticed, and a test that relied on the build being slow had nothing left to
 // outlive.
-var stdioStartupGate = func(context.Context) { //nolint:gochecknoglobals // test seam
+var stdioStartupGate = func(context.Context) {
 	// Nothing to hold at runtime: the build starts at once. A test that needs
 	// it to outlive serving swaps in a function that waits.
 }
@@ -1425,12 +1425,12 @@ var stdioStartupGate = func(context.Context) { //nolint:gochecknoglobals // test
 // exist for the day one of those facts changes, and would otherwise never
 // run.
 var (
-	newGitLabClient         = gitlabclient.NewClient              //nolint:gochecknoglobals // test seam
-	buildDynamicCatalog     = dynamiccatalog.Build                //nolint:gochecknoglobals // test seam
-	buildActionCatalog      = gitlabtools.BuildActionCatalog      //nolint:gochecknoglobals // test seam
-	sharedMetaCatalog       = gitlabtools.SharedMetaCatalog       //nolint:gochecknoglobals // test seam
-	sharedIndividualCatalog = gitlabtools.SharedIndividualCatalog //nolint:gochecknoglobals // test seam
-	addStandaloneCatalog    = dynamictools.AddStandaloneCatalog   //nolint:gochecknoglobals // test seam
+	newGitLabClient         = gitlabclient.NewClient
+	buildDynamicCatalog     = dynamiccatalog.Build
+	buildActionCatalog      = gitlabtools.BuildActionCatalog
+	sharedMetaCatalog       = gitlabtools.SharedMetaCatalog
+	sharedIndividualCatalog = gitlabtools.SharedIndividualCatalog
+	addStandaloneCatalog    = dynamictools.AddStandaloneCatalog
 )
 
 // prepareStdioCatalog runs everything stdio startup needs GitLab for, registers
@@ -3425,7 +3425,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 // periodicCleanupInterval is how often the expiring caches (token identities,
 // rejected tokens, failure budgets) are swept. A var only so a test can make
 // the tick arrive; nothing at runtime writes it.
-var periodicCleanupInterval = 5 * time.Minute //nolint:gochecknoglobals // test seam
+var periodicCleanupInterval = 5 * time.Minute
 
 // startPeriodicCleanup runs cleanup on every tick until ctx ends.
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
@@ -4023,7 +4023,7 @@ func serverCardTelemetry() map[string]any {
 // test can substitute a builder it controls and drive the
 // shutdown-during-build path deterministically instead of racing a sleep
 // against the real build.
-var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
+var buildServerCardFn = buildServerCard
 
 // buildDiscoveryCardFn is the SEP-2127 card builder serveHTTPOn uses; a
 // variable for the reason its sibling above is one, and a sharper one.
@@ -4034,7 +4034,7 @@ var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
 // to answer something when a card cannot be rendered, and this is the only way
 // to drive that answer and see that it is a 503 rather than a card-shaped
 // nothing.
-var buildDiscoveryCardFn = buildDiscoveryCard //nolint:gochecknoglobals // test seam
+var buildDiscoveryCardFn = buildDiscoveryCard
 
 // writeCardUnavailable answers a card request that could not be served.
 //

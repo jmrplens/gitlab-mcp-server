@@ -14534,6 +14534,15 @@
         "id",
         "last"
       ]
+    },
+    {
+      "package": "internal/toolutil",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/merge_requests/:merge_request_id/diffs",
+      "query": [
+        "per_page"
+      ]
     }
   ]
 }

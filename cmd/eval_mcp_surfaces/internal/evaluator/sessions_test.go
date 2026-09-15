@@ -148,14 +148,17 @@ func TestDynamicValidationRoutes_RewritesCatalogRoutes(t *testing.T) {
 
 // TestBuildCatalogSession_UsesClientEnterpriseMode verifies BuildCatalogSession uses client enterprise mode.
 func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
+	// The meta surface registers merge trains as a group of their own,
+	// gitlab_merge_train, so the route is keyed by that tool; a key that no
+	// surface registers would pass the absence check on every catalog.
 	client := newEvalTestClient(t, false)
 	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=false) error = %v", err)
 	}
 	closeSession()
-	if _, ok := routes["gitlab"]["merge_train.list_project"]; ok {
-		t.Fatal("CE catalog registered enterprise-only merge_train.list_project route")
+	if _, ok := routes["gitlab_merge_train"]["list_project"]; ok {
+		t.Fatal("CE catalog registered the enterprise-only gitlab_merge_train list_project route")
 	}
 
 	client = newEvalTestClient(t, true)
@@ -164,10 +167,8 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 		t.Fatalf("buildCatalogSession(enterprise=true) error = %v", err)
 	}
 	defer closeSession()
-	if _, routeOK := routes["gitlab"]["merge_train.list_project"]; !routeOK {
-		if _, fallbackOK := routes["gitlab_merge_train"]["list_project"]; !fallbackOK {
-			t.Skip("main catalog does not expose enterprise merge train routes")
-		}
+	if _, ok := routes["gitlab_merge_train"]["list_project"]; !ok {
+		t.Fatalf("enterprise catalog lacks the gitlab_merge_train list_project route; groups registered: %d", len(routes))
 	}
 }
 

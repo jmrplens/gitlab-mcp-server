@@ -843,8 +843,8 @@ func ToOutput(p *gl.Project, extra toolutil.ProjectExtra) Output {
 		ContainerRegistryEnabled:     accessLevelEnabled(p.ContainerRegistryAccessLevel),
 		PublicBuilds:                 p.PublicJobs,
 		SnippetsEnabled:              accessLevelEnabled(p.SnippetsAccessLevel),
-		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // Preserve backward-compatible field in output.
-		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // No replacement field on Project struct.
+		PackagesEnabled:              p.PackagesEnabled,              //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; prefer package_registry_access_level.
+		ApprovalsBeforeMerge:         p.ApprovalsBeforeMerge,         //nolint:staticcheck // SA1019: deprecated in client-go, still sent by GitLab, mirrored for 1:1 fidelity; the replacement is the Merge Request Approvals API, not a field.
 		RestrictUserDefinedVariables: p.RestrictUserDefinedVariables, //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 		EmailsDisabled:               p.EmailsDisabled,               //nolint:staticcheck // 1:1 SDK parity; deprecated, surfaced additively.
 
@@ -991,7 +991,7 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.BuildGitStrategy = new(input.BuildGitStrategy)
 	}
 	if input.PackagesEnabled != nil {
-		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: deprecated in client-go, still accepted by GitLab, mirrored for 1:1 fidelity; prefer package_registry_access_level.
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = accessLevelPtr(input.PackageRegistryAccessLevel)
@@ -1726,7 +1726,7 @@ func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 		opts.ResolveOutdatedDiffDiscussions = input.ResolveOutdatedDiffDiscussions
 	}
 	if input.ApprovalsBeforeMerge > 0 {
-		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // No replacement field, needs Merge Request Approvals API.
+		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // SA1019: deprecated in client-go, still accepted by GitLab, mirrored for 1:1 fidelity; the replacement is the Merge Request Approvals API, not a field.
 	}
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
@@ -1744,7 +1744,7 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 		opts.PublicJobs = input.PublicBuilds
 	}
 	if input.PackagesEnabled != nil {
-		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: deprecated in client-go, still accepted by GitLab, mirrored for 1:1 fidelity; prefer package_registry_access_level.
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))

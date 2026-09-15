@@ -39,7 +39,7 @@ const (
 // Duration is the one number among the named scalars: GitLab defines it as a
 // floating point number of seconds. Upload never appears in a response and is
 // listed so an input-only scalar is not mistaken for an unknown one.
-var scalarClasses = map[string]scalarClass{ //nolint:gochecknoglobals // the serialization table this audit judges by
+var scalarClasses = map[string]scalarClass{
 	"String":                       classString,
 	"ID":                           classString,
 	"GlobalID":                     classString,
@@ -88,7 +88,7 @@ func scalarClassOf(name string) (scalarClass, bool) {
 // fail to decode. Whether the value fits the width is the decoder's business
 // at run time, not a shape. classAny is never checked against a basic kind,
 // so its entry is empty.
-var classKinds = [...]types.BasicInfo{ //nolint:gochecknoglobals // a table indexed by class
+var classKinds = [...]types.BasicInfo{
 	classString: types.IsString,
 	classInt:    types.IsInteger | types.IsFloat,
 	classFloat:  types.IsFloat,
@@ -97,7 +97,7 @@ var classKinds = [...]types.BasicInfo{ //nolint:gochecknoglobals // a table inde
 }
 
 // classDescriptions say what each class is on the wire, for a report line.
-var classDescriptions = [...]string{ //nolint:gochecknoglobals // a table indexed by class
+var classDescriptions = [...]string{
 	classString: "sent as a JSON string",
 	classInt:    "sent as a JSON integer",
 	classFloat:  "sent as a JSON number that may carry a fraction",
@@ -117,7 +117,7 @@ func (c scalarClass) String() string {
 
 // typenameType is the type of __typename, which every object carries and no
 // schema declares as a field.
-var typenameType = &ast.Type{NamedType: "String", NonNull: true} //nolint:gochecknoglobals // the one meta field's type
+var typenameType = &ast.Type{NamedType: "String", NonNull: true}
 
 // finding is one disagreement between a document and its decoder, or one
 // selection nothing reads.

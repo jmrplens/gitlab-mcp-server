@@ -117,6 +117,7 @@ func TestToolsList_DuringTheCatalogBuild_ReturnsTheWholeCatalog(t *testing.T) {
 	}
 	for _, want := range []string{"gitlab_project_get", "gitlab_issue_list"} {
 		t.Run(want, func(t *testing.T) {
+			t.Parallel()
 			if !tools[want] {
 				t.Errorf("the catalog is missing %q, so it was answered before registration finished", want)
 			}

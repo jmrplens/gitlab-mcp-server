@@ -1008,7 +1008,7 @@ func TestBuildReport_LiveBaseline(t *testing.T) {
 	readme := filepath.Join(repoRoot, "docs/reference/tools/README.md")
 	docsRoot := filepath.Join(repoRoot, "docs/reference/tools")
 
-	catalog, err := loadCatalog(repoRoot)
+	catalog, err := loadCatalog()
 	if err != nil {
 		t.Fatalf("loadCatalog: %v", err)
 	}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"go/ast"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -168,25 +167,14 @@ func TestResolvePortMap_RetiredTests_HeldToTheSameRule(t *testing.T) {
 	}
 }
 
-// TestRetiredTests_Table_NamesDeletedTests verifies the production list on
-// the tree it describes: every entry is a name go test would run, none is
-// listed twice, and none is still declared by the retired suite, since each
-// was retired on the claim that its file is gone. The list goes with that
-// suite: now that the tree is deleted there is nothing for it to be held
-// against, and this test says so rather than failing.
+// TestRetiredTests_Table_NamesDeletedTests verifies the production list's own
+// shape: every entry is a name go test would run, none is listed twice, and
+// there are exactly the 74 the EE half of the old suite declared. The list
+// used to be held against that suite's files too, so that a retired test
+// still declared there was a finding; the suite has since been deleted whole,
+// which makes that claim true of every entry and leaves the shape as the
+// only thing a test can still hold the list to.
 func TestRetiredTests_Table_NamesDeletedTests(t *testing.T) {
-	oldDir := filepath.Join("..", "..", "test", "e2e", "suite")
-	if _, err := os.Stat(oldDir); err != nil {
-		t.Skipf("%s is gone, and the retired list goes with it", oldDir)
-	}
-	declared, err := testFunctions(oldDir)
-	if err != nil {
-		t.Fatalf("testFunctions(%s) error = %v", oldDir, err)
-	}
-	stillDeclared := map[string]bool{}
-	for _, name := range declared {
-		stillDeclared[name] = true
-	}
 	seen := map[string]bool{}
 	for _, name := range retiredTests {
 		t.Run(name, func(t *testing.T) {
@@ -197,9 +185,6 @@ func TestRetiredTests_Table_NamesDeletedTests(t *testing.T) {
 				t.Errorf("%s is listed twice", name)
 			}
 			seen[name] = true
-			if stillDeclared[name] {
-				t.Errorf("%s is retired and still declared under %s", name, oldDir)
-			}
 		})
 	}
 	if len(retiredTests) != 74 {

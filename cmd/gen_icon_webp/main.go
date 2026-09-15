@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 )
 
 const (
@@ -124,7 +126,9 @@ func generateAll(dir string, icons []iconSource, raster rasterizer) (int, error)
 			if rasterErr != nil {
 				return written, fmt.Errorf("%s: %w", ic.name, rasterErr)
 			}
-			if writeErr := os.WriteFile(path, data, 0o644); writeErr != nil { //nolint:gosec // generated asset, not sensitive
+			// Not through docgen.WriteOrCheck, which appends a newline a
+			// WebP cannot carry; the mode is still its decision.
+			if writeErr := os.WriteFile(path, data, docgen.GeneratedFileMode); writeErr != nil {
 				return written, writeErr
 			}
 			written++

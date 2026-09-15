@@ -92,6 +92,11 @@ func ensureEnterprisePushRuleProjectFixture(ctx context.Context, env FixtureCont
 			return nil, fmt.Errorf("prepare Enterprise push rule project: %w", err)
 		}
 		if !seedRule {
+			// A new project inherits its group's push rule when the group has
+			// one, and this shape of the fixture wants none. The delete is
+			// best-effort on purpose: a 404 is the answer when there was
+			// nothing to inherit, and anything else surfaces in the case that
+			// then finds a rule where it expected none.
 			_, _ = env.Client.GL().Projects.DeleteProjectPushRule(project.PathWithNamespace, gl.WithContext(setupCtx))
 		}
 		if seedRule {

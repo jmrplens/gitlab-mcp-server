@@ -21,7 +21,10 @@ func ReplaceSection(path, startMark, endMark, content string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Clean(path), []byte(result), 0o644) //#nosec G306,G703 -- managed doc path is a compile-time constant, not user input
+	// The file was just read, so the mode never applies: os.WriteFile keeps
+	// the mode of a file that exists. It is the shared one for the same
+	// reason the whole-file writer's is.
+	return os.WriteFile(filepath.Clean(path), []byte(result), GeneratedFileMode) //#nosec G703 -- managed doc path is a compile-time constant, not user input
 }
 
 // ComputeReplacedSection returns text with the content between startMark and

@@ -14,7 +14,7 @@ import (
 
 const (
 	errControllerIDRequired = "controller_id is required and must be > 0"
-	errTokenIDRequired      = "token_id is required and must be > 0" // #nosec G101 -- false positive: error message, not a credential //nolint:gosec
+	errTokenIDRequired      = "token_id is required and must be > 0" //#nosec G101 -- false positive: error message, not a credential
 )
 
 // ---------------------------------------------------------------------------

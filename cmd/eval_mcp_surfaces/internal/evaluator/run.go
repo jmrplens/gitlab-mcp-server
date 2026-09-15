@@ -382,7 +382,7 @@ func runFixtureSmokeEvaluation(ctx context.Context, opts options, tasks []evalTa
 	if !opts.Execute || !opts.UseFixtures {
 		return errors.New("--fixture-smoke requires --execute-tools and --use-fixtures")
 	}
-	runtime, err := newEvaluationRuntime(opts, catalog) //nolint:contextcheck // Runtime setup uses existing session APIs; per-task fixture preparation below receives ctx.
+	runtime, err := newEvaluationRuntime(opts, catalog) //nolint:contextcheck // the session layer bounds each handshake with a timeout of its own from context.Background (sessions.go), so a ctx here would move this finding one call down into every one of them; the run at the top of this file builds the same runtime with no ctx to hand over, and the per-task work below does receive ctx
 	if err != nil {
 		return err
 	}

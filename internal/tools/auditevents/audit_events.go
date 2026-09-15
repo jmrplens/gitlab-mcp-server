@@ -124,7 +124,12 @@ func toOutput(e *gl.AuditEvent) Output {
 	if len(e.Details.ChangeObject) > 0 {
 		// Decode the raw object-valued change into a generic value so the
 		// model-facing schema is an open JSON value rather than a byte array.
-		_ = json.Unmarshal(e.Details.ChangeObject, &o.Details.ChangeObject)
+		// The raw message came out of a body the SDK already decoded, so it is
+		// valid JSON and this decode cannot fail; if it ever did, the bytes are
+		// kept as text rather than dropped, so the change is never lost.
+		if err := json.Unmarshal(e.Details.ChangeObject, &o.Details.ChangeObject); err != nil {
+			o.Details.ChangeObject = string(e.Details.ChangeObject)
+		}
 	}
 	if len(e.Details.Changes) > 0 {
 		o.Details.Changes = make([]ChangeEntry, len(e.Details.Changes))

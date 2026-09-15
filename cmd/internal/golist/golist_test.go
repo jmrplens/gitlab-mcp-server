@@ -1,9 +1,9 @@
 package golist
 
 import (
+	"go/build"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -94,7 +94,7 @@ func TestExecutable_PointsAtTheRunningToolchain(t *testing.T) {
 	if !filepath.IsAbs(got) {
 		t.Fatalf("Executable() = %q, want an absolute path", got)
 	}
-	if want := filepath.Join(runtime.GOROOT(), "bin"); filepath.Dir(got) != want { //nolint:staticcheck // The audited helper resolves the same GOROOT.
+	if want := filepath.Join(build.Default.GOROOT, "bin"); filepath.Dir(got) != want {
 		t.Fatalf("Executable() = %q, want it under %q", got, want)
 	}
 	info, err := os.Stat(got)

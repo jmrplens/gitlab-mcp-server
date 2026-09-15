@@ -33,8 +33,7 @@ func TestCIVariables_Instance_Lifecycle(t *testing.T) {
 	// A run that failed before its own delete leaves this key behind, so the
 	// next run starts by removing it best-effort.
 	e.Defer("instance variable "+key, func(ctx context.Context) error {
-		if _, err := harness.Try[instancevariables.Output](s, actionCIVariableInstanceDelete, map[string]any{"key": key},
-			harness.For(harness.PurposeCleanup), harness.Under(ctx)); err != nil {
+		if _, err := harness.Undo[instancevariables.Output](ctx, s, actionCIVariableInstanceDelete, map[string]any{"key": key}); err != nil {
 			e.T.Logf("best-effort cleanup of instance variable %s answered: %v", key, err)
 		}
 		return nil

@@ -77,20 +77,22 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	events := fetchContributionEvents(ctx, client, userID, isSelf, since)
 
 	// Merged MRs in period
-	mergedMRs, _, _ := client.GL().MergeRequests.ListMergeRequests(&gl.ListMergeRequestsOptions{
+	mergedMRs, _, err := client.GL().MergeRequests.ListMergeRequests(&gl.ListMergeRequestsOptions{
 		AuthorID:     new(userID),
 		State:        new("merged"),
 		CreatedAfter: new(since),
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "merged merge requests", err)
 
 	// MRs under review
-	reviewMRs, _, _ := client.GL().MergeRequests.ListMergeRequests(&gl.ListMergeRequestsOptions{
+	reviewMRs, _, err := client.GL().MergeRequests.ListMergeRequests(&gl.ListMergeRequestsOptions{
 		ReviewerID:   gl.ReviewerID(userID),
 		State:        new("opened"),
 		UpdatedAfter: new(since),
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "merge requests under review", err)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Activity Report for @%s (last %d days)\n\n", mdHeading(resolvedUser), days)
@@ -204,17 +206,19 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 	}
 
 	// Open MRs for the group
-	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
+	openMRs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open merge requests", err)
 
 	// Merged MRs in the period
-	mergedMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
+	mergedMRs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: new(since),
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "merged merge requests", err)
 
 	stats := buildTeamOverviewStats(members, openMRs, mergedMRs)
 
@@ -411,10 +415,11 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 	}
 
 	// Open MRs
-	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
+	openMRs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:   new("opened"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "open merge requests", err)
 
 	rStats := buildReviewerWorkloadStats(members, openMRs)
 

@@ -237,7 +237,12 @@ func TestToolNameView_FiltersTheDimensionAndNotTheExemplar(t *testing.T) {
 		t.Error("the tool name is still a dimension; the View is not doing its job")
 	}
 	if !inExemplar {
-		t.Skip("no exemplar carried the filtered attribute, so this SDK version does not exhibit the behavior this test records")
+		// The second half of the test's name, and the reason it exists: the
+		// exemplar is where the filtered value leaks to a collector. An SDK
+		// that stopped carrying it would make a View a working privacy filter
+		// and this test's doc comment wrong, which is worth a failure rather
+		// than a skip nobody reads.
+		t.Error("no exemplar carried the filtered attribute; the SDK no longer exhibits the leak this test records, so the guidance above it needs revisiting")
 	}
 }
 

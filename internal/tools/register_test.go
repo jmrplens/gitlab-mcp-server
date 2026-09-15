@@ -1348,10 +1348,6 @@ func isDeleteToolName(name string) bool {
 	return slices.Contains(strings.Split(name, "_"), "delete")
 }
 
-// knownNamingExceptions lists tools whose names violate the convention
-// but are tracked for remediation in a later audit phase.
-var knownNamingExceptions = map[string]string{}
-
 // ---------- Audit helper functions ----------.
 
 // checkToolAnnotations validates that a tool's annotations are properly set:
@@ -1543,9 +1539,6 @@ func TestMetadataAudit_ToolNamingConvention(t *testing.T) {
 
 	for _, tool := range result.Tools {
 		t.Run(tool.Name, func(t *testing.T) {
-			if reason, isException := knownNamingExceptions[tool.Name]; isException {
-				t.Skipf("known exception: %s", reason)
-			}
 			if !toolNameRe.MatchString(tool.Name) {
 				t.Errorf("name %q does not match gitlab_{action}_{resource} snake_case pattern", tool.Name)
 			}
@@ -2566,13 +2559,16 @@ func TestResponseCompliance_MetaToolsListable(t *testing.T) {
 
 // TestResponseCompliance_ContentHasTextContent validates that for each
 // domain that produces markdown, the markdownForResult dispatcher returns
-// content with proper TextContent entries (complementary to markdown_audit_test.go).
+// content with proper TextContent entries. A fixture that is not dispatched
+// fails here as it does in TestMarkdownAudit_DispatchCoverage in
+// markdown_test.go, rather than being skipped: a nil dispatch is the defect
+// both tests exist to catch.
 func TestResponseCompliance_ContentHasTextContent(t *testing.T) {
 	for _, fix := range allMarkdownFixtures() {
 		t.Run(fix.name, func(t *testing.T) {
 			result := markdownForResult(fix.result)
 			if result == nil {
-				t.Skip("nil dispatch -- tracked in markdown_audit_test.go")
+				t.Fatalf("markdownForResult returned nil: %s is not dispatched to any formatter", fix.name)
 			}
 			assertResultHasTextContent(t, result)
 		})

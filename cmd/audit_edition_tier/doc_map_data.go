@@ -141,5 +141,4 @@ func init() {
 		"securitysettings":     "project_security_settings",
 		"vulnerabilities":      "vulnerabilities",
 	}
-	_ = docAreaByPackage
 }

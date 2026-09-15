@@ -60,7 +60,7 @@ const errorsField = "errors"
 // connectionPlumbing are the field names that move a connection rather than
 // carry it. Asking about them would report the transport on every paged
 // object, and the answer is always the same.
-var connectionPlumbing = map[string]bool{ //nolint:gochecknoglobals // the exclusion table this walk judges by
+var connectionPlumbing = map[string]bool{
 	"edges":    true,
 	"nodes":    true,
 	"node":     true,
@@ -545,7 +545,7 @@ func typeConditions(selections ast.SelectionSet) []string {
 type publishedIndex map[string]map[string]string
 
 // outputTypeSuffixes name the exported types a package publishes to a model.
-var outputTypeSuffixes = []string{"Output", "Item"} //nolint:gochecknoglobals // the naming convention this repository publishes under
+var outputTypeSuffixes = []string{"Output", "Item"}
 
 // collectPublished reads what every package publishes, so a field the
 // document never selects can say whether the value reaches a caller anyway.

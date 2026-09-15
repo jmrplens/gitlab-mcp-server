@@ -62,9 +62,9 @@ var sharedCatalogs sync.Map // string -> *sharedCatalogEntry
 // report their failure exist for the day one of those facts changes, and
 // would otherwise never run.
 var (
-	sharedBaseCatalog   = SharedBaseCatalog          //nolint:gochecknoglobals // test seam
-	filterSharedCatalog = FilterActionCatalog        //nolint:gochecknoglobals // test seam
-	scopeFilterCatalog  = FilterScopeFilteredCatalog //nolint:gochecknoglobals // test seam
+	sharedBaseCatalog   = SharedBaseCatalog          // test seam
+	filterSharedCatalog = FilterActionCatalog        // test seam
+	scopeFilterCatalog  = FilterScopeFilteredCatalog // test seam
 )
 
 // ShareCatalog returns the catalog cached under key, building it with build

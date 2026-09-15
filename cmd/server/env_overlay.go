@@ -52,7 +52,7 @@ func overlayGitLabURLs(hcfg *httpConfig, value *string) {
 		return
 	}
 	hcfg.gitlabURLs = nil
-	_ = hcfg.gitlabURLs.Set(*value)
+	hcfg.gitlabURLs.add(*value)
 }
 
 func overlayBool(hcfg *httpConfig, flagName string, target, value *bool) {

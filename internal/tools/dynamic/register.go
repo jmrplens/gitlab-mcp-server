@@ -378,8 +378,8 @@ var findInputSchema = sync.OnceValue(buildFindInputSchema)
 // Test seams for the two schema derivations, which cannot fail for the fixed
 // structs they reflect; the fallback branches exist for the day that changes.
 var (
-	findSchemaFor    = jsonschema.For[FindInput]    //nolint:gochecknoglobals // test seam
-	executeSchemaFor = jsonschema.For[ExecuteInput] //nolint:gochecknoglobals // test seam
+	findSchemaFor    = jsonschema.For[FindInput]    // test seam
+	executeSchemaFor = jsonschema.For[ExecuteInput] // test seam
 )
 
 // buildFindInputSchema derives the find tool's input schema, or nil to leave

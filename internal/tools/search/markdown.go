@@ -139,11 +139,10 @@ func FormatMilestonesMarkdown(out MilestonesOutput) string {
 		if due == "" {
 			due = "—"
 		}
-		//gitlab:allow-unescaped m.State: a milestone state, one of GitLab's fixed set (active, closed).
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdTitleLink(strconv.FormatInt(m.IID, 10), m.WebURL),
 			toolutil.EscapeMdTableCell(m.Title),
-			m.State,
+			toolutil.EscapeMdTableCell(m.State),
 			due,
 		))
 	}
@@ -165,9 +164,8 @@ func FormatNotesMarkdown(out NotesOutput) string {
 	for _, n := range out.Notes {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(n.Author),
-			//gitlab:allow-unescaped n.NoteableType: the GitLab class a note hangs on (Issue, MergeRequest, Snippet, Commit, Epic), never text anybody types.
-			n.NoteableType,
-			//gitlab:allow-unescaped noteableRef(n.NoteableType, n.NoteableIID): that same class name and an integer IID, so the reference carries nothing a cell reacts to.
+			toolutil.EscapeMdTableCell(n.NoteableType),
+			//gitlab:allow-unescaped noteableRef(n.NoteableType, n.NoteableIID): a reference this package composes itself from the class name and an integer IID, kept unescaped so the cell renders it as the reference it is.
 			noteableRef(n.NoteableType, n.NoteableIID),
 			toolutil.EscapeMdTableCell(truncateBody(n.Body, 80)),
 		))
@@ -255,11 +253,10 @@ func FormatUsersMarkdown(out UsersOutput) string {
 	toolutil.WriteListHeading(&b, "User Search Results", len(out.Users), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("Username", "Name", "State"))
 	for _, u := range out.Users {
-		//gitlab:allow-unescaped u.State: a user account state, one of GitLab's fixed set (active, blocked, deactivated, banned).
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.MdUserLink(u.Username, u.WebURL),
 			toolutil.EscapeMdTableCell(u.Name),
-			u.State,
+			toolutil.EscapeMdTableCell(u.State),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
@@ -286,8 +283,7 @@ func FormatWikiMarkdown(out WikiOutput) string {
 		b.WriteString(toolutil.MarkdownTableRow(
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
-			//gitlab:allow-unescaped w.Format: a wiki format, a gl.WikiFormatValue GitLab picks from a fixed set (markdown, rdoc, asciidoc, org).
-			w.Format,
+			toolutil.EscapeMdTableCell(w.Format),
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,

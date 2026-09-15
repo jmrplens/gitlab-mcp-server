@@ -367,7 +367,7 @@ func decorateProjectMeta(options *toolutil.ActionSpecOptions, individualTool str
 // tailored Usage (push rules, delete) so that bespoke text is preserved while
 // aliases, related actions, and the individual-tool description are still added.
 //
-//nolint:funlen // A flat, reviewable lookup table; one entry per project action.
+// A flat, reviewable lookup table: one entry per project action.
 var projectActionMeta = map[string]projectActionMetaEntry{
 	"gitlab_project_create": {
 		usage:       "Create a new project in a namespace you can write to. Provide name (and optionally path, namespace_id, visibility, description). Use create_for_user to create on behalf of another user as admin.",
@@ -763,8 +763,6 @@ var projectApprovalRuleTypeOverride = toolutil.SchemaEnumOverride("rule_type", "
 // additional input-schema enum overrides. decorateProjectSchemaOverrides
 // appends these onto any overrides already set by projectOptionsForAction so
 // that inline and map-based overrides coexist without conflict.
-//
-//nolint:gochecknoglobals // Intentional package-level lookup table; mirrors projectActionMeta pattern.
 var projectActionSchemaOverrides = map[string][]toolutil.InputSchemaOverride{
 	"gitlab_project_create":                projectSettingsEnumOverrides,
 	"gitlab_project_update":                projectUpdateEnumOverrides,

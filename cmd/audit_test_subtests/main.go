@@ -72,7 +72,7 @@ var assertMethods = map[string]bool{"Error": true, "Errorf": true, "Fatal": true
 // strings and counts, which encoding/json cannot be made to refuse; a rewrite
 // only wraps a loop body in a call, which leaves source the formatter accepts;
 // and the file written back is the one just read.
-var ( //nolint:gochecknoglobals // test seams
+var (
 	marshalReport = json.MarshalIndent
 	formatSource  = format.Source
 	writeSource   = os.WriteFile

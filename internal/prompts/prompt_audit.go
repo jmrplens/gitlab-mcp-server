@@ -66,8 +66,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "| Name | %s |\n", mdInline(project.Name))
 	fmt.Fprintf(&b, "| Path | %s |\n", mdInline(project.PathWithNamespace))
 	fmt.Fprintf(&b, "| Description | %s |\n", mdInline(emptyDash(project.Description)))
-	//gitlab:allow-unescaped string(project.Visibility): a gl.VisibilityValue, which GitLab fills with private, internal or public.
-	fmt.Fprintf(&b, "| Visibility | %s |\n", string(project.Visibility))
+	fmt.Fprintf(&b, "| Visibility | %s |\n", mdInline(string(project.Visibility)))
 	fmt.Fprintf(&b, "| Default branch | %s |\n", mdInline(emptyDash(project.DefaultBranch)))
 	fmt.Fprintf(&b, "| Created | %s |\n", formatAuditDate(project.CreatedAt))
 	fmt.Fprintf(&b, "| Last activity | %s |\n", formatAuditDate(project.LastActivityAt))
@@ -81,16 +80,14 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "| Wiki | %s |\n", accessLevelIcon(project.WikiAccessLevel))
 	fmt.Fprintf(&b, "| Snippets | %s |\n", accessLevelIcon(project.SnippetsAccessLevel))
 	fmt.Fprintf(&b, "| Container Registry | %s |\n", accessLevelIcon(project.ContainerRegistryAccessLevel))
-	fmt.Fprintf(&b, "| Packages | %s |\n", toolutil.BoolEmoji(project.PackagesEnabled)) //nolint:staticcheck // Keep legacy PackagesEnabled in audit output.
+	fmt.Fprintf(&b, "| Packages | %s |\n", accessLevelIcon(project.PackageRegistryAccessLevel))
 	b.WriteString("\n")
 
 	// Merge settings
 	b.WriteString("## Merge Settings\n\n")
 	b.WriteString(settingValueTableHeader)
-	//gitlab:allow-unescaped emptyDash(string(project.MergeMethod)): a gl.MergeMethodValue, which GitLab fills with merge, ff or rebase_merge.
-	fmt.Fprintf(&b, "| Merge method | %s |\n", emptyDash(string(project.MergeMethod)))
-	//gitlab:allow-unescaped emptyDash(string(project.SquashOption)): a gl.SquashOptionValue, which GitLab fills with never, always, default_on or default_off.
-	fmt.Fprintf(&b, "| Squash option | %s |\n", emptyDash(string(project.SquashOption)))
+	fmt.Fprintf(&b, "| Merge method | %s |\n", mdInline(emptyDash(string(project.MergeMethod))))
+	fmt.Fprintf(&b, "| Squash option | %s |\n", mdInline(emptyDash(string(project.SquashOption))))
 	fmt.Fprintf(&b, "| Only merge if pipeline succeeds | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfPipelineSucceeds))
 	fmt.Fprintf(&b, "| Only merge if all discussions resolved | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfAllDiscussionsAreResolved))
 	fmt.Fprintf(&b, "| Remove source branch on merge | %s |\n", toolutil.BoolEmoji(project.RemoveSourceBranchAfterMerge))
@@ -364,10 +361,8 @@ func writeMemberTable(b *strings.Builder, members []*gl.ProjectMember) {
 	b.WriteString("| User | Name | Access | State |\n")
 	b.WriteString("|------|------|--------|-------|\n")
 	for _, m := range members {
-		//gitlab:allow-unescaped m.Username: a GitLab namespace path, which the instance holds to letters, digits, underscore, dash and dot.
-		//gitlab:allow-unescaped m.State: a membership state GitLab picks from a fixed set (active, blocked, awaiting and the rest).
 		fmt.Fprintf(b, "| @%s | %s | %s | %s |\n",
-			m.Username, mdInline(m.Name), toolutil.AccessLevelDescription(m.AccessLevel), m.State)
+			mdInline(m.Username), mdInline(m.Name), toolutil.AccessLevelDescription(m.AccessLevel), mdInline(m.State))
 	}
 	b.WriteString("\n")
 }
@@ -414,14 +409,16 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	}
 	writeLabelsAudit(&b, labels)
 
-	activeMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
+	activeMilestones, _, activeErr := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
 		State:   new("active"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
-	closedMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
+	warnFetch(ctx, "active milestones", activeErr)
+	closedMilestones, _, closedErr := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
 		State:   new("closed"),
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
+	warnFetch(ctx, "closed milestones", closedErr)
 	writeMilestonesAudit(&b, activeMilestones, closedMilestones)
 
 	issueTemplates, _, issueTPLErr := client.GL().ProjectTemplates.ListTemplates(projectID, "issues", &gl.ListProjectTemplatesOptions{
@@ -466,9 +463,8 @@ func writeLabelsAudit(b *strings.Builder, labels []*gl.Label) {
 		if desc == "" {
 			desc = toolutil.EmojiWarning + " _missing_"
 		}
-		//gitlab:allow-unescaped l.Color: a label color, which GitLab validates as a #RGB or #RRGGBB literal.
 		fmt.Fprintf(b, "| %s | %s | %s | %d | %d |\n",
-			mdInline(l.Name), l.Color, mdInline(desc), l.OpenIssuesCount, l.OpenMergeRequestsCount)
+			mdInline(l.Name), mdInline(l.Color), mdInline(desc), l.OpenIssuesCount, l.OpenMergeRequestsCount)
 	}
 	b.WriteString("\n")
 }
@@ -714,10 +710,10 @@ func writeFullScorecard(b *strings.Builder, s scorecardData) {
 func writeFullSettingsSection(b *strings.Builder, project *gl.Project) {
 	b.WriteString("## 1. Project Settings\n\n")
 	b.WriteString(settingValueTableHeader)
-	fmt.Fprintf(b, "| Visibility | %s |\n", string(project.Visibility))
+	fmt.Fprintf(b, "| Visibility | %s |\n", mdInline(string(project.Visibility)))
 	fmt.Fprintf(b, "| Default branch | %s |\n", mdInline(emptyDash(project.DefaultBranch)))
-	fmt.Fprintf(b, "| Merge method | %s |\n", emptyDash(string(project.MergeMethod)))
-	fmt.Fprintf(b, "| Squash option | %s |\n", emptyDash(string(project.SquashOption)))
+	fmt.Fprintf(b, "| Merge method | %s |\n", mdInline(emptyDash(string(project.MergeMethod))))
+	fmt.Fprintf(b, "| Squash option | %s |\n", mdInline(emptyDash(string(project.SquashOption))))
 	fmt.Fprintf(b, "| Pipeline required | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfPipelineSucceeds))
 	fmt.Fprintf(b, "| All discussions resolved | %s |\n", toolutil.BoolEmoji(project.OnlyAllowMergeIfAllDiscussionsAreResolved))
 	fmt.Fprintf(b, "| Remove source branch | %s |\n", toolutil.BoolEmoji(project.RemoveSourceBranchAfterMerge))

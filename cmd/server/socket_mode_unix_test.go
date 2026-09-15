@@ -383,9 +383,7 @@ func TestBindUnixSocket_UnwritableDirectoryIsRefused(t *testing.T) {
 	if err := os.Mkdir(closed, 0o700); err != nil {
 		t.Fatalf("creating the directory: %v", err)
 	}
-	// Readable and searchable but not writable is the whole point, so the
-	// mode cannot be narrowed to satisfy a permissions linter.
-	if chmodErr := os.Chmod(closed, 0o500); chmodErr != nil { //nolint:gosec // see above
+	if chmodErr := os.Chmod(closed, 0o500); chmodErr != nil { //nolint:gosec // G302: readable and searchable but not writable is the fixture, so the mode cannot be narrowed
 		t.Fatalf("making the directory unwritable: %v", chmodErr)
 	}
 

@@ -345,7 +345,7 @@ func NewDetailedError(domain, action string, err error) *DetailedError {
 	// the request line and status plus GitLab's own message when the body
 	// actually parsed as one — and never the body itself.
 	func() {
-		defer func() { recover() }() //nolint:errcheck // intentional panic recovery
+		defer func() { _ = recover() }()
 		de.Details = sanitize(err).Error()
 	}()
 	if msg := ExtractGitLabMessage(err); msg != "" {
@@ -581,11 +581,7 @@ func sanitize(err error) error {
 	if err == nil {
 		return nil
 	}
-	// Formatted through fmt rather than by calling Error() directly: fmt
-	// recovers a panic inside an Error method and renders a placeholder, and
-	// client-go's dereferences the request without checking it. Calling it here
-	// would turn an error into a crash.
-	original := fmt.Sprintf("%v", err) //nolint:perfsprint // err.Error() is exactly what must not be called here
+	original := renderRecovering(err)
 	text := original
 	if glErr, ok := errors.AsType[*gl.ErrorResponse](err); ok {
 		raw, safe := renderGitLabResponse(glErr)
@@ -628,15 +624,25 @@ func replaceUnboundRendering(text string, err error) string {
 		return text
 	}
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
-		// Through fmt for the reason [sanitize] gives: url.Error.Error()
-		// delegates to whatever it wraps, and fmt recovers a panic in there
-		// where a direct call would crash the process.
-		if raw := fmt.Sprintf("%v", urlErr); strings.Contains(text, raw) { //nolint:perfsprint // Error() is exactly what must not be called here
+		if raw := renderRecovering(urlErr); strings.Contains(text, raw) {
 			return strings.ReplaceAll(text, raw, UnattributedRequestMessage)
 		}
 	}
 	return strings.ReplaceAll(text, gitlabclient.ErrUnboundClient.Error(), UnattributedRequestMessage)
 }
+
+// renderRecovering renders an error the way fmt's %v would, and is the one
+// way this file turns an error it did not build into text.
+//
+// It exists so that Error() is never called directly on such a value: fmt
+// recovers a panic raised inside an Error method and renders a placeholder in
+// its place, while a direct call would carry the panic up through the
+// handler. client-go's ErrorResponse.Error() dereferences its request without
+// checking it, and url.Error.Error() delegates to whatever it wraps, so both
+// reach here as the chain of a handler's error. The parameter is typed any on
+// purpose: it is what lets the call site read as a rendering rather than as
+// a Sprintf that a linter would rewrite to the very call this avoids.
+func renderRecovering(v any) string { return fmt.Sprint(v) }
 
 // SanitizeError returns err with a rendering that reflects no upstream response
 // body, leaving the chain intact for [errors.As] and [errors.Is].
@@ -656,7 +662,7 @@ func SanitizeError(err error) error { return sanitize(err) }
 func renderGitLabResponse(glErr *gl.ErrorResponse) (raw, safe string) {
 	safe = describeGitLabResponse(glErr)
 	func() {
-		defer func() { recover() }() //nolint:errcheck // intentional panic recovery
+		defer func() { _ = recover() }()
 		raw = glErr.Error()
 	}()
 	if raw == "" {

@@ -416,7 +416,7 @@ func ensureMergeableMergeRequestFixture(ctx context.Context, env FixtureContext)
 
 func ensureLiveMergeRequestApprovalless(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
 	approvalsRequired := int64(0)
-	_, _, err := client.GL().MergeRequestApprovals.ChangeApprovalConfiguration(projectID, mergeRequestIID, &gl.ChangeMergeRequestApprovalConfigurationOptions{ //nolint:staticcheck // GitLab EE still relies on this endpoint to clear MR-level approval requirements in fixture projects.
+	_, _, err := client.GL().MergeRequestApprovals.ChangeApprovalConfiguration(projectID, mergeRequestIID, &gl.ChangeMergeRequestApprovalConfigurationOptions{ //nolint:staticcheck // client-go deprecates it as of GitLab 16.0, but the pinned 19.3.1 still serves POST .../merge_requests/:iid/approvals (gitlab-api-live.json) and it is the one request that clears the MR-level count; the rules below are the other half, and a refusal is tolerated either way
 		ApprovalsRequired: &approvalsRequired,
 	}, gl.WithContext(ctx))
 	if err != nil && !canIgnoreApprovalConfigurationError(err) {
@@ -451,7 +451,6 @@ func canIgnoreApprovalConfigurationError(err error) bool {
 
 func createMergeableMRTemporaryProject(ctx context.Context, client *gitlabclient.Client) (*gl.Project, error) {
 	visibility := gl.PrivateVisibility
-	approvalsBeforeMerge := int64(0)
 	mergePipelinesEnabled := false
 	onlyAllowMergeIfAllDiscussionsAreResolved := false
 	onlyAllowMergeIfAllStatusChecksPassed := false
@@ -460,12 +459,14 @@ func createMergeableMRTemporaryProject(ctx context.Context, client *gitlabclient
 	for range 5 {
 		path := "eval-merge-mr-" + liveUniqueSuffix()
 		initializeWithReadme := true
+		// No approvals_before_merge: a new project requires none, and the
+		// mergeable-MR fixture clears the MR-level count through the
+		// approvals API, which is where GitLab moved it in 16.0.
 		project, _, createErr := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
 			Name:                  &path,
 			Path:                  &path,
 			InitializeWithReadme:  &initializeWithReadme,
 			Visibility:            &visibility,
-			ApprovalsBeforeMerge:  &approvalsBeforeMerge, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 			MergePipelinesEnabled: &mergePipelinesEnabled,
 			OnlyAllowMergeIfAllDiscussionsAreResolved: &onlyAllowMergeIfAllDiscussionsAreResolved,
 			OnlyAllowMergeIfAllStatusChecksPassed:     &onlyAllowMergeIfAllStatusChecksPassed,

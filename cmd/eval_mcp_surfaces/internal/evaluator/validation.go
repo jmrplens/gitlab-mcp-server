@@ -416,7 +416,6 @@ func repairPayloadForValidation(task evalTask, step evalStep, validation validat
 	if payload.FailedAction == "" {
 		payload.FailedAction = step.ExpectedTool
 	}
-	_ = task
 	return payload
 }
 

@@ -109,7 +109,7 @@ func main() {
 	docsRoot := filepath.Join(repoRoot, flags.docsRoot)
 	readmePath := filepath.Join(repoRoot, flags.readmePath)
 
-	catalog, err := loadCatalog(repoRoot)
+	catalog, err := loadCatalog()
 	if err != nil {
 		cmdutil.Fatalf("load action catalog: %v", err)
 	}

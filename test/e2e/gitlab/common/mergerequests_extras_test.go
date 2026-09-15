@@ -151,9 +151,6 @@ func TestMergeRequestExtras_ContextCommitsTodoAndRelatedIssues(t *testing.T) {
 	})
 }
 
-// markTodoDone marks a to-do done through client-go, failing the test when
-// GitLab refuses: a to-do left pending would make the next surface's create
-// answer the refusal where it expects the to-do.
 // awaitTodoListed waits for a to-do to appear among the caller's pending
 // ones, which is the state that makes GitLab refuse a second to-do for the
 // same merge request.
@@ -171,8 +168,7 @@ func awaitTodoListed(e *harness.Env, todoID int64) {
 	err := harness.Poll(e.Ctx, todoListedInterval, todoListedWait, func() (bool, string, error) {
 		todos, _, listErr := e.Client().GL().Todos.ListTodos(&gl.ListTodosOptions{}, gl.WithContext(e.Ctx))
 		if listErr != nil {
-			//nolint:nilerr // a failed listing is a reason to poll again, not to end the wait: the error returned here is what Poll treats as fatal, and the string is what it reports if the deadline runs out
-			return false, "listing to-dos: " + listErr.Error(), nil
+			return harness.WaitThrough("listing to-dos", listErr)
 		}
 		if slices.ContainsFunc(todos, func(todo *gl.Todo) bool { return todo.ID == todoID }) {
 			return true, "", nil
@@ -184,6 +180,9 @@ func awaitTodoListed(e *harness.Env, todoID int64) {
 	}
 }
 
+// markTodoDone marks a to-do done through client-go, failing the test when
+// GitLab refuses: a to-do left pending would make the next surface's create
+// answer the refusal where it expects the to-do.
 func markTodoDone(e *harness.Env, todoID int64) {
 	e.T.Helper()
 	if _, err := e.Client().GL().Todos.MarkTodoAsDone(todoID, gl.WithContext(e.Ctx)); err != nil {

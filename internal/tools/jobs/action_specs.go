@@ -117,7 +117,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // gitlab_job_get individual tool with bespoke usage, aliases, and
 // parameter guidance.
 func jobGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
-	options := jobOptionsForAction("get", "gitlab_job_get")
+	options := jobOptionsForAction("gitlab_job_get")
 	options.Usage = "Get one CI job by project_id and job_id. Use this when the task already references a specific job and needs state, stage, runner, failure reason, or timing details."
 	options.Aliases = []string{"get job", "show job details", "lookup job"}
 	options.RelatedActions = []string{actionJobTrace, actionJobCancel, actionJobRetry, actionJobWait, actionCommitGet}
@@ -141,30 +141,30 @@ func playRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 // jobReadSpec builds a read-only [toolutil.ActionSpec] for a jobs
 // action using the package's default [jobOptionsForAction].
 func jobReadSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, jobOptionsForAction(name, individualTool, extraTags...))
+	return toolutil.NewReadActionSpec(name, route, jobOptionsForAction(individualTool, extraTags...))
 }
 
 // jobMutationSpec builds an update-style [toolutil.ActionSpec] for a
 // jobs action (cancel, retry, play, keep) using the package's default
 // [jobOptionsForAction].
 func jobMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, jobOptionsForAction(name, individualTool, extraTags...))
+	return toolutil.NewUpdateActionSpec(name, route, jobOptionsForAction(individualTool, extraTags...))
 }
 
 // jobDeleteSpec builds a destructive [toolutil.ActionSpec] for a jobs
 // action (erase, delete_artifacts) using the package's default
 // [jobOptionsForAction].
 func jobDeleteSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, jobOptionsForAction(name, individualTool, extraTags...))
+	return toolutil.NewDeleteActionSpec(name, route, jobOptionsForAction(individualTool, extraTags...))
 }
 
 // jobOptionsForAction returns the base [toolutil.ActionSpecOptions] for
-// a jobs action, layering the ci/job tags and any per-action extras,
-// and customizing the Usage/Aliases/Description for the most common
-// individual tools.
-func jobOptionsForAction(actionName, individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
-	_ = actionName
-
+// the jobs action behind one individual tool, layering the ci/job tags
+// and any per-action extras, and customizing the Usage/Aliases/Description
+// for the most common individual tools. It keys on the individual tool
+// name alone: every action here maps to exactly one individual tool, so
+// the catalog action name would say nothing the tool name does not.
+func jobOptionsForAction(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	tags := append([]string{"ci", "job"}, extraTags...)
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute jobs domain action.", Tags: tags,

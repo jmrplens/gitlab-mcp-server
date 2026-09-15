@@ -106,7 +106,7 @@ func isShard(name string) bool {
 
 // readShard reads one shard file.
 func readShard(path string) ([]Record, error) {
-	// #nosec G304 -- the path comes from a walk of the directory the caller named.
+	// The path comes from a walk of the directory the caller named.
 	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("open shard: %w", err)

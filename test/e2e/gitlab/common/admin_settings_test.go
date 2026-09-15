@@ -48,9 +48,7 @@ import (
 // cleanup failure: the delete the test asserts on is the one in the body.
 func adminDeferDelete(e *harness.Env, s *harness.Session, label string, action harness.ActionID, params map[string]any) {
 	e.Defer(label, func(ctx context.Context) error {
-		//nolint:contextcheck // Under(ctx) is how a call takes a context here; what the linter follows past it is the reconnect, which uses the session's lifetime on purpose.
-		if _, err := harness.Try[toolutil.DeleteOutput](s, action, params,
-			harness.For(harness.PurposeCleanup), harness.Under(ctx)); err != nil {
+		if _, err := harness.Undo[toolutil.DeleteOutput](ctx, s, action, params); err != nil {
 			e.T.Logf("best-effort cleanup of %s answered: %v", label, err)
 		}
 		return nil
@@ -122,8 +120,7 @@ func TestAdmin_SettingsAndAppearance(t *testing.T) {
 	beforeTitle := appearanceGet.Appearance.Title
 	e.T.Logf("appearance title before: %q", beforeTitle)
 	e.Defer("appearance title", func(ctx context.Context) error {
-		_, err := harness.Try[appearance.UpdateOutput](s, actionAdminAppearanceUpd,
-			map[string]any{"title": beforeTitle}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+		_, err := harness.Undo[appearance.UpdateOutput](ctx, s, actionAdminAppearanceUpd, map[string]any{"title": beforeTitle})
 		return err
 	})
 
@@ -144,8 +141,8 @@ func restoreSetting(e *harness.Env, s *harness.Session, before map[string]any, k
 		return
 	}
 	e.Defer("instance setting "+key, func(ctx context.Context) error {
-		_, err := harness.Try[settings.UpdateOutput](s, actionAdminSettingsUpdate,
-			map[string]any{"settings": map[string]any{key: previous}}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+		_, err := harness.Undo[settings.UpdateOutput](ctx, s, actionAdminSettingsUpdate,
+			map[string]any{"settings": map[string]any{key: previous}})
 		return err
 	})
 }
@@ -206,13 +203,11 @@ func restoreFeature(e *harness.Env, s *harness.Session, before featureState, nam
 
 	e.Defer("feature flag "+name, func(ctx context.Context) error {
 		if !before.Listed {
-			//nolint:contextcheck // Under(ctx) is how a call takes a context here; what the linter follows past it is the reconnect, which uses the session's lifetime on purpose.
-			_, err := harness.Try[toolutil.DeleteOutput](s, actionAdminFeatureDelete,
-				map[string]any{"name": name}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+			_, err := harness.Undo[toolutil.DeleteOutput](ctx, s, actionAdminFeatureDelete, map[string]any{"name": name})
 			return err
 		}
-		_, err := harness.Try[features.SetOutput](s, actionAdminFeatureSet,
-			map[string]any{"name": name, "value": before.Value}, harness.For(harness.PurposeCleanup), harness.Under(ctx))
+		_, err := harness.Undo[features.SetOutput](ctx, s, actionAdminFeatureSet,
+			map[string]any{"name": name, "value": before.Value})
 		return err
 	})
 }
@@ -239,9 +234,9 @@ func TestAdmin_InstanceMetadata(t *testing.T) {
 	original := current.PyPiMaxFileSize
 	raised := original + 1
 	e.Defer("restore plan limit", func(ctx context.Context) error {
-		if _, err := harness.Try[planlimits.ChangeOutput](s, actionAdminPlanLimitsChg, map[string]any{
+		if _, err := harness.Undo[planlimits.ChangeOutput](ctx, s, actionAdminPlanLimitsChg, map[string]any{
 			"plan_name": planName, "pypi_max_file_size": original,
-		}, harness.For(harness.PurposeCleanup), harness.Under(ctx)); err != nil {
+		}); err != nil {
 			e.T.Logf("restoring the default plan's PyPI limit answered: %v", err)
 		}
 		return nil
