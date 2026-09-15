@@ -189,7 +189,7 @@ func TestRun_UnusableInputOrOutput_NamesTheStage(t *testing.T) {
 		{
 			name: "no shards to merge",
 			opts: options{shardDir: filepath.Join("dist", "absent"), outputPath: outputPath},
-			want: "read shard directory",
+			want: "make record-request-inventory",
 		},
 		{
 			name: "an artifact path that is not writable",

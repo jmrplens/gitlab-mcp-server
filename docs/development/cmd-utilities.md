@@ -1396,10 +1396,13 @@ What this does not do is judge. It says what we send, not whether GitLab would a
 #### Usage
 
 ```bash
+# Record a run, and nothing else
+make record-request-inventory
+
 # Record the suite and rewrite the artifact
 make gen-request-inventory
 
-# CI gate: verify it against shards already recorded
+# Gate: verify the artifact against shards already recorded
 go run ./cmd/gen_request_inventory/ -check
 
 # Name every package the catalog owns actions in that issued no request
@@ -1417,13 +1420,16 @@ go run ./cmd/gen_request_inventory/ -v -check
 
 #### Output
 
-The artifact on disk, and a three-line summary on stderr: how many rows, distinct paths and packages the inventory holds, and how much of the catalog the recording could see. Exits non-zero when the shard directory holds no shard, when a shard cannot be read, and in `-check` mode when the committed artifact is not what the shards say it should be. An empty shard directory is an error rather than an empty inventory, because writing that would erase the artifact and report the whole file as a change.
+The artifact on disk, and a three-line summary on stderr: how many rows, distinct paths and packages the inventory holds, when the shards it merged were written, and how much of the catalog the recording could see. Exits non-zero when the shard directory holds no shard, when a shard cannot be read, and in `-check` mode when the committed artifact is not what the shards say it should be. An empty shard directory is an error rather than an empty inventory, because writing that would erase the artifact and report the whole file as a change; so is a directory that is not there at all, which is what a checkout that has recorded nothing yet has, and the refusal names the target that would record one.
+
+The recording time is on the summary because this command never records. It merges whatever run last left shards, so a comparison is a statement about that run, and about the working tree only when the recording was made from it.
 
 #### Make targets
 
-- `make gen-request-inventory`: records the suite, then rewrites the artifact.
-- `make check-request-inventory`: the same, gating instead of writing. CI does not run this target: it sets `GITLAB_MCP_TEST_INVENTORY_DIR` on the coverage job's suite run and merges those shards, so the gate costs one `go run` rather than a second seven-minute suite.
-- `make audit-request-inventory`: the gate, naming the silent packages.
+- `make record-request-inventory`: runs the suite with recording on and leaves the shards. The minutes live here, and a suite that fails deletes the shards and says so, so the next step refuses rather than merging a partial run.
+- `make gen-request-inventory`: records, then rewrites the artifact.
+- `make check-request-inventory`: merges the shards of the last recorded run and gates instead of writing. It runs no suite of its own, so it costs one `go run`; recording is the opt-in half. CI gets both for nothing: it sets `GITLAB_MCP_TEST_INVENTORY_DIR` on the coverage job's suite run and merges those shards.
+- `make audit-request-inventory`: the same gate, naming the silent packages.
 
 ### gen_stats
 
@@ -1465,13 +1471,13 @@ Regenerates the managed test-metrics block in `docs/development/testing/testing.
 go run ./cmd/gen_testing_docs/
 
 # CI gate: everything a checkout determines, in seconds
-go run ./cmd/gen_testing_docs/ --check -skip-coverage
+go run ./cmd/gen_testing_docs/ --check
 
 # Refresh the counts without recomputing coverage, keeping the recorded values
 go run ./cmd/gen_testing_docs/ -skip-coverage
 
 # Verify the coverage values as well, which takes minutes
-go run ./cmd/gen_testing_docs/ -check
+go run ./cmd/gen_testing_docs/ --check -skip-coverage=false
 
 # Give a slow package more room than the 30 minutes each go test run gets
 go run ./cmd/gen_testing_docs/ -timeout 45m
@@ -1483,6 +1489,12 @@ instead of blanking it, so it is a real refresh of everything else and, with
 the counts, the naming breakdown, the per-layer tables, and the set of packages
 in the coverage tables, which is what caught `cmd/audit_install_buttons` missing
 from them. It takes seconds, because it runs no coverage at all.
+
+`--check` implies it. The cheap answer is the one a check means, and it used to
+depend on the caller remembering the flag: `go run ./cmd/gen_testing_docs/
+--check` on its own ran the whole coverage pass and compared numbers this
+document deliberately does not gate. Measuring under a check is still
+available, and now says so: `--check -skip-coverage=false`.
 
 The coverage values are not gated, because they are a property of the machine as
 much as of the tree. Several tests assert refusals that permission bits never
@@ -1511,7 +1523,7 @@ document write.
 | `-coverage-dir`    | `string`   | `""`                                  | Directory for temporary coverage profiles; defaults to a temp directory  |
 | `-file`            | `string`   | `docs/development/testing/testing.md` | Testing documentation file to update                                     |
 | `-include-e2e-run` | `bool`     | `false`                               | Also run the build-tagged E2E suite; requires a GitLab test environment  |
-| `-skip-coverage`   | `bool`     | `false`                               | Skip the `go test` coverage run and keep the values already recorded     |
+| `-skip-coverage`   | `bool`     | `false`, `true` under `-check`        | Skip the `go test` coverage run and keep the values already recorded     |
 | `-timeout`         | `duration` | `30m`                                 | Per-package timeout handed to each `go test` run                         |
 | `-top-tool-rows`   | `int`      | `25`                                  | Number of high-test-count tool sub-packages to show in the summary table |
 
@@ -1853,6 +1865,6 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `check-graphql-schema`                   | `gen_graphql_schema --check`                                     | The committed GitLab schema parses and its provenance record decodes                                                                                                                               | Non-zero if either file is missing or unusable                                                                                                                   |
 | `check-graphql-documents`                | `audit_graphql_documents`                                        | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                                                                                                   | Non-zero on any refusal, or if no documents are found                                                                                                            |
 | `check-graphql-shapes`                   | `audit_graphql_shapes`                                           | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects                                                                          | Non-zero on any disagreement, anything unpaired, a mutation payload whose errors no field of the decoder reads, a stale sent declaration, or if no call is found |
-| `check-request-inventory`                | `gen_request_inventory -check`                                   | The committed request inventory is what the unit suite records now                                                                                                                                 | Non-zero if the artifact is stale or no shard was written                                                                                                        |
+| `check-request-inventory`                | `gen_request_inventory -check`                                   | The committed request inventory is what the last recorded run issued                                                                                                                               | Non-zero if the artifact is stale or no run has recorded any shard                                                                                               |
 | `audit-1to1-paths`                       | `audit_1to1 -scope=paths`                                        | Every action's owning package was seen issuing a request, every GraphQL document is one the pinned schema accepts, and the shape, pagination and client-go document comparisons report beside them | Non-zero on a refused document, an undeclared silent package, or a stale declaration                                                                             |
 | `audit-1to1-paths-e2e`                   | `audit_1to1 -scope=paths -e2e-calls dist/e2e-calls`              | The same, with the observation question asked per action from the shards a Docker end-to-end run recorded                                                                                          | Non-zero on the same findings; the per-action report gates on nothing                                                                                            |

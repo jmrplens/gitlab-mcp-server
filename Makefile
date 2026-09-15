@@ -17,7 +17,7 @@
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
 	gen-api-live check-api-live check-meta-descriptions \
-	gen-request-inventory check-request-inventory audit-request-inventory \
+	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
@@ -1222,13 +1222,17 @@ gen-testing-docs:
 	go run ./cmd/gen_testing_docs/
 
 ## check-testing-docs: verify everything in testing.md that a checkout determines.
-## Seconds, not minutes: it carries the recorded coverage values forward instead of
-## recomputing them, because those depend on the machine (privilege, and whether
-## rsvg-convert is installed) while counts and package rows do not. This is the CI
-## gate. To verify the coverage values too, regenerate with gen-testing-docs and
-## look at the diff.
+## Seconds, not minutes: a check carries the recorded coverage values forward
+## instead of recomputing them, because those depend on the machine (privilege,
+## and whether rsvg-convert is installed) while counts and package rows do not.
+## This is the CI gate. To verify the coverage values too, regenerate with
+## gen-testing-docs and look at the diff.
+##
+## No -skip-coverage here on purpose: --check implies it, so every caller gets
+## the cheap answer rather than whoever remembered the flag. The command says
+## so, and `--check -skip-coverage=false` is the explicit way to measure.
 check-testing-docs:
-	go run ./cmd/gen_testing_docs/ --check -skip-coverage
+	go run ./cmd/gen_testing_docs/ --check
 
 ## gen-action-catalog-manifest: regenerate the ActionSpec group builder manifest.
 gen-action-catalog-manifest:
@@ -1669,32 +1673,59 @@ GRAPHQL_LIVE_URL ?= https://gitlab.com/api/graphql
 check-graphql-documents-live:
 	go run ./cmd/audit_graphql_documents/ -live "$(GRAPHQL_LIVE_URL)"
 
-## gen-request-inventory: record every request the unit suite issues and
-## rewrite docs/development/request-inventory.json. The suite run is where the
-## minutes go; the merge is instant. Recording is off unless
-## GITLAB_MCP_TEST_INVENTORY_DIR names an absolute directory, so an ordinary
-## `make test` pays nothing for it.
+## record-request-inventory: run the unit suite with request recording on,
+## leaving one shard per test process under dist/request-inventory. This is
+## where the minutes go; merging them is instant, which is why recording is a
+## target of its own and the two targets below consume what it leaves.
+## Recording is off unless GITLAB_MCP_TEST_INVENTORY_DIR names an absolute
+## directory, so an ordinary `make test` pays nothing for it.
 ##
-## The merge only runs if the suite passed, since shards from a run that died
-## halfway are a partial answer. The R-PATH gate's own unit test therefore
-## skips while that variable is set (see TestRun_TheRealTree_PassesItsOwnGate):
-## without that, a new domain package could not be recorded, because the gate
-## failed on the package the recording was about to add and make stopped before
-## merging.
-gen-request-inventory:
+## A suite that fails takes the shards with it and says so on the way out.
+## That is the whole reason this is written as a shell branch rather than one
+## command: `make gen-request-inventory` used to merge only after a passing
+## run, so a failure rewrote nothing, `git status` stayed clean, and the tree
+## read as already current when nothing had been recorded at all. A benchmark
+## test that lost a port it had bound decided whether the inventory was
+## regenerated, silently. Removing the shards is what makes the merge that
+## follows refuse outright rather than publish half a run as the whole answer.
+##
+## The R-PATH gate's own unit test skips while that variable is set (see
+## TestRun_TheRealTree_PassesItsOwnGate): without that, a new domain package
+## could not be recorded, because the gate failed on the package the recording
+## was about to add and make stopped before merging.
+record-request-inventory:
 	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
 	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
-	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
+	@GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS) || { \
+		$(call RM_RF,$(REQUEST_INVENTORY_SHARDS)); \
+		echo ''; \
+		echo 'NOT RECORDED: the unit suite failed, so no request was written down.'; \
+		echo 'docs/development/request-inventory.json was left exactly as it was: a clean'; \
+		echo 'git status here means nothing ran, not that the inventory is current.'; \
+		echo 'Fix the suite and run this again.'; \
+		exit 1; \
+	}
+
+## gen-request-inventory: record the suite, then rewrite
+## docs/development/request-inventory.json from what that run recorded.
+gen-request-inventory: record-request-inventory
 	go run ./cmd/gen_request_inventory/
 
 ## check-request-inventory: fail when the committed request inventory is not
-## what the suite records now. CI does not run this target: it sets the same
-## variable on the coverage job's suite run and merges those shards, so the
-## gate costs one `go run` rather than a second suite.
+## what the last recorded run says. It merges the shards already under
+## dist/request-inventory and compares, so it costs one `go run` instead of a
+## suite of its own, and refuses with a message naming the recording target
+## when no run has left any. Recording stays opt-in: `make
+## record-request-inventory`, or `make gen-request-inventory` to record and
+## rewrite in one go.
+##
+## What it answers is therefore "is the committed inventory what that run
+## recorded", which is a statement about this tree only when the recording was
+## made from this tree; the summary line prints when the shards were written,
+## so an older recording is visible rather than assumed. CI gets both halves
+## for nothing: the coverage job records on the suite run it was going to do
+## anyway and merges those shards afterwards.
 check-request-inventory:
-	$(call RM_RF,$(REQUEST_INVENTORY_SHARDS))
-	$(call MKDIR_P,$(REQUEST_INVENTORY_SHARDS))
-	GITLAB_MCP_TEST_INVENTORY_DIR=$(CURDIR)/$(REQUEST_INVENTORY_SHARDS) go test -count=1 $(PKGS)
 	go run ./cmd/gen_request_inventory/ -check
 
 ## audit-request-inventory: merge the shards of the last recorded run and name

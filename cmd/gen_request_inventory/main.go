@@ -51,12 +51,12 @@ type options struct {
 // run is the testable entry point. Every error names the stage that failed,
 // which is the text main reports.
 func run(progress io.Writer, root string, opts options) error {
-	records, err := readShards(underRoot(root, opts.shardDir))
+	recorded, err := readShards(underRoot(root, opts.shardDir))
 	if err != nil {
 		return err
 	}
-	rows := merge(records)
-	summarize(progress, root, rows, opts.verbose)
+	rows := merge(recorded.records)
+	summarize(progress, root, rows, recorded.written, opts.verbose)
 
 	target := underRoot(root, opts.outputPath)
 	content := render(rows)

@@ -3,13 +3,16 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -65,35 +68,108 @@ type rowKey struct {
 	operation string
 }
 
+// recording is one shard directory: the records a suite run left there, and
+// when it left them.
+//
+// The time travels with the records because this command merges a recording it
+// did not make. `make check-request-inventory` compares the committed artifact
+// with whatever run last wrote shards, which is an answer about that run and
+// only about the tree as it stands if the recording was made from it, and
+// nothing in the merged rows says when they were observed.
+type recording struct {
+	records []shardRecord
+	written time.Time
+}
+
+// shardInfo reads one directory entry's metadata. It is a variable so the
+// branch that cannot read it stays reachable from a test, the way
+// catalogActions is: the only way an entry ReadDir just listed refuses to
+// describe itself is a race with its own removal.
+var shardInfo = func(entry os.DirEntry) (os.FileInfo, error) { return entry.Info() }
+
 // readShards reads every shard in dir.
 //
 // An empty directory is an error rather than an empty inventory: the shards
 // are written by a suite run, so nothing there means the suite did not run
 // with recording on, and writing the empty result would erase the artifact and
 // call it a change.
-func readShards(dir string) ([]shardRecord, error) {
+func readShards(dir string) (recording, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("read shard directory: %w", err)
+		// Which of the two refusals this is cannot be read off the error
+		// class, because the two platforms disagree about it. Opening a
+		// regular file as a directory is ENOTDIR on Unix, which is not
+		// fs.ErrNotExist, and on Windows it reports ERROR_PATH_NOT_FOUND,
+		// which Go maps to ENOENT, which is. Asking the filesystem what the
+		// path actually is settles it the same way everywhere, and the
+		// distinction is worth keeping: a path that is not there means nobody
+		// has recorded a run, and a path that is a file means whoever set
+		// GITLAB_MCP_TEST_INVENTORY_DIR pointed it at the wrong thing.
+		if info, statErr := os.Stat(dir); statErr == nil && !info.IsDir() {
+			return recording{}, fmt.Errorf("read shard directory: %s is not a directory", dir)
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			return recording{}, notRecorded(dir)
+		}
+		return recording{}, fmt.Errorf("read shard directory: %w", err)
 	}
 
-	var records []shardRecord
+	var merged recording
 	shards := 0
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != shardExt {
 			continue
 		}
-		shards++
 		read, readErr := readShard(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
-			return nil, readErr
+			return recording{}, readErr
 		}
-		records = append(records, read...)
+		// A shard holding nothing is a shard whose process died between
+		// creating the file and writing its first line. The recorder opens
+		// one lazily, inside the write, so a test binary that issues no
+		// request leaves no file at all and an empty one cannot mean "this
+		// package was silent". The window is microseconds wide and only a
+		// SIGKILL lands in it, which is exactly why it must be refused
+		// rather than merged: the run would otherwise publish an inventory
+		// missing one package's requests, with nothing anywhere saying a
+		// package was lost. That is the failure this command exists to make
+		// impossible, one shard down instead of all of them.
+		if len(read) == 0 {
+			return recording{}, fmt.Errorf("shard %s in %s holds no request: a recording was interrupted before it wrote one, so the merge would silently drop whatever that test process saw. Record again with `make record-request-inventory`", entry.Name(), dir)
+		}
+		shards++
+		merged.records = append(merged.records, read...)
+		merged.written = newest(merged.written, entry)
 	}
 	if shards == 0 {
-		return nil, fmt.Errorf("no %s shard in %s: run `make gen-request-inventory`, which records the suite before merging it", shardExt, dir)
+		return recording{}, notRecorded(dir)
 	}
-	return records, nil
+	return merged, nil
+}
+
+// notRecorded is the refusal when there is nothing to merge, and it names the
+// target that would record something.
+//
+// A directory that is absent and a directory holding no shard are the same
+// answer to the reader, and the absent one is the ordinary case: nothing but a
+// recorded run creates it, so a fresh checkout running the gate gets this. It
+// used to get `open dist/request-inventory: no such file or directory`, which
+// is the truth and says nothing about what to do with it.
+func notRecorded(dir string) error {
+	return fmt.Errorf("no %s shard in %s: nothing has recorded a run here. `make record-request-inventory` records one, and `make gen-request-inventory` records and then rewrites the artifact", shardExt, dir)
+}
+
+// newest returns the later of what is known so far and this shard's own write
+// time, and leaves the answer alone for a shard that cannot be described.
+func newest(known time.Time, entry os.DirEntry) time.Time {
+	info, err := shardInfo(entry)
+	if err != nil {
+		return known
+	}
+	if written := info.ModTime(); written.After(known) {
+		return written
+	}
+	return known
 }
 
 // readShard reads one shard file.

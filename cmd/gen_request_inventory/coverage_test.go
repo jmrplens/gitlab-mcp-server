@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -45,11 +46,12 @@ func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 		{Package: "internal/tools/issues", Path: "/projects/:id/issues", Method: "POST"},
 	}
 
+	written := time.Date(2026, 9, 15, 10, 30, 0, 0, time.UTC)
 	var quiet, verbose bytes.Buffer
-	summarize(&quiet, root, rows, false)
-	summarize(&verbose, root, rows, true)
+	summarize(&quiet, root, rows, written, false)
+	summarize(&verbose, root, rows, written, true)
 
-	for _, want := range []string{"2 rows", "1 distinct paths", "1 packages", "1 of 3 catalog actions"} {
+	for _, want := range []string{"2 rows", "1 distinct paths", "1 packages", "recorded 2026-09-15T10:30:00Z", "1 of 3 catalog actions"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(quiet.String(), want) {
 				t.Errorf("summary = %q, want it to contain %q", quiet.String(), want)
@@ -79,12 +81,29 @@ func TestSummarize_CatalogFailure_KeepsTheInventory(t *testing.T) {
 	t.Cleanup(func() { catalogActions = original })
 
 	var progress bytes.Buffer
-	summarize(&progress, t.TempDir(), []requestinventory.Row{{Package: "internal/tools/issues", Path: "/projects"}}, true)
+	summarize(&progress, t.TempDir(), []requestinventory.Row{{Package: "internal/tools/issues", Path: "/projects"}}, time.Now(), true)
 
 	if !strings.Contains(progress.String(), "1 rows") {
 		t.Errorf("summary = %q, want it to still count the rows", progress.String())
 	}
 	if !strings.Contains(progress.String(), "catalog is broken") {
 		t.Errorf("summary = %q, want it to name the catalog failure", progress.String())
+	}
+}
+
+// TestSummarize_UndatedRecording_SaysSo verifies the summary never implies a
+// recording time it does not have: a reader uses that line to tell a check
+// made against a fresh run from one made against a week-old one, and an empty
+// or invented date answers the question wrongly rather than declining it.
+func TestSummarize_UndatedRecording_SaysSo(t *testing.T) {
+	original := catalogActions
+	catalogActions = func() ([]requestinventory.Action, error) { return nil, nil }
+	t.Cleanup(func() { catalogActions = original })
+
+	var progress bytes.Buffer
+	summarize(&progress, t.TempDir(), []requestinventory.Row{{Package: "internal/tools/issues", Path: "/projects"}}, time.Time{}, false)
+
+	if !strings.Contains(progress.String(), "recorded at an unknown time") {
+		t.Errorf("summary = %q, want it to say the recording time is unknown", progress.String())
 	}
 }
