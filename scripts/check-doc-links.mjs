@@ -380,18 +380,42 @@ function withoutFrontmatter(content) {
 // and tildes need no handling at all, since the slugger drops them wherever
 // they stand.
 function headingText(raw) {
-	return raw
-		.replace(/[ \t]+#+[ \t]*$/, "")
-		.replace(/<!--[\s\S]*?-->/g, "")
+	const withoutComments = stripRepeatedly(
+		raw.replace(/[ \t]+#+[ \t]*$/, ""),
+		/<!--[\s\S]*?-->/g,
+	);
+	const withoutLinks = withoutComments
 		.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
 		.replace(/\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
-		.replace(/\[([^\]]*)\]\[[^\]]*\]/g, "$1")
-		.replace(/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/g, "")
-		// Underscores are kept by both sluggers, so emphasis written with them
-		// has to go while the ones inside a name like audit_md_escaping stay.
-		// Only a pair on a word boundary is emphasis.
-		.replace(/(?<![\p{L}\p{N}_])__?([^_]+?)__?(?![\p{L}\p{N}_])/gu, "$1")
-		.trim();
+		.replace(/\[([^\]]*)\]\[[^\]]*\]/g, "$1");
+	return (
+		stripRepeatedly(
+			withoutLinks,
+			/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/g,
+		)
+			// Underscores are kept by both sluggers, so emphasis written with
+			// them has to go while the ones inside a name like
+			// audit_md_escaping stay. Only a pair on a word boundary is
+			// emphasis.
+			.replace(/(?<![\p{L}\p{N}_])__?([^_]+?)__?(?![\p{L}\p{N}_])/gu, "$1")
+			.trim()
+	);
+}
+
+// stripRepeatedly removes every match and then looks again, because one pass
+// over nested markup leaves a piece of the outer construct behind: "<<b>i>"
+// loses the "<b>" and leaves "<i>", and "<!--<!-- -->-->" leaves "-->". What
+// is left would go on to be slugged, and a heading whose anchor nobody can
+// guess is exactly the failure this file is meant to report rather than cause.
+// It is also the single-pass shape CodeQL names as incomplete sanitization.
+function stripRepeatedly(text, pattern) {
+	let previous;
+	let stripped = text;
+	do {
+		previous = stripped;
+		stripped = stripped.replace(pattern, "");
+	} while (stripped !== previous);
+	return stripped;
 }
 
 // explicitIds collects the anchors a page states rather than derives. Both
