@@ -12461,15 +12461,16 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_pull_mirror_configure
 
-Configure a project's pull mirror. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
+Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.
 
 **Parameters:**
 
 - `auth_password` (string): Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors
 - `auth_user` (string): Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password
+- `confirm` (boolean): Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting
 - `enabled` (boolean): Enable or disable pull mirroring
 - `mirror_branch_regex` (string): Regex to filter branches to mirror
-- `mirror_overwrites_diverged_branches` (boolean): Overwrite diverged branches on mirror update
+- `mirror_overwrites_diverged_branches` (boolean): Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true
 - `mirror_trigger_builds` (boolean): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
