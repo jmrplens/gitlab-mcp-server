@@ -824,7 +824,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	var postCommonActionParamExplanations []toolutil.ParamAliasExplanation
 	params, postCommonActionParamExplanations = NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
 	actionParamExplanations = append(actionParamExplanations, postCommonActionParamExplanations...)
-	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
+	if stateEvent, lifecycleAlias := IssueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
 			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {
 				toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
@@ -880,7 +880,16 @@ func NormalizeActionScopedParamsWithExplanation(actionID string, params, schema 
 	return actioncompat.NormalizeParamsWithExplanation(actionID, params, schema)
 }
 
-func issueLifecycleAliasStateEvent(actionID string) (string, bool) {
+// IssueLifecycleAliasStateEvent reports the state_event an issue lifecycle
+// alias stands for, and whether the action ID is one.
+//
+// It is exported for the surface evaluator, which has to judge the call this
+// server would run rather than the one the model typed: a model reaching
+// issue.close is executed with state_event filled in here, so a scorer reading
+// only what the model sent would refuse a call the server accepts. Taking the
+// rule from here rather than restating it is what keeps the two from drifting
+// into disagreeing about which aliases exist.
+func IssueLifecycleAliasStateEvent(actionID string) (string, bool) {
 	switch actionID {
 	case "issue.close":
 		return "close", true

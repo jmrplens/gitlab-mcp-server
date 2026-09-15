@@ -72,7 +72,7 @@ func normalizeRouteActionInput(step ExpectedStep, toolName string, input map[str
 	}
 	if step.ExpectedTool == dynamicExecuteActionTool {
 		if normalized, ok := dynamictools.NormalizeCompatibilityActionAlias(action); ok {
-			input = cloneToolInputWithAction(input, normalized)
+			input = withIssueLifecycleStateEvent(cloneToolInputWithAction(input, normalized), action)
 			action = normalized
 		}
 	}
@@ -114,6 +114,34 @@ func cloneToolInputWithAction(input map[string]any, action string) map[string]an
 	maps.Copy(out, input)
 	out["action"] = action
 	return out
+}
+
+// withIssueLifecycleStateEvent fills in the state_event the server fills in,
+// for a call that reached a canonical action through an issue lifecycle alias.
+//
+// The scorer has to judge the call the server would run rather than the one the
+// model typed. gitlab_execute_action accepts issue.close, maps it to
+// issue.update and supplies state_event itself, so a model that sends the alias
+// with nothing but the issue's identifiers is running a correct call; without
+// this, the scorer refused that same call for a required parameter the server
+// never asked the model for. A state_event the model sent is left alone, since
+// the server refuses a contradicting one rather than overwriting it.
+func withIssueLifecycleStateEvent(input map[string]any, requestedAction string) map[string]any {
+	stateEvent, lifecycleAlias := dynamictools.IssueLifecycleAliasStateEvent(requestedAction)
+	if !lifecycleAlias {
+		return input
+	}
+	params, paramsOK := input["params"].(map[string]any)
+	if !paramsOK {
+		return input
+	}
+	if _, sent := params["state_event"]; sent {
+		return input
+	}
+	filled := make(map[string]any, len(params)+1)
+	maps.Copy(filled, params)
+	filled["state_event"] = stateEvent
+	return cloneToolInputWithParams(input, filled)
 }
 
 // cloneToolInputWithParams clones tool input with params without sharing mutable maps.

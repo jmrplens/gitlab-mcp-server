@@ -1244,3 +1244,66 @@ func TestValidationBadParam_ExtractsFirstOffendingParam(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateStepCallWithRoutes_ScoresAnIssueLifecycleAliasAsTheServerRunsIt
+// pins the rule that the scorer judges the call the server would run, not the
+// one the model typed.
+//
+// gitlab_execute_action accepts issue.close, maps it to issue.update and
+// supplies state_event itself, so a model sending the alias with nothing but
+// the issue's identifiers has made a correct call. The scorer used to map the
+// action and stop there, refusing that call for a required parameter the
+// server never asked the model for, and the refusal was invisible because the
+// prompt named state_event until the corpus stopped doing so.
+func TestValidateStepCallWithRoutes_ScoresAnIssueLifecycleAliasAsTheServerRunsIt(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"project_id":  map[string]any{"type": "string"},
+			"issue_iid":   map[string]any{"type": "integer"},
+			"state_event": map[string]any{"type": "string"},
+		},
+		"required": []any{"project_id", "issue_iid", "state_event"},
+	}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"issue.update": toolutil.ActionRoute{InputSchema: schema}}}
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "state_event"}}
+
+	tests := []struct {
+		name  string
+		input map[string]any
+		valid bool
+		want  string
+	}{
+		{
+			name:  "the alias carries the state_event the server fills in",
+			input: map[string]any{"action": "issue.close", "params": map[string]any{"project_id": "my/project", "issue_iid": 42}},
+			valid: true,
+		},
+		{
+			name:  "reopen is the other alias",
+			input: map[string]any{"action": "issue.reopen", "params": map[string]any{"project_id": "my/project", "issue_iid": 42}},
+			valid: true,
+		},
+		{
+			name:  "a state_event the model sent is left alone",
+			input: map[string]any{"action": "issue.close", "params": map[string]any{"project_id": "my/project", "issue_iid": 42, "state_event": "close"}},
+			valid: true,
+		},
+		{
+			name:  "the canonical action still owes its own required parameter",
+			input: map[string]any{"action": "issue.update", "params": map[string]any{"project_id": "my/project", "issue_iid": 42}},
+			valid: false,
+			want:  "state_event",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validateStepCallWithRoutes(step, dynamicExecuteActionTool, tc.input, routes)
+			if result.Valid != tc.valid {
+				t.Fatalf("validateStepCallWithRoutes() valid = %v, want %v (message %q)", result.Valid, tc.valid, result.Message)
+			}
+			if tc.want != "" && !strings.Contains(result.Message, tc.want) {
+				t.Errorf("message = %q, want it to name %q", result.Message, tc.want)
+			}
+		})
+	}
+}
