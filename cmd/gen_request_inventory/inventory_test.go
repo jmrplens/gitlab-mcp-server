@@ -80,13 +80,24 @@ func TestReadShards_TwoShards_CarriesTheLatestWriteTime(t *testing.T) {
 	if err := os.Chtimes(filepath.Join(dir, "requests-2.jsonl"), older, older); err != nil {
 		t.Fatalf("Chtimes error = %v", err)
 	}
+	// The expectation is what the filesystem stored, not what Chtimes was
+	// asked for. time.Now carries nanoseconds and a filesystem need not: NTFS
+	// keeps 100 ns and several keep a whole second, so comparing against the
+	// requested value asserts the host's timestamp granularity rather than
+	// this function's rule. The hour between the two shards is what makes the
+	// ordering unambiguous, and it survives any rounding.
+	stored, err := os.Stat(filepath.Join(dir, "requests-1.jsonl"))
+	if err != nil {
+		t.Fatalf("Stat error = %v", err)
+	}
+	want := stored.ModTime()
 
 	recorded, err := readShards(dir)
 	if err != nil {
 		t.Fatalf("readShards error = %v", err)
 	}
-	if !recorded.written.Equal(newer) {
-		t.Errorf("written = %v, want the newest shard's time %v", recorded.written, newer)
+	if !recorded.written.Equal(want) {
+		t.Errorf("written = %v, want the newest shard's time %v", recorded.written, want)
 	}
 }
 
@@ -122,6 +133,61 @@ func TestReadShards_ShardThatCannotBeDescribed_StillMerges(t *testing.T) {
 // creates that directory: a checkout running the gate before recording
 // anything is the ordinary way to arrive here, and it used to be answered with
 // a bare "no such file or directory".
+// TestReadShards_ShardHoldingNoRequest_IsAnError verifies that a shard with no
+// record in it stops the merge instead of contributing nothing to it.
+//
+// The recorder opens a shard lazily, inside the write of its first line, so a
+// test process that issues no request leaves no file: an empty one cannot mean
+// "this package was silent", only that the process died between the create and
+// the write. Merging it would publish an inventory missing one package's
+// requests and say nothing about the loss, which is the exact failure this
+// command refuses for a whole recording and must refuse for one shard of it.
+//
+// Both spellings of empty are covered because they arrive differently: a
+// zero-byte file is what an interrupted create leaves, and a blank line is what
+// a writer that flushed a newline and nothing else leaves.
+func TestReadShards_ShardHoldingNoRequest_IsAnError(t *testing.T) {
+	tests := []struct {
+		name  string
+		write func(t *testing.T, dir string)
+	}{
+		{
+			name: "a zero-byte shard",
+			write: func(t *testing.T, dir string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(dir, "requests-2.jsonl"), nil, 0o600); err != nil {
+					t.Fatalf("WriteFile error = %v", err)
+				}
+			},
+		},
+		{
+			name: "a shard holding only a blank line",
+			write: func(t *testing.T, dir string) {
+				t.Helper()
+				writeShard(t, dir, "requests-2.jsonl")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeShard(t, dir, "requests-1.jsonl", sampleRecord)
+			tt.write(t, dir)
+
+			_, err := readShards(dir)
+			if err == nil {
+				t.Fatal("readShards error = nil, want a refusal naming the empty shard")
+			}
+			if !strings.Contains(err.Error(), "requests-2.jsonl") {
+				t.Errorf("error = %q, want it to name the empty shard", err)
+			}
+			if !strings.Contains(err.Error(), "make record-request-inventory") {
+				t.Errorf("error = %q, want it to name the target that records again", err)
+			}
+		})
+	}
+}
+
 func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 	tests := []struct {
 		name string

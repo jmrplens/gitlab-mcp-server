@@ -120,11 +120,24 @@ func readShards(dir string) (recording, error) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != shardExt {
 			continue
 		}
-		shards++
 		read, readErr := readShard(filepath.Join(dir, entry.Name()))
 		if readErr != nil {
 			return recording{}, readErr
 		}
+		// A shard holding nothing is a shard whose process died between
+		// creating the file and writing its first line. The recorder opens
+		// one lazily, inside the write, so a test binary that issues no
+		// request leaves no file at all and an empty one cannot mean "this
+		// package was silent". The window is microseconds wide and only a
+		// SIGKILL lands in it, which is exactly why it must be refused
+		// rather than merged: the run would otherwise publish an inventory
+		// missing one package's requests, with nothing anywhere saying a
+		// package was lost. That is the failure this command exists to make
+		// impossible, one shard down instead of all of them.
+		if len(read) == 0 {
+			return recording{}, fmt.Errorf("shard %s in %s holds no request: a recording was interrupted before it wrote one, so the merge would silently drop whatever that test process saw. Record again with `make record-request-inventory`", entry.Name(), dir)
+		}
+		shards++
 		merged.records = append(merged.records, read...)
 		merged.written = newest(merged.written, entry)
 	}
