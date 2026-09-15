@@ -604,6 +604,21 @@ func handleInvalidCapabilityBridgeCall(bridgeCtx capabilityBridgeStepContext, st
 }
 
 func recordValidationAttempt(result *taskResult, toolUse modelContentBlock, validation validationResult, state *modelEvaluationState) {
+	// A discovery call is not the first outcome. The columns this fills are
+	// about the catalog operation the task asked for, and on the dynamic
+	// surface reaching one takes a find call first; claiming the attempt here
+	// made those columns report whether the model called gitlab_find_action.
+	// The find call's own validity is recorded separately, so the surface
+	// question "did discovery work" keeps an answer.
+	if isDynamicDiscovery(toolUse) {
+		result.DiscoveryCalls++
+		if validation.Valid {
+			result.DiscoveryValid++
+		}
+		result.FinalTool = toolUse.Name
+		result.FinalAction = validation.Action
+		return
+	}
 	if state.firstFinalAttempt {
 		result.FirstTool = toolUse.Name
 		result.FirstAction = validation.Action
@@ -612,6 +627,9 @@ func recordValidationAttempt(result *taskResult, toolUse modelContentBlock, vali
 	}
 	result.FinalTool = toolUse.Name
 	result.FinalAction = validation.Action
+	if validation.DestructiveReached {
+		result.DestructiveReached = true
+	}
 	result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
 }
 

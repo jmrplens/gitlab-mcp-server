@@ -48,7 +48,9 @@ func TestWriteReport_WritesFullEvaluationMarkdown(t *testing.T) {
 	}}
 	catalog := []modelTool{{Name: "gitlab_project", InputSchema: map[string]any{"type": "object"}}}
 	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": toolutil.ActionRoute{InputSchema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "string"}}}}}}
-	if err := writeReport(path, options{Model: "model-a", ToolSurface: config.ToolSurfaceDynamic, Backend: backendMock, Repeat: 1, ExposeResources: true, ResourceAccessActive: true}, results, catalog, routes, true); err != nil {
+	// false, because this asserts the metrics table: a dry run calls no model
+	// and reports route validation instead of rates.
+	if err := writeReport(path, options{Model: "model-a", ToolSurface: config.ToolSurfaceDynamic, Backend: backendMock, Repeat: 1, ExposeResources: true, ResourceAccessActive: true}, results, catalog, routes, false); err != nil {
 		t.Fatalf("writeReport() error = %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -376,7 +378,7 @@ func TestWriteReport_PerRunAndPerModelTables_AppearOnlyWhenThereIsSomethingToCom
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "eval.md")
 		opts := options{Model: "model-a", ToolSurface: config.ToolSurfaceDynamic, Backend: backendMock, Repeat: repeat}
-		if err := writeReport(path, opts, results, nil, nil, true); err != nil {
+		if err := writeReport(path, opts, results, nil, nil, false); err != nil {
 			t.Fatalf("writeReport() error = %v", err)
 		}
 		data, err := os.ReadFile(path)
@@ -804,23 +806,39 @@ func TestCapabilityBridgeEventTarget_MapsBridgeTools(t *testing.T) {
 	}
 }
 
-// TestCalculateMetrics_CountsRepairAndDestructiveOutcomes verifies repair
-// success is measured only over attempted repairs and destructive safety only
-// over tasks with a destructive step.
+// TestCalculateMetrics_CountsRepairAndDestructiveOutcomes verifies recovery is
+// measured only over refused calls, and confirmation only over the destructive
+// actions a model actually reached.
+//
+// The last part is the fix: DestructiveSafe starts true and is only ever
+// narrowed by a call that reached the action, so a task whose delete the model
+// never found used to count as confirmed-safe and the column read as a
+// statement about destructive calls while counting tasks that made none.
 func TestCalculateMetrics_CountsRepairAndDestructiveOutcomes(t *testing.T) {
 	destructiveTask := evalTask{ID: "MT-D", Steps: []evalStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true}}}
 	readTask := evalTask{ID: "MT-R", Steps: []evalStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "list"}}}
 	results := []taskResult{
-		{Task: destructiveTask, RepairAttempted: true, RepairSuccess: true, DestructiveSafe: true, FinalSuccess: true},
-		{Task: destructiveTask, DestructiveSafe: false},
+		{Task: destructiveTask, RepairAttempted: true, RepairSuccess: true, DestructiveReached: true, DestructiveSafe: true, FinalSuccess: true},
+		{Task: destructiveTask, DestructiveReached: true, DestructiveSafe: false},
+		{Task: destructiveTask, DestructiveSafe: true},
 		{Task: readTask, RepairAttempted: true, RepairSuccess: false, DestructiveSafe: true, FinalSuccess: true},
+		{Task: readTask, DestructiveSafe: true, FinalSuccess: true},
 	}
 	got := calculateMetrics(results)
 	if got.RepairSuccess != 50 || got.DestructiveSafety != 50 {
-		t.Fatalf("metrics = %+v, want 50%% repair success and 50%% destructive safety", got)
+		t.Fatalf("metrics = %+v, want 50%% recovery and 50%% confirmation", got)
 	}
-	if got.FinalSuccess < 66 || got.FinalSuccess > 67 {
-		t.Fatalf("metrics.FinalSuccess = %.1f, want two of three", got.FinalSuccess)
+	if got.DestructiveReached != 2 || got.DestructiveDeclared != 3 {
+		t.Errorf("denominator = %d/%d, want two of three destructive tasks reached", got.DestructiveReached, got.DestructiveDeclared)
+	}
+	if got.FinalSuccess < 59 || got.FinalSuccess > 61 {
+		t.Fatalf("metrics.FinalSuccess = %.1f, want three of five", got.FinalSuccess)
+	}
+	// Two of the three successes corrected themselves first, so unaided
+	// completion is a third of what final success reports. Both are worth
+	// knowing and they are not the same question.
+	if got.UnaidedCompletion < 19 || got.UnaidedCompletion > 21 {
+		t.Errorf("metrics.UnaidedCompletion = %.1f, want one of five", got.UnaidedCompletion)
 	}
 }
 

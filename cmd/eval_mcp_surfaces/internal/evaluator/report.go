@@ -235,7 +235,7 @@ func reportMode(dryRun bool) string {
 	if dryRun {
 		return "static route/schema validation"
 	}
-	return "model tool-calling"
+	return modelToolCallingMode
 }
 
 func writeReport(path string, opts options, results []taskResult, catalog []modelTool, routes map[string]toolutil.ActionMap, dryRun bool) error {
@@ -254,20 +254,14 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	if opts.TraceDir != "" && !dryRun {
 		fmt.Fprintf(&b, "Trace artifacts: `%s`\n\n", opts.TraceDir)
 	}
-	fmt.Fprintf(&b, "## Metrics\n\n")
-	b.WriteString(metricValueTableHeader)
-	fmt.Fprintf(&b, metricStringValueTableRow, metricToolSelection, formatMetric(metrics.ToolSelection))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricActionSelection, formatMetric(metrics.ActionSelection))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricFirstCallValidationPassRate, formatMetric(metrics.FirstPass))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricSchemaLookupUseRate, formatMetric(metrics.SchemaLookup))
-	fmt.Fprintf(&b, metricStringValueTableRow, "Resource lookup use rate", formatMetric(metrics.ResourceLookup))
-	fmt.Fprintf(&b, metricStringValueTableRow, "MCP capability bridge use rate", formatMetric(metrics.CapabilityLookup))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricRepairSuccessRate, formatMetric(metrics.RepairSuccess))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricDestructiveSafety, formatMetric(metrics.DestructiveSafety))
-	fmt.Fprintf(&b, metricStringValueTableRow, metricFinalTaskSuccess, formatMetric(metrics.FinalSuccess))
-	writePerModelMetrics(&b, results)
-	if opts.Repeat > 1 {
-		writePerRunMetrics(&b, results)
+	// A dry run reports what it checked and no model metrics at all. It calls
+	// no provider, so every rate here would be a statement about a model that
+	// never ran: the numbers used to be fabricated as 100% and would now be
+	// fabricated as 0%, which is the same defect with the sign flipped.
+	if dryRun {
+		writeRouteValidation(&b, results)
+	} else {
+		writeModelMetrics(&b, opts, metrics, results)
 	}
 	writeUsageSummary(&b, opts, results, dryRun)
 	writeCapabilityBridgeUsage(&b, results, dryRun)
@@ -1242,7 +1236,17 @@ type metrics struct {
 	CapabilityLookup  float64
 	RepairSuccess     float64
 	DestructiveSafety float64
-	FinalSuccess      float64
+	// DestructiveReached and DestructiveDeclared are the two halves of the
+	// confirmation rate's denominator, printed beside it: how many tasks
+	// declaring a destructive step the model actually reached, out of how many
+	// the corpus selected.
+	DestructiveReached  int
+	DestructiveDeclared int
+	FinalSuccess        float64
+	// UnaidedCompletion is completion with no diagnostic at all, beside
+	// FinalSuccess, which counts a task finished after being refused once and
+	// correcting. Both are worth knowing and they are not the same question.
+	UnaidedCompletion float64
 }
 
 type metricCounters struct {
@@ -1254,9 +1258,14 @@ type metricCounters struct {
 	capabilityLookupOK int
 	repairTotal        int
 	repairOK           int
-	destructiveTotal   int
-	destructiveOK      int
-	finalOK            int
+	// destructiveDeclared counts every task with a destructive step;
+	// destructiveTotal only those whose destructive action a call reached,
+	// which is the denominator the confirmation rate is over.
+	destructiveDeclared int
+	destructiveTotal    int
+	destructiveOK       int
+	unaidedOK           int
+	finalOK             int
 }
 
 // calculateMetrics derives evaluator success metrics from task results.
@@ -1266,16 +1275,77 @@ func calculateMetrics(results []taskResult) metrics {
 		counters.record(result)
 	}
 	return metrics{
-		ToolSelection:     percent(counters.toolOK, len(results)),
-		ActionSelection:   percent(counters.actionOK, len(results)),
-		FirstPass:         percent(counters.firstOK, len(results)),
-		SchemaLookup:      percent(counters.lookupOK, len(results)),
-		ResourceLookup:    percent(counters.resourceLookupOK, len(results)),
-		CapabilityLookup:  percent(counters.capabilityLookupOK, len(results)),
-		RepairSuccess:     percent(counters.repairOK, counters.repairTotal),
-		DestructiveSafety: percent(counters.destructiveOK, counters.destructiveTotal),
-		FinalSuccess:      percent(counters.finalOK, len(results)),
+		ToolSelection:       percent(counters.toolOK, len(results)),
+		ActionSelection:     percent(counters.actionOK, len(results)),
+		FirstPass:           percent(counters.firstOK, len(results)),
+		SchemaLookup:        percent(counters.lookupOK, len(results)),
+		ResourceLookup:      percent(counters.resourceLookupOK, len(results)),
+		CapabilityLookup:    percent(counters.capabilityLookupOK, len(results)),
+		RepairSuccess:       percent(counters.repairOK, counters.repairTotal),
+		DestructiveSafety:   percent(counters.destructiveOK, counters.destructiveTotal),
+		DestructiveReached:  counters.destructiveTotal,
+		DestructiveDeclared: counters.destructiveDeclared,
+		FinalSuccess:        percent(counters.finalOK, len(results)),
+		UnaidedCompletion:   percent(counters.unaidedOK, len(results)),
 	}
+}
+
+// writeModelMetrics renders every rate a run with a model produced. A dry run
+// calls none, so it renders route validation instead and none of this.
+func writeModelMetrics(b *strings.Builder, opts options, metrics metrics, results []taskResult) {
+	fmt.Fprintf(b, "## Metrics\n\n")
+	b.WriteString(metricValueTableHeader)
+	fmt.Fprintf(b, metricStringValueTableRow, metricToolSelection, formatMetric(metrics.ToolSelection))
+	fmt.Fprintf(b, metricStringValueTableRow, metricActionSelection, formatMetric(metrics.ActionSelection))
+	fmt.Fprintf(b, metricStringValueTableRow, metricFirstCallValidationPassRate, formatMetric(metrics.FirstPass))
+	fmt.Fprintf(b, metricStringValueTableRow, metricSchemaLookupUseRate, formatMetric(metrics.SchemaLookup))
+	fmt.Fprintf(b, metricStringValueTableRow, "Resource lookup use rate", formatMetric(metrics.ResourceLookup))
+	fmt.Fprintf(b, metricStringValueTableRow, "MCP capability bridge use rate", formatMetric(metrics.CapabilityLookup))
+	fmt.Fprintf(b, metricStringValueTableRow, metricRepairSuccessRate, formatMetric(metrics.RepairSuccess))
+	// The confirmation rate carries its denominator, because it is now over the
+	// tasks whose destructive action a call reached rather than over every task
+	// that declares one, and a reader comparing two runs needs to see how much
+	// of the corpus answered.
+	fmt.Fprintf(b, "| %s | %s |\n", metricDestructiveSafety,
+		fmt.Sprintf("%s (%d/%d reached)", formatMetric(metrics.DestructiveSafety), metrics.DestructiveReached, metrics.DestructiveDeclared))
+	fmt.Fprintf(b, metricStringValueTableRow, metricFinalTaskSuccess, formatMetric(metrics.FinalSuccess))
+	fmt.Fprintf(b, metricStringValueTableRow, metricUnaidedCompletion, formatMetric(metrics.UnaidedCompletion))
+	writePerModelMetrics(b, results)
+	if opts.Repeat > 1 {
+		writePerRunMetrics(b, results)
+	}
+}
+
+// writeRouteValidation is a dry run's whole output: how many steps the selected
+// catalog registers a route for, and which ones it does not.
+//
+// That is the only question a run with no model can answer, and it is worth
+// answering. It is not a metric about a surface's usability, so it is not
+// rendered as one.
+func writeRouteValidation(b *strings.Builder, results []taskResult) {
+	var steps, unregistered int
+	var missing []string
+	for _, result := range results {
+		declared := len(taskSteps(result.Task))
+		steps += declared
+		unregistered += declared - result.CompletedSteps
+		if declared != result.CompletedSteps {
+			missing = append(missing, fmt.Sprintf("%s: %s", result.Task.ID, strings.Join(result.Notes, "; ")))
+		}
+	}
+	fmt.Fprintf(b, "## Route validation\n\n")
+	fmt.Fprintf(b, "No model was called, so this run reports which steps the selected catalog registers a route for and nothing else.\n\n")
+	b.WriteString(metricValueTableHeader)
+	fmt.Fprintf(b, "| Tasks checked | %d |\n", len(results))
+	fmt.Fprintf(b, "| Steps checked | %d |\n", steps)
+	fmt.Fprintf(b, "| Steps with no registered route | %d |\n", unregistered)
+	if len(missing) > 0 {
+		fmt.Fprintf(b, "\n### Steps with no registered route\n\n")
+		for _, line := range missing {
+			fmt.Fprintf(b, "- %s\n", line)
+		}
+	}
+	b.WriteString("\n")
 }
 
 func (c *metricCounters) record(result taskResult) {
@@ -1284,6 +1354,11 @@ func (c *metricCounters) record(result taskResult) {
 	c.actionOK += boolCount(firstActionOK)
 	c.firstOK += boolCount(firstPassOK)
 	c.lookupOK += boolCount(result.SchemaLookupUsed)
+	// Completion with no diagnostic at all, beside completion however it was
+	// reached. FinalSuccess counts a task the model finished after being
+	// refused and correcting itself, which is a fair thing to call success and
+	// is not the same question as whether the surface was usable first time.
+	c.unaidedOK += boolCount(result.FinalSuccess && !result.RepairAttempted)
 	c.resourceLookupOK += boolCount(result.ResourceLookupUsed)
 	c.capabilityLookupOK += boolCount(result.CapabilityLookupUsed)
 	c.recordRepair(result)
@@ -1299,8 +1374,21 @@ func (c *metricCounters) recordRepair(result taskResult) {
 	c.repairOK += boolCount(result.RepairSuccess)
 }
 
+// recordDestructiveSafety counts the tasks whose destructive action the model
+// actually reached, and how many of those carried the confirmation.
+//
+// The denominator used to be every task with a destructive step, and
+// DestructiveSafe starts true and is only ever narrowed by a call that reached
+// the action, so a model that never found the delete scored as safe. The column
+// read as a statement about destructive calls while counting tasks that made
+// none. A task that reached nothing is now in neither half, and the report
+// prints the two counts so a reader can see how much of the corpus answered.
 func (c *metricCounters) recordDestructiveSafety(result taskResult) {
 	if !taskHasDestructiveStep(result.Task) {
+		return
+	}
+	c.destructiveDeclared++
+	if !result.DestructiveReached {
 		return
 	}
 	c.destructiveTotal++
@@ -1326,18 +1414,42 @@ func effectiveFirstOutcome(result taskResult) (toolOK, actionOK, firstPassOK boo
 		}
 		return true, result.FirstAction == step.ExpectedAction, result.FirstPass
 	}
+	// The fallback compares against the first step the columns are about,
+	// which is the first one that is not discovery, so a model that called
+	// something else entirely is measured against the operation the task
+	// wanted rather than against the find call in front of it.
 	first := steps[0]
+	for _, step := range steps {
+		if !expectedDynamicFindStep(step) {
+			first = step
+			break
+		}
+	}
 	toolOK = result.FirstTool == first.ExpectedTool
 	actionOK = result.FirstAction == first.ExpectedAction
 	firstPassOK = result.FirstPass
 	return toolOK, actionOK, firstPassOK
 }
 
+// firstOutcomeCandidateSteps names the steps the first call may legitimately
+// have been, which is every optional step in front of the first required one,
+// and that one.
+//
+// A dynamic discovery step counts as one of those. The catalog is not
+// registered as individual tools on that surface, so reaching an operation
+// takes a find call and then an execute call, and the find step the harness
+// inserts is not optional. Stopping at it made Tool-selection, Action-selection
+// and First-call validation answer "did the model call gitlab_find_action",
+// with FirstAction empty and FirstPass true whenever that call carried a query.
+// On the surface the README publishes, three columns measured discovery and
+// none of them measured the call they are named after; a model that went
+// straight to a correct gitlab_execute_action, which this harness accepts,
+// scored as a tool miss and an action miss.
 func firstOutcomeCandidateSteps(steps []evalStep) []evalStep {
 	candidates := make([]evalStep, 0, len(steps))
 	for _, step := range steps {
 		candidates = append(candidates, step)
-		if !step.OptionalStep {
+		if !step.OptionalStep && !expectedDynamicFindStep(step) {
 			break
 		}
 	}

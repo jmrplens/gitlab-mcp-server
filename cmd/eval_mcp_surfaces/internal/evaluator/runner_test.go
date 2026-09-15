@@ -1122,8 +1122,18 @@ func TestEvaluateTask_ExpectedDynamicFindStep_AdvancesThenExecutes(t *testing.T)
 	if !result.FinalSuccess || result.CompletedSteps != 2 || !result.SchemaLookupUsed {
 		t.Fatalf("result = %+v, want find-then-execute success", result)
 	}
-	if result.FirstTool != dynamicFindTool || result.FinalTool != dynamicExecuteActionTool {
-		t.Fatalf("first/final tool = %s/%s, want find then execute", result.FirstTool, result.FinalTool)
+	// The first outcome is the catalog call, not the discovery in front of it.
+	// It used to be the find call, which made Tool-selection, Action-selection
+	// and First-call validation report whether the model called
+	// gitlab_find_action rather than which operation it chose.
+	if result.FirstTool != dynamicExecuteActionTool || result.FirstAction != actionProjectGet {
+		t.Fatalf("first outcome = %s/%s, want the catalog call", result.FirstTool, result.FirstAction)
+	}
+	if result.DiscoveryCalls != 1 || result.DiscoveryValid != 1 {
+		t.Errorf("discovery counts = %d/%d, want one valid find call recorded apart", result.DiscoveryValid, result.DiscoveryCalls)
+	}
+	if result.FinalTool != dynamicExecuteActionTool {
+		t.Fatalf("final tool = %s, want the execute call", result.FinalTool)
 	}
 }
 

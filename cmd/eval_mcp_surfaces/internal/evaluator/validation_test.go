@@ -330,9 +330,11 @@ func TestRepairPayloadForValidation_DiagnosesWithoutHandingBackTheCall(t *testin
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
 	for _, forbidden := range []string{"retry_envelope", "likely_fix", "gitlab://tools/project.get"} {
-		if strings.Contains(string(data), forbidden) {
-			t.Errorf("the repair payload carries %q: %s", forbidden, data)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(string(data), forbidden) {
+				t.Errorf("the repair payload carries %q: %s", forbidden, data)
+			}
+		})
 	}
 }
 
@@ -384,10 +386,18 @@ func TestRunStaticValidation_ReportsMissingStandaloneAndActionRoutes(t *testing.
 		{ID: "missing", ExpectedTool: "gitlab_project", ExpectedAction: "get"},
 	}
 	results := runStaticValidation(tasks, map[string]toolutil.ActionMap{}, map[string]bool{resourceReadTool: true}, 2)
-	if len(results) != 2 || !results[0].FinalSuccess || results[0].Run != 2 {
-		t.Fatalf("results[0] = %+v, want successful run 2", results[0])
+	// A route check reports how many steps the catalog registers, and sets no
+	// outcome field: it called no model, so it observed no tool choice, no
+	// first call and no completion. It used to set FirstTool, FirstAction,
+	// FirstPass, FinalSuccess and DestructiveSafe from the answer key, which
+	// is how a run that dispatched nothing published 100% for five rates.
+	if len(results) != 2 || results[0].CompletedSteps != 1 || results[0].Run != 2 {
+		t.Fatalf("results[0] = %+v, want run 2 with its one step registered", results[0])
 	}
-	if results[1].FinalSuccess || len(results[1].Notes) == 0 || !strings.Contains(results[1].Notes[0], "missing from catalog") {
+	if results[0].FinalSuccess || results[0].FirstPass || results[0].FirstTool != "" {
+		t.Errorf("results[0] = %+v, want no observed outcome from a run with no model", results[0])
+	}
+	if results[1].CompletedSteps != 0 || len(results[1].Notes) == 0 || !strings.Contains(results[1].Notes[0], "missing from catalog") {
 		t.Fatalf("results[1] = %+v, want missing catalog route note", results[1])
 	}
 }
@@ -1042,8 +1052,11 @@ func TestRunStaticValidation_ValidatesMultiStepRoutes(t *testing.T) {
 	}
 	toolNames := map[string]bool{"gitlab_discover_project": true, "gitlab_project": true, "gitlab_repository": true}
 	results := runStaticValidation(tasks, routes, toolNames, 1)
-	if len(results) != 1 || !results[0].FinalSuccess || results[0].CompletedSteps != 3 {
-		t.Fatalf("results = %+v, want completed multi-step validation", results)
+	if len(results) != 1 || results[0].CompletedSteps != 3 {
+		t.Fatalf("results = %+v, want three registered steps", results)
+	}
+	if results[0].FinalSuccess {
+		t.Errorf("results = %+v, want no completion claimed by a run with no model", results)
 	}
 }
 

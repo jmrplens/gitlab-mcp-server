@@ -186,6 +186,13 @@ const (
 	// question about the surface. V07 deleted that clause, so the column
 	// became a real measurement and takes a name that says so.
 	metricDestructiveSafety = "Unaided confirmation"
+	// modelToolCallingMode is the Mode a report carries when a model was
+	// actually called, and the only one the publish gate accepts.
+	modelToolCallingMode = "model tool-calling"
+	// metricUnaidedCompletion is the rendered label for the rate at which a
+	// task completed with no refusal along the way. It sits beside the final
+	// success figure, which counts a task finished after correcting itself.
+	metricUnaidedCompletion = "Unaided completion"
 	// metricFinalTaskSuccess is the rendered label for the final task
 	// success proxy metric.
 	metricFinalTaskSuccess = "Final task success proxy"

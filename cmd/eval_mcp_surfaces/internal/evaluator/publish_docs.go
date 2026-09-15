@@ -1047,6 +1047,14 @@ func validatePublishReports(reports []publishReport, label string, allowHarnessN
 		if err := requireUncoachedStimulus(report); err != nil {
 			return err
 		}
+		// A run that called no model measured no model. Its report carries
+		// route validation rather than rates now, but refusing it by name is
+		// what stops a future reader of an older one publishing figures that
+		// were never observed: such a report also carries `Stimulus:
+		// uncoached`, so the publish gate had nothing to object to.
+		if strings.TrimSpace(report.Mode) != "" && report.Mode != modelToolCallingMode {
+			return fmt.Errorf("publish input %s was produced in %q mode; only a run that called a model measured anything to publish", report.Path, report.Mode)
+		}
 		if publishSectionForSurface(report.ToolSurface) == publishSectionUnknown {
 			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
 		}

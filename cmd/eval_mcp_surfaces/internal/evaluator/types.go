@@ -264,6 +264,17 @@ type modelError struct {
 
 // taskResult captures task result data for one evaluation task.
 type taskResult struct {
+	// DiscoveryCalls and DiscoveryValid count the dynamic surface's find calls
+	// and the ones that were well formed. They are kept apart from the
+	// first-outcome columns because discovery is a question about the surface
+	// (can a model reach an operation at all) and not about which operation it
+	// chose, and folding the two made three published columns report discovery
+	// under the names of the other question.
+	DiscoveryCalls int
+	DiscoveryValid int
+	// DestructiveReached is true where some call in the run reached the
+	// destructive step's tool and action.
+	DestructiveReached   bool
 	Task                 evalTask
 	Run                  int
 	Model                string
@@ -435,6 +446,10 @@ type validationResult struct {
 	Unknown         []string
 	Forbidden       []string
 	ConfirmMissing  bool
+	// DestructiveReached is true where the call matched a destructive step's
+	// tool and action, which is the only case in which its confirmation says
+	// anything about the surface.
+	DestructiveReached bool
 	// ConfirmRefusal is what a deployment answers this call, in the
 	// deployment's own words, taken from the one place that writes them.
 	ConfirmRefusal string
