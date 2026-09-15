@@ -171,7 +171,7 @@ func TestBaseMutatingPromptTemplate_RendersAttemptNamesWithoutChangingStoredProm
 		t.Fatal("CaseByID(MT-036) = false")
 	}
 	task := taskFromCase(evalCase)
-	if task.Prompt != "Create release with tag_name `v0.0.0-eval`, ref `main`, and name `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`." {
+	if task.Prompt != "Create a release named `v0.0.0-eval` for tag `v0.0.0-eval` from `main` in project `my-org/tools/gitlab-mcp-server`." {
 		t.Fatalf("stored prompt = %q", task.Prompt)
 	}
 	output := attemptNameFixtureOutput(FixtureContext{ModelName: "openai:gpt-5.4-mini", RunIndex: 1, RunSuffix: "abc123"})

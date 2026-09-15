@@ -38,7 +38,7 @@ func enterpriseMutatingEvalCases() []Case {
 		baseEnterpriseMutatingEvalCase("MT-165", "Add merge request IID `7` to the merge train in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab", "merge_train.add", params("project_id", "merge_request_iid"), params("auto_merge", "sha", "squash"))),
 		baseEnterpriseMutatingEvalCase("MT-167", "Add a project push rule to project `my-org/tools/gitlab-mcp-server` that rejects unsigned commits.", readStep("gitlab", "project.push_rule_add", params("project_id"), params("reject_unsigned_commits", "commit_message_regex"))),
 		baseEnterpriseMutatingEvalCase("MT-169", "Update project security settings for project `my-org/tools/gitlab-mcp-server` to enable secret push protection.", readStep("gitlab", "project.security_settings_update", params("project_id", "secret_push_protection_enabled"), nil)),
-		baseEnterpriseMutatingEvalCase("MT-170", "Create project alias `eval-alias` for numeric project ID `123`; do not use a project path for project_id.", readStep("gitlab", "project_alias.create", params("name", "project_id"), nil)),
+		baseEnterpriseMutatingEvalCase("MT-170", "Create project alias `eval-alias` for project ID `123`.", readStep("gitlab", "project_alias.create", params("name", "project_id"), nil)),
 		baseEnterpriseMutatingEvalCase("MT-175", "Create an instance service account named `eval-service-account` with username `eval-service-account`.", readStep("gitlab", "user.create_service_account", params("name", "username"), params("email"))),
 		baseEnterpriseMutatingEvalCase("MT-181", "Create project service account `eval-project-bot` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab", "project.service_account_create", params("project_id"), params("name", "username", "email"))),
 		baseEnterpriseMutatingEvalCase("MT-182", "Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-v2`.", readStep("gitlab", "project.service_account_update", params("project_id", "service_account_id"), params("name", "username", "email"))),
@@ -46,10 +46,10 @@ func enterpriseMutatingEvalCases() []Case {
 		baseEnterpriseMutatingEvalCase("MT-186", "Rotate project service account PAT ID `66` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab", "project.service_account_pat_rotate", params("project_id", "service_account_id", "token_id"), nil)),
 		baseEnterpriseMutatingEvalCase(evalMT192, "Add a project push rule to project `my-org/tools/gitlab-mcp-server` with commit message regex `^EVAL-`.", readStep("gitlab_project", "push_rule_add", params("project_id"), params("commit_message_regex", "reject_unsigned_commits"))),
 		baseEnterpriseMutatingEvalCase("MT-193", "Edit the project push rule in project `my-org/tools/gitlab-mcp-server` to reject unsigned commits.", readStep("gitlab_project", "push_rule_edit", params("project_id"), params("reject_unsigned_commits", "commit_message_regex"))),
-		baseEnterpriseMutatingEvalCase("MT-194", "Update project security settings for project `my-org/tools/gitlab-mcp-server` to set `secret_push_protection_enabled` to true.", readStep("gitlab_project", "security_settings_update", params("project_id", "secret_push_protection_enabled"), nil)),
+		baseEnterpriseMutatingEvalCase("MT-194", "Update project security settings for project `my-org/tools/gitlab-mcp-server` to enable secret push protection.", readStep("gitlab_project", "security_settings_update", params("project_id", "secret_push_protection_enabled"), nil)),
 		baseEnterpriseMutatingEvalCase(evalMT195, "Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-live`.", readStep("gitlab_project", "service_account_update", params("project_id", "service_account_id"), params("name", "username", "email"))),
 		baseEnterpriseMutatingEvalCase(
-			evalMS054, "Exercise Enterprise project mutating settings in project `my-org/tools/gitlab-mcp-server`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `55` to name `eval-project-bot-workflow`.",
+			evalMS054, "Exercise Enterprise project mutating settings in project `my-org/tools/gitlab-mcp-server`: get the project security settings, enable secret push protection, list the project service accounts, then rename project service account user ID `55` to `eval-project-bot-workflow`.",
 			readStep("gitlab_project", "security_settings_get", params("project_id"), nil),
 			readStep("gitlab_project", "security_settings_update", params("project_id", "secret_push_protection_enabled"), nil),
 			readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page")),
@@ -87,7 +87,7 @@ func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (promptTempl
 	case evalMT195:
 		return PromptTemplate{Text: "Update project service account user ID `{{.Values.project_service_account_id}}` in project `{{.Project.Path}}` to name `eval-project-bot-live`."}, []string{fixtureProjectServiceAccount}
 	case evalMS054:
-		return PromptTemplate{Text: "Exercise Enterprise project mutating settings in project `{{.Project.Path}}`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `{{.Values.project_service_account_id}}` to name `eval-project-bot-workflow`."}, []string{fixtureProjectServiceAccount}
+		return PromptTemplate{Text: "Exercise Enterprise project mutating settings in project `{{.Project.Path}}`: get the project security settings, enable secret push protection, list the project service accounts, then rename project service account user ID `{{.Values.project_service_account_id}}` to `eval-project-bot-workflow`."}, []string{fixtureProjectServiceAccount}
 	default:
 		return PromptTemplate{Text: prompt}, nil
 	}

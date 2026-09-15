@@ -74,7 +74,7 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-2",
-			"First look up project `my-org/tools/gitlab-mcp-server` with project.get to confirm it exists, then pull the deployment-frequency DORA metric for that project over the last 30 days. Today is 2026-06-04, so compute the start_date and end_date as YYYY-MM-DD strings and pass them; interval is `daily`. Do not use a `days` or `days_back` parameter. Only the computed start_date and end_date are accepted.",
+			"First check that project `my-org/tools/gitlab-mcp-server` exists by looking it up, then pull its deployment-frequency DORA metric for the 30 days ending today, 2026-06-04, at daily granularity. The metric takes an explicit date range, so work out both dates yourself as YYYY-MM-DD.",
 			readStep("gitlab_project", "get", params("project_id"), nil),
 			readStep("gitlab_dora_metrics", "project", params("project_id", "metric", "start_date", "end_date", "interval"), nil),
 		),
@@ -92,13 +92,13 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-4",
-			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities (the dedicated severity-count endpoint, not a paginated list), then list the project's vulnerabilities using GraphQL-style pagination (pass `first=5` for the page size, do not pass `per_page`, that param is for REST-only endpoints).",
+			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities from the dedicated severity-count endpoint rather than a paginated list, then list the project's vulnerabilities five to a page.",
 			readStep("gitlab_vulnerability", "severity_count", params("project_path"), nil),
 			readStep("gitlab_vulnerability", "list", params("project_path"), params("state", "first")),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-5",
-			"List every project alias on this GitLab instance, then pick the first alias from the list and fetch its full details with project_alias.get (passing the `name` you read from the list output). Report the alias name and the project_id it points to.",
+			"List every project alias on this GitLab instance, then fetch the full details of the first alias in that list by its name. Report the alias name and the ID of the project it points to.",
 			// gitlab_project_alias.list has no per_page in its schema
 			// (the client-go v2 ListProjectAliases entry point takes
 			// only RequestOptionFuncs and no ListOptions). Drop it from
@@ -113,7 +113,7 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-7",
-			"For group `my-org`: first list the open epics using GraphQL-style pagination (pass `first=5` for the page size, do not pass `per_page`, that param is for REST-only endpoints), then fetch the current group iterations in any state.",
+			"For group `my-org`: list its open epics, five to a page, then fetch its iterations in any state.",
 			readStep("gitlab_group", "epic_list", params("full_path"), params("state", "first")),
 			readStep("gitlab", "issue.iteration_list_group", params("group_id"), params("per_page")),
 		),

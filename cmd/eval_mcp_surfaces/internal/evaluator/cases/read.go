@@ -14,10 +14,10 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-022", "Get the trace for job `999` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_job", "trace", params("project_id", "job_id"), nil)),
 		baseReadEvalCase("MT-025", "List CI variables in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_ci_variable", "list", params("project_id"), params("page", "per_page"))),
 		baseReadEvalCase("MT-029", "Get file `README.md` from ref `main` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_repository", "file_get", params("project_id", "file_path", "ref"), nil)),
-		baseReadEvalCase("MT-032", "Search code inside project `my-org/tools/gitlab-mcp-server` for `func RegisterMCPMeta` using that project's `project_id`.", readStep("gitlab_search", "code", params("query", "project_id"), nil)),
+		baseReadEvalCase("MT-032", "Search the code in project `my-org/tools/gitlab-mcp-server` for `func RegisterMCPMeta`.", readStep("gitlab_search", "code", params("query", "project_id"), nil)),
 		baseReadEvalCase("MT-033", "Search all projects for `gitlab-mcp-server`.", readStep("gitlab_search", "projects", params("query"), nil)),
 		baseReadEvalCase("MT-038", "List deploy keys for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_access", "deploy_key_list_project", params("project_id"), params("page", "per_page"))),
-		baseReadEvalCase("MT-040", "First use gitlab_find_action to locate the server health check action, then execute the GitLab connectivity check for the MCP server.", readStep("gitlab_server", "health_check", nil, nil)),
+		baseReadEvalCase("MT-040", "Check that the MCP server can reach GitLab.", readStep("gitlab_server", "health_check", nil, nil)),
 		baseReadEvalCase("MT-043", "List generic packages in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_package", "list", params("project_id"), params("package_type", "per_page"))),
 		baseReadEvalCase("MT-045", "List online project runners for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_runner", "list_project", params("project_id"), params("status"))),
 		baseReadEvalCase("MT-048", "List available environments in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_environment", "list", params("project_id"), params("states"))),
@@ -50,13 +50,13 @@ func readEvalCases() []Case {
 			readStep("gitlab_get_prompt", "", params("name"), nil),
 		),
 		baseReadEvalCase(
-			"MT-203", "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).",
+			"MT-203", "Retrieve the current user info, then request MCP completions for argument `state` of prompt `my_issues`.",
 			readStep("gitlab_user", "current", nil, nil),
 			readStep("gitlab_complete", "", params("ref_type", "name", "argument_name"), params("argument_value")),
 		),
 		baseReadEvalCase("MT-204", "List issues with status `closed` created in the last 60 days in project `my-org/tools/gitlab-mcp-server`, ordered by creation date.", readStep("gitlab_issue", "list", params("project_id"), params("state", "order_by", "sort", "created_after", "per_page"))),
 		baseReadEvalCase(
-			"MT-205", "For project `my-org/tools/gitlab-mcp-server`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for the returned pipeline ID and list job statuses.",
+			"MT-205", "For project `my-org/tools/gitlab-mcp-server`, list the pipelines on branch `main`, then list the jobs of the first pipeline returned with their statuses.",
 			readStep("gitlab_pipeline", "list", params("project_id"), params("ref", "per_page")),
 			readStep("gitlab_job", "list", params("project_id", "pipeline_id"), params("scope", "per_page")),
 		),
@@ -108,10 +108,10 @@ func artifactDownloadEvalCase() Case {
 func environmentLastDeploymentEvalCase() Case {
 	evalCase := baseReadEvalCase(
 		"MS-ENV-DEP-1",
-		"Get the environment `eval-deploy` (environment_id provided) in project `my-org/tools/gitlab-mcp-server` and report its last deployment's commit SHA and status.",
+		"Get environment `eval-deploy` (ID `7`) in project `my-org/tools/gitlab-mcp-server` and report its last deployment's commit SHA and status.",
 		readStep("gitlab_environment", "get", params("project_id", "environment_id"), nil),
 	)
-	evalCase.PromptTemplate = PromptTemplate{Text: "Get the environment `{{ .Environment.Name }}` (environment_id `{{ .Values.environment_id }}`) in project `{{ .Project.Path }}` and report its last deployment's commit SHA and status."}
+	evalCase.PromptTemplate = PromptTemplate{Text: "Get environment `{{ .Environment.Name }}` (ID `{{ .Values.environment_id }}`) in project `{{ .Project.Path }}` and report its last deployment's commit SHA and status."}
 	evalCase.Fixtures = []string{fixtureEnvironmentDeployment}
 	evalCase.Assertions = []Assertion{
 		outputContainsAssertion(1, "environment last deployment evidence", "{{ .Values.deployment_sha }}", "running"),
@@ -125,10 +125,10 @@ func environmentLastDeploymentEvalCase() Case {
 func deploymentGetEvalCase() Case {
 	evalCase := baseReadEvalCase(
 		"MS-ENV-DEP-2",
-		"Get the deployment by ID (provided) in project `my-org/tools/gitlab-mcp-server` and report its ref and status.",
+		"Get deployment ID `77` in project `my-org/tools/gitlab-mcp-server` and report its ref and status.",
 		readStep("gitlab_environment", "deployment_get", params("project_id", "deployment_id"), nil),
 	)
-	evalCase.PromptTemplate = PromptTemplate{Text: "Get the deployment with deployment_id `{{ .Values.deployment_id }}` in project `{{ .Project.Path }}` and report its ref and status."}
+	evalCase.PromptTemplate = PromptTemplate{Text: "Get deployment ID `{{ .Values.deployment_id }}` in project `{{ .Project.Path }}` and report its ref and status."}
 	evalCase.Fixtures = []string{fixtureEnvironmentDeployment}
 	evalCase.Assertions = []Assertion{
 		outputContainsAssertion(1, "deployment ref and status evidence", "{{ .Values.deployment_ref }}", "running"),
@@ -178,11 +178,11 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 	case "MT-202":
 		return "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.", nil
 	case "MT-203":
-		return "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).", nil
+		return "Retrieve the current user info, then request MCP completions for argument `state` of prompt `my_issues`.", nil
 	case "MT-204":
 		return "List issues with status closed created in the last 60 days in project `{{ .Project.Path }}`, ordered by creation date.", []string{fixtureIssue}
 	case "MT-205":
-		return "For project `{{ .Project.Path }}`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for pipeline `{{ .Pipeline.ID }}` and list job statuses.", []string{fixturePipelineJob}
+		return "For project `{{ .Project.Path }}`, list the pipelines on branch `main`, then list the jobs of pipeline `{{ .Pipeline.ID }}` with their statuses.", []string{fixturePipelineJob}
 	case "MT-206":
 		return "Find issues labeled bug and in milestone v2.0 for project `{{ .Project.Path }}`.", []string{fixtureIssue}
 	case "MT-207":
