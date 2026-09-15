@@ -192,23 +192,32 @@ func writeRecordStates(b *strings.Builder, doc *coverageRecord) {
 			continue
 		}
 		b.WriteString("### " + key + "\n\n")
-		b.WriteString(renderStateTable("Surface", entry.Summary.States, surfaceOrder))
+		b.WriteString(renderStateTable("Surface", entry.Summary.States))
 		b.WriteString("\n")
 		if len(entry.Summary.Capabilities) > 0 {
 			b.WriteString("Resources, prompts, completions, subscriptions and the protective " +
 				"modes, classified on the same terms:\n\n")
-			b.WriteString(renderStateTable("Capability", entry.Summary.Capabilities, nil))
+			b.WriteString(renderStateTable("Capability", entry.Summary.Capabilities))
 			b.WriteString("\n")
 		}
 	}
 }
 
-// renderStateTable draws one histogram with a column per state.
+// renderStateTable draws one histogram with a column per state, and is the one
+// implementation of that table: [writeStateTable], which is what a run's
+// Markdown summary puts in GITHUB_STEP_SUMMARY, prints what this returns.
 //
 // The columns are every state, in the order [markdownStates] fixes, even the
 // ones no runtime reached: a column that came and went with the data would
 // make every refresh a diff of the header as well as of the figures.
-func renderStateTable(first string, histogram map[string]map[state]int, order func(string) int) string {
+//
+// The rows are ordered by [surfaceOrder] and then by name, which is right for
+// both callers rather than a surface-table rule imposed on the capability
+// table: surfaceOrder ranks everything that is not one of the three surfaces
+// the same, so the capability keys fall through to alphabetical on their own.
+// It used to take an order function for that, and the only two arguments ever
+// passed produced identical output.
+func renderStateTable(first string, histogram map[string]map[state]int) string {
 	headers := make([]string, 0, len(markdownStates)+1)
 	headers = append(headers, first)
 	alignments := make([]docgen.Alignment, 0, len(markdownStates)+1)
@@ -222,8 +231,8 @@ func renderStateTable(first string, histogram map[string]map[state]int, order fu
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		if order != nil && order(keys[i]) != order(keys[j]) {
-			return order(keys[i]) < order(keys[j])
+		if surfaceOrder(keys[i]) != surfaceOrder(keys[j]) {
+			return surfaceOrder(keys[i]) < surfaceOrder(keys[j])
 		}
 		return keys[i] < keys[j]
 	})
@@ -260,8 +269,16 @@ This page is a rendering, so it needs no GitLab:
 
 ` + "```bash" + `
 ` + pageRegenerate + `  # redraw from the committed record
-make check-e2e-coverage-record   # the offline gate CI runs
+make check-e2e-coverage-page     # is this page what the record renders to
+make check-e2e-coverage-record   # are the recorded figures themselves sound
 ` + "```" + `
+
+CI runs both, and on different terms. The record is judged on every push,
+because nothing in this repository can regenerate those figures and a stale one
+is the only thing left to catch. The page is judged only where the freshness
+gates apply, because the renderer that draws it is code here: a change to it
+makes this file stale on purpose, and the layer that refreshes it is the one
+that should be asked.
 `)
 }
 

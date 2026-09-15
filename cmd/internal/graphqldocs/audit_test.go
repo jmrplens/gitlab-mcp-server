@@ -148,6 +148,27 @@ func TestJudge_DocumentsTheCallerAlreadyHolds_AreRefusedOnTheSameTerms(t *testin
 	}
 }
 
+// TestJudge_ASchemaItCannotRead_Fails verifies that the caller holding its own
+// documents gets the same refusal [Audit] gives.
+//
+// The failure matters more on this entry than on that one. A caller here has
+// already paid for a load of somebody else's module, so falling back to the pin
+// when the schema it named could not be read would answer a question nobody
+// asked, and answer it as a clean run over documents the named schema never
+// saw.
+func TestJudge_ASchemaItCannotRead_Fails(t *testing.T) {
+	documents := []Document{{Package: "sdk", Name: "accepted", Text: "query { currentUser { id } }"}}
+
+	_, err := Judge(documents, Options{SchemaPath: filepath.Join(t.TempDir(), "absent.graphql")})
+
+	if err == nil {
+		t.Fatal("Judge() error = nil, want the unreadable schema reported")
+	}
+	if !strings.Contains(err.Error(), "read the schema to judge against") {
+		t.Errorf("Judge() error = %q, want it to name the schema it could not read", err)
+	}
+}
+
 // TestAudit_SourceItCannotRead_Fails verifies that a load failure ends the run
 // rather than being reported as a tree with no documents in it.
 func TestAudit_SourceItCannotRead_Fails(t *testing.T) {

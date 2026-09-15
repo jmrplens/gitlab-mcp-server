@@ -13,6 +13,7 @@ package harness
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,8 +28,10 @@ import (
 // ordinary run free: with the variable absent, no directory is resolved, no
 // directory is created and a child carries no GOCOVERDIR.
 //
-// A child given an empty one would not be silent about it: the runtime reports
-// at exit that it could not write, on the stderr a failing call quotes.
+// A child given an empty one would not be silent about it: the runtime warns
+// on its stderr the moment it starts, from the meta-data emit that runs in the
+// main package's init, so the line would head every child's log for the whole
+// run rather than appear once at the end.
 func TestCoverageDir_Unset_MeasuresNothing(t *testing.T) {
 	dir, err := coverageDir(testSettings(map[string]string{}))
 	if err != nil {
@@ -155,6 +158,110 @@ func TestCountCoverageCounters_MetaData_IsNotCounted(t *testing.T) {
 	}
 	if got != 2 {
 		t.Fatalf("countCoverageCounters() = %d, want 2", got)
+	}
+}
+
+// TestReportCoverage_Unset_SaysNothing checks that a run measuring nothing
+// logs nothing about coverage.
+//
+// The report is called at the end of every package, measured or not, so a line
+// here would appear in the log of every ordinary run and say only that the run
+// was ordinary.
+func TestReportCoverage_Unset_SaysNothing(t *testing.T) {
+	logged := captureLog(t)
+
+	reportCoverage(testSettings(map[string]string{}))
+
+	if logged.String() != "" {
+		t.Fatalf("a run with no coverage directory logged %q", logged.String())
+	}
+}
+
+// TestReportCoverage_FewerCountersThanChildren_NamesTheShortfall covers the
+// one line that makes a regression of the whole termination seam visible.
+//
+// A child that is killed rather than asked to stop runs no exit hook, so it
+// writes its meta-data at startup and never its counters, and the merged
+// profile is quietly short by everything that child executed. Nothing else in
+// a run says so: the profile is a smaller number than it should be, and a
+// smaller number is exactly what a run that covered less looks like. So the
+// count of counter files against the count of children started is the whole
+// detection, and it is asserted here on the log it is written to.
+//
+// The started count is stored and restored rather than driven through real
+// children: it is a package-level counter every launched child increments, no
+// test in this package runs in parallel, and a real child per case would cost
+// a build and a launch to move one integer.
+func TestReportCoverage_FewerCountersThanChildren_NamesTheShortfall(t *testing.T) {
+	before := childrenStarted.Load()
+	t.Cleanup(func() { childrenStarted.Store(before) })
+
+	cases := []struct {
+		name     string
+		started  int64
+		counters int
+		named    []string
+		unwanted []string
+	}{
+		{
+			name:     "every child wrote",
+			started:  2,
+			counters: 2,
+			named:    []string{"holds 2 counter files", "started 2 server children"},
+			unwanted: []string{"wrote none"},
+		},
+		{
+			name:     "two children wrote nothing",
+			started:  3,
+			counters: 1,
+			named:    []string{"holds 1 counter files", "at least 2 children wrote none"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for i := range testCase.counters {
+				name := fmt.Sprintf("%s4e5c1f.%d.16789", counterFilePrefix, i)
+				if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+					t.Fatalf("planting %s: %v", name, err)
+				}
+			}
+			childrenStarted.Store(testCase.started)
+			logged := captureLog(t)
+
+			reportCoverage(testSettings(map[string]string{coverDirEnv: dir}))
+
+			for _, want := range testCase.named {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("the log does not say %q: %s", want, logged.String())
+				}
+			}
+			for _, unwanted := range testCase.unwanted {
+				if strings.Contains(logged.String(), unwanted) {
+					t.Errorf("the log says %q for a run that lost nothing: %s", unwanted, logged.String())
+				}
+			}
+		})
+	}
+}
+
+// TestReportCoverage_UnreadableDirectory_SaysWhichOne checks that a directory
+// the report cannot read is reported as that, rather than counted as zero
+// counter files and reported as a run in which every child died.
+func TestReportCoverage_UnreadableDirectory_SaysWhichOne(t *testing.T) {
+	notADirectory := filepath.Join(t.TempDir(), "counters")
+	if err := os.WriteFile(notADirectory, []byte("x"), 0o600); err != nil {
+		t.Fatalf("planting a file where a directory is expected: %v", err)
+	}
+	logged := captureLog(t)
+
+	reportCoverage(testSettings(map[string]string{coverDirEnv: notADirectory}))
+
+	if !strings.Contains(logged.String(), notADirectory) {
+		t.Errorf("the log does not name the directory it could not read: %s", logged.String())
+	}
+	if strings.Contains(logged.String(), "wrote none") {
+		t.Errorf("an unreadable directory was reported as children that wrote nothing: %s", logged.String())
 	}
 }
 

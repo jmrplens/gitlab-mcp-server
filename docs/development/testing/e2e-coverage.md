@@ -124,5 +124,13 @@ This page is a rendering, so it needs no GitLab:
 
 ```bash
 make e2e-coverage-record-render  # redraw from the committed record
-make check-e2e-coverage-record   # the offline gate CI runs
+make check-e2e-coverage-page     # is this page what the record renders to
+make check-e2e-coverage-record   # are the recorded figures themselves sound
 ```
+
+CI runs both, and on different terms. The record is judged on every push,
+because nothing in this repository can regenerate those figures and a stale one
+is the only thing left to catch. The page is judged only where the freshness
+gates apply, because the renderer that draws it is code here: a change to it
+makes this file stale on purpose, and the layer that refreshes it is the one
+that should be asked.

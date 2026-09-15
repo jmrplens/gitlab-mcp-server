@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // stableHashLength is how many hexadecimal characters of a SHA-256 sum a
@@ -26,10 +28,6 @@ import (
 // path limits and long enough that two names minted in one afternoon do not
 // collide.
 const stableHashLength = 10
-
-// runIDStampLayout is the UTC timestamp a run ID opens with, lowercased so the
-// whole identifier is a legal GitLab path segment.
-const runIDStampLayout = "20060102t150405z"
 
 // unsafeChars matches everything GitLab refuses in a path segment, once the
 // name has been lowercased and its separators turned into dashes.
@@ -90,7 +88,7 @@ func sanitizeNamePrefix(prefix string) string {
 // leftovers it is looking at.
 func newRunID(now time.Time, pkg string) string {
 	source := fmt.Sprintf("%d-%d-%d", now.UnixNano(), os.Getpid(), runIDCounter.Add(1))
-	return withPackage(now.UTC().Format(runIDStampLayout)+"-"+shortStableHash(source), pkg)
+	return withPackage(now.UTC().Format(e2ecalls.RunIDStampLayout)+"-"+shortStableHash(source), pkg)
 }
 
 // configuredRunID returns the sanitized override when one was given, and a

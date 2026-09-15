@@ -33,6 +33,13 @@
 // worked too, and would have made every fast-path run pay a docker probe and
 // then report a skip that means nothing to anyone reading CI output.
 //
+// One scheduled job does run the tag: the race gate
+// (.github/workflows/race.yml), weekly and at every release, which wants
+// exactly the modules that drive the binary as a process and can pay for an
+// image pull at that cadence. That is also what keeps the build seam below
+// honest, since a `go test -race` half nothing ever compiles is a half that
+// rots.
+//
 // # Why the harness is duplicated rather than shared
 //
 // This is the third small build-and-drive harness in test/e2e, after http and
@@ -67,6 +74,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -94,11 +102,15 @@ var (
 
 // binaryEnv names a server already built, to drive instead of building one.
 //
-// The Makefile's Docker targets build cmd/server once and hand it to every
-// package that drives it, and until this was read here the three transport
-// modules were the packages that ignored it: a run that had already staged a
-// binary still paid for a compile per module. The variable now means the same
-// thing in all four places.
+// The Makefile's e2e targets build cmd/server once and hand it to every package
+// that drives it, and until this was read here the three transport modules were
+// the packages that ignored it: a run that had already staged a binary still
+// paid for a compile per module. What the variable means is the same in all
+// four places; how it is resolved is not. The harness reads it through the
+// run's settings, which overlay .env and test/e2e/.env.docker on the process
+// environment, so a value written in one of those files reaches it. Here it is
+// the process environment and nothing else — a Makefile target's export, or a
+// caller's own — and an entry in .env reaches this module through neither.
 const binaryEnv = "E2E_SERVER_BINARY"
 
 // serverBinary returns the path of the server these tests drive: the one
@@ -120,17 +132,56 @@ func serverBinary(t *testing.T) string {
 		if refusal := prebuiltBinaryRefusal(); refusal != "" {
 			t.Fatalf("%s names %s, which cannot be used: %s", binaryEnv, prebuilt, refusal)
 		}
-		//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
-		if _, err := os.Stat(prebuilt); err != nil {
+		staged, err := stagedBinary(prebuilt)
+		if err != nil {
 			t.Fatalf("%s names %s, which cannot be used: %v", binaryEnv, prebuilt, err)
 		}
-		return prebuilt
+		return staged
 	}
 	bin, err := buildServerBinary()
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 	return bin
+}
+
+// stagedBinary resolves what E2E_SERVER_BINARY names to an absolute path this
+// harness can execute, or says why it cannot.
+//
+// Absolute, because the path is executed rather than only read, and a relative
+// one names two different files: os.Stat resolves it against the process's
+// working directory and exec resolves it against whatever Cmd.Dir a case
+// chooses. Nothing here chooses one today, so resolving changes no behavior
+// in this module; it keeps the file that was checked and the file that runs
+// the same file the moment something does, which is the shape that bit the
+// stdio module.
+//
+// Regular and executable, because a stat alone accepts a directory and a file
+// nothing can run. An operator who pointed the variable at the staging
+// directory rather than at the binary inside it got "fork/exec …: permission
+// denied" out of cmd.Start, which names neither the variable nor what is wrong
+// with what it names, and saying both is the whole reason this check exists
+// rather than being left to exec.
+func stagedBinary(prebuilt string) (string, error) {
+	abs, err := filepath.Abs(prebuilt)
+	if err != nil {
+		return "", err
+	}
+	//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("it is not a regular file (mode %s)", info.Mode())
+	}
+	// Windows has no executable bit — os.Stat reports 0666 or 0444 there, from
+	// the read-only attribute — so this half of the check would refuse every
+	// staged binary on that platform rather than the ones that cannot run.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		return "", fmt.Errorf("it is not executable (mode %s)", info.Mode())
+	}
+	return abs, nil
 }
 
 // buildServerBinary builds cmd/server once for the whole package.
@@ -248,7 +299,9 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 
 	// The process is waited on once, here, and the result published by closing
 	// rather than by sending: everything that asks whether the server is still
-	// there has to be able to ask, and a value can only be taken once.
+	// there has to be able to ask, and a value can only be taken once. The
+	// wait's own error is recorded beside it, which is safe to read once the
+	// close has been observed.
 	//
 	// Cmd.Wait rather than os.Process.Wait, which is what the stdio module
 	// reaps with: stdout and stderr here are an io.Writer, so exec runs its own
@@ -256,13 +309,30 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 	// closes the parent ends of the pipes. Reaping the process directly would
 	// close the channel before the last lines were copied and leak two
 	// descriptors per start.
+	var waitErr error
 	exited := make(chan struct{})
 	go func() {
-		_ = cmd.Wait()
+		waitErr = cmd.Wait()
 		close(exited)
 	}()
 
 	t.Cleanup(func() {
+		// Asked before the server is told to stop, because an exit after the
+		// cancel is the one this harness asked for and says nothing. A process
+		// already gone at this point went on its own, which under
+		// GORACE=halt_on_error=1 is what a race report looks like: the report
+		// can land after the export this test asserts on was already parsed by
+		// the collector, so every assertion passes, the output goes to the
+		// buffer of a test nobody prints, and the exit status is the only thing
+		// left saying anything happened. waitHealthy watches for the same
+		// thing and stops watching the moment the server answers, which is
+		// before any test has driven a single call.
+		select {
+		case <-exited:
+			t.Errorf("the server exited on its own during the test (%s), which no test here asks it to do:\n%s",
+				describeExit(waitErr, cmd), srv.logs())
+		default:
+		}
 		// Cancel first, then wait: the process flushes its last telemetry
 		// batch on the way out, and a test that killed it without waiting
 		// would race that flush against its own assertions. Waiting on the
@@ -275,6 +345,23 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 
 	waitHealthy(t, srv, exited)
 	return srv
+}
+
+// describeExit names how the process ended: its recorded status when there is
+// one, and the error from the wait otherwise.
+//
+// The status is what to report. A server that handles its termination signal
+// exits 0, so the wait error alone says "<nil>" about a process that is
+// certainly gone, which is the least useful thing a message about an exit could
+// say.
+func describeExit(waitErr error, cmd *exec.Cmd) string {
+	if state := cmd.ProcessState; state != nil {
+		return state.String()
+	}
+	if waitErr != nil {
+		return waitErr.Error()
+	}
+	return "exit status not recorded"
 }
 
 // lockedWriter serializes writes from the process's two pipes into one buffer

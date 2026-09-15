@@ -302,6 +302,19 @@ func (r *spanReceiver) absorb(export *coltracepb.ExportTraceServiceRequest) {
 // rather than merged. Counting it is the whole of the per-action observation
 // this record exists to make possible, and keeping it out of the merge is what
 // stops a failed GitLab call from writing its own error.type over the server's.
+//
+// Every other client span is dropped, and the rule is the span kind rather
+// than "is it GitLab" for a reason the GitLab case makes visible only by
+// accident. The outbound transport is not the server's only producer of client
+// spans: [mcpotel.SendingMiddleware] opens one per server-initiated request —
+// an elicitation, a sampling call, a progress notification — and a failed one
+// carries error.type and no http.request.method, so a rule that merged
+// whatever is not a GitLab request would write that error over the server's
+// facts, mark the trace dispatch-observed before the server span landed, and
+// have [spanReceiver.lookup] report arrival from a span that names no action.
+// The merge wants the server span; asking for SPAN_KIND_SERVER outright is the
+// cleaner spelling of that and is not what this does, because a span built by
+// hand leaves Kind unset and every stub in the tests would stop being merged.
 func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	traceID := hex.EncodeToString(span.GetTraceId())
 	if traceID == "" {
@@ -322,6 +335,9 @@ func (r *spanReceiver) absorbSpan(span *tracepb.Span) {
 	if request {
 		kept.requests++
 		r.seen[traceID] = kept
+		return
+	}
+	if span.GetKind() == tracepb.Span_SPAN_KIND_CLIENT {
 		return
 	}
 	kept.dispatch = kept.dispatch.merge(facts)

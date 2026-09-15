@@ -271,8 +271,8 @@ func TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction(t *testing.
 	}, graphqldocs.Result{})
 	withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
 		return []e2ecalls.Record{
-			dispatchRecordOf("issue.list", 1, ""),
-			dispatchRecordOf("issue.get", 0, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4731", "issue.list", 1, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4732", "issue.get", 0, ""),
 		}, nil
 	})
 

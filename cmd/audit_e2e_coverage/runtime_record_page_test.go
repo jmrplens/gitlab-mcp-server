@@ -43,8 +43,10 @@ func TestRenderRecordPage_MatchesTheRecord(t *testing.T) {
 			}
 		})
 	}
-	// The ce fixture records no commit git could resolve, so its cell is the
-	// em dash rather than a truncated value that reads like a revision.
+	// The ce fixture records deadbeef, which is shorter than the abbreviation
+	// the ee row is cut to, so it is printed whole: a recorded revision is
+	// never padded out to look longer than it is, and never cut to a width it
+	// is already under.
 	if !strings.Contains(page, "`deadbeef`") {
 		t.Error("the page does not carry the ce fixture's short commit")
 	}

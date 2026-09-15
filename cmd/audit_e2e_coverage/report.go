@@ -416,37 +416,23 @@ var markdownStates = []state{
 	stateCleanupOnly, stateUnasserted, stateUnservable, stateSkipped, stateFailed, stateAbsent,
 }
 
-// writeStateTable writes one histogram table.
+// writeStateTable writes one histogram table into the run's Markdown summary.
+//
+// It prints what [renderStateTable] draws for the committed page rather than
+// spelling the same columns, the same order and the same cells a second time.
+// The two differ only in padding and in the backticks around a key, neither of
+// which any reader of either document can tell apart from the other; what a
+// second spelling would differ in eventually is the columns, which is the
+// drift this is here to prevent.
+//
+// The empty-histogram guard stays: a run's summary is a section of a document
+// other steps also write into, and a header with no rows under it reads as a
+// table whose data went missing.
 func writeStateTable(w io.Writer, first string, histogram map[string]map[state]int) {
 	if len(histogram) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "\n| %s |", first)
-	for _, s := range markdownStates {
-		fmt.Fprintf(w, " %s |", s)
-	}
-	fmt.Fprint(w, "\n| --- |")
-	for range markdownStates {
-		fmt.Fprint(w, " ---: |")
-	}
-	fmt.Fprintln(w)
-	keys := make([]string, 0, len(histogram))
-	for key := range histogram {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if surfaceOrder(keys[i]) != surfaceOrder(keys[j]) {
-			return surfaceOrder(keys[i]) < surfaceOrder(keys[j])
-		}
-		return keys[i] < keys[j]
-	})
-	for _, key := range keys {
-		fmt.Fprintf(w, "| %s |", key)
-		for _, s := range markdownStates {
-			fmt.Fprintf(w, " %d |", histogram[key][s])
-		}
-		fmt.Fprintln(w)
-	}
+	fmt.Fprint(w, "\n"+renderStateTable(first, histogram))
 }
 
 // writeVerdicts writes the check and baseline verdicts when the run asked

@@ -363,7 +363,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 		// and never listened. Left alone it holds the port for the rest of
 		// the run, and the next session asking for a free one can be handed
 		// this same address.
-		stopChild(cmd, exited)
+		p.stopChild(cmd)
 		return nil, fmt.Errorf("%w\nserver stderr:\n%s", err, p.stderrTail())
 	}
 	return &mcp.StreamableClientTransport{
@@ -458,6 +458,15 @@ const (
 	// childrenExitBudget bounds the whole end-of-run wait, not one child's:
 	// they are all signaled at once and shut down at once, so a per-child
 	// bound would multiply by however many shapes the run started.
+	//
+	// It covers the phase after the cancel and not the Close loop that runs
+	// first. Each session's Close reaches the SDK's own pipe teardown, which
+	// waits for the exit, then sends SIGTERM and waits again, then kills and
+	// waits again: up to three times its TerminateDuration, 15 s at the SDK's
+	// default, for one stdio child, and serially. A healthy child exits on
+	// EOF in a few hundred milliseconds, so the loop is only the shape of the
+	// teardown when a child has wedged -- which is also when go test's own
+	// timeout is likeliest to fire mid-teardown and take the counters with it.
 	childrenExitBudget = 30 * time.Second
 )
 
@@ -516,15 +525,16 @@ func (p *serverProcess) waitForExit(deadline time.Time) bool {
 // A kill rather than an interrupt, because the child never reached the state
 // where it answers anything and there is nothing to shut down gracefully;
 // Windows has no interrupt to send it either.
-func stopChild(cmd *exec.Cmd, exited <-chan struct{}) {
+//
+// The wait is waitForExit's, so there is one bounded wait on p.exited in this
+// package rather than a second spelling of the same select: this one is the
+// same wait under childStopTimeout with a kill in front of it.
+func (p *serverProcess) stopChild(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return
 	}
 	_ = cmd.Process.Kill()
-	select {
-	case <-exited:
-	case <-time.After(childStopTimeout):
-	}
+	p.waitForExit(time.Now().Add(childStopTimeout))
 }
 
 // reap starts the one goroutine that collects the child.

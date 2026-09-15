@@ -400,6 +400,77 @@ func TestSettingsWith_ChangesOneValueAndLeavesTheOriginal(t *testing.T) {
 	}
 }
 
+// TestWaitForChildren_OneThatWouldNotStop_IsNamedInTheLog covers the wait that
+// stands between the cancel and the two deletions that follow it.
+//
+// closeSessions removes the session root and the built binary the moment this
+// returns, and both of those are files a child is still using: the root is its
+// home and working directory, and the binary is what it is executing. So the
+// wait has to end when the children have been collected and has to end anyway
+// when one of them will not stop, and a child that outlasted the budget has to
+// be named, since that is the only record anything keeps of it.
+//
+// Driven with fabricated processes and a budget of milliseconds: what is under
+// test is which channel states end the wait and what the line says, not how
+// long the real thirty seconds is.
+func TestWaitForChildren_OneThatWouldNotStop_IsNamedInTheLog(t *testing.T) {
+	collected := make(chan struct{})
+	close(collected)
+
+	cases := []struct {
+		name     string
+		procs    []*serverProcess
+		named    []string
+		unwanted []string
+	}{
+		{
+			name: "every child collected",
+			procs: []*serverProcess{
+				{label: "never-started"},
+				{label: "collected", exited: collected},
+			},
+			unwanted: []string{"still running", "never-started", "collected"},
+		},
+		{
+			name: "one child wedged",
+			procs: []*serverProcess{
+				{label: "collected", exited: collected},
+				{label: "wedged", exited: make(chan struct{})},
+			},
+			named:    []string{"still running", "wedged"},
+			unwanted: []string{"collected"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			logged := captureLog(t)
+
+			const budget = 20 * time.Millisecond
+			// A ceiling far above the budget rather than just above it: what
+			// would fail here is a wait that never ends, and a tight bound
+			// would fail on a loaded machine instead.
+			const ceiling = 5 * time.Second
+
+			started := time.Now()
+			waitForChildren(testCase.procs, budget)
+			if elapsed := time.Since(started); elapsed > ceiling {
+				t.Fatalf("waitForChildren() took %s under a %s budget", elapsed, budget)
+			}
+
+			for _, want := range testCase.named {
+				if !strings.Contains(logged.String(), want) {
+					t.Errorf("the log does not mention %q: %s", want, logged.String())
+				}
+			}
+			for _, unwanted := range testCase.unwanted {
+				if strings.Contains(logged.String(), unwanted) {
+					t.Errorf("the log mentions %q, which stopped: %s", unwanted, logged.String())
+				}
+			}
+		})
+	}
+}
+
 // TestSession_HTTPTransport_StartsAndAnswers checks that a session asking for
 // HTTP gets one, rather than being silently downgraded to the transport the
 // launcher finds easier.

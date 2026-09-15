@@ -77,11 +77,11 @@ jobs:
           GITLAB_MCP_TEST_INVENTORY_DIR: ${{ runner.temp }}/request-inventory-race
         run: go test -race -count=1 -timeout 60m ./cmd/... ./internal/...
 
-  # The two transport modules, which are here because they are the only tests
-  # that drive the shipped binary as a process. `go test -race` instruments the
-  # test binary alone, so on its own it would watch the harness and say nothing
-  # about the server, which is the half worth watching: the harness passes the
-  # detector on to the binary it builds through a build-tag seam
+  # The three modules that drive the shipped binary as a process, which is why
+  # they are here and the rest of the suite is not. `go test -race` instruments
+  # the test binary alone, so on its own it would watch the harness and say
+  # nothing about the server, which is the half worth watching: each harness
+  # passes the detector on to the binary it builds through a build-tag seam
   # (harness_race_test.go in each module), and sets GORACE=halt_on_error=1 so a
   # detected race stops the server rather than being printed into a log nobody
   # reads.
@@ -92,25 +92,38 @@ jobs:
   # and reporting no race for that reason. The modules refuse the variable under
   # the detector rather than trusting this comment.
   #
+  # The collector module is here although it is deliberately absent from the
+  # push-triggered jobs in ci.yml, which run httpe2e and stdioe2e and never it.
+  # What keeps it out of those is that it pulls a container image, a cost every
+  # commit would pay; a weekly run and a release gate pay it once. Leaving it
+  # out here instead would mean its seam — the -race build, the halt, the
+  # refusal of a staged binary — was compiled by nothing in the repository and
+  # exercised by nothing, which is how a file rots unnoticed. Without a usable
+  # Docker, or when the image cannot be pulled, the module skips with its reason
+  # rather than failing, so a registry outage cannot block a release here.
+  #
   # A race build shares no cache with an ordinary one, so the first build is a
   # cold build of the whole dependency tree. It is done here rather than inside
   # the test's five-minute bound.
   transport:
-    name: "🏁 Race (${{ matrix.name }} transport e2e)"
+    name: "🏁 Race (${{ matrix.name }})"
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
-      # Both modules report. Stopping at the first failure would hide a second,
-      # different one.
+      # Every module reports. Stopping at the first failure would hide a
+      # second, different one.
       fail-fast: false
       matrix:
         include:
-          - name: HTTP
+          - name: HTTP transport e2e
             tag: httpe2e
             dir: ./test/e2e/http/
-          - name: stdio
+          - name: stdio transport e2e
             tag: stdioe2e
             dir: ./test/e2e/stdio/
+          - name: collector e2e
+            tag: collectore2e
+            dir: ./test/e2e/collector/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -125,7 +138,7 @@ jobs:
       # module's runtime is dominated by a per-test cost that the detector
       # multiplies. The bound is here to end a hang with goroutine stacks, not
       # to express how long the module should take.
-      - name: Transport module under the race detector
+      - name: Module under the race detector
         env:
           TAG: ${{ matrix.tag }}
           DIR: ${{ matrix.dir }}

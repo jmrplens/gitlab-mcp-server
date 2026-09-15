@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // The committed artifacts, relative to the repository root.
@@ -56,6 +57,19 @@ var recordRuntimes = []string{"ce", "ee"}
 // record is a coverage claim about a catalog that no longer exists, and the
 // only honest way to say so is to fail.
 const recordMaxAge = 90 * 24 * time.Hour
+
+// recordNoticeAge is when the window starts being announced: from here to
+// [recordMaxAge] the age is a note that prints and exits zero, and only the
+// expiry itself is a finding.
+//
+// A deadline should be visible before it stops the repository. Clearing this
+// one is `make test-e2e-ce` plus `make test-e2e-ee` plus a record write, and
+// the licensed half needs an activation code that is deliberately not in CI,
+// so on the day the window closes every open pull request goes red at once
+// over something no contributor can fix. A fortnight is about the notice a
+// maintainer needs to schedule two hour-long Docker runs, and a note on every
+// push in that fortnight is how they hear about it.
+const recordNoticeAge = recordMaxAge - 14*24*time.Hour
 
 // coverageRecord is the committed per-runtime summary.
 //
@@ -179,19 +193,16 @@ func oneCommit(rep *report) error {
 		len(seen), strings.Join(named, "; "))
 }
 
-// runIDStampLayout is the UTC timestamp a run ID opens with, spelled the way
-// the harness formats it. It is duplicated here rather than exported from the
-// harness because the harness is under the e2e build tag and this command is
-// not; what holds the two together is that the committed shard fixtures carry
-// real run IDs, so a layout change that left this constant behind leaves
-// every entry dateless and the build test fails.
-const runIDStampLayout = "20060102t150405z"
-
 // errRecordDate is a run ID whose stamp says nothing about when the run
 // happened.
 var errRecordDate = errors.New("no run ID carries a timestamp this can read, so the entry would have no date and nothing could say how old it is")
 
 // recordDate reads the day of the run off its run IDs.
+//
+// The stamp is read through [e2ecalls.RunIDDate], which sits beside the layout
+// the harness mints the identifier with: this command is outside the e2e build
+// tag and the harness is inside it, so the shared untagged package both already
+// import is the only place a single spelling can live.
 //
 // The earliest stamp wins, not the latest: a directory's packages start
 // minutes apart and the window asks how long the measurement has been
@@ -201,12 +212,8 @@ var errRecordDate = errors.New("no run ID carries a timestamp this can read, so 
 func recordDate(rep *report) (string, error) {
 	var earliest time.Time
 	for _, run := range rep.Runs {
-		stamp, _, found := strings.Cut(run.RunID, "-")
-		if !found {
-			continue
-		}
-		at, err := time.Parse(runIDStampLayout, stamp)
-		if err != nil {
+		at, read := e2ecalls.RunIDDate(run.RunID)
+		if !read {
 			continue
 		}
 		if earliest.IsZero() || at.Before(earliest) {
@@ -243,6 +250,14 @@ func readRecord(path string) (*coverageRecord, error) {
 // write that replaced the whole document would silently drop the ee entry and
 // the page would then report a suite that covers half of what it does. An
 // unreadable document is refused rather than replaced, for the same reason.
+//
+// Two reports of one invocation settling to one key is refused rather than
+// folded, and that is the fold's own blind spot: a key is an edition and a
+// tier, so `make test-e2e-gitlab`'s self-hosted directory -- a developer's own
+// instance, unlicensed, which the record must never hold -- is community/free
+// exactly as the Docker ce instance is. Pointed at the parent directory both
+// sit under, the write would put the stranger's figures under ce, in sorted
+// order so self-hosted wins, and exit zero.
 func writeRecord(recordPath, pagePath string, reps []*report) error {
 	doc, err := readRecord(recordPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -253,12 +268,20 @@ func writeRecord(recordPath, pagePath string, reps []*report) error {
 	}
 	doc.SchemaVersion = recordSchemaVersion
 	doc.Note = recordNote
+	settled := map[string]*report{}
 	for _, rep := range reps {
-		key, _ := recordKeyFor(rep.Runtime)
 		entry, buildErr := buildRecordEntry(rep)
 		if buildErr != nil {
 			return buildErr
 		}
+		key, _ := recordKeyFor(rep.Runtime)
+		if first, taken := settled[key]; taken {
+			return fmt.Errorf("two runs of this invocation settle to the %s entry, %s and %s: "+
+				"the key is the edition and the tier, so a Docker run and a developer's own instance of the same "+
+				"edition are indistinguishable here and the second would replace the first with nothing said; "+
+				"record one directory at a time", key, recordSource(first), recordSource(rep))
+		}
+		settled[key] = rep
 		doc.Runtimes[key] = entry
 	}
 	encoded, err := marshalRecord(doc)
@@ -269,6 +292,21 @@ func writeRecord(recordPath, pagePath string, reps []*report) error {
 		return writeErr
 	}
 	return writeRecordPage(pagePath, doc, false)
+}
+
+// recordSource names a report the way a refusal about two of them has to: the
+// runtime it measured and the directory its shards were read from, which is
+// the only thing that tells two runs of one edition apart.
+//
+// It is the one place [report.Directory] is allowed out, and the ban it is an
+// exception to is intact: the string goes to the operator who is being told to
+// choose, never into the document. A hand-built report carries no directory
+// and is named by its runtime alone.
+func recordSource(rep *report) string {
+	if rep.Directory == "" {
+		return rep.Runtime
+	}
+	return rep.Runtime + " (" + rep.Directory + ")"
 }
 
 // marshalRecord encodes the document the way it is committed.
@@ -316,9 +354,18 @@ func recordPaths(opts options) (recordPath, pagePath string) {
 }
 
 // runRecordWrite writes the record from this run's reports.
-func runRecordWrite(opts options, reports []*report, stdout, stderr io.Writer) int {
-	if opts.results == "" || !opts.static {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: -record needs -results and -static: "+
+//
+// The static scan is judged by what it produced and not by the flag that asked
+// for it, through the same [staticApplied] the classification itself is gated
+// on. The flag is the weaker question by a distance: a scan that could not load
+// the packages -- which any type error under the e2e build tag does -- leaves a
+// nil result, and a tree with no test/e2e/gitlab in it leaves a skipped one,
+// and in both cases the classification this would commit is exactly the
+// over-generous one the guard exists to keep out of the document, written
+// with exit status 0 while the run's own status says the gate failed.
+func runRecordWrite(opts options, static *staticResult, reports []*report, stdout, stderr io.Writer) int {
+	if opts.results == "" || !opts.static || !staticApplied(static) {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: -record needs -results and a -static scan that ran: "+
 			"without the results stream a failed test still counts as coverage, and without the static scan a call "+
 			"site that throws its answer away does too, so the record would freeze the most generous classification "+
 			"this command can produce rather than the one the gates judge by")

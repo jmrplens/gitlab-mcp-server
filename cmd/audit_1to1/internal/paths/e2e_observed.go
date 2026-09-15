@@ -40,7 +40,9 @@ type E2EObservation struct {
 	// than a failure: this check reports.
 	Error string `json:"error,omitempty"`
 	// Dispatches is how many traces named an action, which is the denominator
-	// of the two lists below.
+	// of the two lists below. It is traces and not lines: one trace can be
+	// written twice, and [foldDispatchesByTrace] is what keeps the count and
+	// the word agreeing.
 	Dispatches int `json:"dispatches"`
 	// Issuing are the catalog actions a dispatch span named whose trace also
 	// carried at least one GitLab request. This is the per-action observation,
@@ -86,12 +88,8 @@ func e2eObservation(dir string, actions []requestinventory.Action) E2EObservatio
 	}
 
 	issuing, silent, unmatched := map[string]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
-	for _, record := range records {
-		if record.Type != e2ecalls.TypeDispatch || record.Dispatch == nil || record.Dispatch.Action == "" {
-			continue
-		}
+	for _, dispatch := range foldDispatchesByTrace(records) {
 		observation.Dispatches++
-		dispatch := record.Dispatch
 		if _, known := catalog[dispatch.Action]; !known {
 			unmatched[dispatch.Action] = struct{}{}
 			continue
@@ -120,6 +118,51 @@ func e2eObservation(dir string, actions []requestinventory.Action) E2EObservatio
 	observation.Silent = sortedActions(silent)
 	observation.Unmatched = sortedActions(unmatched)
 	return observation
+}
+
+// foldDispatchesByTrace reduces a record to one dispatch per trace, keeping the
+// line that saw the most requests, in the order the traces first appear.
+//
+// One trace is one call is one action, and a trace can legitimately be written
+// twice: the harness flushes a dispatch line when its test ends and re-offers
+// every trace the receiver holds at the end of the run, while the writer's
+// dedupe is on the exact JSON text, so a line whose request count grew between
+// the two writes is written again rather than replacing the first. Counting
+// both would inflate [E2EObservation.Dispatches], which is published as a count
+// of traces, and would classify a call from the earliest and least informed
+// line the run produced.
+//
+// The highest count wins for the reason [e2ecalls.Dispatch.Requests] is
+// documented as a floor: a later line saw more of the trace's client spans, and
+// none of them un-happened.
+//
+// A line naming no trace is folded with nothing. Every line the harness writes
+// carries a trace id, so one without comes from a record this reader does not
+// know, and folding two of those together on an empty key would merge two calls
+// into one.
+func foldDispatchesByTrace(records []e2ecalls.Record) []*e2ecalls.Dispatch {
+	folded := make([]*e2ecalls.Dispatch, 0, len(records))
+	byTrace := make(map[string]int, len(records))
+	for _, record := range records {
+		if record.Type != e2ecalls.TypeDispatch || record.Dispatch == nil || record.Dispatch.Action == "" {
+			continue
+		}
+		dispatch := record.Dispatch
+		if dispatch.TraceID == "" {
+			folded = append(folded, dispatch)
+			continue
+		}
+		at, known := byTrace[dispatch.TraceID]
+		if !known {
+			byTrace[dispatch.TraceID] = len(folded)
+			folded = append(folded, dispatch)
+			continue
+		}
+		if dispatch.Requests > folded[at].Requests {
+			folded[at] = dispatch
+		}
+	}
+	return folded
 }
 
 // sortedActions renders a set of action ids as the sorted list a report prints.

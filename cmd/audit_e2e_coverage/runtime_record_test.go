@@ -187,6 +187,58 @@ func TestWriteRecord_SecondRuntime_MergesAndKeepsTheFirst(t *testing.T) {
 	}
 }
 
+// TestWriteRecord_TwoRunsOneKey_Refused verifies that the committed figures
+// cannot be replaced by a stranger's without a word.
+//
+// A key is an edition and a tier, so `make test-e2e-gitlab`'s self-hosted
+// directory -- a developer's own instance, which the record must never hold --
+// is community/free exactly as the Docker ce one is, and both answer to the ce
+// selector. Pointed at the parent directory both sit under, the write used to
+// take them in sorted order and leave self-hosted's figures under ce with a nil
+// error. The refusal names both, which is the only way the operator can tell
+// which directory to pass.
+func TestWriteRecord_TwoRunsOneKey_Refused(t *testing.T) {
+	docker := shardReport(t, "ce")
+	developer := shardReport(t, "ce")
+	developer.Directory = filepath.Join("dist", "e2e-calls", "self-hosted")
+
+	cases := []struct {
+		name  string
+		reps  []*report
+		wants []string
+	}{
+		{
+			name:  "two directories of one edition",
+			reps:  []*report{docker, developer},
+			wants: []string{"settle to the ce entry", docker.Directory, developer.Directory},
+		},
+		{
+			// A report built without shards has no directory to name, so the
+			// refusal falls back to the runtime rather than printing an empty
+			// pair of brackets.
+			name:  "reports with no directory to name",
+			reps:  []*report{eeReport(), eeReport()},
+			wants: []string{"settle to the ee entry", "enterprise/ultimate and enterprise/ultimate"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			err := writeRecord(filepath.Join(dir, "e2e-coverage.json"), filepath.Join(dir, "page.md"), tc.reps)
+
+			if err == nil {
+				t.Fatal("writeRecord() = nil, want a refusal to file two runs under one key")
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("writeRecord() = %q, want it to name %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 // TestWriteRecord_Deterministic_SameInputSameBytes verifies that the record is
 // stable from one write to the next, which is what lets the page be compared
 // byte for byte and a refresh produce a diff a reviewer can read.
@@ -244,26 +296,45 @@ func TestWriteRecord_UnreadableDocument_Refused(t *testing.T) {
 	}
 }
 
+// scannedStatic is a static result that ran and found the tree, which is what
+// [staticApplied] admits and therefore what the record write demands.
+func scannedStatic() *staticResult {
+	return &staticResult{unassertedIDs: map[string]bool{}, testIDs: map[string]map[string]bool{}}
+}
+
 // TestRunRecordWrite_WithoutTheGates_Refused verifies that the record cannot
 // be written from a run that classified more generously than the gates do: no
 // results stream means a failed test still counts, and no static scan means a
 // call site that discards its answer does too.
+//
+// The last two cases are the ones the flag alone could not see, and they are
+// the realistic ones: -static passed, and the scan then produced nothing to
+// apply because it could not load the packages (any type error under the e2e
+// build tag) or because the tree has no test/e2e/gitlab in it. Both used to
+// write the record from the unnarrowed classification and exit 0.
 func TestRunRecordWrite_WithoutTheGates_Refused(t *testing.T) {
 	cases := []struct {
-		name string
-		opts options
+		name   string
+		opts   options
+		static *staticResult
 	}{
-		{name: "no results", opts: options{static: true}},
+		{name: "no results", opts: options{static: true}, static: scannedStatic()},
 		{name: "no static", opts: options{results: "log.json"}},
+		{name: "the scan could not run", opts: options{results: "log.json", static: true}},
+		{
+			name:   "the scan found no suite to read",
+			opts:   options{results: "log.json", static: true},
+			static: &staticResult{Skipped: true},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr strings.Builder
-			if code := runRecordWrite(tc.opts, []*report{shardReport(t, "ce")}, &stdout, &stderr); code != exitUsage {
+			if code := runRecordWrite(tc.opts, tc.static, []*report{shardReport(t, "ce")}, &stdout, &stderr); code != exitUsage {
 				t.Errorf("runRecordWrite() = %d, want %d", code, exitUsage)
 			}
-			if !strings.Contains(stderr.String(), "-record needs -results and -static") {
-				t.Errorf("stderr = %q, want it to name both flags", stderr.String())
+			if !strings.Contains(stderr.String(), "-record needs -results and a -static scan that ran") {
+				t.Errorf("stderr = %q, want it to name both preconditions", stderr.String())
 			}
 		})
 	}
@@ -275,7 +346,7 @@ func TestRunRecordWrite_WithoutTheGates_Refused(t *testing.T) {
 func TestRunRecordWrite_NoRuntimeSelected_Refused(t *testing.T) {
 	var stdout, stderr strings.Builder
 	opts := options{dir: t.TempDir(), results: "log.json", static: true}
-	if code := runRecordWrite(opts, nil, &stdout, &stderr); code != exitUsage {
+	if code := runRecordWrite(opts, scannedStatic(), nil, &stdout, &stderr); code != exitUsage {
 		t.Errorf("runRecordWrite() = %d, want %d", code, exitUsage)
 	}
 	if !strings.Contains(stderr.String(), "selected no runtime") {
@@ -294,7 +365,7 @@ func TestRunRecordWrite_Fixture_WritesBothArtifacts(t *testing.T) {
 		recordPage: filepath.Join(dir, "e2e-coverage.md"),
 	}
 	var stdout, stderr strings.Builder
-	if code := runRecordWrite(opts, []*report{shardReport(t, "ce")}, &stdout, &stderr); code != exitOK {
+	if code := runRecordWrite(opts, scannedStatic(), []*report{shardReport(t, "ce")}, &stdout, &stderr); code != exitOK {
 		t.Fatalf("runRecordWrite() = %d, stderr %q; want 0", code, stderr.String())
 	}
 	for _, path := range []string{opts.recordPath, opts.recordPage} {
@@ -306,6 +377,32 @@ func TestRunRecordWrite_Fixture_WritesBothArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "record: ce: L1 ") {
 		t.Errorf("stdout = %q, want the ce summary line", stdout.String())
+	}
+}
+
+// TestRunRecordWrite_UnrecordableRuntime_Reported verifies that a refusal from
+// the build reaches the operator instead of the process: the write is abandoned
+// and its reason is printed, so a run that measured a runtime no Makefile target
+// produces does not leave a half-written document behind.
+func TestRunRecordWrite_UnrecordableRuntime_Reported(t *testing.T) {
+	dir := t.TempDir()
+	opts := options{
+		dir: dir, results: "log.json", static: true,
+		recordPath: filepath.Join(dir, "e2e-coverage.json"),
+		recordPage: filepath.Join(dir, "e2e-coverage.md"),
+	}
+	unlicensed := shardReport(t, "ce")
+	unlicensed.Runtime = "enterprise/free"
+
+	var stdout, stderr strings.Builder
+	if code := runRecordWrite(opts, scannedStatic(), []*report{unlicensed}, &stdout, &stderr); code != exitUsage {
+		t.Fatalf("runRecordWrite() = %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(stderr.String(), "no Makefile target produces it") {
+		t.Errorf("stderr = %q, want the reason the runtime is not recordable", stderr.String())
+	}
+	if _, err := os.Stat(opts.recordPath); err == nil {
+		t.Error("the refused write left a record behind")
 	}
 }
 

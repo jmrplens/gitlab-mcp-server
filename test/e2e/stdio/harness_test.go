@@ -63,11 +63,15 @@ var (
 
 // binaryEnv names a server already built, to drive instead of building one.
 //
-// The Makefile's Docker targets build cmd/server once and hand it to every
-// package that drives it, and until this was read here the three transport
-// modules were the packages that ignored it: a run that had already staged a
-// binary still paid for a compile per module. The variable now means the same
-// thing in all four places.
+// The Makefile's e2e targets build cmd/server once and hand it to every package
+// that drives it, and until this was read here the three transport modules were
+// the packages that ignored it: a run that had already staged a binary still
+// paid for a compile per module. What the variable means is the same in all
+// four places; how it is resolved is not. The harness reads it through the
+// run's settings, which overlay .env and test/e2e/.env.docker on the process
+// environment, so a value written in one of those files reaches it. Here it is
+// the process environment and nothing else — a Makefile target's export, or a
+// caller's own — and an entry in .env reaches this module through neither.
 const binaryEnv = "E2E_SERVER_BINARY"
 
 // serverBinary returns the path of the server these tests drive: the one
@@ -88,17 +92,57 @@ func serverBinary(t *testing.T) string {
 		if refusal := prebuiltBinaryRefusal(); refusal != "" {
 			t.Fatalf("%s names %s, which cannot be used: %s", binaryEnv, prebuilt, refusal)
 		}
-		//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
-		if _, err := os.Stat(prebuilt); err != nil {
+		staged, err := stagedBinary(prebuilt)
+		if err != nil {
 			t.Fatalf("%s names %s, which cannot be used: %v", binaryEnv, prebuilt, err)
 		}
-		return prebuilt
+		return staged
 	}
 	bin, err := buildServerBinary()
 	if err != nil {
 		t.Fatalf("building the server binary: %v", err)
 	}
 	return bin
+}
+
+// stagedBinary resolves what E2E_SERVER_BINARY names to an absolute path this
+// harness can execute, or says why it cannot.
+//
+// Absolute, because the path is executed rather than only read, and a relative
+// one names two different files here: os.Stat resolves it against the test
+// binary's own directory, which is this package's, while exec resolves it
+// against the Cmd.Dir startSessionIn sets — and choosing a working directory is
+// not an edge case in this module, it is what the cases about an untrusted
+// workspace are for. A relative path therefore used to pass the check and then
+// fail to start in exactly those cases, with fork/exec naming the path and
+// nothing naming the variable it came from.
+//
+// Regular and executable, because a stat alone accepts a directory and a file
+// nothing can run. An operator who pointed the variable at the staging
+// directory rather than at the binary inside it got "fork/exec …: permission
+// denied" out of cmd.Start, which names neither the variable nor what is wrong
+// with what it names, and saying both is the whole reason this check exists
+// rather than being left to exec.
+func stagedBinary(prebuilt string) (string, error) {
+	abs, err := filepath.Abs(prebuilt)
+	if err != nil {
+		return "", err
+	}
+	//#nosec G703 -- the path is E2E_SERVER_BINARY, chosen by whoever runs the tests, and statting it is the smaller half of what this run does with it: the next thing is to execute it as the server under test.
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("it is not a regular file (mode %s)", info.Mode())
+	}
+	// Windows has no executable bit — os.Stat reports 0666 or 0444 there, from
+	// the read-only attribute — so this half of the check would refuse every
+	// staged binary on that platform rather than the ones that cannot run.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		return "", fmt.Errorf("it is not executable (mode %s)", info.Mode())
+	}
+	return abs, nil
 }
 
 // buildServerBinary builds cmd/server once for the whole package and returns

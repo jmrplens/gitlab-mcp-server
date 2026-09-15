@@ -93,6 +93,19 @@ jobs:
       # reached by nothing here. An instrumented binary writes its meta-data
       # when it starts and its counters when it exits, into the directory the
       # run step names below.
+      #
+      # Unconditionally, unlike the Makefile's COVER switch, which is off by
+      # default: this is the blocking gate, and the only run of the suite that
+      # happens on every push, so a coverage figure conditioned on anything
+      # would be a figure nobody ever sees. What that costs is a gate whose
+      # binary is not byte-identical to the one the release ships -- counters
+      # around every statement, and the run a little slower -- and what it
+      # buys is the only measurement of how much of the program a live-GitLab
+      # run reaches. The instrumentation does nothing of its own: it counts
+      # what the program does and writes the tally at exit, so a defect it hid
+      # would have to be one the counters caused, and a developer reproducing
+      # a failure here with `make test-e2e-ce COVER=1` drives the same binary
+      # CI did.
       - name: Build the server the suite drives
         run: go build -cover -o dist/e2e/gitlab-mcp-server ./cmd/server
 
@@ -117,7 +130,12 @@ jobs:
           # way: a child runs in its own session directory, and a run that
           # folded an earlier run's counters into this one's would report a
           # figure about neither.
-          E2E_COVER_DIR: ${{ github.workspace }}/test-results/e2e-cover
+          #
+          # The ce leaf under the root the merge step searches, the way the
+          # Makefile's targets each write one: this is the leaf name and the
+          # merge step passes the parent as E2E_COVER_ROOT, so the two never
+          # have to mean the same directory.
+          E2E_COVER_DIR: ${{ github.workspace }}/test-results/e2e-cover/ce
 
       # What the run covered, from the calls it recorded and the verdicts
       # gotestsum wrote: the JSON report is uploaded with the results and the
@@ -146,9 +164,19 @@ jobs:
       # the red step that explains it helps nobody. Nothing gates on the
       # number, and the profile is never merged into coverage.out, which is
       # what Sonar publishes as the unit suite's figure.
+      #
+      # pipefail because the target's whole purpose is to refuse an empty
+      # directory rather than report it as zero, and a refusal on the left of
+      # a pipe is tee's success without it: the step would stay green and
+      # write an empty code fence to the summary, which is the same "reports
+      # nothing and says nothing" outcome the refusal exists to prevent,
+      # displaced one step up. The `run:` block declares no shell, so Actions
+      # gives it `bash -e {0}` -- -e without -o pipefail -- and this line is
+      # what adds the rest.
       - name: Go statement coverage of the server binary
         run: |
-          make -s e2e-go-coverage E2E_COVER_DIR=test-results/e2e-cover E2E_REPORT_DIR=test-results \
+          set -euo pipefail
+          make -s e2e-go-coverage E2E_COVER_ROOT=test-results/e2e-cover E2E_REPORT_DIR=test-results \
             | tee test-results/e2e-go-coverage.txt
           {
             echo "### Go statement coverage of the server binary"

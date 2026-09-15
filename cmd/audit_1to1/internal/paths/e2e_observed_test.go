@@ -19,12 +19,16 @@ func withE2ERecord(t *testing.T, read func(string) ([]e2ecalls.Record, error)) {
 }
 
 // dispatchRecordOf wraps one dispatch line the way a shard holds it.
-func dispatchRecordOf(action string, requests int, refusal string) e2ecalls.Record {
+//
+// The trace is a parameter rather than a constant because it is what a dispatch
+// line is keyed on: one trace is one call, and a case that gave every line the
+// same id would be describing one call five times while reading as five.
+func dispatchRecordOf(traceID, action string, requests int, refusal string) e2ecalls.Record {
 	return e2ecalls.Record{
 		Schema: e2ecalls.SchemaVersion,
 		Type:   e2ecalls.TypeDispatch,
 		Dispatch: &e2ecalls.Dispatch{
-			TraceID:       "4bf92f3577b34da6a3ce929d0e0e4736",
+			TraceID:       traceID,
 			Action:        action,
 			RefusalReason: refusal,
 			Requests:      requests,
@@ -44,11 +48,11 @@ func dispatchRecordOf(action string, requests int, refusal string) e2ecalls.Reco
 func TestE2EObservation_ClassifiesPerAction(t *testing.T) {
 	withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
 		return []e2ecalls.Record{
-			dispatchRecordOf("issue.list", 1, ""),
-			dispatchRecordOf("issue.get", 0, ""),
-			dispatchRecordOf("issue.delete", 0, "safe_mode"),
-			dispatchRecordOf("issue.list", 0, ""),
-			dispatchRecordOf("gone.list", 4, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4731", "issue.list", 1, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4732", "issue.get", 0, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4733", "issue.delete", 0, "safe_mode"),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4734", "issue.list", 0, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4735", "gone.list", 4, ""),
 			{Schema: e2ecalls.SchemaVersion, Type: e2ecalls.TypeCall, Call: &e2ecalls.Call{Action: "issue.update"}},
 		}, nil
 	})
@@ -65,7 +69,7 @@ func TestE2EObservation_ClassifiesPerAction(t *testing.T) {
 		t.Fatalf("observation = %+v, want a run over the named directory", observation)
 	}
 	if observation.Dispatches != 5 {
-		t.Errorf("dispatches = %d, want the five dispatch lines and not the call line", observation.Dispatches)
+		t.Errorf("dispatches = %d, want the five traces and not the call line", observation.Dispatches)
 	}
 	cases := []struct {
 		name string
@@ -82,6 +86,56 @@ func TestE2EObservation_ClassifiesPerAction(t *testing.T) {
 				t.Errorf("%s = %v, want %v", testCase.name, testCase.got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestE2EObservation_ATraceWrittenTwice_IsStillOneDispatch pins the count
+// against the one shape the harness produces on purpose.
+//
+// A call's dispatch line is written when its test ends and every trace the
+// receiver holds is re-offered at the end of the run, while the writer dedupes
+// on the exact JSON text — so a trace whose client spans landed in between is
+// written a second time with a larger request count, by design. Counting both
+// would publish two traces where one call happened, in the field that is the
+// denominator of both lists beside it, and the later line is the one to keep
+// because a request count is a floor that only grows.
+//
+// The classification survived this before the fold existed, since one witness
+// settles it, which is exactly why only the published number was wrong and
+// nothing failed.
+func TestE2EObservation_ATraceWrittenTwice_IsStillOneDispatch(t *testing.T) {
+	const trace = "4bf92f3577b34da6a3ce929d0e0e4736"
+	withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
+		return []e2ecalls.Record{
+			dispatchRecordOf(trace, "issue.list", 0, ""),
+			dispatchRecordOf(trace, "issue.list", 2, ""),
+			// A third line of the same trace, carrying fewer requests than the
+			// one already folded: an export that arrived out of order must not
+			// take the count back down, which is the half of "highest wins"
+			// that a two-line case cannot show.
+			dispatchRecordOf(trace, "issue.list", 1, ""),
+			dispatchRecordOf("", "issue.get", 0, ""),
+			dispatchRecordOf("", "issue.get", 0, ""),
+		}, nil
+	})
+	actions := []requestinventory.Action{
+		{ID: "issue.list", Owner: "issues"},
+		{ID: "issue.get", Owner: "issues"},
+	}
+
+	observation := e2eObservation("dist/e2e-calls", actions)
+
+	// Two for the trace-less pair: a line naming no trace is folded with
+	// nothing, since merging those would join two calls that never said they
+	// were one.
+	if observation.Dispatches != 3 {
+		t.Errorf("dispatches = %d, want the one folded trace and the two lines that name none", observation.Dispatches)
+	}
+	if !slices.Equal(observation.Issuing, []string{"issue.list"}) {
+		t.Errorf("issuing = %v, want the trace's larger request count to have been kept", observation.Issuing)
+	}
+	if !slices.Equal(observation.Silent, []string{"issue.get"}) {
+		t.Errorf("silent = %v, want only the action whose trace carried no request", observation.Silent)
 	}
 }
 

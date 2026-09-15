@@ -508,6 +508,33 @@ func TestDispatchLine_CarriesTheRequestsTheTraceMade(t *testing.T) {
 	}
 }
 
+// TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine covers the skip that
+// keeps a record's two readings of one trace agreeing.
+//
+// A trace whose GitLab client spans landed and whose server span did not names
+// no action. Written anyway, it is a dispatch line with an empty action: the
+// coverage command counts it among its dispatch lines and then skips it when it
+// joins, so its diagnostics and its joins disagree and nothing says why. The
+// other trace here is what makes the assertion about the skip rather than about
+// an empty receiver.
+func TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine(t *testing.T) {
+	lines := dispatchLinesOf(map[string]traceSpans{
+		"4bf92f3577b34da6a3ce929d0e0e4731": {requests: 2},
+		"4bf92f3577b34da6a3ce929d0e0e4732": {dispatch: dispatchRecord{action: "issue.list"}, requests: 1},
+	})
+
+	if len(lines) != 1 {
+		t.Fatalf("dispatchLinesOf() wrote %d line(s), want only the trace the server spoke about", len(lines))
+	}
+	dispatch, isDispatch := lines[0].(*e2ecalls.Dispatch)
+	if !isDispatch {
+		t.Fatalf("dispatchLinesOf() wrote a %T, want a dispatch line", lines[0])
+	}
+	if dispatch.Action != "issue.list" || dispatch.Requests != 1 {
+		t.Errorf("the line is %+v, want issue.list with its one request", dispatch)
+	}
+}
+
 // TestNewTraceParent_IsAFreshSampledTraceEveryTime checks the value the server
 // reads the trace off.
 //

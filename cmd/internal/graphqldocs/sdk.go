@@ -32,13 +32,42 @@ func SDKPatterns() []string { return []string{"./..."} }
 // repository's own build is affected, since a workspace of ours would be
 // nobody's business during a load of somebody else's module.
 //
-// GOFLAGS=-mod=readonly, because a module cache directory is read-only and
-// -mod=mod asks the toolchain for permission to write a go.mod it cannot. A
+// GOFLAGS carries -mod=readonly, because a module cache directory is read-only
+// and -mod=mod asks the toolchain for permission to write a go.mod it cannot. A
 // developer or a build machine with -mod=mod exported (which is one way to run
 // this repository's own tooling) would otherwise see this load fail with a
 // message about workspace mode that says nothing about either cause.
+//
+// That one setting is substituted into whatever GOFLAGS already said rather
+// than written over it. The toolchain honors the last assignment of a
+// variable, so appending "GOFLAGS=-mod=readonly" would silently take away
+// every other flag the caller set — a machine exporting
+// "-mod=mod -buildvcs=false" would lose the second one here and keep it
+// everywhere else in the same run, which is a difference nobody would think to
+// look for. The module cache makes -mod this package's business and nothing
+// else's.
 func ForeignModuleEnv() []string {
-	return append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=readonly")
+	return append(os.Environ(), "GOWORK=off", "GOFLAGS="+readOnlyModule(os.Getenv("GOFLAGS")))
+}
+
+// readOnlyModule is an inherited GOFLAGS value with its -mod setting replaced
+// by -mod=readonly and every other flag left alone.
+//
+// GOFLAGS is a space-separated list of flags in -flag=value form, so the
+// substitution is a filter and an append. Both spellings of the flag are
+// dropped: the valued one the toolchain documents, and the bare one a hand
+// that meant "-mod mod" leaves behind, which go itself refuses and which would
+// otherwise survive this filter to fail the load for a reason about GOFLAGS
+// syntax rather than about the module cache.
+func readOnlyModule(inherited string) string {
+	var kept []string
+	for flag := range strings.FieldsSeq(inherited) {
+		if flag == "-mod" || strings.HasPrefix(flag, "-mod=") {
+			continue
+		}
+		kept = append(kept, flag)
+	}
+	return strings.Join(append(kept, "-mod=readonly"), " ")
 }
 
 // errNoSDKDirectory is an empty directory, which is refused rather than

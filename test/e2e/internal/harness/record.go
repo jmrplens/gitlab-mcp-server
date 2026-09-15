@@ -897,19 +897,35 @@ func sessionLines() []e2ecalls.Line {
 // dispatched action, and this is what lets the audit join one to it anyway.
 // Re-offering a line that was already written costs nothing: the writer drops
 // a line whose JSON it has already seen, and a line whose request count has
-// since grown is a new line the reader keeps in place of the earlier one,
-// which is what makes a late client span correct itself.
+// since grown is written a second time, which is what makes a late client span
+// correct itself.
 //
-// A trace holding only GitLab request spans is skipped. It names no action, so
-// there is nothing for the audit to attribute those requests to, and a
-// dispatch line with an empty action would be a record of a call nobody can
-// identify.
+// Both readers fold those two lines back into one trace — the coverage
+// command's join keeps the last line per trace id, and R-PATH's observation
+// keeps the one that saw the most requests — so the correction is what a reader
+// sees. A diagnostic that counts lines rather than traces counts both, which is
+// why the coverage command's own is called DispatchLines.
 func lateDispatchLines() []e2ecalls.Line {
 	received := receiverIfStarted()
 	if received == nil {
 		return nil
 	}
-	all := received.all()
+	return dispatchLinesOf(received.all())
+}
+
+// dispatchLinesOf turns what a receiver holds into the dispatch lines a record
+// carries, one per trace that named an action.
+//
+// A trace holding only GitLab request spans is skipped. It names no action, so
+// there is nothing for the audit to attribute those requests to, and a dispatch
+// line with an empty action would be a record of a call nobody can identify —
+// counted as a dispatch by the coverage command's diagnostics and then skipped
+// by its join, which is a disagreement with no signal behind it.
+//
+// It is a function of the map rather than a loop inside its caller so that the
+// skip can be tested: its caller reads a package-level receiver that only a
+// started suite has.
+func dispatchLinesOf(all map[string]traceSpans) []e2ecalls.Line {
 	lines := make([]e2ecalls.Line, 0, len(all))
 	for traceID, kept := range all {
 		if !kept.dispatch.carriesFacts() {

@@ -65,6 +65,7 @@ func TestRun_RecordModes_AreNotAUsageError(t *testing.T) {
 		// and -render-record cannot run at all, and neither is the usage
 		// error a run that asked for nothing gets.
 		{name: "check-record", opts: func() options { o := base; o.checkRecord = true; return o }(), want: exitFindings},
+		{name: "check-record-page", opts: func() options { o := base; o.checkRecordPage = true; return o }(), want: exitFindings},
 		{name: "render-record", opts: func() options { o := base; o.renderRecord = true; return o }(), want: exitUsage},
 	}
 	for _, tc := range cases {
@@ -77,6 +78,24 @@ func TestRun_RecordModes_AreNotAUsageError(t *testing.T) {
 				t.Errorf("stderr = %q, want the record mode to have run", stderr)
 			}
 		})
+	}
+}
+
+// TestRun_RecordWithoutCalls_IsAUsageError verifies that -record with no
+// shards to commit is refused rather than passed over.
+//
+// -record is reached from inside the coverage path, which a run without -calls
+// never enters, so `-static -record` used to print the static summary, write
+// nothing, say nothing about the record and exit 0 -- while the other two
+// preconditions of -record are each refused with a paragraph.
+func TestRun_RecordWithoutCalls_IsAUsageError(t *testing.T) {
+	code, _, stderr := runFixture(t, options{static: true, record: true})
+
+	if code != exitUsage {
+		t.Errorf("run(-static -record) = %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(stderr, "-record needs -calls") {
+		t.Errorf("stderr = %q, want it to name the missing flag", stderr)
 	}
 }
 

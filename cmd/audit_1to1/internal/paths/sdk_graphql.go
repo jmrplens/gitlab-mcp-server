@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
@@ -28,11 +29,13 @@ import (
 // repository's own tree, which is what every other thing it fails on is.
 type SDKGraphQLCheck struct {
 	// Ran is whether the module was read. Everything below is empty when it is
-	// false, and Error says why.
+	// false, Error excepted: a section that declined says why it declined, or a
+	// reader is left with a clean-looking zero over source nobody loaded.
 	Ran bool `json:"ran"`
 	// Module is the directory the documents were read from, trimmed to the
 	// module's own name and version so the report does not carry the reader's
-	// module cache path.
+	// module cache path. See [sdkModuleName] for why that is two path elements
+	// and not one.
 	Module string `json:"module,omitempty"`
 	// Error is what stopped the read. It is a note rather than a failure: this
 	// reads a module cache whose state it does not own.
@@ -79,13 +82,23 @@ var (
 // to find it; what it does cost is type-checking client-go, which is the only
 // way a document assembled from a shared field constant folds to the string
 // GitLab receives.
+//
+// The two ways of never getting that directory each carry their reason out.
+// Both render as ran=false with no documents and no refusals, which is exactly
+// what a module holding nothing refusable would render as, and the difference
+// between "judged and clean" and "never opened" is the whole value of the
+// section: a reader with the first belief and the second fact is worse off than
+// one told nothing at all.
 func sdkGraphQLCheck(root string) SDKGraphQLCheck {
 	pairings, err := collectPairings(root)
-	if err != nil || pairings.ClientGoDir == "" {
-		return SDKGraphQLCheck{}
+	if err != nil {
+		return SDKGraphQLCheck{Error: fmt.Sprintf("resolve the client-go module directory: %v", err)}
+	}
+	if pairings.ClientGoDir == "" {
+		return SDKGraphQLCheck{Error: "the load resolved no client-go module directory, so no document of the SDK was read"}
 	}
 
-	check := SDKGraphQLCheck{Ran: true, Module: filepath.Base(pairings.ClientGoDir)}
+	check := SDKGraphQLCheck{Ran: true, Module: sdkModuleName(pairings.ClientGoDir)}
 	documents, err := readSDKDocuments(pairings.ClientGoDir)
 	if err != nil {
 		check.Error = err.Error()
@@ -114,6 +127,29 @@ func sdkGraphQLCheck(root string) SDKGraphQLCheck {
 	}
 	check.Refusals = sdkRefusals(result, pairings.ClientGoDir)
 	return check
+}
+
+// sdkModuleName names the module a cache directory holds, short enough to keep
+// the reader's own GOMODCACHE out of the report and long enough to say which
+// dependency was read.
+//
+// Two elements rather than the base, because a module at v2 or above keeps its
+// major version in the last one: client-go sits at
+// …/gitlab.com/gitlab-org/api/client-go/v3@v3.0.0, so a base alone renders
+// "v3@v3.0.0", which names no module and would read identically for any other
+// v3 dependency this section might one day be pointed at. The element that
+// actually identifies it is precisely the one a base trims off.
+//
+// Separators are normalized so the field reads the same in a report written on
+// Windows as in one written anywhere else, which is what a reader comparing two
+// runs needs it to do.
+func sdkModuleName(dir string) string {
+	base := filepath.Base(dir)
+	parent := filepath.Base(filepath.Dir(dir))
+	if parent == "." || parent == string(filepath.Separator) {
+		return base
+	}
+	return filepath.ToSlash(filepath.Join(parent, base))
 }
 
 // sdkRefusals renders the refused SDK documents the way the repository's own

@@ -127,20 +127,26 @@ func TestSDKGraphQLCheck_Refusals_NameAPathAnybodyCanFollow(t *testing.T) {
 	}
 }
 
-// TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure covers the two
-// ways this check declines, both of which are facts about the machine rather
-// than about the server.
+// TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure covers the ways
+// this check declines before it has read anything, all of which are facts about
+// the machine rather than about the server.
 //
-// It reads a module cache whose state this process does not own: the directory
-// may have been evicted, and the toolchain may refuse to load it. Neither says
+// It reads a module cache whose state this process does not own: the pairing
+// load can fail, it can resolve no client-go directory at all, and the
+// toolchain can refuse the directory it did resolve. None of those says
 // anything about whether a document GitLab would refuse has shipped, so the
 // reason is published and R-PATH's verdict is left alone.
+//
+// The reason is what every case here asserts, because all three render as the
+// same zero section a clean module would, and Ran alone cannot tell "read and
+// found nothing refusable" from "never opened".
 func TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure(t *testing.T) {
 	cases := []struct {
-		name     string
-		pairings func(string) (structs.Pairings, error)
-		read     func(string) ([]graphqldocs.Document, error)
-		wantRan  bool
+		name      string
+		pairings  func(string) (structs.Pairings, error)
+		read      func(string) ([]graphqldocs.Document, error)
+		wantRan   bool
+		wantError string
 	}{
 		{
 			name:     "no module directory was resolved",
@@ -149,6 +155,7 @@ func TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure(t *testing.T) {
 				t.Error("the documents were read without a module directory to read them from")
 				return nil, nil
 			},
+			wantError: "no client-go module directory",
 		},
 		{
 			name:     "the pairing load failed",
@@ -157,6 +164,7 @@ func TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure(t *testing.T) {
 				t.Error("the documents were read after the pairing load failed")
 				return nil, nil
 			},
+			wantError: "load: no packages",
 		},
 		{
 			name:     "the module would not load",
@@ -164,7 +172,8 @@ func TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure(t *testing.T) {
 			read: func(string) ([]graphqldocs.Document, error) {
 				return nil, errors.New("load the client-go source: directory not found")
 			},
-			wantRan: true,
+			wantRan:   true,
+			wantError: "directory not found",
 		},
 	}
 	for _, testCase := range cases {
@@ -180,11 +189,82 @@ func TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure(t *testing.T) {
 			if check.Ran != testCase.wantRan {
 				t.Errorf("ran = %t, want %t", check.Ran, testCase.wantRan)
 			}
-			if testCase.wantRan && check.Error == "" {
-				t.Error("the read failure was absorbed rather than published")
+			// Every one of these is a zero section, so the reason is the only
+			// thing that distinguishes it from a module that was read and held
+			// nothing refusable.
+			if !strings.Contains(check.Error, testCase.wantError) {
+				t.Errorf("error = %q, want it to say %q", check.Error, testCase.wantError)
 			}
 			if len(check.Refusals) != 0 {
 				t.Errorf("refusals = %+v, want no claim about any document", check.Refusals)
+			}
+		})
+	}
+}
+
+// TestSDKGraphQLCheck_TheSchemaCouldNotJudge_IsANoteAndNotAFailure covers the
+// third way this section declines, which is the one that happens after the
+// expensive half of the work is already done.
+//
+// The documents were read and the schema then could not be used — an unreadable
+// -schema, or a live probe whose answer never arrived. Reporting refusals from a
+// judgement that did not happen would be worse than reporting none, so the
+// reason is published and the count of what was read is kept.
+func TestSDKGraphQLCheck_TheSchemaCouldNotJudge_IsANoteAndNotAFailure(t *testing.T) {
+	withSDKSeams(t, foundPairings,
+		func(string) ([]graphqldocs.Document, error) {
+			return []graphqldocs.Document{
+				sdkDocument("listAchievementsQuery", "achievements.go", "query ListAchievements { group { id } }"),
+			}, nil
+		},
+		func([]graphqldocs.Document, graphqldocs.Options) (graphqldocs.Result, error) {
+			return graphqldocs.Result{}, errors.New("read the schema to judge against: no such file")
+		})
+
+	check := sdkGraphQLCheck(t.TempDir())
+
+	if !check.Ran || check.Documents != 1 || check.Judged != 1 {
+		t.Fatalf("check = %+v, want the one document read and offered to the schema", check)
+	}
+	if !strings.Contains(check.Error, "read the schema to judge against") {
+		t.Errorf("error = %q, want the judgement failure published", check.Error)
+	}
+	if len(check.Refusals) != 0 {
+		t.Errorf("refusals = %+v, want no claim from a judgement that did not happen", check.Refusals)
+	}
+}
+
+// TestSDKModuleName_NamesTheModuleAndNotItsMajorVersion pins the one field a
+// reader uses to tell which dependency the section was read from.
+//
+// A module at v2 or above keeps its major version in the last element of its
+// cache directory, so the obvious spelling — the base — renders "v3@v3.0.0",
+// which names no module at all and would read the same for any other v3
+// dependency. The element that identifies it is the one the base trims off.
+func TestSDKModuleName_NamesTheModuleAndNotItsMajorVersion(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "a major-version module in the cache", dir: sdkModuleDir, want: "client-go/v3@v3.0.0"},
+		{
+			name: "a module with no major-version element",
+			dir:  "/home/somebody/go/pkg/mod/gitlab.com/gitlab-org/api/client-go@v1.2.3",
+			want: "api/client-go@v1.2.3",
+		},
+		{name: "a single element", dir: "client-go", want: "client-go"},
+		{name: "nothing at all", dir: "", want: "."},
+		{name: "the filesystem root", dir: string(filepath.Separator), want: string(filepath.Separator)},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := sdkModuleName(testCase.dir); got != testCase.want {
+				t.Errorf("sdkModuleName(%q) = %q, want %q", testCase.dir, got, testCase.want)
 			}
 		})
 	}

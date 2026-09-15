@@ -888,8 +888,7 @@ func (c *classification) applyStatic(sr *staticResult) {
 
 // sortedKeys returns a map's keys in order. It is generic because the same
 // question is asked of a set here and of the coverage record's runtimes in
-// cmd/audit_e2e_coverage's record check, and two spellings of six lines is
-// how they drift.
+// runtime_record_check.go, and two spellings of six lines is how they drift.
 func sortedKeys[V any](set map[string]V) []string {
 	names := make([]string, 0, len(set))
 	for name := range set {

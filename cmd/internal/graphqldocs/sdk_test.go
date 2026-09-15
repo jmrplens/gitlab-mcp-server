@@ -49,6 +49,69 @@ func TestSDKDocuments_DirectoryItCannotLoad_Fails(t *testing.T) {
 	}
 }
 
+// TestSDKDocuments_AModuleOnDisk_FoldsWhatItsSourceBuilds is the statement the
+// whole section rests on: point the reader at a module and the documents its
+// packages declare come back.
+//
+// The fixture is a module of this test's own rather than the real client-go,
+// because the module cache holds whichever version this machine last fetched
+// and a test that asserts a count over it asserts a fact about the machine. It
+// carries the two shapes that decide whether the read is worth anything: a
+// document assembled from a shared constant, which folds to the text GitLab
+// receives only because the collector type-checks the module rather than
+// reading its bytes, and a .graphql file, which this reader leaves out because
+// the only such files client-go ships are test fixtures nothing sends.
+func TestSDKDocuments_AModuleOnDisk_FoldsWhatItsSourceBuilds(t *testing.T) {
+	t.Parallel()
+
+	const source = `package achievements
+
+// nodeFields is the selection several documents share, which is what makes the
+// folding worth testing: the text GitLab receives exists nowhere in the source.
+const nodeFields = "id\n        title"
+
+const listAchievementsQuery = ` + "`" + `query ListAchievements($fullPath: ID!) {
+  group(fullPath: $fullPath) {
+    achievements {
+      nodes {
+        ` + "`" + ` + nodeFields + ` + "`" + `
+      }
+    }
+  }
+}` + "`" + `
+
+// notADocument is here so the pre-filter has something to decline.
+const notADocument = "achievements are read over GraphQL"
+`
+
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatalf("prepare the fixture: %v", err)
+		}
+	}
+	write("go.mod", "module fixture\n\ngo 1.24\n")
+	write("achievements.go", source)
+	write("fixture.graphql", "query {\n  currentUser {\n    id\n  }\n}\n")
+
+	documents, err := SDKDocuments(dir)
+	if err != nil {
+		t.Fatalf("SDKDocuments() error = %v, want nil", err)
+	}
+
+	if len(documents) != 1 {
+		t.Fatalf("SDKDocuments() read %+v, want the one document the Go source declares", documents)
+	}
+	found := documents[0]
+	if found.Name != "listAchievementsQuery" || found.Package != "fixture" {
+		t.Errorf("SDKDocuments() read %s in %s, want listAchievementsQuery in fixture", found.Name, found.Package)
+	}
+	if !strings.Contains(found.Text, "id\n        title") {
+		t.Errorf("SDKDocuments() text = %q, want the shared constant folded into it", found.Text)
+	}
+}
+
 // TestForeignModuleEnv_CarriesTheTwoSettingsAModuleCacheLoadNeeds pins the
 // environment without which this read does not work at all.
 //
@@ -94,6 +157,66 @@ func TestForeignModuleEnv_CarriesTheTwoSettingsAModuleCacheLoadNeeds(t *testing.
 	}
 	if len(env) <= len(os.Environ()) {
 		t.Error("ForeignModuleEnv() replaced the caller's environment rather than adding to it")
+	}
+}
+
+// TestForeignModuleEnv_AnInheritedGOFLAGS_KeepsEveryFlagButMod pins the half of
+// the GOFLAGS rule that is not about -mod.
+//
+// Writing "GOFLAGS=-mod=readonly" on the end of the environment is the obvious
+// spelling and it takes the caller's other flags with it, because the toolchain
+// honors the last assignment of a variable and reads the whole value. The
+// machine that motivated this setting exports -mod=mod, which is exactly the
+// kind of environment that carries more than one flag, and a flag dropped only
+// for this one load is a difference nobody would go looking for.
+func TestForeignModuleEnv_AnInheritedGOFLAGS_KeepsEveryFlagButMod(t *testing.T) {
+	t.Setenv("GOFLAGS", "-mod=mod -buildvcs=false -trimpath")
+
+	env := ForeignModuleEnv()
+
+	last := ""
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "GOFLAGS=") {
+			last = entry
+		}
+	}
+	if want := "GOFLAGS=-buildvcs=false -trimpath -mod=readonly"; last != want {
+		t.Errorf("ForeignModuleEnv() ends with %q, want %q", last, want)
+	}
+}
+
+// TestReadOnlyModule_SubstitutesTheModSettingAlone covers the spellings a
+// GOFLAGS value arrives in.
+//
+// The empty case is the ordinary one and must not produce a leading space, a
+// value the go command would read as an empty flag. The bare "-mod" is what a
+// hand that meant "-mod mod" leaves behind: go refuses it, and leaving it in
+// would fail this load with a message about GOFLAGS syntax rather than about
+// the module cache it is here for.
+func TestReadOnlyModule_SubstitutesTheModSettingAlone(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		inherited string
+		want      string
+	}{
+		{name: "nothing inherited", inherited: "", want: "-mod=readonly"},
+		{name: "only a mod setting", inherited: "-mod=mod", want: "-mod=readonly"},
+		{name: "a bare mod flag", inherited: "-mod", want: "-mod=readonly"},
+		{name: "already read-only", inherited: "-mod=readonly", want: "-mod=readonly"},
+		{name: "flags that are not about the module", inherited: "-count=1 -x", want: "-count=1 -x -mod=readonly"},
+		{name: "a mod setting among others", inherited: "-trimpath -mod=vendor -x", want: "-trimpath -x -mod=readonly"},
+		{name: "a flag that merely starts with mod", inherited: "-modcacherw", want: "-modcacherw -mod=readonly"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := readOnlyModule(testCase.inherited); got != testCase.want {
+				t.Errorf("readOnlyModule(%q) = %q, want %q", testCase.inherited, got, testCase.want)
+			}
+		})
 	}
 }
 

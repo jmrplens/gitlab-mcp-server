@@ -82,9 +82,11 @@ func coverageDir(s settings) (string, error) {
 // land where the run asked, or nothing when the run measures nothing.
 //
 // A map rather than a path, so the caller merges it the way it merges the
-// telemetry variables and a run without coverage adds no key at all: a child
-// given an empty GOCOVERDIR would report an error at exit instead of staying
-// silent.
+// telemetry variables and a run without coverage adds no key at all: the
+// runtime of a child given an empty GOCOVERDIR prints "warning: GOCOVERDIR not
+// set, no coverage data emitted" on its stderr the moment it starts, from the
+// meta-data emit the main package's init runs, so the key's absence is what
+// keeps that line off the top of every child's log for the whole run.
 func coverageVariables(s settings) (map[string]string, error) {
 	dir, err := coverageDir(s)
 	if err != nil || dir == "" {
