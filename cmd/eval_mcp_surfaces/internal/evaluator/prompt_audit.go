@@ -160,13 +160,17 @@ func runPromptAudit(w io.Writer, opts options, tasks []evalTask) error {
 	if _, err := io.WriteString(w, renderPromptAuditSummary(report)); err != nil {
 		return fmt.Errorf("write prompt audit: %w", err)
 	}
+	// The check runs first and its verdict is held rather than returned,
+	// because a failing gate is exactly when the dump is worth reading: it
+	// carries the prompt that broke it. Returning early would have made
+	// --audit-prompts -check --out silently produce no artifact on the one
+	// run anybody would go looking for one.
+	var checkErr error
 	if opts.AuditPromptsCheck {
-		if err := promptAuditBuilderSitesAreClean(w, report); err != nil {
-			return err
-		}
+		checkErr = promptAuditBuilderSitesAreClean(w, report)
 	}
 	if strings.TrimSpace(opts.Output) == "" {
-		return nil
+		return checkErr
 	}
 	if err := writePromptAuditDump(opts.Output, report); err != nil {
 		return err
@@ -174,7 +178,7 @@ func runPromptAudit(w io.Writer, opts options, tasks []evalTask) error {
 	if _, err := fmt.Fprintf(w, "\nFull dump with every prompt: %s\n", opts.Output); err != nil {
 		return fmt.Errorf("write prompt audit: %w", err)
 	}
-	return nil
+	return checkErr
 }
 
 // writePromptAuditDump writes the full artifact, prompts included.
@@ -772,6 +776,24 @@ func yesNo(value bool) string {
 func promptAuditBuilderSitesAreClean(w io.Writer, report promptAuditReport) error {
 	var coached []string
 	for _, audited := range report.Cases {
+		// Two questions, and a gate that asked only the first would miss the
+		// shape of the leak it was built for. A literal finding is a prompt
+		// naming the answer; AnswerKeyed is a prompt that came back *different*
+		// when the answer key was taken away, which catches coaching carrying
+		// the answer's shape and none of its words. The dynamic operation
+		// count, "For each of the 3 GitLab catalog operations", was exactly
+		// that, and its return produces no literal finding at all.
+		//
+		// What AnswerKeyed can and cannot see is worth being exact about,
+		// because it is narrower than it sounds: the blind render blanks each
+		// step's fields and keeps the steps themselves, so a count of raw steps
+		// survives it unchanged and is not caught here. The original count was
+		// caught because it counted steps carrying an expected action, which
+		// the blinding removes. Verified both ways rather than assumed.
+		if site, keyed := promptAuditFirstBuilderSite(audited.AnswerKeyed); keyed {
+			coached = append(coached, fmt.Sprintf("%s: its %s prompt changes when the answer key is removed", audited.ID, site))
+			continue
+		}
 		for _, finding := range audited.Findings {
 			if slices.Contains(finding.Sites, promptSiteSystem) || slices.Contains(finding.Sites, promptSiteTask) {
 				coached = append(coached, fmt.Sprintf("%s: %s %q at %v", audited.ID, finding.Kind, finding.Value, finding.Sites))
@@ -787,4 +809,16 @@ func promptAuditBuilderSitesAreClean(w io.Writer, report promptAuditReport) erro
 	}
 	return fmt.Errorf("the prompts this package writes carry the answer for %d case(s):\n  %s",
 		len(coached), strings.Join(coached, "\n  "))
+}
+
+// promptAuditFirstBuilderSite names the first builder site of an answer-keyed
+// list, and reports whether there was one. The case site cannot appear in that
+// list: it is the user's own words, which the blind render keeps.
+func promptAuditFirstBuilderSite(sites []promptAuditSite) (promptAuditSite, bool) {
+	for _, site := range sites {
+		if site == promptSiteSystem || site == promptSiteTask {
+			return site, true
+		}
+	}
+	return "", false
 }

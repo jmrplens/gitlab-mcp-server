@@ -732,3 +732,62 @@ func TestPromptAuditBuilderSitesAreClean_PassesOnBothSurfaces(t *testing.T) {
 		})
 	}
 }
+
+// TestPromptAuditBuilderSitesAreClean_NamesWhatFailedIt drives the refusal
+// path, which the passing corpus never reaches.
+//
+// Both ways in are covered because they answer different questions and a gate
+// that lost either would still look healthy: a literal finding is a prompt
+// naming the answer, and an answer-keyed site is a prompt that came back
+// different without naming anything.
+func TestPromptAuditBuilderSitesAreClean_NamesWhatFailedIt(t *testing.T) {
+	tests := []struct {
+		name   string
+		report promptAuditReport
+		want   string
+	}{
+		{
+			name: "a literal named in the task prompt",
+			report: promptAuditReport{Cases: []promptAuditCase{{
+				ID:       "MT-001",
+				Findings: []promptAuditFinding{{Kind: promptLeakAction, Value: "issue.update", Sites: []promptAuditSite{promptSiteTask}}},
+			}}},
+			want: `MT-001: action "issue.update"`,
+		},
+		{
+			name: "a system prompt that changes without the answer key",
+			report: promptAuditReport{Cases: []promptAuditCase{{
+				ID:          "MT-002",
+				AnswerKeyed: []promptAuditSite{promptSiteSystem},
+			}}},
+			want: "MT-002: its system prompt changes when the answer key is removed",
+		},
+		{
+			name: "the case's own words fail nothing",
+			report: promptAuditReport{Cases: []promptAuditCase{{
+				ID:          "MT-003",
+				AnswerKeyed: []promptAuditSite{promptSiteCase},
+				Findings:    []promptAuditFinding{{Kind: promptLeakParam, Value: "project_id", Sites: []promptAuditSite{promptSiteCase}}},
+			}}},
+			want: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out strings.Builder
+			err := promptAuditBuilderSitesAreClean(&out, tc.report)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("the gate refused a report whose only repetition is the case's own words: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("the gate accepted a coached report")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to name %q", err, tc.want)
+			}
+		})
+	}
+}

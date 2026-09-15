@@ -1287,3 +1287,37 @@ func TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication(t *testing
 		t.Fatalf("refusal = %v, want it to name both %q and %q", err, stimulusCoached, stimulusUncoached)
 	}
 }
+
+// TestReportStimulus_AnswersForTheRunRatherThanThePackage covers the three
+// answers the header can give, since V01's publish gate reads this one field.
+func TestReportStimulus_AnswersForTheRunRatherThanThePackage(t *testing.T) {
+	opts := options{ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, Edition: editionAll, ServerMode: ServerModeDefault}
+	tests := []struct {
+		name  string
+		tasks []evalTask
+		want  string
+	}{
+		{
+			name:  "a run with no tasks has produced no evidence",
+			tasks: nil,
+			want:  stimulusCoached,
+		},
+		{
+			name:  "a task whose own words name its action is coached",
+			tasks: []evalTask{{ID: "MT-x", Prompt: "Run project.get for `my-org/tools/x`.", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}}},
+			want:  stimulusCoached,
+		},
+		{
+			name:  "a task asking in a user's words is not",
+			tasks: []evalTask{{ID: "MT-y", Prompt: "Tell me the default branch of `my-org/tools/x`.", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}}},
+			want:  stimulusUncoached,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := reportStimulus(opts, tc.tasks); got != tc.want {
+				t.Errorf("reportStimulus() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
