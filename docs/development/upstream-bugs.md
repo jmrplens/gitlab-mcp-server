@@ -118,7 +118,7 @@ readable without opening the tracker:
 | 43 | client-go | [PipelineInfo decodes two entities and models only the smaller one](#pipelineinfo-decodes-two-entities-and-models-only-the-smaller-one) | No | No | No | No | Yes |
 | 44 | client-go | [Group, Project and Issue each model one entity where GitLab renders two](#group-project-and-issue-each-model-one-entity-where-gitlab-renders-two) | No | No | No | No | Yes |
 | 45 | client-go | [The work item get, create and update documents select licensed fields](#the-work-item-get-create-and-update-documents-select-licensed-fields) | No | No | No | Yes, on Community Edition | None possible |
-| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), open | No | Was yes | Yes |
+| 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), open; [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | No | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 
@@ -2316,16 +2316,31 @@ against the styleguide's `code:` is the prevailing idiom rather than a defect.
 
 - **Reported**: yes, as the merge request below rather than as an issue of its
   own, the way the job token scope annotations went.
-- **In review**: yes,
-  [gitlab-org/gitlab!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239),
-  from the community fork: the endpoint presents the merge request on success
-  and renders the service's error with its own status. Unlike
+- **In review**: yes, as **two** merge requests from the community fork,
+  [gitlab-org/gitlab!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702)
+  (adds `cancel_auto_merge`, which presents the merge request on success and
+  renders the service's error with its own status) and
+  [gitlab-org/gitlab!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704)
+  (corrects the old endpoint's documentation to what it actually sends, and
+  deprecates it).
+
+  **The first attempt,
+  [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239), was
+  closed unmerged, and why is the useful part.** It changed the handler to match
+  the documentation, on the reasoning that unlike
   [!254698](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/254698), which
-  corrected annotations to match the code, this one moves the code to match the
-  documentation, because here the page and the annotation agree with each other
-  and only the handler disagrees. That is a change to an observable response of
-  a stable endpoint, so the merge request says so plainly and offers the
-  opposite change as the alternative for them to pick.
+  corrected annotations to match the code, here the page and the annotation
+  agree with each other and only the handler disagrees. @phikai answered that
+  this is a breaking change whichever way it is argued, since it changes the
+  response of a stable endpoint, and @marc_shaw proposed the shape that was
+  taken instead: leave the old endpoint exactly as it behaves, deprecate it in
+  the documentation, and add a new one under the current naming. His reason is
+  worth recording because it applies to every future contribution of this shape:
+  "we basically can't deprecate our API, by introducing another endpoint, we are
+  now maintaining the old and the new". That is why the deprecation is a
+  documentation notice and **not** an entry in `doc/api/rest/deprecations.md`,
+  which promises removals, and why a symmetric `add_to_auto_merge` was declined
+  in the same breath.
 - **Merged**: no.
 - **Blocking**: it was, for the action. `merge_request.cancel_auto_merge`
   answered a model with an object carrying no IID, no state and no title, so a
@@ -2353,6 +2368,30 @@ turned up: `clear_auto_merge` rescues and returns
 read `http_status` out of a plain hash, so a cancellation that fails is
 answered `201` with the error hash as its body while the page documents `406`.
 Both halves of the documented contract were lost in the same missing `present`.
+
+**Why it survived for years, measured rather than guessed while writing the
+replacement.** The endpoint's own request spec never arms an auto-merge and
+cannot notice that it does not: it sets up with
+`AutoMergeService#execute(merge_request, STRATEGY_MERGE_WHEN_CHECKS_PASS)`, and
+on that factory the call is a no-op, because
+`MergeWhenChecksPassService#availability_details` returns an error when the
+merge request is already mergeable with no pipeline in progress, which is
+exactly the fixture's state. Against the real fixture: `mergeable? true`,
+`available_for? false`, `execute :failed`, `auto_merge_enabled false`. The
+endpoint answers `201` either way and the spec asserts only `:created`, so it
+passes whatever the handler does.
+
+**The false contract was published in a third place, and that one is CI-gated**:
+`doc/api/openapi/openapi_v3.yaml` is generated from these `desc` blocks, is
+committed, and `scripts/static-analysis` holds it through
+`gitlab:openapi:v3:check_docs`. Its `201` carried an `APIEntitiesMergeRequest`
+schema for an endpoint that returns no merge request. Two smaller findings from
+the same reading: the real body key order is `message`, `status`, `http_status`,
+and the `406` in the endpoint's `desc` failure list can never fire, because
+`not_acceptable!` is called in exactly one place in the whole codebase
+(`lib/api/repositories.rb`, hotlink detection). Both are evidence that the
+documentation was written from the annotation rather than from the behaviour,
+which is the pattern this whole record exists to catch.
 
 **Why it is worth recording rather than just working around**: the annotation
 is an oracle three of our own audit rules read. R-PATH's type grain joins an
