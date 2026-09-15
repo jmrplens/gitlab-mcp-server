@@ -202,9 +202,11 @@ type Metrics struct {
 	// is the periodic revalidation finding that GitLab now refuses the
 	// credential.
 	InvalidEvictions atomic.Int64
-	// RebuildEvictions counts entries dropped by [ServerPool.EvictServer],
-	// which is a configuration shape whose catalog registration failed taking
-	// every credential pointing at it.
+	// RebuildEvictions counts entries dropped because a configuration shape's
+	// catalog registration failed, taking every credential pointing at it:
+	// [ServerPool.EvictServer] for the entries already pooled when the failure
+	// landed, and [ServerPool.dropRefusedEntry] for one inserted after it,
+	// which the insert callback refuses.
 	RebuildEvictions       atomic.Int64
 	IdleEvictions          atomic.Int64
 	RevalidationsFailed    atomic.Int64
@@ -267,6 +269,9 @@ type ServerPool struct {
 	maxSize int
 	cfg     *config.Config
 	factory ServerFactory
+	// onInsert is called with each entry the pool has just cached, and answers
+	// whether the entry may stay. See [WithOnInsert].
+	onInsert func(*Entry) bool
 	// onEvict is called with a server the pool has just stopped owning, for
 	// every removal path: LRU pressure, idle reclamation, revalidation of a
 	// revoked token, and Close. It exists because a caller that keeps its own
@@ -276,8 +281,7 @@ type ServerPool struct {
 	//
 	// It runs while the pool's write lock is held, so it must be cheap and
 	// must not call back into the pool.
-	onInsert func(*Entry)
-	onEvict  func(*Entry, EvictionCause)
+	onEvict func(*Entry, EvictionCause)
 	// inUse answers whether an entry is doing work the pool cannot see, for
 	// idle eviction alone. See [WithInUse].
 	inUse              func(*Entry) bool
@@ -419,7 +423,8 @@ func WithInUse(fn func(*Entry) bool) Option {
 }
 
 // WithOnInsert registers a callback invoked with each server the pool has just
-// cached, once it is reachable by key.
+// cached, once it is reachable by key, and reporting whether the entry may
+// stay.
 //
 // It exists for work that must not start before the entry can be found again.
 // A server whose catalog is registered in the background is the case: if that
@@ -427,7 +432,16 @@ func WithInUse(fn func(*Entry) bool) Option {
 // started it would be racing its own insertion. The callback runs under the
 // pool's write lock, so like [WithOnEvict] it must not block and must not
 // re-enter the pool; starting a goroutine is what it is for.
-func WithOnInsert(fn func(*Entry)) Option {
+//
+// Returning false is how a callback that has just learned the entry is unusable
+// gets it out of the pool without re-entering it: the insertion is undone under
+// the lock it is already holding, before [ServerPool.GetOrCreateEntry] returns,
+// so the request that built the entry cannot answer its client while a poisoned
+// entry is still cached for the client's retry to find. Evicting from a
+// goroutine instead left exactly that window open. The entry is still handed
+// back to the caller that built it, since it is the only thing to answer that
+// one request with; it is simply not pooled, so the next request rebuilds.
+func WithOnInsert(fn func(*Entry) bool) Option {
 	return func(p *ServerPool) { p.onInsert = fn }
 }
 
@@ -849,6 +863,12 @@ func (p *ServerPool) IdentityFor(token, gitlabURL string) (UserIdentity, bool) {
 // already-stored entry is returned and the freshly built one is discarded: its
 // server holds no live sessions, mirroring [ServerPool.Close], which lets
 // servers expire naturally rather than terminating them.
+//
+// An entry the insert callback refuses ([WithOnInsert]) is taken back out
+// before this returns, so nothing is ever cached that the caller has already
+// been told is unusable. It is still returned, because the request that built
+// it has to be answered with something and that answer is the refusal its
+// server produces.
 func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -869,9 +889,12 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	p.entries[key] = entry
 
 	// After the entry is reachable by key, so a callback that starts work
-	// which may later have to evict this server can find it.
-	if p.onInsert != nil {
-		p.onInsert(entry)
+	// which may later have to evict this server can find it. A callback that
+	// already knows this server is unusable says so instead, and the insertion
+	// is undone here rather than by an eviction racing this caller's answer.
+	if p.onInsert != nil && !p.onInsert(entry) {
+		p.dropRefusedEntry(key, entry)
+		return entry
 	}
 
 	slog.Info(
@@ -886,6 +909,30 @@ func (p *ServerPool) insertEntry(key, token string, entry *Entry) *Entry {
 	)
 
 	return entry
+}
+
+// dropRefusedEntry undoes an insertion the insert callback refused. Callers
+// hold p.mu, which is the whole point: the entry never becomes visible to a
+// lookup that could hand it out.
+//
+// It is counted as a rebuild eviction, the same cause
+// [ServerPool.EvictServer] uses, because it is the same event seen a moment
+// earlier: a configuration shape whose catalog registration failed, taking a
+// credential with it. Which of the two finds a given entry is decided by
+// whether the failure arrived before or after this insertion, and an operator
+// reading the counter should not have to know that.
+func (p *ServerPool) dropRefusedEntry(key string, entry *Entry) {
+	p.lru.Remove(entry.element)
+	p.dropEntry(key, CauseRebuild)
+	p.metrics.Evictions.Add(1)
+	p.metrics.RebuildEvictions.Add(1)
+	gitlabURL, enterprise := entryConfigLogValues(entry)
+	slog.Warn(
+		"server pool: dropped a new entry whose server was already unusable",
+		"pool_size", len(p.entries),
+		"gitlab_url", gitlabURL,
+		"enterprise", enterprise,
+	)
 }
 
 // existingEntryLocked returns an existing entry for key while p.mu is held.

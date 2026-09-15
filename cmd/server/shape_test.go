@@ -567,6 +567,14 @@ func TestStartShapeRegistration_ASuccessfulBuild_OpensTheGate(t *testing.T) {
 // on the gate are failed, the shape is forgotten, and every pool entry pointing
 // at that server is evicted. The next request of that configuration rebuilds
 // instead of finding either the broken shape or an entry with no tools.
+//
+// It also pins the ORDER of those two, which is what issue 672 is about: the
+// callback that forgets the shape and evicts its entries must run while the
+// gate is still shut. Opening the gate is what releases the parked requests and
+// so what puts the refusal on the wire, and a client told to retry retries at
+// once; with the eviction still to come on this goroutine, that retry could
+// find the poisoned entry cached and be refused again by a server nothing was
+// rebuilding.
 func TestStartShapeRegistration_AFailedBuild_FailsTheGateAndDropsTheShape(t *testing.T) {
 	forced := failDynamicCatalog(t, nil)
 	client := newMockGitLabClient(t)
@@ -575,23 +583,49 @@ func TestStartShapeRegistration_AFailedBuild_FailsTheGateAndDropsTheShape(t *tes
 		t.Fatalf("newServerShell: %v", err)
 	}
 	shape := &serverShape{shell: shell}
-	failed := make(chan *mcp.Server, 1)
+	type failureReport struct {
+		server     *mcp.Server
+		gateOpened bool
+	}
+	failed := make(chan failureReport, 1)
 
-	startShapeRegistration(t.Context(), shape, func(srv *mcp.Server) { failed <- srv })
+	startShapeRegistration(t.Context(), shape, func(srv *mcp.Server) {
+		failed <- failureReport{server: srv, gateOpened: gateHasOpened(shell.gate)}
+	})
 
 	select {
-	case srv := <-failed:
-		if srv != shell.server {
+	case report := <-failed:
+		if report.server != shell.server {
 			t.Error("the failure callback was handed a server other than the shape's own")
+		}
+		if report.gateOpened {
+			t.Error("the gate had already released its waiters when the shape was dropped: " +
+				"a request refused in that window can retry before the eviction lands and be " +
+				"served the poisoned entry again")
 		}
 	case <-t.Context().Done():
 		t.Fatal("the shape was never reported as failed")
 	}
+	waitForCatalog(t, shell)
 	if cause := shell.gate.failed(); !errors.Is(cause, forced) {
 		t.Errorf("gate failure = %v, want the build's own error", cause)
 	}
 	if shell.gate.isReady() {
 		t.Error("the gate opened for a catalog that could not be built")
+	}
+}
+
+// gateHasOpened reports whether a readiness gate has released its waiters,
+// either way.
+//
+// [readinessGate.isReady] is not that question: it answers false for a gate
+// that opened with a failure, which is precisely the case under test here.
+func gateHasOpened(gate *readinessGate) bool {
+	select {
+	case <-gate.ready:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -688,6 +722,53 @@ func shapedPoolGitLab(t *testing.T) string {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// TestAdoptPooledEntry_AShapeAlreadyForgotten_RefusesTheEntry covers the answer
+// the pool's insert callback gives for an entry built on a shape whose
+// registration has since failed.
+//
+// That entry was inserted after the eviction which followed the failure had
+// already scanned the pool, so nothing else will ever look at it: the registry
+// is the only witness left, and refusing is what takes the entry back out
+// before the request that built it is answered. Keeping it would cache a server
+// whose readiness gate has failed, and every later request for that credential
+// would be refused from it until an idle timeout or a revalidation happened to
+// drop it (issue 672).
+//
+// The kept answer is driven by the wiring tests below, which assert that a
+// pooled entry has its per-credential state filed.
+func TestAdoptPooledEntry_AShapeAlreadyForgotten_RefusesTheEntry(t *testing.T) {
+	gitlab := shapedPoolGitLab(t)
+	_, pool := newShapedServerPool(t.Context(), &config.Config{
+		GitLabURL:         gitlab,
+		Tier:              edition.Free,
+		TierExplicit:      true,
+		IgnoreScopes:      true,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+	})
+	t.Cleanup(pool.Close)
+
+	entry, err := pool.GetOrCreateEntry("glpat-orphaned", gitlab, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+
+	// A registry that has never heard of this entry's server is what the real
+	// one looks like the moment after a failed registration forgot the shape.
+	forgotten := newShapeServers(func(*config.ServerConfig, bool) (*serverShape, error) {
+		return nil, errors.New("this registry builds nothing")
+	}, nil)
+	credentials := &credentialStates{}
+
+	if adoptPooledEntry(t.Context(), forgotten, credentials, entry) {
+		t.Error("an entry whose configuration shape is gone was admitted to the pool; " +
+			"every request for that credential would be answered from its failed readiness gate")
+	}
+	if credentials.get(entry.Owner()) != nil {
+		t.Error("per-credential state was filed for an entry the pool is being told to drop")
+	}
 }
 
 // TestNewShapedServerPool_EvictingAnEntry_EndsWhatThatCredentialOwned drives the
