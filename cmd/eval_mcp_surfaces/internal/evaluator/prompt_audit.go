@@ -578,7 +578,7 @@ func promptIdentifierContext(text string, start, end int) bool {
 	if end >= len(text) {
 		return false
 	}
-	if after := text[end]; after == '.' {
+	if text[end] == '.' {
 		return end+1 < len(text) && promptIdentifierByte(text[end+1])
 	}
 	// An equals sign is the other way a case writes a parameter down. A

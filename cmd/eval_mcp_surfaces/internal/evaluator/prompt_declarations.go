@@ -56,6 +56,11 @@ var promptDeclarationSurfaces = map[string]bool{
 	config.ToolSurfaceMeta:    true,
 }
 
+// promptDeclarationCaseSchemaResource is the case that asks a model to read the
+// schema resource of the action it then calls, which is why its URI carries an
+// action ID on both surfaces.
+const promptDeclarationCaseSchemaResource = "MS-040"
+
 // declaredPromptFindings holds every case-site finding the gate accepts, each
 // with the surface it is rendered on, a category and a reason.
 //
@@ -65,7 +70,7 @@ var promptDeclarationSurfaces = map[string]bool{
 var declaredPromptFindings = []promptDeclaration{
 	{
 		Surface:  config.ToolSurfaceDynamic,
-		Case:     "MS-040",
+		Case:     promptDeclarationCaseSchemaResource,
 		Kind:     promptLeakAction,
 		Value:    "project.get",
 		Category: promptCategoryLiteralIsTheRequest,
@@ -76,7 +81,7 @@ var declaredPromptFindings = []promptDeclaration{
 	},
 	{
 		Surface:  config.ToolSurfaceMeta,
-		Case:     "MS-040",
+		Case:     promptDeclarationCaseSchemaResource,
 		Kind:     promptLeakTool,
 		Value:    "gitlab_project",
 		Category: promptCategoryLiteralIsTheRequest,
@@ -85,7 +90,7 @@ var declaredPromptFindings = []promptDeclaration{
 	},
 	{
 		Surface:  config.ToolSurfaceMeta,
-		Case:     "MS-040",
+		Case:     promptDeclarationCaseSchemaResource,
 		Kind:     promptLeakAction,
 		Value:    "get",
 		Category: promptCategoryLiteralIsTheRequest,
