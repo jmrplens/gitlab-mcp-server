@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -237,7 +237,32 @@ function checkTarget(file, line, rawTarget) {
 		return;
 	}
 
-	checkFragment(file, line, target, resolved, fragment);
+	checkFragment(file, line, target, pageOf(resolved), fragment);
+}
+
+// pageOf names the file whose headings answer a fragment. A link can resolve to
+// a directory, since that is the first candidate and a directory exists, and
+// both renderers answer one with the page inside it: GitHub draws the README
+// below the listing, Starlight routes to the index. Without this the fragment
+// on such a link was dropped for landing on something that is not Markdown,
+// which is the silence this whole change is about.
+//
+// The page is looked for inside the directory rather than by letting the
+// candidate list run on, because the next candidates are "<dir>.md" and
+// "<dir>.mdx", siblings of the directory rather than anything a reader of that
+// link would be shown.
+function pageOf(resolvedPath) {
+	if (!isDirectory(resolvedPath)) {
+		return resolvedPath;
+	}
+	const inside = ["README.md", "index.md", "index.mdx"].map((name) =>
+		path.join(resolvedPath, name),
+	);
+	return inside.find((candidate) => existsSync(candidate)) ?? resolvedPath;
+}
+
+function isDirectory(candidate) {
+	return statSync(candidate, { throwIfNoEntry: false })?.isDirectory() ?? false;
 }
 
 // checkFragment holds the other half of a link, the half that used to be
