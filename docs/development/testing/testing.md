@@ -706,7 +706,7 @@ Docker mode files use the `e2e-docker-` prefix, and Enterprise Docker files use 
 
 The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. Docker targets still tear down containers and volumes before returning a non-zero status on failure.
 
-The same three targets also record what the suite did, beside the reports of what it concluded: each exports `GITLAB_MCP_TEST_E2E_CALLS_DIR` as an absolute path under `dist/e2e-calls/` (`self-hosted`, `ce` or `ee`), clears that directory first, and runs with `-count=1`, since a package-list run can answer from the test cache and a cached PASS records nothing. The suite then writes one `calls-*.jsonl` shard per test process: a call line for every tool call, resource read, prompt and completion a test made, attributed to the subtest that made it and carrying the canonical action it asked for; a dispatch line for every server span, with the route the server actually ran; one session line per in-process server with the tools, resources and prompts it listed; and one run line with the edition, tier, version and fixture profile. The call lines carry no verdict, which is what the JSON report beside them is for: `go run ./cmd/audit_e2e_coverage/ -calls dist/e2e-calls/ce -results dist/e2e-reports/e2e-docker-log.json -runtime ce` joins the two and says what the run covered. The recorder lives in `test/e2e/internal/harness/record.go`, with the receiver it reads from in `otlp.go` beside it, and it is two halves that make one line. The client half is a sending middleware on every harness session: it stamps a fresh traceparent into `_meta`, writes down what was asked for and what came back, and attributes it to the test that asked through the context. The server half is the span that call produced, exported by the real binary over OTLP and joined on the trace id. So the dispatched action is what the server's own production telemetry says, rather than a second reading of it made by the test. Records are buffered per test and written from the first-registered cleanup, which therefore runs last, so the ledger's own undo calls are in the buffer and the test's final status is settled before anything is written. Nothing is written when the variable is unset.
+The same three targets also record what the suite did, beside the reports of what it concluded: each exports `GITLAB_MCP_TEST_E2E_CALLS_DIR` as an absolute path under `dist/e2e-calls/` (`self-hosted`, `ce` or `ee`), clears that directory first, and runs with `-count=1`, since a package-list run can answer from the test cache and a cached PASS records nothing. The suite then writes one `calls-*.jsonl` shard per test process: a call line for every tool call, resource read, prompt and completion a test made, attributed to the subtest that made it and carrying the canonical action it asked for; a dispatch line for every server span, with the route the server actually ran; one session line per server the run started, with the tools, resources and prompts it listed; and one run line with the edition, tier, version and fixture profile. The call lines carry no verdict, which is what the JSON report beside them is for: `go run ./cmd/audit_e2e_coverage/ -calls dist/e2e-calls/ce -results dist/e2e-reports/e2e-docker-log.json -runtime ce` joins the two and says what the run covered. The recorder lives in `test/e2e/internal/harness/record.go`, with the receiver it reads from in `otlp.go` beside it, and it is two halves that make one line. The client half is a sending middleware on every harness session: it stamps a fresh traceparent into `_meta`, writes down what was asked for and what came back, and attributes it to the test that asked through the context. The server half is the span that call produced, exported by the real binary over OTLP and joined on the trace id. So the dispatched action is what the server's own production telemetry says, rather than a second reading of it made by the test. Records are buffered per test and written from the first-registered cleanup, which therefore runs last, so the ledger's own undo calls are in the buffer and the test's final status is settled before anything is written. Nothing is written when the variable is unset.
 
 A third thing a run can record, off by default, is how much of the **server binary** it executed. `COVER=1` on `make test-e2e-ce`, `make test-e2e-ee` or `make test-e2e-gitlab` builds the shared binary with `-cover` and exports `E2E_COVER_DIR` as an absolute path under `dist/e2e-cover/` (`ce`, `ee` or `self-hosted`); the harness gives each server child that directory as its `GOCOVERDIR`, and `make e2e-go-coverage` merges what the run left into `dist/e2e-reports/e2e-go-coverage.out`, printing the per-package table and the total. It answers what `cmd/audit_e2e_coverage` cannot: that one reports which catalog actions dispatched, and this one reports which statements of the program ran, meaning startup, the catalog build, the middleware chain and the branches no live-GitLab scenario reaches. An instrumented binary writes its meta-data at startup and its counters from an exit hook, so only a child that ends normally contributes anything: `closeSessions` closes every session before it cancels their context, and a child left running is asked to terminate rather than killed, which is what makes the counters exist at all. The run's log ends with the counter files written against the children started, so a child that died is visible rather than merely missing. Nothing is committed and nothing gates on the number, since only a live GitLab produces the input, and the profile is never merged into `coverage.out`, which `sonar-project.properties` publishes as the unit suite's figure.
 
@@ -714,14 +714,17 @@ Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum
 
 #### Test Architecture
 
-The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
+A session is the **real binary over stdio**, not a server the test builds: `test/e2e/internal/harness` starts `cmd/server` as a child process and drives it through `mcp.CommandTransport`, staging one build for the whole run through `E2E_SERVER_BINARY`. The suite this replaced connected an in-process server with `mcp.NewInMemoryTransports()`, which is the right shape for a question about tool behaviour and answers none about the program around it: no startup path, no middleware chain, no flags, no separation of stdout from stderr.
 
-| Session       | Purpose                                      |
-| ------------- | -------------------------------------------- |
-| `individual`  | Individual GitLab tools                      |
-| `meta`        | Domain meta-tools and action dispatch        |
-| `elicitation` | Elicitation tools with mock user handler     |
-| `safeMode`    | Mutating tools wrapped as safe-mode previews |
+The surfaces are not separate sessions written by hand either. `harness.SurfacesWith` builds a scenario's fixture once on the parent and runs the body again per surface as a subtest, so one scenario is held to the same assertions on the dynamic, meta and individual paths:
+
+| Surface      | What it drives                                                |
+| ------------ | ------------------------------------------------------------- |
+| `dynamic`    | `gitlab_find_action` and `gitlab_execute_action`, the default |
+| `meta`       | Domain meta-tools and action dispatch                         |
+| `individual` | One visible tool per action                                   |
+
+A mode a scenario needs rather than a surface, such as safe mode or an elicitation handler, is asked for on the session it needs it on rather than kept as a fifth standing pair.
 
 **Workflows:**
 
@@ -750,12 +753,12 @@ Docker validation snapshots are written under `dist/e2e-reports/` after `make te
 
 #### Fixture Cleanup
 
-Test fixtures (`fixture_ce_test.go` / `fixture_ee_test.go`) register `t.Cleanup` handlers that **permanently delete** projects created during tests. GitLab's Delayed Deletion feature requires a two-step process:
+The fixture builders live in `test/e2e/internal/fixture`, one file per kind, and each registers the undo for what it created. Projects and groups are **permanently removed**, because GitLab's Delayed Deletion makes the ordinary delete a two-step process:
 
 1. Mark the project for deletion (`DELETE /projects/:id`)
 2. Permanently remove it (`DELETE /projects/:id?permanently_remove=true&full_path=...`)
 
-The `cleanupOrphanedProjects` function in `setup_test.go` runs at suite start to remove leftover projects from interrupted runs, including those already in pending-delete state (`IncludePendingDelete` option).
+A run cleans up only what carries its own run id, which is what lets two runs share an instance. What an interrupted run left behind is swept separately and by hand, `make e2e-clean-orphans`, which deletes every project, group and user named with `E2E_SWEEP_PREFIX` (default `e2e-`) and skips unless that prefix is set. It is a test of the fixture package because that library is importable only from `test/e2e`, and nothing schedules it: a prefix-wide sweep is not something a run should decide to do to an instance it shares.
 
 ### Meta-Tool Tests
 
@@ -961,12 +964,25 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (137 test files)
-    ├── setup_test.go         # MCP server setup, helpers, shared state
-    ├── fixture_ce_test.go    # Self-contained GitLab CE resource builders
-    ├── fixture_ee_test.go    # Self-contained GitLab EE resource builders
-    └── *_test.go             # Domain-specific test files
+├── internal/
+│   ├── harness/              # The one route from a test to a server: the child
+│   │                         # process, the session, the surfaces, the ledger,
+│   │                         # the waits and the coverage shards
+│   └── fixture/              # Resource builders, one file per kind, each
+│                             # registering the undo for what it creates
+├── gitlab/                   # The suite, one package per runtime
+│   ├── common/               # What any instance serves (168 test files)
+│   ├── ce/                   # What only an unlicensed instance does (4)
+│   └── ee/                   # Premium and Ultimate (45)
+├── http/                     # HTTP transport module (httpe2e)
+├── stdio/                    # stdio transport module (stdioe2e)
+├── collector/                # OTLP collector acceptance (collectore2e)
+└── orbit/                    # GitLab.com Knowledge Graph (orbitlive)
 ```
+
+The runtime a test needs is a property of the package it is in rather than of a
+build tag: every file under `gitlab/` and `internal/` carries `e2e` alone, so
+one compile and one analysis pass see all of them.
 
 ### Wizard Test Helpers
 
