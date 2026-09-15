@@ -168,6 +168,9 @@ const (
 	// metricFirstCallValidationPassRate is the rendered label for the
 	// first-call validation pass rate metric.
 	metricFirstCallValidationPassRate = "First-call validation pass rate"
+	// metricSchemaLookupUseRate is the rendered label for the schema lookup
+	// use rate metric.
+	metricSchemaLookupUseRate = "Schema lookup use rate"
 	// metricRepairSuccessRate is the rendered label for the repair success
 	// rate metric.
 	metricRepairSuccessRate = "Repair success rate"
@@ -185,6 +188,17 @@ const (
 	// metricIntegerValueTableRow formats a single metric integer as a
 	// markdown table row.
 	metricIntegerValueTableRow = "| %s | %d |\n"
+	// perRunMetricsHeading titles the table a repeated run writes to compare
+	// one run with another.
+	perRunMetricsHeading = "## Per-Run Metrics"
+	// perModelMetricsHeading titles the table a multi-model run writes, and is
+	// what the publisher looks for to read those rows back out of a report.
+	perModelMetricsHeading = "## Per-Model Metrics"
+	// metricStringValueTableRow formats an already-rendered metric value as
+	// a markdown table row. Rates are written through it rather than through
+	// a float verb, because a rate with no sample behind it renders as a
+	// dash and not as a number.
+	metricStringValueTableRow = "| %s | %s |\n"
 	// timestampLayout is the UTC timestamp layout used for generated
 	// evaluator artifacts.
 	timestampLayout = "20060102-150405"

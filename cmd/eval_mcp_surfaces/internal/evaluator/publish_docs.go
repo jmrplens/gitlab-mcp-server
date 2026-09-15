@@ -865,7 +865,7 @@ func publishTaskStatsByModel(content, defaultModel string) map[string]publishTas
 // publishMetricsByModel publishes metrics by model for the evaluator package.
 func publishMetricsByModel(content string) map[string]publishModelMetrics {
 	out := map[string]publishModelMetrics{}
-	for _, row := range reportNamedTableRows(content, "## Per-Model Metrics") {
+	for _, row := range reportNamedTableRows(content, perModelMetricsHeading) {
 		model := cleanReportValue(row["Model"])
 		if model == "" {
 			continue
@@ -1138,7 +1138,7 @@ func buildReadmeSummaryBlock(label string, reports []publishReport) string {
 	fmt.Fprintf(&b, "Current published result: **%s**.\n\n", label)
 	b.WriteString(renderReadmeSummaryTable(summaries))
 	fmt.Fprintf(&b, "\nThe published model-evaluation set covers %d task attempts and %d expected MCP operations. Across the selected reports, models emitted %d tool calls over %d model requests, with %s aggregate final success. See [AI Model Evaluation Results](docs/development/testing/model-results.md) for the detailed current matrix.\n",
-		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetric(aggregate.FinalSuccess))
+		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetricInProse(aggregate.FinalSuccess))
 	return strings.TrimSpace(b.String()) + "\n"
 }
 
@@ -1220,32 +1220,55 @@ func presetRank(preset string) int {
 	}
 }
 
+// weightedMetric averages one metric over the rows that measured it, weighting
+// each row by its attempts. A row whose metric has no sample behind it is left
+// out of both the sum and the weight, so a preset with no destructive task
+// neither raises nor lowers the destructive-safety aggregate.
+type weightedMetric struct {
+	sum    float64
+	weight int
+}
+
+// add folds one row's measurement in, ignoring a row that measured nothing.
+func (w *weightedMetric) add(value float64, weight int) {
+	if !metricIsDefined(value) {
+		return
+	}
+	w.sum += value * float64(weight)
+	w.weight += weight
+}
+
+// value returns the weighted average, or metricUndefined when no row measured it.
+func (w *weightedMetric) value() float64 {
+	if w.weight == 0 {
+		return metricUndefined
+	}
+	return w.sum / float64(w.weight)
+}
+
 // aggregatePublishRows aggregates publish rows across reports.
 func aggregatePublishRows(rows []publishRow) publishRow {
 	var out publishRow
+	var toolSelection, actionSelection, firstPass, destructiveSafety, finalSuccess weightedMetric
 	for _, row := range rows {
 		out.Attempts += row.Attempts
 		out.ExpectedOps += row.ExpectedOps
 		out.ModelRequests += row.ModelRequests
 		out.ToolCalls += row.ToolCalls
-		out.ToolSelection += row.ToolSelection * float64(row.Attempts)
-		out.ActionSelection += row.ActionSelection * float64(row.Attempts)
-		out.FirstPass += row.FirstPass * float64(row.Attempts)
 		out.RepairAttempts += row.RepairAttempts
 		out.RepairSuccesses += row.RepairSuccesses
-		out.DestructiveSafety += row.DestructiveSafety * float64(row.Attempts)
-		out.FinalSuccess += row.FinalSuccess * float64(row.Attempts)
+		toolSelection.add(row.ToolSelection, row.Attempts)
+		actionSelection.add(row.ActionSelection, row.Attempts)
+		firstPass.add(row.FirstPass, row.Attempts)
+		destructiveSafety.add(row.DestructiveSafety, row.Attempts)
+		finalSuccess.add(row.FinalSuccess, row.Attempts)
 	}
-	if out.Attempts == 0 {
-		return out
-	}
-	denominator := float64(out.Attempts)
-	out.ToolSelection /= denominator
-	out.ActionSelection /= denominator
-	out.FirstPass /= denominator
+	out.ToolSelection = toolSelection.value()
+	out.ActionSelection = actionSelection.value()
+	out.FirstPass = firstPass.value()
 	out.RepairSuccess = percent(out.RepairSuccesses, out.RepairAttempts)
-	out.DestructiveSafety /= denominator
-	out.FinalSuccess /= denominator
+	out.DestructiveSafety = destructiveSafety.value()
+	out.FinalSuccess = finalSuccess.value()
 	return out
 }
 
@@ -1304,12 +1327,19 @@ func providerModel(model string) (providerName, modelName string) {
 	}
 }
 
-// compatibilityLabel formats compatibility label for report output.
+// compatibilityLabel formats compatibility label for report output. A model one
+// of whose three rates was never measured is neither compatible nor under
+// review: nothing was observed to judge.
 func compatibilityLabel(summary publishModelSummary) string {
-	if summary.ToolSelection == 100 && summary.ActionSelection == 100 && summary.FinalSuccess == 100 {
-		return "OK"
+	for _, value := range []float64{summary.ToolSelection, summary.ActionSelection, summary.FinalSuccess} {
+		if !metricIsDefined(value) {
+			return "No sample"
+		}
+		if value != 100 {
+			return "Review"
+		}
 	}
-	return "Review"
+	return "OK"
 }
 
 // dockerLiveStatus formats docker live status for report output.
@@ -1317,13 +1347,16 @@ func dockerLiveStatus(summary publishModelSummary) string {
 	if !summary.DockerBacked {
 		return "Not Docker-backed"
 	}
+	if !metricIsDefined(summary.FinalSuccess) {
+		return fmt.Sprintf("No final-success sample across %d ops", summary.ExpectedOps)
+	}
 	return fmt.Sprintf("%s final across %d ops", formatMetric(summary.FinalSuccess), summary.ExpectedOps)
 }
 
 // formatRepairMetric renders the result as a formatted string.
 func formatRepairMetric(row publishRow) string {
 	if row.RepairAttempts == 0 {
-		return "-"
+		return noMetricSample
 	}
 	return fmt.Sprintf("%s (%d/%d)", formatMetric(row.RepairSuccess), row.RepairSuccesses, row.RepairAttempts)
 }

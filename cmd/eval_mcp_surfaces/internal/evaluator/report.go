@@ -3,6 +3,7 @@ package evaluator
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -149,15 +150,15 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	fmt.Fprintf(&b, "## Metrics\n\n")
 	b.WriteString(metricValueTableHeader)
-	fmt.Fprintf(&b, "| Tool-selection accuracy | %.1f%% |\n", metrics.ToolSelection)
-	fmt.Fprintf(&b, "| Action-selection accuracy | %.1f%% |\n", metrics.ActionSelection)
-	fmt.Fprintf(&b, "| First-call validation pass rate | %.1f%% |\n", metrics.FirstPass)
-	fmt.Fprintf(&b, "| Schema lookup use rate | %.1f%% |\n", metrics.SchemaLookup)
-	fmt.Fprintf(&b, "| Resource lookup use rate | %.1f%% |\n", metrics.ResourceLookup)
-	fmt.Fprintf(&b, "| MCP capability bridge use rate | %.1f%% |\n", metrics.CapabilityLookup)
-	fmt.Fprintf(&b, "| Repair success rate | %.1f%% |\n", metrics.RepairSuccess)
-	fmt.Fprintf(&b, "| Destructive safety | %.1f%% |\n", metrics.DestructiveSafety)
-	fmt.Fprintf(&b, "| Final task success proxy | %.1f%% |\n", metrics.FinalSuccess)
+	fmt.Fprintf(&b, metricStringValueTableRow, metricToolSelection, formatMetric(metrics.ToolSelection))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricActionSelection, formatMetric(metrics.ActionSelection))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricFirstCallValidationPassRate, formatMetric(metrics.FirstPass))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricSchemaLookupUseRate, formatMetric(metrics.SchemaLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, "Resource lookup use rate", formatMetric(metrics.ResourceLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, "MCP capability bridge use rate", formatMetric(metrics.CapabilityLookup))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricRepairSuccessRate, formatMetric(metrics.RepairSuccess))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricDestructiveSafety, formatMetric(metrics.DestructiveSafety))
+	fmt.Fprintf(&b, metricStringValueTableRow, metricFinalTaskSuccess, formatMetric(metrics.FinalSuccess))
 	writePerModelMetrics(&b, results)
 	if opts.Repeat > 1 {
 		writePerRunMetrics(&b, results)
@@ -819,23 +820,15 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 		byRun[result.Run] = append(byRun[result.Run], result)
 	}
 	sort.Ints(runs)
-	fmt.Fprintf(b, "\n## Per-Run Metrics\n\n")
+	fmt.Fprintf(b, "\n%s\n\n", perRunMetricsHeading)
 	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
 	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, runIndex := range runs {
 		metrics := calculateMetrics(byRun[runIndex])
 		fmt.Fprintf(
-			b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+			b, "| %d | %s |\n",
 			runIndex,
-			metrics.ToolSelection,
-			metrics.ActionSelection,
-			metrics.FirstPass,
-			metrics.SchemaLookup,
-			metrics.ResourceLookup,
-			metrics.CapabilityLookup,
-			metrics.RepairSuccess,
-			metrics.DestructiveSafety,
-			metrics.FinalSuccess,
+			strings.Join(formattedMetricCells(metrics), " | "),
 		)
 	}
 }
@@ -846,14 +839,35 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 		return
 	}
 	models := sortedStringKeys(byModel)
-	fmt.Fprintf(b, "\n## Per-Model Metrics\n\n")
+	fmt.Fprintf(b, "\n%s\n\n", perModelMetricsHeading)
 	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		metrics := calculateMetrics(byModel[model])
-		fmt.Fprintf(b, "| `%s` | %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
-			escapeTable(model), len(byModel[model]), metrics.ToolSelection, metrics.ActionSelection, metrics.FirstPass, metrics.SchemaLookup, metrics.ResourceLookup, metrics.CapabilityLookup, metrics.RepairSuccess, metrics.DestructiveSafety, metrics.FinalSuccess)
+		fmt.Fprintf(b, "| `%s` | %d | %s |\n",
+			escapeTable(model), len(byModel[model]), strings.Join(formattedMetricCells(metrics), " | "))
 	}
+}
+
+// formattedMetricCells renders one metric set as the per-run and per-model
+// tables order them, each cell already a dash where nothing was measured.
+func formattedMetricCells(metrics metrics) []string {
+	values := []float64{
+		metrics.ToolSelection,
+		metrics.ActionSelection,
+		metrics.FirstPass,
+		metrics.SchemaLookup,
+		metrics.ResourceLookup,
+		metrics.CapabilityLookup,
+		metrics.RepairSuccess,
+		metrics.DestructiveSafety,
+		metrics.FinalSuccess,
+	}
+	cells := make([]string, 0, len(values))
+	for _, value := range values {
+		cells = append(cells, formatMetric(value))
+	}
+	return cells
 }
 
 func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, dryRun bool) {
@@ -1141,9 +1155,6 @@ type metricCounters struct {
 
 // calculateMetrics derives evaluator success metrics from task results.
 func calculateMetrics(results []taskResult) metrics {
-	if len(results) == 0 {
-		return metrics{}
-	}
 	counters := metricCounters{}
 	for _, result := range results {
 		counters.record(result)
@@ -1227,12 +1238,33 @@ func firstOutcomeCandidateSteps(steps []evalStep) []evalStep {
 	return candidates
 }
 
-// percent converts a count and total into a percentage, treating empty samples as complete.
+// percent converts a count and total into a percentage. An empty sample has no
+// rate at all, so it returns metricUndefined rather than a number. Returning
+// 100 is what made a run that attempted no repair at all report a perfect
+// repair success rate, on the published tables as well as in its own report.
 func percent(value, total int) float64 {
 	if total == 0 {
-		return 100
+		return metricUndefined
 	}
 	return float64(value) * 100 / float64(total)
+}
+
+// metricUndefined marks a rate whose denominator was empty. Renderers print it
+// as a dash and aggregation leaves it out of both sides of its average.
+//
+// It is NaN rather than a value off the bottom of the scale because a figure
+// rendered here may legitimately be negative: traceOverheadPercent is negative
+// whenever a run made fewer calls than its tasks expected operations, so a
+// sentinel recognized by its sign would silently print a real measurement as
+// "not measured".
+var metricUndefined = math.NaN()
+
+// noMetricSample is how an undefined metric renders in a table cell.
+const noMetricSample = "-"
+
+// metricIsDefined reports whether a metric was measured over a non-empty sample.
+func metricIsDefined(value float64) bool {
+	return !math.IsNaN(value)
 }
 
 // boolText formats booleans for human-readable Markdown reports.

@@ -168,6 +168,64 @@ func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 	}
 }
 
+// TestAggregatePublishRows_UnmeasuredRowsLeaveTheAggregateUnmeasured verifies
+// that a row with no sample behind a metric changes neither side of that
+// metric's average, and that an aggregate no row measured stays undefined.
+// Weighting the sentinel by attempts would have dragged a real average below
+// zero, which is the failure mode a negative sentinel invites.
+func TestAggregatePublishRows_UnmeasuredRowsLeaveTheAggregateUnmeasured(t *testing.T) {
+	rows := []publishRow{
+		{Attempts: 10, DestructiveSafety: metricUndefined, FinalSuccess: metricUndefined},
+		{Attempts: 10, DestructiveSafety: 50, FinalSuccess: metricUndefined},
+	}
+
+	aggregate := aggregatePublishRows(rows)
+	if aggregate.Attempts != 20 {
+		t.Fatalf("aggregate attempts = %d, want every row counted", aggregate.Attempts)
+	}
+	if aggregate.DestructiveSafety != 50 {
+		t.Fatalf("aggregate destructive safety = %v, want the one measured row's 50", aggregate.DestructiveSafety)
+	}
+	if metricIsDefined(aggregate.FinalSuccess) {
+		t.Fatalf("aggregate final success = %v, want undefined when no row measured it", aggregate.FinalSuccess)
+	}
+	if got := formatMetric(aggregate.FinalSuccess); got != "-" {
+		t.Fatalf("formatMetric(aggregate final success) = %q, want a dash", got)
+	}
+	empty := aggregatePublishRows(nil)
+	if metricIsDefined(empty.ToolSelection) || metricIsDefined(empty.RepairSuccess) {
+		t.Fatalf("empty aggregate = %+v, want undefined rates", empty)
+	}
+}
+
+// TestPublishSummaryLabels_SayWhenNothingWasMeasured verifies the two published
+// cells that read a metric without formatting it as a number. A model whose
+// rates have no sample is labeled as unmeasured rather than as compatible or
+// as under review, and its Docker status says so in words instead of printing
+// a dash mid-sentence.
+func TestPublishSummaryLabels_SayWhenNothingWasMeasured(t *testing.T) {
+	unmeasured := publishModelSummary{
+		DockerBacked:    true,
+		ExpectedOps:     12,
+		ToolSelection:   metricUndefined,
+		ActionSelection: metricUndefined,
+		FinalSuccess:    metricUndefined,
+	}
+	if got := compatibilityLabel(unmeasured); got != "No sample" {
+		t.Fatalf("compatibilityLabel(unmeasured) = %q, want No sample", got)
+	}
+	if got := dockerLiveStatus(unmeasured); got != "No final-success sample across 12 ops" {
+		t.Fatalf("dockerLiveStatus(unmeasured) = %q", got)
+	}
+	perfect := publishModelSummary{DockerBacked: true, ExpectedOps: 12, ToolSelection: 100, ActionSelection: 100, FinalSuccess: 100}
+	if got := compatibilityLabel(perfect); got != "OK" {
+		t.Fatalf("compatibilityLabel(perfect) = %q, want OK", got)
+	}
+	if got := dockerLiveStatus(perfect); got != "100.0% final across 12 ops" {
+		t.Fatalf("dockerLiveStatus(perfect) = %q", got)
+	}
+}
+
 // TestAggregatePublishRows_RepairSuccessUsesRepairAttempts verifies AggregatePublishRows uses repair attempts for repair success.
 func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	rows := []publishRow{

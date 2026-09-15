@@ -204,6 +204,14 @@ as harness noise and should be fixed in fixtures before judging the model.
 | Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
 | MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
 
+A rate whose denominator is empty prints `-`, not a percentage, everywhere a
+report or a published table states it: a run that attempted no repair has no
+repair success rate, and one that ran no destructive task has no destructive
+safety. An aggregate leaves such a row out of both sides of its average rather
+than counting it as a pass, and a comparison states no delta against it. Until
+3.1.0 an empty denominator scored 100%, so the emptier the sample the better a
+model looked.
+
 For clear single-operation meta tasks, the target is `model_calls=1` and
 `tool_calls=1`. For Dynamic tasks, one GitLab operation normally requires two
 tool calls: `gitlab_find_action` followed by `gitlab_execute_action`. Extra calls

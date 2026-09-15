@@ -348,8 +348,75 @@ func TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors(t *testing.T) {
 	}
 }
 
-// TestCalculateMetrics_HandlesNoRepairs verifies CalculateMetrics handles no repairs.
-func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
+// TestWriteReport_PerRunAndPerModelTables_AppearOnlyWhenThereIsSomethingToCompare
+// verifies the two metric tables that exist to compare one slice of a run with
+// another: the per-run table is written only for a repeated run, the per-model
+// table only when more than one model answered, and each row carries one cell
+// per metric with a dash where nothing was measured.
+//
+// Nothing drove either table before, which is how both of their guards
+// survived mutation while their rows were being rewritten.
+func TestWriteReport_PerRunAndPerModelTables_AppearOnlyWhenThereIsSomethingToCompare(t *testing.T) {
+	task := evalTask{ID: "MT-001", ExpectedTool: "gitlab_project", ExpectedAction: "get"}
+	attempt := func(run int, model string, pass bool) taskResult {
+		return taskResult{
+			Run: run, Model: model, ToolSurface: config.ToolSurfaceDynamic, Task: task,
+			FirstTool: "gitlab_project", FirstAction: "get", FinalTool: "gitlab_project", FinalAction: "get",
+			CompletedSteps: 1, FirstPass: pass, FinalSuccess: pass, DestructiveSafe: true, ModelCalls: 1, ToolCalls: 1,
+		}
+	}
+	write := func(t *testing.T, repeat int, results []taskResult) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "eval.md")
+		opts := options{Model: "model-a", ToolSurface: config.ToolSurfaceDynamic, Backend: backendMock, Repeat: repeat}
+		if err := writeReport(path, opts, results, nil, nil, true); err != nil {
+			t.Fatalf("writeReport() error = %v", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read report: %v", err)
+		}
+		return string(data)
+	}
+
+	single := write(t, 1, []taskResult{attempt(1, "model-a", true)})
+	if strings.Contains(single, perRunMetricsHeading) {
+		t.Fatalf("one run wrote %q:\n%s", perRunMetricsHeading, single)
+	}
+	if strings.Contains(single, perModelMetricsHeading) {
+		t.Fatalf("one model wrote %q:\n%s", perModelMetricsHeading, single)
+	}
+
+	many := write(t, 2, []taskResult{
+		attempt(1, "model-a", true),
+		attempt(2, "model-a", false),
+		attempt(1, "model-b", true),
+	})
+	for _, heading := range []string{perRunMetricsHeading, perModelMetricsHeading} {
+		t.Run(heading, func(t *testing.T) {
+			if !strings.Contains(many, heading) {
+				t.Fatalf("repeated multi-model run missing %q:\n%s", heading, many)
+			}
+		})
+	}
+	// Nine metric cells, the last three of them a repair success rate no
+	// attempt measured, a destructive safety no task called for, and a final
+	// success two of the three attempts reached.
+	if !strings.Contains(many, "| 1 | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 0.0% | - | - | 100.0% |") {
+		t.Fatalf("per-run row missing or reshaped:\n%s", many)
+	}
+	if !strings.Contains(many, "| `model-b` | 1 | 100.0% | 100.0% | 100.0% | 0.0% | 0.0% | 0.0% | - | - | 100.0% |") {
+		t.Fatalf("per-model row missing or reshaped:\n%s", many)
+	}
+}
+
+// TestCalculateMetrics_NoRepairsOrDestructiveTasks_LeavesThoseMetricsUndefined
+// verifies that a rate nothing was measured for is left undefined rather than
+// scored. The single attempt attempts no repair and names no destructive step,
+// so repair success and destructive safety have an empty denominator; both were
+// reported as 100 before, which is what let a run that dispatched nothing
+// publish perfect scores.
+func TestCalculateMetrics_NoRepairsOrDestructiveTasks_LeavesThoseMetricsUndefined(t *testing.T) {
 	results := []taskResult{{
 		Task:            evalTask{ExpectedTool: "gitlab_user", ExpectedAction: "current"},
 		FirstTool:       "gitlab_user",
@@ -359,8 +426,26 @@ func TestCalculateMetrics_HandlesNoRepairs(t *testing.T) {
 		DestructiveSafe: true,
 	}}
 	measured := calculateMetrics(results)
-	if measured.ToolSelection != 100 || measured.ActionSelection != 100 || measured.RepairSuccess != 100 {
-		t.Fatalf("metrics = %+v, want all applicable metrics at 100", measured)
+	if measured.ToolSelection != 100 || measured.ActionSelection != 100 || measured.FinalSuccess != 100 {
+		t.Fatalf("metrics = %+v, want the measured rates at 100", measured)
+	}
+	if metricIsDefined(measured.RepairSuccess) || metricIsDefined(measured.DestructiveSafety) {
+		t.Fatalf("metrics = %+v, want repair success and destructive safety undefined", measured)
+	}
+	if got := formatMetric(measured.RepairSuccess); got != "-" {
+		t.Fatalf("formatMetric(repair success) = %q, want a dash", got)
+	}
+}
+
+// TestCalculateMetrics_NoResults_LeavesEveryMetricUndefined verifies that a run
+// with no attempt at all publishes no rate. Every denominator is empty, so
+// every metric is a dash rather than a perfect score.
+func TestCalculateMetrics_NoResults_LeavesEveryMetricUndefined(t *testing.T) {
+	measured := calculateMetrics(nil)
+	for _, cell := range formattedMetricCells(measured) {
+		if cell != "-" {
+			t.Fatalf("metric cells = %q, want every cell a dash", formattedMetricCells(measured))
+		}
 	}
 }
 
