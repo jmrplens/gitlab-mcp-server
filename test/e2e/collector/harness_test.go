@@ -274,6 +274,10 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 	// Before the caller's own entries, so a test that needs to say something
 	// else about GORACE still can.
 	cmd.Env = append(cmd.Env, raceEnviron()...)
+	// An instrumented binary writes its counters where E2E_COVER_DIR says; a
+	// plain one ignores the variable, so this costs an ordinary run nothing
+	// (coverage_test.go).
+	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -333,18 +337,51 @@ func startServer(t *testing.T, env map[string]string, flags ...string) *server {
 				describeExit(waitErr, cmd), srv.logs())
 		default:
 		}
-		// Cancel first, then wait: the process flushes its last telemetry
-		// batch on the way out, and a test that killed it without waiting
-		// would race that flush against its own assertions. Waiting on the
-		// reaper is that same barrier: the Wait it made is the one that awaits
-		// the copy goroutines, so by the time this returns the flush has been
-		// sent and whatever the server said about it is in the buffer.
+		// Asked to stop, then waited for, and only then canceled. The cancel
+		// is a kill, and a killed server flushes no last telemetry batch and
+		// runs no coverage exit hook: an instrumented binary writes its
+		// counter file when it exits normally, so every child of this module
+		// was losing whatever it had executed. Waiting on the reaper is the
+		// barrier the assertions need either way: the Wait it made is the one
+		// that awaits the copy goroutines, so by the time this returns the
+		// flush has been sent and whatever the server said about it is in the
+		// buffer.
+		stopServer(cmd, exited)
 		cancel()
 		<-exited
 	})
 
 	waitHealthy(t, srv, exited)
 	return srv
+}
+
+// serverStopGrace is how long a cleanup lets the server leave on its own
+// before it falls back to canceling the context, which kills it. Bounded
+// rather than unbounded because a server that will not stop should end a test
+// run rather than hang it.
+const serverStopGrace = 10 * time.Second
+
+// stopServer asks a running server to shut down and waits for it to go.
+//
+// os.Interrupt is the signal, because it is the one every platform's Go
+// runtime can name and the server listens for it beside SIGTERM
+// (signal.NotifyContext in cmd/server). Windows refuses to deliver it to
+// another process, and this returns on that refusal, leaving the caller's
+// cancel to stop the server the way it always did; this module needs a Docker
+// daemon and so runs on Unix in practice, which is where the two things it
+// buys are real: the last telemetry batch is flushed, and an instrumented
+// binary runs the exit hook that writes its coverage counters.
+func stopServer(cmd *exec.Cmd, exited <-chan struct{}) {
+	if cmd.Process == nil {
+		return
+	}
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		return
+	}
+	select {
+	case <-exited:
+	case <-time.After(serverStopGrace):
+	}
 }
 
 // describeExit names how the process ended: its recorded status when there is

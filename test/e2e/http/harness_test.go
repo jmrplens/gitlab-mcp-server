@@ -342,6 +342,10 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 	// Before the caller's own entries, so a test that needs to say something
 	// else about GORACE still can.
 	cmd.Env = append(cmd.Env, raceEnviron()...)
+	// An instrumented binary writes its counters where E2E_COVER_DIR says; a
+	// plain one ignores the variable, so this costs an ordinary run nothing
+	// (coverage_test.go).
+	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -388,6 +392,7 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 				describeExit(waitErr, cmd), logs())
 		default:
 		}
+		stopServer(cmd, exited)
 		cancel()
 		<-exited
 	})
@@ -406,6 +411,40 @@ func tryStartServerOnPort(t *testing.T, port int, env map[string]string, flags .
 		return nil, err
 	}
 	return srv, nil
+}
+
+// serverStopGrace is how long a cleanup lets the server leave on its own
+// before it falls back to canceling the context, which kills it. Bounded
+// rather than unbounded because a server that will not stop is a defect this
+// module reports elsewhere, not one a cleanup should hang on.
+const serverStopGrace = 10 * time.Second
+
+// stopServer asks a running server to shut down and waits for it to go.
+//
+// Every caller cancels the command's context afterwards, and that cancel is a
+// kill. A killed process runs no exit hook, so an instrumented binary writes
+// no counter file and everything it executed is missing from the merged
+// profile — the whole of this module, since almost every server here ends in a
+// cleanup. Asking first is what makes the measurement real; the cancel stays
+// as the fallback for a server that does not answer, which is why this is
+// bounded and never reports anything of its own.
+//
+// It signals rather than closing anything because that is what this transport
+// gives a supervisor: SIGTERM on every platform but Windows, and a CTRL_BREAK
+// to the server's own process group there (terminate_unix_test.go,
+// terminate_windows_test.go). A process already gone refuses the signal, which
+// is the case this returns on.
+func stopServer(cmd *exec.Cmd, exited <-chan struct{}) {
+	if cmd.Process == nil {
+		return
+	}
+	if err := signalTermination(cmd.Process); err != nil {
+		return
+	}
+	select {
+	case <-exited:
+	case <-time.After(serverStopGrace):
+	}
 }
 
 // awaitListenAddr reads the address the server bound out of its own log.
@@ -683,6 +722,10 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(configFreeEnviron(), "LOG_LEVEL=info")
+	// A refusal is an exit, so an instrumented binary writes its counters on
+	// the way out: the startup validation these cases drive is measured like
+	// everything else.
+	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

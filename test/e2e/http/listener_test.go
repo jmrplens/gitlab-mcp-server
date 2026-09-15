@@ -76,6 +76,10 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
+	// The TLS and unix-socket listeners this starter exists for are statements
+	// nothing else in the tree reaches, so an instrumented binary has to be
+	// told where to write them down (coverage_test.go).
+	cmd.Env = append(cmd.Env, coverEnviron(t)...)
 
 	var out bytes.Buffer
 	var mu sync.Mutex
@@ -96,9 +100,19 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 			return out.String()
 		},
 	}
-	t.Cleanup(func() {
-		cancel()
+	// Reaped on its own goroutine so the cleanup can ask the server to stop
+	// and wait for it under a bound: Cmd.Wait can be called once, and a
+	// cleanup that called it directly would either hang on a server that
+	// ignored the signal or have to kill it and lose its counters.
+	exited := make(chan struct{})
+	go func() {
 		_ = cmd.Wait()
+		close(exited)
+	}()
+	t.Cleanup(func() {
+		stopServer(cmd, exited)
+		cancel()
+		<-exited
 	})
 
 	waitHealthy(t, srv)

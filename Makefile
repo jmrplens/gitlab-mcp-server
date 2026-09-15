@@ -85,8 +85,10 @@ E2E_CALLS_DIR=dist/e2e-calls
 # children a GOCOVERDIR under here, one directory per target, cleared where the
 # calls directory is cleared: in run-docker-e2e.sh for the two Docker targets,
 # since CI invokes that script rather than the target, and in the recipe for
-# the self-hosted one. `make e2e-go-coverage` merges what the run left. dist/
-# is gitignored, so `make clean` removes all of it.
+# the self-hosted one and for the three transport modules. `make
+# e2e-go-coverage` merges what the run left, so a GitLab run and a transport
+# run fold into one figure. dist/ is gitignored, so `make clean` removes all of
+# it.
 #
 # Two names for two things, the way E2E_CALLS_DIR and the exported
 # GITLAB_MCP_TEST_E2E_CALLS_DIR are two names: E2E_COVER_ROOT is the parent
@@ -286,32 +288,35 @@ test-e2e-harness: ensure-gotestsum
 # developer running all three used to pay for three compiles of the same tree;
 # with it set the build happens once here and every module drives that file.
 #
-# Three properties of it are the modules' own and are worth knowing before
+# Two properties of it are the modules' own and are worth knowing before
 # setting it by hand. A path naming nothing, a directory, or a file that cannot
 # be executed is refused rather than built around, so a stale dist/e2e fails the
-# run instead of being silently replaced by a build of its own. A `go test -race`
-# run refuses a staged binary outright, because the detector reaches only a
-# binary compiled with -race and this target compiles plainly; nothing here
-# passes -race, and .github/workflows/race.yml runs the modules directly and
-# stages nothing, which is what keeps that refusal theoretical there. And these
-# three stage a plain build even under COVER=1, which is what the line below
-# says: the coverage record is the rebuilt suite's run, not this one's.
+# run instead of being silently replaced by a build of its own. And a
+# `go test -race` run refuses a staged binary outright, because the detector
+# reaches only a binary compiled with -race and this target compiles plainly;
+# nothing here passes -race, and .github/workflows/race.yml runs the modules
+# directly and stages nothing, which is what keeps that refusal theoretical
+# there.
 #
-# That last one is a correctness requirement rather than a preference. An
-# instrumented binary given no GOCOVERDIR prints "warning: GOCOVERDIR not set,
-# no coverage data emitted" from the meta-data emit its init runs, so the line
-# arrives before anything this server writes, and the stdio module requires
-# every stderr line to parse as JSON (test/e2e/stdio/transport_test.go). Handing
-# these three an instrumented binary therefore does not cost a measurement, it
-# fails the run. The variable is target-specific and GNU make passes it down to
-# the prerequisite, so e2e-server-binary compiles plainly when it is built for
-# one of these and keeps -cover for every other target that stages it.
-test-e2e-stdio test-e2e-http test-e2e-collector: e2e_cover_build =
+# COVER=1 measures these three like every other run target: the shared build
+# carries -cover and each of them hands its children a GOCOVERDIR under its own
+# leaf. They used to stage a plain build instead, because an instrumented
+# binary given no GOCOVERDIR prints "warning: GOCOVERDIR not set, no coverage
+# data emitted" from the meta-data emit its init runs, before the server writes
+# anything, and the stdio module requires every stderr line to parse as JSON
+# (test/e2e/stdio/transport_test.go). Each module reads E2E_COVER_DIR itself
+# now (test/e2e/{stdio,http,collector}/coverage_test.go), so the key is there
+# and the line never appears. What that buys is the only measurement of the
+# transport there is: pipes, process lifetime, the handler chain, the listener,
+# and every flag a scenario against a GitLab cannot reach.
 
 ## test-e2e-stdio: run the stdio transport end-to-end module (no GitLab needed; drives the real binary over pipes).
 test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/stdio))
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  $(call e2e_cover_env,stdio) \
+	  $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
 	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
@@ -319,7 +324,10 @@ test-e2e-stdio: ensure-gotestsum e2e-server-binary
 ## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; nginx layer skips without Docker).
 test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/http))
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  $(call e2e_cover_env,http) \
+	  $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
@@ -331,7 +339,10 @@ test-e2e-http: ensure-gotestsum e2e-server-binary
 # path every commit waits on.
 test-e2e-collector: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/collector))
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  $(call e2e_cover_env,collector) \
+	  $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-collector-junit.xml \
 	  -- -tags collectore2e -count=1 -timeout 900s ./test/e2e/collector/'
