@@ -714,3 +714,21 @@ func TestAuditPrompts_NoStimulusIsAnswerKeyed(t *testing.T) {
 		})
 	}
 }
+
+// TestPromptAuditBuilderSitesAreClean_PassesOnBothSurfaces runs the gate the
+// CLI runs, through the same function, so `go test ./cmd/...` fails for the
+// same reason `make check-eval-prompts` does.
+//
+// Calling the production function rather than restating its rule is the point:
+// a unit test that reimplements a gate can pass while the gate fails, and the
+// only way anyone would find out is CI.
+func TestPromptAuditBuilderSitesAreClean_PassesOnBothSurfaces(t *testing.T) {
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(surface, func(t *testing.T) {
+			var out strings.Builder
+			if err := promptAuditBuilderSitesAreClean(&out, promptAuditForSurface(t, surface)); err != nil {
+				t.Errorf("the prompts this package writes carry an answer: %v", err)
+			}
+		})
+	}
+}

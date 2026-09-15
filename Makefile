@@ -4,6 +4,7 @@
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
+	check-eval-prompts audit-eval-prompts \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -565,6 +566,20 @@ orbit-run-live-tests: orbit-ensure-token
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
+
+## check-eval-prompts: fail when a prompt the evaluator writes carries the case's own answer.
+## Renders the stimulus every case would be sent, on both surfaces, and refuses
+## a prompt naming that case's expected tool, action or parameter names. Calls
+## no provider and needs no Docker. The case's own text is reported and does not
+## fail it; issue 778 carries the work that would make that gateable too.
+check-eval-prompts:
+	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface meta
+	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface dynamic
+
+## audit-eval-prompts: report what every case's stimulus repeats of its own answer, without failing.
+audit-eval-prompts:
+	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface meta
+	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface dynamic
 
 ## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read] [SERVER_MODE=read-only|safe-mode])
 eval-surfaces-docker:
