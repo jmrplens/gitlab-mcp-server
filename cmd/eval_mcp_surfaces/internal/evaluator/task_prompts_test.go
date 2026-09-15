@@ -1237,7 +1237,7 @@ func assertResolvedParams(t *testing.T, got, want map[string]any) {
 // question. That is not a style matter: a score produced from such a prompt
 // says how well a model transcribes, and the whole point of this evaluator is
 // to say how well the *surface* describes itself.
-var answerKeyFields = []string{"ExpectedTool", "ExpectedAction"}
+var answerKeyFields = []string{"ExpectedTool", "ExpectedAction", "RequiredParams", "OptionalParams"}
 
 // answerKeyExemptFunctions may read those fields despite being reachable from a
 // prompt builder, each for a stated reason.
@@ -1259,9 +1259,27 @@ var answerKeyFields = []string{"ExpectedTool", "ExpectedAction"}
 //   - taskSteps constructs the steps. Without that read there is nothing to
 //     leak and nothing to score.
 //
-// An exemption covers what the excused function calls, since both of these
-// return a verdict and write no prompt text; see reachableFrom.
-var answerKeyExemptFunctions = []string{"taskHasDestructiveStep", "taskSteps"}
+// Three more came with the feedback channels, and they divide into two kinds.
+//
+//   - validationRepairText compares the attempted action with the expected one
+//     to decide whether to reject it, and emits only what was attempted. That
+//     is the same shape as taskHasDestructiveStep: a question about the answer
+//     is not an answer.
+//   - successfulSimulatedToolContent and populateSimulatedToolResult shape the
+//     mock backend's stand-in for a GitLab response by the action the step
+//     expects rather than the one the model called. No name reaches the model
+//     any more, but a mock that decides what to return from the answer key can
+//     still make a wrong call look like it worked. That is a defect of the mock
+//     rather than of the prompts, it is confined to a backend whose reports
+//     V08b refuses to publish, and V08c rebuilds this path on the declared
+//     fixture state, which is where this exemption is meant to be retired.
+//
+// An exemption covers what the excused function calls, since these return a
+// verdict or a stand-in response and write no prompt text; see reachableFrom.
+var answerKeyExemptFunctions = []string{
+	"taskHasDestructiveStep", "taskSteps",
+	"validationRepairText", "successfulSimulatedToolContent", "populateSimulatedToolResult",
+}
 
 // promptEntryPoints are the four builders that write the scaffolding around a
 // case's own words.
@@ -1280,7 +1298,17 @@ var answerKeyExemptFunctions = []string{"taskHasDestructiveStep", "taskSteps"}
 // change to this package can take away. Verified rather than assumed:
 // RenderCasePrompt fills its template from FixtureOutput, the values a fixture
 // produced, and consults no expected step.
-var promptEntryPoints = []string{"taskPrompt", "dynamicTaskPrompt", "systemPrompt", "dynamicSystemPrompt"}
+// It is no longer only the four builders. A prompt is the first thing a model
+// is shown and not the last: the repair message, the mock backend's tool result
+// and the nudge for a turn that called nothing all reach the same conversation,
+// and each was handing over the answer while this list named four functions
+// that were not. The worst put the expected tool and action inside a simulated
+// tool result, which is the server's own voice.
+var promptEntryPoints = []string{
+	"taskPrompt", "dynamicTaskPrompt", "systemPrompt", "dynamicSystemPrompt",
+	"validationRepairMessage", "validationRepairText", "repairPayloadForValidation",
+	"successfulSimulatedToolContent", "populateSimulatedToolResult",
+}
 
 // TestPromptBuilders_NeverReadTheAnswerKey is the gate that keeps V06's
 // deletion deleted.

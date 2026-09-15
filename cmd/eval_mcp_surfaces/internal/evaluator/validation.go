@@ -419,7 +419,7 @@ func requiredParamPresent(params map[string]any, required string) bool {
 // validationRepairMessage reports whether validation repair message.
 func validationRepairMessage(step evalStep, validation validationResult, attemptedInput map[string]any) string {
 	text := validationRepairText(step, validation)
-	payload := repairPayloadForValidation(step, validation, attemptedInput, text)
+	payload := repairPayloadForValidation(validation, attemptedInput, text)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return text
@@ -446,7 +446,7 @@ type repairPayload struct {
 }
 
 // repairPayloadForValidation builds repair payload for validation for retry and repair feedback.
-func repairPayloadForValidation(step evalStep, validation validationResult, attemptedInput map[string]any, text string) repairPayload {
+func repairPayloadForValidation(validation validationResult, attemptedInput map[string]any, text string) repairPayload {
 	// Both are derived from the model half, so a payload cannot reintroduce
 	// through a field what the message no longer says. It also classifies
 	// better: a call to the wrong action used to be reported as a missing
@@ -462,13 +462,12 @@ func repairPayloadForValidation(step evalStep, validation validationResult, atte
 		RetryAllowed: true,
 		Message:      text,
 	}
-	// failed_action names the call that was refused. It falls back to the
-	// step's own tool only where the model named nothing at all, which is a
-	// malformed call rather than a wrong one; falling back to the expected
-	// action would put the answer in a field that claims to hold the attempt.
-	if payload.FailedAction == "" {
-		payload.FailedAction = step.ExpectedTool
-	}
+	// failed_action names the call that was refused, and only ever that. It
+	// used to fall back to the step's expected action and then to its expected
+	// tool, so a model that called something the harness could not read was
+	// answered with the name of the call it should have made, in a field whose
+	// whole claim is that it holds the attempt. A call that named nothing
+	// leaves it empty, which is what happened.
 	return payload
 }
 

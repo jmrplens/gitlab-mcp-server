@@ -204,7 +204,7 @@ func (r *modelRunner) handleModelTurn(ctx context.Context, response modelRespons
 	usage := response.Usage
 	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceEvent{Turn: turnCtx.result.ModelCalls, Kind: "assistant_message", Role: "assistant", Blocks: response.Content, Usage: &usage, Provider: response.ProviderTrace})
 	if len(toolUses) == 0 {
-		return handleNoToolUseResult(turnCtx.result, turnCtx.state, turnCtx.repairLimit, turnCtx.steps)
+		return handleNoToolUseResult(turnCtx.result, turnCtx.state, turnCtx.repairLimit)
 	}
 
 	followups := make([]modelContentBlock, 0, len(toolUses))
@@ -342,7 +342,7 @@ func (r *modelRunner) handleValidToolStep(ctx context.Context, validCtx validToo
 	if validCtx.state.repairCount > 0 {
 		validCtx.result.RepairSuccess = true
 	}
-	block := toolResultBlock(validCtx.toolUse.ID, successfulSimulatedToolContent(completedStep, validCtx.toolUse, validCtx.state.stepIndex+1, len(validCtx.steps)), nil)
+	block := toolResultBlock(validCtx.toolUse.ID, successfulSimulatedToolContent(completedStep, validCtx.toolUse), nil)
 	*validCtx.followups = append(*validCtx.followups, block)
 	validCtx.result.Trace.Events = append(validCtx.result.Trace.Events, traceToolResultEvent(validCtx.result.ModelCalls, block))
 	if validCtx.state.stepIndex == len(validCtx.steps) {
@@ -514,7 +514,7 @@ func dynamicFindExchangeIncludesAction(exchange *traceMCPExchange, expectedActio
 	})
 }
 
-func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repairLimit int, steps []evalStep) bool {
+func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repairLimit int) bool {
 	result.Notes = append(result.Notes, "model returned no tool_use block")
 	if state.firstFinalAttempt {
 		result.FirstPass = false
@@ -525,7 +525,7 @@ func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repa
 	}
 	result.RepairAttempted = true
 	state.repairCount++
-	repairMessage := noToolUseRepairMessage(state.stepIndex, steps)
+	repairMessage := noToolUseRepairMessage
 	state.messages = append(state.messages, modelMessage{Role: "user", Content: []modelContentBlock{{Type: "text", Text: repairMessage}}})
 	result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "repair_prompt", Role: "user", Content: repairMessage})
 	return false
@@ -624,7 +624,7 @@ func appendDynamicPreludeFollowup(steps []evalStep, stepIndex int, toolUse model
 	}
 	result.FinalTool = toolUse.Name
 	result.FinalAction = validation.Action
-	block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(steps[stepIndex], toolUse, stepIndex+1, len(steps)), nil)
+	block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(steps[stepIndex], toolUse), nil)
 	*followups = append(*followups, block)
 	result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
 }
@@ -690,17 +690,16 @@ func recordInvalidToolUse(result *taskResult, stepIndex int, validation validati
 	return false
 }
 
-// noToolUseRepairMessage builds no tool use repair message for retry and repair feedback.
-func noToolUseRepairMessage(stepIndex int, steps []evalStep) string {
-	if stepIndex < 0 || stepIndex >= len(steps) {
-		return "The previous response did not call an MCP tool. Continue by calling the next required tool now; do not answer in prose."
-	}
-	step := steps[stepIndex]
-	if step.ExpectedAction == "" {
-		return fmt.Sprintf("The previous response did not call an MCP tool. Continue by calling %s now; do not answer in prose.", step.ExpectedTool)
-	}
-	return fmt.Sprintf("The previous response did not call an MCP tool. Continue by calling %s with action %s now; do not answer in prose.", step.ExpectedTool, step.ExpectedAction)
-}
+// noToolUseRepairMessage is what a model is told when it answered in prose
+// instead of calling a tool.
+//
+// It used to name the call to make: "Continue by calling %s with action %s
+// now", built from the step's expected tool and action. That is the answer to
+// the case, handed over on a path nothing gated, and it fires on the one turn
+// where a model has demonstrated it does not know what to call. A client whose
+// user asked for something and got prose back says only that, so that is what
+// this says, and it takes no step to say it.
+const noToolUseRepairMessage = "The previous response did not call an MCP tool. Carry out the task by calling a tool; do not answer in prose."
 
 // canExecuteInvalidToolCall reports whether the *modelRunner satisfies the can execute invalid tool call condition.
 func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation validationResult, toolUse modelContentBlock, routes map[string]toolutil.ActionMap) bool {
@@ -844,8 +843,16 @@ func acceptsDynamicPreludeCall(_ string, _ evalStep, _ validationResult) bool {
 }
 
 // successfulSimulatedToolContent resolves successful simulated tool content for evaluator execution.
-func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, nextStep, totalSteps int) string {
-	result := map[string]any{"ok": true, "next_step": nextStep, "total_steps": totalSteps}
+// successfulSimulatedToolContent is what the mock backend returns in place of a
+// GitLab response.
+//
+// It used to carry four things GitLab does not: next_step and total_steps, which
+// is the operation count V07 deleted from the task prompt, and expected_tool and
+// expected_action, which is the answer to the case delivered as though the
+// server had said it. A tool result is the most credible channel there is, so a
+// leak here is the worst-placed one in the harness.
+func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock) string {
+	result := map[string]any{"ok": true}
 	action, _ := toolUse.Input["action"].(string)
 	if step.ExpectedAction != "" {
 		action = toolutil.NormalizeActionAlias(action, toolutil.ActionMap{step.ExpectedAction: {}})
@@ -856,7 +863,7 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 	addProducedValues(result, step, params)
 	data, err := json.Marshal(result)
 	if err != nil {
-		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
+		return `{"ok":true}`
 	}
 	return string(data)
 }
@@ -909,11 +916,11 @@ func populateSimulatedToolResult(result map[string]any, step evalStep, toolUse m
 			"default_branch": project["default_branch"],
 		}}
 	default:
-		if applyActionSimulation(result, toolUse, action, params) {
-			return
-		}
-		result["expected_tool"] = step.ExpectedTool
-		result["expected_action"] = step.ExpectedAction
+		// An action with no simulation of its own answers with the bare
+		// acknowledgement. It used to answer with the step's expected tool
+		// and action, which told a model that had called the wrong thing
+		// what the right thing was, in the server's voice.
+		applyActionSimulation(result, toolUse, action, params)
 	}
 }
 

@@ -455,7 +455,7 @@ func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T)
 			"action": "project.badge_add",
 			"params": map[string]any{"project_id": "my-org/project"},
 		},
-	}, 2, 4)
+	})
 
 	if !strings.Contains(content, `"badge_id":102`) || !strings.Contains(content, `"id":102`) {
 		t.Fatalf("successfulSimulatedToolContent() = %s, want badge id fields", content)
@@ -467,7 +467,7 @@ func TestSuccessfulSimulatedToolContent_IncludesCreatedResourceIDs(t *testing.T)
 			"action": "merge_request_note.create",
 			"params": map[string]any{"project_id": "my-org/project", "merge_request_iid": float64(7)},
 		},
-	}, 2, 4)
+	})
 	if !strings.Contains(content, `"note_id":104`) {
 		t.Fatalf("successfulSimulatedToolContent(alias) = %s, want note_id", content)
 	}
@@ -486,7 +486,7 @@ func TestSuccessfulSimulatedToolContent_IncludesPackageDirectoryURLs(t *testing.
 				"directory_path":  "/tmp/package-release-files",
 			},
 		},
-	}, 2, 3)
+	})
 
 	requireContainsAll(t, "successfulSimulatedToolContent()", content, []string{
 		`"published"`,
@@ -578,7 +578,7 @@ func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) 
 	content := successfulSimulatedToolContent(evalStep{}, modelContentBlock{
 		Name:  "gitlab_discover_project",
 		Input: map[string]any{"remote_url": "https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git"},
-	}, 2, 3)
+	})
 	if !strings.Contains(content, "my-org/tools/gitlab-mcp-server") || !strings.Contains(content, "default_branch") {
 		t.Fatalf("successfulSimulatedToolContent() = %s, want project metadata", content)
 	}
@@ -589,7 +589,7 @@ func TestSuccessfulSimulatedToolContent_IncludesDiscoveredProject(t *testing.T) 
 			"action": "search.projects",
 			"params": map[string]any{"search": "gitlab-mcp-server"},
 		},
-	}, 2, 3)
+	})
 	for _, want := range []string{"my-org/tools/gitlab-mcp-server", `"projects"`, `"environments"`} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(content, want) {
@@ -1363,25 +1363,20 @@ func TestDiscoveryBudgetFeedback_SuppressesRedundantDiscovery(t *testing.T) {
 	}
 }
 
-// TestNoToolUseRepairMessage_NamesTheNextExpectedCall verifies the repair
-// prompt names the next tool and action when the step index is in range, the
-// tool alone for a standalone step, and stays generic when it is not.
-func TestNoToolUseRepairMessage_NamesTheNextExpectedCall(t *testing.T) {
-	steps := []evalStep{{ExpectedTool: dynamicFindTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}
-	cases := []struct {
-		name      string
-		stepIndex int
-		want      string
-	}{
-		{name: "standalone step", stepIndex: 0, want: "calling " + dynamicFindTool + " now"},
-		{name: "action step", stepIndex: 1, want: "with action " + actionProjectGet},
-		{name: "out of range", stepIndex: 5, want: "calling the next required tool now"},
-		{name: "negative", stepIndex: -1, want: "calling the next required tool now"},
+// TestNoToolUseRepairMessage_NamesNoCall is the inverse of the test it
+// replaces, which asserted the nudge "names the next tool and action".
+//
+// It did, on the one turn where a model has just demonstrated it does not know
+// what to call, and nothing gated it. A client whose user asked for something
+// and got prose back says only that.
+func TestNoToolUseRepairMessage_NamesNoCall(t *testing.T) {
+	if !strings.Contains(noToolUseRepairMessage, "did not call an MCP tool") {
+		t.Fatalf("noToolUseRepairMessage = %q, want it to say what went wrong", noToolUseRepairMessage)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := noToolUseRepairMessage(tc.stepIndex, steps); !strings.Contains(got, tc.want) {
-				t.Fatalf("noToolUseRepairMessage(%d) = %q, want %q", tc.stepIndex, got, tc.want)
+	for _, forbidden := range []string{dynamicFindTool, dynamicExecuteActionTool, actionProjectGet, "action"} {
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(noToolUseRepairMessage, forbidden) {
+				t.Errorf("noToolUseRepairMessage = %q, still names %q", noToolUseRepairMessage, forbidden)
 			}
 		})
 	}

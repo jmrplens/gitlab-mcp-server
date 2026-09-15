@@ -200,7 +200,7 @@ func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
 	if !hasFailedAssertion(assertionTarget.AssertionResults, CaseAssertionForbiddenParams) {
 		t.Fatalf("assertion results = %+v, want forbidden param failure", assertionTarget.AssertionResults)
 	}
-	payload := repairPayloadForValidation(step, result, input, validationRepairText(step, result))
+	payload := repairPayloadForValidation(result, input, validationRepairText(step, result))
 	if payload.ErrorKind != "forbidden_param" || payload.BadParam != "token" || !strings.Contains(payload.Message, "token") {
 		t.Fatalf("payload = %+v, want forbidden_param repair naming the param that was refused", payload)
 	}
@@ -235,7 +235,7 @@ func TestValidateStepCallWithRoutes_ReportsWrongAction(t *testing.T) {
 	if result.Valid || result.ActionMatches || !strings.Contains(result.Message, "expected action project.get") {
 		t.Fatalf("result = %+v, want wrong action diagnostic", result)
 	}
-	payload := repairPayloadForValidation(step, result, input, validationRepairText(step, result))
+	payload := repairPayloadForValidation(result, input, validationRepairText(step, result))
 	if payload.ErrorKind != "wrong_action" || payload.FailedAction != actionProjectList {
 		t.Fatalf("payload = %+v, want wrong_action for attempted project.list", payload)
 	}
@@ -315,7 +315,7 @@ func TestValidateStandaloneToolCall_RejectsActionEnvelope(t *testing.T) {
 func TestRepairPayloadForValidation_DiagnosesWithoutHandingBackTheCall(t *testing.T) {
 	step := evalStep{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}
 	validation := validateStandaloneToolCall(step, resourceReadTool, map[string]any{})
-	payload := repairPayloadForValidation(step, validation, map[string]any{}, validationRepairText(step, validation))
+	payload := repairPayloadForValidation(validation, map[string]any{}, validationRepairText(step, validation))
 	if payload.ErrorKind != "missing_required_param" || payload.BadParam != "uri" {
 		t.Fatalf("payload = %+v, want missing uri", payload)
 	}
@@ -359,7 +359,7 @@ func TestSuccessfulSimulatedToolContent_EmitsProducedValues(t *testing.T) {
 	content := successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", ProducedValues: []string{"issue_iid", "project_id"}}, modelContentBlock{
 		Name:  dynamicExecuteActionTool,
 		Input: map[string]any{"action": "issue.create", "params": map[string]any{"project_id": "my/project", "title": "eval"}},
-	}, 2, 3)
+	})
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
 		t.Fatalf("successfulSimulatedToolContent() invalid JSON %q: %v", content, err)
