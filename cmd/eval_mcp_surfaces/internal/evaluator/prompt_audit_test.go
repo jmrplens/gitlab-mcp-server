@@ -844,7 +844,7 @@ func TestPromptAuditBuilderSitesAreClean_PassesOnBothSurfaces(t *testing.T) {
 	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
 		t.Run(surface, func(t *testing.T) {
 			var out strings.Builder
-			if err := promptAuditBuilderSitesAreClean(&out, promptAuditForSurface(t, surface)); err != nil {
+			if err := promptAuditIsClean(&out, promptAuditForSurface(t, surface)); err != nil {
 				t.Errorf("the prompts this package writes carry an answer: %v", err)
 			}
 		})
@@ -858,7 +858,7 @@ func TestPromptAuditBuilderSitesAreClean_PassesOnBothSurfaces(t *testing.T) {
 // that lost either would still look healthy: a literal finding is a prompt
 // naming the answer, and an answer-keyed site is a prompt that came back
 // different without naming anything.
-func TestPromptAuditBuilderSitesAreClean_NamesWhatFailedIt(t *testing.T) {
+func TestPromptAuditIsClean_NamesWhatFailedIt(t *testing.T) {
 	tests := []struct {
 		name   string
 		report promptAuditReport
@@ -881,19 +881,37 @@ func TestPromptAuditBuilderSitesAreClean_NamesWhatFailedIt(t *testing.T) {
 			want: "MT-002: its system prompt changes when the answer key is removed",
 		},
 		{
-			name: "the case's own words fail nothing",
+			name: "the case's own words fail it too, when nothing declares them",
 			report: promptAuditReport{Cases: []promptAuditCase{{
 				ID:          "MT-003",
 				AnswerKeyed: []promptAuditSite{promptSiteCase},
 				Findings:    []promptAuditFinding{{Kind: promptLeakParam, Value: "project_id", Sites: []promptAuditSite{promptSiteCase}}},
 			}}},
+			want: `MT-003: its own text names param "project_id", and no declaration says why`,
+		},
+		{
+			name: "a declared case literal passes",
+			report: promptAuditReport{Cases: []promptAuditCase{{
+				ID:       "MT-004",
+				Findings: []promptAuditFinding{{Kind: promptLeakAction, Value: "project.get", Sites: []promptAuditSite{promptSiteCase}, Category: promptCategoryLiteralIsTheRequest}},
+			}}},
 			want: "",
+		},
+		{
+			name:   "a declaration that covers nothing is itself a finding",
+			report: promptAuditReport{StaleDeclarations: []string{"meta MS-999 action project.get"}},
+			want:   "meta MS-999 action project.get: declared, and nothing on this surface carries it any more",
+		},
+		{
+			name:   "a declaration the gate cannot act on fails before anything else",
+			report: promptAuditReport{InvalidDeclarations: []string{"individual MS-040 tool gitlab_project: names a surface the audit never renders"}},
+			want:   "names a surface the audit never renders",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var out strings.Builder
-			err := promptAuditBuilderSitesAreClean(&out, tc.report)
+			err := promptAuditIsClean(&out, tc.report)
 			if tc.want == "" {
 				if err != nil {
 					t.Fatalf("the gate refused a report whose only repetition is the case's own words: %v", err)

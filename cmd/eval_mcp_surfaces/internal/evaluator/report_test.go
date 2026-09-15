@@ -1308,6 +1308,11 @@ func TestReportStimulus_AnswersForTheRunRatherThanThePackage(t *testing.T) {
 			want:  stimulusCoached,
 		},
 		{
+			name:  "a declared literal is not coaching",
+			tasks: []evalTask{{ID: "MS-040", Prompt: "Discover MCP resources, read the project get schema resource `gitlab://tools/gitlab_project.get`, then fetch project `my-org/tools/x`.", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}}}},
+			want:  stimulusUncoached,
+		},
+		{
 			name:  "a task asking in a user's words is not",
 			tasks: []evalTask{{ID: "MT-y", Prompt: "Tell me the default branch of `my-org/tools/x`.", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}}},
 			want:  stimulusUncoached,

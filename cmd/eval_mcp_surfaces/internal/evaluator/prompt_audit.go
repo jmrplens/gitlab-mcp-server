@@ -22,8 +22,10 @@ import (
 // renders the exact prompts through the same two entry points the runner calls
 // and counts, so a third reader gets the same number as the first two.
 //
-// It reports and does not gate. The deletions it measures come after it, and
-// each of them is reviewed as a diff over the report this writes today.
+// It gates as well as reports. Every site is judged: the prompts this package
+// writes must name nothing of the answer, and a case whose own text names part
+// of it is refused unless prompt_declarations.go records why that word is the
+// request rather than the answer.
 
 // promptAuditSite says where in the stimulus an answer literal was found. The
 // three are not equally damning and the report keeps them apart: the system
@@ -39,8 +41,9 @@ const (
 	// guidance, the destructive line and the exact-call envelopes the
 	// builder wraps around it.
 	promptSiteTask promptAuditSite = "task"
-	// promptSiteCase is the case's own user-authored text, which no
-	// deletion in this package can change.
+	// promptSiteCase is the case's own user-authored text. No deletion
+	// in this package can change it, so it is the one site a
+	// declaration may excuse.
 	promptSiteCase promptAuditSite = "case"
 )
 
@@ -87,6 +90,12 @@ type promptAuditFinding struct {
 	Kind  promptAuditKind
 	Value string
 	Sites []promptAuditSite
+	// Category names the declaration that accepts this finding at the case
+	// site, and is empty for every finding nothing declares. Only the case
+	// site is declarable: a literal the builder writes is this package's to
+	// delete, so a declaration there would excuse the one thing the gate
+	// exists to refuse.
+	Category string
 }
 
 // promptAuditCase is one case rendered for one surface.
@@ -118,6 +127,16 @@ type promptAuditReport struct {
 	Edition    string
 	Backend    string
 	Cases      []promptAuditCase
+	// DeclaredFindings counts the case-site findings a declaration accepted.
+	DeclaredFindings int
+	// StaleDeclarations names, by key, every declaration for this surface
+	// that covered no finding. A declaration that stops describing the
+	// corpus is a finding of its own, which is what stops the table
+	// outliving the case text it was written about.
+	StaleDeclarations []string
+	// InvalidDeclarations names every declaration the gate refuses to act
+	// on, with what is wrong with it.
+	InvalidDeclarations []string
 }
 
 // promptAuditKindTotals counts one kind across the corpus.
@@ -168,7 +187,7 @@ func runPromptAudit(w io.Writer, opts options, tasks []evalTask) error {
 	// run anybody would go looking for one.
 	var checkErr error
 	if opts.AuditPromptsCheck {
-		checkErr = promptAuditBuilderSitesAreClean(w, report)
+		checkErr = promptAuditIsClean(w, report)
 	}
 	if strings.TrimSpace(opts.Output) == "" {
 		return checkErr
@@ -209,7 +228,50 @@ func auditPrompts(opts options, tasks []evalTask) promptAuditReport {
 	slices.SortStableFunc(report.Cases, func(left, right promptAuditCase) int {
 		return cmp.Compare(left.ID, right.ID)
 	})
+	declarePromptFindings(&report)
 	return report
+}
+
+// declarePromptFindings marks every case-site finding a declaration accepts and
+// records the declarations that accepted nothing.
+//
+// It runs inside auditPrompts rather than in the gate so that the gate, the
+// report renderer, the published Stimulus header and the tests all read one
+// classification. A finding at the system or task site is deliberately left
+// undeclarable: that text is this package's to delete, and a declaration there
+// would excuse the one thing the gate exists to refuse.
+func declarePromptFindings(report *promptAuditReport) {
+	used := make(map[string]bool, len(declaredPromptFindings))
+	for caseIndex := range report.Cases {
+		audited := &report.Cases[caseIndex]
+		for findingIndex := range audited.Findings {
+			finding := &audited.Findings[findingIndex]
+			if !slices.Contains(finding.Sites, promptSiteCase) {
+				continue
+			}
+			for _, declaration := range declaredPromptFindings {
+				if promptDeclarationProblem(declaration) != "" || !declaration.covers(report.Surface, audited.ID, *finding) {
+					continue
+				}
+				finding.Category = declaration.Category
+				used[declaration.key()] = true
+				report.DeclaredFindings++
+				break
+			}
+		}
+	}
+	for _, declaration := range declaredPromptFindings {
+		if problem := promptDeclarationProblem(declaration); problem != "" {
+			report.InvalidDeclarations = append(report.InvalidDeclarations, problem)
+			continue
+		}
+		if declaration.Surface != report.Surface || used[declaration.key()] {
+			continue
+		}
+		report.StaleDeclarations = append(report.StaleDeclarations, declaration.key())
+	}
+	slices.Sort(report.StaleDeclarations)
+	slices.Sort(report.InvalidDeclarations)
 }
 
 // auditPromptsForTask renders one case exactly as the runner renders it: the
@@ -791,6 +853,13 @@ func writePromptAuditTotals(b *strings.Builder, report promptAuditReport) {
 	fmt.Fprintf(b, "Cases whose stimulus repeats it beyond the confirm clause: %d (%s)\n", totals.BeyondConfirm, formatMetric(percent(totals.BeyondConfirm, totals.Cases)))
 	fmt.Fprintf(b, "Cases coached by this package (system prompt or task scaffolding): %d (%s)\n", totals.BuilderCoached, formatMetric(percent(totals.BuilderCoached, totals.Cases)))
 	fmt.Fprintf(b, "Cases whose only repetition is in their own text: %d\n", totals.CaseTextOnly)
+	fmt.Fprintf(b, "Case-text findings a declaration accounts for: %d\n", report.DeclaredFindings)
+	if len(report.StaleDeclarations) > 0 {
+		fmt.Fprintf(b, "Declarations matching nothing on this surface: %s\n", strings.Join(report.StaleDeclarations, ", "))
+	}
+	if len(report.InvalidDeclarations) > 0 {
+		fmt.Fprintf(b, "Declarations the gate cannot act on: %s\n", strings.Join(report.InvalidDeclarations, ", "))
+	}
 	fmt.Fprintf(b, "Cases whose task prompt drops the user's request entirely: %d\n", totals.CaseTextDropped)
 	fmt.Fprintf(b, "Destructive cases: %d, of which the stimulus names confirm: %d\n", totals.Destructive, totals.DestructiveConfirmNamed)
 	fmt.Fprintf(b, "Cases whose stimulus changes when the answer key is taken away: %d (system %d, task %d)\n\n",
@@ -841,16 +910,17 @@ func yesNo(value bool) string {
 	return "no"
 }
 
-// promptAuditBuilderSitesAreClean is the gate half of the audit: it fails when
-// a prompt this package writes carries the case's own answer.
+// promptAuditIsClean is the gate half of the audit: it fails when the stimulus
+// a run would send carries the case's own answer.
 //
-// It judges the system and task sites and not the case site, and that is the
-// whole of what it can honestly claim today. The case site is the corpus's own
-// text, where twenty cases still name an action or a parameter; gating it now
-// would fail on the first run and there would be no way to introduce the gate
-// at all. Issue 778 carries that work, and the Stimulus header already refuses
-// publication while it is outstanding, so nothing rests on remembering it.
-func promptAuditBuilderSitesAreClean(w io.Writer, report promptAuditReport) error {
+// It judges all three sites, and the three are not held to the same terms. The
+// system and task sites are this package's own text, so a finding there is a
+// defect with nowhere to hide and nothing may excuse it. The case site is the
+// corpus's own words, where a request can be unwritable without the literal it
+// carries, so a finding there is refused unless prompt_declarations.go records
+// why. A declaration that stops matching anything fails too, which is what
+// stops the table outliving the case text it describes.
+func promptAuditIsClean(w io.Writer, report promptAuditReport) error {
 	var coached []string
 	for _, audited := range report.Cases {
 		// Two questions, and a gate that asked only the first would miss the
@@ -878,13 +948,30 @@ func promptAuditBuilderSitesAreClean(w io.Writer, report promptAuditReport) erro
 			}
 		}
 	}
+	// The case site is gated too, against prompt_declarations.go. It was
+	// reported and not gated while the corpus still carried its own answers:
+	// gating it then would have failed on the first run, which is no way to
+	// introduce a gate. Issue 778 emptied it, so the refusal now has a corpus
+	// it can hold.
+	for _, audited := range report.Cases {
+		for _, finding := range audited.Findings {
+			if !slices.Contains(finding.Sites, promptSiteCase) || finding.Category != "" {
+				continue
+			}
+			coached = append(coached, fmt.Sprintf("%s: its own text names %s %q, and no declaration says why", audited.ID, finding.Kind, finding.Value))
+		}
+	}
+	coached = append(coached, report.InvalidDeclarations...)
+	for _, stale := range report.StaleDeclarations {
+		coached = append(coached, stale+": declared, and nothing on this surface carries it any more")
+	}
 	if len(coached) == 0 {
-		if _, err := fmt.Fprintf(w, "\nPrompt audit check: the prompts this package writes name no case's own answer.\n"); err != nil {
+		if _, err := fmt.Fprintf(w, "\nPrompt audit check: no case's stimulus names its own answer, beyond %d declared literal(s).\n", report.DeclaredFindings); err != nil {
 			return fmt.Errorf("write prompt audit: %w", err)
 		}
 		return nil
 	}
-	return fmt.Errorf("the prompts this package writes carry the answer for %d case(s):\n  %s",
+	return fmt.Errorf("the stimulus carries the answer for %d case(s):\n  %s",
 		len(coached), strings.Join(coached, "\n  "))
 }
 

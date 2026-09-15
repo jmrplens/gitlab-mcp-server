@@ -166,25 +166,22 @@ func maxOutputTokensLabel(maxTokens int) string {
 	return strconv.Itoa(maxTokens)
 }
 
-// reportStimulus reports what the prompt builder hands the model, which is
-// what decides whether the numbers in this report may be published at all
-// (see requireUncoachedStimulus).
-//
-// It is coached today, and the declaration is not a formality: the meta
-// surface's prompt builder writes the expected call into the prompt for
-// twelve cases (exactToolTaskPrompt), and the retry guidance switches on the
-// expected tool and action for nineteen more. This is the one place that
-// flips once those paths are gone, and until it does nothing this evaluator
-// writes can be published.
 // reportStimulus answers whether the stimuli this run actually sent carried
 // their own answers, by auditing them rather than by declaring a constant.
 //
 // The plan had this step set `uncoached` outright, on the reasoning that the
 // prompt builders no longer coach. They do not, and that is a statement about
-// this package; the header is a statement about the run. Twenty cases still
-// name an action or a parameter in their own text, so a constant would be true
-// of the code and false of the report it stamps, and V01's publish gate reads
-// exactly this field to decide whether a run may be published.
+// this package; the header is a statement about the run, which V01's publish
+// gate reads to decide whether the numbers may be published at all (see
+// requireUncoachedStimulus). A constant would have been true of the code and
+// false of the report it stamps for as long as the corpus named its own
+// answers, which it did for twenty-four cases until issue 778.
+//
+// A declared finding does not make a run coached. It is a literal the request
+// cannot be written without, recorded with its reason in
+// prompt_declarations.go, and a reader who wants to judge that for themselves
+// has the declaration to read; a stale or invalid one fails the gate rather
+// than silently downgrading a report nobody would then look at.
 //
 // A run with no tasks is `coached`: it has produced no evidence either way, and
 // the direction that costs nothing to be wrong about is the one that refuses
@@ -198,7 +195,7 @@ func reportStimulus(opts options, tasks []evalTask) string {
 			if slices.Contains(finding.Sites, promptSiteSystem) || slices.Contains(finding.Sites, promptSiteTask) {
 				return stimulusCoached
 			}
-			if slices.Contains(finding.Sites, promptSiteCase) {
+			if slices.Contains(finding.Sites, promptSiteCase) && finding.Category == "" {
 				return stimulusCoached
 			}
 		}
