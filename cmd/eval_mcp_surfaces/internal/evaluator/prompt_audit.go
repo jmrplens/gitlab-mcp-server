@@ -160,6 +160,11 @@ func runPromptAudit(w io.Writer, opts options, tasks []evalTask) error {
 	if _, err := io.WriteString(w, renderPromptAuditSummary(report)); err != nil {
 		return fmt.Errorf("write prompt audit: %w", err)
 	}
+	if opts.AuditPromptsCheck {
+		if err := promptAuditBuilderSitesAreClean(w, report); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(opts.Output) == "" {
 		return nil
 	}
@@ -753,4 +758,33 @@ func yesNo(value bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// promptAuditBuilderSitesAreClean is the gate half of the audit: it fails when
+// a prompt this package writes carries the case's own answer.
+//
+// It judges the system and task sites and not the case site, and that is the
+// whole of what it can honestly claim today. The case site is the corpus's own
+// text, where twenty cases still name an action or a parameter; gating it now
+// would fail on the first run and there would be no way to introduce the gate
+// at all. Issue 778 carries that work, and the Stimulus header already refuses
+// publication while it is outstanding, so nothing rests on remembering it.
+func promptAuditBuilderSitesAreClean(w io.Writer, report promptAuditReport) error {
+	var coached []string
+	for _, audited := range report.Cases {
+		for _, finding := range audited.Findings {
+			if slices.Contains(finding.Sites, promptSiteSystem) || slices.Contains(finding.Sites, promptSiteTask) {
+				coached = append(coached, fmt.Sprintf("%s: %s %q at %v", audited.ID, finding.Kind, finding.Value, finding.Sites))
+				break
+			}
+		}
+	}
+	if len(coached) == 0 {
+		if _, err := fmt.Fprintf(w, "\nPrompt audit check: the prompts this package writes name no case's own answer.\n"); err != nil {
+			return fmt.Errorf("write prompt audit: %w", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("the prompts this package writes carry the answer for %d case(s):\n  %s",
+		len(coached), strings.Join(coached, "\n  "))
 }

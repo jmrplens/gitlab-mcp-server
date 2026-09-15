@@ -60,7 +60,12 @@ type options struct {
 	DryRun     bool
 	// AuditPrompts renders the stimulus rather than running anything, which
 	// is why it reaches no provider and writes no evaluation report.
-	AuditPrompts           bool
+	AuditPrompts bool
+	// AuditPromptsCheck turns the audit into a gate over the sites this
+	// package writes. The case's own text is reported and never fails it:
+	// gating that today would fail on the first run, and issue 778 carries
+	// the work that would make it gateable.
+	AuditPromptsCheck      bool
 	FixtureSmoke           bool
 	PublishDocs            bool
 	CheckDocs              bool
