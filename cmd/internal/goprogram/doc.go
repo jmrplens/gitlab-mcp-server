@@ -29,6 +29,13 @@
 // that load needs, test variants and build tags, and [Load] is the same call
 // with neither, so the four production loads are unchanged.
 //
+// [Options.Env] is there for the one load that is not of this repository at
+// all: cmd/internal/graphqldocs reads the GraphQL documents client-go builds,
+// which means loading a module directory in the module cache, and two
+// toolchain settings decide whether that works. The settings and their reasons
+// stay with that caller, since they are a property of loading somebody else's
+// module rather than of this front end.
+//
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared.LoadToolPackages]
 // is deliberately not folded in. It loads with NeedDeps, so it pays for the
 // dependency tree these four refuse to pay for, and it refuses more widely

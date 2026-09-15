@@ -38,6 +38,8 @@
 #   E2E_REPORT_DIR                 dist/e2e-reports, resolved from the repository root
 #   E2E_REPORT_NAME                stem of the junit, json and output files: e2e-<runtime>
 #   GITLAB_MCP_TEST_E2E_CALLS_DIR  where the suite records its calls; cleared first, must be absolute
+#   E2E_COVER_DIR                  where the children write Go coverage data; cleared first, must be
+#                                  absolute, and only useful when the binary was built with -cover
 #   GITLAB_IMAGE                   the image for the runtime; the defaults above
 #   GOTESTSUM                      the gotestsum binary; the one on PATH
 #   E2E_SERVER_BINARY, E2E_COMMIT  forwarded to the run as they are
@@ -185,6 +187,23 @@ if [ -n "${GITLAB_MCP_TEST_E2E_CALLS_DIR:-}" ]; then
     esac
     rm -rf "${GITLAB_MCP_TEST_E2E_CALLS_DIR}"
     mkdir -p "${GITLAB_MCP_TEST_E2E_CALLS_DIR}"
+fi
+
+# Cleared here rather than in the Makefile for the reason the calls directory
+# is: CI invokes this script directly, so a target that cleared it would leave
+# the counters of every earlier run folded into the CI run's own figure. The
+# harness creates the directory itself, since the toolchain refuses one that is
+# not there.
+if [ -n "${E2E_COVER_DIR:-}" ]; then
+    case "${E2E_COVER_DIR}" in
+        /*) ;;
+        *)
+            echo "ERROR: E2E_COVER_DIR must be absolute, and is ${E2E_COVER_DIR}" >&2
+            exit 1
+            ;;
+    esac
+    rm -rf "${E2E_COVER_DIR}"
+    mkdir -p "${E2E_COVER_DIR}"
 fi
 
 set +e

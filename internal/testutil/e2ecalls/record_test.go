@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestRefusedOutcome_CarriesThePrefixAndTheReason verifies that a refusal is
@@ -22,6 +23,58 @@ func TestRefusedOutcome_CarriesThePrefixAndTheReason(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, OutcomeRefusedPrefix) {
 		t.Errorf("RefusedOutcome = %q, want it to start with %q", got, OutcomeRefusedPrefix)
+	}
+}
+
+// TestRunIDDate_Cases verifies what the stamp of a run identifier is read as,
+// and what is read as no stamp at all.
+//
+// The date of the committed coverage record is this parse and nothing else, so
+// the two refusals matter as much as the reading: an identifier the harness did
+// not stamp must leave the entry dateless and loudly so, rather than be dated
+// by the clock of whoever rebuilt the file.
+func TestRunIDDate_Cases(t *testing.T) {
+	cases := []struct {
+		name  string
+		runID string
+		want  time.Time
+		read  bool
+	}{
+		{
+			name:  "a minted identifier",
+			runID: "20260914t191454z-a97711a8e8-ce",
+			want:  time.Date(2026, 9, 14, 19, 14, 54, 0, time.UTC),
+			read:  true,
+		},
+		{name: "no dash, so no stamp this package wrote", runID: "20260914t191454z"},
+		{name: "an operator's own identifier", runID: "nightly-run-ce"},
+		{name: "nothing at all", runID: ""},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, read := RunIDDate(testCase.runID)
+
+			if read != testCase.read {
+				t.Fatalf("RunIDDate(%q) read = %t, want %t", testCase.runID, read, testCase.read)
+			}
+			if read && !got.Equal(testCase.want) {
+				t.Errorf("RunIDDate(%q) = %s, want %s", testCase.runID, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestRunIDStampLayout_FormatsAndParsesBack verifies that the layout is a
+// round trip of itself, which is the property both sides rest on: the harness
+// formats a run identifier's stamp with it and cmd/audit_e2e_coverage parses
+// that stamp back with it to date the committed record.
+func TestRunIDStampLayout_FormatsAndParsesBack(t *testing.T) {
+	at := time.Date(2026, 9, 14, 19, 14, 54, 0, time.UTC)
+
+	got, read := RunIDDate(at.Format(RunIDStampLayout) + "-a97711a8e8-ce")
+
+	if !read || !got.Equal(at) {
+		t.Errorf("RunIDDate(Format(%s)) = %s, %t; want %s and true", at, got, read, at)
 	}
 }
 
@@ -185,6 +238,58 @@ func TestRecord_KeepsTheFieldNamesTheReaderJoinsOn(t *testing.T) {
 		t.Run(field, func(t *testing.T) {
 			if _, present := call[field]; !present {
 				t.Errorf("call object = %v, want a %q field", call, field)
+			}
+		})
+	}
+}
+
+// TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero pins the
+// field R-PATH reads to answer "did this action issue a request" per action
+// rather than per package.
+//
+// Both halves matter. A count that did not survive the round trip would leave
+// the question unanswerable while every line still parsed, which is the
+// silence the whole record exists to remove. And a zero must be absent rather
+// than written: an action that reached no GitLab is the ordinary case for a
+// refusal and a safe-mode preview, and a shard from before this field existed
+// reads the same way, so the reader is told nothing rather than told zero.
+func TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero(t *testing.T) {
+	cases := []struct {
+		name    string
+		line    *Dispatch
+		want    int
+		written bool
+	}{
+		{
+			name:    "a handler that called GitLab",
+			line:    &Dispatch{TraceID: "4bf92f3577b34da6a3ce929d0e0e4736", Action: "issue.list", Requests: 2},
+			want:    2,
+			written: true,
+		},
+		{
+			name: "a refusal that called nobody",
+			line: &Dispatch{TraceID: "4bf92f3577b34da6a3ce929d0e0e4736", Action: "issue.delete", RefusalReason: "safe_mode"},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			encoded, err := json.Marshal(testCase.line.record())
+			if err != nil {
+				t.Fatalf("Marshal error = %v", err)
+			}
+
+			var decoded Record
+			if unmarshalErr := json.Unmarshal(encoded, &decoded); unmarshalErr != nil {
+				t.Fatalf("Unmarshal error = %v", unmarshalErr)
+			}
+			if validateErr := decoded.validate(); validateErr != nil {
+				t.Fatalf("validate() error = %v, want nil", validateErr)
+			}
+			if decoded.Dispatch.Requests != testCase.want {
+				t.Errorf("Requests = %d, want %d", decoded.Dispatch.Requests, testCase.want)
+			}
+			if strings.Contains(string(encoded), `"requests"`) != testCase.written {
+				t.Errorf("encoded record = %s, want a requests field present = %t", encoded, testCase.written)
 			}
 		})
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/graphqldocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // stubInputs replaces the four inputs with fixtures, so a case can describe a
@@ -83,7 +84,7 @@ func TestRun_ACleanTree_PassesTheGateAndCountsWhatItSaw(t *testing.T) {
 		[]requestinventory.Action{{ID: "issue.list", Owner: "issues"}},
 		graphqldocs.Result{Documents: []graphqldocs.Document{{Name: "query"}}})
 
-	content, clean, err := Run(t.Context(), root, false, nil)
+	content, clean, err := Run(t.Context(), root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
@@ -158,7 +159,7 @@ func TestRun_TheThreeFindings_FailTheGate(t *testing.T) {
 			root := t.TempDir()
 			testCase.arrange(t, root)
 
-			content, clean, err := Run(t.Context(), root, false, nil)
+			content, clean, err := Run(t.Context(), root, Options{})
 			if err != nil {
 				t.Fatalf("Run() error = %v, want the finding in the report", err)
 			}
@@ -187,7 +188,7 @@ func TestRun_TheRefusedDocument_IsNamedWhereAReaderCanOpenIt(t *testing.T) {
 		}},
 	})
 
-	content, _, err := Run(t.Context(), root, false, nil)
+	content, _, err := Run(t.Context(), root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -227,11 +228,11 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 		{ID: "c.list", Owner: "nowhere"},
 	}, graphqldocs.Result{})
 
-	full, _, err := Run(t.Context(), root, false, nil)
+	full, _, err := Run(t.Context(), root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	gaps, _, err := Run(t.Context(), root, true, nil)
+	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -246,6 +247,61 @@ func TestRun_GapsOnly_KeepsTheWorkAndDropsTheContext(t *testing.T) {
 	t.Run("the summary still counts everything", func(t *testing.T) {
 		if decode(t, gaps).Summary.ActionsSilent != 2 {
 			t.Errorf("summary = %+v, want the counts unchanged by the filter", decode(t, gaps).Summary)
+		}
+	})
+}
+
+// TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction verifies the
+// wiring of the one input that sharpens this dimension's weakest number.
+//
+// The observation check gates at package grain because nothing on the wire
+// names an action, and the number it prints reads far stronger than it is. An
+// end-to-end run names one, so when a record is offered the report says which
+// actions were themselves seen issuing a request and which ran without issuing
+// one. It changes no verdict: the record is a byproduct of a Docker session
+// that CI does not schedule, and a gate that failed for its absence would fail
+// every push.
+func TestRun_AnEndToEndRecord_AnswersTheObservationQuestionPerAction(t *testing.T) {
+	root := t.TempDir()
+	makeToolsPackage(t, root, "issues")
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	stubInputs(t, oneRow, []requestinventory.Action{
+		{ID: "issue.list", Owner: "issues"},
+		{ID: "issue.get", Owner: "issues"},
+	}, graphqldocs.Result{})
+	withE2ERecord(t, func(string) ([]e2ecalls.Record, error) {
+		return []e2ecalls.Record{
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4731", "issue.list", 1, ""),
+			dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4732", "issue.get", 0, ""),
+		}, nil
+	})
+
+	content, clean, err := Run(t.Context(), root, Options{E2ECallsDir: "dist/e2e-calls"})
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if !clean {
+		t.Errorf("the end-to-end record changed the gate's verdict:\n%s", content)
+	}
+	report := decode(t, content)
+	if !report.E2E.Ran {
+		t.Fatalf("the report did not read the record: %+v", report.E2E)
+	}
+	if report.Summary.E2EActionsObserved != 1 || report.Summary.E2EActionsSilent != 1 {
+		t.Errorf("summary = %+v, want one action seen issuing and one that ran without", report.Summary)
+	}
+
+	t.Run("gaps-only keeps the lead and drops the context", func(t *testing.T) {
+		gaps, _, gapsErr := Run(t.Context(), root, Options{GapsOnly: true, E2ECallsDir: "dist/e2e-calls"})
+		if gapsErr != nil {
+			t.Fatalf("Run() error = %v, want nil", gapsErr)
+		}
+		observation := decode(t, gaps).E2E
+		if len(observation.Issuing) != 0 {
+			t.Errorf("the gaps-only report lists %v as issuing, want the observed actions dropped", observation.Issuing)
+		}
+		if len(observation.Silent) != 1 || observation.Silent[0] != "issue.get" {
+			t.Errorf("the gaps-only report lists %v, want the action that ran and issued nothing", observation.Silent)
 		}
 	})
 }
@@ -270,7 +326,7 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 		return EndpointCheck{Ran: true, Undocumented: []Endpoint{{Method: "GET", Path: "/nowhere"}}}, nil
 	}
 
-	_, cleanWithout, err := Run(t.Context(), root, false, nil)
+	_, cleanWithout, err := Run(t.Context(), root, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -281,7 +337,7 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 		t.Error("the gate failed on a comparison that never ran")
 	}
 
-	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -296,7 +352,7 @@ func TestRun_TheDocumentationComparison_RunsOnlyWithAFetcher(t *testing.T) {
 		t.Errorf("summary = %+v, want the endpoint counted as undocumented and undeclared", summary)
 	}
 	t.Run("the work list keeps it", func(t *testing.T) {
-		gaps, _, gapsErr := Run(t.Context(), root, true, apidocs.New(root, apidocs.Options{}))
+		gaps, _, gapsErr := Run(t.Context(), root, Options{GapsOnly: true, Fetcher: apidocs.New(root, apidocs.Options{})})
 		if gapsErr != nil {
 			t.Fatalf("Run() error = %v", gapsErr)
 		}
@@ -324,7 +380,7 @@ func TestRun_ADeclaredEndpoint_PassesAndIsNotWork(t *testing.T) {
 		return EndpointCheck{Ran: true, Undocumented: found, UnusedDeclarations: unused}, nil
 	}
 
-	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -336,7 +392,7 @@ func TestRun_ADeclaredEndpoint_PassesAndIsNotWork(t *testing.T) {
 	if len(report.Endpoints.Undocumented) != 1 || report.Endpoints.Undocumented[0].Category != categoryUndocumentedAPI {
 		t.Errorf("undocumented = %+v, want the declaration's category on it", report.Endpoints.Undocumented)
 	}
-	gaps, _, err := Run(t.Context(), root, true, apidocs.New(root, apidocs.Options{}))
+	gaps, _, err := Run(t.Context(), root, Options{GapsOnly: true, Fetcher: apidocs.New(root, apidocs.Options{})})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -359,7 +415,7 @@ func TestRun_ADeclarationThatMatchesNothing_IsAFinding(t *testing.T) {
 		return EndpointCheck{Ran: true, UnusedDeclarations: []string{"/orbit/..."}}, nil
 	}
 
-	content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+	content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -446,7 +502,7 @@ func TestRun_AnInputItCannotRead_Fails(t *testing.T) {
 			stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
 			testCase.arrange(t)
 
-			content, clean, err := Run(t.Context(), root, false, apidocs.New(root, apidocs.Options{}))
+			content, clean, err := Run(t.Context(), root, Options{Fetcher: apidocs.New(root, apidocs.Options{})})
 
 			if err == nil {
 				t.Fatalf("Run() error = nil, want one naming %q", testCase.want)
@@ -484,7 +540,7 @@ func TestRun_TheRealTree_PassesItsOwnGate(t *testing.T) {
 		t.Skipf("%s=%s: the committed inventory is being regenerated by this very run", recordingDirEnv, dir)
 	}
 
-	content, clean, err := Run(t.Context(), repoRoot(t), false, nil)
+	content, clean, err := Run(t.Context(), repoRoot(t), Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want the real tree audited", err)
 	}

@@ -4,7 +4,11 @@
 
 package e2ecalls
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 const (
 	// DirEnv names the directory the end-to-end harness records its calls
@@ -136,6 +140,40 @@ const (
 // concatenation is how the two would come to disagree.
 func RefusedOutcome(reason string) string {
 	return OutcomeRefusedPrefix + reason
+}
+
+// RunIDStampLayout is the UTC timestamp a run identifier opens with, spelled
+// the way the harness formats it and the way a reader parses it back. It is
+// lowercased so the whole identifier stays a legal GitLab path segment.
+//
+// It lives here rather than in either side because it is the same contract as
+// the field names above: the harness under the e2e build tag mints the run ID,
+// and cmd/audit_e2e_coverage, which is not under that tag, reads the day of the
+// run off it to date the committed coverage record. While the layout was
+// spelled in both, nothing tied the two spellings together -- the committed
+// shard fixtures carry invented identifiers, so a layout change on one side
+// would leave every test green and be found by the first real Docker run
+// producing a record with no date at all.
+const RunIDStampLayout = "20060102t150405z"
+
+// RunIDDate reads the day a run started off its identifier, and reports false
+// for an identifier carrying no stamp this can read.
+//
+// A run ID is the stamp, a hash and the package name joined by dashes, so the
+// stamp is everything before the first one; an identifier with no dash carries
+// no stamp this recognizes even if it parses, since the caller overrode it and
+// whatever it says is not a time this package wrote. It sits beside the layout
+// so the format and the parse cannot drift apart.
+func RunIDDate(runID string) (time.Time, bool) {
+	stamp, _, found := strings.Cut(runID, "-")
+	if !found {
+		return time.Time{}, false
+	}
+	at, err := time.Parse(RunIDStampLayout, stamp)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return at.UTC(), true
 }
 
 // Line is one thing a shard can hold. The set is closed on purpose: [Run],
@@ -389,6 +427,23 @@ type Dispatch struct {
 	ErrorType string `json:"error_type,omitempty"`
 	// Status is the span status.
 	Status string `json:"status,omitempty"`
+	// Requests is how many GitLab requests the handler made while running this
+	// action, counted from the client spans of the same trace.
+	//
+	// It is the one fact here that comes from a span other than the server's
+	// own, and it is what lets a reader ask per action what the committed
+	// request inventory can only answer per package: nothing on the wire names
+	// an action, but a trace does, and every GitLab call the handler made is a
+	// child of the span that names it.
+	//
+	// Read it as a floor rather than as an exact count. The spans travel
+	// through a batching processor with a bounded queue, so a run that
+	// overflows it drops client spans silently and this reads low; and a retry
+	// is a separate round trip, so two attempts at one endpoint count two. Zero
+	// means no client span of this trace arrived, which is usually an action
+	// that reached no GitLab (a refusal, a safe-mode preview) and is
+	// occasionally that drop.
+	Requests int `json:"requests,omitempty"`
 }
 
 // Skip is a test that did not run, with the reason it gave.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -38,6 +39,26 @@ type options struct {
 	static  bool
 	check   bool
 	report  bool
+	// record writes the committed per-runtime coverage record from this run,
+	// checkRecord judges the committed one offline, checkRecordPage compares
+	// the page beside it with a fresh rendering, and renderRecord redraws
+	// that page from the record.
+	//
+	// The two checks are separate flags because only one of them is a
+	// freshness comparison: the figures need a booted GitLab and cannot be
+	// regenerated here at all, while the page is drawn from the source tree
+	// and is refreshed by update-all like every other generated artifact.
+	record          bool
+	checkRecord     bool
+	checkRecordPage bool
+	renderRecord    bool
+	// recordPath and recordPage are the two committed artifacts; empty means
+	// the repository's own.
+	recordPath string
+	recordPage string
+	// now is the clock the record's staleness window is judged against; nil
+	// is time.Now, through provenance.Clock.
+	now func() time.Time
 	// output is the JSON path, empty for stdout.
 	output string
 	// summary is the Markdown path, "-" for stdout, empty for none.
@@ -84,14 +105,36 @@ func main() {
 	flag.StringVar(&opts.summary, "summary", "", "write a Markdown summary to this path, or - for stdout, which then carries the summary in place of the JSON")
 	flag.StringVar(&opts.oldSuite, "old-suite", "", "the retired suite the port map reads Test functions from; required, since that tree is no longer in this repository")
 	flag.StringVar(&opts.newSuite, "new-suite", gitlabTestDir, "the new suite the port map reads Replaces: lines from")
+	// A bool and a separate path, rather than one string flag whose empty
+	// value would mean the default: Go's flag package has no optional-value
+	// string flag, so a bare -record as the last argument exits 2 with "flag
+	// needs an argument".
+	flag.BoolVar(&opts.record, "record", false, "write the committed per-runtime coverage record and its page from this run; needs -calls, -results and a -static scan that ran")
+	flag.BoolVar(&opts.checkRecord, "check-record", false, "judge the committed coverage record against this tree, with no GitLab and no network")
+	flag.BoolVar(&opts.checkRecordPage, "check-record-page", false, "compare the record's committed Markdown page with a fresh rendering of the record; the freshness half of -check-record")
+	flag.BoolVar(&opts.renderRecord, "render-record", false, "redraw the committed record's Markdown page from the record itself")
+	flag.StringVar(&opts.recordPath, "record-path", "", "the coverage record to write, check or render (default: the repository's "+recordRelPath+")")
+	flag.StringVar(&opts.recordPage, "record-page", "", "the page rendered from the record (default: the repository's "+recordPageRelPath+")")
 	flag.Parse()
 	os.Exit(run(opts, os.Stdout, os.Stderr))
 }
 
 // run is main with its streams and its exit status handed to it.
 func run(opts options, stdout, stderr io.Writer) int {
-	if opts.calls == "" && !opts.static && !opts.portMap {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static or -port-map")
+	// The three record modes read a committed artifact and need no shards,
+	// which is the whole reason they can gate on a machine with no Docker.
+	if opts.calls == "" && !opts.static && !opts.portMap && !opts.checkRecord && !opts.checkRecordPage && !opts.renderRecord {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: nothing to do: give -calls, -static, -port-map, -check-record, -check-record-page or -render-record")
+		return exitUsage
+	}
+	// -record is not a mode of its own: it commits what a -calls run
+	// classified, so it is reached from inside the coverage path and a run
+	// without shards passes straight over it. Refusing here is what stops
+	// `-static -record` printing the static summary and exiting 0 having
+	// written nothing, which is the one precondition of -record that used to
+	// be silent while the other two were refused with a paragraph.
+	if opts.record && opts.calls == "" {
+		fmt.Fprintln(stderr, "audit_e2e_coverage: -record needs -calls: the record is written from the shards a run recorded, and this run names none")
 		return exitUsage
 	}
 	if opts.dir == "" {
@@ -114,6 +157,12 @@ func run(opts options, stdout, stderr io.Writer) int {
 	}
 	if opts.calls != "" {
 		status = max(status, runCoverage(opts, static, stdout, stderr))
+	}
+	if opts.checkRecord || opts.checkRecordPage {
+		status = max(status, runCheckRecord(opts, stdout, stderr))
+	}
+	if opts.renderRecord {
+		status = max(status, runRecordRender(opts, stdout, stderr))
 	}
 	return status
 }
@@ -222,6 +271,9 @@ func runCoverage(opts options, static *staticResult, stdout, stderr io.Writer) i
 		fmt.Fprintln(stderr, "audit_e2e_coverage:", writeErr)
 		return exitUsage
 	}
+	if opts.record {
+		status = max(status, runRecordWrite(opts, static, reports, stdout, stderr))
+	}
 	return status
 }
 
@@ -277,7 +329,7 @@ func classifyRuntime(opts options, rt *runtimeRecords, selectors []string, resul
 		join = &joined
 	}
 	c := classify(rt, catalog)
-	if static != nil && !static.Skipped {
+	if staticApplied(static) {
 		c.applyStatic(static)
 	}
 	rep = buildReport(c)
@@ -299,6 +351,19 @@ func classifyRuntime(opts options, rt *runtimeRecords, selectors []string, resul
 		}
 	}
 	return rep, status, nil
+}
+
+// staticApplied reports whether the static scan contributed to a
+// classification, which is a different question from whether -static was
+// passed: [runStaticGate] answers an error with a nil result, and a tree with
+// no test/e2e/gitlab in it with a skipped one.
+//
+// It is one function because two callers ask it -- the classification, which
+// applies the scan's findings, and the record write, which refuses to commit a
+// classification the scan did not reach -- and a second spelling of it would
+// let the write freeze what the classification never narrowed.
+func staticApplied(static *staticResult) bool {
+	return static != nil && !static.Skipped
 }
 
 // errBaselineRuntime is a baseline directory holding no run of the runtime

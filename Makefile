@@ -9,8 +9,9 @@
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
-	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-validate-docs audit-edition-tier \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
+	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
@@ -69,6 +70,49 @@ E2E_REPORT_DIR=dist/e2e-reports
 # package-list run can answer from the test cache, and a cached PASS records
 # nothing.
 E2E_CALLS_DIR=dist/e2e-calls
+
+# COVER=1 measures how much of the server binary an e2e run executed, which is
+# a different question from the one the calls directory answers: that one says
+# which catalog actions dispatched, and this one says which statements of the
+# program ran at all: startup, the catalog build, the middleware chain, the
+# error branches no scenario reaches. It is off by default because it costs a
+# build of its own and slows every child, and because the merged profile is a
+# report rather than a gate: only a live GitLab produces the input, so no
+# committed artifact could be verified offline and no floor could be moved
+# without booting one.
+#
+# With it on, the shared build carries -cover and each run target hands its
+# children a GOCOVERDIR under here, one directory per target, cleared where the
+# calls directory is cleared: in run-docker-e2e.sh for the two Docker targets,
+# since CI invokes that script rather than the target, and in the recipe for
+# the self-hosted one. `make e2e-go-coverage` merges what the run left. dist/
+# is gitignored, so `make clean` removes all of it.
+#
+# Two names for two things, the way E2E_CALLS_DIR and the exported
+# GITLAB_MCP_TEST_E2E_CALLS_DIR are two names: E2E_COVER_ROOT is the parent
+# every target writes a leaf under and the one `make e2e-go-coverage` searches,
+# and E2E_COVER_DIR, exported to the harness and to run-docker-e2e.sh, is the
+# one leaf a single run is handed. They were one name until the collision bit:
+# CI set it to an absolute leaf for the run and passed it to make as a relative
+# parent for the merge, and the two readings only happened to agree.
+#
+# E2E_COVER_ROOT is repository-relative and must stay so, since the line below
+# joins $(CURDIR) onto it: an absolute override would be appended to the
+# repository path rather than replacing it, and the counters would land under
+# dist/ while the merge looked where the override said. E2E_CALLS_DIR is joined
+# the same way, so this is the convention here rather than a property of
+# coverage.
+COVER ?=
+E2E_COVER_ROOT=dist/e2e-cover
+E2E_COVER_PROFILE=$(E2E_REPORT_DIR)/e2e-go-coverage.out
+# Empty unless COVER is set, so an ordinary run is unaffected: nothing is built
+# with -cover and the children carry no GOCOVERDIR at all. Absent rather than
+# empty, because the runtime of a child given an empty one prints "GOCOVERDIR
+# not set, no coverage data emitted" on its stderr the moment it starts, which
+# would head every child's log for the whole run.
+e2e_cover_build = $(if $(COVER),-cover)
+e2e_cover_env = $(if $(COVER),E2E_COVER_DIR=$(CURDIR)/$(E2E_COVER_ROOT)/$(1))
+
 # The revision the e2e run records on its run line, so a recorded baseline
 # says which tree produced it. Overridable for a run of a tree git cannot see.
 E2E_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null)
@@ -236,18 +280,46 @@ test-e2e-harness: ensure-gotestsum
 	  --junitfile $(E2E_REPORT_DIR)/e2e-harness-junit.xml \
 	  -- -tags e2e -count=1 -timeout 600s ./test/e2e/internal/...'
 
+# The three transport modules below stage the server the way the rebuilt
+# suite's targets do, through e2e-server-binary and E2E_SERVER_BINARY. Each of
+# them builds cmd/server once per test binary when the variable is unset, so a
+# developer running all three used to pay for three compiles of the same tree;
+# with it set the build happens once here and every module drives that file.
+#
+# Three properties of it are the modules' own and are worth knowing before
+# setting it by hand. A path naming nothing, a directory, or a file that cannot
+# be executed is refused rather than built around, so a stale dist/e2e fails the
+# run instead of being silently replaced by a build of its own. A `go test -race`
+# run refuses a staged binary outright, because the detector reaches only a
+# binary compiled with -race and this target compiles plainly; nothing here
+# passes -race, and .github/workflows/race.yml runs the modules directly and
+# stages nothing, which is what keeps that refusal theoretical there. And these
+# three stage a plain build even under COVER=1, which is what the line below
+# says: the coverage record is the rebuilt suite's run, not this one's.
+#
+# That last one is a correctness requirement rather than a preference. An
+# instrumented binary given no GOCOVERDIR prints "warning: GOCOVERDIR not set,
+# no coverage data emitted" from the meta-data emit its init runs, so the line
+# arrives before anything this server writes, and the stdio module requires
+# every stderr line to parse as JSON (test/e2e/stdio/transport_test.go). Handing
+# these three an instrumented binary therefore does not cost a measurement, it
+# fails the run. The variable is target-specific and GNU make passes it down to
+# the prerequisite, so e2e-server-binary compiles plainly when it is built for
+# one of these and keeps -cover for every other target that stages it.
+test-e2e-stdio test-e2e-http test-e2e-collector: e2e_cover_build =
+
 ## test-e2e-stdio: run the stdio transport end-to-end module (no GitLab needed; drives the real binary over pipes).
-test-e2e-stdio: ensure-gotestsum
+test-e2e-stdio: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
 	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
 
 ## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; nginx layer skips without Docker).
-test-e2e-http: ensure-gotestsum
+test-e2e-http: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
@@ -257,9 +329,9 @@ test-e2e-http: ensure-gotestsum
 # stdioe2e tags and never this one. Those two need no daemon; this one pulls a
 # container image, which belongs with the Docker-mode targets rather than in the
 # path every commit waits on.
-test-e2e-collector: ensure-gotestsum
+test-e2e-collector: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
+	bash -o pipefail -c 'E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-collector-junit.xml \
 	  -- -tags collectore2e -count=1 -timeout 900s ./test/e2e/collector/'
@@ -303,15 +375,19 @@ E2E_SERVER_BINARY=dist/e2e/$(BINARY_NAME)$(BINARY_EXT)
 E2E_GITLAB_TIMEOUT ?= 3600s
 
 ## e2e-server-binary: build the server the rebuilt e2e suite drives, once for every package.
+# Instrumented under COVER=1: the binary every documented run drives is the one
+# built here, so this is where -cover has to enter. The target is .PHONY, so an
+# uninstrumented build left by an earlier run can never be reused.
 e2e-server-binary:
 	$(call MKDIR_P,dist/e2e)
-	go build -o $(E2E_SERVER_BINARY) $(CMD_PATH)
+	go build $(e2e_cover_build) -o $(E2E_SERVER_BINARY) $(CMD_PATH)
 
 ## test-e2e-ce: start ephemeral GitLab CE (+ Bitbucket fixture), run the common and ce packages of the rebuilt suite, tear down.
 test-e2e-ce: ensure-gotestsum e2e-server-binary
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ce \
+	$(call e2e_cover_env,ce) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
@@ -320,6 +396,7 @@ test-e2e-ee: ensure-gotestsum e2e-server-binary
 	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
 	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
 	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/ee \
+	$(call e2e_cover_env,ee) \
 	GOTESTSUM=$(GOTESTSUM) \
 	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ee/
 
@@ -335,7 +412,9 @@ test-e2e-gitlab: ensure-gotestsum e2e-server-binary
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	$(call RM_RF,$(E2E_CALLS_DIR)/self-hosted)
 	$(call MKDIR_P,$(E2E_CALLS_DIR)/self-hosted)
+	$(if $(COVER),$(call RM_RF,$(E2E_COVER_ROOT)/self-hosted))
 	bash -o pipefail -c 'E2E_RUNTIME_MISMATCH=skip E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	  $(call e2e_cover_env,self-hosted) \
 	  GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(E2E_CALLS_DIR)/self-hosted $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-gitlab-junit.xml \
@@ -640,22 +719,23 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/16] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/16] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/16] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/16] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/16] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/16] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/16] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/16] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/16] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[10/16] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/16] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[12/16] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[13/16] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[14/16] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[15/16] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[16/16] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[1/17] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/17] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/17] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/17] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/17] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/17] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/17] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[8/17] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[9/17] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[10/17] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[11/17] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[12/17] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[13/17] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[14/17] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[15/17] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[16/17] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[17/17] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1068,8 +1148,11 @@ gen-readme: gen-footprint gen-stats
 # the committed record and measures nothing, which is what check-bench-resources
 # then compares; bench-resources itself stays out, and so does brand-rasters,
 # which needs rsvg-convert and cwebp that only the maintainer's machine has.
+# e2e-coverage-record-render is in on exactly the same terms and
+# e2e-coverage-record is out on the same ones: redrawing the coverage page
+# needs only the committed record, while measuring it needs a booted GitLab.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
@@ -1235,6 +1318,18 @@ audit-1to1-paths-endpoints:
 	go run ./cmd/audit_1to1/ -scope=paths -check-endpoints -output plan/1to1-paths.json
 	@echo "R-PATH report written to plan/1to1-paths.json"
 
+## audit-1to1-paths-e2e: the same report, plus the observation question asked per ACTION
+## instead of per owning package, read from the shards a Docker end-to-end run left under
+## $(E2E_CALLS_DIR) (make test-e2e-ce or make test-e2e-ee writes them). The committed
+## inventory can only answer at package grain, because nothing on the wire names an
+## action; a trace does, so the record says which actions were themselves seen issuing a
+## request and which ran without issuing one. It changes nothing the gate fails on: the
+## shards are a byproduct of a run CI does not schedule, and the counts are floors, since
+## a batch queue that overflowed drops client spans without saying so.
+audit-1to1-paths-e2e:
+	go run ./cmd/audit_1to1/ -scope=paths -e2e-calls $(E2E_CALLS_DIR) -output plan/1to1-paths-e2e.json
+	@echo "R-PATH report with per-action observation written to plan/1to1-paths-e2e.json"
+
 ## audit-1to1-enums: the enum value rule on its own (R-ENUM), in its native shape.
 ## Fails on a value the SDK declares that no schema enum or description offers, on a
 ## value offered that the SDK does not declare, or on a stale exemption.
@@ -1305,6 +1400,91 @@ audit-e2e-gaps:
 audit-e2e-coverage:
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR) -report -o $(E2E_REPORT_DIR)/e2e-coverage.json -summary -
+
+## e2e-coverage-record: fold both Docker runs into the committed per-runtime
+## coverage record and redraw the page beside it. Needs the shards and the
+## gotestsum streams of a run of each half, so it is a maintainer's command
+## and deliberately not a member of update-all. Each half is written by its
+## own invocation: one -results stream belongs to one runtime, and joining
+## the ce stream to the ee shards would credit each against the other's tests.
+e2e-coverage-record:
+	@for target in e2e-coverage-record-ce e2e-coverage-record-ee; do \
+		$(MAKE) --no-print-directory $$target || exit 1; \
+	done
+
+## e2e-coverage-record-ce: record the unlicensed half alone, for a maintainer
+## who ran only `make test-e2e-ce`. The write folds into the committed
+## document and leaves the ee entry exactly as it was.
+e2e-coverage-record-ce:
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ce -results $(E2E_REPORT_DIR)/e2e-ce-log.json \
+		-runtime ce -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ce.json
+
+## e2e-coverage-record-ee: record the licensed half alone, for a maintainer
+## who ran only `make test-e2e-ee`.
+e2e-coverage-record-ee:
+	go run ./cmd/audit_e2e_coverage/ -calls $(E2E_CALLS_DIR)/ee -results $(E2E_REPORT_DIR)/e2e-ee-log.json \
+		-runtime ee -static -record -o $(E2E_REPORT_DIR)/e2e-coverage-ee.json
+
+## e2e-coverage-record-render: redraw docs/development/testing/e2e-coverage.md
+## from the committed record, without a GitLab. This is what to run after
+## changing the page's wording; the figures stay exactly as they were measured.
+e2e-coverage-record-render:
+	go run ./cmd/audit_e2e_coverage/ -render-record
+
+## check-e2e-coverage-record: the offline gate over the committed coverage
+## record: both runtimes present, the levels agreeing with the action lists
+## beside them, the floors of -check re-applied, and the record inside its own
+## staleness window. No GitLab, no Docker and no network; a catalog that has
+## moved under the record is a note rather than a failure, since
+## check-e2e-static already fails on a rename from the scenario's side. The
+## page beside the record is check-e2e-coverage-page, which is a separate
+## target because it is a freshness comparison and this one is not: nothing
+## here can regenerate the figures, so these judgments hold on every layer of
+## every stack.
+check-e2e-coverage-record:
+	go run ./cmd/audit_e2e_coverage/ -check-record
+
+## check-e2e-coverage-page: compare docs/development/testing/e2e-coverage.md
+## with a fresh rendering of the committed record. This is the half of the gate
+## the source tree can move -- the renderer and the table formatter are code
+## here -- so it is redrawn by e2e-coverage-record-render, which update-all
+## runs, and CI defers it below a stack's tip exactly as it does
+## check-bench-resources.
+check-e2e-coverage-page:
+	go run ./cmd/audit_e2e_coverage/ -check-record-page
+
+## e2e-go-coverage: report which statements of the server binary the e2e runs
+## executed, from the counter files a COVER=1 run left under $(E2E_COVER_ROOT):
+## the merged profile in $(E2E_COVER_PROFILE), the per-package table and the
+## total. Its sibling above answers which catalog actions dispatched, which
+## says nothing about the program around them.
+#
+# It reads whatever runs are there, so a CE run and a licensed one merge into
+# one figure, which is the honest one: a statement only the licensed catalog
+# reaches was still reached. Nothing here is committed and nothing gates on
+# the number: the input exists only after a live GitLab has been driven, so a
+# floor could not be moved without booting one, and the profile must never be
+# folded into coverage.out, which sonar-project.properties publishes as the
+# unit suite's figure. The run is refused rather than reported as zero when no
+# meta-data file is there at all, since that is the shape of an uninstrumented
+# build and not of a binary nothing executed.
+e2e-go-coverage:
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c 'set -eu; \
+	  dirs=""; \
+	  for meta in $$(find $(E2E_COVER_ROOT) -name "covmeta.*" -type f 2>/dev/null | sort); do \
+	    dir=$$(dirname "$$meta"); \
+	    case ",$$dirs," in *",$$dir,"*) continue;; esac; \
+	    dirs="$${dirs:+$$dirs,}$$dir"; \
+	  done; \
+	  if [ -z "$$dirs" ]; then \
+	    echo "no coverage data under $(E2E_COVER_ROOT): run an e2e target with COVER=1, which builds the server with -cover and gives every child a GOCOVERDIR" >&2; \
+	    exit 1; \
+	  fi; \
+	  echo "merging $$dirs"; \
+	  go tool covdata textfmt -i="$$dirs" -o=$(E2E_COVER_PROFILE); \
+	  go tool covdata percent -i="$$dirs"; \
+	  go tool cover -func=$(E2E_COVER_PROFILE) | tail -n 1'
 
 ## check-e2e-static: the push-time gate over the new e2e suite, with no
 ## GitLab: every typed action id names a catalog action, sits in a package

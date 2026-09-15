@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -307,12 +308,19 @@ func (c ServerConfig) label(private int64) string {
 }
 
 // childVariables returns the environment variables this configuration sets on
-// the server child, which is the whole of what it configures.
+// the server child: everything a child carries that the ServerConfig decides,
+// which is all of it bar the run's coverage directory.
 //
-// The telemetry variables are merged in here rather than at the launcher,
-// because this is the one place a session's child environment is built and
-// every child runs with telemetry on: a session whose server exported no spans
-// could only ever record what its tests asked for, never what ran.
+// Two merge points, and which one a variable belongs at is decided by whether
+// it can fail. The telemetry variables are merged in here, because they cannot:
+// telemetryVariables reaches for the package's own collector and logs when it
+// finds none, and every child runs with telemetry on regardless, since a
+// session whose server exported no spans could only ever record what its tests
+// asked for, never what ran. The coverage directory is merged in startSession
+// instead, because resolving it creates a directory and that can fail,
+// and a run that was asked to measure and silently measured nothing is the one
+// outcome this whole seam exists to prevent: the launcher can return that
+// error and fail the session, and a method returning a map cannot.
 func (c ServerConfig) childVariables() map[string]string {
 	vars := map[string]string{
 		"GITLAB_MCP_TOOL_SURFACE":       string(c.Surface),
@@ -541,16 +549,57 @@ func harnessRoot() (string, error) {
 //
 // Main calls it before it deletes the binary it built, and the order matters
 // on Windows, where an executable that is still running cannot be removed.
+//
+// Close first and cancel second, which is the reverse of what this did until
+// the run's Go coverage was measured. Canceling first killed every child
+// through exec's default Cancel, and a killed process runs no exit hook: an
+// instrumented child wrote its meta-data at startup and never its counters, so
+// everything it executed was lost. A session's Close ends a stdio child the
+// way a client does, by closing its stdin and waiting; the cancel is what is
+// left for an HTTP child, whose client holds no pipe of the process at all.
+//
+// Then the wait, before anything is deleted. The cancel only asks, and what
+// follows assumes the answer: the session root is each child's home and
+// working directory, the built binary is the file it is executing, and on
+// Windows a running executable cannot be removed at all.
 func closeSessions() {
-	sessionCancel()
+	var procs []*serverProcess
 	sessions.Range(func(_, value any) bool {
 		if entry, ok := value.(*sessionEntry); ok && entry.conn != nil {
 			entry.conn.close()
+			procs = append(procs, entry.conn.proc)
 		}
 		return true
 	})
+	sessionCancel()
+	waitForChildren(procs, childrenExitBudget)
+
 	if sessionRootDir != "" {
 		_ = os.RemoveAll(sessionRootDir)
+	}
+}
+
+// waitForChildren waits for the run's children to be collected under one
+// budget shared by all of them, and says which ones outlasted it.
+//
+// Saying so rather than failing: the run's verdict belongs to the tests, and a
+// child that would not stop is a fact about the shutdown that the next reader
+// of the log needs and that nothing else would record.
+//
+// The budget is a parameter and not read from childrenExitBudget here so that
+// the dangling branch can be driven in a test without spending the real thirty
+// seconds: the only caller in the run passes exactly that constant.
+func waitForChildren(procs []*serverProcess, budget time.Duration) {
+	deadline := time.Now().Add(budget)
+	var running []string
+	for _, proc := range procs {
+		if !proc.waitForExit(deadline) {
+			running = append(running, proc.label)
+		}
+	}
+	if len(running) > 0 {
+		log.Printf("e2e: %d server children were still running %s after being asked to stop: %s",
+			len(running), budget, strings.Join(running, ", "))
 	}
 }
 
@@ -648,12 +697,27 @@ func startSession(inst *instance, cfg ServerConfig, token, key string) (*session
 		settingsForChild = inst.settings.with(envGitLabToken, token)
 	}
 
+	// Merged here rather than in childVariables, beside telemetry, for the one
+	// reason that separates it from telemetry: resolving the directory creates
+	// it, and that can fail. A method returning a map could only log the
+	// failure the way telemetryVariables logs a missing collector, and a run
+	// asked to measure that quietly measures nothing is exactly the outcome
+	// this seam exists to prevent, so the error is returned and the session
+	// does not start. The map childVariables returns is a fresh one per call,
+	// so writing into it changes nobody else's child.
+	childVars := cfg.childVariables()
+	coverage, err := coverageVariables(inst.settings)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(childVars, coverage)
+
 	conn := &sessionConn{
 		label:       label,
 		cfg:         recorded,
 		tier:        recorded.resolvedTier(cred.tier),
 		inst:        inst,
-		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, cfg.childVariables())),
+		proc:        newServerProcess(label, bin, newChildEnv(settingsForChild, dir, childVars)),
 		notifier:    newUpdateNotifier(),
 		progress:    newProgressCollector(),
 		subscribers: newSubscriberIndex(),

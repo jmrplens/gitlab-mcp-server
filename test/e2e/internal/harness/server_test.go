@@ -9,12 +9,15 @@ package harness
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +27,48 @@ import (
 // testSettings builds the resolved configuration a child is launched from.
 func testSettings(values map[string]string) settings {
 	return settings{values: values}
+}
+
+// logCapture collects what the standard logger writes while one test runs.
+//
+// Guarded, because the standard logger is process-wide and this package has
+// goroutines that write to it: the OTLP receiver says when it stopped, and the
+// recorder says when no span has arrived. One of those writing while the test
+// reads would be a data race the detector is right to report, and a mutex is
+// the whole cost of not having one.
+type logCapture struct {
+	mu      sync.Mutex
+	written strings.Builder
+}
+
+func (c *logCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.written.Write(p)
+}
+
+// String returns everything logged since the capture was installed.
+func (c *logCapture) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.written.String()
+}
+
+// captureLog points the standard logger at a buffer for the rest of this test
+// and restores it afterwards.
+//
+// The harness reports through the standard logger everything it deliberately
+// does not fail on: a child that would not stop, a run that wrote fewer
+// coverage counters than it started children. A test of those lines has to
+// read the log, because the line is the whole of the behavior.
+func captureLog(t *testing.T) *logCapture {
+	t.Helper()
+
+	capture := &logCapture{}
+	previous := log.Writer()
+	log.SetOutput(capture)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	return capture
 }
 
 // environMap turns a child's environment back into a map for assertions.
@@ -286,6 +331,148 @@ func TestServerProcess_RealBinary_ServesTheDefaultSurface(t *testing.T) {
 	}
 	if proc.alive() {
 		t.Fatalf("the server was still running %s after its stdin closed\nstderr: %s", exitWindow, proc.stderrTail())
+	}
+}
+
+// TestServerProcess_ContextCancel_EndsTheChildWithACleanExit checks that the
+// end of a run asks the child to stop rather than killing it.
+//
+// The difference is invisible in a run's verdict and decides everything about
+// what the run measured: the Go runtime writes an instrumented binary's
+// coverage counters from an exit hook, and a killed process runs none of
+// those. So it is asserted on the recorded exit status, which is the server's
+// own when it was asked and `signal: killed` when it was not.
+//
+// Windows is skipped rather than covered: the harness keeps exec's kill there
+// because Windows has no SIGTERM, and nothing runs this suite on it.
+func TestServerProcess_ContextCancel_EndsTheChildWithACleanExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the harness keeps exec's kill here, since Windows has no SIGTERM and no run of this suite happens here")
+	}
+	stub := startStubGitLab(t)
+
+	bin, err := serverBinary("")
+	if err != nil {
+		t.Fatalf("building the server: %v", err)
+	}
+
+	env := newChildEnv(testSettings(map[string]string{
+		envGitLabURL:   stub.URL,
+		envGitLabToken: "glpat-harness-terminate",
+	}), t.TempDir(), nil)
+
+	proc := newServerProcess("terminate", bin, env)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "harness-terminate", Version: "1"}, nil)
+	session, err := client.Connect(ctx, proc.transport(ctx), nil)
+	if err != nil {
+		t.Fatalf("connecting to the server: %v\nstderr: %s", err, proc.stderrTail())
+	}
+	// Closing the session is what the run does after the cancel, and what
+	// collects the command exec is watching.
+	defer func() { _ = session.Close() }()
+
+	if _, err = session.ListTools(ctx, nil); err != nil {
+		t.Fatalf("tools/list: %v\nstderr: %s", err, proc.stderrTail())
+	}
+
+	cancel()
+
+	const exitWindow = 30 * time.Second
+	if !proc.waitForExit(time.Now().Add(exitWindow)) {
+		t.Fatalf("the server was still running %s after its context was cancelled\nstderr: %s", exitWindow, proc.stderrTail())
+	}
+	if got := proc.exitStatus(); got != "exit status 0" {
+		t.Fatalf("the server ended as %q, want a clean exit: a killed child runs no exit hook\nstderr: %s",
+			got, proc.stderrTail())
+	}
+}
+
+// TestServerProcess_HTTPContextCancel_EndsTheChildWithACleanExit is the twin
+// of the test above for the transport where the cancel is the whole of the
+// ending.
+//
+// A stdio child is also ended by its client closing the pipe it speaks over,
+// so the seam there has a second thing holding it up. An HTTP child's client
+// holds no pipe of the process at all: canceling the session's context is the
+// only thing that ever stops one, so terminateOnCancel could be dropped from
+// httpTransport with every other test in this package still green, and every
+// HTTP child of an instrumented run would be killed and contribute nothing.
+//
+// No MCP client is needed to ask the question: httpTransport returns only
+// after the child has answered its own health endpoint, which is the whole
+// proof that a process was started and got as far as serving.
+func TestServerProcess_HTTPContextCancel_EndsTheChildWithACleanExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the harness keeps exec's kill here, since Windows has no SIGTERM and no run of this suite happens here")
+	}
+	stub := startStubGitLab(t)
+
+	bin, err := serverBinary("")
+	if err != nil {
+		t.Fatalf("building the server: %v", err)
+	}
+
+	env := newChildEnv(testSettings(map[string]string{
+		envGitLabURL:   stub.URL,
+		envGitLabToken: "glpat-harness-http-terminate",
+	}), t.TempDir(), nil)
+
+	proc := newServerProcess("http-terminate", bin, env)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	addr, err := freeLoopbackAddr(ctx)
+	if err != nil {
+		t.Fatalf("reserving an address for the child: %v", err)
+	}
+	if _, err = proc.httpTransport(ctx, addr); err != nil {
+		t.Fatalf("starting the server on %s: %v", addr, err)
+	}
+
+	cancel()
+
+	const exitWindow = 30 * time.Second
+	if !proc.waitForExit(time.Now().Add(exitWindow)) {
+		t.Fatalf("the HTTP server was still running %s after its context was cancelled\nstderr: %s",
+			exitWindow, proc.stderrTail())
+	}
+	if got := proc.exitStatus(); got != "exit status 0" {
+		t.Fatalf("the HTTP server ended as %q, want a clean exit: a killed child runs no exit hook\nstderr: %s",
+			got, proc.stderrTail())
+	}
+}
+
+// TestServerProcess_WaitForExit_EachChildState_IsAnswered covers the bound the
+// end of a run leans on: it must not wait forever for a child that will not
+// stop, and must not report one that already has as still running.
+func TestServerProcess_WaitForExit_EachChildState_IsAnswered(t *testing.T) {
+	stopped := make(chan struct{})
+	close(stopped)
+
+	cases := []struct {
+		name   string
+		proc   *serverProcess
+		exited bool
+	}{
+		{name: "never started", proc: &serverProcess{label: "never-started"}, exited: true},
+		{name: "already collected", proc: &serverProcess{label: "collected", exited: stopped}, exited: true},
+		{name: "still running", proc: &serverProcess{label: "running", exited: make(chan struct{})}, exited: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// A deadline already past for the running case, since what is
+			// being checked is that it returns rather than how long it waits.
+			deadline := time.Now()
+			if testCase.exited {
+				deadline = deadline.Add(time.Minute)
+			}
+			if got := testCase.proc.waitForExit(deadline); got != testCase.exited {
+				t.Fatalf("waitForExit() = %t, want %t", got, testCase.exited)
+			}
+		})
 	}
 }
 

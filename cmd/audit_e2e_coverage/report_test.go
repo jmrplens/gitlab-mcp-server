@@ -136,6 +136,10 @@ func TestWriteGapTSV_NoSession_Named(t *testing.T) {
 // TestWriteMarkdownSummary_Fixture_Document pins the whole summary for the fixture
 // with a check and a baseline verdict on it, which is what a CI step puts in
 // GITHUB_STEP_SUMMARY.
+//
+// The two histogram tables are padded and their keys are in backticks because
+// they are [renderStateTable]'s, the same drawing the committed coverage page
+// carries; the summary used to spell its own unpadded copy of the same columns.
 func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 	rep := fixtureReport()
 	rep.Check = &checkResult{Passed: false, Findings: []string{"no test call was recorded on community/free"}}
@@ -153,20 +157,20 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 		"- L3 (asserted on all three surfaces): 0",
 		"- Test calls: 25; dispatch mismatches: 1; unresolved tools: 1",
 		"",
-		"| Surface | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
-		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-		"| dynamic | 2 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 | 6 |",
-		"| meta | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 6 |",
-		"| individual | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 8 |",
+		"| Surface      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
+		"| ------------ | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |",
+		"| `dynamic`    |        2 |          0 |          0 |               1 |            1 |            0 |            0 |          0 |          1 |       0 |      1 |      6 |",
+		"| `meta`       |        2 |          1 |          0 |               0 |            0 |            0 |            1 |          0 |          1 |       1 |      0 |      6 |",
+		"| `individual` |        0 |          0 |          1 |               0 |            0 |            0 |            0 |          0 |          3 |       0 |      0 |      8 |",
 		"",
-		"| Capability | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
-		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-		"| completions | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |",
-		"| elicitation | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 2 |",
-		"| modes | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |",
-		"| prompts | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 4 |",
-		"| resources | 3 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 17 |",
-		"| subscriptions | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 128 |",
+		"| Capability      | asserted | unobserved | sweep-only | error-path-only | refused-only | preview-only | cleanup-only | unasserted | unservable | skipped | failed | absent |",
+		"| --------------- | -------: | ---------: | ---------: | --------------: | -----------: | -----------: | -----------: | ---------: | ---------: | ------: | -----: | -----: |",
+		"| `completions`   |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
+		"| `elicitation`   |        1 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          1 |       0 |      0 |      2 |",
+		"| `modes`         |        4 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      0 |",
+		"| `prompts`       |        1 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |      4 |",
+		"| `resources`     |        3 |          0 |          0 |               1 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |     17 |",
+		"| `subscriptions` |        2 |          0 |          0 |               0 |            0 |            0 |            0 |          0 |          0 |       0 |      0 |    128 |",
 		"",
 		"- Check: FAILED",
 		"  - no test call was recorded on community/free",
@@ -177,6 +181,22 @@ func TestWriteMarkdownSummary_Fixture_Document(t *testing.T) {
 	}, "\n")
 	if out.String() != want {
 		t.Errorf("summary =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// TestWriteStateTable_EmptyHistogram_WritesNothing verifies the one thing the
+// summary's table keeps that the page's does not.
+//
+// A run's summary is a section of a document every step of the job writes into,
+// and a runtime that classified no capability at all would otherwise leave a
+// header with no rows under it, which reads as a table whose data went missing.
+func TestWriteStateTable_EmptyHistogram_WritesNothing(t *testing.T) {
+	var out bytes.Buffer
+
+	writeStateTable(&out, "Capability", nil)
+
+	if out.Len() > 0 {
+		t.Errorf("writeStateTable() wrote %q for an empty histogram, want nothing", out.String())
 	}
 }
 

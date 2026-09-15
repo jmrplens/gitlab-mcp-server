@@ -50,6 +50,39 @@ func stubSpan(traceID string, attributes map[string]string, code tracepb.Status_
 	return span
 }
 
+// stubRequestSpan builds one GitLab client span the way
+// internal/mcpotel.NewTransport makes it: the method attribute and the client
+// kind, which together are what the receiver counts on.
+func stubRequestSpan(traceID, method string) *tracepb.Span {
+	span := stubSpan(traceID, map[string]string{
+		string(mcpotel.AttrHTTPRequestMethod): method,
+		"server.address":                      "gitlab.example.com",
+	}, tracepb.Status_STATUS_CODE_UNSET)
+	span.Name = method
+	span.Kind = tracepb.Span_SPAN_KIND_CLIENT
+	return span
+}
+
+// stubOutboundMCPSpan builds the span internal/mcpotel.SendingMiddleware makes
+// for one server-initiated MCP request that failed.
+//
+// It is a client span like a GitLab round trip and carries none of the
+// attributes that tell one apart: no http.request.method, and an error.type
+// the failure path writes onto it. That is exactly the shape which used to
+// reach the merge, so it is built here from the keys the middleware itself
+// uses rather than from a plausible-looking set of my own.
+func stubOutboundMCPSpan(traceID, method string) *tracepb.Span {
+	span := stubSpan(traceID, map[string]string{
+		string(mcpotel.AttrMCPMethodName):         method,
+		string(mcpotel.AttrNetworkTransport):      "pipe",
+		string(mcpotel.AttrErrorType):             "_OTHER",
+		string(mcpotel.AttrRPCResponseStatusCode): "-32603",
+	}, tracepb.Status_STATUS_CODE_ERROR)
+	span.Name = method
+	span.Kind = tracepb.Span_SPAN_KIND_CLIENT
+	return span
+}
+
 // exportOf wraps spans in the request an exporter sends.
 func exportOf(spans ...*tracepb.Span) *coltracepb.ExportTraceServiceRequest {
 	return &coltracepb.ExportTraceServiceRequest{
@@ -125,10 +158,11 @@ func TestSpanReceiver_IssuedTrace_KeepsWhatTheServerSaid(t *testing.T) {
 		t.Fatalf("the receiver answered %d, want 200", status)
 	}
 
-	record, arrived := received.lookup(testTraceID)
+	kept, arrived := received.lookup(testTraceID)
 	if !arrived {
 		t.Fatal("the receiver kept nothing for a trace the harness issued")
 	}
+	record := kept.dispatch
 	cases := []struct {
 		name string
 		got  string
@@ -178,7 +212,8 @@ func TestSpanReceiver_TraceItNeverIssued_IsDropped(t *testing.T) {
 // One MCP call produces a server span carrying the action and a child span per
 // GitLab request, and those children carry none of these attributes. Merging
 // one would replace the facts with emptiness, which is a record that says a
-// call dispatched nothing.
+// call dispatched nothing. They are counted instead, which is what turns "this
+// package issued something" into "this action issued something".
 func TestSpanReceiver_ChildSpans_DoNotOverwriteTheServerSpan(t *testing.T) {
 	received := startTestReceiver(t)
 	received.issue(testTraceID)
@@ -187,16 +222,168 @@ func TestSpanReceiver_ChildSpans_DoNotOverwriteTheServerSpan(t *testing.T) {
 		string(mcpotel.AttrActionID): "issue.list",
 		string(mcpotel.AttrDomain):   "issue",
 	}, tracepb.Status_STATUS_CODE_OK)
-	child := stubSpan(testTraceID, map[string]string{"http.request.method": "GET"}, tracepb.Status_STATUS_CODE_UNSET)
+	child := stubRequestSpan(testTraceID, http.MethodGet)
 
 	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(child, server, child)), "")
 
-	record, arrived := received.lookup(testTraceID)
+	kept, arrived := received.lookup(testTraceID)
 	if !arrived {
 		t.Fatal("the receiver kept nothing for the trace")
 	}
-	if record.action != "issue.list" || record.domain != "issue" {
-		t.Errorf("the record is %+v, want the server span's own facts", record)
+	if kept.dispatch.action != "issue.list" || kept.dispatch.domain != "issue" {
+		t.Errorf("the record is %+v, want the server span's own facts", kept.dispatch)
+	}
+	if kept.requests != 2 {
+		t.Errorf("the trace counted %d GitLab requests, want 2", kept.requests)
+	}
+}
+
+// TestSpanReceiver_FailedRequestSpan_IsCountedAndNotMerged is the case that
+// made the two kinds of span worth telling apart at all.
+//
+// A GitLab call that never got a response carries error.type, which is one of
+// the five attributes the dispatch record is made of. Merged, it would report
+// the action as having failed when the handler went on to answer, and it would
+// mark the trace dispatch-observed before the server had said anything.
+func TestSpanReceiver_FailedRequestSpan_IsCountedAndNotMerged(t *testing.T) {
+	received := startTestReceiver(t)
+	received.issue(testTraceID)
+
+	failed := stubRequestSpan(testTraceID, http.MethodPost)
+	failed.Attributes = append(failed.Attributes, &commonpb.KeyValue{
+		Key:   string(mcpotel.AttrErrorType),
+		Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: "_OTHER"}},
+	})
+	failed.Status = &tracepb.Status{Code: tracepb.Status_STATUS_CODE_ERROR}
+
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(failed)), "")
+
+	kept, arrived := received.lookup(testTraceID)
+	if arrived {
+		t.Error("a GitLab request span alone marked the trace as dispatch-observed")
+	}
+	if kept.requests != 1 {
+		t.Errorf("the trace counted %d GitLab requests, want 1", kept.requests)
+	}
+	if kept.dispatch.carriesFacts() {
+		t.Errorf("the request span wrote %+v into the dispatch record", kept.dispatch)
+	}
+	if received.observed.Load() {
+		t.Error("a request span alone told the receiver a dispatch had been observed")
+	}
+}
+
+// TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged covers the other
+// producer of client spans, which the GitLab case left unguarded.
+//
+// internal/mcpotel.SendingMiddleware opens a client span per server-initiated
+// request — an elicitation, a sampling call, a progress notification — and the
+// suite drives all three. A failed one carries error.type and no
+// http.request.method, so it is not a GitLab request and used to be merged:
+// the dispatch record grew an error the action never had, lookup reported
+// arrival from a span naming no action, and the receiver marked itself
+// dispatch-observed. All three are asserted here because all three are
+// silent — a call line written from an empty record still looks like a line.
+func TestSpanReceiver_FailedOutboundMCPSpan_IsDroppedNotMerged(t *testing.T) {
+	received := startTestReceiver(t)
+	received.issue(testTraceID)
+
+	postExport(t, received.url, "/v1/traces",
+		marshalExport(t, exportOf(stubOutboundMCPSpan(testTraceID, "elicitation/create"))), "")
+
+	kept, arrived := received.lookup(testTraceID)
+	if arrived {
+		t.Error("an outbound MCP span alone marked the trace as dispatch-observed")
+	}
+	if kept.dispatch.carriesFacts() {
+		t.Errorf("the outbound MCP span wrote %+v into the dispatch record", kept.dispatch)
+	}
+	if kept.requests != 0 {
+		t.Errorf("an outbound MCP span counted as %d GitLab requests, want 0", kept.requests)
+	}
+	if received.observed.Load() {
+		t.Error("an outbound MCP span alone told the receiver a dispatch had been observed")
+	}
+}
+
+// TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact is the same
+// defect seen from the side a reader of the record would notice it.
+//
+// An elicitation that the client refused fails the outbound request while the
+// handler goes on to answer, so the trace carries both spans. Merging the
+// outbound one reported the action as failed, which is a false negative in
+// exactly the place the record exists to be believed.
+func TestSpanReceiver_FailedOutboundMCPSpan_LeavesTheServerSpanIntact(t *testing.T) {
+	received := startTestReceiver(t)
+	received.issue(testTraceID)
+
+	server := stubSpan(testTraceID, map[string]string{
+		string(mcpotel.AttrActionID): "issue.create",
+		string(mcpotel.AttrDomain):   "issue",
+	}, tracepb.Status_STATUS_CODE_OK)
+	outbound := stubOutboundMCPSpan(testTraceID, "elicitation/create")
+
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(outbound, server, outbound)), "")
+
+	kept, arrived := received.lookup(testTraceID)
+	if !arrived {
+		t.Fatal("the receiver kept nothing for the trace")
+	}
+	if kept.dispatch.action != "issue.create" {
+		t.Errorf("the record names action %q, want issue.create", kept.dispatch.action)
+	}
+	if kept.dispatch.errorType != "" {
+		t.Errorf("the outbound MCP span wrote error type %q over a successful dispatch", kept.dispatch.errorType)
+	}
+	if kept.dispatch.status != tracepb.Status_STATUS_CODE_OK.String() {
+		t.Errorf("the dispatch status is %q, want %q", kept.dispatch.status, tracepb.Status_STATUS_CODE_OK.String())
+	}
+}
+
+// TestSpanReceiver_RequestSpanOnAnUnissuedTrace_IsDropped keeps the count to
+// the calls this harness made.
+//
+// The server makes GitLab calls of its own at startup — the tier probe and the
+// scope probe both go through the instrumented transport — and those are on
+// traces nobody stamped. Counting them would put requests on a trace no action
+// names, and they are dropped for the same reason a stray server span is.
+func TestSpanReceiver_RequestSpanOnAnUnissuedTrace_IsDropped(t *testing.T) {
+	received := startTestReceiver(t)
+
+	postExport(t, received.url, "/v1/traces",
+		marshalExport(t, exportOf(stubRequestSpan(testTraceID, http.MethodGet))), "")
+
+	if len(received.all()) != 0 {
+		t.Errorf("the receiver kept %d traces it never issued", len(received.all()))
+	}
+}
+
+// TestSpanReceiver_ServerSpanCarryingAMethod_IsNotCountedAsARequest pins the
+// half of the discriminator that is not the attribute.
+//
+// The HTTP server middleware records http.request.method too, on the span it
+// opens for an inbound POST. That span is a root of its own trace today,
+// because the harness stamps its traceparent into _meta rather than into a
+// header, and a change on either side would put it on this trace. The kind is
+// what keeps it out of the count whatever happens there.
+func TestSpanReceiver_ServerSpanCarryingAMethod_IsNotCountedAsARequest(t *testing.T) {
+	received := startTestReceiver(t)
+	received.issue(testTraceID)
+
+	inbound := stubSpan(testTraceID, map[string]string{
+		string(mcpotel.AttrHTTPRequestMethod): http.MethodPost,
+		string(mcpotel.AttrActionID):          "issue.list",
+	}, tracepb.Status_STATUS_CODE_OK)
+	inbound.Kind = tracepb.Span_SPAN_KIND_SERVER
+
+	postExport(t, received.url, "/v1/traces", marshalExport(t, exportOf(inbound)), "")
+
+	kept, arrived := received.lookup(testTraceID)
+	if !arrived {
+		t.Fatal("the receiver kept nothing for the trace")
+	}
+	if kept.requests != 0 {
+		t.Errorf("a server span counted as %d GitLab requests, want 0", kept.requests)
 	}
 }
 
@@ -262,8 +449,8 @@ func TestSpanReceiver_GzippedExport_IsRead(t *testing.T) {
 	if status := postExport(t, received.url, "/v1/traces", compressed.Bytes(), "gzip"); status != http.StatusOK {
 		t.Fatalf("the receiver answered %d for a gzipped export, want 200", status)
 	}
-	if record, arrived := received.lookup(testTraceID); !arrived || record.action != "issue.list" {
-		t.Errorf("the gzipped export was not read: arrived=%t record=%+v", arrived, record)
+	if kept, arrived := received.lookup(testTraceID); !arrived || kept.dispatch.action != "issue.list" {
+		t.Errorf("the gzipped export was not read: arrived=%t record=%+v", arrived, kept.dispatch)
 	}
 }
 

@@ -58,6 +58,44 @@
 // declares nothing and the lines that replaced it would otherwise read as
 // naming a test that never existed.
 //
+// # The committed record
+//
+// Everything above describes one run and is written into the gitignored
+// dist/, so nothing on main can say what the suite covers. -record commits an
+// allowlist of the report to docs/development/e2e-coverage.json, one entry per
+// Docker target (ce, ee): the runtime, the run rows with their commit, GitLab
+// version and fixture profile, the session rows, the summary, and the three
+// level lists, which are what make the record an answer to which actions
+// rather than only to how many. The per-action cells stay out, being a
+// thousand rows per runtime that no reviewer would read, and the shard
+// directory stays out for being a path on the machine that ran the suite. The
+// entry's date is read off the run IDs' own timestamps, not the writing
+// clock, so rebuilding the file from old shards does not reset the window.
+// The write insists on -calls, on -results and on a -static scan that actually
+// ran -- the flag is not enough, since a scan that could not load the packages
+// or found no test/e2e/gitlab contributes nothing -- because without all three
+// the classification frozen would be a more generous one than the gates judge
+// by. Two runtimes of one invocation settling to one key are refused rather
+// than folded: a key is an edition and a tier, so a developer's own unlicensed
+// instance is indistinguishable from the Docker ce one and would replace it
+// silently.
+//
+// -render-record redraws docs/development/testing/e2e-coverage.md from the
+// committed record, which is why that half is a member of make update-all and
+// the measurement is not. -check-record is the offline gate over the document:
+// the schema, the runtime set, the levels against the lists beside them and
+// against each other, the floors -check applies, and the staleness window,
+// whose last fortnight is a note rather than a finding so the deadline is
+// visible before it stops the repository. -check-record-page is the other
+// half, the committed page against a fresh rendering; it is a separate flag
+// because it is the only half the source tree can move, which makes it a
+// freshness gate CI defers below a stack's tip while the judgments above hold
+// on every layer. A catalog that has moved under the record is reported and
+// does not fail, since -static already fails on the same rename from the
+// scenario's side; so is an entry measured on a revision that is not an
+// ancestor of HEAD, and only when git can resolve that revision at all, since
+// a shallow CI checkout knows none of them.
+//
 // -static needs no GitLab and runs on push. It loads test/e2e/gitlab and
 // test/e2e/internal with their tests under the e2e tag and, from the type
 // checker's own record, collects every constant of the harness's ActionID

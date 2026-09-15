@@ -53,14 +53,28 @@ type report struct {
 }
 
 // runRow is one package's run line.
+//
+// The three provenance fields are here rather than on the report as a whole
+// because the run line is where they are recorded and a directory may hold
+// several: two packages of one runtime that disagree on the commit were built
+// from two trees, and a row that folded them would hide it. The committed
+// coverage record carries these rows verbatim for exactly that reason.
 type runRow struct {
-	Package     string                  `json:"package"`
-	Requirement string                  `json:"requirement"`
-	Status      string                  `json:"status"`
-	Reason      string                  `json:"reason,omitempty"`
-	Filter      string                  `json:"filter,omitempty"`
-	RunID       string                  `json:"run_id"`
-	Fixtures    e2ecalls.FixtureProfile `json:"fixtures"`
+	Package     string `json:"package"`
+	Requirement string `json:"requirement"`
+	Status      string `json:"status"`
+	Reason      string `json:"reason,omitempty"`
+	Filter      string `json:"filter,omitempty"`
+	RunID       string `json:"run_id"`
+	// Commit is the revision under test, from E2E_COMMIT.
+	Commit string `json:"commit,omitempty"`
+	// GitLabVersion is the version the instance reported.
+	GitLabVersion string `json:"gitlab_version,omitempty"`
+	// TierConfirmed is whether the tier came from the instance license rather
+	// than from a setting, which decides whether the catalog the figures are
+	// divided by is the one the instance would really serve.
+	TierConfirmed bool                    `json:"tier_confirmed"`
+	Fixtures      e2ecalls.FixtureProfile `json:"fixtures"`
 }
 
 // sessionRow is one surface and mode, with what its sessions served.
@@ -171,7 +185,8 @@ func runRows(rt *runtimeRecords) []runRow {
 	for _, run := range rt.runs {
 		rows = append(rows, runRow{
 			Package: run.Package, Requirement: run.Requirement, Status: run.Status, Reason: run.Reason,
-			Filter: run.Filter, RunID: run.RunID, Fixtures: run.Fixtures,
+			Filter: run.Filter, RunID: run.RunID, Commit: run.Commit, GitLabVersion: run.GitLabVersion,
+			TierConfirmed: run.TierConfirmed, Fixtures: run.Fixtures,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Package < rows[j].Package })
@@ -401,37 +416,23 @@ var markdownStates = []state{
 	stateCleanupOnly, stateUnasserted, stateUnservable, stateSkipped, stateFailed, stateAbsent,
 }
 
-// writeStateTable writes one histogram table.
+// writeStateTable writes one histogram table into the run's Markdown summary.
+//
+// It prints what [renderStateTable] draws for the committed page rather than
+// spelling the same columns, the same order and the same cells a second time.
+// The two differ only in padding and in the backticks around a key, neither of
+// which any reader of either document can tell apart from the other; what a
+// second spelling would differ in eventually is the columns, which is the
+// drift this is here to prevent.
+//
+// The empty-histogram guard stays: a run's summary is a section of a document
+// other steps also write into, and a header with no rows under it reads as a
+// table whose data went missing.
 func writeStateTable(w io.Writer, first string, histogram map[string]map[state]int) {
 	if len(histogram) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "\n| %s |", first)
-	for _, s := range markdownStates {
-		fmt.Fprintf(w, " %s |", s)
-	}
-	fmt.Fprint(w, "\n| --- |")
-	for range markdownStates {
-		fmt.Fprint(w, " ---: |")
-	}
-	fmt.Fprintln(w)
-	keys := make([]string, 0, len(histogram))
-	for key := range histogram {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if surfaceOrder(keys[i]) != surfaceOrder(keys[j]) {
-			return surfaceOrder(keys[i]) < surfaceOrder(keys[j])
-		}
-		return keys[i] < keys[j]
-	})
-	for _, key := range keys {
-		fmt.Fprintf(w, "| %s |", key)
-		for _, s := range markdownStates {
-			fmt.Fprintf(w, " %d |", histogram[key][s])
-		}
-		fmt.Fprintln(w)
-	}
+	fmt.Fprint(w, "\n"+renderStateTable(first, histogram))
 }
 
 // writeVerdicts writes the check and baseline verdicts when the run asked

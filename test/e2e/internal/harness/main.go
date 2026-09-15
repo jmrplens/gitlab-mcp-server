@@ -145,6 +145,9 @@ func Main(m *testing.M, req Requirement) int {
 	// executable cannot be deleted, so a child left alive would leave the
 	// build behind on every run.
 	closeSessions()
+	// After it, because a child writes its coverage counters as it exits and
+	// closeSessions is what waits for that to have happened.
+	reportCoverage(state.settings)
 	closeSpanReceiver()
 	removeBuiltBinary()
 	return state.finish(code)

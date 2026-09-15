@@ -469,6 +469,72 @@ func TestAssertDispatch_RewriteFailsAScenarioButNotASweep(t *testing.T) {
 	}
 }
 
+// TestDispatchLine_CarriesTheRequestsTheTraceMade checks the one fact on this
+// line that comes from a span other than the server's own.
+//
+// It is what lets a reader ask per action what the committed request inventory
+// can only answer per package, so a line that dropped it would leave the
+// question unanswerable while looking complete. The empty case is here beside
+// it because the field is omitempty: an action that reached no GitLab must
+// write no count rather than a zero that reads as a measurement.
+func TestDispatchLine_CarriesTheRequestsTheTraceMade(t *testing.T) {
+	cases := []struct {
+		name string
+		kept traceSpans
+		want int
+	}{
+		{
+			name: "a handler that called GitLab",
+			kept: traceSpans{dispatch: dispatchRecord{action: "issue.list"}, requests: 3},
+			want: 3,
+		},
+		{
+			name: "a refusal that called nobody",
+			kept: traceSpans{dispatch: dispatchRecord{action: "issue.delete", refusalReason: "safe_mode"}},
+			want: 0,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			line := dispatchLine(testTraceID, testCase.kept)
+
+			if line.Requests != testCase.want {
+				t.Errorf("the dispatch line reports %d requests, want %d", line.Requests, testCase.want)
+			}
+			if line.Action != testCase.kept.dispatch.action {
+				t.Errorf("the dispatch line names %q, want %q", line.Action, testCase.kept.dispatch.action)
+			}
+		})
+	}
+}
+
+// TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine covers the skip that
+// keeps a record's two readings of one trace agreeing.
+//
+// A trace whose GitLab client spans landed and whose server span did not names
+// no action. Written anyway, it is a dispatch line with an empty action: the
+// coverage command counts it among its dispatch lines and then skips it when it
+// joins, so its diagnostics and its joins disagree and nothing says why. The
+// other trace here is what makes the assertion about the skip rather than about
+// an empty receiver.
+func TestDispatchLinesOf_ATraceWithNoServerSpan_WritesNoLine(t *testing.T) {
+	lines := dispatchLinesOf(map[string]traceSpans{
+		"4bf92f3577b34da6a3ce929d0e0e4731": {requests: 2},
+		"4bf92f3577b34da6a3ce929d0e0e4732": {dispatch: dispatchRecord{action: "issue.list"}, requests: 1},
+	})
+
+	if len(lines) != 1 {
+		t.Fatalf("dispatchLinesOf() wrote %d line(s), want only the trace the server spoke about", len(lines))
+	}
+	dispatch, isDispatch := lines[0].(*e2ecalls.Dispatch)
+	if !isDispatch {
+		t.Fatalf("dispatchLinesOf() wrote a %T, want a dispatch line", lines[0])
+	}
+	if dispatch.Action != "issue.list" || dispatch.Requests != 1 {
+		t.Errorf("the line is %+v, want issue.list with its one request", dispatch)
+	}
+}
+
 // TestNewTraceParent_IsAFreshSampledTraceEveryTime checks the value the server
 // reads the trace off.
 //

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/e2ecalls"
 )
 
 // hexOnly matches a lowercase hexadecimal string with nothing else in it.
@@ -83,6 +85,31 @@ func TestNewRunID_NonUTCClock_UsesUTCStampHashAndPackage(t *testing.T) {
 
 	if !regexp.MustCompile(`^20260430t103456z-[a-f0-9]{10}-common$`).MatchString(got) {
 		t.Fatalf("newRunID() = %q, want a UTC stamp, a 10-character hash and the package", got)
+	}
+}
+
+// TestNewRunID_Stamp_IsTheOneTheCoverageRecordReadsBack ties the identifier
+// this package mints to the parse that dates the committed coverage record.
+//
+// The two sides are in different build worlds -- this one is behind the e2e
+// tag and cmd/audit_e2e_coverage is not -- and the layout used to be spelled
+// once on each side with nothing holding them together. The committed shard
+// fixtures could not: they are hand-written files carrying invented
+// identifiers, so a layout change here would have left every test green and
+// been found by the first hour-long Docker run, whose entries would have had
+// no date at all. Both sides now read e2ecalls.RunIDStampLayout, and this is
+// the test that says so.
+func TestNewRunID_Stamp_IsTheOneTheCoverageRecordReadsBack(t *testing.T) {
+	now := time.Date(2026, 4, 30, 12, 34, 56, 789, time.FixedZone("UTC+2", 2*60*60))
+
+	runID := newRunID(now, "common")
+	at, read := e2ecalls.RunIDDate(runID)
+
+	if !read {
+		t.Fatalf("e2ecalls.RunIDDate(%q) read no stamp off an identifier this package minted", runID)
+	}
+	if want := now.UTC().Truncate(time.Second); !at.Equal(want) {
+		t.Errorf("e2ecalls.RunIDDate(%q) = %s, want %s", runID, at, want)
 	}
 }
 

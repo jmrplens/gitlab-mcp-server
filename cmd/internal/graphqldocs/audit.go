@@ -78,6 +78,9 @@ var ErrNoDocuments = errors.New("no GraphQL documents were found, which means th
 // is for the audit failing to run at all, which is the case a caller must not
 // report as a pass.
 func Audit(opts Options) (Result, error) {
+	// The schema is resolved before the tree is loaded, so an unreadable
+	// -schema fails in milliseconds rather than after twenty seconds of
+	// type-checking a program nothing will be judged against.
 	validate, provenance, err := judge(opts.SchemaPath, opts.Schema, opts.Provenance)
 	if err != nil {
 		return Result{}, err
@@ -91,10 +94,34 @@ func Audit(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	return judgeAll(documents, validate, provenance)
+}
+
+// Judge puts documents a caller already holds through the schema the options
+// name, and is the half of [Audit] that does not read the tree.
+//
+// It is separate for the caller that collected its documents somewhere else:
+// the client-go documents come from a module directory rather than from a
+// pattern under this repository, and reading them is [SDKDocuments]'s business
+// while judging them is exactly this. Both go through one validation so a
+// document is refused on the same terms wherever it was found.
+//
+// An empty set is [ErrNoDocuments] here as it is there, for the same reason: a
+// clean exit over nothing is the silence this package exists to remove.
+func Judge(documents []Document, opts Options) (Result, error) {
+	validate, provenance, err := judge(opts.SchemaPath, opts.Schema, opts.Provenance)
+	if err != nil {
+		return Result{}, err
+	}
+	return judgeAll(documents, validate, provenance)
+}
+
+// judgeAll is the loop both entry points share: every document against one
+// schema, with the refusals in the order the documents came in.
+func judgeAll(documents []Document, validate func(string) error, provenance string) (Result, error) {
 	if len(documents) == 0 {
 		return Result{}, ErrNoDocuments
 	}
-
 	result := Result{Provenance: provenance, Documents: documents}
 	for _, found := range documents {
 		if validationErr := validate(found.Text); validationErr != nil {

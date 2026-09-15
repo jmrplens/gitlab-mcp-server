@@ -14,9 +14,19 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Attribute keys for an outbound HTTP call, from the Stable HTTP conventions.
+// AttrHTTPRequestMethod is the Stable HTTP convention's method key, and the one
+// key of this group with a reader outside this package.
+//
+// The end-to-end harness's OTLP receiver reads it to tell a GitLab request span
+// from the MCP server span sharing its trace, and it reads this constant rather
+// than spelling the string a second time. A second spelling is a record that
+// empties itself the day the convention renames one, silently, which is what
+// every attribute key the harness reads is exported against.
+const AttrHTTPRequestMethod = attribute.Key("http.request.method")
+
+// The other attribute keys for an outbound HTTP call, from the Stable HTTP
+// conventions.
 const (
-	attrHTTPRequestMethod  = attribute.Key("http.request.method")
 	attrHTTPResponseStatus = attribute.Key("http.response.status_code")
 	attrServerAddress      = attribute.Key("server.address")
 	// attrServerPort pairs with server.address; two ports on one host are
@@ -129,7 +139,7 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	host := req.URL.Hostname()
 	port := serverPort(req.URL)
 	shared := []attribute.KeyValue{
-		attrHTTPRequestMethod.String(req.Method),
+		AttrHTTPRequestMethod.String(req.Method),
 		attrURLScheme.String(req.URL.Scheme),
 		attrNetworkProtocolName.String("http"),
 	}
