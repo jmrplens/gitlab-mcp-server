@@ -33,6 +33,14 @@ func TestLooksLikeDocument_TellsGraphQLFromEverythingElse(t *testing.T) {
 		// them into the operations that use them.
 		{name: "a fragment on its own", value: "fragment Bits on Thing {\n  id\n  name\n}", want: true},
 		{name: "a named operation", value: "query Everything {\n  things { id }\n}", want: true},
+		// Four shapes GraphQL accepts that a rule reading only whitespace
+		// between the tokens would refuse. Each parses; none is written in
+		// this repository today, which is what would have made the loss
+		// silent rather than loud.
+		{name: "an operation whose keyword is followed by a directive", value: "mutation @skip(if: true) { thing { errors } }", want: true},
+		{name: "a comment between the keyword and the selection set", value: "mutation # sends the thing\n{ thing { errors } }", want: true},
+		{name: "a comment between the operation name and its variables", value: "mutation Touch # sends the thing\n($id: ID!) { thing(id: $id) { errors } }", want: true},
+		{name: "a comment between a fragment's name and its on", value: "fragment Bits # the bits we read\non Thing { id }", want: true},
 		{name: "a bare selection set", value: "{ currentUser { id } }", want: true},
 		{name: "a selection set spreading a fragment", value: "{ ...Bits }", want: true},
 		{name: "a selection set on an underscored field", value: "{ __typename }", want: true},
@@ -116,6 +124,13 @@ func TestDefinesMutation_SeparatesWritesFromReads(t *testing.T) {
 		{name: "a mutation under a template hole", value: "{{/* header */}}\nmutation Touch($id: ID!) {\n  touch(id: $id) { errors }\n}", want: true},
 		{name: "a mutation under a header line", value: "Sent to GitLab:\nmutation { thing { errors } }", want: true},
 		{name: "an indented mutation inside a raw literal", value: "\n\t\tmutation Touch($input: In!) {\n\t\t\ttouch(input: $input) { errors }\n\t\t}\n", want: true},
+		// The same four shapes as the document test, here because this is the
+		// rule that decides whether a document may reach a mutation: a write
+		// that slipped past it would be read as a read.
+		{name: "a mutation whose keyword is followed by a directive", value: "mutation @skip(if: true) { thing { errors } }", want: true},
+		{name: "a mutation with a comment before its selection set", value: "mutation # sends the thing\n{ thing { errors } }", want: true},
+		{name: "a mutation with a comment after its name", value: "mutation Touch # sends the thing\n($id: ID!) { thing(id: $id) { errors } }", want: true},
+		{name: "a mutation with a comment between two of its lines", value: "mutation Touch\n# sends the thing\n($id: ID!) { thing(id: $id) { errors } }", want: true},
 
 		{name: "a query", value: "query($id: ID!) {\n  node(id: $id) { id }\n}", want: false},
 		{name: "a subscription", value: "subscription {\n  tick\n}", want: false},

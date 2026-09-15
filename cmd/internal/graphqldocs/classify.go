@@ -7,14 +7,36 @@ import (
 	"unicode/utf8"
 )
 
+// ignoredText is what may sit between two parts of a definition without
+// changing what the definition is: whitespace, and a comment, which runs to the
+// end of its line. The name is the specification's, which calls this class
+// Ignored.
+//
+// It is spelled once because leaving it out anywhere narrows the rule against
+// legal GraphQL rather than against prose. A document may write a directive
+// straight after the operation type, and may carry a comment between the
+// keyword and the selection set, between the operation name and its variable
+// definitions, or between a fragment's name and its "on". Each of those parses,
+// and a rule that admitted only a space would drop them out of the inventory
+// with nothing reporting the loss, which is the narrowing this file exists to
+// end.
+//
+// The specification counts a comma as Ignored too and this does not, which is
+// deliberate: no document writes "mutation , {", so admitting it would buy
+// nothing, and a comma is the one member of the class that reads naturally in
+// English prose, where every extra thing this rule accepts is a false document
+// in the inventory.
+const ignoredText = `(?:\s|#[^\n]*)`
+
 // definitionOf builds the rule that recognizes an operation definition written
 // with one of the given keywords.
 //
 // What follows the keyword is what separates a definition from English prose:
-// the selection set or the variable definitions the operation opens with, or an
-// operation name followed by one of those or by a directive. "mutation errors:
-// %s" therefore defines nothing, and neither does an identifier such as
-// queryBuilder, whose keyword is not a word of its own.
+// the selection set the operation opens with, its variable definitions, a
+// directive, or an operation name followed by one of those three. "mutation
+// errors: %s" therefore defines nothing, since a name followed by a colon is
+// none of them, and neither does an identifier such as queryBuilder, whose
+// keyword is not a word of its own.
 //
 // The keyword is looked for at the start of any line rather than at the start
 // of the document, because the operation is not always the first thing in the
@@ -23,12 +45,12 @@ import (
 // not a "#" comment. Anchoring at the start of the document is what used to let
 // a document in either shape leave the inventory and be judged by nothing.
 //
-// The whitespace between the keyword and what follows it may be a newline. A
-// document is free to put its selection set on the line below its keyword and
-// GitLab reads it the same way, so a rule that demanded a space would refuse a
-// document GitLab accepts.
+// What sits between the keyword and what follows it may be a newline, and may
+// be a comment: see [ignoredText]. A document is free to put its selection set
+// on the line below its keyword and GitLab reads it the same way, so a rule
+// that demanded a space would refuse a document GitLab accepts.
 func definitionOf(keywords string) *regexp.Regexp {
-	return regexp.MustCompile(`(?m)^[ \t]*(?:` + keywords + `)\b(?:\s*[({]|\s+[A-Za-z_][A-Za-z0-9_]*\s*[({@])`)
+	return regexp.MustCompile(`(?m)^[ \t]*(?:` + keywords + `)\b` + ignoredText + `*(?:[({@]|[A-Za-z_][A-Za-z0-9_]*` + ignoredText + `*[({@])`)
 }
 
 // mutationDefinition matches the one operation type that changes server state.
@@ -41,7 +63,7 @@ var readDefinition = definitionOf("query|subscription")
 // of its own and is still a document: this repository writes fragments as
 // constants and splices them into the operations that use them. The "on" is
 // what separates one from prose that opens with the word fragment.
-var fragmentDefinition = regexp.MustCompile(`(?m)^[ \t]*fragment\b\s+[A-Za-z_][A-Za-z0-9_]*\s+on\b`)
+var fragmentDefinition = regexp.MustCompile(`(?m)^[ \t]*fragment\b` + ignoredText + `+[A-Za-z_][A-Za-z0-9_]*` + ignoredText + `+on\b`)
 
 // objectLiteral matches an opening brace whose first entry binds a name to a
 // quoted string, which is a map written in JSON-ish shorthand and never
