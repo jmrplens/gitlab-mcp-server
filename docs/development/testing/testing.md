@@ -23,7 +23,7 @@
 | E2E test functions                                    |    910 |
 | cmd test functions                                    |  3,217 |
 | Test files (internal/)                                |    558 |
-| Test files (cmd/)                                     |    228 |
+| Test files (cmd/)                                     |    227 |
 | Test files (test/e2e/)                                |    330 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     23 |
@@ -49,8 +49,8 @@
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,098 |        379 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            910 |        330 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,217 |        228 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,320** |  **1,116** |                                                                                                 |
+| cmd packages            |          3,217 |        227 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,320** |  **1,115** |                                                                                                 |
 
 ### Core Packages
 
