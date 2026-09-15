@@ -31,7 +31,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -62,13 +61,11 @@ func (r *runner) runSeries(ctx context.Context, plan scenarioPlan) (SeriesScenar
 	if err != nil {
 		return SeriesScenario{}, err
 	}
-	pprofPort, err := freePort(ctx)
-	if err != nil {
-		return SeriesScenario{}, err
-	}
 	tgt := &httpTarget{
 		binary: r.binary, plan: plan, stubURL: r.stub.url, otlpURL: r.otlp.url,
-		pprofAddr: "127.0.0.1:" + strconv.Itoa(pprofPort),
+		// The address is start's to choose, and to choose again if the server
+		// loses it: the profiler below is built from what start published.
+		pprof: true,
 		// Sized to the largest step, so that nothing a step admitted is
 		// evicted before the next one measures it.
 		maxClients: slices.Max(plan.Steps),

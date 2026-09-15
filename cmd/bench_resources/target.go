@@ -36,6 +36,29 @@ import (
 // the pool keys on token and instance URL.
 const benchToken = "bench-token-" //#nosec G101 -- not a credential, a stand-in the stub instance accepts
 
+// startAttempts is how many times an HTTP target will reserve an address and
+// hand it to a process that has to bind it.
+//
+// One collision is ordinary on a machine doing anything else: the reservation
+// is released before the child runs, so the port is the kernel's to give away
+// again for as long as the child takes to start. Three collisions in a row on
+// three ports the kernel picked independently is not a benchmark's problem to
+// solve, and a retry that never gave up would turn a server that cannot start
+// for its own reasons into a loop.
+const startAttempts = 3
+
+// errServerGone reports a measured process that ended before it answered
+// /health, whatever it said on the way out.
+//
+// It is the one failure start retries, and it is deliberately not narrowed to
+// "the address was taken": that reason arrives as the child's own text, which
+// is the operating system's wording rather than ours and differs by platform,
+// so matching it would make the retry a Unix-only behavior and the test for
+// it unportable. Retrying any early exit costs a few milliseconds of restart
+// where the cause was something else, and what start reports then is the last
+// attempt's own output, so a server that is simply broken still says why.
+var errServerGone = errors.New("the server exited before it answered /health")
+
 // Seams a test drives the slow failure paths through: the wait for /health,
 // which is a minute against a binary that never serves it, and the port
 // reservation, whose failures the kernel does not produce on demand.
@@ -94,9 +117,16 @@ type procWait struct {
 	done chan struct{}
 }
 
-// wait blocks until the process has been reaped, by this call or an earlier
-// one.
-func (w *procWait) wait(cmd *exec.Cmd) {
+// watch starts reaping the process, if nobody has started yet, and hands back
+// the channel that closes once it is gone.
+//
+// The reaping starts as soon as there is a process rather than at close,
+// because a child that dies on its own is how the port handover fails: the
+// start below watches this so that it answers the moment the process is gone,
+// instead of polling an address nothing is listening on until the health
+// deadline. Sixty seconds of that is what one lost port cost the run this was
+// written for.
+func (w *procWait) watch(cmd *exec.Cmd) <-chan struct{} {
 	w.once.Do(func() {
 		w.done = make(chan struct{})
 		go func() {
@@ -104,8 +134,12 @@ func (w *procWait) wait(cmd *exec.Cmd) {
 			close(w.done)
 		}()
 	})
-	<-w.done
+	return w.done
 }
+
+// wait blocks until the process has been reaped, by this call or an earlier
+// one.
+func (w *procWait) wait(cmd *exec.Cmd) { <-w.watch(cmd) }
 
 // lockedBuffer collects a child's two output streams while it still runs.
 type lockedBuffer struct {
@@ -221,10 +255,12 @@ type httpTarget struct {
 	plan    scenarioPlan
 	stubURL string
 	otlpURL string
-	// pprofAddr, when set, is the loopback address the server is told to
-	// serve its profiling handlers on; the series reads its profiles and
-	// goroutine counts there. maxClients, when positive, sizes the pool so
-	// that no credential of a series is evicted between its steps.
+	// pprof asks for the profiling handlers, which the series reads its
+	// profiles and goroutine counts from; start reserves the port and
+	// publishes it as pprofAddr, so an attempt that lost one address does not
+	// keep the other. maxClients, when positive, sizes the pool so that no
+	// credential of a series is evicted between its steps.
+	pprof      bool
 	pprofAddr  string
 	maxClients int
 	// boundArgs and boundEnv are how a bound is put in force, or taken out of
@@ -236,27 +272,69 @@ type httpTarget struct {
 	boundEnv  []string
 
 	addr string
-	// mu guards cmd alone, which the sampler reads from a goroutine of its own
-	// while start is still assigning it.
+	// mu guards cmd and the reaper watching it, which the sampler reads from a
+	// goroutine of its own while start is still assigning them.
 	mu     sync.Mutex
 	cmd    *exec.Cmd
+	reap   *procWait
 	output *lockedBuffer
 	cancel context.CancelFunc
 	info   ServerInfo
-	reap   procWait
 }
 
-// start launches the process and waits for /health.
+// start launches the process and waits for /health, on a fresh address each
+// time the one before it was lost.
+//
+// A port is reserved by binding and releasing it, and the child binds it a
+// moment later, so anything else on the machine may take it in between. That
+// window cannot be closed from here: the address has to be on the command line
+// before the process exists, and the one way to have the child choose it
+// instead would be to read the address back out of its log, which the server
+// writes at info level while every measured process here runs at error, so
+// every scenario would pay for a log line per tool call inside the figures it
+// publishes. What can be done is to notice the collision and try again, which
+// is what this does. The failure it answers is real and was hidden: a lost
+// port failed a benchmark test after sixty seconds of polling, that failure
+// failed the unit suite, and the suite failing left the request inventory
+// unwritten and git status clean.
+func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
+	var lost error
+	for range startAttempts {
+		ready, err := t.startOnce(ctx)
+		if err == nil {
+			return ready, nil
+		}
+		if !errors.Is(err, errServerGone) {
+			return 0, err
+		}
+		lost = err
+		t.forgetProcess()
+	}
+	return 0, fmt.Errorf("%d attempts, each on a port of its own, and none stayed up: %w", startAttempts, lost)
+}
+
+// startOnce is one attempt: reserve what the child must bind, start it, and
+// wait for it to answer.
 //
 // The rate limiter is disabled unless the caller named a bound: refusals are a
 // different measurement, made by the fairness scenario and by the httpe2e
 // module, and one that would otherwise contaminate every capacity figure here.
-func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
-	port, err := freePort(ctx)
+func (t *httpTarget) startOnce(ctx context.Context) (time.Duration, error) {
+	// Both addresses come from this attempt, because the server exits when
+	// either one is taken: a retry that reused the profiling port it had lost
+	// would lose every attempt to the same collision.
+	wanted := 1
+	if t.pprof {
+		wanted = 2
+	}
+	ports, err := freePorts(ctx, wanted)
 	if err != nil {
 		return 0, err
 	}
-	t.addr = "127.0.0.1:" + strconv.Itoa(port)
+	t.addr = "127.0.0.1:" + strconv.Itoa(ports[0])
+	if t.pprof {
+		t.pprofAddr = "127.0.0.1:" + strconv.Itoa(ports[1])
+	}
 
 	args := []string{
 		"--http",
@@ -297,8 +375,9 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 	// caller starts it before the target so that the idle reading is taken from
 	// the first moment there is a process to read. Assigning the command before
 	// Start filled in its Process was a read of two fields being written.
-	t.setCommand(cmd)
-	info, waitErr := t.waitHealthy(runCtx)
+	reap := &procWait{}
+	t.setCommand(cmd, reap)
+	info, waitErr := t.waitHealthy(runCtx, reap.watch(cmd))
 	if waitErr != nil {
 		t.close()
 		return 0, waitErr
@@ -309,7 +388,28 @@ func (t *httpTarget) start(ctx context.Context) (time.Duration, error) {
 
 // waitHealthy polls /health until the process answers, and reads the build it
 // reports while it is there.
-func (t *httpTarget) waitHealthy(ctx context.Context) (ServerInfo, error) {
+//
+// gone closes when the process has been reaped, which ends the wait at once:
+// a server that is no longer running will not answer, and the sixty seconds
+// this would otherwise spend asking an address nothing holds are sixty seconds
+// a reader spends waiting for a failure that already happened. A nil channel
+// never closes, which is what a caller holding no process passes.
+func (t *httpTarget) waitHealthy(ctx context.Context, gone <-chan struct{}) (ServerInfo, error) {
+	// The requests are bound to the process's life as well as to the caller's
+	// context, because the interesting collision is with something that is
+	// listening: the connection is accepted and then nothing answers it, so a
+	// poll costs the client's whole timeout while the answer, that this is no
+	// longer our process, arrived seconds ago.
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() {
+		select {
+		case <-gone:
+			stop()
+		case <-ctx.Done():
+		}
+	}()
+
 	deadline := time.Now().Add(healthWait)
 	client := &http.Client{Timeout: 5 * time.Second}
 	for time.Now().Before(deadline) {
@@ -325,6 +425,14 @@ func (t *httpTarget) waitHealthy(ctx context.Context) (ServerInfo, error) {
 				return info, nil
 			}
 		}
+		select {
+		case <-gone:
+			// Everything the process wrote is in the buffer by now: the wait
+			// that closes this channel returns only once the copies of its two
+			// streams are finished, so the reason it gave is here to report.
+			return ServerInfo{}, fmt.Errorf("%w on %s:\n%s", errServerGone, t.addr, t.output.String())
+		default:
+		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	return ServerInfo{}, fmt.Errorf("server never became healthy:\n%s", t.output.String())
@@ -337,25 +445,36 @@ func (t *httpTarget) addClient(_ context.Context, index int) (*clientConn, time.
 	return &clientConn{rpc: client, label: "client " + strconv.Itoa(index)}, 0, nil
 }
 
-// setCommand publishes the started process to whoever is watching it.
-func (t *httpTarget) setCommand(cmd *exec.Cmd) {
+// setCommand publishes the started process, and the reaper watching it, to
+// whoever is watching them.
+func (t *httpTarget) setCommand(cmd *exec.Cmd, reap *procWait) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.cmd = cmd
+	t.cmd, t.reap = cmd, reap
 }
 
-// command is the started process, or nil before there is one. The lock is
-// released before the caller does anything with it, since two of the three
-// callers then block on the process for as long as it takes to die.
-func (t *httpTarget) command() *exec.Cmd {
+// forgetProcess drops the process an attempt left behind, after that attempt
+// has stopped and reaped it, so the next one publishes its own rather than
+// inheriting a reaper that has already fired.
+func (t *httpTarget) forgetProcess() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.cmd
+	t.cmd, t.reap, t.cancel = nil, nil, nil
+}
+
+// command is the started process and the reaper that collects it, or nil
+// before there is one. The lock is released before the caller does anything
+// with them, since two of the three callers then block on the process for as
+// long as it takes to die.
+func (t *httpTarget) command() (*exec.Cmd, *procWait) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.cmd, t.reap
 }
 
 // processes reports the single server process.
 func (t *httpTarget) processes() []*os.Process {
-	cmd := t.command()
+	cmd, _ := t.command()
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
@@ -364,11 +483,11 @@ func (t *httpTarget) processes() []*os.Process {
 
 // goroutines dumps and counts the server's goroutines, ending its life.
 func (t *httpTarget) goroutines() (int, error) {
-	cmd := t.command()
+	cmd, reap := t.command()
 	if cmd == nil || cmd.Process == nil {
 		return 0, errors.New("no server process")
 	}
-	return dumpGoroutines(cmd.Process, func() { t.reap.wait(cmd) }, t.output.String)
+	return dumpGoroutines(cmd.Process, func() { reap.wait(cmd) }, t.output.String)
 }
 
 // serverInfo returns the build /health reported.
@@ -379,8 +498,8 @@ func (t *httpTarget) close() {
 	if t.cancel != nil {
 		t.cancel()
 	}
-	if cmd := t.command(); cmd != nil {
-		t.reap.wait(cmd)
+	if cmd, reap := t.command(); cmd != nil && reap != nil {
+		reap.wait(cmd)
 	}
 }
 
@@ -486,21 +605,53 @@ func (t *stdioTarget) close() {
 	}
 }
 
-// freePort reserves a port by binding and releasing it. A race with another
-// process remains, which is why start waits for health rather than assuming
-// the port is ours the moment we ask.
-func freePort(ctx context.Context) (int, error) {
-	listener, err := reservePort(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("reserve a port: %w", err)
+// freePorts reserves count ports by binding them, and releases them together.
+//
+// Together, rather than one after another, because a port released a moment
+// ago is one the kernel may hand out again: two reservations made in turn can
+// return the same number, and a server given that number twice, once to serve
+// on and once for its profiling handlers, refuses to start with the address
+// already in use. Holding every listener until the last one is bound is what
+// makes them distinct; it is the one half of this the command can settle by
+// itself.
+//
+// The other half it cannot. Each port is the kernel's to give away again from
+// the moment this returns, so what comes back is a candidate rather than a
+// reservation, and start is where that is dealt with: it notices a child that
+// exited without serving and asks for another, rather than assuming the
+// address was still ours by the time the child got to it.
+func freePorts(ctx context.Context, count int) ([]int, error) {
+	held := make([]net.Listener, 0, count)
+	ports := make([]int, 0, count)
+	for range count {
+		listener, err := reservePort(ctx)
+		if err != nil {
+			releaseAll(held)
+			return nil, fmt.Errorf("reserve a port: %w", err)
+		}
+		held = append(held, listener)
+		addr, ok := listener.Addr().(*net.TCPAddr)
+		if !ok {
+			releaseAll(held)
+			return nil, errors.New("the reserved listener is not a TCP address")
+		}
+		ports = append(ports, addr.Port)
 	}
-	addr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok {
+	for i, listener := range held {
+		if closeErr := listener.Close(); closeErr != nil {
+			releaseAll(held[i+1:])
+			return nil, fmt.Errorf("release the reserved port: %w", closeErr)
+		}
+	}
+	return ports, nil
+}
+
+// releaseAll closes what a failed reservation had bound so far. Whatever it
+// reports is beside the point: the caller is already returning the failure
+// that brought it here, and a port left bound would be a port the harness
+// itself takes out of circulation.
+func releaseAll(held []net.Listener) {
+	for _, listener := range held {
 		_ = listener.Close()
-		return 0, errors.New("the reserved listener is not a TCP address")
 	}
-	if closeErr := listener.Close(); closeErr != nil {
-		return 0, fmt.Errorf("release the reserved port: %w", closeErr)
-	}
-	return addr.Port, nil
 }

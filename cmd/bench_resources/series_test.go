@@ -894,7 +894,7 @@ func TestRunSeries_Refusals(t *testing.T) {
 			t.Error("runSeries accepted a surface with no tool call")
 		}
 	})
-	t.Run("no port for the profile listener", func(t *testing.T) {
+	t.Run("no port to reserve", func(t *testing.T) {
 		previous := reservePort
 		reservePort = func(context.Context) (net.Listener, error) { return nil, errors.New("no ports") }
 		t.Cleanup(func() { reservePort = previous })
