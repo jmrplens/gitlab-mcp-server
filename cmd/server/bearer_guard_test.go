@@ -270,6 +270,189 @@ func TestBearerGuard_BlockedAddress_RefusesAVerifiedTokenThatIsUnderScoped(t *te
 	}
 }
 
+// TestBearerGuard_BlockedAddress_RefusesARequestCarryingNoToken keeps the
+// exemption to requests that actually present a credential.
+//
+// A request with no Authorization header has nothing for the cache to be
+// keyed on, so the lookup must not be attempted at all: the key is a hash of
+// the instance and the token, and hashing nothing produces a perfectly valid
+// key that some entry could one day sit under. An exemption granted there
+// would be granted to every anonymous request from the blocked address, which
+// is the one thing the budget has to go on bounding.
+//
+// The stub cache answers a hit for anything it is asked about, the empty token
+// included, so what the refusal rests on is the guard and not the accident that
+// a real cache holds no entry under an empty key. It also records having been
+// asked, which is the same claim stated directly: a request with no credential
+// is refused before the lookup, not by it.
+func TestBearerGuard_BlockedAddress_RefusesARequestCarryingNoToken(t *testing.T) {
+	t.Parallel()
+
+	var askedAboutNothing atomic.Bool
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	})
+	g.verified = func(_, token string) (*auth.TokenInfo, bool) {
+		if token == "" {
+			askedAboutNothing.Store(true)
+		}
+		return &auth.TokenInfo{UserID: "7", Scopes: []string{oauth.ScopeAPI}, Expiration: time.Now().Add(time.Hour)}, true
+	}
+
+	for i := range 4 {
+		if failure := g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))); failure == nil {
+			t.Fatalf("spray attempt %d was admitted", i)
+		}
+	}
+
+	failure := g.check(guardRequest(t, ""))
+	if failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Fatalf("a request carrying no credential at a blocked address = %+v, want 429", failure)
+	}
+	if askedAboutNothing.Load() {
+		t.Error("the verified-token cache was asked about an empty token; there is no credential there to recognize")
+	}
+}
+
+// TestBearerGuard_BlockedAddress_ExemptionIsScopedToTheInstanceSelected pins
+// what the oauth-mode exemption is keyed on.
+//
+// The verified-token cache is keyed by instance and token together, because a
+// token means nothing away from the GitLab that issued it, so the exemption has
+// to resolve the instance this request selected and ask about that pair. Three
+// consequences, and each of them is a way the exemption could be too generous:
+// a token cached against the instance the request selected is served; the same
+// deployment's cache entry for another published instance does not serve it;
+// and a request the resolver refuses an instance for is not exempted at all,
+// however much the cache would have answered for the empty instance the lookup
+// would otherwise have fallen back on.
+//
+// The last is the one that reads as pedantic and is not. Falling back would
+// key every misaddressed request onto one shared bucket, so a token verified
+// on a deployment that publishes no instance would exempt a blocked request
+// naming a host this deployment refuses.
+func TestBearerGuard_BlockedAddress_ExemptionIsScopedToTheInstanceSelected(t *testing.T) {
+	t.Parallel()
+
+	const (
+		selected     = "https://gitlab.example.com"
+		alsoServed   = "https://gitlab.other.example"
+		cachedHere   = "gloas-cached-for-the-selected-instance"
+		cachedThere  = "gloas-cached-for-the-other-instance"
+		neverCached  = "gloas-never-verified"
+		apiScopeOnly = oauth.ScopeAPI
+	)
+	// Keyed the way the real cache is: instance and token together, plus one
+	// entry under the empty instance, which is what a lookup that ignored a
+	// resolver error would land on.
+	cached := map[string]map[string]*auth.TokenInfo{
+		selected:   {cachedHere: {UserID: "7", Scopes: []string{apiScopeOnly}, Expiration: time.Now().Add(time.Hour)}},
+		alsoServed: {cachedThere: {UserID: "8", Scopes: []string{apiScopeOnly}, Expiration: time.Now().Add(time.Hour)}},
+		"":         {cachedThere: {UserID: "9", Scopes: []string{apiScopeOnly}, Expiration: time.Now().Add(time.Hour)}},
+	}
+
+	resolvesToSelected := func(*http.Request) (string, error) { return selected, nil }
+
+	// newBlockedGuard returns a guard whose address is already blocked, by the
+	// only thing that blocks one: authentications GitLab refused. A
+	// misaddressed request is deliberately not charged to the budget, so a
+	// spray of those would leave the address clear and prove nothing.
+	newBlockedGuard := func(t *testing.T) *bearerGuard {
+		t.Helper()
+		var g *bearerGuard
+		// The verifier reads the same cache first, as the real one does, so an
+		// exempted request is answered from memory and a cache miss is the
+		// upstream call the block exists to prevent.
+		g = newTestGuard(func(_ context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
+			instance, _ := g.resolveInstance(r)
+			if info, ok := cached[instance][token]; ok {
+				return info, nil
+			}
+			return nil, auth.ErrInvalidToken
+		})
+		g.instances = []string{selected, alsoServed}
+		g.resolveInstance = resolvesToSelected
+		g.verified = func(instance, token string) (*auth.TokenInfo, bool) {
+			info, ok := cached[instance][token]
+			return info, ok
+		}
+		for i := range 4 {
+			failure := g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i))))
+			if failure == nil {
+				t.Fatalf("spray attempt %d was admitted", i)
+			}
+		}
+		return g
+	}
+
+	cases := []struct {
+		name    string
+		resolve func(*http.Request) (string, error)
+		token   string
+		want    int // 0 means the request must not be refused at all
+		why     string
+	}{
+		{
+			name:    "cached against the instance this request selected",
+			resolve: resolvesToSelected,
+			token:   cachedHere,
+			want:    0,
+			why:     "this deployment verified this token at this instance and is serving it",
+		},
+		{
+			name:    "cached against another published instance",
+			resolve: resolvesToSelected,
+			token:   cachedThere,
+			want:    http.StatusTooManyRequests,
+			why:     "verifying it at the instance this request names would be an upstream call",
+		},
+		{
+			name:    "never verified anywhere",
+			resolve: resolvesToSelected,
+			token:   neverCached,
+			want:    http.StatusTooManyRequests,
+			why:     "this is the whole of what a sprayer can send, and the budget must go on refusing it",
+		},
+		{
+			name: "an instance this deployment does not publish",
+			resolve: func(*http.Request) (string, error) {
+				return "", &serverpool.DisallowedGitLabURLError{Allowed: []string{selected}}
+			},
+			token: cachedThere,
+			want:  http.StatusTooManyRequests,
+			why:   "the resolver names no instance, so the exemption must not fall back to the empty one",
+		},
+		{
+			name:    "no instance selected where two are published",
+			resolve: func(*http.Request) (string, error) { return "", errMissingGitLabURL },
+			token:   cachedThere,
+			want:    http.StatusTooManyRequests,
+			why:     "the resolver refuses to choose, so the exemption has nothing to ask about",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			g := newBlockedGuard(t)
+			// Set after the block: this is the instance the request being
+			// judged selects, not the one that spent the budget.
+			g.resolveInstance = tc.resolve
+
+			failure := g.check(guardRequest(t, tc.token))
+			if tc.want == 0 {
+				if failure != nil {
+					t.Fatalf("= %+v, want the request served: %s", failure, tc.why)
+				}
+				return
+			}
+			if failure == nil || failure.status != tc.want {
+				t.Fatalf("= %+v, want %d: %s", failure, tc.want, tc.why)
+			}
+		})
+	}
+}
+
 // TestBearerGuard_BlockedAddress_AdvertisesRetryAfter verifies that a blocked
 // caller is told when to come back rather than left to guess.
 func TestBearerGuard_BlockedAddress_AdvertisesRetryAfter(t *testing.T) {

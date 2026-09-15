@@ -418,6 +418,169 @@ func TestMCPServerGate_BlockedAddress_StillServesACredentialThePoolHolds(t *test
 	}
 }
 
+// TestMCPServerGate_BlockedAddress_WithNoPool_StaysBlocked covers the gate that
+// holds no pool, which is the one shape in which the exemption has nothing to
+// consult.
+//
+// The block is the path that must cost nothing, so it is also the path that may
+// not reach for state that is not there: asking a nil pool whether it holds
+// this credential takes the process down, and it does so only once an address
+// is already blocked, which is exactly when a deployment is under a spray. The
+// gate answers 429 instead, because a deployment with no pool holds no
+// credential, so there is nothing for the exemption to be true of.
+//
+// The budget is spent with requests carrying no credential at all, since those
+// are refused before anything touches the pool; a request with a token would
+// reach [serverpool.ServerPool.GetOrCreateEntry] and tell us nothing about the
+// exemption.
+func TestMCPServerGate_BlockedAddress_WithNoPool_StaysBlocked(t *testing.T) {
+	gate := &mcpServerGate{
+		gitlabURLs: []string{"https://gitlab.example.com"},
+		limiter:    serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow),
+		challenge:  legacyAuthChallenge,
+	}
+
+	var reached atomic.Int64
+	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	post := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		if token != "" {
+			req.Header.Set("PRIVATE-TOKEN", token)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := range authFailureLimit {
+		if rec := post(""); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("spending attempt %d = %d, want %d", i, rec.Code, http.StatusUnauthorized)
+		}
+	}
+
+	// A credential arrives at a blocked address. There is no pool, so it
+	// cannot be one this deployment already serves, and the gate must say so
+	// rather than go looking.
+	blocked := post(gateTestToken)
+	if blocked.Code != http.StatusTooManyRequests {
+		t.Fatalf("a credential at a blocked address with no pool = %d, want %d",
+			blocked.Code, http.StatusTooManyRequests)
+	}
+	if reached.Load() != 0 {
+		t.Errorf("the handler was reached %d time(s) from a blocked address", reached.Load())
+	}
+}
+
+// TestMCPServerGate_BlockedAddress_ExemptionIsScopedToTheInstanceSelected pins
+// what the exemption is keyed on, which is a credential and not a token.
+//
+// A pool entry belongs to one token at one instance, because a token means
+// nothing away from the GitLab that issued it. So the exemption has to resolve
+// the instance the request selected and ask about that pair, and the three ways
+// a request can fail to name one it holds all have to stay blocked: a published
+// instance the pool holds no entry for, an instance this deployment does not
+// publish, and no selection at all where several are published.
+//
+// Only the first of those is a lookup. The other two are the resolver refusing
+// to name an instance for the request, which leaves the exemption nothing to
+// ask about and so leaves the block standing; the request is then answered the
+// way any blocked request is, rather than being let through to be told which
+// instances exist.
+//
+// The probe count is the second half of every case: none of these answers may
+// spend the deployment's standing with GitLab, which is what the budget is
+// there to protect.
+func TestMCPServerGate_BlockedAddress_ExemptionIsScopedToTheInstanceSelected(t *testing.T) {
+	var probes atomic.Int64
+	published := gateTokenGatedGitLab(t, gateTestToken, &probes)
+	alsoPublished := gateTokenGatedGitLab(t, gateTestToken, &probes)
+
+	gate := newGateAgainst(t, okFactory, published)
+	gate.gitlabURLs = []string{published, alsoPublished}
+
+	var reached atomic.Int64
+	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	post := func(token, instance string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", token)
+		if instance != "" {
+			req.Header.Set(serverpool.RequestOptionGitLabURL, instance)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// The credential earns its entry, at one of the two published instances.
+	if rec := post(gateTestToken, published); rec.Code != http.StatusOK {
+		t.Fatalf("warming the pool entry = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	for i := range authFailureLimit {
+		if rec := post("glpat-invented-"+strconv.Itoa(i), published); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("spray attempt %d = %d, want %d", i, rec.Code, http.StatusUnauthorized)
+		}
+	}
+	spent := probes.Load()
+
+	cases := []struct {
+		name     string
+		instance string
+		want     int
+		why      string
+	}{
+		{
+			name:     "the instance the entry belongs to",
+			instance: published,
+			want:     http.StatusOK,
+			why:      "a credential the pool already holds must be served whoever shares its address",
+		},
+		{
+			name:     "another published instance",
+			instance: alsoPublished,
+			want:     http.StatusTooManyRequests,
+			why:      "the pool holds no entry for this token there, so serving it would mean verifying it upstream",
+		},
+		{
+			name:     "an instance this deployment does not publish",
+			instance: "https://gitlab.invented.example",
+			want:     http.StatusTooManyRequests,
+			why:      "the resolver names no instance for this request, so the exemption has nothing to ask about",
+		},
+		{
+			name:     "no instance selected where two are published",
+			instance: "",
+			want:     http.StatusTooManyRequests,
+			why:      "the resolver refuses to choose, so the exemption has nothing to ask about",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			before := probes.Load()
+			rec := post(gateTestToken, tc.instance)
+			if rec.Code != tc.want {
+				t.Errorf("= %d, want %d: %s", rec.Code, tc.want, tc.why)
+			}
+			if got := probes.Load(); got != before {
+				t.Errorf("cost %d upstream probe(s); no answer from a blocked address may reach GitLab", got-before)
+			}
+		})
+	}
+
+	if got := probes.Load(); got != spent {
+		t.Errorf("the blocked address spent %d upstream probe(s) in total; it must spend none", got-spent)
+	}
+	if reached.Load() != 2 {
+		t.Errorf("the handler was reached %d time(s), want 2: the warm-up and the one exempt request", reached.Load())
+	}
+}
+
 // TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards both halves of the
 // non-POST rule.
 //
