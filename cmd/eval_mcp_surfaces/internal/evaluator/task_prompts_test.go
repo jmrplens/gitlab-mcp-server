@@ -1,7 +1,6 @@
 package evaluator
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -2403,7 +2402,12 @@ func assertResolvedParams(t *testing.T, got, want map[string]any) {
 			t.Errorf("param %s not resolved; got %#v", param, got)
 			continue
 		}
-		if fmt.Sprint(value) != fmt.Sprint(expected) {
+		// DeepEqual rather than a string comparison: the claim is that a value
+		// is recovered as the parameter it belongs to *and* as the type that
+		// parameter takes, and rendering both sides through fmt.Sprint would
+		// make 7 and "7" the same answer, which is exactly the resolver bug
+		// worth catching.
+		if !reflect.DeepEqual(value, expected) {
 			t.Errorf("param %s = %#v, want %#v", param, value, expected)
 		}
 	}
