@@ -28,7 +28,7 @@ which is the ground the boundary test sanctions it on.
 | Catalog actions named  | 313 of 1084 |
 | Catalog domains named  |    42 of 46 |
 | Standalone tools named |           5 |
-| Worlds asked for       |    71 of 71 |
+| Worlds asked for       |    74 of 74 |
 
 ## Domains the corpus names
 
@@ -429,6 +429,7 @@ which is the ground the boundary test sanctions it on.
 | `failed_job_artifact`         |     6 |
 | `feature_flag`                |     2 |
 | `geo_site`                    |     2 |
+| `geo_site_name`               |     1 |
 | `group`                       |    23 |
 | `group_access_token`          |     2 |
 | `group_protected_branch`      |     1 |
@@ -458,9 +459,10 @@ which is the ground the boundary test sanctions it on.
 | `pipeline_job`                |     4 |
 | `pipeline_schedule`           |     1 |
 | `pipeline_trigger`            |     1 |
-| `project`                     |    38 |
+| `project`                     |    37 |
 | `project_access_token`        |     1 |
 | `project_alias`               |     2 |
+| `project_alias_name`          |     1 |
 | `project_badge`               |     1 |
 | `project_hook`                |     1 |
 | `project_member_candidate`    |     1 |
@@ -472,6 +474,7 @@ which is the ground the boundary test sanctions it on.
 | `runner`                      |     3 |
 | `saml_link`                   |     1 |
 | `scim_identity`               |     2 |
+| `service_account_name`        |     1 |
 | `snippet`                     |     3 |
 | `storage_move`                |     1 |
 | `tag`                         |     1 |
@@ -479,14 +482,14 @@ which is the ground the boundary test sanctions it on.
 | `user`                        |     2 |
 | `vulnerability`               |     5 |
 | `wiki_page`                   |     1 |
-| `world`                       |    66 |
+| `world`                       |    64 |
 
 ## What the corpus needs of an instance
 
 | Requirement            | Cases |
 | ---------------------- | ----: |
 | a CI runner            |    13 |
-| an administrator token |    26 |
+| an administrator token |    33 |
 | tier free              |   162 |
 | tier premium           |    63 |
 | tier ultimate          |    33 |

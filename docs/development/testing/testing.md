@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,391 |
-| Unit test functions                                   | 15,481 |
+| Total test functions                                  | 16,393 |
+| Unit test functions                                   | 15,483 |
 | E2E test functions                                    |    910 |
 | cmd test functions                                    |  3,203 |
 | Test files (internal/)                                |    567 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,262 | 74.8% |
+| `TestFunc_Scenario` (2-part)           | 12,264 | 74.8% |
 | `TestFunc` (no underscore)             |    932 |  5.7% |
 | `TestFunc_Scenario_Expected` (3+ part) |  3,197 | 19.5% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,814 |        172 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,816 |        172 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,098 |        379 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            910 |        330 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          3,203 |        228 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,391** |  **1,125** |                                                                                                 |
+| **Total**               |     **16,393** |  **1,125** |                                                                                                 |
 
 ### Core Packages
 
@@ -78,10 +78,10 @@
 | telemetry            |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
 | testutil             |       119 |    99.5% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | testutil/e2ecalls    |        27 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                         |
-| testutil/modelcorpus |        46 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                 |
+| testutil/modelcorpus |        48 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                 |
 | testutil/modelrecord |        39 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                        |
 | toolutil             |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
-| **Subtotal**         | **2,814** |          |                                                                                                                                                                                                                                                                    |
+| **Subtotal**         | **2,816** |          |                                                                                                                                                                                                                                                                    |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
