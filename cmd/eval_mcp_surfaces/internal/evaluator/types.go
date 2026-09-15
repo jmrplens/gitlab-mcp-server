@@ -435,6 +435,9 @@ type validationResult struct {
 	Unknown         []string
 	Forbidden       []string
 	ConfirmMissing  bool
+	// ConfirmRefusal is what a deployment answers this call, in the
+	// deployment's own words, taken from the one place that writes them.
+	ConfirmRefusal string
 }
 
 // simulationResult holds simulation result data for the evaluator package.

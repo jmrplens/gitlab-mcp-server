@@ -62,6 +62,24 @@ func isTruthy(s string) bool {
 // a tool result asks it to fix a field its client mangled. Everything a caller
 // can act on (declined, cancelled, a client that cannot prompt) stays in the
 // result, which is where MCP wants tool-level failure.
+// destructiveConfirmationTail is what a client that cannot prompt is told after
+// the per-action sentence, and is the whole of what a non-interactive caller
+// has to act on.
+const destructiveConfirmationTail = " The connected client cannot prompt for confirmation." +
+	" Re-send with confirm=true only after the user explicitly approves this operation."
+
+// DestructiveConfirmationRefusal is what a meta-surface tool answers a
+// destructive call that carried no confirmation, for a client that cannot be
+// prompted.
+//
+// It is exported for the surface evaluator, which must refuse such a call in
+// the words a deployment would use rather than words of its own, and cannot
+// forward it to find out because that would run the action. The per-action
+// sentence is the caller's, so this states the part that is fixed.
+func DestructiveConfirmationRefusal(tool string) string {
+	return "Destructive action on " + tool + " requires explicit confirmation." + destructiveConfirmationTail
+}
+
 func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, params map[string]any, message string) (*mcp.CallToolResult, error) {
 	tool := ""
 	if req != nil {
@@ -89,9 +107,7 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	}
 	if !flow.IsSupported() {
 		slog.WarnContext(ctx, "blocked destructive action without explicit confirmation", "tool", tool)
-		return ErrorResult(message +
-			" The connected client cannot prompt for confirmation." +
-			" Re-send with confirm=true only after the user explicitly approves this operation."), nil
+		return ErrorResult(message + destructiveConfirmationTail), nil
 	}
 
 	return ConfirmAction(ctx, req, message)

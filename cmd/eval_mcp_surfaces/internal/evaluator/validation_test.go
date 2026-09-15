@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -267,8 +268,13 @@ func TestValidateStepCallWithRoutes_PreservesDestructiveConfirmSemantics(t *test
 	}
 	params := map[string]any{"project_id": "my/project", "issue_iid": 7}
 	missingDynamicConfirm := validateStepCallWithRoutes(dynamicStep, dynamicExecuteActionTool, map[string]any{"action": "issue.delete", "params": params}, routes)
-	if missingDynamicConfirm.Valid || missingDynamicConfirm.DestructiveSafe || !strings.Contains(missingDynamicConfirm.Message, "top-level confirm=true") {
-		t.Fatalf("missing dynamic confirm = %+v, want top-level confirm requirement", missingDynamicConfirm)
+	// The refusal is the server's own, taken from the one place that writes it,
+	// and it reaches the model as well as the reader. It used to be our own
+	// sentence in the reader's message and nothing at all in the model's.
+	if missingDynamicConfirm.Valid || missingDynamicConfirm.DestructiveSafe ||
+		missingDynamicConfirm.Message != dynamictools.DestructiveConfirmationRefusal("issue.delete") ||
+		missingDynamicConfirm.ModelMessage != missingDynamicConfirm.Message {
+		t.Fatalf("missing dynamic confirm = %+v, want the server's own refusal in both messages", missingDynamicConfirm)
 	}
 	paramsConfirmOnly := validateStepCallWithRoutes(dynamicStep, dynamicExecuteActionTool, map[string]any{"action": "issue.delete", "params": map[string]any{"project_id": "my/project", "issue_iid": 7, "confirm": true}}, routes)
 	if paramsConfirmOnly.Valid || paramsConfirmOnly.DestructiveSafe {
@@ -1479,5 +1485,57 @@ func TestValidateStepCallWithRoutes_ReportsOneAbsencePerParameter(t *testing.T) 
 	}
 	if strings.Contains(result.ModelMessage, "project_id") {
 		t.Errorf("a parameter the call did send was reported missing: %q", result.ModelMessage)
+	}
+}
+
+// TestValidateDestructiveSafety_RefusesInTheServersOwnWords pins that a
+// destructive call without confirmation is answered the way a deployment
+// answers it, and that the answer reaches the model.
+//
+// It reached the reader's diagnostic only, so the model was sent an empty
+// message on the one axis the destructive-safety column scores, and any model
+// that recovered was recovering from silence. The words come from the server's
+// own functions rather than being restated, so the harness and the server
+// cannot drift into refusing the same call differently.
+func TestValidateDestructiveSafety_RefusesInTheServersOwnWords(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteActionTool: {"issue.delete": toolutil.ActionRoute{}},
+		"gitlab_issue":           {"delete": toolutil.ActionRoute{}},
+	}
+	tests := []struct {
+		name  string
+		step  evalStep
+		tool  string
+		input map[string]any
+		want  string
+	}{
+		{
+			name:  "dynamic",
+			step:  evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", Destructive: true},
+			tool:  dynamicExecuteActionTool,
+			input: map[string]any{"action": "issue.delete", "params": map[string]any{}},
+			want:  dynamictools.DestructiveConfirmationRefusal("issue.delete"),
+		},
+		{
+			name:  "meta",
+			step:  evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true},
+			tool:  "gitlab_issue",
+			input: map[string]any{"action": "delete", "params": map[string]any{}},
+			want:  toolutil.DestructiveConfirmationRefusal("gitlab_issue"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validateStepCallWithRoutes(tc.step, tc.tool, tc.input, routes)
+			if result.DestructiveSafe {
+				t.Fatal("a call with no confirmation was judged safe")
+			}
+			if !result.ConfirmMissing {
+				t.Error("the structured diagnostic does not record the missing confirmation")
+			}
+			if !strings.Contains(result.ModelMessage, tc.want) {
+				t.Errorf("the model was told %q, want the server's own refusal %q", result.ModelMessage, tc.want)
+			}
+		})
 	}
 }

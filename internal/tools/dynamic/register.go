@@ -850,7 +850,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		// the default surface, so leaving it out meant the most common
 		// needs_confirmation refusals never reached the refusal metric at all.
 		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalNeedsConfirmation)
-		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
+		return toolutil.ErrorResult(DestructiveConfirmationRefusal(entry.ID)), nil, nil
 	}
 
 	handler := r.handlers[entry.Tool]
@@ -878,6 +878,19 @@ func NormalizeActionScopedParams(actionID string, params, schema map[string]any)
 // name-only metadata for action-scoped compatibility aliases and coercions.
 func NormalizeActionScopedParamsWithExplanation(actionID string, params, schema map[string]any) (map[string]any, []toolutil.ParamAliasExplanation) {
 	return actioncompat.NormalizeParamsWithExplanation(actionID, params, schema)
+}
+
+// DestructiveConfirmationRefusal is what this server answers a destructive
+// action sent without an explicit confirmation.
+//
+// It is exported for the surface evaluator, which has to refuse such a call in
+// the words a deployment would use rather than in words of its own: the
+// evaluator cannot forward the call to find out, because doing so would run the
+// action. The harness said nothing at all here, so a model that forgot the
+// confirmation was told less than any real client would have been, and the
+// column that scores confirmations was measuring recovery from silence.
+func DestructiveConfirmationRefusal(actionID string) string {
+	return fmt.Sprintf("gitlab_execute_action: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", actionID)
 }
 
 // IssueLifecycleAliasStateEvent reports the state_event an issue lifecycle
