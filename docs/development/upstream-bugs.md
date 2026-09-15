@@ -121,6 +121,8 @@ readable without opening the tracker:
 | 46 | gitlab-org/gitlab | [Cancelling an auto-merge answers a status hash under a merge request annotation](#cancelling-an-auto-merge-answers-a-status-hash-under-a-merge-request-annotation) | Yes | Yes, [!255702](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255702) and [!255704](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255704), open; [!255239](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255239) closed unmerged | No | Was yes | Yes |
 | 47 | gitlab-org/gitlab | [A revoked GPG UID still verifies commits](#a-revoked-gpg-uid-is-still-offered-for-verification-and-still-verifies-commits) | Yes, by another user | Yes, [gitlab-org/gitlab!255300](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/255300), open | No | No | None possible |
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
+| 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), open | No | No | None taken |
+| 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -1967,6 +1969,97 @@ answered `resultType: 'input_required'`.
 
 **Documented in**: `docs/reference/capabilities/elicitation.md`, so the
 behaviour is stated where someone writing a client would look.
+
+### Three methods are served on a legacy session before the initialize handshake
+
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271),
+  on 2026-09-15.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273),
+  which moves the gate out of the switch so it covers every method rather
+  than only the ones without a `case`.
+- **Merged**: no.
+- **Blocking**: no, but it reaches our surface: `resources/subscribe` is one
+  of the three, and ADR-0015 makes the first read the authorization check, so
+  the watcher a pre-handshake subscribe starts is one this server created.
+- **Workaround**: none taken. The refusal belongs in the SDK, and disagreeing
+  with it here would mean this server rejecting a call the SDK accepts.
+
+**What**: `ServerSession.handle` refuses a call made before `initialize` on a
+legacy session, and the refusal sat in the `default` branch of its method
+switch. Any method with a `case` of its own skipped it, and three are served
+on a session that never handshook: `logging/setLevel`, `resources/subscribe`
+and `resources/unsubscribe`.
+
+`resources/subscribe` is the one that matters, because it reaches state rather
+than merely answering: it starts a watcher and registers a subscriber, so a
+client that subscribes before `initialize` is delivered
+`notifications/resources/updated` for the lifetime of a session the server
+never agreed to.
+
+**Why it is the SDK disagreeing with itself** rather than with the
+specification: the lifecycle page is what motivates the gate the `default`
+branch applies, and these three sat outside it for no stated reason. The
+discriminator is the request rather than the session, which is the condition
+the `default` branch already applied: a call carrying no
+`_meta.protocolVersion` on a session with no recorded handshake. A SEP-2575
+session legitimately has no `initialize` and stays served through the same
+`usesNewProtocol` exemption.
+
+**Two review points settled on the pull request**, both worth keeping because
+each is a rule about the gate rather than about this change. The comment was
+shortened to the rule and the exemption, since how the gap came to exist
+belongs in the commit message. And a proposal to replace `req.IsCall()` with
+`req.Method != notificationInitialized` was declined with evidence: that
+widens the gate from calls to notifications, and `notifications/cancelled` has
+no `case` of its own, so a client giving up on a slow `initialize` would have
+its cancellation refused and the in-flight call never cancelled. The SDK's own
+client sends exactly that message (`client.go:353`) and the transport has a
+dedicated path for it (`transport.go:261`).
+
+### The negotiated protocol version is recorded on one path of four
+
+- **Reported**: yes,
+  [modelcontextprotocol/go-sdk#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272),
+  on 2026-09-15.
+- **In review**: yes,
+  [modelcontextprotocol/go-sdk#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274).
+- **Merged**: no.
+- **Blocking**: no, and the concrete failure is on the transport this server
+  leads with. `ioConn.sessionUpdated` reads only `NegotiatedProtocolVersion`,
+  so a SEP-2575 session over **stdio** is treated as `2025-03-26` and accepts
+  JSON-RPC batches. Batching was removed in `2025-06-18`, and the streamable
+  handler already refuses them by reading the header, so the two transports
+  disagree about the same session shape.
+- **Workaround**: none taken.
+
+**What**: four places record a protocol version on a `ServerSession` and only
+`ServerSession.initialize` records it in `NegotiatedProtocolVersion`. The other
+three (`handle` for a new-protocol client's `_meta`, `server/discover`, and the
+streamable handler synthesizing from the `MCP-Protocol-Version` header) record
+only `InitializeParams`, so a reader asking what a session speaks gets a
+different answer depending on how the session began.
+
+The support check those three apply **is** all the negotiation SEP-2575 has:
+with no handshake response there is nowhere to communicate a downgrade, so a
+version they accept is one the server supports, and recording it as negotiated
+states what happened. `initialize` stays the one path that downgrades.
+
+**A reviewer proposal here was refuted by a test, and the refutation is the
+useful part.** Validating an incoming new-protocol request against
+`Session.supportedVersions` rather than `Server.protocolVersions` looks
+obviously right, and its premise is: `server/discover` answers with the
+session's list, so validating against the server's means advertising one set
+and accepting another. But `StreamableServerTransport.SupportsProtocolVersion`
+returns `t.Stateless && …` for any version at or above `2026-07-28`, so on a
+**stateful** session the session's list excludes `2026-07-28` entirely, and the
+change refuses the one request whose job is to ask what the server supports.
+`TestStreamableStateful_AcceptsDiscover` turns from 200 to 400. A discover
+probe cannot be required to speak the version it is asking about. The shape
+that does work, verified against the package with `-race`, judges
+`methodDiscover` against the server's list and every other new-protocol method
+against the session's.
 
 ### Application code cannot send notifications/cancelled for a listen stream
 
