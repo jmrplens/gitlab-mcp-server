@@ -59,8 +59,9 @@ que una máquina de desarrollo y la integración continua midan lo mismo.
 Todo lo que sigue lo regenera una sola orden, `make bench-resources`, que
 ejecuta el banco de pruebas y redibuja las gráficas a partir del registro que
 escribe. La máquina, la compilación y el método aparecen en el texto bajo el
-encabezado y en el borde inferior de cada gráfica, porque una cifra de memoria
-residente sin ellos no es accionable.
+encabezado, y cada gráfica repite en su borde inferior la parte de eso sin la
+que no puede leerse fuera de esta página: cuántas CPU lógicas midieron, en qué
+sistema operativo y con qué núcleo, y cuándo.
 
 **Esta página es una instantánea, y solo eso.** Cada versión vuelve a medir en
 la máquina de referencia y sustituye estos valores por completo: sin columna de
@@ -127,7 +128,7 @@ Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, 62 GiB de RAM, linux/amd6
 
 <ChartPair name="latency" lang="es" alt="Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie." />
 
-<ChartPair name="series-memory" lang="es" alt="Líneas sobre una escala logarítmica de credenciales con el pico de memoria residente de cada superficie por paso, el presupuesto de memoria y el número de credenciales en que se detuvo cada serie." />
+<ChartPair name="series-memory" lang="es" alt="Líneas sobre una escala logarítmica de credenciales con el pico de memoria residente de cada superficie por paso y el número de credenciales en que se detuvo cada serie." />
 
 <ChartPair name="series-latency" lang="es" alt="Líneas en escalas logarítmicas con el p50 y el p99 de tools/call por superficie según crece el número de credenciales." />
 
@@ -190,7 +191,7 @@ Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, 62 GiB de RAM, linux/amd6
 
 ### Serie de concurrencia
 
-#### http, superficie dynamic: 4 en vuelo por credencial, 10 s por paso, presupuesto de memoria de 35000 MiB
+#### http, superficie dynamic: 4 en vuelo por credencial, 10 s por paso
 
 | Credenciales | Residente, media | Residente, pico | Heap en reposo | Residente en reposo | CPU por llamada | Llamadas | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
 | -----------: | ---------------: | --------------: | -------------: | ------------------: | --------------: | -------: | -------------: | -------------: | -------------: | -------------: | ---------: |
@@ -207,7 +208,7 @@ Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, 62 GiB de RAM, linux/amd6
 
 Ajustado sobre estos pasos: el pico de conjunto residente bajo carga crece 1.92 MiB por credencial, y el heap vivo en reposo, leído con la carga detenida y una recolección forzada, crece 50.6 KiB por credencial. Lo primero es lo que cuesta una credencial mientras ella y todas las demás están llamando; lo segundo es lo que cuesta mantenerla. El conjunto residente en reposo va por detrás de ambos, porque Go devuelve al sistema operativo las páginas liberadas según su propio calendario. Se ejecutaron todos los pasos previstos, hasta 1000 credenciales.
 
-#### http, superficie meta: 4 en vuelo por credencial, 10 s por paso, presupuesto de memoria de 35000 MiB
+#### http, superficie meta: 4 en vuelo por credencial, 10 s por paso
 
 | Credenciales | Residente, media | Residente, pico | Heap en reposo | Residente en reposo | CPU por llamada | Llamadas | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
 | -----------: | ---------------: | --------------: | -------------: | ------------------: | --------------: | -------: | -------------: | -------------: | -------------: | -------------: | ---------: |
@@ -224,7 +225,7 @@ Ajustado sobre estos pasos: el pico de conjunto residente bajo carga crece 1.92 
 
 Ajustado sobre estos pasos: el pico de conjunto residente bajo carga crece 0.81 MiB por credencial, y el heap vivo en reposo, leído con la carga detenida y una recolección forzada, crece 52.6 KiB por credencial. Lo primero es lo que cuesta una credencial mientras ella y todas las demás están llamando; lo segundo es lo que cuesta mantenerla. El conjunto residente en reposo va por detrás de ambos, porque Go devuelve al sistema operativo las páginas liberadas según su propio calendario. Se ejecutaron todos los pasos previstos, hasta 1000 credenciales.
 
-#### http, superficie individual: 2 en vuelo por credencial, 10 s por paso, presupuesto de memoria de 35000 MiB
+#### http, superficie individual: 2 en vuelo por credencial, 10 s por paso
 
 | Credenciales | Residente, media | Residente, pico | Heap en reposo | Residente en reposo | CPU por llamada | Llamadas | tools/call p50 | tools/call p99 | tools/list p50 | tools/list p99 | Goroutines |
 | -----------: | ---------------: | --------------: | -------------: | ------------------: | --------------: | -------: | -------------: | -------------: | -------------: | -------------: | ---------: |

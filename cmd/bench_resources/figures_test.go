@@ -4,6 +4,7 @@
 package main
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -355,10 +356,16 @@ func TestOrderedSeries_SurfaceOrderAndNoEmptyOnes(t *testing.T) {
 	}
 }
 
-// TestSeriesMemorySpec_BudgetThresholdAndStopMarkers verifies the memory
-// figure draws one line per surface from the peaks, the budget as the
-// threshold rule, and a marker for every series that stopped early.
-func TestSeriesMemorySpec_BudgetThresholdAndStopMarkers(t *testing.T) {
+// TestSeriesMemorySpec_LinesStopMarkersAndNoBudgetRule verifies the memory
+// figure draws one line per surface from the peaks and a marker for every
+// series that stopped early, and that it draws no threshold rule.
+//
+// The budget was that rule until 3.1.0, and drawing it cost the figure its
+// whole point: the published record budgets 35000 MiB against a highest
+// measurement of 4677, so the axis went to 40000 and the three surfaces were
+// squashed into the bottom eighth of the plot, where the difference between
+// them could not be seen.
+func TestSeriesMemorySpec_LinesStopMarkersAndNoBudgetRule(t *testing.T) {
 	run := sampleSeriesRun()
 	spec := seriesMemorySpec(run, englishLabels())
 
@@ -372,8 +379,8 @@ func TestSeriesMemorySpec_BudgetThresholdAndStopMarkers(t *testing.T) {
 	if dynamic.Label != surfaceDynamic || !reflect.DeepEqual(dynamic.X, []float64{1, 5}) || !reflect.DeepEqual(dynamic.Y, []float64{220, 500}) {
 		t.Errorf("dynamic line = %+v, want the peaks at 1 and 5 credentials", dynamic)
 	}
-	if spec.Threshold == nil || spec.Threshold.Value != 4000 || !strings.Contains(spec.Threshold.Label, "4000") {
-		t.Errorf("threshold = %+v, want the 4000 MiB budget", spec.Threshold)
+	if spec.Threshold != nil {
+		t.Errorf("threshold = %+v, want none: the budget flattens the figure it appears in", spec.Threshold)
 	}
 	wantMarkers := []lineMarker{
 		{X: 5, Label: "dynamic: stopped at 5"},
@@ -383,15 +390,24 @@ func TestSeriesMemorySpec_BudgetThresholdAndStopMarkers(t *testing.T) {
 		t.Errorf("markers = %+v, want %+v", spec.Markers, wantMarkers)
 	}
 
-	t.Run("no budget draws no threshold", func(t *testing.T) {
-		unbudgeted := sampleSeriesRun()
-		for i := range unbudgeted.Series {
-			unbudgeted.Series[i].BudgetMiB = 0
+	// The axis is then decided by the measurements, which is the whole gain:
+	// against this record's 900 MiB peak it ends just above it rather than at
+	// the budget's 4000.
+	if axis, _ := linearScale(specMaxY(spec) * 1.1); axis.hi > 1200 {
+		t.Errorf("axis top %v, want one the measurements decide rather than a budget", axis.hi)
+	}
+}
+
+// specMaxY is the largest value a line spec carries, which is what its axis
+// has to cover.
+func specMaxY(spec lineSpec) float64 {
+	highest := 0.0
+	for _, series := range spec.Series {
+		for _, y := range series.Y {
+			highest = math.Max(highest, y)
 		}
-		if unbudgetedSpec := seriesMemorySpec(unbudgeted, englishLabels()); unbudgetedSpec.Threshold != nil {
-			t.Errorf("threshold = %+v on series that had no budget", unbudgetedSpec.Threshold)
-		}
-	})
+	}
+	return highest
 }
 
 // TestSeriesLatencySpec_PairsMedianAndTailPerSurface verifies the latency
@@ -518,35 +534,36 @@ func TestSpecs_LabelBothAxes(t *testing.T) {
 	}
 }
 
-// TestChartProvenance_NamesTheMachineAndTheBuild verifies the line every
-// figure carries along its bottom edge says which machine and which build the
-// numbers came from, in the language of the page the figure is going on.
+// TestChartProvenance_NamesTheProcessorsTheKernelAndTheDay verifies the line
+// every figure carries along its bottom edge says how many logical processors
+// measured, on which operating system and kernel, and when, in the language of
+// the page the figure is going on.
 //
 // A chart travels: it is embedded, screenshotted and quoted away from the page
-// that states those, so a figure whose provenance was missing would be a
-// memory curve nobody could act on. The Spanish bundle is asserted beside the
-// English one because a rendered SVG is content rather than chrome, and a
-// Spanish page carrying an English sentence is half translated.
-func TestChartProvenance_NamesTheMachineAndTheBuild(t *testing.T) {
+// that states those, and a processor-time figure with no processor count is a
+// number nobody can act on. Everything else that sentence carries stays on the
+// page, the build in particular: it is a commit hash on an image, and it dates
+// the image in a way nothing else on the page does. The Spanish bundle is
+// asserted beside the English one because a rendered SVG is content rather than
+// chrome, and a Spanish page carrying an English sentence is half translated.
+func TestChartProvenance_NamesTheProcessorsTheKernelAndTheDay(t *testing.T) {
 	run := sampleRun()
 	for _, tc := range []struct {
 		l    labels
-		want []string
+		want string
 	}{
-		{englishLabels(), []string{"Measured on", "Test CPU", "8 logical CPUs", "linux/amd64", "go1.27.1", "Build 2.7.6 (01234567)", "2026-09-04"}},
-		{spanishLabels(), []string{"Medido en", "Test CPU", "8 CPU lógicas", "linux/amd64", "go1.27.1", "Compilación 2.7.6 (01234567)", "2026-09-04"}},
+		{englishLabels(), "8 logical CPUs, Linux 6.1.0, 2026-09-04"},
+		{spanishLabels(), "8 CPU lógicas, Linux 6.1.0, 2026-09-04"},
 	} {
 		t.Run(tc.l.Code, func(t *testing.T) {
 			got := chartProvenance(run, tc.l)
-			for _, want := range tc.want {
-				if !strings.Contains(got, want) {
-					t.Errorf("provenance %q does not mention %q", got, want)
-				}
+			if got != tc.want {
+				t.Errorf("provenance = %q, want %q", got, tc.want)
 			}
-			// The kernel and the installed memory belong to the sentence under
-			// the measurements, which has the width for them; on a chart they
-			// would push the build off the canvas.
-			for _, unwanted := range []string{"6.1.0", "61"} {
+			// The processor model, the architecture, the installed memory, the
+			// toolchain and the build belong to the sentence under the
+			// measurements, which has the width for them.
+			for _, unwanted := range []string{"Test CPU", "amd64", "61", "go1.27.1", "2.7.6", "01234567"} {
 				if strings.Contains(got, unwanted) {
 					t.Errorf("provenance %q carries %q, which the short host description drops", got, unwanted)
 				}

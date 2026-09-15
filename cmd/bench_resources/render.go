@@ -257,6 +257,12 @@ func tableBlocks(run *Run, l labels, heading string) string {
 // a subheading naming its settings, its per-step table and the sentence
 // saying where it stopped. Nothing at all for a record without one, so a
 // page rendered from the schema-1 record is unchanged.
+//
+// The memory budget is not among the settings named here. It describes the
+// harness rather than the server, and on a series that ran every planned step
+// it is a number the reader has nothing to do with; the one series it does
+// explain is one that stopped on it, and the sentence under the table names
+// it there.
 func seriesBlocks(run *Run, l labels, heading string) string {
 	series := orderedSeries(run)
 	if len(series) == 0 {
@@ -265,11 +271,7 @@ func seriesBlocks(run *Run, l labels, heading string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n\n", heading, l.TableCaption["series"])
 	for _, s := range series {
-		budget := l.SeriesNoBudget
-		if s.BudgetMiB > 0 {
-			budget = fmt.Sprintf(l.SeriesBudgetClause, s.BudgetMiB)
-		}
-		fmt.Fprintf(&b, "%s# %s\n\n", heading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds, budget))
+		fmt.Fprintf(&b, "%s# %s\n\n", heading, fmt.Sprintf(l.SeriesCaption, s.Transport, s.Surface, s.Parallel, s.StepSeconds))
 		fmt.Fprintf(&b, "%s\n\n", strings.TrimRight(seriesTable(s, l), "\n"))
 		fmt.Fprintf(&b, "%s\n\n", joinNonEmpty(" ", seriesSlopeSentence(s, l), seriesSentence(s, l)))
 	}
