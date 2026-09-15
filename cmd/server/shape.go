@@ -282,35 +282,8 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 		}
 		return shape.shell.server, nil
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
-		serverpool.WithOnInsert(func(entry *serverpool.Entry) {
-			// Under the pool's write lock, so it does no work beyond building
-			// the entry's own state: the shape it belongs to is already built,
-			// and its registration is already running.
-			shape := shapes.forServer(entry.Server())
-			if shape == nil {
-				// The shape's registration failed and forgot it between this
-				// entry's build and its insertion, so the eviction that
-				// followed the failure ran while this entry was not yet in the
-				// map and could not have seen it. That ordering is reachable
-				// whenever registration fails quickly, because the factory
-				// hands the server back before the pool files the entry, and
-				// without this check the poisoned entry stays cached: every
-				// later request for that credential is answered from a failed
-				// readiness gate, and nothing rebuilds until an idle timeout or
-				// a revalidation happens to drop it.
-				//
-				// Checking the registry rather than the gate is what makes it
-				// exhaustive: the failure path forgets the shape before it
-				// evicts, so an entry inserted before the forget is found by
-				// that eviction and one inserted after it is found here.
-				//
-				// On a goroutine, because eviction re-enters the pool and this
-				// callback runs under the pool's write lock.
-				slog.WarnContext(ctx, "dropping a pooled credential whose configuration shape failed to register")
-				go pool.EvictServer(entry.Server())
-				return
-			}
-			credentials.add(shape.shell.newCredentialState(entry))
+		serverpool.WithOnInsert(func(entry *serverpool.Entry) bool {
+			return adoptPooledEntry(ctx, shapes, credentials, entry)
 		}),
 		// The per-credential state must not outlive the pool entry it belongs
 		// to. Without this it grew past --max-http-clients on credential churn,
@@ -357,6 +330,49 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 	return poolBinding{credentials: credentials, sessions: sessions}, pool
 }
 
+// adoptPooledEntry builds the per-credential state of an entry the pool has
+// just cached, and reports whether the pool may keep it.
+//
+// It runs under the pool's write lock, so it does no work beyond that state:
+// the shape the entry belongs to is already built, and its registration is
+// already running.
+//
+// The entry is refused when the registry no longer knows its server. That means
+// the shape's registration failed and forgot it between this entry's build and
+// its insertion, so the eviction that followed the failure ran while this entry
+// was not yet in the map and could not have seen it. The ordering is reachable
+// whenever registration fails quickly, because the factory hands the server
+// back before the pool files the entry, and without this the poisoned entry
+// stays cached: every later request for that credential is answered from a
+// failed readiness gate, and nothing rebuilds until an idle timeout or a
+// revalidation happens to drop it.
+//
+// Checking the registry rather than the gate is what makes it exhaustive: the
+// failure path forgets the shape before it evicts, so an entry inserted before
+// the forget is found by that eviction and one inserted after it is found here.
+//
+// Refusing rather than evicting on a goroutine is the other half of the
+// ordering [startShapeRegistration] states: the pool undoes the insertion under
+// the lock it is already holding, so the entry is gone before the request that
+// built it has been answered. The goroutine this replaces made the removal a
+// race against that request's own refusal, and a client that retried on being
+// told to retry could find the poisoned entry still cached and be refused again
+// with nothing rebuilding (issue 672).
+func adoptPooledEntry(
+	ctx context.Context,
+	shapes *shapeServers,
+	credentials *credentialStates,
+	entry *serverpool.Entry,
+) bool {
+	shape := shapes.forServer(entry.Server())
+	if shape == nil {
+		slog.WarnContext(ctx, "dropping a pooled credential whose configuration shape failed to register")
+		return false
+	}
+	credentials.add(shape.shell.newCredentialState(entry))
+	return true
+}
+
 // startShapeRegistration builds the catalog for a freshly built shape, on a
 // goroutine, behind that server's readiness gate.
 //
@@ -364,14 +380,30 @@ func newShapedServerPool(ctx context.Context, cfg *config.Config) (poolBinding, 
 // credential. Sharing changes the failure path more than the success one: a
 // registration that fails has failed for every credential of the shape, so the
 // pool drops all of them and the shape itself is forgotten.
+//
+// # The failure is cleaned up before it is reported
+//
+// onFailure runs BEFORE the gate is failed, and the order is the contract
+// rather than a detail. Failing the gate is what releases the requests parked
+// behind it and what every later request observes, so it is the moment the
+// refusal reaches a client; a client told "retry it" retries, and the retry
+// must not find the shape or its entries still cached, or it is refused again
+// by the same dead server and nothing rebuilds. Doing it the other way round
+// left that window open for however long the scheduler took to run the rest of
+// this goroutine, which is what TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted
+// caught on a loaded runner (issue 672).
+//
+// It costs the parked requests nothing worth measuring and holds no lock across
+// any response: forgetting the shape and evicting the entries each take their
+// own lock and release it, and the gate opens afterwards.
 func startShapeRegistration(ctx context.Context, shape *serverShape, onFailure func(*mcp.Server)) {
 	shell := shape.shell
 	go func() {
 		if registerErr := shell.register(ctx); registerErr != nil {
-			shell.gate.markFailed(registerErr)
 			slog.ErrorContext(ctx, "the tool catalog could not be built for a configuration shape",
 				"error", registerErr)
 			onFailure(shell.server)
+			shell.gate.markFailed(registerErr)
 			return
 		}
 		shell.gate.markReady()

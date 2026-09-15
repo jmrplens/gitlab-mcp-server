@@ -3596,10 +3596,11 @@ func TestWithOnInsert_FiresWithTheEntry(t *testing.T) {
 	shared := mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil)
 	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return shared, nil
-	}, WithOnInsert(func(entry *Entry) {
+	}, WithOnInsert(func(entry *Entry) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		owners = append(owners, entry.Owner())
+		return true
 	}))
 
 	for _, token := range []string{"glpat-one", "glpat-two"} {
@@ -3617,6 +3618,68 @@ func TestWithOnInsert_FiresWithTheEntry(t *testing.T) {
 	}
 	if owners[0] == "" || owners[0] == owners[1] {
 		t.Errorf("the hook was handed owners %q and %q, want two distinct non-empty tokens", owners[0], owners[1])
+	}
+}
+
+// TestWithOnInsert_ARefusedEntry_IsGoneBeforeTheBuildReturns covers the other
+// half of a failed background registration: the entry inserted after the
+// eviction that followed the failure had already scanned the pool.
+//
+// The callback is the only thing that can see that case, and what it does about
+// it has to be finished before [ServerPool.GetOrCreateEntry] returns. The
+// request that built the entry is about to be answered with the refusal its
+// unusable server produces, and a client that is told to retry retries: it must
+// not find this entry still cached, because that answers it from the same dead
+// server and rebuilds nothing. Evicting on a goroutine left exactly that gap,
+// which is issue 672.
+//
+// The entry is still returned, since that one request has to be answered with
+// something, and the next call builds a new one.
+func TestWithOnInsert_ARefusedEntry_IsGoneBeforeTheBuildReturns(t *testing.T) {
+	var builds atomic.Int64
+	var refusals atomic.Int64
+	var evictions atomic.Int64
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		builds.Add(1)
+		return mcp.NewServer(&mcp.Implementation{Name: "shape", Version: "0.0.0"}, nil), nil
+	}, WithOnInsert(func(*Entry) bool {
+		refusals.Add(1)
+		return false
+	}), WithOnEvict(func(*Entry, EvictionCause) {
+		evictions.Add(1)
+	}))
+
+	first, err := pool.GetOrCreateEntry("glpat-refused", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	if first == nil {
+		t.Fatal("GetOrCreateEntry returned no entry; the request that built it has nothing to answer with")
+	}
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d with the build's caller still holding its answer, want 0: "+
+			"the entry its own callback refused is cached, and a retry would be served from it", pool.Size())
+	}
+
+	second, err := pool.GetOrCreateEntry("glpat-refused", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry (retry): %v", err)
+	}
+	if second == first {
+		t.Error("the retry was handed the entry the callback refused, not a fresh one")
+	}
+	if got := builds.Load(); got != 2 {
+		t.Errorf("the factory ran %d time(s) for two requests, want 2: the retry did not rebuild", got)
+	}
+	if got := refusals.Load(); got != 2 {
+		t.Errorf("the insert callback ran %d time(s), want 2", got)
+	}
+	if got := evictions.Load(); got != 2 {
+		t.Errorf("the evict callback ran %d time(s), want 2: a refused entry was in the pool and must be "+
+			"reported leaving it, or the caller's per-entry state outlives it", got)
+	}
+	if got := pool.Stats().RebuildEvictions; got != 2 {
+		t.Errorf("RebuildEvictions = %d, want 2: a refused insertion is the same failure EvictServer counts", got)
 	}
 }
 

@@ -97,13 +97,27 @@ clearing that up has an ordering to respect, because the registration is started
 by the shape registry while the pool's factory has not yet returned. The failure
 path forgets the shape and then evicts every pool entry pointing at its server.
 An entry already filed is found by that eviction; an entry filed afterwards
-finds no shape in the registry when the pool's insert hook asks, and evicts
-itself. There is no third ordering, since an eviction can only miss an entry by
+finds no shape in the registry when the pool's insert hook asks, and is refused
+there. There is no third ordering, since an eviction can only miss an entry by
 running before the pool filed it, and running that early means the forget ran
 earlier still. Without the second half a registration that failed quickly left a
 poisoned entry cached, answering every later request for that credential from a
 failed readiness gate until an idle timeout or a revalidation happened to drop
 it.
+
+All of that happens **before** the readiness gate is failed, and neither half of
+it may be deferred to a goroutine. Failing the gate is what releases the
+requests parked behind it, so it is the moment the refusal reaches a client, and
+the refusal asks that client to retry: a retry that arrives while the cleanup is
+still pending finds the poisoned entry and is answered from the same dead server
+with nothing rebuilding. So the registration goroutine forgets and evicts before
+it calls `markFailed`, and the insert hook, which cannot evict because it runs
+under the pool's own write lock, returns false instead and has the pool undo the
+insertion under that lock, before the request that built the entry has been
+answered. Both halves used to happen after the fact, which turned the guarantee
+`TestServeHTTP_APooledCatalogThatCannotBeBuilt_IsEvicted` states into a race a
+loaded runner could lose
+([issue 672](https://github.com/jmrplens/gitlab-mcp-server/issues/672)).
 
 ### The credential travels with the request
 
