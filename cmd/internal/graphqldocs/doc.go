@@ -57,10 +57,13 @@
 // and used to find them with a walk of its own that read constants and
 // package-level variables and nothing else. Two detectors of the same thing
 // disagree by construction, and this one reads .graphql files that one could
-// not, so it now builds its index from [FromPackages] and [Standalone] and
-// judges the text with its own rule. What it cannot resolve, a document with no
-// [Document.Object] that its own body walk did not record either, it reports
-// rather than skips.
+// not, so it builds its index from [FromPackages] and [Standalone]. It used to
+// re-read the text with a rule of its own as well, which disagreed with
+// [LooksLikeDocument] about two shapes and so judged a narrower set than the one
+// it printed; it asks [DefinesMutation] now, so the rule that says what a
+// document is and the rule that says whether it writes are one rule. What it
+// cannot resolve, a document with no [Document.Object] that its own body walk
+// did not record either, it reports rather than skips.
 //
 // cmd/audit_graphql_shapes pairs each document it finds with the Go struct that
 // decodes the response, and parses those pairs against the schema itself to get

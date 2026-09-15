@@ -134,14 +134,19 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 // Constants are folded by the type checker, so a document assembled from a
 // shared fragment constant is indexed with the fragment already spliced in,
 // which is how the vulnerability state mutations are written.
+// Every entry that names an object is indexed, with no second opinion about
+// whether it is a document: the rule that put it in the inventory is the rule
+// [classifyDocument] asks, so nothing here can come back as notADocument. It
+// used to be able to, and that was a hole rather than a filter: a named
+// document this audit's own rule refused was dropped here and skipped by
+// [program.unattributedDocuments] too, which reports only what no object names,
+// so it was judged by nothing and reported by nothing.
 func (p *program) indexDocuments(inventory []graphqldocs.Document) {
 	for _, document := range inventory {
 		if document.Object == nil {
 			continue
 		}
-		if kind := classifyDocument(document.Text); kind != notADocument {
-			p.documents[document.Object] = kind
-		}
+		p.documents[document.Object] = classifyDocument(document.Text)
 	}
 }
 
