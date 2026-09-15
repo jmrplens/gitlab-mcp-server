@@ -25,6 +25,13 @@ const (
 	recordPageRelPath = "docs/development/testing/e2e-coverage.md"
 )
 
+// recordErrPrefix opens every line this file writes to stderr.
+//
+// One spelling rather than three, because the three places that print it are
+// the three ways a record operation can fail and a reader grepping their logs
+// for one of them should find all of them.
+const recordErrPrefix = "audit_e2e_coverage: record:"
+
 // recordSchemaVersion is the version of the committed document's shape.
 //
 // It is refused rather than read half-way when it is not this one, on the
@@ -381,7 +388,7 @@ func runRecordWrite(opts options, static *staticResult, reports []*report, stdou
 	}
 	recordPath, pagePath := recordPaths(opts)
 	if err := writeRecord(recordPath, pagePath, reports); err != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: record:", err)
+		fmt.Fprintln(stderr, recordErrPrefix, err)
 		return exitUsage
 	}
 	for _, rep := range reports {
@@ -397,11 +404,11 @@ func runRecordRender(opts options, stdout, stderr io.Writer) int {
 	recordPath, pagePath := recordPaths(opts)
 	doc, err := readRecord(recordPath)
 	if err != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: record:", err)
+		fmt.Fprintln(stderr, recordErrPrefix, err)
 		return exitUsage
 	}
 	if err = writeRecordPage(pagePath, doc, false); err != nil {
-		fmt.Fprintln(stderr, "audit_e2e_coverage: record:", err)
+		fmt.Fprintln(stderr, recordErrPrefix, err)
 		return exitUsage
 	}
 	fmt.Fprintf(stdout, "record: rendered %s from %s\n", pagePath, recordPath)

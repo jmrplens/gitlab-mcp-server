@@ -288,7 +288,7 @@ func TestDispatch_RequestCount_SurvivesTheRoundTripAndIsOmittedAtZero(t *testing
 			if decoded.Dispatch.Requests != testCase.want {
 				t.Errorf("Requests = %d, want %d", decoded.Dispatch.Requests, testCase.want)
 			}
-			if present := strings.Contains(string(encoded), `"requests"`); present != testCase.written {
+			if strings.Contains(string(encoded), `"requests"`) != testCase.written {
 				t.Errorf("encoded record = %s, want a requests field present = %t", encoded, testCase.written)
 			}
 		})
