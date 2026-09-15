@@ -927,7 +927,7 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	}
 	sort.Ints(runs)
 	fmt.Fprintf(b, "\n%s\n\n", perRunMetricsHeading)
-	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
+	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Recovery from diagnostics | Unaided confirmation | Final success |\n")
 	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, runIndex := range runs {
 		metrics := calculateMetrics(byRun[runIndex])
@@ -946,7 +946,7 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	}
 	models := sortedStringKeys(byModel)
 	fmt.Fprintf(b, "\n%s\n\n", perModelMetricsHeading)
-	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Repair success | Destructive safety | Final success |\n")
+	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Resource lookup | MCP bridge | Recovery from diagnostics | Unaided confirmation | Final success |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		metrics := calculateMetrics(byModel[model])

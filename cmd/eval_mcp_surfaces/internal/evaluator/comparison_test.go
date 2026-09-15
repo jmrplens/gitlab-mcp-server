@@ -88,7 +88,7 @@ func TestWriteComparisonReport_BuildsEvaluationAndTokenSections(t *testing.T) {
 	dir := t.TempDir()
 	evalA := filepath.Join(dir, "dynamic.md")
 	evalB := filepath.Join(dir, "meta.md")
-	contentA := "# Dynamic Surface Model Evaluation\n\nMode: model tool-calling\nModel: `model-a`\nTool surface: `dynamic`\nBackend: `gitlab`\nTool execution: `mcp`\nCatalog tools: 2\nRuns: 1\nTask attempts: 1\n\n## Metrics\n\n| Metric | Value |\n| --- | ---: |\n| Tool-selection accuracy | 90.0% |\n| Action-selection accuracy | 80.0% |\n| First-call validation pass rate | 70.0% |\n| Schema lookup use rate | 10.0% |\n| Repair success rate | 50.0% |\n| Destructive safety | 100.0% |\n| Final task success proxy | 60.0% |\n\n## API Usage\n\n| Metric | Value |\n| --- | ---: |\n| Model requests | 1 |\n| Tool calls emitted | 2 |\n| Input tokens | 3 |\n| Output tokens | 4 |\n| Estimated cost | $0.0001 |\n"
+	contentA := "# Dynamic Surface Model Evaluation\n\nMode: model tool-calling\nModel: `model-a`\nTool surface: `dynamic`\nBackend: `gitlab`\nTool execution: `mcp`\nCatalog tools: 2\nRuns: 1\nTask attempts: 1\n\n## Metrics\n\n| Metric | Value |\n| --- | ---: |\n| Tool-selection accuracy | 90.0% |\n| Action-selection accuracy | 80.0% |\n| First-call validation pass rate | 70.0% |\n| Schema lookup use rate | 10.0% |\n| Recovery from server diagnostics | 50.0% |\n| Unaided confirmation | 100.0% |\n| Final task success proxy | 60.0% |\n\n## API Usage\n\n| Metric | Value |\n| --- | ---: |\n| Model requests | 1 |\n| Tool calls emitted | 2 |\n| Input tokens | 3 |\n| Output tokens | 4 |\n| Estimated cost | $0.0001 |\n"
 	contentB := strings.ReplaceAll(contentA, "Dynamic Surface", "Meta-Tool")
 	contentB = strings.ReplaceAll(contentB, "`dynamic`", "`meta`")
 	contentB = strings.ReplaceAll(contentB, "90.0%", "95.0%")
@@ -191,8 +191,8 @@ Task attempts: 3
 | Action-selection accuracy | 99.5% |
 | First-call validation pass rate | 98.0% |
 | Schema lookup use rate | 2.0% |
-| Repair success rate | 100.0% |
-| Destructive safety | 100.0% |
+| Recovery from server diagnostics | 100.0% |
+| Unaided confirmation | 100.0% |
 | Final task success proxy | 97.0% |
 
 ## Failure Diagnostics

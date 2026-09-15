@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1096,8 +1097,8 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		"| Action-selection accuracy | 100.0% |\n" +
 		"| First-call validation pass rate | 100.0% |\n" +
 		"| Schema lookup use rate | 0.0% |\n" +
-		"| Repair success rate | 100.0% |\n" +
-		"| Destructive safety | 100.0% |\n" +
+		"| Recovery from server diagnostics | 100.0% |\n" +
+		"| Unaided confirmation | 100.0% |\n" +
 		"| Final task success proxy | 100.0% |\n" +
 		"\n## API Usage\n\n" +
 		"| Metric | Value |\n| --- | ---: |\n" +
@@ -1137,11 +1138,11 @@ func multiModelPublishReport() string {
 		"| Tool-selection accuracy | 100.0% |\n" +
 		"| Action-selection accuracy | 100.0% |\n" +
 		"| First-call validation pass rate | 100.0% |\n" +
-		"| Repair success rate | 100.0% |\n" +
-		"| Destructive safety | 100.0% |\n" +
+		"| Recovery from server diagnostics | 100.0% |\n" +
+		"| Unaided confirmation | 100.0% |\n" +
 		"| Final task success proxy | 100.0% |\n" +
 		"\n## Per-Model Metrics\n\n" +
-		"| Model | Attempts | Tool | Action | First pass | Schema lookup | Repair success | Destructive safety | Final success |\n" +
+		"| Model | Attempts | Tool | Action | First pass | Schema lookup | Repair success | Unaided confirmation | Final success |\n" +
 		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n" +
 		"| `anthropic:claude-haiku-4-5-20251001` | 2 | 100.0% | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% | 100.0% |\n" +
 		"| `google:gemini-3.1-flash-lite-preview` | 2 | 100.0% | 100.0% | 100.0% | 0.0% | 100.0% | 100.0% | 100.0% |\n" +
@@ -1182,8 +1183,8 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"| Tool-selection accuracy | 100.0% |\n" +
 		"| Action-selection accuracy | 100.0% |\n" +
 		"| First-call validation pass rate | 100.0% |\n" +
-		"| Repair success rate | 100.0% |\n" +
-		"| Destructive safety | 100.0% |\n" +
+		"| Recovery from server diagnostics | 100.0% |\n" +
+		"| Unaided confirmation | 100.0% |\n" +
 		"| Final task success proxy | 100.0% |\n" +
 		"\n## Task Results\n\n" +
 		"| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n" +
@@ -1601,5 +1602,41 @@ func TestPublishedProvenanceCells_StateAFactOrSayTheyCannot(t *testing.T) {
 	}
 	if got := rowRunConditions(publishRow{Model: "a:b"}); got != "schema -; scopes -; GitLab -; T -; max -" {
 		t.Fatalf("run conditions = %q, want every part dashed", got)
+	}
+}
+
+// TestPublishMetricsByModel_ReadsTheRenamedColumnsAndNotTheOldOnes pins the
+// decision that came with the V08 rename.
+//
+// "Repair success" counted a model pasting back a call the harness had just
+// handed it, and "Destructive safety" counted a confirmation every prompt told
+// the model to send. Both measure something the harness no longer does, so a
+// report written before that change contributes nothing to the new columns
+// rather than having its numbers carried forward under a name that would
+// misdescribe them.
+func TestPublishMetricsByModel_ReadsTheRenamedColumnsAndNotTheOldOnes(t *testing.T) {
+	const heading = "\n## Per-Model Metrics\n\n"
+	current := heading +
+		"| Model | Attempts | Tool | Action | First pass | Schema lookup | Recovery from diagnostics | Unaided confirmation | Final success |\n" +
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n" +
+		"| `m` | 2 | 100.0% | 100.0% | 100.0% | 0.0% | 75.0% | 50.0% | 100.0% |\n"
+	superseded := heading +
+		"| Model | Attempts | Tool | Action | First pass | Schema lookup | Repair success | Destructive safety | Final success |\n" +
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n" +
+		"| `m` | 2 | 100.0% | 100.0% | 100.0% | 0.0% | 75.0% | 50.0% | 100.0% |\n"
+
+	got := publishMetricsByModel(current)["m"]
+	if got.RepairSuccess != 75 || got.DestructiveSafety != 50 {
+		t.Fatalf("current report = %+v, want the two renamed columns read", got)
+	}
+	// Undefined rather than zero, which is the distinction V02 introduced:
+	// a column with no sample renders as a dash, while a zero would publish
+	// "this model recovered from nothing" as a measurement.
+	old := publishMetricsByModel(superseded)["m"]
+	if !math.IsNaN(old.RepairSuccess) || !math.IsNaN(old.DestructiveSafety) {
+		t.Errorf("a pre-rename report populated the new columns: %+v", old)
+	}
+	if old.FirstPass != 100 {
+		t.Errorf("a pre-rename report lost the columns that did not change: %+v", old)
 	}
 }

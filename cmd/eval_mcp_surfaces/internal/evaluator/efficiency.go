@@ -395,7 +395,7 @@ func buildEfficiencyCheckReport(paths []string, metrics traceMetricSet, violatio
 	fmt.Fprintf(&builder, "| Final success | %s (%d/%d) |\n", formatMetric(percent(metrics.Overall.FinalSuccesses, metrics.Overall.Attempts)), metrics.Overall.FinalSuccesses, metrics.Overall.Attempts)
 	fmt.Fprintf(&builder, "| Schema/search attempts | %d |\n", metrics.Overall.SchemaLookups)
 	fmt.Fprintf(&builder, "| Repair attempts | %d |\n", metrics.Overall.RepairAttempts)
-	fmt.Fprintf(&builder, "| Repair successes | %d |\n", metrics.Overall.RepairSuccesses)
+	fmt.Fprintf(&builder, "| Recoveries from diagnostics | %d |\n", metrics.Overall.RepairSuccesses)
 
 	fmt.Fprintf(&builder, "\n## Gates\n\n")
 	fmt.Fprintf(&builder, "| Gate | Limit | Observed | Status | Detail |\n| --- | ---: | ---: | --- | --- |\n")

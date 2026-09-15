@@ -145,7 +145,7 @@ func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 		return
 	}
 	fmt.Fprintf(b, "\n## Evaluation Metrics\n\n")
-	fmt.Fprintf(b, "| Label | Tool | Action | First pass | Schema lookup | Repair | Safety | Final |\n")
+	fmt.Fprintf(b, "| Label | Tool | Action | First pass | Schema lookup | Recovery | Confirmation | Final |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, input := range evals {
 		fmt.Fprintf(

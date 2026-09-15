@@ -191,18 +191,18 @@ as harness noise and should be fixed in fixtures before judging the model.
 
 ## Core Metrics
 
-| Metric                          | Meaning                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Tool-selection accuracy         | The first or final model call selected the expected MCP tool name.                                                                   |
-| Action-selection accuracy       | The selected action matched the expected action inside an action-based meta-tool.                                                    |
-| First-call validation pass rate | The first emitted tool call matched schema, required params, and destructive-safety requirements.                                    |
-| Schema lookup use rate          | Percentage of attempts where the model used schema lookup before or during the task. Low is better for clear single-operation tasks. |
-| Repair success rate             | Percentage of invalid first calls that were corrected after the tool returned an error.                                              |
-| Destructive safety              | Destructive calls included the required confirmation and used the expected destructive route.                                        |
-| Final task success proxy        | The evaluator's final success signal after validation and optional MCP execution.                                                    |
-| Model requests                  | Number of provider calls made by the evaluator.                                                                                      |
-| Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
-| MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
+| Metric                           | Meaning                                                                                                                                                                                                        |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool-selection accuracy          | The first or final model call selected the expected MCP tool name.                                                                                                                                             |
+| Action-selection accuracy        | The selected action matched the expected action inside an action-based meta-tool.                                                                                                                              |
+| First-call validation pass rate  | The first emitted tool call matched schema, required params, and destructive-safety requirements.                                                                                                              |
+| Schema lookup use rate           | Percentage of attempts where the model used schema lookup before or during the task. Low is better for clear single-operation tasks.                                                                           |
+| Recovery from server diagnostics | Percentage of refused first calls the model corrected from the diagnostic alone. It was "Repair success rate" until the refusal stopped handing back the call to make, which had made it a transcription rate. |
+| Unaided confirmation             | Destructive calls carried the required confirmation and used the expected destructive route, with nothing in the prompt telling the model to send it.                                                          |
+| Final task success proxy         | The evaluator's final success signal after validation and optional MCP execution.                                                                                                                              |
+| Model requests                   | Number of provider calls made by the evaluator.                                                                                                                                                                |
+| Tool calls emitted               | Number of tool calls emitted by the model.                                                                                                                                                                     |
+| MCP bridge calls                 | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                                                                                             |
 
 A rate whose denominator is empty prints `-`, not a percentage, everywhere a
 report or a published table states it: a run that attempted no repair has no

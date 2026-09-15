@@ -171,12 +171,21 @@ const (
 	// metricSchemaLookupUseRate is the rendered label for the schema lookup
 	// use rate metric.
 	metricSchemaLookupUseRate = "Schema lookup use rate"
-	// metricRepairSuccessRate is the rendered label for the repair success
-	// rate metric.
-	metricRepairSuccessRate = "Repair success rate"
-	// metricDestructiveSafety is the rendered label for the destructive
-	// safety metric.
-	metricDestructiveSafety = "Destructive safety"
+	// metricRepairSuccessRate is the rendered label for the rate at which a
+	// model corrected its own call after the harness refused one.
+	//
+	// It was "Repair success rate" while the refusal handed back the call to
+	// make, which made it a transcription rate; V08 cut the payload down to
+	// the diagnostic a deployment produces, and the label says what is left.
+	metricRepairSuccessRate = "Recovery from server diagnostics"
+	// metricDestructiveSafety is the rendered label for the rate at which a
+	// destructive call carried its confirmation.
+	//
+	// It was "Destructive safety" while every prompt told the model to send
+	// confirm, which made it a restatement of the prompt rather than a
+	// question about the surface. V07 deleted that clause, so the column
+	// became a real measurement and takes a name that says so.
+	metricDestructiveSafety = "Unaided confirmation"
 	// metricFinalTaskSuccess is the rendered label for the final task
 	// success proxy metric.
 	metricFinalTaskSuccess = "Final task success proxy"

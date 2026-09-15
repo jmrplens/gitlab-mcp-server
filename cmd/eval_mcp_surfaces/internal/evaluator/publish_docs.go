@@ -902,12 +902,18 @@ func publishMetricsByModel(content string) map[string]publishModelMetrics {
 			continue
 		}
 		out[model] = publishModelMetrics{
-			Attempts:          parseReportInt(row["Attempts"]),
-			ToolSelection:     parseReportPercent(row["Tool"]),
-			ActionSelection:   parseReportPercent(row["Action"]),
-			FirstPass:         parseReportPercent(row["First pass"]),
-			RepairSuccess:     parseReportPercent(row["Repair success"]),
-			DestructiveSafety: parseReportPercent(row["Destructive safety"]),
+			Attempts:        parseReportInt(row["Attempts"]),
+			ToolSelection:   parseReportPercent(row["Tool"]),
+			ActionSelection: parseReportPercent(row["Action"]),
+			FirstPass:       parseReportPercent(row["First pass"]),
+			// These two read the new headers only, and a report written
+			// before V07 and V08 therefore contributes nothing to them.
+			// That is deliberate: the old columns counted a model pasting
+			// back a call it had been handed, and a confirmation the prompt
+			// had told it to send, so carrying those numbers forward under
+			// the new names would publish one measurement as another.
+			RepairSuccess:     parseReportPercent(row["Recovery from diagnostics"]),
+			DestructiveSafety: parseReportPercent(row["Unaided confirmation"]),
 			FinalSuccess:      parseReportPercent(row["Final success"]),
 		}
 	}
@@ -1160,7 +1166,7 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 	})
 
 	return docgen.RenderMarkdownTable(
-		[]string{"Model", "Preset", "Backend", "Server mode", "Tier", "Run conditions", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
+		[]string{"Model", "Preset", "Backend", "Server mode", "Tier", "Run conditions", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Recovery from diagnostics", "Unaided confirmation", "Final task success", "Cost/tokens", "Commit / branch / date"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
 		tableRows,
 	)
