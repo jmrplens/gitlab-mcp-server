@@ -1433,3 +1433,51 @@ func messageNamesToken(message, token string) bool {
 func isTokenByte(b byte) bool {
 	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
 }
+
+// TestValidateStepCallWithRoutes_ReportsOneAbsencePerParameter pins the fix for
+// a diagnostic that reported the same thing twice.
+//
+// A case declares a parameter required and the action's schema requires it too.
+// Two passes each appended their own sentence, joined with "; ", so the model
+// was told "missing required params: state_event; missing required params for
+// gitlab_execute_action/issue.update: state_event". Both messages are now
+// composed once from one structured set, which is what makes the repeat
+// impossible rather than merely absent today.
+//
+// The second half matters as much: the schema's findings used to reach the
+// reader's message and not the model's, so the half a deployment would actually
+// have spoken was withheld from the one party that has to act on it.
+func TestValidateStepCallWithRoutes_ReportsOneAbsencePerParameter(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"project_id":  map[string]any{"type": "string"},
+			"issue_iid":   map[string]any{"type": "integer"},
+			"state_event": map[string]any{"type": "string"},
+		},
+		"required": []any{"project_id", "issue_iid", "state_event"},
+	}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"issue.update": toolutil.ActionRoute{InputSchema: schema}}}
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "state_event"}}
+
+	result := validateStepCallWithRoutes(step, dynamicExecuteActionTool, map[string]any{
+		"action": "issue.update",
+		"params": map[string]any{"project_id": "my/project"},
+	}, routes)
+
+	if count := strings.Count(result.Message, diagnosticMissingRequiredParams); count != 1 {
+		t.Errorf("the reader's diagnostic names the absence %d times: %q", count, result.Message)
+	}
+	if count := strings.Count(result.ModelMessage, diagnosticMissingRequiredParams); count != 1 {
+		t.Errorf("the model's diagnostic names the absence %d times: %q", count, result.ModelMessage)
+	}
+	for _, want := range []string{"issue_iid", "state_event"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(result.ModelMessage, want) {
+				t.Errorf("the model was not told %q is missing: %q", want, result.ModelMessage)
+			}
+		})
+	}
+	if strings.Contains(result.ModelMessage, "project_id") {
+		t.Errorf("a parameter the call did send was reported missing: %q", result.ModelMessage)
+	}
+}

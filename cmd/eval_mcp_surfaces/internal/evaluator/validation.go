@@ -42,23 +42,45 @@ func validateStepCallWithRoutes(step ExpectedStep, toolName string, input map[st
 	if len(unknown) == 0 && len(missing) == 0 {
 		return result
 	}
+	// The schema's findings join the same structured set the case's own
+	// findings went into, and both messages are composed once from it. They
+	// used to be appended as a second sentence, which is how one absent
+	// parameter came to be reported twice, and which left the schema half out
+	// of the model's message entirely: the reader saw it, the model did not,
+	// and the model is the one that has to fix the call.
 	sort.Strings(unknown)
 	sort.Strings(missing)
-	var messages []string
-	if len(unknown) > 0 {
-		messages = append(messages, fmt.Sprintf("unknown params for %s/%s: %s", step.ExpectedTool, step.ExpectedAction, strings.Join(unknown, ", ")))
-	}
+	result.Unknown = unknown
+	result.MissingSchema = missing
 	if len(missing) > 0 {
-		messages = append(messages, fmt.Sprintf("%s for %s/%s: %s", diagnosticMissingRequiredParams, step.ExpectedTool, step.ExpectedAction, strings.Join(missing, ", ")))
+		result.RequiredPresent = false
 	}
-	message := strings.Join(messages, "; ")
-	result.Valid = false
-	if result.Message == "" || result.Message == "ok" {
-		result.Message = message
-	} else {
-		result.Message += "; " + message
-	}
+	renderValidationMessages(&result, nonDiagnosticProblems(result.Message), nonDiagnosticProblems(result.ModelMessage))
 	return result
+}
+
+// nonDiagnosticProblems recovers the prose a validator collected that has no
+// structured field of its own, so a second composition does not lose it.
+//
+// The destructive refusal is the only one today. It is recovered from the text
+// rather than given a field because the confirm rules differ per surface and
+// are decided in validateDestructiveSafety, which owns the wording.
+func nonDiagnosticProblems(message string) []string {
+	if message == "" || message == "ok" {
+		return nil
+	}
+	var kept []string
+	for part := range strings.SplitSeq(message, "; ") {
+		switch {
+		case strings.HasPrefix(part, "unknown params"),
+			strings.HasPrefix(part, diagnosticMissingRequiredParams),
+			strings.HasPrefix(part, "forbidden params present"):
+			continue
+		default:
+			kept = append(kept, part)
+		}
+	}
+	return kept
 }
 
 func normalizeRouteActionInput(step ExpectedStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) map[string]any {
@@ -325,28 +347,75 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	for _, required := range step.RequiredParams {
 		if !requiredParamPresent(params, required) {
 			result.RequiredPresent = false
-			problems = append(problems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
-			// A missing required parameter is disclosable only where the
-			// model reached the action the task wanted. Anywhere else the
-			// list is the expected action's schema, so naming it would hand
-			// over the shape of a call the model has not found.
-			if result.ActionMatches && result.ToolMatches {
-				modelProblems = append(modelProblems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
-			}
+			result.MissingDeclared = append(result.MissingDeclared, required)
 		}
 	}
-	problems = appendForbiddenParamProblems(params, step.ForbiddenParams, problems)
-	modelProblems = appendForbiddenParamProblems(params, step.ForbiddenParams, modelProblems)
+	result.Forbidden = forbiddenParamsPresent(params, step.ForbiddenParams)
 	problems = validateDestructiveSafety(&result, step, input, params, problems)
+	renderValidationMessages(&result, problems, modelProblems)
+	return result
+}
+
+// forbiddenParamsPresent lists the parameters a case forbids that the call sent.
+func forbiddenParamsPresent(params map[string]any, forbidden []string) []string {
+	var present []string
+	for _, param := range forbidden {
+		if _, ok := params[param]; ok {
+			present = append(present, param)
+		}
+	}
+	sort.Strings(present)
+	return present
+}
+
+// renderValidationMessages composes both diagnostics from one structured set,
+// plus whatever prose the caller collected that has no field of its own.
+//
+// The reader's message carries everything; the model's carries what a
+// deployment could itself have said. A parameter the case declares required is
+// disclosable only where the model reached the action the task wanted: anywhere
+// else that list is the shape of a call it has not found. A name the schema
+// requires too is rendered once, under the schema, since that is the half the
+// server would have spoken.
+func renderValidationMessages(result *validationResult, problems, modelProblems []string) {
+	schemaRequired := map[string]bool{}
+	for _, name := range result.MissingSchema {
+		schemaRequired[name] = true
+	}
+	var declaredOnly []string
+	for _, name := range result.MissingDeclared {
+		if !schemaRequired[name] {
+			declaredOnly = append(declaredOnly, name)
+		}
+	}
+	reachedTheAction := result.ActionMatches && result.ToolMatches
+	if len(result.Unknown) > 0 {
+		line := "unknown params: " + strings.Join(result.Unknown, ", ")
+		problems = append(problems, line)
+		if reachedTheAction {
+			modelProblems = append(modelProblems, line)
+		}
+	}
+	if missing := append(append([]string(nil), result.MissingSchema...), declaredOnly...); len(missing) > 0 {
+		line := diagnosticMissingRequiredParams + ": " + strings.Join(missing, ", ")
+		problems = append(problems, line)
+		if reachedTheAction {
+			modelProblems = append(modelProblems, line)
+		}
+	}
+	if len(result.Forbidden) > 0 {
+		line := "forbidden params present: " + strings.Join(result.Forbidden, ", ")
+		problems = append(problems, line)
+		modelProblems = append(modelProblems, line)
+	}
 	result.Valid = len(problems) == 0
 	if result.Valid {
 		result.Message = "ok"
 		result.ModelMessage = "ok"
-	} else {
-		result.Message = strings.Join(problems, "; ")
-		result.ModelMessage = strings.Join(modelProblems, "; ")
+		return
 	}
-	return result
+	result.Message = strings.Join(problems, "; ")
+	result.ModelMessage = strings.Join(modelProblems, "; ")
 }
 
 func appendForbiddenParamProblems(params map[string]any, forbidden, problems []string) []string {
@@ -452,7 +521,15 @@ func repairPayloadForValidation(validation validationResult, attemptedInput map[
 	// better: a call to the wrong action used to be reported as a missing
 	// required parameter, because the full message named the expected
 	// action's schema and that test comes first.
-	badParam := validationBadParam(validation.ModelMessage)
+	// Read from the structured fields, falling back to the text only for the
+	// diagnostics that have no field yet. Recovering a parameter name by
+	// cutting up a message the same pass composed is how a wrong-action call
+	// used to be reported as a missing required parameter: the full message
+	// named the expected action's schema, and that test came first.
+	badParam := structuredBadParam(validation)
+	if badParam == "" {
+		badParam = validationBadParam(validation.ModelMessage)
+	}
 	payload := repairPayload{
 		ErrorKind:    validationErrorKind(validation.ModelMessage, validation),
 		FailedAction: validation.Action,
@@ -534,6 +611,27 @@ func isMissingRequiredDiagnostic(message string) bool {
 }
 
 // validationBadParam reports whether validation bad param.
+// structuredBadParam names the first parameter the structured diagnostic
+// refused, in the order a caller would fix them: an unknown parameter is the
+// one the call must lose, a missing one the one it must gain.
+func structuredBadParam(validation validationResult) string {
+	// Unknown and forbidden parameters are things the call sent, so naming one
+	// describes the attempt. A missing one is a name off the expected action's
+	// schema, so it is disclosable only where the model reached that action,
+	// which is the rule the message follows: the corpus-wide repair guard
+	// caught this field handing over `project_id` on a wrong-action call.
+	candidates := [][]string{validation.Unknown, validation.Forbidden}
+	if validation.ActionMatches && validation.ToolMatches {
+		candidates = append([][]string{validation.Unknown, validation.MissingSchema, validation.MissingDeclared}, validation.Forbidden)
+	}
+	for _, names := range candidates {
+		if len(names) > 0 {
+			return names[0]
+		}
+	}
+	return ""
+}
+
 func validationBadParam(message string) string {
 	if _, after, ok := strings.Cut(message, diagnosticMissingRequiredParams+" for "); ok {
 		if _, params, hasColon := strings.Cut(after, ":"); hasColon {

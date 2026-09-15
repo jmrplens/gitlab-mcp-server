@@ -417,6 +417,24 @@ type validationResult struct {
 	// parameter problems and never the expected tool or action, because a
 	// server refusing a call cannot know which call the task wanted.
 	ModelMessage string
+	// The structured diagnostic both messages are rendered from, and what the
+	// error kind and the bad parameter are read out of.
+	//
+	// They exist because the same absence used to be reported twice: the case
+	// declares a parameter required and the action's schema requires it too,
+	// and two passes each appended their own sentence, so a model was told
+	// "missing required params: state_event; missing required params for
+	// gitlab_execute_action/issue.update: state_event". Composing one message
+	// from one set is what makes that impossible rather than tidied up.
+	//
+	// MissingDeclared is a parameter the case declares required; MissingSchema
+	// one the action's own schema requires. A name in both appears once, under
+	// the schema, because that is the half a deployment would have said.
+	MissingDeclared []string
+	MissingSchema   []string
+	Unknown         []string
+	Forbidden       []string
+	ConfirmMissing  bool
 }
 
 // simulationResult holds simulation result data for the evaluator package.
