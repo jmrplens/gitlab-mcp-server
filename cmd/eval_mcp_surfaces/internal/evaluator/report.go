@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 		return fmt.Errorf("create report directory: %w", err)
 	}
 	var b strings.Builder
-	writeReportHeader(&b, opts, opts.DryRun)
+	writeReportHeader(&b, opts, opts.DryRun, nil)
 	fmt.Fprintf(&b, "Status: `%s`\n", status)
 	if opts.TraceDir != "" && !opts.DryRun {
 		fmt.Fprintf(&b, "Trace artifacts: `%s`\n", opts.TraceDir)
@@ -59,7 +60,7 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 	return nil
 }
 
-func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
+func writeReportHeader(b *strings.Builder, opts options, dryRun bool, tasks []evalTask) {
 	fmt.Fprintf(b, "# %s\n\n", reportTitle(opts.ToolSurface))
 	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
 	branch, commit := currentGitReportMetadata()
@@ -85,7 +86,7 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	if opts.Partition != "" {
 		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
 	}
-	writeRunProvenance(b, opts)
+	writeRunProvenance(b, opts, tasks)
 	capabilityAccess := "disabled"
 	resourceAccess := "disabled"
 	promptAccess := "disabled"
@@ -133,7 +134,7 @@ func writeReportMetadata(b *strings.Builder, key, value string) {
 // checks for. A report that states none of them cannot be compared with
 // another one, and the published tables used to carry six columns naming
 // neither the deployment nor the commit they came from.
-func writeRunProvenance(b *strings.Builder, opts options) {
+func writeRunProvenance(b *strings.Builder, opts options, tasks []evalTask) {
 	writeReportMetadata(b, reportKeyServerMode, evalServerModeLabel(opts.ServerMode))
 	writeReportMetadata(b, reportKeyTier, opts.Deployment.tierLabel())
 	writeReportMetadata(b, reportKeyTokenScopes, opts.Deployment.tokenScopesLabel())
@@ -141,7 +142,7 @@ func writeRunProvenance(b *strings.Builder, opts options) {
 	writeReportMetadata(b, reportKeyGitLabVersion, opts.Deployment.GitLabVersion)
 	writeReportMetadata(b, reportKeyTemperature, strconv.FormatFloat(evalSamplingTemperature, 'f', -1, 64))
 	writeReportMetadata(b, reportKeyMaxOutputTokens, maxOutputTokensLabel(opts.MaxTokens))
-	writeReportMetadata(b, reportKeyStimulus, reportStimulus())
+	writeReportMetadata(b, reportKeyStimulus, reportStimulus(opts, tasks))
 }
 
 // evalServerModeLabel names the protective mode a catalog was built for. An
@@ -175,8 +176,50 @@ func maxOutputTokensLabel(maxTokens int) string {
 // expected tool and action for nineteen more. This is the one place that
 // flips once those paths are gone, and until it does nothing this evaluator
 // writes can be published.
-func reportStimulus() string {
-	return stimulusCoached
+// reportStimulus answers whether the stimuli this run actually sent carried
+// their own answers, by auditing them rather than by declaring a constant.
+//
+// The plan had this step set `uncoached` outright, on the reasoning that the
+// prompt builders no longer coach. They do not, and that is a statement about
+// this package; the header is a statement about the run. Twenty cases still
+// name an action or a parameter in their own text, so a constant would be true
+// of the code and false of the report it stamps, and V01's publish gate reads
+// exactly this field to decide whether a run may be published.
+//
+// A run with no tasks is `coached`: it has produced no evidence either way, and
+// the direction that costs nothing to be wrong about is the one that refuses
+// publication.
+func reportStimulus(opts options, tasks []evalTask) string {
+	if len(tasks) == 0 {
+		return stimulusCoached
+	}
+	for _, audited := range auditPrompts(opts, tasks).Cases {
+		for _, finding := range audited.Findings {
+			if slices.Contains(finding.Sites, promptSiteSystem) || slices.Contains(finding.Sites, promptSiteTask) {
+				return stimulusCoached
+			}
+			if slices.Contains(finding.Sites, promptSiteCase) {
+				return stimulusCoached
+			}
+		}
+	}
+	return stimulusUncoached
+}
+
+// tasksFromResults recovers the distinct tasks a run sent, in the order it sent
+// them, so the stimulus audit judges what was actually evaluated rather than
+// the whole corpus.
+func tasksFromResults(results []taskResult) []evalTask {
+	seen := make(map[string]bool, len(results))
+	tasks := make([]evalTask, 0, len(results))
+	for _, result := range results {
+		if seen[result.Task.ID] {
+			continue
+		}
+		seen[result.Task.ID] = true
+		tasks = append(tasks, result.Task)
+	}
+	return tasks
 }
 
 func reportTitle(toolSurface string) string {
@@ -204,7 +247,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	var b strings.Builder
 	metrics := calculateMetrics(results)
-	writeReportHeader(&b, opts, dryRun)
+	writeReportHeader(&b, opts, dryRun, tasksFromResults(results))
 	fmt.Fprintf(&b, "Catalog tools: %d\n", len(catalog))
 	fmt.Fprintf(&b, "Runs: %d\n", opts.Repeat)
 	fmt.Fprintf(&b, "Task attempts: %d\n\n", len(results))

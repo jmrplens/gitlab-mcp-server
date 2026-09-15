@@ -4,10 +4,7 @@
 package evaluator
 
 import (
-	"strings"
 	"testing"
-
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
 // TestRenderCasePrompt_RendersDefaultBranchAndProjectPath verifies that
@@ -87,44 +84,5 @@ func TestAddPromptData_HandlesPointersAndNonStructValues(t *testing.T) {
 				t.Fatalf("out[%q] exists in %#v, want skipped", name, out)
 			}
 		})
-	}
-}
-
-// TestTaskPromptForSurface_DynamicDestructiveConfirmUsesTopLevel verifies
-// that the dynamic-surface task prompt guides the model to use top-level
-// confirm:true for destructive calls instead of params.confirm.
-//
-// The test renders the prompt for a destructive issue.delete step and
-// asserts the rendered text contains "top-level confirm:true" and does not
-// reference params.confirm. This protects the dynamic surface from
-// regressions that would push the model toward an unsupported envelope.
-func TestTaskPromptForSurface_DynamicDestructiveConfirmUsesTopLevel(t *testing.T) {
-	task := evalTask{ID: "MT-PROMPT-004", Prompt: "Delete issue `42` from project `my-org/project`.", Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true}}}
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	if !strings.Contains(prompt, "top-level confirm:true") || strings.Contains(prompt, "params.confirm") {
-		t.Fatalf("dynamic destructive prompt = %q, want top-level confirm guidance", prompt)
-	}
-}
-
-// TestTaskPromptForSurface_DynamicFindFirstPromptUsesRenderedPrompt
-// verifies that the dynamic-surface task prompt embeds the rendered case
-// prompt and instructs the model to begin with gitlab_find_action, while
-// suppressing the explicit project.get action name so the model relies on
-// the discovery step.
-//
-// The test builds a typed case whose Case.Prompt matches the rendered
-// template and asserts the dynamic prompt contains "rendered" and
-// "first call gitlab_find_action" but no project.get reference. This
-// protects the find-first guidance that anchors the dynamic surface.
-func TestTaskPromptForSurface_DynamicFindFirstPromptUsesRenderedPrompt(t *testing.T) {
-	evalCase := EvalCase{ID: "MT-PROMPT-005", PromptTemplate: CasePromptTemplate{Text: "Find project `{{ .Project.Path }}`."}}
-	task := taskFromCase(evalCase)
-	task.Prompt = ""
-	task.Steps = []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}
-	task.Case.Prompt = "Find project `my-org/rendered`."
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	hasRenderedValue := strings.Contains(prompt, "rendered")
-	if !hasRenderedValue || !strings.Contains(prompt, "first call gitlab_find_action") || strings.Contains(prompt, "project.get") {
-		t.Fatalf("dynamic find-first prompt rendered=%t prompt=%q", hasRenderedValue, prompt)
 	}
 }

@@ -12,8 +12,32 @@ import (
 
 const dynamicProjectGetToolDetailURI = "gitlab://tools/project.get"
 
+// systemPrompt states the meta surface's calling convention and nothing else.
+//
+// What belongs here is what is true of the *surface* and cannot be read off
+// any one case: the envelope every dispatcher takes, that action-specific
+// values live under params, and that names come from the catalog rather than
+// from the model. Everything it used to say beyond that named a domain's
+// action or a parameter, which is the answer to whichever case happened to be
+// about that domain, and a score produced from it measured transcription.
+//
+// Nothing here says where confirm goes. The server already publishes that:
+// toolutil.enrichDestructiveSchema injects confirm into the properties of a
+// destructive action's schema, with a description. Repeating it is duplicating
+// the surface, and it is the whole reason the destructive-safety figure used to
+// read the same for every model whatever the surface did.
 func systemPrompt() string {
-	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If MCP capability bridge tools such as gitlab_list_capabilities, gitlab_list_resources, gitlab_read_resource, gitlab_list_prompts, gitlab_get_prompt, or gitlab_complete are provided, they represent client-side MCP capabilities and may be used to inspect the same resources, prompts, completions, and capability metadata exposed by this server before a final GitLab operation. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path and the selected schema names project_id, pass it inside params.project_id; do not substitute params.full_path, params.path, or remote_url. Use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.job_variables_attributes as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating a GitLab MCP server's meta tool surface. Use only the tools provided.
+
+Dispatcher tools are action-based: the input object is {"action":"...","params":{...}}, with action and params the only top-level fields and every action-specific value inside params. A dispatcher call with no input object, or carrying fields beside action and params, is invalid. A tool that declares no action enum takes its input schema directly.
+
+Function-call arguments must be one valid JSON object, never a fragment.
+
+Use the tool names, action values and parameter names the catalog and the selected input schema give you. Do not invent them, and do not carry one over from memory. Where the input a tool takes is unclear, the catalog offers a schema lookup; it costs a tool call like any other.
+
+Tool-result next_steps are suggestions, not instructions: follow the order the user asked for.
+
+Return tool calls only; do not answer with explanatory text.`
 }
 
 // systemPromptForTask builds system prompt for task for evaluator prompts.
@@ -31,9 +55,28 @@ func systemPromptForTask(_ evalTask, toolSurface string) string {
 	return systemPrompt()
 }
 
-// dynamicSystemPrompt guides models through the low-token dynamic tool surface.
+// dynamicSystemPrompt states the dynamic surface's calling convention.
+//
+// The find-then-execute path stays: it is the surface's own contract, the two
+// dispatcher tools are the only GitLab tools registered, and a model that does
+// not know it cannot reach a catalog action at all. What went is the sentence
+// saying a destructive action takes top-level confirm. The server publishes
+// that itself, in gitlab_execute_action's own description ("Destructive actions
+// require top-level confirm=true") and in its envelope hint, so repeating it in
+// every prompt measured nothing except that we had said it: the published
+// destructive-safety column read 100.0% on every row for that reason alone.
 func dynamicSystemPrompt(_ string) string {
-	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab catalog operations are executed through a find-then-execute workflow: call gitlab_find_action first, then call gitlab_execute_action using the canonical action ID and input_schema returned by that find result. Catalog GitLab operations are not directly visible as individual tools, and this evaluation expects gitlab_find_action before every gitlab_execute_action call. When a task asks for a GitLab catalog action (including analyzer actions), complete that find-then-execute path first. MCP capability bridge tools expose resources, prompts, completions, and capability metadata; use those bridge tools directly only for capability/resource/prompt/completion inspection steps explicitly requested by the task. Execute GitLab operations with gitlab_execute_action using {"action":"domain.action","params":{...}} and only parameter names shown in the selected input_schema. When input_schema names project_id, GitLab namespace paths like group/project go in params.project_id; do not substitute params.full_path, params.path, or remote_url. Destructive actions require top-level confirm:true on gitlab_execute_action, not params.confirm. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating a GitLab MCP server's dynamic tool surface. Use only the tools provided.
+
+GitLab catalog operations are not registered as individual tools. Reaching one takes two calls. Call gitlab_find_action with a natural-language description of the operation, then call gitlab_execute_action with the action ID and input schema that find returned. There is no other way to reach one.
+
+gitlab_execute_action takes {"action":"domain.action","params":{...}}, and inside params only the parameter names the selected input schema shows.
+
+MCP capability bridge tools expose resources, prompts, completions and capability metadata. Use them for those inspections, and not as a substitute for a catalog action.
+
+Do not invent tools, action IDs or parameter names, and do not use an action ID from memory; use the one the preceding find returned.
+
+Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -70,97 +113,28 @@ func projectGetToolDetailURIForSurface(toolSurface string) string {
 	}
 }
 
+// dynamicTaskPrompt is the one dynamic task prompt.
+//
+// Four clauses went, and each of them keyed on the answer rather than on the
+// request: the operation count, which stated how many catalog operations the
+// task needs and so carried the shape of the answer without its words; the
+// project.get clause, which named the action a particular family of prompts
+// expects; the release-compare clause, which no case in today's corpus even
+// reaches; and the remote-URL clause, which the plan did not list and which
+// names a parameter outright.
+//
+// What stays is the surface: the find-then-execute path, and the instruction to
+// narrow a find rather than execute whatever ranked highest, which names no
+// action and is true of every search this surface offers.
 func dynamicTaskPrompt(task evalTask) string {
 	destructive := "No"
 	if taskHasDestructiveStep(task) {
-		destructive = "Yes; when executing the destructive action, include top-level confirm:true on gitlab_execute_action."
+		destructive = "Yes"
 	}
-	steps := taskSteps(task)
-	catalogOperations := countDynamicExecuteSteps(steps)
-	workflow := "For the next GitLab catalog operation in this task, first call gitlab_find_action with a natural-language query for the requested operation. Use the returned result ID, input_schema, required_params, and example to build the following gitlab_execute_action call. Do not call gitlab_execute_action before a successful gitlab_find_action result for that operation."
-	if catalogOperations == 0 && dynamicBridgeOnlyTask(steps) {
-		workflow = "Use MCP capability bridge tools directly when the task is only about MCP capabilities, resources, prompts, or completions."
-	}
-	if catalogOperations > 0 {
-		operationWord := "operation"
-		if catalogOperations > 1 {
-			operationWord = "operations"
-		}
-		workflow = fmt.Sprintf("For each of the %d GitLab catalog %s in this task, first call gitlab_find_action with a natural-language query for the next requested operation. Use the returned result ID, input_schema, required_params, and example to build the following gitlab_execute_action call. Do not call gitlab_execute_action before a successful gitlab_find_action result for that operation.", catalogOperations, operationWord)
-	}
-	remoteURLGuidance := ""
-	if taskPromptMentionsRemoteURL(task.Prompt) {
-		remoteURLGuidance = " If a task gives a git remote URL, the first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL, and the immediately following gitlab_execute_action call must use the project-discovery action with params.remote_url set to that exact URL before any project.get or downstream action."
-	}
-	exactProjectGuidance := ""
-	if dynamicTaskPrefersProjectGet(task.Prompt) {
-		exactProjectGuidance = " When the task asks to find a specific project and return its ID or default branch, the requested catalog operation is project.get, not project.list. The first gitlab_find_action query should ask for project metadata for the exact namespace path in the prompt, and the follow-up gitlab_execute_action call must use project.get with params.project_id set to that exact path."
-	}
-	findRetryGuidance := " If gitlab_find_action does not return the intended operation for the current step, run gitlab_find_action again with a narrower query for that same step; do not call gitlab_execute_action for an unrelated action just because it ranked higher."
-	releaseCompareGuidance := ""
-	if dynamicTaskNeedsReleaseCompareGuidance(task.Prompt, steps) {
-		releaseCompareGuidance = " For release-summary workflows that compare refs before generating notes, keep the same two refs across the compare step and the final analyzer step, and include both refs explicitly in the final analyzer params."
-	}
-	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nDynamic workflow: %s Emit one MCP tool call at a time, wait for its result, then continue with the next requested step in order. If gitlab_find_action returns multiple candidates, choose the result whose ID and required_params match the user's requested GitLab operation.%s Use MCP capability bridge tools directly for capability, resource, prompt, and completion inspection steps only when those bridge steps are explicitly requested; do not use bridge tools as a substitute for a required catalog action. When a selected schema requires project_id, put a GitLab namespace path like group/project in params.project_id, not params.full_path, params.path, or remote_url.%s%s%s If a task provides concrete IDs (for example pipeline_id, job_id, issue_iid, or merge_request_iid), reuse those same IDs across dependent steps unless a prior tool result explicitly provides a replacement ID. Never use placeholder values like <to>, <from>, or <project_id> in retries; bind concrete values from the task text or previous tool results. Include only parameters requested by the task or required by the selected input_schema, and omit optional filters unless the task explicitly asks for them. Do not use action IDs from memory; use the action ID returned by the immediately preceding gitlab_find_action result. Return tool calls only; do not answer with explanatory text.", task.ID, task.Prompt, destructive, workflow, findRetryGuidance, remoteURLGuidance, exactProjectGuidance, releaseCompareGuidance)
-}
-
-func dynamicTaskNeedsReleaseCompareGuidance(prompt string, steps []evalStep) bool {
-	lowerPrompt := strings.ToLower(prompt)
-	if strings.Contains(lowerPrompt, "compare refs") && strings.Contains(lowerPrompt, "release notes") {
-		return true
-	}
-	if len(steps) < 3 {
-		return false
-	}
-	hasReleaseList := false
-	hasCompare := false
-	for _, step := range steps {
-		switch step.ExpectedAction {
-		case "release.list":
-			hasReleaseList = true
-		case "repository.compare":
-			hasCompare = true
-		}
-	}
-	return hasReleaseList && hasCompare
-}
-
-func dynamicTaskPrefersProjectGet(prompt string) bool {
-	lowerPrompt := strings.ToLower(prompt)
-	if !strings.Contains(lowerPrompt, "find project") {
-		return false
-	}
-	if strings.Contains(lowerPrompt, "default branch") {
-		return true
-	}
-	return strings.Contains(lowerPrompt, "id") && strings.Contains(lowerPrompt, "project")
-}
-
-func taskPromptMentionsRemoteURL(prompt string) bool {
-	prompt = strings.ToLower(prompt)
-	return strings.Contains(prompt, "remote url") || strings.Contains(prompt, "remote_url")
-}
-
-func dynamicBridgeOnlyTask(steps []evalStep) bool {
-	if len(steps) == 0 {
-		return false
-	}
-	for _, step := range steps {
-		if !expectedCapabilityBridgeStep(step) {
-			return false
-		}
-	}
-	return true
-}
-
-func countDynamicExecuteSteps(steps []evalStep) int {
-	count := 0
-	for _, step := range steps {
-		if step.ExpectedAction != "" {
-			count++
-		}
-	}
-	return count
+	return fmt.Sprintf(
+		"Task %s: %s\nDestructive: %s\nFor each GitLab catalog operation this task needs, call gitlab_find_action first with a natural-language query for that operation, then build the gitlab_execute_action call from the ID and input schema it returned. If find does not return the operation you meant, narrow the query and run it again; do not execute an unrelated action because it ranked higher. Emit one tool call at a time and wait for its result before the next.%s",
+		task.ID, task.Prompt, destructive, taskRetryGuidance(task),
+	)
 }
 
 func taskWithRenderedCasePrompt(task evalTask) evalTask {
@@ -450,39 +424,64 @@ func repositoryFilePathExample(prompt string) (string, bool) {
 }
 
 // taskPrompt builds task prompt for evaluator prompts.
+// taskPrompt is the one meta task prompt, for a task of any length.
+//
+// It used to choose between a single-step and a multi-step builder on
+// len(steps), and that choice is itself the answer key: the number of
+// operations a task needs is what the model is being scored on working out.
+// The single-step one said so outright, that the fixture "expects exactly one
+// tool call" and that a schema lookup before it "is a failure". A model told
+// that has been handed the shape of the answer without a word of it, which is
+// the same objection the plan makes to the dynamic operation count.
+//
+// What is left is the case's own text, whether the user asked for something
+// destructive, and how this surface is called, which the system prompt states
+// once for every case.
 func taskPrompt(task evalTask) string {
-	destructive := taskDestructiveGuidance(task)
-	steps := taskSteps(task)
-	retryGuidance := taskRetryGuidance(task, steps)
-	if len(steps) > 1 {
-		return multiStepTaskPrompt(task, destructive, retryGuidance)
-	}
-	return singleStepTaskPrompt(task, destructive, retryGuidance)
+	return fmt.Sprintf(
+		"Task %s: %s\nDestructive: %s\nCarry out what the task asks, in the order it asks for it. Emit one tool call at a time and wait for its result before the next.%s",
+		task.ID, task.Prompt, taskDestructiveGuidance(task), taskRetryGuidance(task),
+	)
 }
 
-type taskPromptRule func(evalTask, []evalStep, string) string
+type taskPromptRule func(evalTask, string) string
 
+// taskDestructiveGuidance answers whether the user asked for something
+// destructive, and no longer says what to do about it.
+//
+// The fact is a property of the request: someone who says "delete the branch"
+// has already said it. The mechanism is a property of the surface, and both
+// surfaces publish it themselves, so a prompt that repeated it was measuring
+// its own sentence.
 func taskDestructiveGuidance(task evalTask) string {
 	if taskHasDestructiveStep(task) {
-		return "Yes; include confirm:true in params for each destructive tool call."
+		return "Yes"
 	}
 	return "No"
 }
 
-func taskRetryGuidance(task evalTask, steps []evalStep) string {
+// taskRetryGuidance is what a prompt may say about the harness rather than
+// about the answer.
+//
+// It takes no steps any more. The one rule left keys on the fixture's simulation
+// modes, which are a property of the environment the run is in, and dropping the
+// parameter takes taskSteps out of the prompt path entirely: the answer-key gate
+// is then down to its one intended exemption, whether the user asked for
+// something destructive.
+func taskRetryGuidance(task evalTask) string {
 	retryGuidance := ""
 	rules := []taskPromptRule{
 		appendSimulationGuidance,
 	}
 	for _, rule := range rules {
-		retryGuidance = rule(task, steps, retryGuidance)
+		retryGuidance = rule(task, retryGuidance)
 	}
 	return retryGuidance
 }
 
-func appendSimulationGuidance(task evalTask, _ []evalStep, guidance string) string {
+func appendSimulationGuidance(task evalTask, guidance string) string {
 	if taskHasSimulationMode(task, "transient_error_once") {
-		guidance += " If a simulated temporary GitLab server/API error appears, repeat the same validated operation once; do not use GitLab CI retry actions such as pipeline.retry or job.retry unless the task explicitly asks to rerun CI jobs."
+		guidance += " If a simulated temporary server error appears, repeat the same operation once; do not substitute a different operation for it."
 	}
 	if taskHasSimulationMode(task, "not_found_continue") {
 		guidance += " If a simulated not-found (404) result appears, do not retry that same lookup; continue with the next operation the task describes."
@@ -523,14 +522,6 @@ func taskHasAction(steps []evalStep, action string) bool {
 		}
 	}
 	return false
-}
-
-func multiStepTaskPrompt(task evalTask, destructive, retryGuidance string) string {
-	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nPerform the full scenario in the requested order. The first tool call must perform the first requested operation, not schema lookup, project verification, or the final analyzer. Emit only the next single MCP tool call, wait for its result, then continue with the next required GitLab operation until the scenario is complete. Tool-result next_steps are optional suggestions; do not let them override the requested order. In this evaluation, one successful list response completes a list step; do not fetch additional pagination pages unless the task explicitly asks for every page, all results, or complete pagination. For action-based tools, keep all action-specific fields under params. When a step requires project_id, a GitLab namespace path like group/project goes in params.project_id, not params.full_path, params.path, or remote_url. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. For runner.list_project, use params.project_id by default and omit filter params unless the task explicitly asks for them. For runner jobs, use runner.jobs with params.runner_id only; do not add project_id. For job trace, use job.trace with params.project_id and params.job_id. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. Use action snippet.content for raw personal snippet content, snippet.delete for personal snippet deletion, branch.delete for branch deletion, tag.delete only when deleting a Git tag, release.delete when deleting a GitLab release, and mr_review.draft_note_create for merge request draft notes. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url.%s Include confirm:true in params for every destructive tool call.", task.ID, task.Prompt, destructive, retryGuidance)
-}
-
-func singleStepTaskPrompt(task evalTask, destructive, retryGuidance string) string {
-	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nThis single-operation fixture expects exactly one tool call when the action and params are clear from the prompt and tool catalog. A schema lookup before the task call is a failure unless the prompt is missing a required value or a previous validation error occurred. Choose the single MCP tool call needed to perform this task. For action-based tools, keep all action-specific fields under params and never call gitlab without an input object containing action and params. If the task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. When the selected action requires project_id, a value like group/project is params.project_id, not params.full_path, params.path, or remote_url; do not call gitlab_discover_project unless the task gives a git remote URL. For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title. Do not use ref, search, tag_name, to, or value for merge request create branch/title fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. For merge request draft notes, use mr_review.draft_note_create, not mr_review.note_create. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, snippet ID is params.snippet_id, not project_id, query, search, sort, or file_path; get raw content with action snippet.content, not snippet.raw; delete them with action snippet.delete, not personal_snippet.delete. For custom emoji group operations, use custom_emoji.list with params.group_path, not group.custom_emoji_list or group_id. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and runner.disable_project only detaches a runner from a project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For job.play variables, use params.job_variables_attributes as an array like [{\"key\":\"DEPLOY_ENV\",\"value\":\"staging\"}], not an object. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. For subgroup creation with group.create, use params.name, params.path, and params.parent_id. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For branch deletion, use action branch.delete, not repository.delete_branch. For GitLab release deletion, use action release.delete; use action tag.delete only when deleting a Git tag, not a release. For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope; for group variables use params.group_id and ci_variable.group_* actions, not project actions. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url. For pipeline lists, latest pipelines plural means pipeline.list; use pipeline.latest only for one single latest pipeline. Omit optional params that are not needed; do not add sorting/filter params unless the user asks for them, and do not send empty arrays or objects. If the task needs no input values, call the selected action with params:{}. The final task call should perform the requested GitLab operation.%s", task.ID, task.Prompt, destructive, retryGuidance)
 }
 
 // paramProvenance records where an exact-call parameter value came from.
