@@ -2,10 +2,10 @@ package evaluator
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -44,48 +44,6 @@ func TestSimulatedToolResult_Branches(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestStandaloneExpectedParamValue_KnownAndFallback verifies the standalone
-// parameter resolver returns the expected heuristic value or the default
-// placeholder for unknown params.
-func TestStandaloneExpectedParamValue_KnownAndFallback(t *testing.T) {
-	tests := []struct {
-		name     string
-		param    string
-		prompt   string
-		wantKind string
-		wantSub  string
-	}{
-		{name: "uri with gitlab prefix", param: "uri", prompt: "see `gitlab://tools/example`", wantKind: "string", wantSub: "gitlab://"},
-		{name: "uri without marker", param: "uri", prompt: "no marker", wantKind: "string", wantSub: "gitlab://tools"},
-		{name: "name with backtick", param: "name", prompt: "use `my-mr` here", wantKind: "string", wantSub: "my-mr"},
-		{name: "name without backtick", param: "name", prompt: "no marker", wantKind: "string", wantSub: "my_open_mrs"},
-		{name: "ref_type", param: "ref_type", prompt: "", wantKind: "string", wantSub: "ref/prompt"},
-		{name: "argument_name", param: "argument_name", prompt: "", wantKind: "string", wantSub: "project_id"},
-		{name: "argument_value", param: "argument_value", prompt: "", wantKind: "string", wantSub: "my-org"},
-		{name: "arguments", param: "arguments", prompt: "", wantKind: "map", wantSub: "my-org/tools/gitlab-mcp-server"},
-		{name: "unknown falls back to placeholder", param: "mystery", prompt: "no marker", wantKind: "string", wantSub: "<mystery>"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := standaloneExpectedParamValue(tt.param, tt.prompt)
-			if !strings.Contains(toString(got), tt.wantSub) {
-				t.Fatalf("standaloneExpectedParamValue(%q, %q) = %v, want substring %q", tt.param, tt.prompt, got, tt.wantSub)
-			}
-		})
-	}
-}
-
-func toString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(b)
 }
 
 // TestValidateStepCallWithRoutes_ValidatesDynamicParamsAgainstSchema verifies
@@ -242,9 +200,9 @@ func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
 	if !hasFailedAssertion(assertionTarget.AssertionResults, CaseAssertionForbiddenParams) {
 		t.Fatalf("assertion results = %+v, want forbidden param failure", assertionTarget.AssertionResults)
 	}
-	payload := repairPayloadForValidation(evalTask{Prompt: "Get project."}, step, result, input, validationRepairText(evalTask{Prompt: "Get project."}, step, result, input))
-	if payload.ErrorKind != "forbidden_param" || payload.BadParam != "token" || !strings.Contains(payload.LikelyFix, "remove token") {
-		t.Fatalf("payload = %+v, want forbidden_param repair with allowed path", payload)
+	payload := repairPayloadForValidation(step, result, input, validationRepairText(step, result))
+	if payload.ErrorKind != "forbidden_param" || payload.BadParam != "token" || !strings.Contains(payload.Message, "token") {
+		t.Fatalf("payload = %+v, want forbidden_param repair naming the param that was refused", payload)
 	}
 }
 
@@ -277,9 +235,17 @@ func TestValidateStepCallWithRoutes_ReportsWrongAction(t *testing.T) {
 	if result.Valid || result.ActionMatches || !strings.Contains(result.Message, "expected action project.get") {
 		t.Fatalf("result = %+v, want wrong action diagnostic", result)
 	}
-	payload := repairPayloadForValidation(evalTask{Prompt: "Get project."}, step, result, input, validationRepairText(evalTask{Prompt: "Get project."}, step, result, input))
+	payload := repairPayloadForValidation(step, result, input, validationRepairText(step, result))
 	if payload.ErrorKind != "wrong_action" || payload.FailedAction != actionProjectList {
 		t.Fatalf("payload = %+v, want wrong_action for attempted project.list", payload)
+	}
+	// The whole point of the split: the reader's diagnostic names the action
+	// the task wanted and the model's never does.
+	if !strings.Contains(result.Message, actionProjectGet) {
+		t.Errorf("the report diagnostic no longer names the expected action: %q", result.Message)
+	}
+	if strings.Contains(payload.Message, actionProjectGet) {
+		t.Errorf("the model was told which action the task wanted: %q", payload.Message)
 	}
 }
 
@@ -338,51 +304,29 @@ func TestValidateStandaloneToolCall_RejectsActionEnvelope(t *testing.T) {
 	}
 }
 
-// TestRepairPayloadForValidation_ProvidesExecutableRetryEnvelope verifies repair
-// feedback includes the exact JSON shape models should retry.
-func TestRepairPayloadForValidation_ProvidesExecutableRetryEnvelope(t *testing.T) {
-	task := evalTask{Prompt: "Read resource `gitlab://tools/project.get`."}
+// TestRepairPayloadForValidation_DiagnosesWithoutHandingBackTheCall is the
+// inverse of the test it replaces, which asserted that repair feedback carried
+// "the exact JSON shape models should retry".
+//
+// It did carry it, and that is what made the published Repair success figure a
+// transcription rate. What a refused call comes back with now is the diagnostic
+// a deployment produces: which parameter is missing, and nothing that says what
+// to put in it.
+func TestRepairPayloadForValidation_DiagnosesWithoutHandingBackTheCall(t *testing.T) {
 	step := evalStep{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}
 	validation := validateStandaloneToolCall(step, resourceReadTool, map[string]any{})
-	payload := repairPayloadForValidation(task, step, validation, map[string]any{}, validationRepairText(task, step, validation, map[string]any{}))
+	payload := repairPayloadForValidation(step, validation, map[string]any{}, validationRepairText(step, validation))
 	if payload.ErrorKind != "missing_required_param" || payload.BadParam != "uri" {
 		t.Fatalf("payload = %+v, want missing uri", payload)
 	}
-	if payload.RetryEnvelope["uri"] != "gitlab://tools/project.get" {
-		t.Fatalf("retry envelope = %#v, want prompt URI", payload.RetryEnvelope)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
 	}
-}
-
-// TestExpectedActionCallExample_DynamicDestructiveUsesTopLevelConfirm verifies
-// dynamic retry examples put confirmation at the execute envelope level.
-func TestExpectedActionCallExample_DynamicDestructiveUsesTopLevelConfirm(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true}
-	got := expectedActionCallExample(evalTask{Prompt: "delete issue IID `7` in project `my/project`"}, step, map[string]any{"params": map[string]any{"project_id": "my/project", "issue_iid": 7}})
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
-		t.Fatalf("expectedActionCallExample() invalid JSON %q: %v", got, err)
-	}
-	if decoded["confirm"] != true {
-		t.Fatalf("decoded = %#v, want top-level confirm true", decoded)
-	}
-	params := decoded["params"].(map[string]any)
-	if _, ok := params["confirm"]; ok {
-		t.Fatalf("params = %#v, want no params.confirm in dynamic envelope", params)
-	}
-}
-
-// TestExpectedActionCallExample_DynamicIncludesPromptOptionalParams verifies
-// repair envelopes keep optional parameters explicitly requested by the task.
-func TestExpectedActionCallExample_DynamicIncludesPromptOptionalParams(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}}
-	got := expectedActionCallExample(evalTask{Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-` that rejects unsigned commits."}, step, map[string]any{"params": map[string]any{"project_id": "my-org/tools/eval-push-rule"}})
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
-		t.Fatalf("expectedActionCallExample() invalid JSON %q: %v", got, err)
-	}
-	params := decoded["params"].(map[string]any)
-	if params["commit_message_regex"] != "^EVAL-" || params["reject_unsigned_commits"] != true {
-		t.Fatalf("params = %#v, want requested optional push rule params", params)
+	for _, forbidden := range []string{"retry_envelope", "likely_fix", "gitlab://tools/project.get"} {
+		if strings.Contains(string(data), forbidden) {
+			t.Errorf("the repair payload carries %q: %s", forbidden, data)
+		}
 	}
 }
 
@@ -452,17 +396,14 @@ func TestValidationExampleValueExtractors_CoverBacktickAndPrefixBranches(t *test
 	if got, ok := firstBacktickValueWithPrefix(prompt, "gitlab://"); !ok || got != "gitlab://tools/project.get" {
 		t.Fatalf("firstBacktickValueWithPrefix() = %q, want tools URI", got)
 	}
-	if got := standaloneExpectedParamValue("uri", prompt); got != "gitlab://tools/project.get" {
-		t.Fatalf("standaloneExpectedParamValue(uri) = %v, want tools URI", got)
+	if !stepHasRoleSensitiveParams(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}) {
+		t.Error("merge_request.create is not classified as taking swappable parameters")
 	}
-	if got := standaloneExpectedParamValue("name", "render prompt `project_overview`"); got != "project_overview" {
-		t.Fatalf("standaloneExpectedParamValue(name) = %v, want project_overview", got)
+	if stepHasRoleSensitiveParams(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}) {
+		t.Error("project.get was classified as taking swappable parameters")
 	}
-	if got := standaloneExpectedParamValue("ref_type", prompt); got != "ref/prompt" {
-		t.Fatalf("standaloneExpectedParamValue(ref_type) = %v, want ref/prompt", got)
-	}
-	if got := roleSensitiveRepairHint(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}); !strings.Contains(got, "source_branch") {
-		t.Fatalf("roleSensitiveRepairHint() = %q, want branch hint", got)
+	if stepHasRoleSensitiveParams(evalStep{ExpectedTool: "gitlab_merge_request", ExpectedAction: "create"}) {
+		t.Error("the classification reached a surface that has no execute envelope")
 	}
 }
 
@@ -822,85 +763,138 @@ func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *test
 	}
 }
 
-// TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies ValidationRepairMessage includes action envelope and project hint.
-func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
+// TestValidationRepairMessage_NamesTheMissingParamAndNotTheAction is the
+// inverse of the test it replaces, which asserted the repair message included
+// an `"action":"project.get"` envelope example.
+//
+// The diagnostic names the parameter that is missing, which is what a
+// deployment refusing the call would say, and never the action the task wanted.
+func TestValidationRepairMessage_NamesTheMissingParamAndNotTheAction(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}
-	task := evalTask{Prompt: "Fetch project `my-org/tools/gitlab-mcp-server`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, nil)
-	if !strings.Contains(message, `"action":"project.get"`) || !strings.Contains(message, "project_id") {
-		t.Fatalf("message = %q, want action envelope example", message)
+	validation := validationResult{
+		Message:       "missing required params: project_id",
+		ModelMessage:  "missing required params: project_id",
+		ToolMatches:   true,
+		ActionMatches: true,
 	}
-	if !strings.Contains(message, `"project_id":"my-org/tools/gitlab-mcp-server"`) {
-		t.Fatalf("message = %q, want concrete project_id value", message)
+	message := validationRepairMessage(step, validation, nil)
+	if !strings.Contains(message, "project_id") {
+		t.Fatalf("message = %q, want it to name the missing parameter", message)
 	}
-	if !strings.Contains(message, "previous tool result") || !strings.Contains(message, "params.project_id") {
-		t.Fatalf("message = %q, want previous-result project_id hint", message)
+	if strings.Contains(message, `"action":"project.get"`) {
+		t.Fatalf("message = %q, want no envelope naming the expected action", message)
+	}
+	// Both of these used to be asserted present: the concrete project_id value
+	// lifted out of the prompt, and a sentence telling the model where to find
+	// one in an earlier tool result. Each is the answer to a parameter the
+	// scorer then checks.
+	if strings.Contains(message, `"project_id":"my-org/tools/gitlab-mcp-server"`) {
+		t.Errorf("message = %q, still carries the concrete project_id value", message)
+	}
+	if strings.Contains(message, "previous tool result") {
+		t.Errorf("message = %q, still tells the model where to find the value", message)
 	}
 }
 
-// TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm verifies ValidationRepairMessage when destructive envelope includes confirm.
-func TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm(t *testing.T) {
+// TestValidationRepairMessage_DestructiveRefusalSaysConfirmIsMissing verifies
+// what a destructive call without confirmation comes back with.
+//
+// It used to come back with an envelope carrying `"confirm":true`, which is
+// the whole of what the destructive-safety column scores. The diagnostic now
+// says the call was refused for want of confirmation, which is what the server
+// itself says, and the model has to decide to send it.
+func TestValidationRepairMessage_DestructiveRefusalSaysConfirmIsMissing(t *testing.T) {
 	step := evalStep{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true}
-	task := evalTask{Prompt: "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "destructive task requires params.confirm=true"}, nil)
-	if !strings.Contains(message, `"confirm":true`) {
-		t.Fatalf("message = %q, want confirm inside retry envelope", message)
+	message := validationRepairMessage(step, validationResult{Message: "destructive task requires params.confirm=true", ModelMessage: "destructive task requires params.confirm=true", ToolMatches: true, ActionMatches: true}, nil)
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(message), &payload); err != nil {
+		t.Fatalf("validationRepairMessage() JSON error = %v; message = %s", err, message)
+	}
+	if payload.ErrorKind != "destructive_confirmation_missing" {
+		t.Fatalf("payload = %+v, want the destructive confirmation kind", payload)
+	}
+	if strings.Contains(message, `"retry_envelope"`) {
+		t.Errorf("message = %q, still carries an envelope to paste back", message)
 	}
 }
 
-// TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint verifies
-// dynamic repair feedback steers models back to the current scenario step.
-func TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint(t *testing.T) {
+// TestValidationRepairMessage_WrongActionRejectsWhatWasTriedAndNamesNothingElse
+// is the sharpest case of the split, because here the model reached a
+// different action entirely.
+//
+// The message it used to get carried the expected action, an empty params
+// object showing the shape, and a paragraph of dynamic-surface tutoring. All a
+// deployment could say is nothing at all, since it would simply have run the
+// call. What is left is the one sentence a person who asked for the task would
+// say, which rejects the attempt and describes no other.
+func TestValidationRepairMessage_WrongActionRejectsWhatWasTriedAndNamesNothingElse(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.settings_get"}
-	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "step 1: expected action admin.settings_get, got admin.broadcast_message_list", Action: "admin.broadcast_message_list"}, nil)
-	for _, want := range []string{
-		`"action":"admin.settings_get"`,
+	validation := validationResult{
+		Message: "step 1: expected action admin.settings_get, got admin.broadcast_message_list",
+		Action:  "admin.broadcast_message_list",
+	}
+	message := validationRepairMessage(step, validation, nil)
+	if !strings.Contains(message, "admin.broadcast_message_list") {
+		t.Fatalf("message = %q, want it to name the action that was refused", message)
+	}
+	for _, forbidden := range []string{
+		"admin.settings_get",
 		`"params":{}`,
 		"without gitlab_ prefixes",
-		"not the current scenario step",
 		"do not skip ahead",
 	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(message, want) {
-				t.Fatalf("message = %q, want substring %q", message, want)
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(message, forbidden) {
+				t.Errorf("message = %q, still carries %q", message, forbidden)
 			}
 		})
 	}
 }
 
-// TestValidationRepairMessage_UnknownParamsDropsCarriedFields verifies repair
-// feedback tells models to remove fields copied from previous workflow steps.
-func TestValidationRepairMessage_UnknownParamsDropsCarriedFields(t *testing.T) {
+// TestValidationRepairMessage_UnknownParamsSaysWhichAndStopsThere verifies the
+// diagnostic for a parameter the action does not take.
+//
+// It used to add "Remove every unknown param from the retry; do not carry IDs
+// from a previous action into an unrelated action unless the envelope above
+// includes that param", alongside an envelope naming the expected action. A
+// deployment names the parameter it refused, so that is what is left.
+func TestValidationRepairMessage_UnknownParamsSaysWhichAndStopsThere(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.feature_flag_create", RequiredParams: []string{"project_id", "name", "version"}}
-	task := evalTask{Prompt: "Create feature flag `eval_flag` in project `my-org/tools/gitlab-mcp-server` version `new_version_flag`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "unknown params for gitlab_execute_action/feature_flags.feature_flag_create: user_list_iid"}, nil)
-	for _, want := range []string{
-		`"action":"feature_flags.feature_flag_create"`,
-		"Remove every unknown param",
-		"do not carry IDs from a previous action",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(message, want) {
-				t.Fatalf("message = %q, want substring %q", message, want)
+	diagnostic := "unknown params for gitlab_execute_action/feature_flags.feature_flag_create: user_list_iid"
+	message := validationRepairMessage(step, validationResult{Message: diagnostic, ModelMessage: diagnostic, ToolMatches: true, ActionMatches: true}, nil)
+	if !strings.Contains(message, "user_list_iid") {
+		t.Fatalf("message = %q, want it to name the refused parameter", message)
+	}
+	for _, forbidden := range []string{"Remove every unknown param", "do not carry IDs from a previous action", "retry_envelope"} {
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(message, forbidden) {
+				t.Errorf("message = %q, still carries %q", message, forbidden)
 			}
 		})
 	}
 }
 
-// TestValidationRepairMessage_PreservesAttemptedRequiredParams verifies repair
-// examples keep IDs the model already copied from a prior tool result.
-func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) {
+// TestValidationRepairMessage_KeepsNoneOfTheAttemptedCall verifies that a
+// refused call is not handed back with its own parameters filled in.
+//
+// The replaced test asserted the opposite, that repair examples "keep IDs the
+// model already copied from a prior tool result": the message carried an
+// envelope with the expected action, the project path lifted from the prompt
+// and the trigger ID the model had found. Recovering from that is copying.
+func TestValidationRepairMessage_KeepsNoneOfTheAttemptedCall(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.trigger_get", RequiredParams: []string{"project_id", "trigger_id"}}
-	task := evalTask{Prompt: "Fetch pipeline trigger using the returned trigger ID in project `my-org/tools/gitlab-mcp-server`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, map[string]any{
+	diagnostic := "missing required params: project_id"
+	message := validationRepairMessage(step, validationResult{Message: diagnostic, ModelMessage: diagnostic, ToolMatches: true, ActionMatches: true}, map[string]any{
 		"action": "pipeline.trigger_get",
 		"params": map[string]any{"trigger_id": 67},
 	})
-
-	for _, want := range []string{`"action":"pipeline.trigger_get"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"trigger_id":67`} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(message, want) {
-				t.Fatalf("message = %q, want substring %q", message, want)
+	if !strings.Contains(message, "project_id") {
+		t.Fatalf("message = %q, want it to name the missing parameter", message)
+	}
+	for _, forbidden := range []string{`"action":"pipeline.trigger_get"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"trigger_id":67`} {
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(message, forbidden) {
+				t.Errorf("message = %q, still carries %q", message, forbidden)
 			}
 		})
 	}
@@ -909,8 +903,14 @@ func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) 
 // TestValidationRepairMessage_ReturnsStructuredRepairPayload verifies ValidationRepairMessage returns structured repair payload.
 func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true}
-	task := evalTask{Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`."}
-	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: target_project_id", Action: "job.token_scope_remove_project"}, map[string]any{
+	validation := validationResult{
+		Message:       "missing required params: target_project_id",
+		ModelMessage:  "missing required params: target_project_id",
+		ActionMatches: true,
+		ToolMatches:   true,
+		Action:        "job.token_scope_remove_project",
+	}
+	message := validationRepairMessage(step, validation, map[string]any{
 		"action": "job.token_scope_remove_project",
 		"params": map[string]any{"project_id": 51},
 	})
@@ -922,15 +922,19 @@ func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
 	if payload.ErrorKind != "missing_required_param" || payload.BadParam != "target_project_id" || payload.ExpectedType != "present concrete value" || !payload.RetryAllowed {
 		t.Fatalf("repair payload = %+v, want structured missing param retry", payload)
 	}
-	if !strings.Contains(payload.LikelyFix, "project_id is the owning project") || !strings.Contains(payload.Message, `"target_project_id":51`) {
-		t.Fatalf("repair payload = %+v, want role hint and concrete target_project_id", payload)
+	// The diagnostic says which parameter is missing, which a server says too.
+	// What it no longer says is what to put in it, nor which of two swappable
+	// parameters means what.
+	if strings.Contains(message, "project_id is the owning project") || strings.Contains(message, `"target_project_id":51`) {
+		t.Errorf("the repair message still hands back the value: %s", message)
 	}
 }
 
 // TestValidationRepairMessage_ClassifiesWrongIntegerType verifies ValidationRepairMessage classifies wrong integer type.
 func TestValidationRepairMessage_ClassifiesWrongIntegerType(t *testing.T) {
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}}
-	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "expected params.runner_id to be integer; got string", Action: "runner.remove"}, map[string]any{
+	diagnostic := "expected params.runner_id to be integer; got string"
+	message := validationRepairMessage(step, validationResult{Message: diagnostic, ModelMessage: diagnostic, ToolMatches: true, ActionMatches: true, Action: "runner.remove"}, map[string]any{
 		"action": "runner.remove",
 		"params": map[string]any{"runner_id": "not-a-number"},
 	})
@@ -1163,26 +1167,29 @@ func TestValidationExpectedType_DerivesTypeHints(t *testing.T) {
 	}
 }
 
-// TestRoleSensitiveRepairHint_ReturnsHintsForDynamicRoles verifies the
-// parameter role hint only applies to dynamic execute steps for the actions
-// with ambiguous source/target parameters.
-func TestRoleSensitiveRepairHint_ReturnsHintsForDynamicRoles(t *testing.T) {
+// TestStepHasRoleSensitiveParams_ClassifiesDynamicRolesOnly verifies which
+// actions are treated as taking two parameters a model can swap.
+//
+// What the predicate replaced returned the sentence explaining which parameter
+// meant what, appended to every repair message. Only the classification
+// survives, and it is used for one thing: reporting a 400 on one of these
+// actions as a role confusion rather than a plain bad request.
+func TestStepHasRoleSensitiveParams_ClassifiesDynamicRolesOnly(t *testing.T) {
 	cases := []struct {
 		name string
 		step evalStep
-		want string
+		want bool
 	}{
-		{name: "meta tool", step: evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: actionIssueLinkCreate}, want: ""},
-		{name: "token scope", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project"}, want: "owning project"},
-		{name: "issue link", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionIssueLinkCreate}, want: "source issue"},
-		{name: "merge request create", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}, want: "merged from"},
-		{name: "other dynamic", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}, want: ""},
+		{name: "meta tool", step: evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: actionIssueLinkCreate}, want: false},
+		{name: "token scope", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project"}, want: true},
+		{name: "issue link", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionIssueLinkCreate}, want: true},
+		{name: "merge request create", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}, want: true},
+		{name: "other dynamic", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}, want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := roleSensitiveRepairHint(tc.step)
-			if (tc.want == "" && got != "") || !strings.Contains(got, tc.want) {
-				t.Fatalf("roleSensitiveRepairHint() = %q, want %q", got, tc.want)
+			if got := stepHasRoleSensitiveParams(tc.step); got != tc.want {
+				t.Errorf("stepHasRoleSensitiveParams() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -1306,4 +1313,123 @@ func TestValidateStepCallWithRoutes_ScoresAnIssueLifecycleAliasAsTheServerRunsIt
 			}
 		})
 	}
+}
+
+// TestRepairMessages_NameNoAnswerForAnyCase is the corpus-wide guard on the
+// repair path, and it exists because every one of the tests above pins one
+// shape of leak at a time.
+//
+// For every case on both surfaces it drives the message a refused call comes
+// back with, using an empty call, which is the worst case for the builder this
+// step deleted: every required parameter was missing, so every one of them was
+// spelled out in the reply along with the action and a pasteable envelope.
+//
+// What it forbids is what a deployment could not have said. The expected action
+// never appears, since a server refusing a call cannot know which call the task
+// wanted; neither do the envelope fields. The names of the required parameters
+// are forbidden only where the model has not reached the expected action: there
+// they are the shape of a call it has not found, while on the action it did
+// reach, naming the parameter that is missing is precisely what a server says.
+func TestRepairMessages_NameNoAnswerForAnyCase(t *testing.T) {
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta} {
+		t.Run(surface, func(t *testing.T) {
+			opts := options{ToolSurface: surface, Backend: backendMock, Edition: editionAll, ServerMode: ServerModeDefault}
+			_, routes, _, err := loadCatalog(opts)
+			if err != nil {
+				t.Fatalf("loadCatalog(%s) error = %v", surface, err)
+			}
+			tasks := normalizeTasksForCatalog(evalTasksFromCases(AllEvalCases()), routes, surface)
+			if len(tasks) == 0 {
+				t.Fatal("no task to drive: this test would then pass for the wrong reason")
+			}
+			var checked int
+			for _, task := range tasks {
+				for _, step := range taskSteps(task) {
+					// Two calls, because they reach different branches. The
+					// empty one is the missing-parameter path; the one naming
+					// another action is the wrong-action path, and a guard
+					// that drove only the first passed a mutation that put
+					// the expected action back into the second.
+					for _, attempted := range repairProbeInputs(step) {
+						checked += driveRepairProbe(t, task.ID, step, attempted, routes)
+					}
+				}
+			}
+			if checked == 0 {
+				t.Error("no step was driven: this test would then pass for the wrong reason")
+			}
+		})
+	}
+}
+
+// repairProbeInputs are the two refused calls the corpus guard drives per step.
+func repairProbeInputs(step evalStep) []map[string]any {
+	inputs := []map[string]any{{}}
+	if step.ExpectedAction != "" {
+		// A name no case expects, so the probe cannot accidentally be the
+		// action the step wanted, which is what MF-002 and MF-003 hit.
+		inputs = append(inputs, map[string]any{"action": "zzz.probe_action", "params": map[string]any{}})
+	}
+	return inputs
+}
+
+// driveRepairProbe refuses one call and asserts the diagnostic names nothing a
+// deployment could not have said. It returns the number of probes it ran.
+func driveRepairProbe(t *testing.T, caseID string, step evalStep, attempted map[string]any, routes map[string]toolutil.ActionMap) int {
+	t.Helper()
+	{
+		{
+			validation := validateStepCallWithRoutes(step, step.ExpectedTool, attempted, routes)
+			raw := validationRepairMessage(step, validation, attempted)
+			var payload repairPayload
+			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+				t.Fatalf("%s: repair message is not a payload: %v", caseID, err)
+			}
+			// The prose the model reads, rather than the JSON around it: a
+			// field name like "message" or a fixed phrase like "present
+			// concrete value" is the envelope's own vocabulary and says
+			// nothing about this case.
+			message := payload.Message + " " + payload.BadParam
+			forbidden := []string{"envelope", "This message already provides"}
+			if step.ExpectedAction != "" {
+				forbidden = append(forbidden, step.ExpectedAction)
+			}
+			if !validation.ActionMatches && step.ExpectedAction != "" {
+				forbidden = append(forbidden, step.RequiredParams...)
+			}
+			for _, needle := range forbidden {
+				if needle == "" || !messageNamesToken(message, needle) {
+					continue
+				}
+				t.Errorf("%s: the repair message carries %q: %s", caseID, needle, raw)
+			}
+		}
+	}
+	return 1
+}
+
+// messageNamesToken reports whether a repair message names a word, rather than
+// merely containing its letters. Without the boundary check the parameter
+// `metric` matches inside the tool name `gitlab_dora_metrics` and the guard
+// reports a leak that is not there.
+func messageNamesToken(message, token string) bool {
+	for index := 0; ; {
+		at := strings.Index(message[index:], token)
+		if at < 0 {
+			return false
+		}
+		at += index
+		end := at + len(token)
+		beforeOK := at == 0 || !isTokenByte(message[at-1])
+		afterOK := end == len(message) || !isTokenByte(message[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		index = at + 1
+	}
+}
+
+// isTokenByte reports whether b can be part of an identifier.
+func isTokenByte(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_'
 }

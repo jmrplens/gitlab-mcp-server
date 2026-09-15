@@ -408,7 +408,15 @@ type validationResult struct {
 	RequiredPresent bool
 	DestructiveSafe bool
 	Action          string
-	Message         string
+	// Message is the whole diagnostic, for the report and the assertion
+	// rows. It names the expected tool and action where they did not match,
+	// which is what a reader triaging a run needs to see.
+	Message string
+	// ModelMessage is the part of that diagnostic a deployment would have
+	// produced, and is the only half the model is ever shown. It carries the
+	// parameter problems and never the expected tool or action, because a
+	// server refusing a call cannot know which call the task wanted.
+	ModelMessage string
 }
 
 // simulationResult holds simulation result data for the evaluator package.

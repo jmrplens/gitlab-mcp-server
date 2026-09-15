@@ -307,7 +307,7 @@ func (r *modelRunner) handleInvalidStepToolUse(ctx context.Context, stepCtx step
 		turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceToolResultEventWithMCP(turnCtx.result.ModelCalls, block, simulation.MCP))
 		return false
 	}
-	repairMessage := validationRepairMessage(turnCtx.task, turnCtx.steps[stepIndex], validation, toolUse.Input)
+	repairMessage := validationRepairMessage(turnCtx.steps[stepIndex], validation, toolUse.Input)
 	block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
 	*stepCtx.followups = append(*stepCtx.followups, block)
 	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceToolResultEvent(turnCtx.result.ModelCalls, block))
@@ -449,7 +449,7 @@ func handleInvalidExpectedDynamicFindCall(auxCtx auxiliaryToolUseContext, step e
 	}
 	auxCtx.result.RepairAttempted = true
 	auxCtx.state.repairCount++
-	repairMessage := validationRepairMessage(auxCtx.task, step, validation, auxCtx.toolUse.Input)
+	repairMessage := validationRepairMessage(step, validation, auxCtx.toolUse.Input)
 	block := toolResultBlock(auxCtx.toolUse.ID, repairMessage, errors.New(repairMessage))
 	*auxCtx.followups = append(*auxCtx.followups, block)
 	auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceToolResultEvent(auxCtx.result.ModelCalls, block))
@@ -596,7 +596,7 @@ func handleInvalidCapabilityBridgeCall(bridgeCtx capabilityBridgeStepContext, st
 	}
 	bridgeCtx.result.RepairAttempted = true
 	bridgeCtx.state.repairCount++
-	repairMessage := validationRepairMessage(bridgeCtx.task, step, validation, bridgeCtx.toolUse.Input)
+	repairMessage := validationRepairMessage(step, validation, bridgeCtx.toolUse.Input)
 	block := toolResultBlock(bridgeCtx.toolUse.ID, repairMessage, errors.New(repairMessage))
 	*bridgeCtx.followups = append(*bridgeCtx.followups, block)
 	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceToolResultEvent(bridgeCtx.result.ModelCalls, block))
@@ -1263,14 +1263,20 @@ func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	return string(data)
 }
 
-// repairPayloadForExecutionError builds repair payload for execution error for retry and repair feedback.
+// repairPayloadForExecutionError builds the diagnostic for a call GitLab itself
+// refused, which is the one case where the message is not ours at all: the
+// action ran, and what comes back is what the server said about it.
+//
+// The parameter role hint that used to be appended is gone with the rest of the
+// coaching. It spelled out which of the expected action's parameters means
+// what, which is the answer to the case, on a path that fires whenever a live
+// call returns an error.
 func repairPayloadForExecutionError(step evalStep, err error, message string) repairPayload {
 	return repairPayload{
 		ErrorKind:    executionErrorKind(step, err),
 		FailedAction: step.ExpectedAction,
 		BadParam:     executionErrorBadParam(step, err),
 		ExpectedType: "GitLab API request accepted by the selected action",
-		LikelyFix:    strings.TrimSpace(message + roleSensitiveRepairHint(step)),
 		RetryAllowed: true,
 		Message:      message,
 	}
@@ -1280,7 +1286,7 @@ func repairPayloadForExecutionError(step evalStep, err error, message string) re
 func executionErrorKind(step evalStep, err error) string {
 	text := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(text, "400") && roleSensitiveRepairHint(step) != "":
+	case strings.Contains(text, "400") && stepHasRoleSensitiveParams(step):
 		return "gitlab_bad_request_role_confusion"
 	case strings.Contains(text, "400") || strings.Contains(text, "bad request"):
 		return "gitlab_bad_request"

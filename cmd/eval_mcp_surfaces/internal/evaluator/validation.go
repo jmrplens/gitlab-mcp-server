@@ -304,7 +304,12 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 		Action:          action,
 	}
 
-	var problems []string
+	// Two lists, because the diagnostic has two audiences. Everything goes to
+	// the reader triaging a run; only what a deployment could itself have said
+	// goes to the model. A server refusing a call knows the parameters are
+	// wrong and cannot know which call the task wanted, so the expected tool
+	// and action are withheld from the second list.
+	var problems, modelProblems []string
 	if !result.ToolMatches {
 		problems = append(problems, fmt.Sprintf("expected tool %s, got %s", step.ExpectedTool, toolName))
 	}
@@ -314,21 +319,32 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 	for key := range input {
 		if key != "action" && key != "params" && (step.ExpectedTool != dynamicExecuteActionTool || key != "confirm") {
 			problems = append(problems, fmt.Sprintf("%s %s; put action-specific fields under params", diagnosticUnexpectedTopLevelParameter, key))
+			modelProblems = append(modelProblems, fmt.Sprintf("%s %s; put action-specific fields under params", diagnosticUnexpectedTopLevelParameter, key))
 		}
 	}
 	for _, required := range step.RequiredParams {
 		if !requiredParamPresent(params, required) {
 			result.RequiredPresent = false
 			problems = append(problems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
+			// A missing required parameter is disclosable only where the
+			// model reached the action the task wanted. Anywhere else the
+			// list is the expected action's schema, so naming it would hand
+			// over the shape of a call the model has not found.
+			if result.ActionMatches && result.ToolMatches {
+				modelProblems = append(modelProblems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
+			}
 		}
 	}
 	problems = appendForbiddenParamProblems(params, step.ForbiddenParams, problems)
+	modelProblems = appendForbiddenParamProblems(params, step.ForbiddenParams, modelProblems)
 	problems = validateDestructiveSafety(&result, step, input, params, problems)
 	result.Valid = len(problems) == 0
 	if result.Valid {
 		result.Message = "ok"
+		result.ModelMessage = "ok"
 	} else {
 		result.Message = strings.Join(problems, "; ")
+		result.ModelMessage = strings.Join(modelProblems, "; ")
 	}
 	return result
 }
@@ -401,9 +417,9 @@ func requiredParamPresent(params map[string]any, required string) bool {
 }
 
 // validationRepairMessage reports whether validation repair message.
-func validationRepairMessage(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
-	text := validationRepairText(task, step, validation, attemptedInput)
-	payload := repairPayloadForValidation(task, step, validation, attemptedInput, text)
+func validationRepairMessage(step evalStep, validation validationResult, attemptedInput map[string]any) string {
+	text := validationRepairText(step, validation)
+	payload := repairPayloadForValidation(step, validation, attemptedInput, text)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return text
@@ -412,82 +428,81 @@ func validationRepairMessage(task evalTask, step evalStep, validation validation
 }
 
 // repairPayload holds repair payload data for the evaluator package.
+// repairPayload is the diagnostic a refused call comes back with.
+//
+// Every field describes the call the model made: what kind of error it was,
+// which action it named, which parameter was wrong, what type that parameter
+// takes and what value arrived. A deployment tells a client that much. It used
+// to carry two more, retry_envelope and likely_fix, which between them spelled
+// the whole expected call, and those are gone.
 type repairPayload struct {
-	ErrorKind     string         `json:"error_kind"`
-	FailedAction  string         `json:"failed_action,omitempty"`
-	BadParam      string         `json:"bad_param,omitempty"`
-	ExpectedType  string         `json:"expected_type,omitempty"`
-	SentValue     any            `json:"sent_value,omitempty"`
-	RetryEnvelope map[string]any `json:"retry_envelope,omitempty"`
-	LikelyFix     string         `json:"likely_fix"`
-	RetryAllowed  bool           `json:"retry_allowed"`
-	Message       string         `json:"message"`
+	ErrorKind    string `json:"error_kind"`
+	FailedAction string `json:"failed_action,omitempty"`
+	BadParam     string `json:"bad_param,omitempty"`
+	ExpectedType string `json:"expected_type,omitempty"`
+	SentValue    any    `json:"sent_value,omitempty"`
+	RetryAllowed bool   `json:"retry_allowed"`
+	Message      string `json:"message"`
 }
 
 // repairPayloadForValidation builds repair payload for validation for retry and repair feedback.
-func repairPayloadForValidation(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any, text string) repairPayload {
-	badParam := validationBadParam(validation.Message)
+func repairPayloadForValidation(step evalStep, validation validationResult, attemptedInput map[string]any, text string) repairPayload {
+	// Both are derived from the model half, so a payload cannot reintroduce
+	// through a field what the message no longer says. It also classifies
+	// better: a call to the wrong action used to be reported as a missing
+	// required parameter, because the full message named the expected
+	// action's schema and that test comes first.
+	badParam := validationBadParam(validation.ModelMessage)
 	payload := repairPayload{
-		ErrorKind:     validationErrorKind(validation.Message, validation),
-		FailedAction:  validation.Action,
-		BadParam:      badParam,
-		ExpectedType:  validationExpectedType(validation.Message, badParam),
-		SentValue:     attemptedParamValue(attemptedInput, badParam),
-		RetryEnvelope: repairRetryEnvelope(task, step, attemptedInput),
-		LikelyFix:     strings.TrimSpace(text + roleSensitiveRepairHint(step)),
-		RetryAllowed:  true,
-		Message:       text,
+		ErrorKind:    validationErrorKind(validation.ModelMessage, validation),
+		FailedAction: validation.Action,
+		BadParam:     badParam,
+		ExpectedType: validationExpectedType(validation.Message, badParam),
+		SentValue:    attemptedParamValue(attemptedInput, badParam),
+		RetryAllowed: true,
+		Message:      text,
 	}
-	if payload.FailedAction == "" {
-		payload.FailedAction = step.ExpectedAction
-	}
+	// failed_action names the call that was refused. It falls back to the
+	// step's own tool only where the model named nothing at all, which is a
+	// malformed call rather than a wrong one; falling back to the expected
+	// action would put the answer in a field that claims to hold the attempt.
 	if payload.FailedAction == "" {
 		payload.FailedAction = step.ExpectedTool
 	}
 	return payload
 }
 
-// repairRetryEnvelope builds repair retry envelope for retry and repair feedback.
-func repairRetryEnvelope(task evalTask, step evalStep, attemptedInput map[string]any) map[string]any {
-	data := expectedActionCallExample(task, step, attemptedInput)
-	var envelope map[string]any
-	if err := json.Unmarshal([]byte(data), &envelope); err != nil {
-		return nil
+// validationRepairText is what the model is told when a call did not match the
+// step, and it is deliberately only what a real deployment would have said.
+//
+// It used to hand back the answer. The message ended ". Retry with tool %s and
+// action %s using the envelope %s", carrying the expected tool, the expected
+// action and a marshaled call built from the answer key, and closed with "This
+// message already provides the exact envelope; retry that call directly". A
+// model recovering from that was pasting back an object it had just been given,
+// so the published "Repair success" figure measured transcription and the
+// headline success figures absorbed those recoveries, since a repaired task
+// still sets FinalSuccess.
+//
+// What is left is the diagnostic itself: which parameters are missing or
+// unknown, what type was expected and what was sent. A server says exactly that
+// much about a call it refuses, and a model that fixes its own call from it has
+// demonstrated something about the surface.
+//
+// The one sentence here that no server would produce is the rejection of an
+// action the task did not ask for. It stays because the alternative is a
+// harness that can never continue a scenario a model stepped out of, and it
+// names only what was attempted: the step's own tool, action and parameters are
+// never spelled, so it says "that is not what was asked" and not what was.
+func validationRepairText(step evalStep, validation validationResult) string {
+	var parts []string
+	if trimmed := strings.TrimSpace(validation.ModelMessage); trimmed != "" && trimmed != "ok" {
+		parts = append(parts, trimmed)
 	}
-	return envelope
-}
-
-// validationRepairText reports whether validation repair text.
-func validationRepairText(task evalTask, step evalStep, validation validationResult, attemptedInput map[string]any) string {
-	var b strings.Builder
-	b.WriteString(validation.Message)
-	if step.ExpectedAction == "" {
-		if len(step.RequiredParams) > 0 {
-			fmt.Fprintf(&b, ". Retry %s with top-level required fields: %s", step.ExpectedTool, strings.Join(step.RequiredParams, ", "))
-		}
-		return b.String()
+	if validation.Action != "" && step.ExpectedAction != "" && validation.Action != step.ExpectedAction {
+		parts = append(parts, fmt.Sprintf("The task did not ask for %s; re-read what it asked for rather than moving on to a later operation", validation.Action))
 	}
-	fmt.Fprintf(&b, ". Retry with tool %s and action %s using the envelope %s", step.ExpectedTool, step.ExpectedAction, expectedActionCallExample(task, step, attemptedInput))
-	if step.ExpectedTool == dynamicExecuteActionTool {
-		b.WriteString(". In dynamic mode, action IDs are canonical domain.action values without gitlab_ prefixes, and top-level params is required even when empty. Never send confirm:false; omit confirm unless the envelope above shows confirm:true")
-		if strings.Contains(validation.Message, diagnosticMissingRequiredParams) {
-			b.WriteString(". Your retry must include action and params together in the same tool input; do not send only action and confirm")
-		}
-	}
-	if validation.Action != "" && validation.Action != step.ExpectedAction {
-		fmt.Fprintf(&b, ". The attempted action %s is not the current scenario step; do not skip ahead to later operations or substitute a similarly named action", validation.Action)
-	}
-	if strings.Contains(validation.Message, diagnosticUnknownParams) {
-		b.WriteString(". Remove every unknown param from the retry; do not carry IDs from a previous action into an unrelated action unless the envelope above includes that param")
-	}
-	if len(step.AllowedRepairs) > 0 {
-		fmt.Fprintf(&b, ". Allowed repair paths: %s", strings.Join(step.AllowedRepairs, "; "))
-	}
-	if hasParam(step.RequiredParams, "project_id") {
-		b.WriteString(". If a previous tool result included id, project_id, path_with_namespace, or a GitLab project path, put that value in params.project_id")
-	}
-	b.WriteString(". This message already provides the exact envelope; retry that call directly")
-	return b.String()
+	return strings.Join(parts, ". ")
 }
 
 // validationErrorKind reports whether validation error kind.
@@ -589,117 +604,24 @@ func attemptedParamValue(input map[string]any, param string) any {
 	return params[param]
 }
 
-// roleSensitiveRepairHint builds role sensitive repair hint for retry and repair feedback.
-func roleSensitiveRepairHint(step evalStep) string {
+// stepHasRoleSensitiveParams reports whether an action takes two parameters a
+// model can plausibly swap, such as the owning project and the target project
+// of a job-token allowlist change.
+//
+// It used to return the sentence that told the model which was which, appended
+// to every repair message, which is the answer to the case rather than a
+// diagnostic. Only the classification survives: a 400 from GitLab on one of
+// these actions is reported as a role confusion, which names a category and
+// not a parameter.
+func stepHasRoleSensitiveParams(step evalStep) bool {
 	if step.ExpectedTool != dynamicExecuteActionTool {
-		return ""
+		return false
 	}
 	switch step.ExpectedAction {
-	case "job.token_scope_remove_project":
-		return ". Parameter role hint: project_id is the owning project whose allowlist changes; target_project_id is the project being added or removed"
-	case actionIssueLinkCreate:
-		return ". Parameter role hint: project_id and issue_iid identify the source issue; target_project_id and target_issue_iid identify the linked target issue"
-	case "merge_request.create":
-		return ". Parameter role hint: source_branch is the branch merged from; target_branch is the branch merged into"
-	}
-	return ""
-}
-
-// expectedActionCallExample resolves expected action call example for evaluator execution.
-func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[string]any) string {
-	if step.ExpectedAction == "" {
-		arguments := map[string]any{}
-		for _, required := range step.RequiredParams {
-			if value, ok := attemptedInput[required]; ok {
-				arguments[required] = value
-				continue
-			}
-			arguments[required] = standaloneExpectedParamValue(required, task.Prompt)
-		}
-		if step.Destructive || hasParam(step.OptionalParams, "confirm") {
-			arguments["confirm"] = true
-		}
-		data, err := json.Marshal(arguments)
-		if err != nil {
-			return "{...}"
-		}
-		return string(data)
-	}
-	attemptedParams, _ := attemptedInput["params"].(map[string]any)
-	allParams := exactCallParamSet(step)
-	params := expectedActionParams(task.Prompt, step, attemptedParams, allParams)
-	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
-	if step.ExpectedTool == dynamicExecuteActionTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
-		// gitlab_execute_action expects confirm beside action and params, not inside
-		// params, because the dynamic executor owns destructive confirmation.
-		arguments["confirm"] = true
-	} else if step.Destructive || hasParam(step.OptionalParams, "confirm") {
-		// Direct/meta tools receive confirm as an action parameter.
-		params["confirm"] = true
-	}
-	data, err := json.Marshal(arguments)
-	if err != nil {
-		return fmt.Sprintf("{\"action\":%q,\"params\":{...}}", step.ExpectedAction)
-	}
-	return string(data)
-}
-
-func expectedActionParams(prompt string, step evalStep, attemptedParams map[string]any, allParams map[string]bool) map[string]any {
-	params := map[string]any{}
-	for _, required := range step.RequiredParams {
-		params[required] = expectedRequiredActionParam(prompt, step.ExpectedAction, required, attemptedParams, allParams)
-	}
-	addExpectedOptionalActionParams(params, prompt, step.OptionalParams, attemptedParams)
-	return params
-}
-
-func expectedRequiredActionParam(prompt, action, param string, attemptedParams map[string]any, allParams map[string]bool) any {
-	if value, ok := attemptedParams[param]; ok {
-		return value
-	}
-	return resolveExactParamProvenance(action, param, prompt, allParams).Value
-}
-
-func addExpectedOptionalActionParams(params map[string]any, prompt string, optionalParams []string, attemptedParams map[string]any) {
-	for _, optional := range optionalParams {
-		if optional == "confirm" {
-			continue
-		}
-		if value, ok := exampleOptionalParamValue(optional, prompt); ok {
-			params[optional] = value
-			continue
-		}
-		if value, ok := attemptedParams[optional]; ok {
-			params[optional] = value
-		}
-	}
-}
-
-func standaloneExpectedParamValue(param, prompt string) any {
-	switch param {
-	case "uri":
-		if value, ok := firstBacktickValueWithPrefix(prompt, "gitlab://"); ok {
-			return value
-		}
-		return "gitlab://tools"
-	case "name":
-		if value, ok := firstBacktickValue(prompt); ok {
-			return value
-		}
-		return "my_open_mrs"
-	case "ref_type":
-		return "ref/prompt"
-	case "argument_name":
-		return "project_id"
-	case "argument_value":
-		return "my-org"
-	case "arguments":
-		return map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}
+	case "job.token_scope_remove_project", actionIssueLinkCreate, "merge_request.create":
+		return true
 	default:
-		if value, ok := examplePromptMarkerValue(param, prompt); ok {
-			return value
-		}
-		return fmt.Sprintf("<%s>", param)
+		return false
 	}
 }
 
@@ -742,23 +664,29 @@ func validateStandaloneToolCall(step evalStep, toolName string, input map[string
 		ActionMatches:   true,
 		RequiredPresent: true,
 	}
-	var problems []string
+	var problems, modelProblems []string
 	if !result.ToolMatches {
 		problems = append(problems, fmt.Sprintf("expected tool %s, got %s", step.ExpectedTool, toolName))
 	}
 	if _, ok := input["action"]; ok {
 		problems = append(problems, "standalone tool must not include action")
+		modelProblems = append(modelProblems, "standalone tool must not include action")
 	}
 	if _, ok := input["params"]; ok {
 		problems = append(problems, "standalone tool uses top-level input fields, not params")
+		modelProblems = append(modelProblems, "standalone tool uses top-level input fields, not params")
 	}
 	for _, required := range step.RequiredParams {
 		if _, ok := input[required]; !ok {
 			result.RequiredPresent = false
 			problems = append(problems, fmt.Sprintf("%s%s", diagnosticMissingRequiredStandalone, required))
+			if result.ToolMatches {
+				modelProblems = append(modelProblems, fmt.Sprintf("%s%s", diagnosticMissingRequiredStandalone, required))
+			}
 		}
 	}
 	problems = appendForbiddenParamProblems(input, step.ForbiddenParams, problems)
+	modelProblems = appendForbiddenParamProblems(input, step.ForbiddenParams, modelProblems)
 	result.DestructiveSafe = true
 	if step.Destructive && result.ToolMatches {
 		result.DestructiveSafe = isTruthy(input["confirm"])
@@ -769,8 +697,10 @@ func validateStandaloneToolCall(step evalStep, toolName string, input map[string
 	result.Valid = len(problems) == 0
 	if result.Valid {
 		result.Message = "ok"
+		result.ModelMessage = "ok"
 	} else {
 		result.Message = strings.Join(problems, "; ")
+		result.ModelMessage = strings.Join(modelProblems, "; ")
 	}
 	return result
 }

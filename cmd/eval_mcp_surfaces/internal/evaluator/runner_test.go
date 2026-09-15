@@ -517,8 +517,12 @@ func TestToolExecutionNote_ClassifiesGitLabRoleConfusion(t *testing.T) {
 	if payload.ErrorKind != "gitlab_bad_request_role_confusion" || payload.BadParam != "project_id,target_project_id" || !payload.RetryAllowed {
 		t.Fatalf("execution repair payload = %+v, want role-confusion bad request", payload)
 	}
-	if !strings.Contains(payload.LikelyFix, "project_id is the owning project") {
-		t.Fatalf("execution repair payload = %+v, want role-sensitive likely_fix", payload)
+	// The sentence that used to be here told the model which parameter means
+	// what, which is the answer to the case. What survives is the
+	// classification: the kind above names a category and the message is
+	// GitLab's own.
+	if strings.Contains(payload.Message, "project_id is the owning project") {
+		t.Errorf("execution repair payload still explains the parameter roles: %+v", payload)
 	}
 }
 
