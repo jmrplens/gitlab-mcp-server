@@ -186684,7 +186684,7 @@
   },
   {
     "name": "gitlab_project_pull_mirror_configure",
-    "description": "Configure a project's pull mirror. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
+    "description": "Configure a project's pull mirror. Arming mirror_overwrites_diverged_branches replaces this project's diverged branches with the source's and requires confirmation. Returns: the updated mirror configuration. See also: gitlab_project_pull_mirror_get, gitlab_project_start_mirroring.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -186695,6 +186695,10 @@
         "auth_user": {
           "description": "Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password",
           "type": "string"
+        },
+        "confirm": {
+          "description": "Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting",
+          "type": "boolean"
         },
         "enabled": {
           "description": "Enable or disable pull mirroring",
@@ -186708,7 +186712,7 @@
           "type": "string"
         },
         "mirror_overwrites_diverged_branches": {
-          "description": "Overwrite diverged branches on mirror update",
+          "description": "Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true",
           "type": [
             "null",
             "boolean"

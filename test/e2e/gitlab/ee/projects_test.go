@@ -71,6 +71,12 @@ func TestTargetBranchRules_Lifecycle_CreatesListsAndDeletes(t *testing.T) {
 // source is reached at the address GitLab has for itself inside the Docker
 // network, since the published one is not routable from the container.
 //
+// The configuration overwrites diverged branches, which is what makes a pull
+// mirror able to destroy this project's own commits, so the same call is made
+// twice: once unconfirmed, which the server must refuse without configuring
+// anything, and once with confirm. Both halves are asserted on every surface,
+// because the reserved key travels differently on each.
+//
 // Replaces: TestMeta_ProjectMirroring
 func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
 	e := harness.New(t)
@@ -85,9 +91,19 @@ func TestPullMirror_Lifecycle_ConfiguresStartsAndDisables(t *testing.T) {
 		refused := harness.ExpectToolError(s, actionPullMirrorGet, map[string]any{"project_id": project.IDParam()}, "not mirrored")
 		assertMentions(e, "the read of a project that is not mirrored", refused, "pull_mirror_configure", "pull_mirror_get")
 
+		unconfirmed := harness.ExpectToolError(s, actionPullMirrorConfigure, map[string]any{
+			"project_id": project.IDParam(), "enabled": true, "url": source,
+			"mirror_overwrites_diverged_branches": true,
+		}, "confirm=true")
+		assertMentions(e, "the unconfirmed arming of the diverged-branch overwrite", unconfirmed, "overwrite diverged branches")
+		harness.ExpectToolError(s, actionPullMirrorGet, map[string]any{"project_id": project.IDParam()}, "not mirrored")
+
+		// confirm is required because this configuration overwrites diverged
+		// branches: the guard in internal/tools/projects refuses it otherwise,
+		// on every surface, and the scenario sends what a caller must send.
 		configured := harness.Do[projects.PullMirrorOutput](s, actionPullMirrorConfigure, map[string]any{
 			"project_id": project.IDParam(), "enabled": true, "url": source, "mirror_trigger_builds": false,
-			"only_mirror_protected_branches": false, "mirror_overwrites_diverged_branches": true,
+			"only_mirror_protected_branches": false, "mirror_overwrites_diverged_branches": true, "confirm": true,
 		})
 		if !configured.Enabled || !strings.Contains(configured.URL, upstream.Path) {
 			e.T.Errorf("configure answered %+v, want an enabled mirror of %s", configured, upstream.Path)
