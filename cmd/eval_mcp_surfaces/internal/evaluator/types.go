@@ -56,8 +56,11 @@ type options struct {
 	// from a flag, the way the capability-access fields below are: it records
 	// what the catalog the model was shown was actually built for, and the
 	// report header states it. The zero value reports as unknown.
-	Deployment             deploymentFacts
-	DryRun                 bool
+	Deployment deploymentFacts
+	DryRun     bool
+	// AuditPrompts renders the stimulus rather than running anything, which
+	// is why it reaches no provider and writes no evaluation report.
+	AuditPrompts           bool
 	FixtureSmoke           bool
 	PublishDocs            bool
 	CheckDocs              bool

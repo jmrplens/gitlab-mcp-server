@@ -65,6 +65,13 @@ func Run() (runErr error) {
 	if err != nil {
 		return err
 	}
+	// The audit is answered here rather than in runImmediateMode because the
+	// stimulus it renders depends on the catalog: normalizeTasksForCatalog
+	// decides which tool and action each step expects on this surface, and a
+	// prompt built before that is not the prompt a run would send.
+	if opts.AuditPrompts {
+		return runPromptAudit(os.Stdout, opts, tasks)
+	}
 	if opts.DryRun {
 		if dryRunErr := runDryRunEvaluation(context.Background(), opts, tasks, catalog, routes); dryRunErr != nil {
 			return dryRunErr
@@ -190,9 +197,16 @@ func runImmediateMode(opts options) (bool, error) {
 	return false, nil
 }
 
+// resolveRunModels resolves the models a run will drive, and the paths its
+// artifacts go to.
+//
+// A dry run and a prompt audit both reach no provider, so neither resolves a
+// model; the audit additionally takes no default output path, because it
+// writes an evaluation report nowhere and an --out it was not given would
+// leave a dump under dist that nobody asked for.
 func resolveRunModels(opts options) (options, []modelSpec, error) {
 	var modelSpecs []modelSpec
-	if !opts.DryRun {
+	if !opts.DryRun && !opts.AuditPrompts {
 		var modelErr error
 		modelSpecs, modelErr = resolveModelSpecs(opts)
 		if modelErr != nil {
@@ -202,10 +216,10 @@ func resolveRunModels(opts options) (options, []modelSpec, error) {
 	} else if opts.Model == "" {
 		opts.Model = "none"
 	}
-	if opts.Output == "" {
+	if opts.Output == "" && !opts.AuditPrompts {
 		opts.Output = defaultOutputPath(opts.Model)
 	}
-	if opts.TraceDir == "" && !opts.DryRun {
+	if opts.TraceDir == "" && !opts.DryRun && !opts.AuditPrompts {
 		opts.TraceDir = defaultTraceDir(opts.Output)
 	}
 	return opts, modelSpecs, nil

@@ -20,8 +20,12 @@ const (
 	accessRequestedInactive    = "requested but not active"
 )
 
+// shouldWriteStartupReport reports whether a placeholder report is written
+// before the run starts. The prompt audit is excluded because it writes its own
+// artifact to that same path and evaluates nothing: a status report there would
+// be overwritten on success and would clobber the dump on failure.
 func shouldWriteStartupReport(opts options) bool {
-	return opts.Output != "" && !opts.FixturesOnly
+	return opts.Output != "" && !opts.FixturesOnly && !opts.AuditPrompts
 }
 
 func writeStartupReport(path string, opts options) error {

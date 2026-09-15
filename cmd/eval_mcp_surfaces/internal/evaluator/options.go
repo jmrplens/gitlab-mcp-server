@@ -113,6 +113,10 @@ func parseFlags() options {
 	flag.Float64Var(&opts.Pricing.CacheReadPerMTok, "cache-read-cost-per-mtok", 0, "Optional prompt-cache read price in USD per million tokens for cost estimates")
 	// --dry-run validates fixture routes without calling providers.
 	flag.BoolVar(&opts.DryRun, "dry-run", false, "Validate fixture routes without calling model providers")
+	// --audit-prompts renders the stimulus every selected case would be sent
+	// and reports which of it repeats that case's own answer key. It calls no
+	// provider and needs no GitLab; --out receives the full dump.
+	flag.BoolVar(&opts.AuditPrompts, "audit-prompts", false, "Render the system and task prompts for every selected case and report which of them repeat the case's own expected tool, action, required parameter names or confirm literal; writes the full prompt dump to --out when one is given")
 	// --fixture-smoke exercises fixture preparation without model calls.
 	flag.BoolVar(&opts.FixtureSmoke, "fixture-smoke", false, "With --dry-run, exercise live per-task fixture preparation through MCP without calling model providers")
 	// --publish-docs publishes reviewed reports into README and docs.
