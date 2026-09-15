@@ -471,6 +471,81 @@ func TestCases_NeedsCoverTheTierEveryStepAsks(t *testing.T) {
 	}
 }
 
+// adminModeScope is the PAT scope the catalog's scope filter reads, spelled
+// here so this rule and [gitlabtools.MetaToolScopes] are talking about the
+// same thing.
+const adminModeScope = "admin_mode"
+
+// TestCases_NeedsAdminWhereverTheScopeFilterWithholdsTheGroup is the rule
+// beside the tier one, against the other thing that can deny a case its action
+// before any model sees it.
+//
+// [gitlabtools.MetaToolScopes] withholds five catalog groups whole from a
+// token with no admin_mode, and the filter is applied to the catalog rather
+// than to registered tool names, so the removal reaches all three surfaces: on
+// dynamic and meta the group a caller would name is gone, and on individual
+// every tool projected from it is. A case naming one of those actions without
+// Needs.Admin therefore runs on a non-admin token against a surface that never
+// registered the action, and is scored as a model failure rather than skipped
+// by the harness.
+//
+// It is the same class of defect the tier rule catches, read from the other
+// side: there the instance cannot serve the action, here the server does not
+// offer it.
+func TestCases_NeedsAdminWhereverTheScopeFilterWithholdsTheGroup(t *testing.T) {
+	facts := catalog(t)
+	for _, one := range cases() {
+		t.Run(one.ID, func(t *testing.T) {
+			if one.Needs.Admin {
+				return
+			}
+			for index, oneStep := range one.key.Steps {
+				action, known := facts.actions[oneStep.Action]
+				if !known {
+					continue // reported by the step test
+				}
+				if !groupNeedsAdminMode(action.metaTool) {
+					continue
+				}
+				t.Errorf("step %d calls %s, whose catalog group %s the scope filter withholds from a "+
+					"token without %s, and the case does not declare Needs.Admin",
+					index+1, oneStep.Action, action.metaTool, adminModeScope)
+			}
+		})
+	}
+}
+
+// groupNeedsAdminMode reports whether the scope filter withholds a catalog
+// group from a token that does not administer the instance. It reads the
+// server's own map rather than a list here, so a group added to it is covered
+// by the rule without anybody remembering to widen this.
+func groupNeedsAdminMode(metaTool string) bool {
+	return slices.Contains(gitlabtools.MetaToolScopes[metaTool], adminModeScope)
+}
+
+// TestGroupNeedsAdminMode_ReadsTheServersOwnMap proves the predicate can say
+// both words, on a group the filter really withholds and one it does not. A
+// rule whose predicate has never answered "yes" in a test is a rule nobody has
+// reason to believe holds the corpus to anything.
+func TestGroupNeedsAdminMode_ReadsTheServersOwnMap(t *testing.T) {
+	tests := []struct {
+		name     string
+		metaTool string
+		want     bool
+	}{
+		{name: "a withheld group", metaTool: "gitlab_admin", want: true},
+		{name: "a group anybody may call", metaTool: "gitlab_issue"},
+		{name: "no group at all", metaTool: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := groupNeedsAdminMode(tc.metaTool); got != tc.want {
+				t.Errorf("groupNeedsAdminMode(%q) = %t, want %t", tc.metaTool, got, tc.want)
+			}
+		})
+	}
+}
+
 // tierRank orders the three tiers, and returns -1 for anything else.
 func tierRank(tier Tier) int {
 	switch tier {

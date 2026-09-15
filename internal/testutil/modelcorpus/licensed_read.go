@@ -53,14 +53,14 @@ func licensedReadCases() []Case {
 			ID:     "MT-076",
 			Prompt: "List the enterprise users of group `{{ .Facts.group_path }}`.",
 			Recipe: RecipeWorld,
-			Needs:  Needs{Tier: TierPremium},
+			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key:    Key{Steps: []Step{step("enterprise_user.list", group())}},
 		},
 		{
 			ID:     "MT-078",
 			Prompt: "List the Geo sites of this instance.",
 			Recipe: RecipeWorld,
-			Needs:  Needs{Tier: TierPremium},
+			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key:    Key{Steps: []Step{step("geo.list")}},
 		},
 		{
@@ -101,7 +101,7 @@ func licensedReadCases() []Case {
 			ID:     "MT-087",
 			Prompt: "List the project aliases on this instance.",
 			Recipe: RecipeWorld,
-			Needs:  Needs{Tier: TierPremium},
+			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key:    Key{Steps: []Step{step("project_alias.list")}},
 		},
 		{
@@ -190,7 +190,7 @@ func licensedReadCases() []Case {
 			ID:     "MT-124",
 			Prompt: "Read enterprise user `{{ .Facts.user_id }}` of group `{{ .Facts.group_path }}`.",
 			Recipe: RecipeEnterpriseUser,
-			Needs:  Needs{Tier: TierPremium},
+			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key: Key{Steps: []Step{
 				step("enterprise_user.get", group(), req("user_id", fact(FactUserID))),
 			}},
@@ -451,7 +451,7 @@ func licensedReadCases() []Case {
 				"there, and the most recent audit event of the group. On self-managed GitLab ask for the " +
 				"instance-wide member roles; the group-level ones are deprecated there.",
 			Recipe: RecipeWorld,
-			Needs:  Needs{Tier: TierUltimate},
+			Needs:  Needs{Tier: TierUltimate, Admin: true},
 			key: Key{Steps: []Step{
 				step("member_role.list_instance"),
 				step("enterprise_user.list", group(), opt("active", authored())),

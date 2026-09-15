@@ -87,14 +87,14 @@ func licensedMutatingCases() []Case {
 		},
 		{
 			ID: "MT-130",
-			Prompt: "Create a Geo secondary site called `eval-geo` at `https://geo.example.com`, and leave " +
-				"it switched off.",
-			Recipe: RecipeWorld,
+			Prompt: "Create a Geo secondary site called `{{ .Facts.geo_site_name }}` at " +
+				"`{{ .Facts.geo_site_url }}`, and leave it switched off.",
+			Recipe: RecipeGeoSiteName,
 			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key: Key{Steps: []Step{
 				step("geo.create",
-					req("name", literal("eval-geo")),
-					req("url", literal("https://geo.example.com")),
+					req("name", fact(FactGeoSiteName)),
+					req("url", fact(FactGeoSiteURL)),
 					opt("enabled", authored())),
 			}},
 		},
@@ -290,26 +290,28 @@ func licensedMutatingCases() []Case {
 			}},
 		},
 		{
-			ID:     "MT-170",
-			Prompt: "Create the project alias `eval-alias` for project `{{ .Facts.project_id }}`.",
-			Recipe: RecipeProject,
+			ID: "MT-170",
+			Prompt: "Create the project alias `{{ .Facts.project_alias_name }}` for project " +
+				"`{{ .Facts.project_id }}`.",
+			Recipe: RecipeProjectAliasName,
 			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key: Key{Steps: []Step{
 				step("project_alias.create",
-					req("name", literal("eval-alias")),
+					req("name", fact(FactProjectAliasName)),
 					req("project_id", fact(FactProjectID))),
 			}},
 		},
 		{
 			ID: "MT-175",
-			Prompt: "Create an instance service account called `eval-service-account`, signing in as " +
-				"`eval-service-account`.",
-			Recipe: RecipeWorld,
+			Prompt: "Create an instance service account called " +
+				"`{{ .Facts.service_account_username }}`, signing in as " +
+				"`{{ .Facts.service_account_username }}`.",
+			Recipe: RecipeServiceAccountName,
 			Needs:  Needs{Admin: true},
 			key: Key{Steps: []Step{
 				step("user.create_service_account",
-					req("name", literal("eval-service-account")),
-					req("username", literal("eval-service-account"))),
+					req("name", fact(FactServiceAccountUsername)),
+					req("username", fact(FactServiceAccountUsername))),
 			}},
 		},
 		{

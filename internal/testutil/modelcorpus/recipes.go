@@ -165,6 +165,11 @@ const (
 	// RecipeGroupServiceAccount is a group with a service account and a
 	// token for it.
 	RecipeGroupServiceAccount Recipe = "group_service_account"
+	// RecipeServiceAccountName is a service account username nobody on the
+	// instance signs in as, for the case that creates an instance service
+	// account. A username is unique instance-wide, so it cannot be a
+	// literal.
+	RecipeServiceAccountName Recipe = "service_account_name"
 	// RecipeGroupProtectedBranch is a group with a protected branch rule.
 	RecipeGroupProtectedBranch Recipe = "group_protected_branch"
 	// RecipeGroupProtectedEnvironment is a group with a protected
@@ -172,6 +177,13 @@ const (
 	RecipeGroupProtectedEnvironment Recipe = "group_protected_environment"
 	// RecipeGeoSite is a registered Geo site.
 	RecipeGeoSite Recipe = "geo_site"
+	// RecipeGeoSiteName is a Geo site name and URL no site on the instance
+	// holds, which is the opposite of [RecipeGeoSite]: that one registers a
+	// site, this one reserves what a case may register one as. GitLab holds
+	// both a site's name and its URL unique instance-wide, so neither can
+	// be a literal: one case runs three times against one instance, and
+	// every attempt after the first would be refused.
+	RecipeGeoSiteName Recipe = "geo_site_name"
 	// RecipeScimIdentity is a group with a SCIM identity.
 	RecipeScimIdentity Recipe = "scim_identity"
 	// RecipeLDAPLink is a group with an LDAP link.
@@ -186,6 +198,11 @@ const (
 	RecipeMemberRole Recipe = "member_role"
 	// RecipeProjectAlias is a project with an alias.
 	RecipeProjectAlias Recipe = "project_alias"
+	// RecipeProjectAliasName is a project and an alias name nothing on the
+	// instance has claimed, for the case that creates one. An alias names a
+	// project instance-wide, so it cannot be a literal for the reason
+	// [RecipeInstanceVariable]'s key cannot.
+	RecipeProjectAliasName Recipe = "project_alias_name"
 	// RecipeExternalStatusCheck is a project with an external status check
 	// and a merge request the check applies to.
 	RecipeExternalStatusCheck Recipe = "external_status_check"
@@ -297,6 +314,8 @@ const (
 	FactFeatureFlagName         = "feature_flag_name"
 	FactFilePath                = "file_path"
 	FactGeoSiteID               = "geo_site_id"
+	FactGeoSiteName             = "geo_site_name"
+	FactGeoSiteURL              = "geo_site_url"
 	FactGroupAccessTokenID      = "group_access_token_id"
 	FactHookID                  = "hook_id"
 	FactJobTokenTargetProjectID = "job_token_target_project_id"
@@ -318,6 +337,7 @@ const (
 	FactScimUID                 = "scim_uid"
 	FactServiceAccountID        = "service_account_id"
 	FactServiceAccountTokenID   = "service_account_token_id"
+	FactServiceAccountUsername  = "service_account_username"
 	FactSSHCertificateID        = "ssh_certificate_id"
 	FactStorageMoveID           = "storage_move_id"
 	FactTagName                 = "tag_name"
@@ -415,6 +435,8 @@ var recipeFacts = map[Recipe][]string{
 	RecipeGroupProtectedBranch:      withGroupFacts(FactProtectedBranchName),
 	RecipeGroupProtectedEnvironment: withGroupFacts(FactProtectedEnvironment),
 	RecipeGeoSite:                   {FactGeoSiteID},
+	RecipeGeoSiteName:               {FactGeoSiteName, FactGeoSiteURL},
+	RecipeServiceAccountName:        {FactServiceAccountUsername},
 	RecipeScimIdentity:              withGroupFacts(FactScimUID),
 	RecipeLDAPLink:                  withGroupFacts(FactLDAPProvider),
 	RecipeSAMLLink:                  withGroupFacts(FactSAMLGroupName),
@@ -422,6 +444,7 @@ var recipeFacts = map[Recipe][]string{
 	RecipeGroupWikiPage:             withGroupFacts(FactWikiSlug),
 	RecipeMemberRole:                withGroupFacts(FactMemberRoleID),
 	RecipeProjectAlias:              withProjectFacts(FactProjectAliasName),
+	RecipeProjectAliasName:          withProjectFacts(FactProjectAliasName),
 	RecipeExternalStatusCheck: withProjectFacts(
 		FactMergeRequestIID, FactExternalStatusCheckID, FactCommitSHA,
 	),
@@ -465,9 +488,10 @@ func Recipes() []Recipe {
 		RecipeEpic, RecipeEpicIssue, RecipePushRule,
 		RecipeProjectServiceAccount, RecipeGroupServiceAccount,
 		RecipeGroupProtectedBranch, RecipeGroupProtectedEnvironment,
-		RecipeGeoSite, RecipeScimIdentity, RecipeLDAPLink, RecipeSAMLLink,
+		RecipeGeoSite, RecipeGeoSiteName, RecipeServiceAccountName,
+		RecipeScimIdentity, RecipeLDAPLink, RecipeSAMLLink,
 		RecipeGroupSSHCertificate, RecipeGroupWikiPage, RecipeMemberRole,
-		RecipeProjectAlias, RecipeExternalStatusCheck,
+		RecipeProjectAlias, RecipeProjectAliasName, RecipeExternalStatusCheck,
 		RecipeMergeTrainEntry, RecipeStorageMove, RecipeDependencyExport,
 		RecipeInstanceAuditEvent, RecipeAttestation, RecipeVulnerability,
 		RecipeEnterpriseUser, RecipeGroupAccessToken, RecipeModelVersion,

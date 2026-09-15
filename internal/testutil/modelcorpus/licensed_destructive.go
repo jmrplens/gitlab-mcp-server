@@ -46,7 +46,7 @@ func licensedDestructiveCases() []Case {
 			Prompt: "Disable two-factor authentication for enterprise user `{{ .Facts.user_id }}` of group " +
 				"`{{ .Facts.group_path }}`.",
 			Recipe: RecipeEnterpriseUser,
-			Needs:  Needs{Tier: TierPremium},
+			Needs:  Needs{Tier: TierPremium, Admin: true},
 			key: Key{Steps: []Step{
 				step("enterprise_user.disable_2fa", group(), req("user_id", fact(FactUserID))),
 			}},

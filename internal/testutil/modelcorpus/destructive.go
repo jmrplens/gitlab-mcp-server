@@ -349,6 +349,7 @@ func destructiveCases() []Case {
 			Prompt: "Unlock Terraform state `{{ .Facts.terraform_state_name }}` in project " +
 				"`{{ .Facts.project_path }}`.",
 			Recipe: RecipeTerraformState,
+			Needs:  Needs{Admin: true},
 			key: Key{Steps: []Step{
 				step("admin.terraform_state_unlock", project(),
 					req("name", fact(FactTerraformStateName))),
@@ -409,11 +410,6 @@ func destructiveCases() []Case {
 			}},
 		},
 		{
-			// The deletion binds nothing. admin.broadcast_message_create
-			// publishes only the message it created, so there is no field
-			// of the earlier result a later step could bind to, and an
-			// argument the corpus cannot compare is an argument it does not
-			// declare.
 			ID: "MS-009",
 			Prompt: "Schedule and then withdraw an instance maintenance banner: read the current instance " +
 				"settings, put up a broadcast message saying `Evaluation maintenance`, then take down the " +
@@ -422,8 +418,12 @@ func destructiveCases() []Case {
 			Needs:  Needs{Admin: true},
 			key: Key{Steps: []Step{
 				step("admin.settings_get"),
-				step("admin.broadcast_message_create", req("message", literal("Evaluation maintenance"))),
-				step("admin.broadcast_message_delete"),
+				{
+					Action:   "admin.broadcast_message_create",
+					Args:     []Arg{req("message", literal("Evaluation maintenance"))},
+					Produces: []string{"message.id"},
+				},
+				step("admin.broadcast_message_delete", req("id", produced(2, "message.id"))),
 			}},
 		},
 		{
