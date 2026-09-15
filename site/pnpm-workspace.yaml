@@ -4,6 +4,15 @@ packages:
 overrides:
   esbuild: 0.28.1
   lodash: 4.18.1
+  # lodash-es is the same code under another name and carries the same two
+  # advisories: code injection through _.template (GHSA-r5fr-rjxr-66jc, high)
+  # and prototype pollution through _.unset (GHSA-f23m-r3pf-42rh), both
+  # patched in 4.18.0. It arrived with mermaid 12, which reaches it through
+  # chevrotain, and mermaid 11 pulled neither: the audit went from zero
+  # advisories to two on that bump alone. Pinned rather than the bump reverted,
+  # because the fix is a version that exists and the alternative is holding a
+  # rendering dependency back for a transitive parser's dependency.
+  lodash-es: 4.18.1
   yaml: 2.9.0
   yaml-language-server@1.20.0>yaml: 2.9.0
   # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp) and unbounded-expansion DoS
@@ -51,6 +60,16 @@ auditConfig:
 peerDependencyRules:
   allowedVersions:
     typescript: ">=6.0.0"
+
+# TypeScript stays on 6.x, and the caret in package.json is not the reason: a
+# dependency sweep that reaches for the latest will take 7 and the site will
+# still build, because what breaks is the gate rather than the build.
+# `astro check`, which `pnpm run lint` runs first and CI runs as Site lint,
+# refuses outright: "The TypeScript module loaded (found 7.0.2) does not expose
+# the programmatic API that astro check relies on. TypeScript's native compiler
+# (7.0 and later) does not ship this API yet." Tracked upstream at
+# https://github.com/withastro/roadmap/discussions/1321; raise the floor when
+# that lands, and not before.
 
 allowBuilds:
   esbuild: true
