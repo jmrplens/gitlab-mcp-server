@@ -519,7 +519,11 @@ func promptIdentifierContext(text string, start, end int) bool {
 	if after := text[end]; after == '.' {
 		return end+1 < len(text) && promptIdentifierByte(text[end+1])
 	}
-	return strings.IndexByte(`"}:`, text[end]) >= 0
+	// An equals sign is the other way a case writes a parameter down. A
+	// sentence asking for `auto_merge=true` or a list `first=5` at a time is
+	// naming the field as surely as a JSON key does, and prose does not spell
+	// an equation that way.
+	return strings.IndexByte(`"}:=`, text[end]) >= 0
 }
 
 // promptIdentifierByte reports whether b can be part of an identifier.
