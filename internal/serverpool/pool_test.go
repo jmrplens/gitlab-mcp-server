@@ -2471,6 +2471,79 @@ func TestIdentityFor_UnresolvableUser_ReportsUnknown(t *testing.T) {
 	}
 }
 
+// TestAdmitted_AnswersOnlyForAnEntryTheNextRequestWouldReuse verifies the
+// lookup the HTTP front door exempts from its per-address authentication
+// budget.
+//
+// The exemption is sound only while this answers "yes" exclusively for a
+// credential the next request would be served from memory. Every "yes" it gets
+// wrong is a request the front door lets past a block and then sends to GitLab,
+// which is the cost the block exists to prevent — so an entry GitLab has since
+// refused, and one past the revalidation ceiling, both have to read as "no":
+// each is dropped and rebuilt on the next request, and a rebuild is a round
+// trip.
+func TestAdmitted_AnswersOnlyForAnEntryTheNextRequestWouldReuse(t *testing.T) {
+	var userCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		userCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":4242,"username":"pooled-user"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	newPool := func(opts ...Option) *ServerPool {
+		return New(testConfig(srv.URL), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+			return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+		}, opts...)
+	}
+
+	pool := newPool()
+	if pool.Admitted("glpat-unknown", srv.URL) {
+		t.Error("a credential the pool has never built an entry for must not be admitted")
+	}
+
+	entry, err := pool.GetOrCreateEntry("glpat-known", srv.URL, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry: %v", err)
+	}
+	before := userCalls.Load()
+	if !pool.Admitted("glpat-known", srv.URL) {
+		t.Fatal("a credential the pool just built an entry for must be admitted")
+	}
+	if got := userCalls.Load(); got != before {
+		t.Errorf("the lookup made %d upstream call(s); it must be a map read", got-before)
+	}
+
+	if pool.Admitted("glpat-known", "https://elsewhere.example.com") {
+		t.Error("an entry admits its own instance only: a token means nothing away from the GitLab that issued it")
+	}
+	if pool.Admitted("", srv.URL) || pool.Admitted("glpat-known", "") {
+		t.Error("half a key is not a credential the pool holds")
+	}
+
+	// GitLab refused this entry's credential on a call. The next request
+	// rebuilds, so this one is no longer free.
+	entry.rejected.Store(true)
+	if pool.Admitted("glpat-known", srv.URL) {
+		t.Error("an entry whose credential GitLab has refused must not be admitted")
+	}
+
+	stalePool := newPool(WithMaxCredentialAge(time.Nanosecond))
+	if _, staleErr := stalePool.GetOrCreateEntry("glpat-known", srv.URL, nil); staleErr != nil {
+		t.Fatalf("GetOrCreateEntry on the stale-ceiling pool: %v", staleErr)
+	}
+	time.Sleep(time.Millisecond)
+	if stalePool.Admitted("glpat-known", srv.URL) {
+		t.Error("an entry past the revalidation ceiling must not be admitted; the next request re-verifies it")
+	}
+}
+
 // TestWithBaseContext_ShutdownReleasesEntryConstruction verifies that the
 // GitLab lookups which build an entry are bounded by a lifetime the caller
 // owns, so shutdown does not leave them running.

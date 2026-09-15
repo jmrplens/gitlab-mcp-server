@@ -461,6 +461,64 @@ func TestGate_FailureBudgetIsPerAddress(t *testing.T) {
 	}
 }
 
+// TestGate_BlockedAddressStillServesAnAdmittedCredential drives, on the wire,
+// the two halves of what an address block has to mean.
+//
+// The budget is keyed on the client address, and an address is not a client: a
+// corporate NAT, a campus, a mobile carrier and a reverse proxy running without
+// --trusted-proxy-header all present one address for many people. While the
+// block was consulted before the credential was read, one of them relaying
+// invented tokens answered 429 to all the others for the rest of the window,
+// including a neighbor whose token this server had verified before the spray
+// began and was serving from a pool entry.
+//
+// So both of these have to hold at once, and only driving the real chain shows
+// it: the sprayer stays cut off, because every credential the pool does not
+// already hold is still refused, and the neighbor is served, because
+// recognizing its credential is a map read that reaches no GitLab.
+func TestGate_BlockedAddressStillServesAnAdmittedCredential(t *testing.T) {
+	const neighbor = "glpat-neighbor"
+	// A GitLab that accepts exactly one credential and answers 401 to the
+	// rest, which is what charges the budget: an unreachable instance is not a
+	// verdict on a token and is deliberately not counted.
+	gitlab := startScopedFakeGitLab(t, map[string][]string{neighbor: {"api"}})
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	post := func(token string) response {
+		return srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": token}))
+	}
+
+	// The neighbor authenticates before the spray starts. That is the whole
+	// of its claim on the exemption.
+	if warm := post(neighbor); warm.status != http.StatusOK {
+		t.Fatalf("the neighbor's first request = %d, want %d: %s", warm.status, http.StatusOK, truncate(warm.body))
+	}
+
+	var blocked bool
+	for i := range 20 {
+		if post("glpat-invented-"+strconv.Itoa(i)).status == http.StatusTooManyRequests {
+			blocked = true
+			break
+		}
+	}
+	if !blocked {
+		t.Fatal("a stream of invented tokens from one address was never cut off")
+	}
+
+	if still := post("glpat-invented-past-the-budget"); still.status != http.StatusTooManyRequests {
+		t.Errorf("an unknown credential from the blocked address = %d, want %d — the spray is no longer bounded",
+			still.status, http.StatusTooManyRequests)
+	}
+
+	served := post(neighbor)
+	if served.status == http.StatusTooManyRequests {
+		t.Fatalf("a credential this deployment had already admitted was refused 429 for its neighbor's spending: %s", truncate(served.body))
+	}
+	if served.status != http.StatusOK {
+		t.Fatalf("the neighbor's request during the block = %d, want %d: %s", served.status, http.StatusOK, truncate(served.body))
+	}
+}
+
 // gateAttemptsUntilBlocked issues unauthenticated requests, each claiming the
 // address claimedFor returns for it, and reports how many it took to be cut off
 // with 429. It returns 0 when limit requests went by without one, which is a

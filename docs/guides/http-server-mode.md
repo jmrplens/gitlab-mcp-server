@@ -428,6 +428,8 @@ Every request that cannot be served is classified before it reaches the MCP hand
 | More than 10 auth failures from one IP within a minute | `429`  | `-42900`      | `Retry-After`      |
 | GitLab session could not be built for the token        | `503`  | `-50300`      | —                  |
 
+The `429` row is about the credential, not only about the address. A request carrying one this deployment is **already serving** is answered normally while the address is blocked: in legacy mode that means a credential the session pool holds an entry for, in `--auth-mode=oauth` one the verified-identity cache holds. Recognizing either is a map read that reaches no GitLab, so the budget still bounds what it exists to bound, and one client behind a shared address (a NAT, a campus, a carrier, or a proxy running without `--trusted-proxy-header`) relaying invented tokens no longer cuts off the neighbours who authenticated before it started. Every credential the deployment does not already hold stays refused for the rest of the window.
+
 All of them return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
 
 #### Credential Verification

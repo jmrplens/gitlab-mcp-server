@@ -671,10 +671,13 @@ pointed at your private CA is the pairing for `--tls-cert` on the listener.
 
 A unix socket has no peer address. The authentication failure budget is keyed on
 the caller's address, so on a socket **every caller shares one budget**: ten
-failed authentications a minute from anywhere behind the proxy answer `429` to
-everybody for a minute. `--trusted-proxy-header` cannot repair it either, since
-the header is believed only from a peer that parses as an address, and no socket
-peer does.
+failed authentications a minute from anywhere behind the proxy spend it for
+everybody for a minute. A caller whose credential this deployment is already
+serving is still served while it is spent, so the damage is bounded to callers
+authenticating for the first time inside that window; every credential the
+server does not already hold is answered `429`.
+`--trusted-proxy-header` cannot repair it either, since the header is believed
+only from a peer that parses as an address, and no socket peer does.
 
 The alternative is one line: bind loopback TCP instead and tell the server who
 the proxy is.

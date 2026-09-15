@@ -322,6 +322,102 @@ func TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter(t *testing.
 	}
 }
 
+// gateTokenGatedGitLab is a stub instance that accepts exactly one credential
+// and answers 401 to every other, counting the credential probes it is asked
+// for. The count is what makes "the block cost nothing upstream" observable:
+// every probe is a request this deployment would be making to GitLab from its
+// own address.
+func gateTokenGatedGitLab(t *testing.T, accepted string, probes *atomic.Int64) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		probes.Add(1)
+		if r.Header.Get("PRIVATE-TOKEN") != accepted {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"username":"neighbor"}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// TestMCPServerGate_BlockedAddress_StillServesACredentialThePoolHolds pins the
+// two halves of what an address block means, which used to be one half.
+//
+// The budget is keyed on the address, and an address is not a client: a NAT, a
+// campus, a carrier and a proxy without --trusted-proxy-header all present one
+// for many people. Because the block was consulted before the credential was
+// read, one client relaying invented tokens answered 429 to every neighbor for
+// the rest of the window, a neighbor holding a token this server had already
+// verified and was serving from a pool entry included.
+//
+// So the block must still refuse every credential the pool does not hold —
+// which is the whole of what a sprayer can send, and the property the budget
+// was built for — while a credential it does hold is served. Neither answer may
+// reach GitLab, and the probe count is what says so: the exemption is a map
+// read, not a second chance to spend the deployment's standing upstream.
+func TestMCPServerGate_BlockedAddress_StillServesACredentialThePoolHolds(t *testing.T) {
+	var probes atomic.Int64
+	gate := newGateAgainst(t, okFactory, gateTokenGatedGitLab(t, gateTestToken, &probes))
+
+	var reached atomic.Int64
+	handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	post := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// The neighbor authenticates before the spray begins. That is the whole
+	// of its claim: its credential was verified and is in the pool.
+	if rec := post(gateTestToken); rec.Code != http.StatusOK {
+		t.Fatalf("the neighbor's first request = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	// The sprayer spends the shared address's budget.
+	for i := range authFailureLimit {
+		if rec := post("glpat-invented-" + strconv.Itoa(i)); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("spray attempt %d = %d, want %d", i, rec.Code, http.StatusUnauthorized)
+		}
+	}
+
+	spent := probes.Load()
+
+	// An invented token from the blocked address is refused, and refused
+	// without asking GitLab about it.
+	blocked := post("glpat-invented-past-the-budget")
+	if blocked.Code != http.StatusTooManyRequests {
+		t.Fatalf("an unknown credential from a blocked address = %d, want %d — the budget no longer bounds the spray",
+			blocked.Code, http.StatusTooManyRequests)
+	}
+	if got := probes.Load(); got != spent {
+		t.Errorf("the blocked request cost %d upstream probe(s); a block must cost nothing", got-spent)
+	}
+
+	// The neighbor, on the same address, is still served.
+	served := post(gateTestToken)
+	if served.Code == http.StatusTooManyRequests {
+		t.Fatalf("a credential the pool already holds was refused 429 for its neighbor's spending")
+	}
+	if served.Code != http.StatusOK {
+		t.Fatalf("the neighbor's request = %d, want %d", served.Code, http.StatusOK)
+	}
+	if reached.Load() != 2 {
+		t.Errorf("the handler was reached %d time(s), want 2 — once before the block and once during it", reached.Load())
+	}
+	if got := probes.Load(); got != spent {
+		t.Errorf("serving the admitted credential cost %d upstream probe(s); it is a pool hit, not a verification", got-spent)
+	}
+}
+
 // TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards both halves of the
 // non-POST rule.
 //

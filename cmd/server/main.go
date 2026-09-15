@@ -3327,7 +3327,13 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		TermsOfService: cfg.ResourceTermsURI,
 	}
 	guard := &bearerGuard{
-		verify:             verifier,
+		verify: verifier,
+		// The cache the verifier writes to, read back by the guard for one
+		// question only: whether this deployment is already serving the
+		// presented credential. That is what keeps an address block from
+		// refusing a caller whose token was verified before the address was
+		// spent, and it asks nothing the verifier would not have asked.
+		verified:           tokenCache.Get,
 		resolveInstance:    resolveInstance,
 		instances:          cfg.InstanceURLs(),
 		rejected:           rejectedTokens,

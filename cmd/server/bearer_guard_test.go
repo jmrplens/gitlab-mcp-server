@@ -168,6 +168,108 @@ func TestBearerGuard_RepeatedFailures_BlockTheAddress(t *testing.T) {
 	}
 }
 
+// TestBearerGuard_BlockedAddress_StillServesATokenAlreadyVerified pins the
+// oauth-mode half of what an address block refuses: an authentication, not an
+// address.
+//
+// The budget is keyed on the address, and behind a NAT, a campus, a carrier or
+// a proxy without --trusted-proxy-header one address is many people. Consulting
+// the block before the credential was read therefore answered 429 to a caller
+// whose token this deployment had verified minutes earlier and was holding in
+// its token cache, because somebody sharing their address was spraying.
+//
+// The exemption is exactly that cache, so it is worth nothing to the sprayer:
+// every token the cache does not hold stays refused, and the refusal still
+// costs no upstream call, which is what the budget exists to bound. The stub
+// verifier reads the same cache first, as the real one does, so "no upstream
+// call" is measured rather than asserted.
+func TestBearerGuard_BlockedAddress_StillServesATokenAlreadyVerified(t *testing.T) {
+	t.Parallel()
+
+	const verifiedToken = "gloas-neighbor"
+	cached := map[string]*auth.TokenInfo{
+		verifiedToken: {UserID: "7", Scopes: []string{oauth.ScopeAPI}, Expiration: time.Now().Add(time.Hour)},
+	}
+
+	var upstreamCalls atomic.Int32
+	g := newTestGuard(func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		if info, ok := cached[token]; ok {
+			return info, nil
+		}
+		upstreamCalls.Add(1)
+		return nil, auth.ErrInvalidToken
+	})
+	g.verified = func(_, token string) (*auth.TokenInfo, bool) {
+		info, ok := cached[token]
+		return info, ok
+	}
+
+	// The neighbor is served before the spray begins, which is what puts its
+	// identity in the cache in the first place.
+	if failure := g.check(guardRequest(t, verifiedToken)); failure != nil {
+		t.Fatalf("the neighbor's first request was refused: %+v", failure)
+	}
+
+	// The sprayer spends the shared address's budget. Distinct tokens, so the
+	// rejection cache cannot absorb them and only the limiter can.
+	for i := range 4 {
+		if failure := g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i)))); failure == nil {
+			t.Fatalf("spray attempt %d was admitted", i)
+		}
+	}
+
+	spent := upstreamCalls.Load()
+
+	blocked := g.check(guardRequest(t, "gloas-invented-past-the-budget"))
+	if blocked == nil || blocked.status != http.StatusTooManyRequests {
+		t.Fatalf("an unverified token from a blocked address = %+v, want 429 — the budget no longer bounds the spray", blocked)
+	}
+	if got := upstreamCalls.Load(); got != spent {
+		t.Errorf("the blocked request cost %d upstream call(s); a block must cost nothing", got-spent)
+	}
+
+	if failure := g.check(guardRequest(t, verifiedToken)); failure != nil {
+		t.Fatalf("a token this deployment had already verified was refused for its neighbor's spending: %+v", failure)
+	}
+	if got := upstreamCalls.Load(); got != spent {
+		t.Errorf("serving the verified token cost %d upstream call(s); it is a cache hit, not a verification", got-spent)
+	}
+}
+
+// TestBearerGuard_BlockedAddress_RefusesAVerifiedTokenThatIsUnderScoped keeps
+// the exemption to what it claims to be: a credential this deployment is
+// already serving.
+//
+// A token the instance vouches for but that carries too little scope is
+// answered 403 whenever the address is clear, so it is not one this deployment
+// serves, and a block must go on covering it. Reading the cache alone would
+// have admitted it, since the cache holds every identity GitLab returned.
+func TestBearerGuard_BlockedAddress_RefusesAVerifiedTokenThatIsUnderScoped(t *testing.T) {
+	t.Parallel()
+
+	const underScoped = "gloas-under-scoped"
+	cached := map[string]*auth.TokenInfo{
+		underScoped: {UserID: "7", Scopes: []string{"read_user"}, Expiration: time.Now().Add(time.Hour)},
+	}
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, auth.ErrInvalidToken
+	})
+	g.verified = func(_, token string) (*auth.TokenInfo, bool) {
+		info, ok := cached[token]
+		return info, ok
+	}
+
+	for i := range 4 {
+		g.check(guardRequest(t, "gloas-invented-"+string(rune('a'+i))))
+	}
+
+	failure := g.check(guardRequest(t, underScoped))
+	if failure == nil || failure.status != http.StatusTooManyRequests {
+		t.Fatalf("an under-scoped token = %+v, want 429: the block covers every credential this deployment does not serve", failure)
+	}
+}
+
 // TestBearerGuard_BlockedAddress_AdvertisesRetryAfter verifies that a blocked
 // caller is told when to come back rather than left to guess.
 func TestBearerGuard_BlockedAddress_AdvertisesRetryAfter(t *testing.T) {

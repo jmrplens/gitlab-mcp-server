@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -987,6 +988,59 @@ func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
 		if strings.Contains(challenge, `error="invalid_token"`) {
 			t.Errorf("challenge %q tells the client to discard a working credential", challenge)
 		}
+	}
+}
+
+// TestOAuth_BlockedAddressStillServesATokenAlreadyVerified is the oauth-mode
+// counterpart of the legacy gate's case, and it has to be driven separately
+// because the two layers make the decision independently: the bearer guard runs
+// in front of the gate, so in oauth mode a blocked request never reaches the
+// gate's exemption at all.
+//
+// Behind a NAT, a campus, a carrier or a proxy without --trusted-proxy-header,
+// one address is many people, and the block used to be consulted before the
+// credential was read. A caller whose token this deployment had verified
+// minutes earlier was therefore answered 429 because somebody sharing their
+// address was spraying invented ones.
+//
+// What the guard exempts is its verified-token cache, so the spray gains
+// nothing: a token that cache does not hold stays refused, and refusing it
+// still costs no upstream verification.
+func TestOAuth_BlockedAddressStillServesATokenAlreadyVerified(t *testing.T) {
+	const neighbor = "gloas-neighbor"
+	gitlab := startScopedFakeGitLab(t, map[string][]string{neighbor: {"api"}})
+	srv := oauthServer(t, gitlab.url)
+
+	post := func(token string) response {
+		return srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + token}))
+	}
+
+	if warm := post(neighbor); warm.status != http.StatusOK {
+		t.Fatalf("the neighbor's first request = %d, want %d: %s", warm.status, http.StatusOK, truncate(warm.body))
+	}
+
+	var blocked bool
+	for i := range 20 {
+		if post("gloas-invented-"+strconv.Itoa(i)).status == http.StatusTooManyRequests {
+			blocked = true
+			break
+		}
+	}
+	if !blocked {
+		t.Fatal("a stream of invented bearer tokens from one address was never cut off")
+	}
+
+	if still := post("gloas-invented-past-the-budget"); still.status != http.StatusTooManyRequests {
+		t.Errorf("an unverified token from the blocked address = %d, want %d — the spray is no longer bounded",
+			still.status, http.StatusTooManyRequests)
+	}
+
+	served := post(neighbor)
+	if served.status == http.StatusTooManyRequests {
+		t.Fatalf("a token this deployment had already verified was refused 429 for its neighbor's spending: %s", truncate(served.body))
+	}
+	if served.status != http.StatusOK {
+		t.Fatalf("the neighbor's request during the block = %d, want %d: %s", served.status, http.StatusOK, truncate(served.body))
 	}
 }
 
