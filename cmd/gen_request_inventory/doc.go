@@ -37,8 +37,16 @@
 // follows this one, and a response our output struct misreads can only be
 // caught by a real instance.
 //
+// # What it does not do
+//
+// It never records. The shards are a byproduct of a suite run, and this merges
+// whatever run left them, which is why the summary says when they were
+// written: the comparison is with that run, and it is a statement about the
+// tree as it stands only when the recording was made from it.
+//
 // Usage:
 //
+//	make record-request-inventory                    # record a run, nothing else
 //	make gen-request-inventory                       # record and rewrite
-//	go run ./cmd/gen_request_inventory/ -check       # fail when stale
+//	go run ./cmd/gen_request_inventory/ -check       # fail when stale, merging the last recording
 package main

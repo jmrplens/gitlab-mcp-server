@@ -10,12 +10,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/requestinventory"
 )
@@ -45,18 +47,81 @@ func TestReadShards_TwoShards_ReadsEveryLine(t *testing.T) {
 		t.Fatalf("Mkdir error = %v", err)
 	}
 
-	records, err := readShards(dir)
+	recorded, err := readShards(dir)
 	if err != nil {
 		t.Fatalf("readShards error = %v", err)
 	}
-	if len(records) != 3 {
-		t.Fatalf("read %d record(s), want 3: %+v", len(records), records)
+	if len(recorded.records) != 3 {
+		t.Fatalf("read %d record(s), want 3: %+v", len(recorded.records), recorded.records)
+	}
+	if recorded.written.IsZero() {
+		t.Error("the recording carries no write time, so a check cannot say which run it is comparing against")
+	}
+}
+
+// TestReadShards_TwoShards_CarriesTheLatestWriteTime verifies that the
+// recording reports when it was made and takes the newest shard's time, since
+// the shards of one run are written as each test process reaches its first
+// request and the run ends with the last of them.
+//
+// The newest shard is the one read first, which is the order that matters:
+// ReadDir walks the directory by name, so a rule that kept the last time it
+// saw would pass on shards that happen to be written in order and report a
+// run as older than it was on any other arrangement.
+func TestReadShards_TwoShards_CarriesTheLatestWriteTime(t *testing.T) {
+	dir := t.TempDir()
+	writeShard(t, dir, "requests-1.jsonl", sampleRecord)
+	writeShard(t, dir, "requests-2.jsonl", sampleRecord)
+	newer := time.Now().Add(-time.Hour)
+	older := newer.Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, "requests-1.jsonl"), newer, newer); err != nil {
+		t.Fatalf("Chtimes error = %v", err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "requests-2.jsonl"), older, older); err != nil {
+		t.Fatalf("Chtimes error = %v", err)
+	}
+
+	recorded, err := readShards(dir)
+	if err != nil {
+		t.Fatalf("readShards error = %v", err)
+	}
+	if !recorded.written.Equal(newer) {
+		t.Errorf("written = %v, want the newest shard's time %v", recorded.written, newer)
+	}
+}
+
+// TestReadShards_ShardThatCannotBeDescribed_StillMerges verifies that an entry
+// whose metadata cannot be read costs the write time and nothing else: the
+// records it holds are the artifact, and a recording with no time on it says
+// so rather than refusing to merge.
+func TestReadShards_ShardThatCannotBeDescribed_StillMerges(t *testing.T) {
+	dir := t.TempDir()
+	writeShard(t, dir, "requests-1.jsonl", sampleRecord)
+	original := shardInfo
+	shardInfo = func(os.DirEntry) (os.FileInfo, error) { return nil, errors.New("vanished") }
+	t.Cleanup(func() { shardInfo = original })
+
+	recorded, err := readShards(dir)
+	if err != nil {
+		t.Fatalf("readShards error = %v", err)
+	}
+	if len(recorded.records) != 1 {
+		t.Fatalf("read %d record(s), want 1", len(recorded.records))
+	}
+	if !recorded.written.IsZero() {
+		t.Errorf("written = %v, want the zero time when no shard could be described", recorded.written)
 	}
 }
 
 // TestReadShards_NothingRecorded_IsAnError verifies the mistake that would
 // otherwise be invisible: a merge run without a recorded suite behind it would
 // write an empty inventory and report the whole artifact as a change.
+//
+// A shard directory that is not there says the same thing as an empty one and
+// names the target that would fill it, because nothing but a recorded run
+// creates that directory: a checkout running the gate before recording
+// anything is the ordinary way to arrive here, and it used to be answered with
+// a bare "no such file or directory".
 func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -66,12 +131,24 @@ func TestReadShards_NothingRecorded_IsAnError(t *testing.T) {
 		{
 			name: "a directory that is not there",
 			dir:  func(t *testing.T) string { t.Helper(); return filepath.Join(t.TempDir(), "absent") },
-			want: "read shard directory",
+			want: "make record-request-inventory",
 		},
 		{
 			name: "a directory holding no shard",
 			dir:  func(t *testing.T) string { t.Helper(); return t.TempDir() },
 			want: "no .jsonl shard",
+		},
+		{
+			name: "a shard directory that is not a directory",
+			dir: func(t *testing.T) string {
+				t.Helper()
+				path := filepath.Join(t.TempDir(), "file")
+				if err := os.WriteFile(path, nil, 0o600); err != nil {
+					t.Fatalf("WriteFile error = %v", err)
+				}
+				return path
+			},
+			want: "read shard directory",
 		},
 	}
 

@@ -134,7 +134,8 @@ var (
 //
 // docPath is the testing reference file to update (default docs/development/testing/testing.md).
 // check enables non-mutating CI mode that fails when the generated block
-// would change. skipCoverage skips running `go test -cover` and only
+// would change, and implies skipCoverage unless the caller said otherwise.
+// skipCoverage skips running `go test -cover` and only
 // updates count-only sections. topToolRows caps the high-test-count tool
 // sub-package summary table. timeout is handed to each `go test` run as its
 // per-package bound, and the generation as a whole gets that budget once per
@@ -265,7 +266,7 @@ func parseOptions(args []string) (options, error) {
 	opts := options{}
 	fs.StringVar(&opts.docPath, "file", defaultDocPath, "testing documentation file to update")
 	fs.BoolVar(&opts.check, "check", false, "fail if the generated section is not current")
-	fs.BoolVar(&opts.skipCoverage, "skip-coverage", false, "skip go test coverage execution and update count-only sections")
+	fs.BoolVar(&opts.skipCoverage, "skip-coverage", false, "skip go test coverage execution and update count-only sections; implied by -check, so -check -skip-coverage=false is how a check measures")
 	fs.IntVar(&opts.topToolRows, "top-tool-rows", 25, "number of high-test-count tool sub-packages to show in the summary table")
 	fs.DurationVar(&opts.timeout, "timeout", defaultTestTimeout, "per-package timeout handed to each go test run")
 	fs.StringVar(&opts.coverageDir, "coverage-dir", "", "directory for temporary coverage profiles; defaults to a temp directory")
@@ -282,7 +283,31 @@ func parseOptions(args []string) (options, error) {
 	if opts.timeout <= 0 {
 		return options{}, errors.New("timeout must be greater than zero")
 	}
+	if opts.check && !flagWasSet(fs, "skip-coverage") {
+		opts.skipCoverage = true
+	}
 	return opts, nil
+}
+
+// flagWasSet reports whether the caller named this flag rather than leaving it
+// at its default. flag.FlagSet.Visit walks only the flags that were set, which
+// is the only way to tell an explicit -skip-coverage=false from an unset one.
+//
+// It is what makes a check cheap by construction instead of by convention: a
+// check that recomputes coverage takes the minutes the generator takes and
+// compares numbers that are a property of the machine rather than of the tree
+// (see checkScopeNote), so `--check` on its own now carries the recorded values
+// forward the way the CI gate always meant to. Nothing enforced that before:
+// the gate passed -skip-coverage and any other caller silently paid for a
+// coverage run whose findings it was told to ignore.
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
 }
 
 // runBudget returns the wall-clock deadline for one generation.

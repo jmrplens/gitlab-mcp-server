@@ -609,6 +609,21 @@ func TestParseOptions_FlagShapes_ParsedOrRejected(t *testing.T) {
 			args: []string{"--file", "x.md", "--check", "--skip-coverage", "--top-tool-rows", "3", "--timeout", "1m", "--coverage-dir", "cov", "--include-e2e-run"},
 			want: options{docPath: "x.md", check: true, skipCoverage: true, topToolRows: 3, timeout: time.Minute, coverageDir: "cov", includeE2ERun: true},
 		},
+		{
+			name: "check implies skip-coverage",
+			args: []string{"--check"},
+			want: options{docPath: defaultDocPath, check: true, skipCoverage: true, topToolRows: 25, timeout: defaultTestTimeout},
+		},
+		{
+			name: "check measuring on purpose",
+			args: []string{"--check", "--skip-coverage=false"},
+			want: options{docPath: defaultDocPath, check: true, topToolRows: 25, timeout: defaultTestTimeout},
+		},
+		{
+			name: "generating still measures",
+			args: []string{"--file", "x.md"},
+			want: options{docPath: "x.md", topToolRows: 25, timeout: defaultTestTimeout},
+		},
 		{name: "unknown flag", args: []string{"--bogus"}, wantErr: true},
 		{name: "positional argument", args: []string{"extra"}, wantErr: true},
 		{name: "zero rows", args: []string{"--top-tool-rows", "0"}, wantErr: true},
@@ -966,7 +981,13 @@ func TestRunGo_FailingCommand_IncludesOutputTail(t *testing.T) {
 // TestRun_FakeModule_MigratesChecksAndReports verifies the command end to end
 // on a fake module: the first run migrates the legacy section and reports the
 // update, a second run reports nothing changed, --check accepts the current
-// document, and --check rejects a document edited afterwards.
+// document, --check on its own carries the recorded coverage forward without
+// being told to, and --check rejects a document edited afterwards.
+//
+// The bare --check step is the one that holds the construction rather than the
+// convention: it says "coverage values carried forward" on a run that passed
+// no -skip-coverage, which is what stops a caller silently paying for a
+// coverage pass whose numbers the gate is documented to ignore.
 func TestRun_FakeModule_MigratesChecksAndReports(t *testing.T) {
 	root := writeFakeModule(t, fakeModuleFiles())
 	t.Chdir(root)
@@ -985,6 +1006,11 @@ func TestRun_FakeModule_MigratesChecksAndReports(t *testing.T) {
 		{
 			name:    "check accepts current",
 			args:    append([]string{"--check"}, args...),
+			wantOut: "docs/testing.md is up to date" + checkedScopeSuffix(true),
+		},
+		{
+			name:    "check alone carries coverage forward",
+			args:    []string{"--check", "--file", "docs/testing.md"},
 			wantOut: "docs/testing.md is up to date" + checkedScopeSuffix(true),
 		},
 		{

@@ -389,6 +389,6 @@ the affected Markdown files:
 
 ```bash
 timeout 300s go test ./cmd/eval_mcp_surfaces/... ./cmd/gen_testing_docs -count=1
-timeout 120s go run ./cmd/gen_testing_docs/ --check -skip-coverage
+timeout 120s go run ./cmd/gen_testing_docs/ --check
 timeout 120s npx markdownlint-cli2 docs/development/testing/*.md
 ```
