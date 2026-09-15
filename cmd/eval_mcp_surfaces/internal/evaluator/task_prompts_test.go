@@ -1817,7 +1817,7 @@ func TestPromptAnswerKeyGate_ExemptionsDescribeTheTree(t *testing.T) {
 	}
 	reachable := reachableFrom(functions, promptEntryPoints)
 	for _, name := range answerKeyExemptFunctions {
-		declaration, ok := functions[name]
+		declarations, ok := functions[name]
 		if !ok {
 			t.Errorf("exempt function %s is not defined in this package", name)
 			continue
@@ -1826,23 +1826,28 @@ func TestPromptAnswerKeyGate_ExemptionsDescribeTheTree(t *testing.T) {
 			t.Errorf("exempt function %s is no longer reachable from a prompt builder, so the exemption excuses nothing", name)
 			continue
 		}
-		if len(answerKeyFieldsRead(declaration)) == 0 {
+		if len(answerKeyFieldsRead(declarations)) == 0 {
 			t.Errorf("exempt function %s no longer reads the answer key, so the exemption excuses nothing", name)
 		}
 	}
 }
 
-// packageFunctions parses every non-test Go file in dir and returns the
-// top-level function declarations by name. Methods are keyed by name too,
-// which is coarse and safe in the direction that matters: a coarse key can
-// only make the walk consider more functions than it must.
-func packageFunctions(dir string) (map[string]*ast.FuncDecl, error) {
+// packageFunctions parses every non-test Go file in dir and returns every
+// declaration of each name.
+//
+// Every declaration, not the last one seen. Methods are keyed by their bare
+// name here, so `String` on one type and `String` on another share a key, and
+// a map of one declaration per name would keep whichever file was read last
+// and silently drop the rest. A gate that can drop a declaration can miss the
+// read it exists to find, and it would miss it quietly, which is worse than
+// not having the gate.
+func packageFunctions(dir string) (map[string][]*ast.FuncDecl, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 	fset := token.NewFileSet()
-	functions := map[string]*ast.FuncDecl{}
+	functions := map[string][]*ast.FuncDecl{}
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -1854,7 +1859,7 @@ func packageFunctions(dir string) (map[string]*ast.FuncDecl, error) {
 		}
 		for _, declaration := range file.Decls {
 			if function, ok := declaration.(*ast.FuncDecl); ok && function.Body != nil {
-				functions[function.Name.Name] = function
+				functions[function.Name.Name] = append(functions[function.Name.Name], function)
 			}
 		}
 	}
@@ -1867,26 +1872,28 @@ func packageFunctions(dir string) (map[string]*ast.FuncDecl, error) {
 // position, so a rule passed to a dispatcher as `appendGroupGuidance` counts
 // as reached. That is exactly how taskRetryGuidance applies its rules, and a
 // walk that only followed call expressions would see none of them.
-func reachableFrom(functions map[string]*ast.FuncDecl, entryPoints []string) map[string]bool {
+func reachableFrom(functions map[string][]*ast.FuncDecl, entryPoints []string) map[string]bool {
 	seen := map[string]bool{}
 	var visit func(string)
 	visit = func(name string) {
 		if seen[name] {
 			return
 		}
-		declaration, ok := functions[name]
+		declarations, ok := functions[name]
 		if !ok {
 			return
 		}
 		seen[name] = true
-		ast.Inspect(declaration.Body, func(node ast.Node) bool {
-			if identifier, isIdent := node.(*ast.Ident); isIdent {
-				if _, defined := functions[identifier.Name]; defined {
-					visit(identifier.Name)
+		for _, declaration := range declarations {
+			ast.Inspect(declaration.Body, func(node ast.Node) bool {
+				if identifier, isIdent := node.(*ast.Ident); isIdent {
+					if _, defined := functions[identifier.Name]; defined {
+						visit(identifier.Name)
+					}
 				}
-			}
-			return true
-		})
+				return true
+			})
+		}
 	}
 	for _, entry := range entryPoints {
 		visit(entry)
@@ -1894,16 +1901,19 @@ func reachableFrom(functions map[string]*ast.FuncDecl, entryPoints []string) map
 	return seen
 }
 
-// answerKeyFieldsRead names the answer-key fields a function's body selects.
-func answerKeyFieldsRead(declaration *ast.FuncDecl) []string {
+// answerKeyFieldsRead names the answer-key fields any declaration of one name
+// selects, so a name shared by several declarations is judged by all of them.
+func answerKeyFieldsRead(declarations []*ast.FuncDecl) []string {
 	found := map[string]bool{}
-	ast.Inspect(declaration.Body, func(node ast.Node) bool {
-		selector, ok := node.(*ast.SelectorExpr)
-		if ok && slices.Contains(answerKeyFields, selector.Sel.Name) {
-			found[selector.Sel.Name] = true
-		}
-		return true
-	})
+	for _, declaration := range declarations {
+		ast.Inspect(declaration.Body, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if ok && slices.Contains(answerKeyFields, selector.Sel.Name) {
+				found[selector.Sel.Name] = true
+			}
+			return true
+		})
+	}
 	return sortedNamesOf(found)
 }
 
