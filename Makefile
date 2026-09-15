@@ -567,11 +567,13 @@ orbit-run-live-tests: orbit-ensure-token
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
-## check-eval-prompts: fail when a prompt the evaluator writes carries the case's own answer.
+## check-eval-prompts: fail when the stimulus a run would send carries the case's own answer.
 ## Renders the stimulus every case would be sent, on both surfaces, and refuses
-## a prompt naming that case's expected tool, action or parameter names. Calls
-## no provider and needs no Docker. The case's own text is reported and does not
-## fail it; issue 778 carries the work that would make that gateable too.
+## one that names that case's expected tool, action or parameter names. Calls no
+## provider and needs no Docker. All three sites are judged: the prompts this
+## package writes may carry nothing, and the case's own text is refused too
+## unless prompt_declarations.go records why that literal is the request itself.
+## A declaration that matches nothing on the audited surface fails as well.
 check-eval-prompts:
 	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface meta
 	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface dynamic

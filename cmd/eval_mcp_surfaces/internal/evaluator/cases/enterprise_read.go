@@ -65,20 +65,20 @@ func enterpriseReadEvalCases() []Case {
 		// disambiguation, temporal reasoning, and capability-driven
 		// discovery. All are read-only and resolved through
 		// gitlab_find_action / gitlab_execute_action.
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-1",
 			"Give me the security posture of project `my-org/tools/gitlab-mcp-server` in one go: confirm whether secret-push protection is on, count the project's service accounts, and pull the most recent two project audit events with their action and timestamp.",
 			readStep("gitlab_project", "security_settings_get", params("project_id"), nil),
 			readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page")),
 			readStep("gitlab_audit_event", "list_project", params("project_id"), params("per_page")),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-2",
 			"First check that project `my-org/tools/gitlab-mcp-server` exists by looking it up, then pull its deployment-frequency DORA metric for the 30 days ending today, 2026-06-04, at daily granularity. The metric takes an explicit date range, so work out both dates yourself as YYYY-MM-DD.",
 			readStep("gitlab_project", "get", params("project_id"), nil),
 			readStep("gitlab_dora_metrics", "project", params("project_id", "metric", "start_date", "end_date", "interval"), nil),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-3",
 			"For group `my-org`, give me a quick governance view: how many custom member roles are defined at the instance level, the active enterprise users in the group, and the most recent group audit event. For member roles on self-managed GitLab, query the instance-level list (the group-level list is deprecated on self-managed 17+).",
 			// gitlab_member_role.list_group returns 400 on self-managed
@@ -90,13 +90,13 @@ func enterpriseReadEvalCases() []Case {
 			readStep("gitlab_enterprise_user", "list", params("group_id"), params("active", "per_page")),
 			readStep("gitlab_audit_event", "list_group", params("group_id"), params("per_page")),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-4",
 			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities from the dedicated severity-count endpoint rather than a paginated list, then list the project's vulnerabilities five to a page.",
 			readStep("gitlab_vulnerability", "severity_count", params("project_path"), nil),
 			readStep("gitlab_vulnerability", "list", params("project_path"), params("state", "first")),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-5",
 			"List every project alias on this GitLab instance, then fetch the full details of the first alias in that list by its name. Report the alias name and the ID of the project it points to.",
 			// gitlab_project_alias.list has no per_page in its schema
@@ -106,18 +106,18 @@ func enterpriseReadEvalCases() []Case {
 			readStep("gitlab_project_alias", "list", nil, nil),
 			readStep("gitlab_project_alias", "get", params("name"), nil),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-6",
 			"In project `my-org/tools/gitlab-mcp-server`, fetch the project audit events that occurred during January 2026 (use `2026-01-01T00:00:00Z` and `2026-02-01T00:00:00Z` for the date filters), paginated to 50 per page.",
 			readStep("gitlab_audit_event", "list_project", params("project_id"), params("created_after", "created_before", "per_page")),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-7",
 			"For group `my-org`: list its open epics, five to a page, then fetch its iterations in any state.",
 			readStep("gitlab_group", "epic_list", params("full_path"), params("state", "first")),
 			readStep("gitlab", "issue.iteration_list_group", params("group_id"), params("per_page")),
 		),
-		baseEnterpriseReadEvalCase(
+		enterpriseDynamicReadEvalCase(
 			"MS-ENT-DYN-8",
 			"List the Geo sites configured on this GitLab instance (Geo may be unconfigured in the fixture, explain the result either way), then list all snippet repository storage moves recorded on the instance.",
 			// The Geo API on a single-node GitLab EE fixture has no
@@ -133,15 +133,23 @@ func enterpriseReadEvalCases() []Case {
 	}
 }
 
+// enterpriseDynamicReadEvalCase builds an Enterprise read case that also runs
+// against the live GitLab EE runtime, where it stresses discovery and
+// multi-tool synthesis rather than the schema alone.
+//
+// The Docker preset is asked for here rather than inferred from the case ID,
+// for the reason enterpriseCapabilityEvalCase gives: an identifier that
+// decides where a case runs is an identifier nobody can renumber.
+func enterpriseDynamicReadEvalCase(id, prompt string, steps ...Step) Case {
+	evalCase := baseEnterpriseReadEvalCase(id, prompt, steps...)
+	evalCase.Presets = append(evalCase.Presets, presetDockerEnterpriseRead)
+	return evalCase
+}
+
 func baseEnterpriseReadEvalCase(id, prompt string, steps ...Step) Case {
 	// MT-188 through MT-198 are EnterpriseDockerFixture cases and need both presets
 	presets := []string{presetSchemaEnterprise}
-	hasDockerFixture := (id >= "MT-188" && id <= "MT-191") || id == "MS-044"
-	// MS-ENT-DYN-* are Enterprise + dynamic-surface cases that
-	// stress model discovery / multi-tool synthesis against the live
-	// GitLab EE runtime, so they require the docker-enterprise-read
-	// preset in addition to the schema-only run.
-	if hasDockerFixture || isEnterpriseDynamicCase(id) {
+	if (id >= "MT-188" && id <= "MT-191") || id == "MS-044" {
 		presets = append(presets, presetDockerEnterpriseRead)
 	}
 	return Case{

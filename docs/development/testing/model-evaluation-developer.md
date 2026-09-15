@@ -375,9 +375,25 @@ Edit the typed case files in `cmd/eval_mcp_surfaces/internal/evaluator/cases/`:
 
 Use the following guidance:
 
+- Write the case as the person who wants the outcome would ask for it, and
+  never name the action, tool or parameter the scorer checks for.
+  `make check-eval-prompts` reads the text a run actually sends and refuses a
+  case that carries its own answer. The text it reads is the `PromptTemplate`
+  where a case has one, not the plain `Prompt`, so both are held to the rule.
+- A guardrail is allowed where a case would otherwise be flaky, as long as it
+  constrains the task without naming the answer: "the path is exact and the
+  file exists, so delete it as given" rather than "call `repository.file_delete`
+  directly".
+- A literal a case cannot be written without, such as the resource URI
+  `MS-040` asks the model to read, is recorded in
+  `cmd/eval_mcp_surfaces/internal/evaluator/prompt_declarations.go` with a
+  category and a reason. A declaration that stops matching anything fails the
+  same gate.
 - Include `MT-` cases for one clear operation.
 - Define `MS-` cases for real workflows where sequencing matters.
-- Cover `MF-` cases for failure recovery and prompt-injection resilience.
+- Cover `MF-` cases for failure recovery and prompt-injection resilience. The
+  prefix sorts the catalog and decides nothing; the edition, presets and
+  partition are fields on the case.
 - Include only required params in the required column.
 - Mark destructive steps precisely so the evaluator can enforce confirmation.
 - Prefer Docker fixtures over assumptions about a manually prepared instance.

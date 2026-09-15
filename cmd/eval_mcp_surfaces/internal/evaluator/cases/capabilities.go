@@ -30,7 +30,7 @@ func capabilityDiscoveryEvalCases() []Case {
 		// via the MCP capability bridge and read the unified manifest
 		// for EE-specific entries, then read the project get schema
 		// resource to confirm EE action inputs are exposed.
-		capabilityEvalCase(
+		enterpriseCapabilityEvalCase(
 			"MS-ENT-DYN-10", "Surface the Enterprise-only GitLab MCP capabilities: list MCP resources, read the unified tools manifest `gitlab://tools`, and read the project get schema resource `gitlab://tools/project.get` so I can confirm EE action inputs are exposed.",
 			readStep(resourceListTool, "", nil, nil),
 			readStep(resourceReadTool, "", params("uri"), nil),
@@ -44,14 +44,24 @@ func optionalStep(step Step) Step {
 	return step
 }
 
+// capabilityEvalCase builds a capability-bridge case for any instance.
 func capabilityEvalCase(id, prompt string, steps ...Step) Case {
-	edition := editionCE
-	if isEnterpriseDynamicCase(id) {
-		// MS-ENT-DYN-* cases exercise Enterprise + dynamic flows on
-		// the GitLab EE runtime, so they must be gated to the
-		// Enterprise edition when the suite is filtered.
-		edition = editionEnterprise
-	}
+	return capabilityEvalCaseForEdition(editionCE, id, prompt, steps...)
+}
+
+// enterpriseCapabilityEvalCase builds one that only a licensed instance can
+// run, so the suite gates it when filtering by edition.
+//
+// Which edition a case needs is a property of what it asks GitLab for, so the
+// constructor states it. It used to be read off the case ID, which made the
+// identifier load-bearing: renaming a case would have silently moved it to
+// another runtime, and the allocation rule in this package's doc comment says
+// an ID means nothing but itself.
+func enterpriseCapabilityEvalCase(id, prompt string, steps ...Step) Case {
+	return capabilityEvalCaseForEdition(editionEnterprise, id, prompt, steps...)
+}
+
+func capabilityEvalCaseForEdition(edition, id, prompt string, steps ...Step) Case {
 	return Case{
 		ID:               id,
 		Prompt:           prompt,

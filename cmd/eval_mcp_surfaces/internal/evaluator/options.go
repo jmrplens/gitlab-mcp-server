@@ -116,7 +116,7 @@ func parseFlags() options {
 	// --audit-prompts renders the stimulus every selected case would be sent
 	// and reports which of it repeats that case's own answer key. It calls no
 	// provider and needs no GitLab; --out receives the full dump.
-	flag.BoolVar(&opts.AuditPromptsCheck, "check", false, "With --audit-prompts, exit non-zero when a prompt this package writes carries the case's own expected tool, action or parameter names; the case's own text is reported and does not fail")
+	flag.BoolVar(&opts.AuditPromptsCheck, "check", false, "With --audit-prompts, exit non-zero when the stimulus a run would send carries the case's own expected tool, action or parameter names. The prompts this package writes may carry none; the case's own text is refused too, unless prompt_declarations.go records why that literal is the request")
 	flag.BoolVar(&opts.AuditPrompts, "audit-prompts", false, "Render the system and task prompts for every selected case and report which of them repeat the case's own expected tool, action, required parameter names or confirm literal; writes the full prompt dump to --out when one is given")
 	// --fixture-smoke exercises fixture preparation without model calls.
 	flag.BoolVar(&opts.FixtureSmoke, "fixture-smoke", false, "With --dry-run, exercise live per-task fixture preparation through MCP without calling model providers")

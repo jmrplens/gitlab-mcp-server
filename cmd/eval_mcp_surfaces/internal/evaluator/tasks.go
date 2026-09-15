@@ -242,7 +242,7 @@ func inferTaskPartition(task evalTask) EvalPartition {
 	if taskUsesCapabilityFallback(task) {
 		return EvalPartition(partitionCapabilityFallback)
 	}
-	if strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) {
+	if taskIsErrorRecovery(task) {
 		return EvalPartition(partitionErrorRecovery)
 	}
 	enterprise := taskHasEnterpriseStep(task)
@@ -401,7 +401,7 @@ func taskMatchesPreset(task evalTask, preset string) bool {
 		EnterpriseDockerFixture: taskIsEnterpriseDockerFixture(task),
 		Destructive:             taskHasDestructiveStep(task),
 		Mutating:                taskHasMutatingStep(task),
-		Special:                 strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || capabilityFallback,
+		Special:                 taskIsErrorRecovery(task) || capabilityFallback,
 		CapabilityFallback:      capabilityFallback,
 	}
 	return taskPresetMatchesTraits(traits, preset)
@@ -498,6 +498,22 @@ func routeLooksEnterprise(tool, action string) bool {
 }
 
 // taskHasSimulation reports whether task has simulation.
+// taskIsErrorRecovery reports whether a task is one of the fault cases: it
+// says so in the partition its case declares, or it injects a fault through a
+// step's simulation.
+//
+// The declared partition replaces a test on the "MF-" prefix of the ID. An
+// identifier that decides how a task is classified is an identifier nobody can
+// renumber, and this package's doc comment already promises that an ID means
+// nothing but itself. The simulation test stays beside it because a case can
+// inject a fault without being filed under that partition.
+func taskIsErrorRecovery(task evalTask) bool {
+	if task.Case != nil && task.Case.Partition == EvalPartition(partitionErrorRecovery) {
+		return true
+	}
+	return taskHasSimulation(task)
+}
+
 func taskHasSimulation(task evalTask) bool {
 	for _, step := range taskSteps(task) {
 		if step.Simulation != "" {

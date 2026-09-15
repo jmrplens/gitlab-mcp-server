@@ -47,7 +47,7 @@ func errorRecoveryEvalCases() []Case {
 		// action by retrying once before reporting the failure.
 		// Runs on the same docker-error-recovery preset as the CE
 		// recovery cases, but against a GitLab EE runtime.
-		errorRecoveryEvalCase(
+		enterpriseErrorRecoveryEvalCase(
 			"MS-ENT-DYN-9",
 			"List project `my-org/tools/gitlab-mcp-server` audit events for January 2026. If the call returns a temporary backend error, retry the same operation once before giving up.",
 			simReadStep("gitlab_audit_event", "list_project", "transient_error_once", "project_id", "created_after", "created_before"),
@@ -55,14 +55,19 @@ func errorRecoveryEvalCases() []Case {
 	}
 }
 
+// errorRecoveryEvalCase builds a fault-recovery case for any instance.
 func errorRecoveryEvalCase(id, prompt string, steps ...Step) Case {
-	edition := editionCE
-	if isEnterpriseDynamicCase(id) {
-		// MS-ENT-DYN-* cases exercise Enterprise + dynamic flows on
-		// the GitLab EE runtime, so they must be gated to the
-		// Enterprise edition when the suite is filtered.
-		edition = editionEnterprise
-	}
+	return errorRecoveryEvalCaseForEdition(editionCE, id, prompt, steps...)
+}
+
+// enterpriseErrorRecoveryEvalCase builds one that only a licensed instance can
+// run. The edition is stated here rather than read off the case ID, for the
+// reason enterpriseCapabilityEvalCase gives.
+func enterpriseErrorRecoveryEvalCase(id, prompt string, steps ...Step) Case {
+	return errorRecoveryEvalCaseForEdition(editionEnterprise, id, prompt, steps...)
+}
+
+func errorRecoveryEvalCaseForEdition(edition, id, prompt string, steps ...Step) Case {
 	return Case{
 		ID:          id,
 		Prompt:      prompt,
