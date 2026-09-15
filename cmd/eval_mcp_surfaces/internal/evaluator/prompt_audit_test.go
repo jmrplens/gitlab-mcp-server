@@ -257,6 +257,9 @@ func TestPromptNamesIdentifier_CountsCodeAndNotProse(t *testing.T) {
 		{name: "an opening brace is code", text: "send {id}", value: "id", want: true},
 		{name: "an uppercase letter before it is part of the token", text: "MYid", value: "id", want: false},
 		{name: "a digit after it is part of the token", text: "id42", value: "id", want: false},
+		{name: "the whole text is the identifier", text: "project_id", value: "project_id", want: true},
+		{name: "a match ending at the last byte counts", text: "send params.branch", value: "branch", want: true},
+		{name: "a trailing dot is code", text: "say get.now", value: "get", want: true},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -264,6 +267,227 @@ func TestPromptNamesIdentifier_CountsCodeAndNotProse(t *testing.T) {
 				t.Errorf("promptNamesIdentifier(%q, %q) = %v, want %v", testCase.text, testCase.value, got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestPromptNamesAnswer_ReadsAnEnvelopeAsTextAndEveryOtherKindAsAnIdentifier
+// pins the dispatch the two searches sit behind. An envelope is a marshaled
+// fragment and is searched for literally; every other kind is held to the
+// identifier rule. Both values below are found by one search and missed by the
+// other, so swapping the two fails rather than passing on a value both agree
+// about.
+func TestPromptNamesAnswer_ReadsAnEnvelopeAsTextAndEveryOtherKindAsAnIdentifier(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		answer promptAuditAnswer
+		want   bool
+	}{
+		{
+			name:   "an envelope glued to a word is still the envelope",
+			text:   `say a"action":"get"b`,
+			answer: promptAuditAnswer{Kind: promptLeakEnvelope, Value: `"action":"get"`},
+			want:   true,
+		},
+		{
+			name:   "an action spelled as an English verb is not named",
+			text:   "Please get the project.",
+			answer: promptAuditAnswer{Kind: promptLeakAction, Value: "get"},
+			want:   false,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := promptNamesAnswer(testCase.text, testCase.answer); got != testCase.want {
+				t.Errorf("promptNamesAnswer(%q, %+v) = %v, want %v", testCase.text, testCase.answer, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPromptAuditSurfaceTool_ExcludesTheDispatchersAndNothingElse pins the
+// decision the dynamic surface's tool column rests on: find and execute are
+// the surface's own contract and belong to no case's answer, while every other
+// tool name does, and on meta nothing is excluded at all.
+func TestPromptAuditSurfaceTool_ExcludesTheDispatchersAndNothingElse(t *testing.T) {
+	cases := []struct {
+		name    string
+		tool    string
+		surface string
+		want    bool
+	}{
+		{name: "find on dynamic is the contract", tool: dynamicFindTool, surface: config.ToolSurfaceDynamic, want: true},
+		{name: "execute on dynamic is the contract", tool: dynamicExecuteActionTool, surface: config.ToolSurfaceDynamic, want: true},
+		{name: "a domain tool on dynamic is an answer", tool: "gitlab_branch", surface: config.ToolSurfaceDynamic, want: false},
+		{name: "find on meta is an answer", tool: dynamicFindTool, surface: config.ToolSurfaceMeta, want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := promptAuditSurfaceTool(testCase.tool, testCase.surface); got != testCase.want {
+				t.Errorf("promptAuditSurfaceTool(%q, %q) = %v, want %v", testCase.tool, testCase.surface, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPromptAuditSitesFor_SitesTheCaseTextOnlyWhereThePromptCarriesIt pins the
+// guard that keeps a dropped request off the report: a builder that never sent
+// the user's words sent none of them, however well the case text happens to
+// spell the answer.
+func TestPromptAuditSitesFor_SitesTheCaseTextOnlyWhereThePromptCarriesIt(t *testing.T) {
+	answer := promptAuditAnswer{Kind: promptLeakParam, Value: "project_id"}
+	cases := []struct {
+		name     string
+		audited  promptAuditCase
+		scaffold string
+		want     []promptAuditSite
+	}{
+		{
+			name:    "the case text names it and the prompt carried it",
+			audited: promptAuditCase{CaseTextInPrompt: true, CaseText: "pass project_id"},
+			want:    []promptAuditSite{promptSiteCase},
+		},
+		{
+			name:    "the case text names it and the prompt dropped it",
+			audited: promptAuditCase{CaseTextInPrompt: false, CaseText: "pass project_id"},
+			want:    nil,
+		},
+		{
+			name:    "the prompt carried a case text that names nothing",
+			audited: promptAuditCase{CaseTextInPrompt: true, CaseText: "summarize the work"},
+			want:    nil,
+		},
+		{
+			name:     "the builder's own scaffolding is a site of its own",
+			audited:  promptAuditCase{CaseTextInPrompt: true, CaseText: "summarize the work"},
+			scaffold: "send params.project_id",
+			want:     []promptAuditSite{promptSiteTask},
+		},
+		{
+			name:    "the system prompt is a site of its own",
+			audited: promptAuditCase{CaseTextInPrompt: true, CaseText: "summarize the work", SystemPrompt: "always send params.project_id"},
+			want:    []promptAuditSite{promptSiteSystem},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := promptAuditSitesFor(answer, testCase.audited, testCase.scaffold)
+			if !slices.Equal(got, testCase.want) {
+				t.Errorf("promptAuditSitesFor() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPromptAuditCase_CoachedByBuilder_TakesEitherSiteOnItsOwn pins the number
+// V05 to V07 move: a repetition sited in the system prompt alone is coaching by
+// this package just as much as one sited in the task scaffolding alone, and a
+// repetition sited only in the case's own text is not.
+func TestPromptAuditCase_CoachedByBuilder_TakesEitherSiteOnItsOwn(t *testing.T) {
+	cases := []struct {
+		name  string
+		sites []promptAuditSite
+		want  bool
+	}{
+		{name: "the system prompt alone", sites: []promptAuditSite{promptSiteSystem}, want: true},
+		{name: "the task scaffolding alone", sites: []promptAuditSite{promptSiteTask}, want: true},
+		{name: "both builder sites", sites: []promptAuditSite{promptSiteSystem, promptSiteTask}, want: true},
+		{name: "the case text alone", sites: []promptAuditSite{promptSiteCase}, want: false},
+		{name: "no site at all", sites: nil, want: false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			audited := promptAuditCase{Findings: []promptAuditFinding{
+				{Kind: promptLeakTool, Value: "gitlab_branch", Sites: testCase.sites},
+			}}
+			if got := audited.coachedByBuilder(); got != testCase.want {
+				t.Errorf("coachedByBuilder() with sites %v = %v, want %v", testCase.sites, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestComparePromptAuditFindings_OrdersByKindBeforeValue pins the order the
+// artifact's diffability rests on. Each case is one where kind and value
+// disagree, so an ordering that reads only one of the two fails.
+func TestComparePromptAuditFindings_OrdersByKindBeforeValue(t *testing.T) {
+	cases := []struct {
+		name  string
+		left  promptAuditFinding
+		right promptAuditFinding
+		want  int
+	}{
+		{
+			name:  "an earlier kind wins a later value",
+			left:  promptAuditFinding{Kind: promptLeakTool, Value: "z"},
+			right: promptAuditFinding{Kind: promptLeakAction, Value: "a"},
+			want:  -1,
+		},
+		{
+			name:  "a later kind loses to an earlier one",
+			left:  promptAuditFinding{Kind: promptLeakEnvelope, Value: "a"},
+			right: promptAuditFinding{Kind: promptLeakTool, Value: "z"},
+			want:  1,
+		},
+		{
+			name:  "one kind orders by value",
+			left:  promptAuditFinding{Kind: promptLeakParam, Value: "branch"},
+			right: promptAuditFinding{Kind: promptLeakParam, Value: "project_id"},
+			want:  -1,
+		},
+		{
+			name:  "the same finding is equal",
+			left:  promptAuditFinding{Kind: promptLeakParam, Value: "branch"},
+			right: promptAuditFinding{Kind: promptLeakParam, Value: "branch"},
+			want:  0,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := comparePromptAuditFindings(testCase.left, testCase.right); got != testCase.want {
+				t.Errorf("comparePromptAuditFindings(%+v, %+v) = %d, want %d", testCase.left, testCase.right, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPromptAuditKindRank_PlacesEveryKnownKindAndSendsTheRestLast pins the rank
+// of every kind, the first one included: a rank table asked only about an
+// unknown kind leaves the position of the first free.
+func TestPromptAuditKindRank_PlacesEveryKnownKindAndSendsTheRestLast(t *testing.T) {
+	for index, kind := range promptAuditKindOrder {
+		t.Run(string(kind), func(t *testing.T) {
+			if rank := promptAuditKindRank(kind); rank != index {
+				t.Errorf("promptAuditKindRank(%s) = %d, want %d", kind, rank, index)
+			}
+		})
+	}
+	t.Run("an unknown kind sorts last", func(t *testing.T) {
+		if rank := promptAuditKindRank("not a kind"); rank != len(promptAuditKindOrder) {
+			t.Errorf("promptAuditKindRank(unknown) = %d, want %d", rank, len(promptAuditKindOrder))
+		}
+	})
+}
+
+// TestPromptAuditTotals_CountTheAnswerKeyedSitesApart drives the counterfactual
+// dimension with the four shapes a case can have, so each of its three counters
+// is pinned on its own rather than moving with the others.
+func TestPromptAuditTotals_CountTheAnswerKeyedSitesApart(t *testing.T) {
+	report := promptAuditReport{Surface: config.ToolSurfaceDynamic, Cases: []promptAuditCase{
+		{ID: "PA-020", CaseTextInPrompt: true},
+		{ID: "PA-021", CaseTextInPrompt: true, AnswerKeyed: []promptAuditSite{promptSiteSystem}},
+		{ID: "PA-022", CaseTextInPrompt: true, AnswerKeyed: []promptAuditSite{promptSiteTask}},
+		{ID: "PA-023", CaseTextInPrompt: true, AnswerKeyed: []promptAuditSite{promptSiteSystem, promptSiteTask}},
+	}}
+	totals := report.totals()
+	if totals.Cases != 4 || totals.Leaking != 0 {
+		t.Errorf("cases/leaking = %d/%d, want 4/0", totals.Cases, totals.Leaking)
+	}
+	if totals.AnswerKeyed != 3 {
+		t.Errorf("answer-keyed cases = %d, want 3 of the 4", totals.AnswerKeyed)
+	}
+	if totals.AnswerKeyedSystem != 2 || totals.AnswerKeyedTask != 2 {
+		t.Errorf("answer-keyed sites = system %d, task %d, want 2 and 2", totals.AnswerKeyedSystem, totals.AnswerKeyedTask)
 	}
 }
 

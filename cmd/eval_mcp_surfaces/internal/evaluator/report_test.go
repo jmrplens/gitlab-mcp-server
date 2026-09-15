@@ -154,6 +154,12 @@ func TestReportHeaderHelpers_RenderModeAndTitle(t *testing.T) {
 	if !shouldWriteStartupReport(options{Output: "report.md"}) || shouldWriteStartupReport(options{Output: "report.md", FixturesOnly: true}) {
 		t.Fatal("shouldWriteStartupReport() did not respect Output and FixturesOnly")
 	}
+	// A prompt audit writes its own dump to --out, so a placeholder report
+	// there would be clobbered on success and would clobber the dump on
+	// failure.
+	if shouldWriteStartupReport(options{Output: "report.md", AuditPrompts: true}) {
+		t.Fatal("shouldWriteStartupReport() wrote a placeholder over the prompt audit's own dump path")
+	}
 	if got := reportTitle(config.ToolSurfaceMeta); got != "Meta-Tool Model Evaluation" {
 		t.Fatalf("reportTitle(meta) = %q", got)
 	}

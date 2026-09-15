@@ -603,6 +603,45 @@ func TestResolveRunModels_DryRunAndModelBackedDefaults(t *testing.T) {
 	}
 }
 
+// TestResolveRunModels_PromptAudit_ResolvesNoModelAndNoPaths verifies the
+// three places the prompt audit is excluded from: it reaches no provider, so
+// no model spec is resolved and the label is "none"; it writes its own
+// artifact only where --out names one, so no default report path is derived;
+// and it records no trace, so no trace directory is derived beside a report
+// that does not exist.
+func TestResolveRunModels_PromptAudit_ResolvesNoModelAndNoPaths(t *testing.T) {
+	t.Setenv("EVAL_MODELS", "")
+	cases := []struct {
+		name         string
+		opts         options
+		wantOutput   string
+		wantTraceDir string
+	}{
+		{name: "no paths given", opts: options{AuditPrompts: true}},
+		{
+			name:         "the paths it was given are kept",
+			opts:         options{AuditPrompts: true, Output: "dump.md", TraceDir: "traces"},
+			wantOutput:   "dump.md",
+			wantTraceDir: "traces",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			opts, specs, err := resolveRunModels(testCase.opts)
+			if err != nil {
+				t.Fatalf("resolveRunModels() error = %v", err)
+			}
+			if opts.Model != "none" || len(specs) != 0 {
+				t.Errorf("resolveRunModels() = model %q with %d specs, want \"none\" with none", opts.Model, len(specs))
+			}
+			if opts.Output != testCase.wantOutput || opts.TraceDir != testCase.wantTraceDir {
+				t.Errorf("resolveRunModels() = output %q and trace dir %q, want %q and %q",
+					opts.Output, opts.TraceDir, testCase.wantOutput, testCase.wantTraceDir)
+			}
+		})
+	}
+}
+
 // TestResolveRunModels_UnsupportedProvider_ReturnsError verifies an unknown
 // provider in --models aborts before any evaluation.
 func TestResolveRunModels_UnsupportedProvider_ReturnsError(t *testing.T) {

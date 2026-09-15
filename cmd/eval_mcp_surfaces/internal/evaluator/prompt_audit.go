@@ -398,7 +398,14 @@ func promptNamesIdentifier(text, value string) bool {
 		return false
 	}
 	selfEvident := strings.ContainsAny(value, "_.")
-	for index := 0; index <= len(text)-len(value); {
+	// The search is its own bound. value is not empty, so a rejected match
+	// moves the start one byte on and the remaining text eventually cannot
+	// hold value, which is the one exit. A length bound beside it would be
+	// arithmetic that decides nothing: past it the suffix is shorter than
+	// value, so the search returns the same "not found" the loop already
+	// reads.
+	index := 0
+	for {
 		offset := strings.Index(text[index:], value)
 		if offset < 0 {
 			return false
@@ -410,7 +417,6 @@ func promptNamesIdentifier(text, value string) bool {
 		}
 		index = start + 1
 	}
-	return false
 }
 
 // promptIdentifierBounded reports whether the match is a whole token rather
