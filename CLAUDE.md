@@ -178,9 +178,11 @@ gitlab-mcp-server/
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait, Bitbucket, EE activation)
-│   └── suite/                   # Go test package (172 test files)
-│       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
-│       └── fixture_ce_test.go   # Self-contained GitLab resource builders; the EE half was ported to test/e2e/gitlab/ee and deleted
+│   ├── internal/harness/        # The one route from a test to a server: the binary, the session, the fixtures, the ledger, the waits, the surfaces and the coverage shards. Carries `e2e`, so only the packages below can import it
+│   └── gitlab/                  # The suite that drives the real binary against a real GitLab, one package per runtime
+│       ├── common/              # What any instance serves (168 test files)
+│       ├── ce/                  # What only an unlicensed instance does (4)
+│       └── ee/                  # Premium and Ultimate (45)
 ├── plan/                        # Implementation plans for features
 ├── mcpb/                        # Claude Desktop extension (.mcpb) manifest + icon (packed by scripts/build-mcpb.sh)
 ├── .github/                     # AI assistance infrastructure
@@ -262,11 +264,15 @@ without GitLab or credentials, and both run on every CI push:
   stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
   variables stdio configuration actually uses.
 
-**They exist because the e2e suite cannot see any of this.** `test/e2e/suite`
-drives an in-memory transport in the same process, which is the right shape for
-questions about tool behavior and answers none about the transport: no streams,
-no process, no separation of stdout from stderr, and no flags or environment
-variables, since it builds the server directly.
+**They exist because the GitLab suite asks a different question.**
+`test/e2e/gitlab` drives the same real binary, and drives it against a real
+instance, so what it can answer is what a tool call does to GitLab. It reaches
+the transport only as the pipe its own session happens to use: it never starts
+the process twice, never reads stderr apart from stdout, never passes a flag,
+and could not tell a listener that answers a preflight from one that does not.
+These three need no GitLab at all and ask only about the process: how it is
+started, what it writes where, what it accepts on a socket, and how it ends.
+Both drive the binary; only these three are about the binary.
 
 stdio is the primary transport and nothing drove it until `test/e2e/stdio`
 existed. Two defects shipped through that gap: a nil dereference that killed the
@@ -339,14 +345,20 @@ go test ./internal/tools/branches/ -count=1 -v  # Run domain tests verbose
 go test ./internal/tools/ -run TestBranch -count=1  # Run specific tests
 make golangci-lint                       # Consolidated Go formatting and linting
 
-# End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
-make test-e2e                                          # Same via Makefile
+# End-to-end tests. The suite drives the real binary, so it is staged first;
+# every target below does that for you through e2e-server-binary.
+make test-e2e                                          # self-hosted GitLab from .env (alias of test-e2e-gitlab)
+make test-e2e-ce                                       # ephemeral GitLab CE + runner + fixtures (Docker, ~4 GB RAM)
+make test-e2e-ee                                       # ephemeral GitLab EE, licensed; runs the common and ee packages
+make test-e2e-harness                                  # the harness library's own tests: no GitLab
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
 make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
-make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
-go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
+make test-e2e-collector                                # telemetry into a real OTLP collector (Docker; skips without it)
+
+# Compile-only check. The runtime is decided by the package, not a build tag,
+# so all three are compiled together under the one `e2e` tag.
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...          # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...    # Linux
 
 # Orbit live tests against GitLab.com (requires GITLAB_COM_TOKEN; auto-provisions fixtures)
 GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
@@ -889,49 +901,18 @@ go test ./internal/prompts/ -count=1 -v                    # Prompts
 
 ### Running E2E tests
 
-E2E tests run against a real GitLab instance; only the MCP transport between the test client and the server is in memory, and every tool call still reaches the configured GitLab over the network. Two modes are supported:
+The suite drives the **real `cmd/server` binary** over stdio against a real GitLab, so a tool call crosses a process boundary and then the network. Nothing about it is in memory: the suite this replaced built the server in the test process and drove an in-memory transport, which is why no defect of the binary's own startup, middleware chain or shutdown could ever fail it.
 
-**Self-hosted mode** — requires a `.env` file with `GITLAB_URL` and `GITLAB_TOKEN` (user must have permissions to create/delete projects):
+It is one build and three packages under `test/e2e/gitlab`, and **the package decides the runtime, not a build tag**: `common` for what any instance serves (168 files), `ce` for what only an unlicensed one does (4), `ee` for Premium and Ultimate (45). Every file carries `e2e` alone, so one compile and one analysis pass see all three. Read `test/e2e/README.md` before changing any of it; it holds the reasoning this summary leaves out.
 
-```bash
-# Run full E2E suite (per-domain tests on the individual, meta and dynamic surfaces)
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
-make test-e2e
-
-# Compile-only check (no GitLab needed)
-go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
-```
-
-**Docker mode** — ephemeral GitLab CE container with CI runner and fixture service (enables pipeline/job tests and deterministic webhook/custom-emoji/mirror endpoints):
+**Self-hosted** needs a `.env` with `GITLAB_URL` and `GITLAB_TOKEN`, for a user who may create and delete projects. **Docker** boots an ephemeral instance with a CI runner and the fixture services, which is what makes pipeline, job, webhook, custom-emoji and mirror scenarios deterministic. Every target stages the binary first, so none of them is a bare `go test`:
 
 ```bash
-export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh && ./test/e2e/scripts/setup-bitbucket.sh
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
+make test-e2e        # self-hosted, from .env; a package the instance cannot serve skips
+make test-e2e-ce     # ephemeral GitLab CE + runner + fixtures: common and ce
+make test-e2e-ee     # ephemeral GitLab EE, licensed: common and ee
 ```
 
-The suite is one test file per domain (172 files), each self-contained against the shared fixture from `setup_test.go`, in three families named by the surface they drive:
+A test is named for what it exercises rather than for a surface (`TestAccessTokens_Project_Lifecycle_ThroughSelfRotation`, `TestCommitCreate_PathAlreadyInTheBranch_RefusedWithTheCommitActionHint`), because **one scenario runs on all three surfaces**: `harness.SurfacesWith` builds the fixture once on the parent and runs the body again per surface as a subtest, so the dynamic, meta and individual paths are held to the same assertions instead of to three hand-written families that could drift apart.
 
-- **`TestIndividual_*`**: the individual surface (`gitlab_issue_list`-style tools) through each domain's lifecycle: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, elicitation, cleanup
-- **`TestMeta_*`**: the same operations through the meta-tools, plus the domains only reachable there (admin, epics, group extras, wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji). The Enterprise-only ones are no longer here: their `TestEE_*` half was ported to `test/e2e/gitlab/ee`, the rebuilt suite's licensed package, and deleted with the build tag that used to select it, so `make test-e2e-ee` (or its older name `make test-e2e-docker-enterprise`) is where they run
-- **`TestDynamicToolSurface_*`**: the default dynamic two-tool find/execute surface, including standalone project discovery, multi-intent discovery, and destructive-action confirmation guards. Run only this family in Docker mode after the Docker GitLab setup scripts complete:
-
-	```bash
-	E2E_MODE=docker \
-		go test -v -tags e2e -timeout 600s \
-		-run '^TestDynamicToolSurface' \
-		./test/e2e/suite/
-	```
-
-Domains **added in Docker mode** (require CI runner):
-
-- Pipeline create/get/cancel/retry/delete
-- Job get/log/retry/cancel
-
-**MCP capability tests** (mock handlers, always available):
-
-- Elicitation tools (1 test): confirm destructive action
+What the run covered is **recorded rather than declared**. The harness writes one shard per test process naming the action each call asked for, the server's own telemetry span says which route the dispatcher ran, and `cmd/audit_e2e_coverage` joins the two. `make check-e2e-static` is the gate that keeps it honest: a catalog action no scenario names fails it, and an action nothing on a Docker instance can run is declared in `cmd/audit_e2e_coverage/exemptions.go` with a category and a reason.

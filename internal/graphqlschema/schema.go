@@ -10,6 +10,7 @@ import (
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/validator"
+	"github.com/vektah/gqlparser/v2/validator/rules"
 )
 
 // SDLFileName is the pinned schema's name on disk. The generator writes it and
@@ -140,8 +141,16 @@ func Validate(document string, variables map[string]any) error {
 }
 
 // parseDocument parses and validates one document against schema.
+//
+// The rule set is passed explicitly because gqlparser 2.5.37 deprecated the
+// call that chose one for us, and the one it chose is what this asks for by
+// name: LoadQuery ran the validator with no rules, and that path falls back to
+// NewDefaultRules. Naming it keeps the judgement identical rather than
+// inheriting whatever a later release decides a default should be, which for a
+// gate that says which documents GitLab accepts is the difference between a
+// pin and a moving target.
 func parseDocument(schema *ast.Schema, document string) (*ast.QueryDocument, error) {
-	parsed, errs := gqlparser.LoadQuery(schema, document)
+	parsed, errs := gqlparser.LoadQueryWithRules(schema, document, rules.NewDefaultRules())
 	if len(errs) == 0 {
 		return parsed, nil
 	}
