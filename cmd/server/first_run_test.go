@@ -100,18 +100,7 @@ func TestFirstRunGuidance_NamesWhatItNeeds(t *testing.T) {
 // client would wait for an initialize response that never comes. There is no
 // error, no log line and no exit: it presents as a hang.
 func TestIsInteractiveTerminal_IsFalseForAPipe(t *testing.T) {
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = reader.Close()
-		_ = writer.Close()
-	})
-
-	restore := os.Stdin
-	os.Stdin = reader
-	t.Cleanup(func() { os.Stdin = restore })
+	heldOpenStdin(t)
 
 	if isInteractiveTerminal() {
 		t.Error("a pipe was reported as an interactive terminal; an MCP client would hang here")
