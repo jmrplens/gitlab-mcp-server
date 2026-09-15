@@ -102,6 +102,15 @@ type bearerGuard struct {
 	// select one. Safe to echo here and only here: oauth mode already serves
 	// the same list unauthenticated as RFC 9728 authorization_servers.
 	instances []string
+	// verified reads back a token identity this deployment has already
+	// resolved, without resolving anything: it is the verified-token cache's
+	// own lookup, a map read on a SHA-256 of the instance and the token. Nil
+	// leaves the address block covering every request, which is what a guard
+	// built without a cache gets.
+	//
+	// It is what lets an address block refuse an authentication rather than an
+	// address. See [bearerGuard.credentialAlreadyVerified].
+	verified func(instance, token string) (*auth.TokenInfo, bool)
 	// minimumScope is the least a token must carry to be admitted. A token
 	// without it is refused with insufficient_scope rather than executed and
 	// failed later by GitLab.
@@ -144,8 +153,10 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 	source := transportSource(r)
 
 	// Ordered before everything else on purpose: a blocked caller must cost
-	// nothing, least of all an upstream call.
-	if g.blockedByBudget(ip, source) {
+	// nothing, least of all an upstream call. The one exemption is a
+	// credential this deployment has already verified, which is read back from
+	// memory and so costs nothing either.
+	if g.blockedByBudget(ip, source) && !g.credentialAlreadyVerified(r) {
 		// Both addresses, because the refusal may be either one's doing. The
 		// budget charged to the transport source is shared by everything
 		// behind one proxy, so ip is frequently just whoever arrived next;
@@ -427,6 +438,51 @@ func (g *bearerGuard) recordFailure(key, source string) {
 		g.limiter.RecordFailure(key)
 	}
 	g.sourceBudget.charge(source, key)
+}
+
+// credentialAlreadyVerified reports whether this request carries a token this
+// deployment has already verified and would admit, which is what exempts it
+// from an address block.
+//
+// It is the oauth-mode half of the exemption the pool provides in legacy mode,
+// and it is narrow for the same reasons. The evidence is the verified-token
+// cache, which holds only identities GitLab itself returned, and reading it is
+// a map lookup that reaches nothing; the request it admits goes on to be
+// verified by a cache hit, so no upstream call is made for it. Every token the
+// cache does not hold stays refused, which is the whole of what a sprayer can
+// send.
+//
+// The scope check is part of the question rather than left to the code below:
+// what is being asked is whether this deployment is already serving this
+// credential, and one it would answer 403 to is not a credential it serves.
+//
+// The instance is resolved here because the cache is keyed by instance and
+// token together — a token means nothing away from the GitLab that issued it.
+// It is the same resolver the verifier runs, a pure function of the request and
+// the published allow-list, so the two cannot key differently, and a request
+// that names an instance this deployment does not publish resolves to an error
+// and stays blocked.
+func (g *bearerGuard) credentialAlreadyVerified(r *http.Request) bool {
+	if g.verified == nil {
+		return false
+	}
+	token := serverpool.ExtractBearerToken(r)
+	if token == "" {
+		return false
+	}
+	instance := ""
+	if g.resolveInstance != nil {
+		resolved, err := g.resolveInstance(r)
+		if err != nil {
+			return false
+		}
+		instance = resolved
+	}
+	info, cached := g.verified(instance, token)
+	if !cached || info == nil {
+		return false
+	}
+	return oauth.SatisfiesMinimum(info.Scopes, g.minimumScope)
 }
 
 // blockedByBudget reports whether either budget is exhausted.

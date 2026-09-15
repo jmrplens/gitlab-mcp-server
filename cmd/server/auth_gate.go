@@ -21,6 +21,23 @@ import (
 
 // Authentication rate limiting for HTTP mode: a client IP is blocked after
 // authFailureLimit failed authentications inside authFailureWindow.
+//
+// What the block refuses is an authentication, not an address. A credential
+// this deployment is already serving is admitted from a blocked address too —
+// [mcpServerGate.credentialAlreadyAdmitted] in legacy mode,
+// [bearerGuard.credentialAlreadyVerified] in oauth mode — and both answer from
+// memory, so the budget still bounds exactly what it was built to bound: the
+// distinct credentials one address can have verified upstream.
+//
+// The distinction exists because an address is not a client. A corporate NAT, a
+// campus, a mobile carrier and a reverse proxy without --trusted-proxy-header
+// all present one address for many people, so charging the address alone let
+// one client relaying invented tokens answer 429 to every legitimate neighbor
+// for the rest of the window — including a request carrying a token this
+// deployment had already verified and was holding a pool entry for. A sprayer
+// gains nothing from the exemption: producing a credential the pool already
+// holds means holding a credential GitLab accepts, which is not the state a
+// spray is in.
 const (
 	authFailureLimit  = 10
 	authFailureWindow = 1 * time.Minute
@@ -447,7 +464,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 	ip := clientIP(r, g.trustedProxyHeader, g.trustedProxies)
 	source := transportSource(r)
 
-	if g.blockedByBudget(ip, source) {
+	if g.blockedByBudget(ip, source) && !g.credentialAlreadyAdmitted(r) {
 		// Named apart from the bearer guard's line: the throttle keys on the
 		// message, and one gate's window must not swallow the other's first
 		// report. The source is what spent the budget; behind a proxy the ip
@@ -563,6 +580,41 @@ func (g *mcpServerGate) resolve(r *http.Request) (*serverpool.Entry, *gateFailur
 		}
 	}
 	return entry, nil
+}
+
+// credentialAlreadyAdmitted reports whether this request carries a credential
+// the pool is already serving, which is what exempts it from an address block.
+//
+// It is the whole of the exemption, and it is deliberately narrow: an entry
+// exists only because GitLab accepted that credential, and the lookup is a hash
+// and a map read that reaches no network. So a request it admits costs the
+// deployment nothing upstream, however much its address has spent — while every
+// credential the pool does not already hold is still refused, which is exactly
+// the set a token sprayer can produce.
+//
+// Both halves of the pool key are needed, so the instance is resolved here.
+// The resolver is a pure function of the request and the published allow-list,
+// and [mcpServerGate.resolve] runs it again below for the request proper, so
+// the two cannot disagree; a request it refuses — an unpublished instance, or
+// none named where the deployment publishes several — stays blocked.
+//
+// What this decides is the block and nothing else. A request it exempts carries
+// on through the whole of [mcpServerGate.resolve], so the instance checks, the
+// caller-named-destination guard and the pool lookup all still run, and the
+// only step it skips is the 429.
+func (g *mcpServerGate) credentialAlreadyAdmitted(r *http.Request) bool {
+	if g.pool == nil {
+		return false
+	}
+	token := g.extractCredential(r)
+	if token == "" {
+		return false
+	}
+	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
+	if err != nil {
+		return false
+	}
+	return g.pool.Admitted(token, options.GitLabURL)
 }
 
 // blockedByBudget reports whether either budget is exhausted: the caller's

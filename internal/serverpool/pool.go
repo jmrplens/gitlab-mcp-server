@@ -858,6 +858,43 @@ func (p *ServerPool) IdentityFor(token, gitlabURL string) (UserIdentity, bool) {
 	return entry.identity, true
 }
 
+// Admitted reports whether the pool already holds a usable entry for this
+// credential: one GitLab accepted when it was built, that has not since been
+// refused on a call, and whose credential is still inside the revalidation
+// ceiling.
+//
+// It answers the question [ServerPool.GetOrCreateEntry] answers on its fast
+// path, and answers only that: a false here means the next call would take the
+// slow path and reach GitLab, never that the credential is bad. That is what
+// makes it usable as an exemption from the per-address authentication budget —
+// a credential this pool is already serving costs a hash and a map read to
+// recognize, and serving it again spends nothing upstream, whoever else shares
+// its address. Anything this returns false for still has to earn its entry the
+// ordinary way, which is what keeps a blocked address unable to spend the
+// deployment's standing with GitLab.
+//
+// The three conditions mirror that fast path deliberately. An entry marked
+// rejected or past [WithMaxCredentialAge] is dropped and rebuilt on the next
+// request, and a rebuild is a round trip, so neither may be reported as
+// admitted.
+func (p *ServerPool) Admitted(token, gitlabURL string) bool {
+	if token == "" || gitlabURL == "" {
+		return false
+	}
+	key := sessionKey(token, gitlabURL)
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	entry, ok := p.entries[key]
+	if !ok || entry.rejected.Load() {
+		return false
+	}
+	// Read under the same lock that guards it: lastValidated is written by the
+	// revalidation goroutine.
+	return p.maxCredentialAge <= 0 || time.Since(entry.lastValidated) <= p.maxCredentialAge
+}
+
 // insertEntry commits a freshly built entry under the write lock. If another
 // goroutine created an entry for the same key while this one was building, the
 // already-stored entry is returned and the freshly built one is discarded: its
