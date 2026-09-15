@@ -608,6 +608,114 @@ func TestAuditPromptsForTask_WithoutCaseText_SitesNothingInTheCase(t *testing.T)
 	}
 }
 
+// TestPromptAuditSentCaseText_PrefersTheTemplateARunWouldSend verifies which of
+// a case's two texts the audit measures. A case carrying a prompt template has
+// that template rendered over its plain prompt before a live run sends
+// anything, so the template is the stimulus and the plain field is a string
+// nobody receives. The template's own actions stand in for fixture outputs and
+// are replaced, since a value GitLab minted carries no catalog name and the
+// unreplaced action would carry a parameter name the value does not.
+func TestPromptAuditSentCaseText_PrefersTheTemplateARunWouldSend(t *testing.T) {
+	tests := []struct {
+		name string
+		task evalTask
+		want string
+	}{
+		{
+			name: "a case with no template is its plain prompt",
+			task: evalTask{Prompt: "Delete the file.", Case: &EvalCase{}},
+			want: "Delete the file.",
+		},
+		{
+			name: "a case outside the registry is its plain prompt",
+			task: evalTask{Prompt: "Delete the file."},
+			want: "Delete the file.",
+		},
+		{
+			name: "a template replaces the plain prompt",
+			task: evalTask{Prompt: "Delete the file.", Case: &EvalCase{PromptTemplate: CasePromptTemplate{Text: "Delete the file, calling repository.file_delete."}}},
+			want: "Delete the file, calling repository.file_delete.",
+		},
+		{
+			name: "a template action stands for a fixture value",
+			task: evalTask{Prompt: "x", Case: &EvalCase{PromptTemplate: CasePromptTemplate{Text: "Delete `{{ .Values.file_path }}` from `{{.Project.Path}}`."}}},
+			want: "Delete `the-fixture-value` from `the-fixture-value`.",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := promptAuditSentCaseText(tc.task); got != tc.want {
+				t.Errorf("promptAuditSentCaseText() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAuditPromptsForTask_ReadsTheTemplatesOwnCoaching is the regression for
+// what reading the plain prompt hid. MT-031's template tells the model which
+// action to call and which to avoid; its plain prompt says none of that, so
+// before the audit read the sent text this case reported clean while every
+// Docker run sent the sentence.
+func TestAuditPromptsForTask_ReadsTheTemplatesOwnCoaching(t *testing.T) {
+	task := evalTask{
+		ID:     "PA-014",
+		Prompt: "Delete file `tmp/eval.txt` from branch `feature/eval` in project `my-org/tools/x`.",
+		Case: &EvalCase{PromptTemplate: CasePromptTemplate{
+			Text: "Delete file `{{ .Values.file_path }}` from branch `{{ .Branch.Name }}`. Call repository.file_delete directly; do not call repository.tree.",
+		}},
+		Steps: []evalStep{{ExpectedTool: "gitlab_repository", ExpectedAction: "repository.file_delete", RequiredParams: []string{"project_id"}}},
+	}
+	audited := auditPromptsForTask(task, config.ToolSurfaceMeta)
+	var named bool
+	for _, finding := range audited.Findings {
+		if finding.Kind == promptLeakAction && finding.Value == "repository.file_delete" && slices.Contains(finding.Sites, promptSiteCase) {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("the template naming its own action was not sited in the case text; findings: %+v", audited.Findings)
+	}
+}
+
+// TestPromptAuditAnswers_TakeTheOptionalParamsAndCountConfirmOnce verifies the
+// width of the answer key. An optional parameter is part of the call the scorer
+// builds, so a stimulus naming one has handed that much over; confirm is left
+// to its own kind, which is searched for in every case, so the
+// destructive-safety column keeps counting it exactly once.
+func TestPromptAuditAnswers_TakeTheOptionalParamsAndCountConfirmOnce(t *testing.T) {
+	task := evalTask{
+		ID:    "PA-015",
+		Steps: []evalStep{{ExpectedTool: "gitlab_environment", ExpectedAction: "stop", RequiredParams: []string{"project_id"}, OptionalParams: []string{"force", "confirm"}}},
+	}
+	answers := promptAuditAnswers(task, config.ToolSurfaceMeta)
+	var params, confirms int
+	var sawForce bool
+	for _, answer := range answers {
+		switch answer.Kind {
+		case promptLeakParam:
+			params++
+			if answer.Value == "force" {
+				sawForce = true
+			}
+			if answer.Value == promptAuditConfirmLiteral {
+				t.Error("confirm was counted as an ordinary parameter as well as its own kind")
+			}
+		case promptLeakConfirm:
+			confirms++
+		case promptLeakTool, promptLeakAction, promptLeakEnvelope:
+		}
+	}
+	if !sawForce {
+		t.Error("the optional parameter force is not in the answer key")
+	}
+	if params != 2 {
+		t.Errorf("parameter literals = %d, want 2 (project_id and force)", params)
+	}
+	if confirms != 1 {
+		t.Errorf("confirm literals = %d, want 1", confirms)
+	}
+}
+
 // TestRunPromptAudit_ReportsAWriterThatRefusesTheSummary verifies the audit
 // fails rather than reporting a summary nobody received, on both writes: the
 // summary itself and the line naming the dump.

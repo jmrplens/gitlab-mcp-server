@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -212,10 +213,12 @@ func auditPrompts(opts options, tasks []evalTask) promptAuditReport {
 }
 
 // auditPromptsForTask renders one case exactly as the runner renders it: the
-// task is prepared for the surface first, then handed to the same two prompt
-// entry points evaluatePreparedCase calls.
+// task is prepared for the surface first, its prompt is put in the shape a live
+// run would send, and both are handed to the same two prompt entry points
+// evaluatePreparedCase calls.
 func auditPromptsForTask(task evalTask, surface string) promptAuditCase {
 	rendered := taskForSurface(task, surface)
+	rendered.Prompt = promptAuditSentCaseText(rendered)
 	audited := promptAuditCase{
 		ID:           rendered.ID,
 		Surface:      surface,
@@ -238,6 +241,45 @@ func auditPromptsForTask(task evalTask, surface string) promptAuditCase {
 	slices.SortStableFunc(audited.Findings, comparePromptAuditFindings)
 	return audited
 }
+
+// promptAuditSentCaseText is the case's own words as a run sends them.
+//
+// A case may carry two texts. [EvalCase.Prompt] is the plain one, and
+// [EvalCase.PromptTemplate] is what a run against a live instance renders from
+// its fixture outputs and puts in the task's place (applyLiveFixtureState), so
+// for those cases the plain field is a string nothing sends and auditing it
+// measures the wrong stimulus. The two are not paraphrases of each other:
+// MT-031's template ends "Call repository.file_delete directly with exactly
+// that file_path and branch; do not call repository.tree or switch to a
+// different file path", and its plain prompt says none of that, so every
+// literal in that sentence was invisible here while being sent on every Docker
+// run this harness has ever done.
+//
+// The template's actions are replaced rather than executed, because the audit
+// talks to no GitLab and has no fixture outputs to render from. That loses
+// nothing: a fixture output is an identifier GitLab minted for this run, so no
+// substitution could introduce a name out of the catalog, and leaving the
+// actions in would invent findings instead, since `{{ .Values.file_path }}`
+// carries the parameter name `file_path` that the value it stands for does not.
+func promptAuditSentCaseText(task evalTask) string {
+	plain := strings.TrimSpace(task.Prompt)
+	if task.Case == nil {
+		return plain
+	}
+	template := strings.TrimSpace(task.Case.PromptTemplate.Text)
+	if template == "" {
+		return plain
+	}
+	return strings.TrimSpace(promptAuditTemplateActions.ReplaceAllString(template, promptAuditFixtureValue))
+}
+
+// promptAuditTemplateActions matches one text/template action, the unit
+// RenderCasePrompt replaces with a fixture output.
+var promptAuditTemplateActions = regexp.MustCompile(`{{[^{}]*}}`)
+
+// promptAuditFixtureValue stands in for whatever a fixture would have put
+// there. It is deliberately not a word out of any catalog.
+const promptAuditFixtureValue = "the-fixture-value"
 
 // promptAuditAnswerKeyedSites renders the case a second time with its answer
 // key taken away and reports which prompts came back different.
@@ -342,6 +384,17 @@ func promptAuditAnswers(task evalTask, surface string) []promptAuditAnswer {
 		}
 		add(promptLeakAction, step.ExpectedAction)
 		for _, param := range step.RequiredParams {
+			add(promptLeakParam, param)
+		}
+		// An optional parameter is part of the call the scorer builds
+		// (addExpectedOptionalActionParams), so a stimulus that names one
+		// has handed over that much of the answer. confirm is left to its
+		// own kind, which is searched for in every case, so the
+		// destructive-safety column keeps counting it exactly once.
+		for _, param := range step.OptionalParams {
+			if strings.EqualFold(strings.TrimSpace(param), promptAuditConfirmLiteral) {
+				continue
+			}
 			add(promptLeakParam, param)
 		}
 		if strings.TrimSpace(step.ExpectedAction) != "" {
