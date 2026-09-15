@@ -442,11 +442,31 @@ func promptIdentifierBounded(text string, start, end int) bool {
 
 // promptIdentifierContext reports whether the characters around the match are
 // code punctuation rather than prose.
+//
+// A dot needs its far side checked, and that is the whole of what this used to
+// get wrong. A dot is what makes `project.get` an action ID, but it is also how
+// an English sentence ends, so "fetch job `999` trace." counted `trace` as a
+// named action and MT-202 and MS-017 lost `name` and `branch` the same way.
+// Three findings that were never about the corpus. It is code only when an
+// identifier continues on the other side of it: the `p` before the dot of
+// `project.get`, the `g` after it.
 func promptIdentifierContext(text string, start, end int) bool {
-	if start > 0 && strings.IndexByte(`."{:`, text[start-1]) >= 0 {
-		return true
+	if start > 0 {
+		if before := text[start-1]; before == '.' {
+			if start >= 2 && promptIdentifierByte(text[start-2]) {
+				return true
+			}
+		} else if strings.IndexByte(`"{:`, before) >= 0 {
+			return true
+		}
 	}
-	return end < len(text) && strings.IndexByte(`."}:`, text[end]) >= 0
+	if end >= len(text) {
+		return false
+	}
+	if after := text[end]; after == '.' {
+		return end+1 < len(text) && promptIdentifierByte(text[end+1])
+	}
+	return strings.IndexByte(`"}:`, text[end]) >= 0
 }
 
 // promptIdentifierByte reports whether b can be part of an identifier.

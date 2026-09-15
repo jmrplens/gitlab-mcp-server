@@ -143,6 +143,13 @@ func TestPromptNamesIdentifier_CountsCodeAndNotProse(t *testing.T) {
 		{name: "repeated near miss then a hit", text: "invalid, invalid, params.id", value: "id", want: true},
 		{name: "a bare word on its own is prose", text: "get", value: "get", want: false},
 		{name: "an underscored name opening the text", text: "project_id is the namespace path", value: "project_id", want: true},
+		// A dot ends an English sentence as often as it joins an action ID, and
+		// the rule used to count both. These four are the pair that separates
+		// them: the dot is code only where an identifier continues past it.
+		{name: "a sentence-final period is not a dotted identifier", text: "fetch job `999` trace.", value: "trace", want: false},
+		{name: "a sentence-final period after a param is prose too", text: "render that exact prompt name.", value: "name", want: false},
+		{name: "a dot followed by an identifier is code", text: "call project.get now", value: "project", want: true},
+		{name: "a dot preceded by an identifier is code", text: "call project.get now", value: "get", want: true},
 		{name: "an opening brace is code", text: "send {id}", value: "id", want: true},
 		{name: "an uppercase letter before it is part of the token", text: "MYid", value: "id", want: false},
 		{name: "a digit after it is part of the token", text: "id42", value: "id", want: false},
