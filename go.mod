@@ -11,7 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/tiktoken-go/tokenizer v0.8.1
-	github.com/vektah/gqlparser/v2 v2.5.28
+	github.com/vektah/gqlparser/v2 v2.5.37
 	gitlab.com/gitlab-org/api/client-go/v3 v3.0.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1
 	go.opentelemetry.io/otel v1.46.0
@@ -29,26 +29,26 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.opentelemetry.io/proto/otlp v1.11.0
 	go.yaml.in/yaml/v3 v3.0.5
-	golang.org/x/crypto v0.56.0
-	golang.org/x/image v0.45.0
-	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/time v0.15.0
-	golang.org/x/tools v0.49.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/image v0.46.0
+	golang.org/x/oauth2 v0.37.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
+	golang.org/x/time v0.16.0
+	golang.org/x/tools v0.50.0
 	google.golang.org/protobuf v1.36.12
 )
 
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
-	github.com/bitfield/gotestdox v0.2.2 // indirect
+	github.com/bitfield/gotestdox v0.2.3 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.8.0 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
-	github.com/ebitengine/purego v0.10.2 // indirect
+	github.com/ebitengine/purego v0.11.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
@@ -67,15 +67,15 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
-	golang.org/x/mod v0.40.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
-	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/vuln v1.7.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/grpc v1.83.1 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260910141331-15ceca2b0a1f // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/vuln v1.8.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260911204522-f61a6ca850bd // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260911204522-f61a6ca850bd // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 )
 
