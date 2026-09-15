@@ -688,7 +688,7 @@ mdlint-fix:
 	@echo === markdownlint --fix ===
 	npx markdownlint-cli2 --fix "**/*.md" "#plan"
 
-## check-doc-links: verify tracked Markdown/MDX local links resolve.
+## check-doc-links: verify tracked Markdown/MDX local links resolve, anchor included.
 check-doc-links:
 	@echo === documentation local links ===
 	node scripts/check-doc-links.mjs
