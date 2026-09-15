@@ -15,43 +15,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
-// TestTaskPromptForSurface_DynamicBridgeGuidance verifies dynamic prompts expose
-// capability bridge tools without telling models to wrap those calls in execute.
-func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
-	task := evalTask{ID: "MS-039", Prompt: "Read `gitlab://tools`.", Steps: []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}}
-	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	for _, want := range []string{"Use MCP capability bridge tools directly", "do not use bridge tools as a substitute for a required catalog action", "gitlab://tools"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
-			}
-		})
-	}
-}
-
-// TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance verifies that
-// dynamic prompts for tasks anchored on a remote URL expose the discovery
-// guidance without leaking the exact discovery action name into the prompt.
-//
-// The test renders the prompt for a task with discover_project.resolve and
-// pipeline.get steps and asserts the prompt contains the expected discovery
-// guidance text and does not expose the literal action name. This protects
-// the runner from leaking catalog action names that should be discovered.
-func TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance(t *testing.T) {
-	task := evalTask{ID: "MS-002", Prompt: "Resolve remote URL `https://gitlab.example.com/group/project.git` then inspect pipeline `1`.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}}}
-	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	for _, want := range []string{"first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL", "must use the project-discovery action with params.remote_url set to that exact URL"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
-			}
-		})
-	}
-	if strings.Contains(got, "discover_project.resolve") {
-		t.Fatalf("dynamic prompt leaked exact discovery action:\n%s", got)
-	}
-}
-
 // TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped verifies that
 // the remote-URL discovery guidance is only emitted for tasks whose prompt
 // actually contains a remote URL.
@@ -138,34 +101,6 @@ func TestDynamicExampleParamValue_UsesPromptMarkers(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_CallShapeStaysSurfaceSpecific verifies the one thing a task
-// prompt may still say about how to call: the shape the surface itself uses.
-//
-// It used to assert a sentence a per-case guidance rule wrote, "with
-// params.confirm=true", alongside the surface claims. V06 deleted that rule and
-// the assertion went with it, because where `confirm` sits is a property of the
-// surface and belongs in the contract V07 writes, not in a clause chosen by
-// which action the case expects. What survives is the part that was always
-// about the surface: the dynamic prompt states the find-then-execute path and
-// the meta prompt does not mention the dynamic dispatcher at all.
-func TestTaskPrompt_CallShapeStaysSurfaceSpecific(t *testing.T) {
-	task := evalTask{ID: "MS-link", Prompt: "Run issue link CRUD.", Steps: []evalStep{
-		{ExpectedTool: "gitlab_issue", ExpectedAction: actionIssueCreate},
-		{ExpectedTool: "gitlab_issue", ExpectedAction: "link_create"},
-	}}
-	metaPrompt := taskPromptForSurface(task, config.ToolSurfaceMeta)
-	if strings.Contains(metaPrompt, "gitlab_execute_action") {
-		t.Fatalf("the meta prompt names the dynamic dispatcher: %s", metaPrompt)
-	}
-	dynamicPrompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	if !strings.Contains(dynamicPrompt, "first call gitlab_find_action") {
-		t.Fatalf("dynamic prompt = %s", dynamicPrompt)
-	}
-	if strings.Contains(dynamicPrompt, "params.confirm") {
-		t.Fatalf("dynamic prompt kept params.confirm guidance: %s", dynamicPrompt)
-	}
-}
-
 // requireContainsAll returns contains all test data or fails the test.
 func requireContainsAll(t *testing.T, name, content string, wants []string) {
 	t.Helper()
@@ -173,270 +108,6 @@ func requireContainsAll(t *testing.T, name, content string, wants []string) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("%s = %q, want content containing %q", name, content, want)
 		}
-	}
-}
-
-// TestDynamicPrompt_RequiresFindBeforeUncertainExecute verifies that dynamic
-// prompts instruct models to find actions before uncertain execution.
-func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
-	task := evalTask{ID: "MS-002", Prompt: "Investigate a pipeline failure for git remote `git@gitlab.example.com:group/project.git` and summarize the failing job."}
-
-	system := systemPromptForTask(task, config.ToolSurfaceDynamic)
-	requireContainsAll(t, "systemPromptForTask()", system, []string{
-		"GitLab catalog operations are executed through a find-then-execute workflow",
-		"MCP capability bridge tools",
-		"expects gitlab_find_action before every gitlab_execute_action call",
-		"Destructive actions require top-level confirm:true on gitlab_execute_action",
-	})
-
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic workflow:",
-		"first call gitlab_find_action",
-		"Do not use action IDs from memory",
-		"Use MCP capability bridge tools directly",
-		"Return tool calls only",
-	})
-}
-
-// TestDynamicTaskPrompt_MultiStepUsesFindFirst verifies multi-step Dynamic prompts require find before execute.
-func TestDynamicTaskPrompt_MultiStepUsesFindFirst(t *testing.T) {
-	task := evalTask{ID: "MS-PLAN", Prompt: "Create an issue and then list it.", Steps: []evalStep{
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list", RequiredParams: []string{"project_id"}},
-	}}
-
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"For each of the 2 GitLab catalog operations",
-		"first call gitlab_find_action",
-		"Use the returned result ID, input_schema, required_params, and example",
-		"Do not use action IDs from memory",
-	})
-	for _, unwanted := range []string{"Dynamic workflow plan:", "action=issue.create", "do not call gitlab_find_action for these planned actions"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst verifies previously
-// brittle Dynamic workflows now receive generic find-first guidance without
-// leaking expected action IDs.
-func TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst(t *testing.T) {
-	tests := []struct {
-		name string
-		task evalTask
-	}{
-		{
-			name: "failed pipeline investigation workflow",
-			task: evalTask{ID: "MS-002", Prompt: "Investigate failed pipeline `339` for project `my-org/tools/gitlab-mcp-server` and remote URL `http://localhost:8929/my-org/tools/gitlab-mcp-server.git`: resolve the project, inspect the pipeline, list failed jobs, fetch job `677` trace, then call the pipeline failure analyzer for pipeline `339`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.list", RequiredParams: []string{"project_id", "pipeline_id"}},
-			}},
-		},
-		{
-			name: "settings broadcast workflow",
-			task: evalTask{ID: "MS-009", Prompt: "Read current instance settings, create a broadcast message, then delete it.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.settings_get"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_create"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_delete"},
-			}},
-		},
-		{
-			name: "release cleanup workflow",
-			task: evalTask{ID: "MS-004", Prompt: "Verify a tag and release, list release asset links, delete release and tag.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "tag.get"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.get"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.link_list"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.delete"},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "tag.delete"},
-			}},
-		},
-		{
-			name: "feature flag user list workflow",
-			task: evalTask{ID: "MS-029", Prompt: "Exercise feature flag and user-list lifecycle in project `my-org/tools/gitlab-mcp-server`: create feature flag user list `eval-feature-list` with user IDs `u1,u2`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.ff_user_list_create", RequiredParams: []string{"project_id", "name", "user_xids"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.ff_user_list_get", RequiredParams: []string{"project_id", "user_list_iid"}},
-			}},
-		},
-		{
-			name: "issue time tracking workflow",
-			task: evalTask{ID: "MS-032", Prompt: "Exercise issue time tracking in project `my-org/tools/gitlab-mcp-server`: create issue `eval-time-issue`, set estimate `2h`, add spent time `30m`, reset spent time, reset the estimate, then delete the issue.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.time_estimate_set", RequiredParams: []string{"project_id", "issue_iid", "duration"}},
-			}},
-		},
-		{
-			name: "issue link workflow",
-			task: evalTask{ID: "MS-016", Prompt: "Exercise issue link CRUD in project `my-org/tools/gitlab-mcp-server`: create source issue `eval-link-source`, create target issue `eval-link-target`, link source to target as `relates_to`, list source issue links, delete the returned issue link, then delete both issues.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_list", RequiredParams: []string{"project_id", "issue_iid"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_delete", RequiredParams: []string{"project_id", "issue_iid", "issue_link_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-		},
-		{
-			name: "issue note workflow",
-			task: evalTask{ID: "MS-015", Prompt: "Exercise issue note CRUD in project `my-org/tools/gitlab-mcp-server`: create issue `eval-note-issue`, add a note saying `first note`, fetch that note with note get using the returned note ID, update the note to `updated note`, delete the note, then delete the issue.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_create", RequiredParams: []string{"project_id", "issue_iid", "body"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_get", RequiredParams: []string{"project_id", "issue_iid", "note_id"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_update", RequiredParams: []string{"project_id", "issue_iid", "note_id", "body"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_delete", RequiredParams: []string{"project_id", "issue_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-		},
-		{
-			name: "merge request award workflow",
-			task: evalTask{ID: "MS-033", Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on merge request `1`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.time_estimate_set", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.spent_time_add", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
-			}},
-		},
-		{
-			name: "epic discussion workflow",
-			task: evalTask{ID: "MS-049", Prompt: "Exercise epic discussion lifecycle in group full path `my-org`: create epic `Evaluation Enterprise Discussion Epic`, create discussion `first enterprise discussion`, list discussions, fetch the created discussion, add reply note `enterprise reply`, update that reply to `enterprise reply updated`, delete the reply note, then delete the epic.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_create", RequiredParams: []string{"full_path", "title"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_create", RequiredParams: []string{"full_path", "epic_iid", "body"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_list", RequiredParams: []string{"full_path", "epic_iid"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_get", RequiredParams: []string{"full_path", "epic_iid", "discussion_id"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_add_note", RequiredParams: []string{"full_path", "epic_iid", "discussion_id", "body"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_update_note", RequiredParams: []string{"full_path", "epic_iid", "note_id", "body"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_delete_note", RequiredParams: []string{"full_path", "epic_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-		},
-		{
-			name: "group protected environment workflow",
-			task: evalTask{ID: "MS-052", Prompt: "Exercise group protected environment lifecycle with a temporary group: create group `eval-enterprise-protected-env`, protect environment `staging`, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.create", RequiredParams: []string{"name", "path"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_protect", RequiredParams: []string{"group_id", "name", "deploy_access_levels"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_update", RequiredParams: []string{"group_id", "environment"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_unprotect", RequiredParams: []string{"group_id", "environment"}, OptionalParams: []string{"confirm"}, Destructive: true},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.delete", RequiredParams: []string{"group_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-		},
-		{
-			name: "project push rule add",
-			task: evalTask{ID: "MT-192", Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}},
-			}},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
-			requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-				"first call gitlab_find_action",
-				"Use the returned result ID, input_schema, required_params, and example",
-				"Do not use action IDs from memory",
-			})
-			for _, step := range taskSteps(tt.task) {
-				if step.ExpectedAction != "" && strings.Contains(prompt, step.ExpectedAction) {
-					t.Fatalf("taskPromptForSurface() leaked expected action %q in prompt %q", step.ExpectedAction, prompt)
-				}
-			}
-		})
-	}
-}
-
-// TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan verifies Dynamic prompts do not leak planned action IDs.
-func TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan(t *testing.T) {
-	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_get", RequiredParams: []string{"project_id", "schedule_id"}},
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_update", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"cron"}},
-		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_delete_variable", RequiredParams: []string{"project_id", "schedule_id", "key"}, Destructive: true},
-	}}
-
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"For each of the 4 GitLab catalog operations",
-		"first call gitlab_find_action",
-		"Use the returned result ID, input_schema, required_params, and example",
-		"Do not use action IDs from memory",
-	})
-	for _, unwanted := range []string{"Dynamic first-step exact call", "pipeline.schedule_create", "do not call gitlab_find_action for these planned actions"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent verifies role-sensitive
-// examples are no longer injected into Dynamic prompts.
-func TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent(t *testing.T) {
-	tests := []struct {
-		name   string
-		task   evalTask
-		absent []string
-	}{
-		{
-			name: "allowlist source and target projects",
-			task: evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-			absent: []string{`"action":"job.token_scope_remove_project"`, `"confirm":true`, `"params":{"project_id":1,"target_project_id":51}`},
-		},
-		{
-			name: "issue link source and target",
-			task: evalTask{ID: "MT-LINK", Prompt: "Link source issue IID `5` in project `my-org/source` to target issue IID `9` in target project ID `77`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
-			}},
-			absent: []string{`"action":"issue.link_create"`, `"issue_iid":5`, `"project_id":"my-org/source"`, `"target_issue_iid":9`, `"target_project_id":77`},
-		},
-		{
-			name: "merge request branches",
-			task: evalTask{ID: "MT-MR", Prompt: "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval` into `main` titled `Evaluation MR`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create", RequiredParams: []string{"project_id", "source_branch", "target_branch", "title"}},
-			}},
-			absent: []string{`"action":"merge_request.create"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"source_branch":"feature/eval"`, `"target_branch":"main"`, `"title":"Evaluation MR"`},
-		},
-		{
-			name: "group epic child issue",
-			task: evalTask{ID: "MT-140", Prompt: "Assign issue IID `99` from child project path `my-org/tools/gitlab-mcp-server` to epic IID `12` in group full path `my-org`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_issue_assign", RequiredParams: []string{"full_path", "epic_iid", "child_project_path", "child_iid"}},
-			}},
-			absent: []string{`"action":"group.epic_issue_assign"`, `"child_iid":99`, `"child_project_path":"my-org/tools/gitlab-mcp-server"`, `"epic_iid":12`, `"full_path":"my-org"`},
-		},
-		{
-			name: "project deploy token delete",
-			task: evalTask{ID: "MT-112", Prompt: "Delete project deploy token ID `66` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "access.deploy_token_delete_project", RequiredParams: []string{"project_id", "deploy_token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			}},
-			absent: []string{`"action":"access.deploy_token_delete_project"`, `"confirm":true`, `"deploy_token_id":66`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
-		},
-		{
-			name: "group ci variable environment scope",
-			task: evalTask{ID: "MS-026", Prompt: "Exercise scoped group CI variable CRUD in group `my-org`: create variable `GROUP_EVAL_CRUD_TOKEN` with value `group-crud-value-1` and environment scope `review/eval`.", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "ci_variable.group_create", RequiredParams: []string{"group_id", "key", "value"}, OptionalParams: []string{"environment_scope", "masked"}},
-				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "ci_variable.group_get", RequiredParams: []string{"group_id", "key"}, OptionalParams: []string{"environment_scope"}},
-			}},
-			absent: []string{`"action":"ci_variable.group_create"`, `"environment_scope":"review/eval"`, `"group_id":"my-org"`, `"key":"GROUP_EVAL_CRUD_TOKEN"`, `"value":"group-crud-value-1"`},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
-			requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-				"first call gitlab_find_action",
-				"Use the returned result ID, input_schema, required_params, and example",
-				"Do not use action IDs from memory",
-			})
-			for _, unwanted := range tt.absent {
-				if strings.Contains(prompt, unwanted) {
-					t.Fatalf("taskPromptForSurface() = %q, want no exact-call content %q", prompt, unwanted)
-				}
-			}
-		})
 	}
 }
 
@@ -481,122 +152,6 @@ func TestDynamicTaskPrompt_UnresolvedRoleSensitiveParamsStayFindFirst(t *testing
 			}
 			if !strings.Contains(prompt, "Required parameters for action") && !strings.Contains(prompt, "gitlab_find_action") {
 				t.Fatalf("taskPromptForSurface() = %q, want schema-first or dynamic discovery guidance", prompt)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_ClarifiesTransientRetry verifies TaskPrompt when clarifies transient retry.
-func TestTaskPrompt_ClarifiesTransientRetry(t *testing.T) {
-	task := evalTask{
-		ID:             "MF-001",
-		Prompt:         "Inspect pipeline `12345`, retrying once if GitLab temporarily returns a server error.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "pipeline.get",
-		Simulation:     "transient_error_once",
-	}
-	prompt := taskPrompt(task)
-	if !strings.Contains(prompt, "repeat the same validated operation once") {
-		t.Fatalf("taskPrompt() = %q, want transient retry guidance", prompt)
-	}
-	if !strings.Contains(prompt, "do not use GitLab CI retry actions") {
-		t.Fatalf("taskPrompt() = %q, want CI retry disambiguation", prompt)
-	}
-}
-
-// TestTaskPrompt_SingleOperationPrefersOneClearToolCall verifies TaskPrompt when single operation prefers one clear tool call.
-func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-003",
-		Prompt:         "List the 10 most recently updated projects I can access.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "project.list",
-	}
-	prompt := taskPrompt(task)
-	requireContainsAll(t, "taskPrompt()", prompt, []string{
-		"exactly one tool call",
-		"A schema lookup before the task call is a failure",
-		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
-		"do not add any params that the task did not ask for",
-		"Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow",
-		"When the selected action requires project_id, a value like group/project is params.project_id, not params.full_path, params.path, or remote_url",
-		"never call gitlab without an input object containing action and params",
-		"server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check",
-		"For subgroup creation with group.create, use params.name, params.path, and params.parent_id",
-		"For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title",
-		"For merge request notes or comments, use mr_review.note_create",
-		"Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion",
-		"For personal snippets, snippet ID is params.snippet_id",
-		"or file_path",
-		"For custom emoji group operations, use custom_emoji.list with params.group_path",
-		"For project access tokens, scope names go in params.scopes as an array",
-		"expiring dates go in params.expires_at",
-		"For broadcast messages, saying maps to params.message",
-		"For job.play variables, use params.job_variables_attributes as an array",
-		"For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id",
-		"for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id",
-		"use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied",
-		"For runner.list_project, use params.project_id by default",
-		"Do not send params.paused, params.type, params.tag_list",
-		"For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message",
-		"For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope",
-		"linking to a URL means params.link_url and image means params.image_url",
-		"latest pipelines plural means pipeline.list",
-		"do not send empty arrays or objects",
-		"call the selected action with params:{}",
-	})
-}
-
-// TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies TaskPrompt when multi step avoids implicit pagination.
-func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
-	task := evalTask{
-		ID:     "MS-037",
-		Prompt: "Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: list project CI variables, list deploy keys, then list generic packages.",
-		Steps: []evalStep{
-			{ExpectedTool: "gitlab_ci_variable", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
-			{ExpectedTool: "gitlab_access", ExpectedAction: "deploy_key_list_project", RequiredParams: []string{"project_id"}},
-			{ExpectedTool: "gitlab_package", ExpectedAction: "list", RequiredParams: []string{"project_id"}},
-		},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"one successful list response completes a list step",
-		"do not fetch additional pagination pages",
-		"unless the task explicitly asks for every page",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want pagination guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic verifies package
-// release guidance is preserved after dynamic action normalization.
-func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic(t *testing.T) {
-	task := evalTask{
-		ID:     taskPackageReleaseID,
-		Prompt: "Publish local fixture files to Generic Packages, then create a release, and link each uploaded package file to that release as a package asset.",
-		Steps: []evalStep{
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "package.publish_directory", RequiredParams: []string{"project_id", "package_name", "package_version", "directory_path"}},
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.create", RequiredParams: []string{"project_id", "tag_name", "ref"}},
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.link_create_batch", RequiredParams: []string{"project_id", "tag_name", "links"}},
-		},
-	}
-
-	prompt := taskPromptForSurface(task, "dynamic")
-	requireContainsAll(t, "taskPromptForSurface(dynamic)", prompt, []string{
-		"For each of the 3 GitLab catalog operations",
-		"first call gitlab_find_action",
-		"Use the returned result ID, input_schema, required_params, and example",
-		"Do not use action IDs from memory",
-	})
-	for _, unwanted := range []string{"Dynamic workflow plan:", "package.publish_directory", "release.link_create_batch"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPromptForSurface(dynamic) = %q, want no exact action guidance %q", prompt, unwanted)
 			}
 		})
 	}
@@ -1038,52 +593,6 @@ func TestProjectGetToolDetailURIForSurface_MapsSurfaces(t *testing.T) {
 		t.Run(tc.surface, func(t *testing.T) {
 			if got := projectGetToolDetailURIForSurface(tc.surface); got != tc.want {
 				t.Fatalf("projectGetToolDetailURIForSurface(%s) = %q, want %q", tc.surface, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestDynamicTaskNeedsReleaseCompareGuidance_DetectsWorkflows verifies the
-// release-compare hint triggers on prompt wording or on a release list plus
-// compare step sequence of at least three steps.
-func TestDynamicTaskNeedsReleaseCompareGuidance_DetectsWorkflows(t *testing.T) {
-	cases := []struct {
-		name   string
-		prompt string
-		steps  []evalStep
-		want   bool
-	}{
-		{name: "prompt wording", prompt: "compare refs and draft release notes", want: true},
-		{name: "too few steps", steps: []evalStep{{ExpectedAction: "release.list"}, {ExpectedAction: "repository.compare"}}, want: false},
-		{name: "release list and compare", steps: []evalStep{{ExpectedAction: "release.list"}, {ExpectedAction: "repository.compare"}, {ExpectedAction: "analyzer.release"}}, want: true},
-		{name: "three unrelated steps", steps: []evalStep{{ExpectedAction: "a"}, {ExpectedAction: "b"}, {ExpectedAction: "c"}}, want: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := dynamicTaskNeedsReleaseCompareGuidance(tc.prompt, tc.steps); got != tc.want {
-				t.Fatalf("dynamicTaskNeedsReleaseCompareGuidance() = %t, want %t", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestDynamicBridgeOnlyTask_RequiresEveryStepToBeBridge verifies the
-// bridge-only workflow wording applies only when every expected step is an
-// MCP capability bridge call.
-func TestDynamicBridgeOnlyTask_RequiresEveryStepToBeBridge(t *testing.T) {
-	cases := []struct {
-		name  string
-		steps []evalStep
-		want  bool
-	}{
-		{name: "no steps", want: false},
-		{name: "all bridge", steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: promptListTool}}, want: true},
-		{name: "mixed", steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet}}, want: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := dynamicBridgeOnlyTask(tc.steps); got != tc.want {
-				t.Fatalf("dynamicBridgeOnlyTask() = %t, want %t", got, tc.want)
 			}
 		})
 	}
@@ -1733,40 +1242,45 @@ var answerKeyFields = []string{"ExpectedTool", "ExpectedAction"}
 // answerKeyExemptFunctions may read those fields despite being reachable from a
 // prompt builder, each for a stated reason.
 //
-// The plan for this step asked for exactly one entry. That is the right end
-// state and it is reachable at the end of V07, not here: two of the four extra
-// entries are the dynamic surface's own answer-keyed clauses, which V07 owns by
-// name, and removing them early would be doing V07's work in V06's diff. Saying
-// so in a list that is itself gated is better than a green that quietly covers
-// four holes.
+// The plan asked for exactly one, and one is not reachable. The second is
+// structural rather than a concession: taskSteps is what *builds* the
+// []evalStep every other function receives, so it necessarily touches every
+// field of a step, and anything that needs any field at all drags it in. Today
+// that is taskHasSimulationMode, which reads step.Simulation to find out
+// whether the fixture is simulating a transient error — a property of the
+// environment the run is in, not of the answer. The number could be forced to
+// one by giving the simulation check its own path to the steps, and that would
+// be a second way to build them for the sake of a count.
 //
 //   - taskHasDestructiveStep asks a different question. Whether a task is
 //     destructive is a property of what the user asked for, not of the answer:
-//     someone who says "delete the branch" has already said it is destructive,
-//     and a prompt may repeat that without revealing which action performs it.
-//   - taskSteps is where steps come from. It reads the fields to build the
-//     []evalStep every other function here receives; without that read there is
-//     nothing to leak and nothing to score. Structural, and permanent.
-//   - countDynamicExecuteSteps is the dynamic prompt's operation count, which
-//     carries the shape of the answer without its words. V07 deletes it.
-//   - dynamicTaskNeedsReleaseCompareGuidance selects the release-compare
-//     clause, which no case in today's corpus reaches. V07 deletes it.
-//   - expectedCapabilityBridgeStep classifies a step as a capability-bridge
-//     read rather than a GitLab call. It names a category, not an action, and
-//     what the prompt may say about that category is settled by V07's contract.
-var answerKeyExemptFunctions = []string{
-	"taskHasDestructiveStep",
-	"taskSteps",
-	"countDynamicExecuteSteps",
-	"dynamicTaskNeedsReleaseCompareGuidance",
-	"expectedCapabilityBridgeStep",
-}
+//     someone who says "delete the branch" has already said it, and the prompt
+//     may repeat that without revealing which action performs it.
+//   - taskSteps constructs the steps. Without that read there is nothing to
+//     leak and nothing to score.
+//
+// An exemption covers what the excused function calls, since both of these
+// return a verdict and write no prompt text; see reachableFrom.
+var answerKeyExemptFunctions = []string{"taskHasDestructiveStep", "taskSteps"}
 
-// promptEntryPoints are the two functions a run calls to build what it sends.
-// Everything reachable from them is prompt text or a decision about prompt
-// text, which is why reachability from here is the right scope: the same
-// helper called from the scorer is doing a legitimate job.
-var promptEntryPoints = []string{"taskPromptForSurface", "systemPromptForTask"}
+// promptEntryPoints are the four builders that write the scaffolding around a
+// case's own words.
+//
+// Not taskPromptForSurface, which a run actually calls, and the difference is
+// the whole scope of this gate. That function first replaces the task's prompt
+// with the case's rendered text, and rendering reaches the fixture machinery,
+// which mentions the steps for reasons that have nothing to do with prompts.
+// Following it made the walk report taskSteps and demand an exemption for the
+// function that *builds* the steps, which would have been an exemption for the
+// scope being wrong rather than for anything the prompts do.
+//
+// The claim this gate makes is narrower and is the one worth making: the text
+// this package writes around the user's words names no answer. The user's own
+// words are the audit's `case` site, which it reports and says plainly that no
+// change to this package can take away. Verified rather than assumed:
+// RenderCasePrompt fills its template from FixtureOutput, the values a fixture
+// produced, and consults no expected step.
+var promptEntryPoints = []string{"taskPrompt", "dynamicTaskPrompt", "systemPrompt", "dynamicSystemPrompt"}
 
 // TestPromptBuilders_NeverReadTheAnswerKey is the gate that keeps V06's
 // deletion deleted.
@@ -1884,6 +1398,16 @@ func reachableFrom(functions map[string][]*ast.FuncDecl, entryPoints []string) m
 			return
 		}
 		seen[name] = true
+		// An exemption covers what the excused function calls, not only the
+		// function itself. taskHasDestructiveStep reads the steps through
+		// taskSteps, which builds them; walking into it would demand a second
+		// exemption for the machinery the first one needs, and taskSteps would
+		// then be excused everywhere rather than under the one caller the
+		// exemption is about. What makes this safe is that an excused function
+		// returns a verdict and writes no prompt text.
+		if slices.Contains(answerKeyExemptFunctions, name) {
+			return
+		}
 		for _, declaration := range declarations {
 			ast.Inspect(declaration.Body, func(node ast.Node) bool {
 				if identifier, isIdent := node.(*ast.Ident); isIdent {
@@ -1926,4 +1450,61 @@ func sortedNamesOf(set map[string]bool) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// TestPromptContract_StatesTheSurfaceAndNothingElse pins what a prompt is
+// allowed to say, now that everything per-case has gone.
+//
+// The claim is two-sided and both sides matter. A prompt must still carry the
+// user's words and whether what they asked for is destructive, or a model is
+// being asked to guess; and it must state how this surface is called, or the
+// score measures the model's prior rather than the surface. What it must not do
+// is name the case's own action, tool or parameters, which the answer-key gate
+// and the prompt audit check across the whole corpus.
+func TestPromptContract_StatesTheSurfaceAndNothingElse(t *testing.T) {
+	task := evalTask{
+		ID:     "MS-contract",
+		Prompt: "Close issue `7` in project `my-org/tools/gitlab-mcp-server`.",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_issue", ExpectedAction: "update", RequiredParams: []string{"project_id", "issue_iid"}},
+			{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true},
+		},
+	}
+	surfaces := []struct {
+		name    string
+		surface string
+		states  []string
+	}{
+		{
+			name:    "meta states the envelope",
+			surface: config.ToolSurfaceMeta,
+			states:  []string{`{"action":"...","params":{...}}`},
+		},
+		{
+			name:    "dynamic states find-then-execute",
+			surface: config.ToolSurfaceDynamic,
+			states:  []string{"gitlab_find_action", "gitlab_execute_action"},
+		},
+	}
+	for _, tc := range surfaces {
+		t.Run(tc.name, func(t *testing.T) {
+			stimulus := systemPromptForTask(task, tc.surface) + "\n" + taskPromptForSurface(task, tc.surface)
+			for _, want := range tc.states {
+				if !strings.Contains(stimulus, want) {
+					t.Errorf("the stimulus does not state %q:\n%s", want, stimulus)
+				}
+			}
+			if !strings.Contains(stimulus, task.Prompt) {
+				t.Errorf("the stimulus dropped the user's own words:\n%s", stimulus)
+			}
+			if !strings.Contains(stimulus, "Destructive: Yes") {
+				t.Errorf("the stimulus does not say the task is destructive:\n%s", stimulus)
+			}
+			for _, leaked := range []string{"issue.update", "issue.delete", "gitlab_issue", "issue_iid", "confirm"} {
+				if strings.Contains(stimulus, leaked) {
+					t.Errorf("the stimulus names %q, which is this case's own answer:\n%s", leaked, stimulus)
+				}
+			}
+		})
+	}
 }

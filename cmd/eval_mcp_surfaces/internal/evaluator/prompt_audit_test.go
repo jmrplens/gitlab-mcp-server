@@ -18,21 +18,6 @@ import (
 // again is handing a model the call it is about to be scored on.
 const exactCallPromptSignature = "Exact required call: use the "
 
-// answerKeyedDestructiveClause is the dynamic prompt's destructive line.
-const answerKeyedDestructiveClause = "when executing the destructive action, include top-level confirm:true on gitlab_execute_action"
-
-// answerKeyedOperationCountClause is the opening of the dynamic prompt's
-// operation count, which states how many catalog operations the answer key
-// holds.
-const answerKeyedOperationCountClause = "For each of the "
-
-// answerKeyedProjectGetClause is the dynamic prompt's project.get clause.
-const answerKeyedProjectGetClause = "the requested catalog operation is project.get, not project.list"
-
-// answerKeyedReleaseCompareClause is the dynamic prompt's release-compare
-// clause, which no case in today's corpus reaches.
-const answerKeyedReleaseCompareClause = "For release-summary workflows that compare refs before generating notes"
-
 // exactCallPromptCases are the twelve cases whose meta task prompt was built
 // by exactToolTaskPrompt before V05 deleted it, measured against the tree at
 // the time rather than copied from a plan.
@@ -129,93 +114,6 @@ func TestAuditPrompts_MetaEnvelopes_AreGone(t *testing.T) {
 			}
 			if exact := casesCarrying(report, exactCallPromptSignature); len(exact) > 0 {
 				t.Errorf("cases reaching the deleted exact-call builder = %v, want none", exact)
-			}
-		})
-	}
-}
-
-// TestAuditPrompts_DynamicPrompts_CarryTheAnswerKeyedClauses pins the three
-// clauses of dynamicTaskPrompt that today's corpus reaches. The fourth, the
-// release-compare clause, reaches no case and is asserted in the test below
-// against a task built for it, so that its deletion fails something.
-func TestAuditPrompts_DynamicPrompts_CarryTheAnswerKeyedClauses(t *testing.T) {
-	report := promptAuditForSurface(t, config.ToolSurfaceDynamic)
-	destructive := casesCarrying(report, answerKeyedDestructiveClause)
-	if len(destructive) == 0 {
-		t.Error("no dynamic prompt carries the destructive clause")
-	}
-	for _, audited := range report.Cases {
-		carries := strings.Contains(audited.UserPrompt, answerKeyedDestructiveClause)
-		if carries != audited.Destructive {
-			t.Errorf("%s: destructive clause = %v, case destructive = %v", audited.ID, carries, audited.Destructive)
-		}
-	}
-	if counted := casesCarrying(report, answerKeyedOperationCountClause); len(counted) == 0 {
-		t.Error("no dynamic prompt states how many catalog operations the answer key holds")
-	}
-	if projectGet := casesCarrying(report, answerKeyedProjectGetClause); len(projectGet) == 0 {
-		t.Error("no dynamic prompt carries the project.get clause")
-	}
-	if carried := casesCarrying(report, answerKeyedReleaseCompareClause); len(carried) != 0 {
-		t.Errorf("the release-compare clause reached %v; it reached no case when this was written", carried)
-	}
-	t.Logf("dynamic clauses: destructive %d, operation count %d, project.get %d, release compare 0",
-		len(destructive), len(casesCarrying(report, answerKeyedOperationCountClause)), len(casesCarrying(report, answerKeyedProjectGetClause)))
-}
-
-// TestDynamicTaskPrompt_ReleaseCompareClause_IsSelectedByTheAnswerKey drives
-// the one dynamic clause the corpus does not reach, so its deletion fails a
-// test rather than passing unnoticed.
-func TestDynamicTaskPrompt_ReleaseCompareClause_IsSelectedByTheAnswerKey(t *testing.T) {
-	task := evalTask{
-		ID:     "PA-001",
-		Prompt: "Summarize what shipped in project `group/project`.",
-		Steps: []evalStep{
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.list", RequiredParams: []string{"project_id"}},
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.compare", RequiredParams: []string{"project_id"}},
-			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.create", RequiredParams: []string{"project_id"}},
-		},
-	}
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	if !strings.Contains(prompt, answerKeyedReleaseCompareClause) {
-		t.Fatalf("release-compare clause missing from a prompt whose steps select it:\n%s", prompt)
-	}
-	audited := auditPromptsForTask(task, config.ToolSurfaceDynamic)
-	if !slices.Contains(audited.AnswerKeyed, promptSiteTask) {
-		t.Errorf("AnswerKeyed = %v, want the task prompt to change when the answer key goes", audited.AnswerKeyed)
-	}
-}
-
-// TestAuditPrompts_EveryDynamicCase_IsAnswerKeyedInItsTaskPrompt pins the
-// coaching that names nothing: every dynamic task prompt states the number of
-// catalog operations the answer key holds, so every one of them changes when
-// the key is taken away.
-func TestAuditPrompts_EveryDynamicCase_IsAnswerKeyedInItsTaskPrompt(t *testing.T) {
-	report := promptAuditForSurface(t, config.ToolSurfaceDynamic)
-	for _, audited := range report.Cases {
-		if !slices.Contains(audited.AnswerKeyed, promptSiteTask) {
-			t.Errorf("%s: task prompt did not change when the answer key was removed", audited.ID)
-		}
-		if slices.Contains(audited.AnswerKeyed, promptSiteSystem) {
-			t.Errorf("%s: dynamic system prompt reads the answer key, which it did not when this was written", audited.ID)
-		}
-	}
-}
-
-// TestAuditPrompts_ConfirmLiteral_ReachesEveryCaseOnBothSurfaces pins what the
-// published destructive-safety column rests on: both system prompts name
-// confirm for every case, destructive or not.
-func TestAuditPrompts_ConfirmLiteral_ReachesEveryCaseOnBothSurfaces(t *testing.T) {
-	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta} {
-		t.Run(surface, func(t *testing.T) {
-			report := promptAuditForSurface(t, surface)
-			totals := report.totals()
-			if totals.ByKind[promptLeakConfirm].System != totals.Cases {
-				t.Errorf("confirm named in the system prompt of %d cases, want all %d",
-					totals.ByKind[promptLeakConfirm].System, totals.Cases)
-			}
-			if totals.Destructive == 0 || totals.DestructiveConfirmNamed != totals.Destructive {
-				t.Errorf("destructive cases = %d, of which confirm named = %d", totals.Destructive, totals.DestructiveConfirmNamed)
 			}
 		})
 	}
@@ -773,4 +671,46 @@ func samplePromptAuditReport(t *testing.T) promptAuditReport {
 		t.Fatalf("auditPrompts() audited %d cases, want 1", len(report.Cases))
 	}
 	return report
+}
+
+// TestAuditPrompts_NoStimulusIsAnswerKeyed is what the three V04 tests that
+// pinned the leak became.
+//
+// They asserted the opposite of this, one measurement each, because each was
+// written to fail on the step that removed what it measured: that every dynamic
+// task prompt changed when the answer key was taken away, that both system
+// prompts named confirm for every case whether destructive or not, and that the
+// dynamic prompt carried its operation count, its project.get clause and its
+// destructive clause. V07 removed all of it, so the three collapse into one
+// statement with nothing left to enumerate.
+//
+// The confirm figure is the one worth keeping an eye on. The published
+// destructive-safety column read 100.0% on every row because every stimulus
+// said where confirm goes; both surfaces publish that themselves, in a schema
+// property on meta and in the execute tool's own description on dynamic, so
+// what that column measures now is whether a model reads the surface.
+func TestAuditPrompts_NoStimulusIsAnswerKeyed(t *testing.T) {
+	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta} {
+		t.Run(surface, func(t *testing.T) {
+			report := promptAuditForSurface(t, surface)
+			totals := report.totals()
+			if totals.Destructive == 0 {
+				t.Fatal("no destructive case audited, so the confirm assertion below would pass for the wrong reason")
+			}
+			if totals.DestructiveConfirmNamed != 0 {
+				t.Errorf("%d destructive cases are told where confirm goes, want none", totals.DestructiveConfirmNamed)
+			}
+			if named := totals.ByKind[promptLeakConfirm].System; named != 0 {
+				t.Errorf("the system prompt names confirm for %d cases, want none", named)
+			}
+			for _, audited := range report.Cases {
+				if slices.Contains(audited.AnswerKeyed, promptSiteTask) {
+					t.Errorf("%s: its task prompt still changes when the answer key is removed", audited.ID)
+				}
+				if slices.Contains(audited.AnswerKeyed, promptSiteSystem) {
+					t.Errorf("%s: its system prompt still changes when the answer key is removed", audited.ID)
+				}
+			}
+		})
+	}
 }
