@@ -153,12 +153,12 @@ func TestCapabilityBridgeResult_RequiresSession(t *testing.T) {
 // TestCapabilityBridgeResult_UsesLiveMCPCapabilities verifies bridge tools can
 // inspect a real in-memory MCP session, including resources and completions.
 func TestCapabilityBridgeResult_UsesLiveMCPCapabilities(t *testing.T) {
-	client, cleanup, clientErr := newMockGitLabClient()
+	client, _, cleanup, clientErr := newMockGitLabClient()
 	if clientErr != nil {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}

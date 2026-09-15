@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,14 +58,9 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "# %s\n\n", reportTitle(opts.ToolSurface))
 	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
-	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
-		if branch != "" {
-			fmt.Fprintf(b, "Git branch: `%s`\n", branch)
-		}
-		if commit != "" {
-			fmt.Fprintf(b, "Git commit: `%s`\n", commit)
-		}
-	}
+	branch, commit := currentGitReportMetadata()
+	writeReportMetadata(b, reportKeyGitBranch, branch)
+	writeReportMetadata(b, reportKeyGitCommit, commit)
 	fmt.Fprintf(b, "Mode: %s\n", reportMode(dryRun))
 	fmt.Fprintf(b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(b, "Tool surface: `%s`\n", opts.ToolSurface)
@@ -85,6 +81,7 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	if opts.Partition != "" {
 		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
 	}
+	writeRunProvenance(b, opts)
 	capabilityAccess := "disabled"
 	resourceAccess := "disabled"
 	promptAccess := "disabled"
@@ -111,6 +108,71 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "Resource access: `%s`\n", resourceAccess)
 	fmt.Fprintf(b, "Prompt access: `%s`\n", promptAccess)
 	fmt.Fprintf(b, "Completion access: `%s`\n", completionAccess)
+}
+
+// writeReportMetadata writes one header line, stating [reportValueUnknown]
+// for a value this run could not resolve rather than leaving the line out.
+// An omitted line and a line a reader could not parse look the same from the
+// outside, so a header that drops what it does not know reads as complete
+// while it is not: the runner that produced the first reports had no `.git`
+// to read, and the branch and commit lines simply were not there.
+func writeReportMetadata(b *strings.Builder, key, value string) {
+	if strings.TrimSpace(value) == "" {
+		value = reportValueUnknown
+	}
+	fmt.Fprintf(b, "%s: `%s`\n", key, value)
+}
+
+// writeRunProvenance writes what the numbers below it were measured on: the
+// deployment the evaluated catalog was built for, the sampling every model
+// request carried, and whether the prompts withheld the answer the scorer
+// checks for. A report that states none of them cannot be compared with
+// another one, and the published tables used to carry six columns naming
+// neither the deployment nor the commit they came from.
+func writeRunProvenance(b *strings.Builder, opts options) {
+	writeReportMetadata(b, reportKeyServerMode, evalServerModeLabel(opts.ServerMode))
+	writeReportMetadata(b, reportKeyTier, opts.Deployment.tierLabel())
+	writeReportMetadata(b, reportKeyTokenScopes, opts.Deployment.tokenScopesLabel())
+	writeReportMetadata(b, reportKeyMetaParamSchema, toolutil.MetaParamSchemaMode())
+	writeReportMetadata(b, reportKeyGitLabVersion, opts.Deployment.GitLabVersion)
+	writeReportMetadata(b, reportKeyTemperature, strconv.FormatFloat(evalSamplingTemperature, 'f', -1, 64))
+	writeReportMetadata(b, reportKeyMaxOutputTokens, maxOutputTokensLabel(opts.MaxTokens))
+	writeReportMetadata(b, reportKeyStimulus, reportStimulus())
+}
+
+// evalServerModeLabel names the protective mode a catalog was built for. An
+// unset mode is the default one rather than an unknown one: every reader of
+// it compares against the read-only and safe-mode names and treats everything
+// else as default, [evalServerConfig] included.
+func evalServerModeLabel(serverMode string) string {
+	if strings.TrimSpace(serverMode) == "" {
+		return ServerModeDefault
+	}
+	return serverMode
+}
+
+// maxOutputTokensLabel states the output ceiling model requests were sent
+// with. A non-positive value is one no request could have carried, so it
+// reports as unknown rather than as a ceiling of zero.
+func maxOutputTokensLabel(maxTokens int) string {
+	if maxTokens <= 0 {
+		return ""
+	}
+	return strconv.Itoa(maxTokens)
+}
+
+// reportStimulus reports what the prompt builder hands the model, which is
+// what decides whether the numbers in this report may be published at all
+// (see requireUncoachedStimulus).
+//
+// It is coached today, and the declaration is not a formality: the meta
+// surface's prompt builder writes the expected call into the prompt for
+// twelve cases (exactToolTaskPrompt), and the retry guidance switches on the
+// expected tool and action for nineteen more. This is the one place that
+// flips once those paths are gone, and until it does nothing this evaluator
+// writes can be published.
+func reportStimulus() string {
+	return stimulusCoached
 }
 
 func reportTitle(toolSurface string) string {

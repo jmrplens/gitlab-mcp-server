@@ -244,5 +244,61 @@ const (
 	diagnosticUnexpectedTopLevelParameter = "unexpected top-level parameter"
 )
 
+// Report header keys, spelled once for the writer in report.go and for every
+// reader of a written report. A report that does not say what it was a report
+// of cannot be compared with another one, so each of these lines is written on
+// every run, carrying [reportValueUnknown] where the value is unavailable
+// rather than being left out: an omitted line and a line nothing could parse
+// look the same to a reader, and a completeness check passes on a report with
+// a hole in it.
+const (
+	// reportKeyGitBranch is the branch the evaluated tree was on.
+	reportKeyGitBranch = "Git branch"
+	// reportKeyGitCommit is the short commit the evaluated tree was at.
+	reportKeyGitCommit = "Git commit"
+	// reportKeyServerMode is the protective mode the catalog was built for:
+	// default, read-only or safe-mode.
+	reportKeyServerMode = "Server mode"
+	// reportKeyTier is the licensing tier the catalog was built for, which
+	// decides which actions exist at all.
+	reportKeyTier = "Tier"
+	// reportKeyMetaParamSchema is the meta-tool input-schema mode the catalog
+	// was registered with, which decides how much schema a model was shown.
+	reportKeyMetaParamSchema = "Meta param schema"
+	// reportKeyTokenScopes is the credential's detected PAT scopes, which
+	// narrow the catalog before registration.
+	reportKeyTokenScopes = "Token scopes"
+	// reportKeyGitLabVersion is the version the evaluated instance answered
+	// with.
+	reportKeyGitLabVersion = "GitLab version"
+	// reportKeyTemperature is the sampling temperature every model request
+	// was sent with.
+	reportKeyTemperature = "Temperature"
+	// reportKeyMaxOutputTokens is the output-token ceiling every model
+	// request was sent with.
+	reportKeyMaxOutputTokens = "Max output tokens"
+	// reportKeyStimulus is the report header key that says what the model was
+	// given. A run whose prompts name the expected tool, action or parameters
+	// is measuring the prompt builder, not the model, so the header has to
+	// carry the answer before any number taken from it may be published.
+	reportKeyStimulus = "Stimulus"
+
+	// stimulusCoached is what a run declares while the prompt builder still
+	// hands the model the call the scorer checks for.
+	stimulusCoached = "coached"
+	// stimulusUncoached is the only Stimulus value publication accepts.
+	stimulusUncoached = "uncoached"
+
+	// reportValueUnknown is what a header line carries when its value is not
+	// available to the run that wrote it.
+	reportValueUnknown = "unknown"
+)
+
+// evalSamplingTemperature is the temperature every provider request is sent
+// with. It is a constant rather than an option because nothing selects it, and
+// it is named here so the header states the value the runner actually sends
+// instead of a second copy of the number.
+const evalSamplingTemperature float64 = 0
+
 // evalElicitationReleaseTag stores the package-level eval elicitation release
 // tag state.

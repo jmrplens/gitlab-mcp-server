@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -1156,5 +1157,127 @@ func TestWriteUsageSummary_PricingFlags_RendersCostAndSource(t *testing.T) {
 	writeUsageSummary(&dry, opts, results, true)
 	if dry.Len() != 0 {
 		t.Fatalf("dry-run usage summary = %q, want empty", dry.String())
+	}
+}
+
+// TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn verifies that every
+// choice which changes what a run means reaches the header under its own key,
+// and that a reader parses back exactly what was written.
+//
+// Both halves matter and neither implies the other. A value that reaches the
+// report but not under a key the parser reads is invisible to the published
+// tables, and a key the parser reads that the writer never emits is a column
+// of dashes; the round trip through firstMetadataValue is the same read
+// readPublishReport makes, so this asserts the whole path rather than the
+// rendered line alone. The meta-tool schema mode is set for the duration of
+// the test rather than read from the options, because that is where it lives:
+// the header states what the catalog was registered with, so a header that
+// quoted a constant would keep saying "opaque" on a run that was not.
+func TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn(t *testing.T) {
+	t.Cleanup(toolutil.SetMetaParamSchemaModeScoped(toolutil.MetaParamSchemaCompact))
+
+	var b strings.Builder
+	writeReportHeader(&b, options{
+		Model:       "test:model",
+		ToolSurface: config.ToolSurfaceMeta,
+		Backend:     backendGitLab,
+		ServerMode:  ServerModeReadOnly,
+		MaxTokens:   4096,
+		Deployment: deploymentFacts{
+			Resolved:      true,
+			Enterprise:    true,
+			Tier:          edition.Premium,
+			TokenScopes:   []string{"api", "read_user"},
+			GitLabVersion: "18.4.1",
+		},
+	}, false)
+	header := b.String()
+
+	cases := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{name: "tool surface", key: "Tool surface", want: config.ToolSurfaceMeta},
+		{name: "server mode", key: reportKeyServerMode, want: ServerModeReadOnly},
+		{name: "tier", key: reportKeyTier, want: "premium"},
+		{name: "meta param schema", key: reportKeyMetaParamSchema, want: toolutil.MetaParamSchemaCompact},
+		{name: "token scopes", key: reportKeyTokenScopes, want: "api, read_user"},
+		{name: "gitlab version", key: reportKeyGitLabVersion, want: "18.4.1"},
+		{name: "temperature", key: reportKeyTemperature, want: "0"},
+		{name: "max output tokens", key: reportKeyMaxOutputTokens, want: "4096"},
+		{name: "stimulus", key: reportKeyStimulus, want: stimulusCoached},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if line := tc.key + ": `" + tc.want + "`"; !strings.Contains(header, line) {
+				t.Fatalf("header does not carry %q:\n%s", line, header)
+			}
+			if got := firstMetadataValue(header, tc.key); got != tc.want {
+				t.Fatalf("firstMetadataValue(%q) = %q, want %q", tc.key, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine
+// verifies a value the run could not resolve still occupies its line.
+//
+// This is the defect the remote build runner produced: it holds no `.git`, so
+// currentGitReportMetadata answered nothing and the branch and commit lines
+// were simply absent. A reader cannot tell an omitted line from one it failed
+// to parse, so a completeness check over the header would have passed on a
+// report with a hole in it. A test binary runs in its own package directory,
+// which holds no `.git` either, so the git pair is unresolvable here by
+// construction and the assertion is stable.
+func TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{}, true)
+	header := b.String()
+
+	for _, key := range []string{
+		reportKeyGitBranch,
+		reportKeyGitCommit,
+		reportKeyTier,
+		reportKeyTokenScopes,
+		reportKeyGitLabVersion,
+		reportKeyMaxOutputTokens,
+	} {
+		t.Run(key, func(t *testing.T) {
+			if got := firstMetadataValue(header, key); got != reportValueUnknown {
+				t.Fatalf("firstMetadataValue(%q) = %q, want %q; header:\n%s", key, got, reportValueUnknown, header)
+			}
+		})
+	}
+	// The mode a catalog is built for has no unknown state: an unset
+	// ServerMode is the default mode, which is what every reader of it
+	// resolves an empty string to.
+	if got := firstMetadataValue(header, reportKeyServerMode); got != ServerModeDefault {
+		t.Fatalf("firstMetadataValue(%q) = %q, want %q", reportKeyServerMode, got, ServerModeDefault)
+	}
+}
+
+// TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication verifies the
+// header this evaluator writes today is one publication refuses.
+//
+// The declaration and the gate were written a step apart, so nothing until now
+// held them to each other: a header declaring the wrong spelling, or the gate
+// reading a key the writer does not emit, would leave publication either
+// permanently shut or quietly open. The refusal must also name both the value
+// found and the value required, since it is the only place a reader learns why
+// a full run published nothing.
+func TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{}, true)
+	declared := firstMetadataValue(b.String(), reportKeyStimulus)
+	if declared != stimulusCoached {
+		t.Fatalf("declared stimulus = %q, want %q", declared, stimulusCoached)
+	}
+	err := requireUncoachedStimulus(publishReport{Path: "report.md", Stimulus: declared})
+	if err == nil {
+		t.Fatal("requireUncoachedStimulus() = nil; a coached run must not be publishable")
+	}
+	if !strings.Contains(err.Error(), stimulusCoached) || !strings.Contains(err.Error(), stimulusUncoached) {
+		t.Fatalf("refusal = %v, want it to name both %q and %q", err, stimulusCoached, stimulusUncoached)
 	}
 }

@@ -9,49 +9,54 @@ import (
 )
 
 type options struct {
-	TasksPath              string
-	Output                 string
-	TraceDir               string
-	TerminalLog            string
-	Model                  string
-	Models                 string
-	ToolsFile              string
-	CompareReports         stringList
-	CheckEfficiency        stringList
-	CheckReportClean       stringList
-	CompareTraces          stringList
-	EfficiencyAllowTask    stringList
-	PublishFrom            stringList
-	PublishResults         string
-	PublishReadme          string
-	PublishLabel           string
-	PublishMode            string
-	Preset                 string
-	Partition              string
-	ToolSurface            string
-	ServerMode             string
-	Edition                string
-	CoverageReport         string
-	Backend                string
-	GitLabEnv              string
-	DockerCompose          string
-	DockerComposeFile      string
-	DockerGitLabURL        string
-	DockerAutoStart        bool
-	DockerWaitTimeout      time.Duration
-	MCPCommand             string
-	MCPArgs                stringList
-	MCPEnv                 string
-	Fixtures               string
-	OnlyIDs                string
-	MaxTasks               int
-	Repeat                 int
-	MaxTokens              int
-	Retries                int
-	RetryWait              time.Duration
-	MaxOutputRetries       int
-	Pause                  time.Duration
-	Pricing                pricingOptions
+	TasksPath           string
+	Output              string
+	TraceDir            string
+	TerminalLog         string
+	Model               string
+	Models              string
+	ToolsFile           string
+	CompareReports      stringList
+	CheckEfficiency     stringList
+	CheckReportClean    stringList
+	CompareTraces       stringList
+	EfficiencyAllowTask stringList
+	PublishFrom         stringList
+	PublishResults      string
+	PublishReadme       string
+	PublishLabel        string
+	PublishMode         string
+	Preset              string
+	Partition           string
+	ToolSurface         string
+	ServerMode          string
+	Edition             string
+	CoverageReport      string
+	Backend             string
+	GitLabEnv           string
+	DockerCompose       string
+	DockerComposeFile   string
+	DockerGitLabURL     string
+	DockerAutoStart     bool
+	DockerWaitTimeout   time.Duration
+	MCPCommand          string
+	MCPArgs             stringList
+	MCPEnv              string
+	Fixtures            string
+	OnlyIDs             string
+	MaxTasks            int
+	Repeat              int
+	MaxTokens           int
+	Retries             int
+	RetryWait           time.Duration
+	MaxOutputRetries    int
+	Pause               time.Duration
+	Pricing             pricingOptions
+	// Deployment is resolved while the catalog is loaded rather than parsed
+	// from a flag, the way the capability-access fields below are: it records
+	// what the catalog the model was shown was actually built for, and the
+	// report header states it. The zero value reports as unknown.
+	Deployment             deploymentFacts
 	DryRun                 bool
 	FixtureSmoke           bool
 	PublishDocs            bool

@@ -410,12 +410,12 @@ func TestDynamicDiscoveryResult_Find(t *testing.T) {
 // TestAppendLookupFollowup_DynamicFindUsesLiveMCPTool verifies live dynamic
 // discovery calls exercise the registered MCP tool instead of bypassing it.
 func TestAppendLookupFollowup_DynamicFindUsesLiveMCPTool(t *testing.T) {
-	client, cleanup, clientErr := newMockGitLabClient()
+	client, _, cleanup, clientErr := newMockGitLabClient()
 	if clientErr != nil {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, routes, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
+	session, closeSession, _, routes, sessionErr := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}

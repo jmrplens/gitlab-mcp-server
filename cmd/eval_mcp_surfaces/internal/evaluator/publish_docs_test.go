@@ -1086,6 +1086,7 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		"Backend: `gitlab`\n" +
 		"Preset: `" + preset + "`\n" +
 		"Tool execution: `mcp`\n" +
+		fixtureRunProvenanceHeader +
 		"Catalog tools: 33\n" +
 		"Runs: 1\n" +
 		"Task attempts: " + strconv.Itoa(attempts) + "\n\n" +
@@ -1127,6 +1128,7 @@ func multiModelPublishReport() string {
 		"Backend: `gitlab`\n" +
 		"Preset: `docker-read`\n" +
 		"Tool execution: `mcp`\n" +
+		fixtureRunProvenanceHeader +
 		"Catalog tools: 33\n" +
 		"Runs: 1\n" +
 		"Task attempts: 4\n\n" +
@@ -1494,5 +1496,110 @@ func TestPublishDocSections_HaveAHomeInTheCommittedDocuments(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fixtureRunProvenanceHeader is the provenance block a report written by this
+// evaluator carries. It is kept beside the fixtures rather than assembled per
+// test so every publish fixture states one deployment, and a test about
+// provenance can name these values without restating the whole header.
+const fixtureRunProvenanceHeader = "Server mode: `default`\n" +
+	"Tier: `ultimate`\n" +
+	"Token scopes: `api, admin_mode`\n" +
+	"Meta param schema: `opaque`\n" +
+	"GitLab version: `18.4.1`\n" +
+	"Temperature: `0`\n" +
+	"Max output tokens: `1024`\n"
+
+// TestPublishedTables_StateWhatEveryRowWasMeasuredOn verifies the provenance a
+// report header carries reaches both published tables, and that rows which
+// disagree about it are not published as though they agreed.
+//
+// The published tables are the only form most readers ever see, and until now
+// they named no deployment, no sampling and no commit: two snapshots taken
+// against different instances, tiers or credentials rendered identically, so
+// nothing in the document could settle whether a difference between them was
+// the model's or the runtime's. The aggregate row is the half worth pinning
+// hardest, because it covers several reports at once: taking the first row's
+// value to stand for the rest is how a table comes to name a deployment half
+// its numbers were not measured on.
+func TestPublishedTables_StateWhatEveryRowWasMeasuredOn(t *testing.T) {
+	path := writeTempPublishReport(t, singleModelPublishReportForSurface("anthropic:claude-haiku-4-5-20251001", presetDockerRead, 38, config.ToolSurfaceMeta))
+	report, err := readPublishReport(path)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	if len(report.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(report.Rows))
+	}
+	row := report.Rows[0]
+
+	t.Run("the header reaches the row", func(t *testing.T) {
+		fields := map[string]struct{ got, want string }{
+			reportKeyServerMode:      {row.ServerMode, ServerModeDefault},
+			reportKeyTier:            {row.Tier, "ultimate"},
+			reportKeyTokenScopes:     {row.TokenScopes, "api, admin_mode"},
+			reportKeyMetaParamSchema: {row.MetaParamSchema, "opaque"},
+			reportKeyGitLabVersion:   {row.GitLabVersion, "18.4.1"},
+			reportKeyTemperature:     {row.Temperature, "0"},
+			reportKeyMaxOutputTokens: {row.MaxOutputTokens, "1024"},
+		}
+		for key, field := range fields {
+			t.Run(key, func(t *testing.T) {
+				if field.got != field.want {
+					t.Fatalf("row %s = %q, want %q", key, field.got, field.want)
+				}
+			})
+		}
+	})
+
+	t.Run("the detailed table", func(t *testing.T) {
+		table := renderModelResultsTable(report.Rows, aggregatePublishRows(report.Rows))
+		for _, want := range []string{
+			"Server mode",
+			"Run conditions",
+			"schema opaque; scopes api, admin_mode; GitLab 18.4.1; T 0; max 1024",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(table, want) {
+					t.Fatalf("table does not carry %q:\n%s", want, table)
+				}
+			})
+		}
+	})
+
+	t.Run("the readme summary", func(t *testing.T) {
+		summary := renderReadmeSummaryTable(publishSummariesByModel(report.Rows))
+		for _, want := range []string{"Server mode", "Tier", "default", "ultimate"} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(summary, want) {
+					t.Fatalf("summary does not carry %q:\n%s", want, summary)
+				}
+			})
+		}
+	})
+}
+
+// TestPublishedProvenanceCells_StateAFactOrSayTheyCannot verifies a cell
+// covering several rows claims a value only when they all carry it, and that a
+// report stating no provenance at all renders as absent rather than as a run
+// measured with no schema, no scopes and no ceiling. Every report written
+// before this provenance existed is in that second state.
+func TestPublishedProvenanceCells_StateAFactOrSayTheyCannot(t *testing.T) {
+	rows := []publishRow{
+		{Model: "a:b", ServerMode: ServerModeDefault, Tier: "ultimate"},
+		{Model: "a:b", ServerMode: ServerModeReadOnly, Tier: "ultimate"},
+	}
+	if got := commonPublishValue(rows, func(row publishRow) string { return row.ServerMode }); got != publishValueMixed {
+		t.Fatalf("common server mode = %q, want %q", got, publishValueMixed)
+	}
+	if got := commonPublishValue(rows, func(row publishRow) string { return row.Tier }); got != "ultimate" {
+		t.Fatalf("common tier = %q, want the one both rows carry", got)
+	}
+	if got := commonPublishValue(nil, func(row publishRow) string { return row.Tier }); got != "" {
+		t.Fatalf("common tier over no rows = %q, want empty", got)
+	}
+	if got := rowRunConditions(publishRow{Model: "a:b"}); got != "schema -; scopes -; GitLab -; T -; max -" {
+		t.Fatalf("run conditions = %q, want every part dashed", got)
 	}
 }

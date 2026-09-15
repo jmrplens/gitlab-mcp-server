@@ -93,14 +93,9 @@ const (
 	modelEvaluationSuffix = " Model Evaluation"
 	boldIntFormat         = "**%d**"
 	boldStringFormat      = "**%s**"
-
-	// reportKeyStimulus is the report header key that says what the model was
-	// given. A run whose prompts name the expected tool, action or parameters
-	// is measuring the prompt builder, not the model, so the header has to
-	// carry the answer before any number taken from it may be published.
-	reportKeyStimulus = "Stimulus"
-	// stimulusUncoached is the only Stimulus value publication accepts.
-	stimulusUncoached = "uncoached"
+	// publishValueMixed is what a provenance cell covering several reports
+	// says when they do not agree on the value.
+	publishValueMixed = "mixed"
 )
 
 // fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
@@ -114,6 +109,12 @@ var fullDockerAttemptsByPreset = map[string]int{
 }
 
 // publishReport captures publish report data for published evaluation reports.
+//
+// The provenance half of it, from ServerMode down, is what says which run a
+// published number came from. Each field is read from the header line of the
+// same name and published in a column, because a table of six models carrying
+// no deployment, no sampling and no commit cannot be compared with the next
+// one, and a reader has no other way to reach the report it came from.
 type publishReport struct {
 	Path                   string
 	Date                   string
@@ -124,6 +125,13 @@ type publishReport struct {
 	Backend                string
 	Preset                 string
 	ToolExecution          string
+	ServerMode             string
+	Tier                   string
+	MetaParamSchema        string
+	TokenScopes            string
+	GitLabVersion          string
+	Temperature            string
+	MaxOutputTokens        string
 	GitBranch              string
 	GitCommit              string
 	Stimulus               string
@@ -139,6 +147,13 @@ type publishRow struct {
 	Preset            string
 	Backend           string
 	ToolExecution     string
+	ServerMode        string
+	Tier              string
+	MetaParamSchema   string
+	TokenScopes       string
+	GitLabVersion     string
+	Temperature       string
+	MaxOutputTokens   string
 	Attempts          int
 	ExpectedOps       int
 	ModelRequests     int
@@ -199,6 +214,8 @@ type publishTraceAccumulator struct {
 // publishModelSummary captures publish model summary data for published evaluation reports.
 type publishModelSummary struct {
 	Model           string
+	ServerMode      string
+	Tier            string
 	Attempts        int
 	ExpectedOps     int
 	ToolSelection   float64
@@ -525,8 +542,15 @@ func readPublishReport(path string) (publishReport, error) {
 		Backend:                input.Backend,
 		Preset:                 input.Preset,
 		ToolExecution:          input.ToolExecution,
-		GitBranch:              firstMetadataValue(content, "Git branch"),
-		GitCommit:              firstMetadataValue(content, "Git commit"),
+		ServerMode:             firstMetadataValue(content, reportKeyServerMode),
+		Tier:                   firstMetadataValue(content, reportKeyTier),
+		MetaParamSchema:        firstMetadataValue(content, reportKeyMetaParamSchema),
+		TokenScopes:            firstMetadataValue(content, reportKeyTokenScopes),
+		GitLabVersion:          firstMetadataValue(content, reportKeyGitLabVersion),
+		Temperature:            firstMetadataValue(content, reportKeyTemperature),
+		MaxOutputTokens:        firstMetadataValue(content, reportKeyMaxOutputTokens),
+		GitBranch:              firstMetadataValue(content, reportKeyGitBranch),
+		GitCommit:              firstMetadataValue(content, reportKeyGitCommit),
 		Stimulus:               firstMetadataValue(content, reportKeyStimulus),
 		Diagnostics:            input.Diagnostics,
 		UnresolvedHarnessNoise: reportMentionsHarnessNoise(content),
@@ -818,6 +842,13 @@ func newPublishRow(report publishReport, model, preset string, stats publishTask
 		Preset:            preset,
 		Backend:           report.Backend,
 		ToolExecution:     report.ToolExecution,
+		ServerMode:        report.ServerMode,
+		Tier:              report.Tier,
+		MetaParamSchema:   report.MetaParamSchema,
+		TokenScopes:       report.TokenScopes,
+		GitLabVersion:     report.GitLabVersion,
+		Temperature:       report.Temperature,
+		MaxOutputTokens:   report.MaxOutputTokens,
 		Attempts:          firstPositive(stats.Attempts, metrics.Attempts),
 		ExpectedOps:       stats.ExpectedOps,
 		ModelRequests:     firstPositive(parseReportInt(usage[usageModelRequests]), parseReportInt(usage["Requests"]), stats.ModelRequests),
@@ -1090,6 +1121,9 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 			fmt.Sprintf("`%s`", escapeTable(row.Model)),
 			fmt.Sprintf("`%s`", emptyDash(row.Preset)),
 			dockerBackendLabel(row),
+			emptyDash(escapeTable(row.ServerMode)),
+			emptyDash(escapeTable(row.Tier)),
+			rowRunConditions(row),
 			strconv.Itoa(row.Attempts),
 			strconv.Itoa(row.ExpectedOps),
 			strconv.Itoa(row.ModelRequests),
@@ -1108,6 +1142,9 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 		"**Aggregate**",
 		"**all selected**",
 		"-",
+		emptyDash(escapeTable(commonPublishValue(rows, func(row publishRow) string { return row.ServerMode }))),
+		emptyDash(escapeTable(commonPublishValue(rows, func(row publishRow) string { return row.Tier }))),
+		"-",
 		fmt.Sprintf(boldIntFormat, aggregate.Attempts),
 		fmt.Sprintf(boldIntFormat, aggregate.ExpectedOps),
 		fmt.Sprintf(boldIntFormat, aggregate.ModelRequests),
@@ -1123,10 +1160,46 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 	})
 
 	return docgen.RenderMarkdownTable(
-		[]string{"Model", "Preset", "Backend", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
-		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
+		[]string{"Model", "Preset", "Backend", "Server mode", "Tier", "Run conditions", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
 		tableRows,
 	)
+}
+
+// rowRunConditions states the conditions a row was measured under that do not
+// have a column of their own: the meta-tool schema mode the catalog was
+// registered with, the credential scopes that narrowed it, the version the
+// instance answered with, and the sampling every model request carried. Each
+// keeps its label, because the cell is read by someone comparing two published
+// snapshots and five bare values in a row is not something anyone can read.
+func rowRunConditions(row publishRow) string {
+	return strings.Join([]string{
+		"schema " + emptyDash(escapeTable(row.MetaParamSchema)),
+		"scopes " + emptyDash(escapeTable(row.TokenScopes)),
+		"GitLab " + emptyDash(escapeTable(row.GitLabVersion)),
+		"T " + emptyDash(escapeTable(row.Temperature)),
+		"max " + emptyDash(escapeTable(row.MaxOutputTokens)),
+	}, "; ")
+}
+
+// commonPublishValue names the value every row agrees on, or [publishValueMixed]
+// when they do not. A published aggregate covers several reports, so a
+// provenance cell over them states a fact only while they all carry the same
+// one; taking the first row's value to stand for the rest is how a table comes
+// to name a deployment half its numbers were not measured on.
+func commonPublishValue(rows []publishRow, value func(publishRow) string) string {
+	common := ""
+	for index, row := range rows {
+		current := strings.TrimSpace(value(row))
+		if index == 0 {
+			common = current
+			continue
+		}
+		if current != common {
+			return publishValueMixed
+		}
+	}
+	return common
 }
 
 // buildReadmeSummaryBlock constructs the request parameters from the input.
@@ -1149,6 +1222,8 @@ func renderReadmeSummaryTable(summaries []publishModelSummary) string {
 		rows = append(rows, []string{
 			escapeTable(provider),
 			fmt.Sprintf("`%s`", escapeTable(model)),
+			emptyDash(escapeTable(summary.ServerMode)),
+			emptyDash(escapeTable(summary.Tier)),
 			compatibilityLabel(summary),
 			formatMetric(summary.ToolSelection),
 			formatRecoverySummary(summary),
@@ -1156,8 +1231,8 @@ func renderReadmeSummaryTable(summaries []publishModelSummary) string {
 		})
 	}
 	return docgen.RenderMarkdownTable(
-		[]string{"Provider", "Model", "Compatibility", "Tool accuracy", "Recovery", "Docker live status"},
-		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
+		[]string{"Provider", "Model", "Server mode", "Tier", "Compatibility", "Tool accuracy", "Recovery", "Docker live status"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
 		rows,
 	)
 }
@@ -1284,6 +1359,8 @@ func publishSummariesByModel(rows []publishRow) []publishModelSummary {
 		aggregate := aggregatePublishRows(byModel[model])
 		summary := publishModelSummary{
 			Model:           model,
+			ServerMode:      commonPublishValue(byModel[model], func(row publishRow) string { return row.ServerMode }),
+			Tier:            commonPublishValue(byModel[model], func(row publishRow) string { return row.Tier }),
 			Attempts:        aggregate.Attempts,
 			ExpectedOps:     aggregate.ExpectedOps,
 			ToolSelection:   aggregate.ToolSelection,

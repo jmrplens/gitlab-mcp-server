@@ -253,6 +253,30 @@ not in this conceptual guide.
 
 ## Reading Results
 
+### What the header says the run was
+
+Every report opens with the run's provenance, and each line is written on every
+run: `Git branch`, `Git commit`, `Server mode`, `Tier`, `Token scopes`,
+`Meta param schema`, `GitLab version`, `Temperature`, `Max output tokens` and
+`Stimulus`. A value the run could not resolve is stated as `unknown` rather
+than left out, because an omitted line and a line a reader failed to parse look
+the same, so a report with a hole in it would read as complete.
+
+They are there because two runs of the same cases are only comparable when they
+were measured on the same thing. The tier and the token scopes decide which
+actions exist in the catalog at all, the server mode decides whether the
+mutating ones were withdrawn or previewed, the schema mode decides how much of
+each action a model was shown, and the sampling decides what the model was
+asked with. `Stimulus` says whether the prompts withheld the answer the scorer
+checks for; it reads `coached` today, and publication refuses any report that
+does not declare `uncoached`.
+
+The published tables carry the same information per row: `Server mode` and
+`Tier` as columns of their own, the rest compressed into `Run conditions`. A
+cell covering several reports states the value only when they all agree and
+`mixed` when they do not, so an aggregate never names a deployment half its
+numbers were not measured on.
+
 Start with final success and first-call validation. If final success is high but
 first-call validation is low, the model can recover but the schema or
 description is still costing extra calls. If tool and action accuracy are high

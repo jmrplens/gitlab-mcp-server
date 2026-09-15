@@ -152,7 +152,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	// gitlab_merge_train, so the route is keyed by that tool; a key that no
 	// surface registers would pass the absence check on every catalog.
 	client := newEvalTestClient(t, false)
-	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	_, closeSession, _, routes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=false) error = %v", err)
 	}
@@ -162,7 +162,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	}
 
 	client = newEvalTestClient(t, true)
-	_, closeSession, _, routes, err = buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	_, closeSession, _, routes, err = buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=true) error = %v", err)
 	}
@@ -176,7 +176,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 // evaluator sees the same no-input object schema shape as runtime tools/list.
 func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	_, closeSession, toolList, _, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(meta) error = %v", err)
 	}
@@ -214,7 +214,7 @@ func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
 // routes for validation and execution.
 func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
+	_, closeSession, toolList, routes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(dynamic) error = %v", err)
 	}
@@ -353,12 +353,12 @@ func TestToolResultContentPrefersStructuredContent(t *testing.T) {
 
 // TestBuildCatalogSession_ExposesFullCapabilitySurface verifies eval sessions expose normal MCP capabilities.
 func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
-	client, cleanup, clientErr := newMockGitLabClient()
+	client, _, cleanup, clientErr := newMockGitLabClient()
 	if clientErr != nil {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}
@@ -490,13 +490,13 @@ func requireReadResource(t *testing.T, session *mcp.ClientSession, uri string) {
 func TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog(t *testing.T) {
 	client := newEvalTestClient(t, false)
 
-	_, closeDefault, _, defaultRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	_, closeDefault, _, defaultRoutes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(default) error = %v", err)
 	}
 	closeDefault()
 
-	_, closeReadOnly, _, readOnlyRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeReadOnly)
+	_, closeReadOnly, _, readOnlyRoutes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeReadOnly)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(read-only) error = %v", err)
 	}
@@ -512,7 +512,7 @@ func TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog(t *testing.T) {
 		t.Fatal("default evaluation catalog lacks issue create; the comparison above is meaningless")
 	}
 
-	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeSafe)
+	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeSafe)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(safe-mode) error = %v", err)
 	}
@@ -545,7 +545,7 @@ func TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog(t *testing.T) {
 func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
 	client := newEvalTestClient(t, false)
 
-	_, closeReadOnly, readOnlyTools, readOnlyRoutes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeReadOnly)
+	_, closeReadOnly, readOnlyTools, readOnlyRoutes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeReadOnly)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(dynamic, read-only) error = %v", err)
 	}
@@ -570,7 +570,7 @@ func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
 		t.Error("read-only dynamic evaluation dropped issue.list")
 	}
 
-	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeSafe)
+	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeSafe)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(dynamic, safe-mode) error = %v", err)
 	}
@@ -595,7 +595,7 @@ func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
 func TestBuildCatalogSession_ReadOnlyDynamic_NamesTheCauseOfAWithheldAction(t *testing.T) {
 	client := newEvalTestClient(t, false)
 
-	session, closeSession, _, _, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeReadOnly)
+	session, closeSession, _, _, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceDynamic, ServerModeReadOnly)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(dynamic, read-only) error = %v", err)
 	}
@@ -669,7 +669,7 @@ func TestBuildCatalogSession_AssemblerFails_ReportsTheCatalogError(t *testing.T)
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.install(t)
 			client := newEvalTestClient(t, false)
-			session, closeSession, _, _, err := buildCatalogSession(client, testCase.toolSurface, ServerModeDefault)
+			session, closeSession, _, _, err := buildCatalogSession(client, deploymentFactsForClient(client), testCase.toolSurface, ServerModeDefault)
 			if closeSession != nil {
 				closeSession()
 			}
@@ -692,7 +692,7 @@ func TestBuildCatalogSession_AssemblerFails_ReportsTheCatalogError(t *testing.T)
 func TestBuildCatalogSession_UnknownSurface_IsRefused(t *testing.T) {
 	client := newEvalTestClient(t, false)
 
-	session, closeSession, _, _, err := buildCatalogSession(client, "individual", ServerModeDefault)
+	session, closeSession, _, _, err := buildCatalogSession(client, deploymentFactsForClient(client), "individual", ServerModeDefault)
 	if closeSession != nil {
 		closeSession()
 	}
@@ -701,6 +701,168 @@ func TestBuildCatalogSession_UnknownSurface_IsRefused(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), `unsupported tool surface "individual"`) {
 		t.Fatalf("buildCatalogSession error = %v, want the surface named", err)
+	}
+}
+
+// TestNewCatalogGitLabClient_ReportsWhatTheInstanceResolvedTo verifies the
+// GitLab backend answers with the deployment behind the catalog it built, and
+// that scope detection obeys the same switch the server obeys.
+//
+// This is the branch every real run takes and nothing drove it: the mock
+// backend returns its facts from a constant, so the version read off the ping,
+// the explicit tier and the credential's scopes were all unexercised. The
+// scopes matter twice over, because they are not only reported: the catalog is
+// filtered by them, so a wrong answer here evaluates a surface the credential
+// would never have been served.
+func TestNewCatalogGitLabClient_ReportsWhatTheInstanceResolvedTo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/version"):
+			_, _ = w.Write([]byte(`{"version":"18.4.1"}`))
+		case strings.HasSuffix(r.URL.Path, "/personal_access_tokens/self"):
+			_, _ = w.Write([]byte(`{"id":1,"scopes":["api","read_user"]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cases := []struct {
+		name       string
+		env        map[string]string
+		wantScopes []string
+	}{
+		{
+			name:       "scopes detected",
+			wantScopes: []string{"api", "read_user"},
+		},
+		{
+			name: "scope detection disabled",
+			env:  map[string]string{"GITLAB_MCP_IGNORE_SCOPES": "true"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", srv.URL)
+			t.Setenv("GITLAB_TOKEN", "eval-token")
+			t.Setenv("GITLAB_MCP_TIER", "premium")
+			t.Setenv("GITLAB_MCP_IGNORE_SCOPES", "")
+			for name, value := range tc.env {
+				t.Setenv(name, value)
+			}
+
+			client, facts, cleanup, err := newCatalogGitLabClient(options{Backend: backendGitLab})
+			if err != nil {
+				t.Fatalf("newCatalogGitLabClient() error = %v", err)
+			}
+			t.Cleanup(cleanup)
+			if client == nil {
+				t.Fatal("newCatalogGitLabClient() returned no client")
+			}
+			if !facts.Resolved || facts.Tier != edition.Premium || facts.Enterprise != true {
+				t.Fatalf("facts = %+v, want a resolved enterprise Premium deployment", facts)
+			}
+			if facts.GitLabVersion != "18.4.1" {
+				t.Fatalf("version = %q, want the one the instance answered with", facts.GitLabVersion)
+			}
+			if !slices.Equal(facts.TokenScopes, tc.wantScopes) {
+				t.Fatalf("token scopes = %v, want %v", facts.TokenScopes, tc.wantScopes)
+			}
+		})
+	}
+}
+
+// TestNewCatalogGitLabClient_UnreachableInstance_FailsNamingTheURL verifies an
+// instance that cannot answer the version ping stops the run there, naming the
+// instance rather than leaving a catalog to be built against nothing.
+func TestNewCatalogGitLabClient_UnreachableInstance_FailsNamingTheURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("GITLAB_URL", srv.URL)
+	t.Setenv("GITLAB_TOKEN", "eval-token")
+
+	_, facts, _, err := newCatalogGitLabClient(options{Backend: backendGitLab})
+	if err == nil {
+		t.Fatal("newCatalogGitLabClient() error = nil, want the ping failure")
+	}
+	if !strings.Contains(err.Error(), srv.URL) {
+		t.Fatalf("error = %v, want it to name %s", err, srv.URL)
+	}
+	if facts.Resolved {
+		t.Fatalf("facts = %+v, want nothing resolved when the instance never answered", facts)
+	}
+}
+
+// TestEvalServerConfig_CarriesThePremiumTierThroughInsteadOfRaisingIt verifies
+// the evaluated catalog is built for the tier the client resolved.
+//
+// The configuration used to state the tier rather than pass it through, as
+// edition.TierForEnterprise(client.IsEnterprise()): that reads a resolved tier
+// back as the binary "is this an enterprise instance" question, and every
+// answer of yes becomes Ultimate. A Premium instance was therefore evaluated
+// against the Ultimate catalog, so the cases could reach actions the instance
+// does not serve and a report could name a tier the run never served. The
+// scopes are the same kind of claim: leaving them nil evaluates a surface
+// wider than the credential would have been served, since the scope filter
+// reads nil as "every tool".
+func TestEvalServerConfig_CarriesThePremiumTierThroughInsteadOfRaisingIt(t *testing.T) {
+	facts := deploymentFacts{
+		Resolved:    true,
+		Enterprise:  true,
+		Tier:        edition.Premium,
+		TokenScopes: []string{"read_api"},
+	}
+	cfg := evalServerConfig(facts, ServerModeDefault)
+	if cfg.Tier != edition.Premium {
+		t.Fatalf("tier = %v, want %v; TierForEnterprise would have raised it to %v", cfg.Tier, edition.Premium, edition.Ultimate)
+	}
+	if !slices.Equal(cfg.TokenScopes, facts.TokenScopes) {
+		t.Fatalf("token scopes = %v, want %v; the catalog is filtered by them", cfg.TokenScopes, facts.TokenScopes)
+	}
+
+	modes := []struct {
+		name         string
+		mode         string
+		wantReadOnly bool
+		wantSafeMode bool
+	}{
+		{name: "default", mode: ServerModeDefault},
+		{name: "read-only", mode: ServerModeReadOnly, wantReadOnly: true},
+		{name: "safe-mode", mode: ServerModeSafe, wantSafeMode: true},
+	}
+	for _, tc := range modes {
+		t.Run(tc.name, func(t *testing.T) {
+			modeCfg := evalServerConfig(facts, tc.mode)
+			if modeCfg.ReadOnly != tc.wantReadOnly || modeCfg.SafeMode != tc.wantSafeMode {
+				t.Fatalf("%s: read-only = %v, safe mode = %v; want %v and %v", tc.mode, modeCfg.ReadOnly, modeCfg.SafeMode, tc.wantReadOnly, tc.wantSafeMode)
+			}
+			if modeCfg.Tier != edition.Premium {
+				t.Fatalf("%s: tier = %v, want the resolved %v", tc.mode, modeCfg.Tier, edition.Premium)
+			}
+		})
+	}
+}
+
+// TestDeploymentFactsForClient_ReadsTheResolvedTierOffTheClient verifies the
+// facts a session is built with come from the client rather than from a
+// restatement of what an enterprise instance is assumed to be.
+func TestDeploymentFactsForClient_ReadsTheResolvedTierOffTheClient(t *testing.T) {
+	client := newEvalTestClient(t, false)
+	client.SetTier(edition.Premium)
+
+	facts := deploymentFactsForClient(client)
+	if !facts.Resolved || facts.Tier != edition.Premium || !facts.Enterprise {
+		t.Fatalf("facts = %+v, want a resolved, enterprise, Premium deployment", facts)
+	}
+	if facts.TokenScopes != nil || facts.GitLabVersion != "" {
+		t.Fatalf("facts = %+v; the scopes and the version are asked for separately and must stay empty here", facts)
+	}
+	if unresolved := deploymentFactsForClient(nil); unresolved.Resolved || unresolved.tierLabel() != "" {
+		t.Fatalf("facts for no client = %+v, want an unresolved deployment reporting no tier", unresolved)
 	}
 }
 
@@ -722,7 +884,7 @@ func TestEvalServerConfig_ServerModes_ShareOneBaseAndDifferByFilter(t *testing.T
 	origins := make(map[string]*actioncatalog.Catalog, 3)
 	for _, mode := range []string{ServerModeDefault, ServerModeReadOnly, ServerModeSafe} {
 		t.Run(mode, func(t *testing.T) {
-			catalog, _, err := buildDynamicCatalog(client, evalServerConfig(client, mode))
+			catalog, _, err := buildDynamicCatalog(client, evalServerConfig(deploymentFactsForClient(client), mode))
 			if err != nil {
 				t.Fatalf("buildDynamicCatalog(%s) error = %v", mode, err)
 			}
@@ -730,7 +892,7 @@ func TestEvalServerConfig_ServerModes_ShareOneBaseAndDifferByFilter(t *testing.T
 			if origin == nil {
 				t.Fatalf("catalog for %s is not shared: every session of this mode would rebuild it", mode)
 			}
-			again, _, againErr := buildDynamicCatalog(client, evalServerConfig(client, mode))
+			again, _, againErr := buildDynamicCatalog(client, evalServerConfig(deploymentFactsForClient(client), mode))
 			if againErr != nil {
 				t.Fatalf("buildDynamicCatalog(%s) second call error = %v", mode, againErr)
 			}
@@ -825,14 +987,14 @@ func evalSessionToolNames(t *testing.T, session *mcp.ClientSession) []string {
 func TestBuildCatalogSession_ReadOnlyMeta_WithdrawsTheInteractiveFlows(t *testing.T) {
 	client := newEvalTestClient(t, false)
 
-	defaultSession, closeDefault, _, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	defaultSession, closeDefault, _, _, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(meta, default) error = %v", err)
 	}
 	defer closeDefault()
 	defaultNames := evalSessionToolNames(t, defaultSession)
 
-	readOnlySession, closeReadOnly, readOnlyTools, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeReadOnly)
+	readOnlySession, closeReadOnly, readOnlyTools, _, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeReadOnly)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(meta, read-only) error = %v", err)
 	}
@@ -875,7 +1037,7 @@ func TestBuildCatalogSession_ReadOnlyMeta_WithdrawsTheInteractiveFlows(t *testin
 func TestBuildCatalogSession_SafeModeMeta_PreviewsTheInteractiveFlows(t *testing.T) {
 	client, writes := newWriteCountingEvalClient(t)
 
-	session, closeSession, _, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeSafe)
+	session, closeSession, _, _, err := buildCatalogSession(client, deploymentFactsForClient(client), config.ToolSurfaceMeta, ServerModeSafe)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(meta, safe-mode) error = %v", err)
 	}
