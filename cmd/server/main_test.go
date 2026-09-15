@@ -700,7 +700,13 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 
 // TestServeStdio_ContextCancelled verifies that [serveStdio] returns
 // promptly when given an already-canceled context.
+//
+// The pipe is what makes that claim about the cancellation: run against the
+// test runner's own stdin this returned because that descriptor happened to be
+// at EOF, and it left a read parked on the runner's stdin for the life of the
+// binary.
 func TestServeStdio_ContextCancelled(t *testing.T) {
+	heldOpenStdin(t)
 	server := newTestMCPServer(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
@@ -2572,9 +2578,37 @@ func failDynamicCatalog(t *testing.T, builds *atomic.Int64) error {
 	return forced
 }
 
-// heldOpenStdin points os.Stdin at a pipe whose write end stays open, so the
-// SDK never reads EOF and only the server's own decisions can end a session.
-func heldOpenStdin(t *testing.T) {
+// pipedStdin points os.Stdin at a pipe for the rest of the test and returns
+// the write end, so a test can drive the stdio transport without reading the
+// test runner's own stdin. The write end stays open unless the caller closes
+// it, which is how a client hanging up is spelled here.
+//
+// The teardown order is the whole point of this helper, and it is not tidiness.
+// [serveStdio] hands stdin to the SDK, which reads it on a goroutine of its own
+// (mcp.newIOConn) and documents that goroutine as outliving the session,
+// because a read already parked in the operating system cannot be interrupted
+// portably: closing the session unblocks the SDK's own reader and leaves the
+// operating-system read where it was. So when a test using stdin ends, there is
+// a read parked on this pipe's read end.
+//
+// On Windows an os.Pipe is an anonymous pipe, which is synchronous and is not
+// registered with the runtime poller, so os.(*File).Close ends in
+// runtime_Semacquire (internal/poll.(*FD).Close) and waits for that read to let
+// the descriptor go. The one thing meant to break it is the single CancelIoEx
+// that Close issues, and a read which has taken the descriptor's read lock but
+// has not yet reached ReadFile is not there to be cancelled: it then blocks on
+// an empty pipe whose write end is still open, and the Close waiting for it
+// never returns. That is issue 638, where the package timed out after thirty
+// minutes with this test's cleanup in FD.Close and the SDK's reader in
+// syscall.ReadFile on the same descriptor.
+//
+// Closing the write end first removes the precondition instead of racing it:
+// with no write handle left, a read on the read end completes at once with
+// ERROR_BROKEN_PIPE whether it was already parked or is issued afterwards, so
+// the descriptor is free by the time the close that follows waits for it. Every
+// site in this package that points os.Stdin at a pipe goes through here for
+// that reason; one that closes the read end first is the same hang again.
+func pipedStdin(t *testing.T) *os.File {
 	t.Helper()
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -2584,9 +2618,35 @@ func heldOpenStdin(t *testing.T) {
 	os.Stdin = reader
 	t.Cleanup(func() {
 		os.Stdin = original
-		_ = writer.Close()
-		_ = reader.Close()
+		releaseStdinPipe(writer, reader)
 	})
+	return writer
+}
+
+// releaseStdinPipe closes a stdin pipe in the one order that terminates on
+// every platform: the write end first, so a read parked on the read end is
+// ended by the hangup and lets the descriptor go, and only then the read end
+// itself. See [pipedStdin] for what goes wrong when the two are swapped, and
+// [TestReleaseStdinPipe_WithAReadParkedOnIt_Returns] for the property this
+// holds.
+func releaseStdinPipe(writer, reader *os.File) {
+	_ = writer.Close()
+	_ = reader.Close()
+}
+
+// heldOpenStdin points os.Stdin at a pipe whose write end stays open, so the
+// SDK never reads EOF and only the server's own decisions can end a session.
+func heldOpenStdin(t *testing.T) {
+	t.Helper()
+	pipedStdin(t)
+}
+
+// closedStdin points os.Stdin at a pipe whose write end is already closed, so
+// the SDK reads EOF at once: a client that has exited, and also what keeps a
+// test from reading the test runner's own stdin.
+func closedStdin(t *testing.T) {
+	t.Helper()
+	_ = pipedStdin(t).Close()
 }
 
 // TestRunStdio_ClientAndShellFailures_AreReportedBeforeServing covers the two
@@ -2708,17 +2768,7 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	logged := captureLogMessages(t)
 
 	// A closed pipe: EOF at once, so serving ends while the build is running.
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	_ = writer.Close()
-	original := os.Stdin
-	os.Stdin = reader
-	t.Cleanup(func() {
-		os.Stdin = original
-		_ = reader.Close()
-	})
+	closedStdin(t)
 
 	runErr := runStdio(context.Background())
 	close(release)
@@ -9307,18 +9357,9 @@ func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
 	// A closed pipe as stdin: the SDK reads EOF immediately, which is exactly
 	// what a client exiting does, and it is also what keeps this test from
 	// reading the test runner's own stdin.
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	_ = writer.Close()
-	originalStdin, originalLogger := os.Stdin, slog.Default()
-	os.Stdin = reader
-	t.Cleanup(func() {
-		os.Stdin = originalStdin
-		slog.SetDefault(originalLogger)
-		_ = reader.Close()
-	})
+	closedStdin(t)
+	originalLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(originalLogger) })
 
 	done := make(chan struct{})
 	go func() {
@@ -9673,21 +9714,11 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reader, writer, err := os.Pipe()
-			if err != nil {
-				t.Fatalf("os.Pipe: %v", err)
-			}
-			if !tt.holdOpen {
-				_ = writer.Close()
+			if tt.holdOpen {
+				heldOpenStdin(t)
 			} else {
-				t.Cleanup(func() { _ = writer.Close() })
+				closedStdin(t)
 			}
-			original := os.Stdin
-			os.Stdin = reader
-			t.Cleanup(func() {
-				os.Stdin = original
-				_ = reader.Close()
-			})
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -9695,8 +9726,12 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 				cancel()
 			}
 
+			// Built on the test goroutine: the helper reports a client it
+			// cannot build with t.Fatalf, which may not be called from the
+			// goroutine below.
+			server := newTestMCPServer(t)
 			done := make(chan error, 1)
-			go func() { done <- serveStdio(ctx, newTestMCPServer(t)) }()
+			go func() { done <- serveStdio(ctx, server) }()
 
 			select {
 			case serveErr := <-done:
@@ -9716,34 +9751,24 @@ func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
 // acts on. A context deadline is the reachable stand-in here, since it ends
 // the run without the client closing its pipe and without a cancellation.
 //
-// The SDK's Run cannot return while its read loop is parked on stdin, and
-// nothing in the stdio binding interrupts that read, so once the deadline
-// has passed the pipe's read end is closed from here: that ends the loop
-// with an error that is not EOF, which is not a client hanging up, and Run
-// then reports the deadline it had already chosen.
+// The pipe is held open throughout, and nothing here closes it to make the run
+// end: the deadline alone does that. Closing the session unblocks the SDK's own
+// reader (mcp.ioConn.Read selects on the connection's closed channel), so Run
+// returns whether or not the operating-system read on stdin is still parked,
+// and the read never reported EOF, so this is not a client hanging up either.
+// An earlier version closed the pipe's read end from here to force that, which
+// is precisely the shape that hung the Windows job for thirty minutes in issue
+// 638: see [pipedStdin].
 func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	original := os.Stdin
-	os.Stdin = reader
-	t.Cleanup(func() {
-		os.Stdin = original
-		_ = writer.Close()
-		_ = reader.Close()
-	})
+	heldOpenStdin(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
+	// Built on the test goroutine: the helper reports a client it cannot build
+	// with t.Fatalf, which may not be called from the goroutine below.
+	server := newTestMCPServer(t)
 	done := make(chan error, 1)
-	go func() { done <- serveStdio(ctx, newTestMCPServer(t)) }()
-
-	<-ctx.Done()
-	// Long enough for Run to have taken the deadline's branch, where it waits
-	// on the session, before the session is made to end.
-	time.Sleep(500 * time.Millisecond)
-	_ = reader.Close()
+	go func() { done <- serveStdio(ctx, server) }()
 
 	select {
 	case serveErr := <-done:
@@ -9751,7 +9776,76 @@ func TestServeStdio_AnyOtherEnd_IsReportedAsAFailure(t *testing.T) {
 			t.Errorf("serveStdio() = %v, want the deadline reported as a server error", serveErr)
 		}
 	case <-time.After(testHTTPLivenessTimeout):
-		t.Fatal("serveStdio did not return after its context expired and its input ended")
+		t.Fatal("serveStdio did not return after its context expired")
+	}
+}
+
+// TestReleaseStdinPipe_WithAReadParkedOnIt_Returns pins the property
+// [pipedStdin] rests on: releasing a pipe that a read is parked on terminates.
+//
+// It asserts termination and not what the read reports, because only the first
+// is portable. Closing the write end does end a parked read with EOF, but the
+// close of the read end follows immediately, and on Linux its pd.evict reaches
+// the parked goroutine before the pipe's hangup does, so the read reports a
+// closed descriptor under either order and the error says nothing about which
+// end went first. Termination does say it, on the platform where it matters:
+// on Windows os.(*File).Close waits for the read to release the descriptor, and
+// the single CancelIoEx it issues cannot cancel a read that has not been
+// submitted yet, so with the ends closed the other way round this never
+// returns.
+//
+// That is why the close runs on a goroutine with a deadline around it. A
+// reversed order then fails this test in half a minute, rather than parking a
+// cleanup forever and taking the package down with it: issue 638 cost thirty
+// minutes of CI and reported every other test in the package as a failure it
+// had nothing to do with.
+//
+// The read is primed with a byte the reader consumes, so the settle that
+// follows only has to cover reaching the next read. A settle that turned out
+// too short would leave this run asserting less, never asserting something
+// false, which is the trade this bound is chosen for.
+func TestReleaseStdinPipe_WithAReadParkedOnIt_Returns(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	primed := make(chan error, 1)
+	parked := make(chan error, 1)
+	go func() {
+		var buf [1]byte
+		if _, readErr := io.ReadFull(reader, buf[:]); readErr != nil {
+			primed <- readErr
+			return
+		}
+		primed <- nil
+		_, readErr := reader.Read(buf[:])
+		parked <- readErr
+	}()
+
+	if _, writeErr := writer.WriteString("x"); writeErr != nil {
+		t.Fatalf("priming the pipe: %v", writeErr)
+	}
+	if primeErr := <-primed; primeErr != nil {
+		t.Fatalf("the reader never consumed the priming byte: %v", primeErr)
+	}
+	time.Sleep(250 * time.Millisecond)
+
+	released := make(chan struct{})
+	go func() {
+		defer close(released)
+		releaseStdinPipe(writer, reader)
+	}()
+	select {
+	case <-released:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("releaseStdinPipe did not return while a read was parked on the pipe: the write end has to be closed first")
+	}
+
+	select {
+	case <-parked:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Error("the parked read never ended")
 	}
 }
 
