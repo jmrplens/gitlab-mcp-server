@@ -24,9 +24,13 @@ type Stimulus struct {
 // cases returns every case of the corpus, key included. It is unexported, and
 // the two accessors below are what the rest of the repository sees.
 func cases() []Case {
-	all := make([]Case, 0, 128)
+	all := make([]Case, 0, 256)
 	all = append(all, readCases()...)
 	all = append(all, mutatingCases()...)
+	all = append(all, destructiveCases()...)
+	all = append(all, licensedReadCases()...)
+	all = append(all, licensedMutatingCases()...)
+	all = append(all, licensedDestructiveCases()...)
 	return all
 }
 

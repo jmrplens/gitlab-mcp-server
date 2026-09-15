@@ -21,153 +21,472 @@ which is the ground the boundary test sanctions it on.
 
 ## Summary
 
-| Figure                 |      Count |
-| ---------------------- | ---------: |
-| Cases                  |         75 |
-| Steps declared         |         95 |
-| Catalog actions named  | 65 of 1084 |
-| Catalog domains named  |   26 of 46 |
-| Standalone tools named |          5 |
-| Worlds asked for       |   18 of 18 |
+| Figure                 |       Count |
+| ---------------------- | ----------: |
+| Cases                  |         258 |
+| Steps declared         |         464 |
+| Catalog actions named  | 313 of 1084 |
+| Catalog domains named  |    42 of 46 |
+| Standalone tools named |           5 |
+| Worlds asked for       |    71 of 71 |
 
 ## Domains the corpus names
 
-| Domain        | Actions named | Actions in the catalog |
-| ------------- | ------------: | ---------------------: |
-| access        |             3 |                     48 |
-| admin         |             2 |                     92 |
-| branch        |             1 |                     11 |
-| ci_catalog    |             1 |                      2 |
-| ci_variable   |             5 |                     15 |
-| custom_emoji  |             1 |                      3 |
-| environment   |             3 |                     23 |
-| feature_flags |             1 |                     10 |
-| group         |             2 |                    157 |
-| issue         |             3 |                     71 |
-| job           |             5 |                     25 |
-| merge_request |             2 |                     58 |
-| mr_review     |             5 |                     23 |
-| package       |             2 |                     29 |
-| pipeline      |             4 |                     33 |
-| project       |             7 |                    143 |
-| release       |             3 |                     12 |
-| repository    |             3 |                     41 |
-| runner        |             3 |                     34 |
-| search        |             2 |                     10 |
-| server        |             1 |                      2 |
-| snippet       |             1 |                     34 |
-| tag           |             1 |                      9 |
-| template      |             1 |                     12 |
-| user          |             2 |                     76 |
-| wiki          |             1 |                      6 |
+| Domain                | Actions named | Actions in the catalog |
+| --------------------- | ------------: | ---------------------: |
+| access                |            11 |                     48 |
+| admin                 |             5 |                     92 |
+| attestation           |             2 |                      2 |
+| audit_event           |             3 |                      6 |
+| branch                |             7 |                     11 |
+| ci_catalog            |             1 |                      2 |
+| ci_variable           |            10 |                     15 |
+| compliance_policy     |             2 |                      2 |
+| custom_emoji          |             2 |                      3 |
+| dependency            |             3 |                      4 |
+| dora_metrics          |             2 |                      2 |
+| enterprise_user       |             3 |                      4 |
+| environment           |            10 |                     23 |
+| external_status_check |             4 |                      8 |
+| feature_flags         |            10 |                     10 |
+| geo                   |             4 |                      8 |
+| group                 |            61 |                    157 |
+| group_scim            |             3 |                      4 |
+| issue                 |            19 |                     71 |
+| job                   |             8 |                     25 |
+| member_role           |             4 |                      6 |
+| merge_request         |            11 |                     58 |
+| merge_train           |             3 |                      4 |
+| model_registry        |             1 |                      1 |
+| mr_review             |             9 |                     23 |
+| package               |             4 |                     29 |
+| pipeline              |            16 |                     33 |
+| project               |            37 |                    143 |
+| project_alias         |             4 |                      4 |
+| release               |            10 |                     12 |
+| repository            |             6 |                     41 |
+| runner                |             4 |                     34 |
+| search                |             2 |                     10 |
+| security_finding      |             1 |                      1 |
+| server                |             1 |                      2 |
+| snippet               |             6 |                     34 |
+| storage_move          |             5 |                     18 |
+| tag                   |             3 |                      9 |
+| template              |             1 |                     12 |
+| user                  |             5 |                     76 |
+| vulnerability         |             5 |                      8 |
+| wiki                  |             5 |                      6 |
 
 ## Actions the corpus names
 
-| Action                             | Tier | Named by               |
-| ---------------------------------- | ---- | ---------------------- |
-| `access.deploy_key_list_project`   | free | MS-037, MT-038         |
-| `access.deploy_token_list_project` | free | MS-037                 |
-| `access.token_project_create`      | free | MT-041                 |
-| `admin.broadcast_message_create`   | free | MT-053                 |
-| `admin.settings_get`               | free | MT-052                 |
-| `branch.list`                      | free | MS-037, MT-071, MT-208 |
-| `ci_catalog.list`                  | free | MT-072                 |
-| `ci_variable.create`               | free | MT-026                 |
-| `ci_variable.group_create`         | free | MT-067                 |
-| `ci_variable.instance_create`      | free | MT-068                 |
-| `ci_variable.list`                 | free | MS-037, MT-025         |
-| `ci_variable.update`               | free | MT-027                 |
-| `custom_emoji.list`                | free | MT-073                 |
-| `environment.deployment_get`       | free | MS-ENV-DEP-2           |
-| `environment.get`                  | free | MS-ENV-DEP-1           |
-| `environment.list`                 | free | MT-048                 |
-| `feature_flags.feature_flag_list`  | free | MT-077                 |
-| `group.create`                     | free | MT-007                 |
-| `group.list`                       | free | MT-006                 |
-| `issue.create`                     | free | MT-010                 |
-| `issue.list`                       | free | MT-009, MT-204, MT-206 |
-| `issue.update`                     | free | MT-011, MT-012         |
-| `job.download_single_artifact`     | free | MT-065                 |
-| `job.list`                         | free | MS-002, MT-021, MT-205 |
-| `job.play`                         | free | MT-064                 |
-| `job.retry`                        | free | MT-023                 |
-| `job.trace`                        | free | MS-002, MS-008, MT-022 |
-| `merge_request.create`             | free | MT-015                 |
-| `merge_request.list`               | free | MT-014, MT-199         |
-| `mr_review.changes_get`            | free | MT-179                 |
-| `mr_review.discussion_create`      | free | MT-060                 |
-| `mr_review.discussion_resolve`     | free | MT-061                 |
-| `mr_review.draft_note_create`      | free | MT-062                 |
-| `mr_review.note_create`            | free | MT-016                 |
-| `package.list`                     | free | MS-037, MT-043         |
-| `package.publish_directory`        | free | MS-038                 |
-| `pipeline.cancel`                  | free | MT-020                 |
-| `pipeline.create`                  | free | MT-019                 |
-| `pipeline.get`                     | free | MS-002                 |
-| `pipeline.list`                    | free | MT-018, MT-205         |
-| `project.badge_add`                | free | MT-058                 |
-| `project.get`                      | free | MS-001, MS-037, MT-002 |
-| `project.hook_add`                 | free | MT-056                 |
-| `project.list`                     | free | MT-003                 |
-| `project.members`                  | free | MT-005, MT-209         |
-| `project.milestone_create`         | free | MT-034                 |
-| `project.star`                     | free | MT-004                 |
-| `release.create`                   | free | MS-038, MT-036         |
-| `release.link_create_batch`        | free | MS-038                 |
-| `release.list`                     | free | MS-037, MT-207         |
-| `repository.file_create`           | free | MT-030                 |
-| `repository.file_get`              | free | MS-001, MT-029         |
-| `repository.tree`                  | free | MS-037                 |
-| `runner.jobs`                      | free | MS-008                 |
-| `runner.list_project`              | free | MS-008, MT-045         |
-| `runner.update`                    | free | MS-008, MT-046         |
-| `search.code`                      | free | MT-032                 |
-| `search.projects`                  | free | MT-033                 |
-| `server.health_check`              | free | MT-040                 |
-| `snippet.content`                  | free | MT-050                 |
-| `tag.list`                         | free | MS-037                 |
-| `template.dockerfile_list`         | free | MT-090                 |
-| `user.current`                     | free | MT-001                 |
-| `user.todo_list`                   | free | MT-200                 |
-| `wiki.list`                        | free | MT-092                 |
+| Action                                        | Tier     | Named by                                             |
+| --------------------------------------------- | -------- | ---------------------------------------------------- |
+| `access.deploy_key_add`                       | free     | MS-031                                               |
+| `access.deploy_key_delete`                    | free     | MS-031, MT-111                                       |
+| `access.deploy_key_get`                       | free     | MS-031                                               |
+| `access.deploy_key_list_project`              | free     | MS-037, MT-038                                       |
+| `access.deploy_key_update`                    | free     | MS-031                                               |
+| `access.deploy_token_create_project`          | free     | MS-030                                               |
+| `access.deploy_token_delete_project`          | free     | MS-030, MT-112                                       |
+| `access.deploy_token_get_project`             | free     | MS-030                                               |
+| `access.deploy_token_list_project`            | free     | MS-030, MS-037                                       |
+| `access.token_project_create`                 | free     | MT-041                                               |
+| `access.token_project_revoke`                 | free     | MT-042                                               |
+| `admin.broadcast_message_create`              | free     | MS-009, MT-053                                       |
+| `admin.broadcast_message_delete`              | free     | MS-009, MT-054                                       |
+| `admin.db_migration_mark`                     | free     | MT-115                                               |
+| `admin.settings_get`                          | free     | MS-009, MT-052                                       |
+| `admin.terraform_state_unlock`                | free     | MT-114                                               |
+| `attestation.download`                        | ultimate | MT-117                                               |
+| `attestation.list`                            | ultimate | MT-070                                               |
+| `audit_event.get_instance`                    | premium  | MT-118                                               |
+| `audit_event.list_group`                      | premium  | MS-010, MS-ENT-DYN-3                                 |
+| `audit_event.list_project`                    | premium  | MS-ENT-DYN-1, MS-ENT-DYN-6, MT-119                   |
+| `branch.create`                               | free     | MS-028                                               |
+| `branch.delete`                               | free     | MS-028, MT-099                                       |
+| `branch.get_protected`                        | free     | MS-028                                               |
+| `branch.list`                                 | free     | MS-037, MT-071, MT-208                               |
+| `branch.protect`                              | free     | MS-028                                               |
+| `branch.unprotect`                            | free     | MS-028                                               |
+| `branch.update_protected`                     | free     | MS-028                                               |
+| `ci_catalog.list`                             | free     | MT-072                                               |
+| `ci_variable.create`                          | free     | MS-025, MT-026                                       |
+| `ci_variable.delete`                          | free     | MS-025, MT-028                                       |
+| `ci_variable.group_create`                    | free     | MS-026, MT-067                                       |
+| `ci_variable.group_delete`                    | free     | MS-026                                               |
+| `ci_variable.group_get`                       | free     | MS-026                                               |
+| `ci_variable.group_update`                    | free     | MS-026                                               |
+| `ci_variable.instance_create`                 | free     | MT-068                                               |
+| `ci_variable.instance_delete`                 | free     | MT-069                                               |
+| `ci_variable.list`                            | free     | MS-025, MS-037, MT-025                               |
+| `ci_variable.update`                          | free     | MS-025, MT-027                                       |
+| `compliance_policy.get`                       | ultimate | MS-010                                               |
+| `compliance_policy.update`                    | ultimate | MT-120                                               |
+| `custom_emoji.delete`                         | free     | MT-107                                               |
+| `custom_emoji.list`                           | free     | MT-073                                               |
+| `dependency.export_create`                    | ultimate | MT-121                                               |
+| `dependency.export_download`                  | ultimate | MT-122                                               |
+| `dependency.list`                             | ultimate | MT-074                                               |
+| `dora_metrics.group`                          | ultimate | MT-123                                               |
+| `dora_metrics.project`                        | ultimate | MS-ENT-DYN-2, MT-075                                 |
+| `enterprise_user.disable_2fa`                 | premium  | MT-125                                               |
+| `enterprise_user.get`                         | premium  | MT-124                                               |
+| `enterprise_user.list`                        | premium  | MS-ENT-DYN-3, MT-076                                 |
+| `environment.deployment_approve_or_reject`    | free     | MS-006                                               |
+| `environment.deployment_get`                  | free     | MS-ENV-DEP-2                                         |
+| `environment.deployment_list`                 | free     | MS-006                                               |
+| `environment.get`                             | free     | MS-ENV-DEP-1                                         |
+| `environment.list`                            | free     | MS-006, MT-048                                       |
+| `environment.protected_get`                   | premium  | MS-006, MS-053                                       |
+| `environment.protected_list`                  | premium  | MS-053                                               |
+| `environment.protected_protect`               | premium  | MS-053                                               |
+| `environment.protected_unprotect`             | premium  | MS-053                                               |
+| `environment.stop`                            | free     | MT-049                                               |
+| `external_status_check.create_project`        | ultimate | MT-126                                               |
+| `external_status_check.delete_project`        | ultimate | MT-128                                               |
+| `external_status_check.list_project`          | ultimate | MS-005                                               |
+| `external_status_check.set_project_mr_status` | ultimate | MT-127                                               |
+| `feature_flags.feature_flag_create`           | free     | MS-029                                               |
+| `feature_flags.feature_flag_delete`           | free     | MS-013, MS-029, MT-106                               |
+| `feature_flags.feature_flag_get`              | free     | MS-013, MS-029                                       |
+| `feature_flags.feature_flag_list`             | free     | MT-077                                               |
+| `feature_flags.feature_flag_update`           | free     | MS-029                                               |
+| `feature_flags.ff_user_list_create`           | free     | MS-029                                               |
+| `feature_flags.ff_user_list_delete`           | free     | MS-029                                               |
+| `feature_flags.ff_user_list_get`              | free     | MS-029                                               |
+| `feature_flags.ff_user_list_list`             | free     | MS-013                                               |
+| `feature_flags.ff_user_list_update`           | free     | MS-029                                               |
+| `geo.create`                                  | premium  | MT-130                                               |
+| `geo.delete`                                  | premium  | MT-131                                               |
+| `geo.get`                                     | premium  | MT-129                                               |
+| `geo.list`                                    | premium  | MS-ENT-DYN-8, MT-078                                 |
+| `group.analytics_issues_count`                | premium  | MT-132                                               |
+| `group.create`                                | free     | MS-052, MT-007                                       |
+| `group.credential_list_pats`                  | ultimate | MT-133                                               |
+| `group.credential_revoke_pat`                 | ultimate | MT-134                                               |
+| `group.delete`                                | free     | MS-052, MT-008                                       |
+| `group.epic_board_list`                       | premium  | MS-044, MT-135                                       |
+| `group.epic_create`                           | premium  | MS-047, MS-048, MS-049, MS-050, MT-137               |
+| `group.epic_delete`                           | premium  | MS-047, MS-048, MS-049, MS-050, MT-139               |
+| `group.epic_discussion_add_note`              | premium  | MS-049                                               |
+| `group.epic_discussion_create`                | premium  | MS-049                                               |
+| `group.epic_discussion_delete_note`           | premium  | MS-049                                               |
+| `group.epic_discussion_get`                   | premium  | MS-049                                               |
+| `group.epic_discussion_list`                  | premium  | MS-049                                               |
+| `group.epic_discussion_update_note`           | premium  | MS-049                                               |
+| `group.epic_get`                              | premium  | MS-047                                               |
+| `group.epic_issue_assign`                     | premium  | MS-050, MT-140                                       |
+| `group.epic_issue_list`                       | premium  | MS-050                                               |
+| `group.epic_issue_remove`                     | premium  | MS-050, MT-141                                       |
+| `group.epic_list`                             | premium  | MS-047, MS-ENT-DYN-7, MT-136                         |
+| `group.epic_note_create`                      | premium  | MS-048, MT-142                                       |
+| `group.epic_note_delete`                      | premium  | MS-048, MT-143                                       |
+| `group.epic_note_get`                         | premium  | MS-048                                               |
+| `group.epic_note_list`                        | premium  | MS-048                                               |
+| `group.epic_note_update`                      | premium  | MS-048                                               |
+| `group.epic_update`                           | premium  | MS-047, MT-138                                       |
+| `group.get`                                   | free     | MS-010                                               |
+| `group.group_label_create`                    | free     | MS-035                                               |
+| `group.group_label_delete`                    | free     | MS-035                                               |
+| `group.group_label_get`                       | free     | MS-035                                               |
+| `group.group_label_update`                    | free     | MS-035                                               |
+| `group.group_milestone_create`                | free     | MS-036                                               |
+| `group.group_milestone_delete`                | free     | MS-036                                               |
+| `group.group_milestone_get`                   | free     | MS-036                                               |
+| `group.group_milestone_update`                | free     | MS-036                                               |
+| `group.ldap_link_add`                         | premium  | MT-144                                               |
+| `group.ldap_link_delete_for_provider`         | premium  | MT-145                                               |
+| `group.list`                                  | free     | MS-010, MT-006                                       |
+| `group.protected_branch_get`                  | premium  | MS-051                                               |
+| `group.protected_branch_list`                 | premium  | MS-044, MS-051, MT-190                               |
+| `group.protected_branch_protect`              | premium  | MS-051, MT-146                                       |
+| `group.protected_branch_unprotect`            | premium  | MS-051, MT-147                                       |
+| `group.protected_branch_update`               | premium  | MS-051                                               |
+| `group.protected_env_get`                     | premium  | MS-052                                               |
+| `group.protected_env_list`                    | premium  | MS-044, MS-052, MT-191                               |
+| `group.protected_env_protect`                 | premium  | MS-052, MT-148                                       |
+| `group.protected_env_unprotect`               | premium  | MS-052, MT-149                                       |
+| `group.protected_env_update`                  | premium  | MS-052                                               |
+| `group.saml_link_add`                         | premium  | MT-150                                               |
+| `group.saml_link_delete`                      | premium  | MT-151                                               |
+| `group.security_settings_update`              | ultimate | MT-152                                               |
+| `group.service_account_create`                | free     | MS-046, MT-153                                       |
+| `group.service_account_delete`                | free     | MS-046, MT-198                                       |
+| `group.service_account_list`                  | free     | MS-046                                               |
+| `group.service_account_pat_create`            | free     | MS-046                                               |
+| `group.service_account_pat_list`              | free     | MS-046                                               |
+| `group.service_account_pat_revoke`            | free     | MS-046, MT-154, MT-197                               |
+| `group.service_account_update`                | free     | MS-046                                               |
+| `group.ssh_cert_create`                       | premium  | MT-155                                               |
+| `group.ssh_cert_delete`                       | premium  | MT-156                                               |
+| `group.wiki_create`                           | premium  | MT-157                                               |
+| `group.wiki_delete`                           | premium  | MT-158                                               |
+| `group_scim.get`                              | premium  | MT-159                                               |
+| `group_scim.list`                             | premium  | MT-079                                               |
+| `group_scim.update`                           | premium  | MT-160                                               |
+| `issue.create`                                | free     | MS-014, MS-015, MS-016, MS-032, MS-050, MT-010       |
+| `issue.delete`                                | free     | MS-014, MS-015, MS-016, MS-032, MS-050, MT-013       |
+| `issue.emoji_issue_delete`                    | free     | MT-110                                               |
+| `issue.get`                                   | free     | MS-014                                               |
+| `issue.iteration_list_group`                  | premium  | MS-ENT-DYN-7, MT-161                                 |
+| `issue.iteration_list_project`                | premium  | MT-162                                               |
+| `issue.link_create`                           | free     | MS-016                                               |
+| `issue.link_delete`                           | free     | MS-016                                               |
+| `issue.link_list`                             | free     | MS-016                                               |
+| `issue.list`                                  | free     | MT-009, MT-204, MT-206                               |
+| `issue.note_create`                           | free     | MS-015                                               |
+| `issue.note_delete`                           | free     | MS-015                                               |
+| `issue.note_get`                              | free     | MS-015                                               |
+| `issue.note_update`                           | free     | MS-015                                               |
+| `issue.spent_time_add`                        | free     | MS-032                                               |
+| `issue.spent_time_reset`                      | free     | MS-032                                               |
+| `issue.time_estimate_reset`                   | free     | MS-032                                               |
+| `issue.time_estimate_set`                     | free     | MS-032                                               |
+| `issue.update`                                | free     | MS-014, MT-011, MT-012                               |
+| `job.delete_artifacts`                        | free     | MT-024                                               |
+| `job.download_single_artifact`                | free     | MT-065                                               |
+| `job.list`                                    | free     | MS-002, MT-021, MT-205                               |
+| `job.play`                                    | free     | MT-064                                               |
+| `job.retry`                                   | free     | MT-023                                               |
+| `job.token_scope_list_inbound`                | free     | MS-005                                               |
+| `job.token_scope_remove_project`              | free     | MS-005, MT-066                                       |
+| `job.trace`                                   | free     | MS-002, MS-008, MT-022                               |
+| `member_role.create_group`                    | ultimate | MT-163                                               |
+| `member_role.delete_instance`                 | ultimate | MT-164                                               |
+| `member_role.list_group`                      | ultimate | MT-084                                               |
+| `member_role.list_instance`                   | ultimate | MS-ENT-DYN-3                                         |
+| `merge_request.create`                        | free     | MT-015                                               |
+| `merge_request.emoji_mr_create`               | free     | MS-033                                               |
+| `merge_request.emoji_mr_delete`               | free     | MS-033, MT-109                                       |
+| `merge_request.emoji_mr_list`                 | free     | MS-033                                               |
+| `merge_request.get`                           | free     | MS-003                                               |
+| `merge_request.list`                          | free     | MT-014, MT-199                                       |
+| `merge_request.merge`                         | free     | MT-017                                               |
+| `merge_request.spent_time_add`                | free     | MS-033                                               |
+| `merge_request.spent_time_reset`              | free     | MS-033                                               |
+| `merge_request.time_estimate_reset`           | free     | MS-033                                               |
+| `merge_request.time_estimate_set`             | free     | MS-033                                               |
+| `merge_train.add`                             | premium  | MT-165                                               |
+| `merge_train.get`                             | premium  | MT-166                                               |
+| `merge_train.list_project`                    | premium  | MT-085                                               |
+| `model_registry.download`                     | free     | MT-086                                               |
+| `mr_review.changes_get`                       | free     | MS-003, MT-179                                       |
+| `mr_review.discussion_create`                 | free     | MT-060                                               |
+| `mr_review.discussion_resolve`                | free     | MT-061                                               |
+| `mr_review.draft_note_create`                 | free     | MS-003, MT-062                                       |
+| `mr_review.draft_note_publish_all`            | free     | MS-003, MT-063                                       |
+| `mr_review.note_create`                       | free     | MS-027, MT-016                                       |
+| `mr_review.note_delete`                       | free     | MS-027                                               |
+| `mr_review.note_get`                          | free     | MS-027                                               |
+| `mr_review.note_update`                       | free     | MS-027                                               |
+| `package.delete`                              | free     | MS-007, MT-044                                       |
+| `package.file_list`                           | free     | MS-007                                               |
+| `package.list`                                | free     | MS-007, MS-037, MT-043                               |
+| `package.publish_directory`                   | free     | MS-038                                               |
+| `pipeline.cancel`                             | free     | MT-020                                               |
+| `pipeline.create`                             | free     | MT-019                                               |
+| `pipeline.delete`                             | free     | MT-101                                               |
+| `pipeline.get`                                | free     | MS-002                                               |
+| `pipeline.list`                               | free     | MT-018, MT-205                                       |
+| `pipeline.schedule_create`                    | free     | MS-020                                               |
+| `pipeline.schedule_create_variable`           | free     | MS-020                                               |
+| `pipeline.schedule_delete`                    | free     | MS-020, MT-103                                       |
+| `pipeline.schedule_delete_variable`           | free     | MS-020                                               |
+| `pipeline.schedule_edit_variable`             | free     | MS-020                                               |
+| `pipeline.schedule_get`                       | free     | MS-020                                               |
+| `pipeline.schedule_update`                    | free     | MS-020                                               |
+| `pipeline.trigger_create`                     | free     | MS-019                                               |
+| `pipeline.trigger_delete`                     | free     | MS-019, MT-102                                       |
+| `pipeline.trigger_get`                        | free     | MS-019                                               |
+| `pipeline.trigger_update`                     | free     | MS-019                                               |
+| `project.archive`                             | free     | MT-055                                               |
+| `project.badge_add`                           | free     | MS-022, MT-058                                       |
+| `project.badge_delete`                        | free     | MS-022, MT-059                                       |
+| `project.badge_edit`                          | free     | MS-022                                               |
+| `project.badge_get`                           | free     | MS-022                                               |
+| `project.create`                              | free     | MS-053                                               |
+| `project.delete`                              | free     | MS-053                                               |
+| `project.get`                                 | free     | MS-001, MS-037, MS-ENT-DYN-2, MT-002                 |
+| `project.hook_add`                            | free     | MS-021, MT-056                                       |
+| `project.hook_delete`                         | free     | MS-021, MT-057                                       |
+| `project.hook_edit`                           | free     | MS-021                                               |
+| `project.hook_get`                            | free     | MS-021                                               |
+| `project.hook_list`                           | free     | MS-005                                               |
+| `project.list`                                | free     | MT-003                                               |
+| `project.member_add`                          | free     | MS-034                                               |
+| `project.member_delete`                       | free     | MS-034                                               |
+| `project.member_edit`                         | free     | MS-034                                               |
+| `project.member_get`                          | free     | MS-034                                               |
+| `project.members`                             | free     | MT-005, MT-209                                       |
+| `project.milestone_create`                    | free     | MT-034                                               |
+| `project.milestone_delete`                    | free     | MT-035                                               |
+| `project.mirror_force_push`                   | free     | MT-116                                               |
+| `project.push_rule_add`                       | premium  | MS-045, MT-167, MT-192                               |
+| `project.push_rule_delete`                    | premium  | MS-045, MT-168, MT-196                               |
+| `project.push_rule_edit`                      | premium  | MS-045, MT-193                                       |
+| `project.push_rule_get`                       | premium  | MS-045                                               |
+| `project.security_settings_get`               | ultimate | MS-044, MS-054, MS-ENT-DYN-1, MT-188                 |
+| `project.security_settings_update`            | ultimate | MS-054, MT-169, MT-194                               |
+| `project.service_account_create`              | free     | MS-043, MT-181                                       |
+| `project.service_account_delete`              | free     | MS-043, MT-183                                       |
+| `project.service_account_list`                | free     | MS-043, MS-044, MS-054, MS-ENT-DYN-1, MT-180, MT-189 |
+| `project.service_account_pat_create`          | free     | MS-043, MT-185                                       |
+| `project.service_account_pat_list`            | free     | MS-043, MT-184                                       |
+| `project.service_account_pat_revoke`          | free     | MS-043, MT-187                                       |
+| `project.service_account_pat_rotate`          | free     | MS-043, MT-186                                       |
+| `project.service_account_update`              | free     | MS-043, MS-054, MT-182, MT-195                       |
+| `project.star`                                | free     | MT-004                                               |
+| `project_alias.create`                        | premium  | MT-170                                               |
+| `project_alias.delete`                        | premium  | MT-171                                               |
+| `project_alias.get`                           | premium  | MS-ENT-DYN-5                                         |
+| `project_alias.list`                          | premium  | MS-ENT-DYN-5, MT-087                                 |
+| `release.create`                              | free     | MS-018, MS-038, MT-036                               |
+| `release.delete`                              | free     | MS-004, MS-018, MT-037                               |
+| `release.get`                                 | free     | MS-004                                               |
+| `release.link_create`                         | free     | MS-018                                               |
+| `release.link_create_batch`                   | free     | MS-038                                               |
+| `release.link_delete`                         | free     | MS-018                                               |
+| `release.link_get`                            | free     | MS-018                                               |
+| `release.link_list`                           | free     | MS-004                                               |
+| `release.link_update`                         | free     | MS-018                                               |
+| `release.list`                                | free     | MS-037, MT-207                                       |
+| `repository.commit_discussion_delete_note`    | free     | MT-113                                               |
+| `repository.file_create`                      | free     | MS-017, MT-030                                       |
+| `repository.file_delete`                      | free     | MS-017, MT-031                                       |
+| `repository.file_get`                         | free     | MS-001, MS-017, MT-029                               |
+| `repository.file_update`                      | free     | MS-017                                               |
+| `repository.tree`                             | free     | MS-037                                               |
+| `runner.jobs`                                 | free     | MS-008                                               |
+| `runner.list_project`                         | free     | MS-008, MT-045                                       |
+| `runner.remove`                               | free     | MT-047                                               |
+| `runner.update`                               | free     | MS-008, MT-046                                       |
+| `search.code`                                 | free     | MT-032                                               |
+| `search.projects`                             | free     | MT-033                                               |
+| `security_finding.list`                       | ultimate | MT-088                                               |
+| `server.health_check`                         | free     | MT-040                                               |
+| `snippet.content`                             | free     | MT-050                                               |
+| `snippet.delete`                              | free     | MT-051                                               |
+| `snippet.project_create`                      | free     | MS-024                                               |
+| `snippet.project_delete`                      | free     | MS-024                                               |
+| `snippet.project_get`                         | free     | MS-024                                               |
+| `snippet.project_update`                      | free     | MS-024                                               |
+| `storage_move.get_group_for_group`            | premium  | MT-173                                               |
+| `storage_move.retrieve_all_project`           | free     | MT-089                                               |
+| `storage_move.retrieve_all_snippet`           | free     | MS-ENT-DYN-8                                         |
+| `storage_move.schedule_project`               | free     | MT-172                                               |
+| `storage_move.schedule_snippet`               | free     | MT-174                                               |
+| `tag.delete`                                  | free     | MS-004, MS-018, MT-100                               |
+| `tag.get`                                     | free     | MS-004                                               |
+| `tag.list`                                    | free     | MS-037                                               |
+| `template.dockerfile_list`                    | free     | MT-090                                               |
+| `user.block`                                  | free     | MT-104                                               |
+| `user.create_service_account`                 | free     | MT-175                                               |
+| `user.current`                                | free     | MT-001                                               |
+| `user.disable_two_factor`                     | free     | MT-105                                               |
+| `user.todo_list`                              | free     | MT-200                                               |
+| `vulnerability.dismiss`                       | ultimate | MT-177                                               |
+| `vulnerability.get`                           | ultimate | MT-176                                               |
+| `vulnerability.list`                          | ultimate | MS-ENT-DYN-4, MT-091                                 |
+| `vulnerability.pipeline_security_summary`     | ultimate | MT-178                                               |
+| `vulnerability.severity_count`                | ultimate | MS-ENT-DYN-4                                         |
+| `wiki.create`                                 | free     | MS-023                                               |
+| `wiki.delete`                                 | free     | MS-023, MT-108                                       |
+| `wiki.get`                                    | free     | MS-023                                               |
+| `wiki.list`                                   | free     | MT-092                                               |
+| `wiki.update`                                 | free     | MS-023                                               |
 
 ## Standalone tools the corpus names
 
-| Tool                                | Named by               |
-| ----------------------------------- | ---------------------- |
-| `gitlab_discover_project`           | MS-001, MS-002, MS-011 |
-| `gitlab_interactive_issue_create`   | MS-011, MT-080         |
-| `gitlab_interactive_mr_create`      | MT-081                 |
-| `gitlab_interactive_project_create` | MT-082                 |
-| `gitlab_interactive_release_create` | MT-083                 |
+| Tool                                | Named by                       |
+| ----------------------------------- | ------------------------------ |
+| `gitlab_discover_project`           | MS-001, MS-002, MS-006, MS-011 |
+| `gitlab_interactive_issue_create`   | MS-011, MT-080                 |
+| `gitlab_interactive_mr_create`      | MT-081                         |
+| `gitlab_interactive_project_create` | MT-082                         |
+| `gitlab_interactive_release_create` | MT-083                         |
 
 ## Worlds the corpus asks for
 
-| Recipe                     | Cases |
-| -------------------------- | ----: |
-| `branch`                   |     2 |
-| `ci_variable`              |     1 |
-| `environment_deployment`   |     2 |
-| `failed_job_artifact`      |     5 |
-| `group`                    |     2 |
-| `instance_ci_variable`     |     1 |
-| `issue`                    |     4 |
-| `member`                   |     1 |
-| `merge_request`            |     5 |
-| `merge_request_discussion` |     1 |
-| `merge_request_source`     |     2 |
-| `package_files`            |     1 |
-| `pipeline_job`             |     3 |
-| `project`                  |    12 |
-| `release`                  |     1 |
-| `runner`                   |     2 |
-| `snippet`                  |     1 |
-| `world`                    |    29 |
+| Recipe                        | Cases |
+| ----------------------------- | ----: |
+| `attestation`                 |     1 |
+| `branch`                      |     4 |
+| `broadcast_message`           |     1 |
+| `ci_variable`                 |     2 |
+| `commit_discussion`           |     1 |
+| `custom_emoji`                |     1 |
+| `database_migration`          |     1 |
+| `dependency_export`           |     1 |
+| `deploy_key`                  |     1 |
+| `deploy_token`                |     1 |
+| `deployment_approval`         |     1 |
+| `draft_note`                  |     1 |
+| `enterprise_user`             |     2 |
+| `environment_deployment`      |     3 |
+| `epic`                        |     4 |
+| `epic_issue`                  |     3 |
+| `external_status_check`       |     2 |
+| `failed_job_artifact`         |     6 |
+| `feature_flag`                |     2 |
+| `geo_site`                    |     2 |
+| `group`                       |    23 |
+| `group_access_token`          |     2 |
+| `group_protected_branch`      |     1 |
+| `group_protected_environment` |     1 |
+| `group_service_account`       |     3 |
+| `group_ssh_certificate`       |     1 |
+| `group_wiki_page`             |     1 |
+| `instance_audit_event`        |     1 |
+| `instance_ci_variable`        |     1 |
+| `instance_ci_variable_seeded` |     1 |
+| `issue`                       |     5 |
+| `issue_award`                 |     1 |
+| `job_token_scope`             |     2 |
+| `ldap_link`                   |     1 |
+| `member`                      |     1 |
+| `member_role`                 |     1 |
+| `merge_request`               |     8 |
+| `merge_request_award`         |     1 |
+| `merge_request_discussion`    |     1 |
+| `merge_request_source`        |     2 |
+| `merge_train_entry`           |     1 |
+| `mergeable_merge_request`     |     2 |
+| `milestone`                   |     1 |
+| `model_version`               |     1 |
+| `package`                     |     2 |
+| `package_files`               |     1 |
+| `pipeline_job`                |     4 |
+| `pipeline_schedule`           |     1 |
+| `pipeline_trigger`            |     1 |
+| `project`                     |    38 |
+| `project_access_token`        |     1 |
+| `project_alias`               |     2 |
+| `project_badge`               |     1 |
+| `project_hook`                |     1 |
+| `project_member_candidate`    |     1 |
+| `project_mirror`              |     1 |
+| `project_service_account`     |     8 |
+| `push_rule`                   |     3 |
+| `release`                     |     3 |
+| `repository_file`             |     1 |
+| `runner`                      |     3 |
+| `saml_link`                   |     1 |
+| `scim_identity`               |     2 |
+| `snippet`                     |     3 |
+| `storage_move`                |     1 |
+| `tag`                         |     1 |
+| `terraform_state`             |     1 |
+| `user`                        |     2 |
+| `vulnerability`               |     5 |
+| `wiki_page`                   |     1 |
+| `world`                       |    66 |
 
 ## What the corpus needs of an instance
 
 | Requirement            | Cases |
 | ---------------------- | ----: |
-| a CI runner            |     9 |
-| an administrator token |     3 |
-| tier free              |    75 |
+| a CI runner            |    13 |
+| an administrator token |    26 |
+| tier free              |   162 |
+| tier premium           |    63 |
+| tier ultimate          |    33 |
