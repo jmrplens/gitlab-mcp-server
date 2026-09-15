@@ -639,9 +639,10 @@ GITLAB_TOKEN=glpat-...
 ```
 
 ```bash
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 make test-e2e
 ```
+
+Run it through the target rather than by hand: the suite drives the real `cmd/server` binary, and the target stages that build first and hands the path over. A bare `go test` stages nothing and makes each package compile the server again.
 
 #### Docker Mode
 
@@ -665,16 +666,18 @@ docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 
 # Run tests
 set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+make e2e-server-binary
+E2E_SERVER_BINARY=$PWD/dist/e2e/gitlab-mcp-server \
+  go test -v -tags e2e -timeout 3600s ./test/e2e/gitlab/common/ ./test/e2e/gitlab/ce/
 
 # Cleanup
 docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
-Or use the Makefile target that automates the full lifecycle:
+Or use the Makefile target that automates the full lifecycle, which is what the steps above expand to:
 
 ```bash
-make test-e2e-docker
+make test-e2e-ce     # or its older name, make test-e2e-docker
 ```
 
 For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the shell and use:
@@ -683,9 +686,9 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-ee                  # or its older name, make test-e2e-docker-enterprise
 ```
 
-The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one: the suite under `test/e2e/suite` is superseded, so no default or release gate runs it and the only way to is to ask for it from a manual dispatch of the E2E workflow with `legacy_suite=true`.
+The licensed target runs the `common` and `ee` packages of the rebuilt suite under `test/e2e/gitlab` against the real binary. There is no Enterprise build tag: every file carries `e2e` alone, and the package decides the runtime, so one compile and one analysis run see the licensed tests with everything else. `make test-e2e-docker` is the CE run of that same suite under its older name, and `make test-e2e` the self-hosted one. The suite this replaced is deleted, along with the build tag that used to select its Enterprise half and the workflow input that used to run it.
 
-The rebuilt suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. The old suite keeps its own check: when an enterprise tier is requested (via `GITLAB_MCP_TIER=premium`/`ultimate`, or the legacy `GITLAB_ENTERPRISE=true` harness toggle) but the fixture reports a Free license, its session downgrades to CE and the Premium scenarios skip with a logged reason instead of failing outright.
+The suite re-validates the GitLab tier before it writes anything, by calling the License API (`GET /api/v4/license`). A package pointed at the wrong runtime refuses, naming what it found and the target to run instead, and `E2E_RUNTIME_MISMATCH=skip` turns that refusal into skips. Refusing rather than adapting is the point: a licensed package that quietly downgraded itself on a Free instance would report a pass for scenarios it never ran, which is how the old arrangement hid its Enterprise half for as long as it did.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
@@ -703,7 +706,7 @@ Docker mode files use the `e2e-docker-` prefix, and Enterprise Docker files use 
 
 The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. Docker targets still tear down containers and volumes before returning a non-zero status on failure.
 
-The same three targets also record what the suite did, beside the reports of what it concluded: each exports `GITLAB_MCP_TEST_E2E_CALLS_DIR` as an absolute path under `dist/e2e-calls/` (`self-hosted`, `ce` or `ee`), clears that directory first, and runs with `-count=1`, since a package-list run can answer from the test cache and a cached PASS records nothing. The suite then writes one `calls-*.jsonl` shard per test process: a call line for every tool call, resource read, prompt and completion a test made, attributed to the subtest that made it and carrying the canonical action it asked for; a dispatch line for every server span, with the route the server actually ran; one session line per in-process server with the tools, resources and prompts it listed; and one run line with the edition, tier, version and fixture profile. The call lines carry no verdict, which is what the JSON report beside them is for: `go run ./cmd/audit_e2e_coverage/ -calls dist/e2e-calls/ce -results dist/e2e-reports/e2e-docker-log.json -runtime ce` joins the two and says what the run covered. The recorder lives in `test/e2e/suite/baseline_recorder_test.go`; it installs the production telemetry middleware on every in-process server with an in-memory span processor, so the dispatched action is what production telemetry says and not a second reading of it, and reads the test a call belongs to off the goroutine's stack, resolving the `t.Run` literal a frame sits inside from the source. Nothing is written when the variable is unset.
+The same three targets also record what the suite did, beside the reports of what it concluded: each exports `GITLAB_MCP_TEST_E2E_CALLS_DIR` as an absolute path under `dist/e2e-calls/` (`self-hosted`, `ce` or `ee`), clears that directory first, and runs with `-count=1`, since a package-list run can answer from the test cache and a cached PASS records nothing. The suite then writes one `calls-*.jsonl` shard per test process: a call line for every tool call, resource read, prompt and completion a test made, attributed to the subtest that made it and carrying the canonical action it asked for; a dispatch line for every server span, with the route the server actually ran; one session line per in-process server with the tools, resources and prompts it listed; and one run line with the edition, tier, version and fixture profile. The call lines carry no verdict, which is what the JSON report beside them is for: `go run ./cmd/audit_e2e_coverage/ -calls dist/e2e-calls/ce -results dist/e2e-reports/e2e-docker-log.json -runtime ce` joins the two and says what the run covered. The recorder lives in `test/e2e/internal/harness/record.go`, with the receiver it reads from in `otlp.go` beside it, and it is two halves that make one line. The client half is a sending middleware on every harness session: it stamps a fresh traceparent into `_meta`, writes down what was asked for and what came back, and attributes it to the test that asked through the context. The server half is the span that call produced, exported by the real binary over OTLP and joined on the trace id. So the dispatched action is what the server's own production telemetry says, rather than a second reading of it made by the test. Records are buffered per test and written from the first-registered cleanup, which therefore runs last, so the ledger's own undo calls are in the buffer and the test's final status is settled before anything is written. Nothing is written when the variable is unset.
 
 A third thing a run can record, off by default, is how much of the **server binary** it executed. `COVER=1` on `make test-e2e-ce`, `make test-e2e-ee` or `make test-e2e-gitlab` builds the shared binary with `-cover` and exports `E2E_COVER_DIR` as an absolute path under `dist/e2e-cover/` (`ce`, `ee` or `self-hosted`); the harness gives each server child that directory as its `GOCOVERDIR`, and `make e2e-go-coverage` merges what the run left into `dist/e2e-reports/e2e-go-coverage.out`, printing the per-package table and the total. It answers what `cmd/audit_e2e_coverage` cannot: that one reports which catalog actions dispatched, and this one reports which statements of the program ran, meaning startup, the catalog build, the middleware chain and the branches no live-GitLab scenario reaches. An instrumented binary writes its meta-data at startup and its counters from an exit hook, so only a child that ends normally contributes anything: `closeSessions` closes every session before it cancels their context, and a child left running is asked to terminate rather than killed, which is what makes the counters exist at all. The run's log ends with the counter files written against the children started, so a child that died is visible rather than merely missing. Nothing is committed and nothing gates on the number, since only a live GitLab produces the input, and the profile is never merged into `coverage.out`, which `sonar-project.properties` publishes as the unit suite's figure.
 
@@ -781,13 +784,17 @@ go test ./internal/tools/ -run TestProject -count=1 -v
 go test ./internal/tools/ -run TestBranch -count=1 -v
 ```
 
-**E2E meta-tool tests:**
+**E2E surface coverage:**
 
-The E2E suite now uses domain-focused `TestMeta_*` entry points rather than one large workflow test. These tests exercise project lifecycle operations and extended domains through meta-tool action dispatch, validating routing, parameter passthrough, and response formatting in a real GitLab environment.
+A scenario is not written per surface. It is written once, named for what it exercises, and `harness.SurfacesWith` builds its fixture on the parent and runs the body again on the dynamic, meta and individual surfaces as subtests. Routing, parameter passthrough and response formatting are therefore held to the same assertions on all three, instead of to three hand-written families that drift apart.
+
+The `make` targets take no test flags, so selecting one surface or one scenario means staging the binary and calling `go test` yourself:
 
 ```bash
-# Run all meta-tool E2E tests
-go test -v -tags e2e -timeout 300s -run '^TestMeta_' ./test/e2e/suite/
+make e2e-server-binary
+E2E_SERVER_BINARY=$PWD/dist/e2e/gitlab-mcp-server \
+  go test -v -tags e2e -count=1 -timeout 3600s \
+  -run 'TestIssues_.*/meta' ./test/e2e/gitlab/common/
 ```
 
 ### Validation Tests
@@ -831,25 +838,24 @@ go test ./internal/... -race -count=1
 ### E2E Tests
 
 ```bash
-# Full suite (self-hosted GitLab)
-go test -v -tags e2e -timeout 300s ./test/e2e/suite/
+# Full suite against a self-hosted GitLab, from .env
 make test-e2e
 
-# Docker mode (ephemeral GitLab CE container + Bitbucket import fixture)
-export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh && ./test/e2e/scripts/setup-bitbucket.sh
-set -a && source test/e2e/.env.docker && set +a
-go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
+# Ephemeral GitLab CE, with the runner and the Bitbucket import fixture
+make test-e2e-ce
 
-# Individual and meta-tool domains
-go test -v -tags e2e -timeout 300s -run '^TestIndividual_' ./test/e2e/suite/
-go test -v -tags e2e -timeout 300s -run '^TestMeta_' ./test/e2e/suite/
+# Ephemeral GitLab EE, licensed: the common and ee packages
+make test-e2e-ee
 
-# Compile-only (verify builds without GitLab)
-go test -tags e2e -c -o NUL ./test/e2e/suite/       # Windows
-go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
+# The transport modules and the harness library: no GitLab, no credentials
+make test-e2e-stdio
+make test-e2e-http
+make test-e2e-harness
+
+# Compile-only (verify the suite builds without GitLab). One tag covers all
+# three packages, because the runtime is a property of the package.
+go test -tags e2e -c -o NUL ./test/e2e/gitlab/...          # Windows
+go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...    # Linux
 ```
 
 ### Coverage Report
