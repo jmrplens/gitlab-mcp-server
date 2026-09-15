@@ -564,83 +564,147 @@ func build() string {
 }
 `
 
-// disagreeFixture writes the two shapes the shared pre-filter and this audit's
-// own operation-type rule judge differently, one in each direction.
+// edgeFixture writes the shapes the inventory's rule and this audit's own rule
+// used to judge differently, in both directions, with the handlers and specs
+// that make the gate answer for them end to end.
 //
-// prose carries a mutation on a line of its own but opens with something that
-// is not an operation keyword, so the inventory does not consider it a document
-// at all while classifyDocument's per-line regex would call it a mutation.
-// send returns a literal the inventory does consider a document, the keyword
-// being the first token, while classifyDocument refuses it because the keyword
-// is not followed on its own line by a name, a brace or a paren.
-const disagreeFixture = `package disagree
+// headedMutation carries its operation under a header line, so the document
+// does not open the string it is written in. spacelessRead is a one-field
+// selection set written without a space, which is also how a UCUM unit
+// annotation is written. The inventory refused both, this audit's own rule read
+// both, and a mutation written either way was therefore judged by nothing while
+// the gate went on printing a clean run. secondLine is the other direction: a
+// document the inventory read and this audit's rule did not, which cost a
+// finding rather than a silence.
+const edgeFixture = `package edges
 
-const prose = @@
+import (
+	"context"
+
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+const headedMutation = @@
 Sent to GitLab:
-mutation { thing { errors } }
+mutation($id: ID!) {
+  thing(input: {id: $id}) { errors }
+}
 @@
 
-func send() string {
+const spacelessRead = @@{__typename}@@
+
+// Input is the shared input for every fixture handler.
+type Input struct {
+	ID string @@json:"id"@@
+}
+
+// Output is the shared output for every fixture handler.
+type Output struct {
+	OK bool @@json:"ok"@@
+}
+
+// Touch sends the mutation written under a header line.
+func Touch(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, headedMutation, input)
+}
+
+// Typename sends the document written without spaces.
+func Typename(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	return send(ctx, client, spacelessRead, input)
+}
+
+// secondLine writes a document inline whose selection set opens on the line
+// below its keyword.
+func secondLine() string {
 	return @@query
 { thing { id } }@@
 }
-`
 
-// TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed pins the narrowing
-// the shared inventory brings with it.
-//
-// The inventory asks for the operation keyword at the very start of the
-// comment-stripped text, where this audit's own rule accepts it at the start of
-// any line. A string that only satisfies the looser rule therefore leaves the
-// inventory and is neither indexed nor reported. Every document this repository
-// sends opens with its keyword, so nothing is lost today; the test is here so
-// that the day the difference matters, it is a failing assertion rather than a
-// gate that quietly stopped looking.
-func TestLoadProgram_ADocumentThePreFilterRefuses_IsNotIndexed(t *testing.T) {
-	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+func send(ctx context.Context, client *gitlabclient.Client, query string, input Input) (Output, error) {
+	var response struct {
+		Data map[string]any @@json:"data"@@
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     query,
+		Variables: map[string]any{"id": input.ID},
+	}, &response, gl.WithContext(ctx))
+	return Output{OK: err == nil}, err
+}
 
-	if got := classifyDocument("\nSent to GitLab:\nmutation { thing { errors } }\n"); got != writeDocument {
-		t.Fatalf("classifyDocument() = %v for the fixture's prose, want %v: the test would not be about the "+
-			"narrowing if this audit's own rule refused it too", got, writeDocument)
-	}
-	for obj := range prog.documents {
-		if obj.Pkg() != nil && obj.Pkg().Name() == "disagree" && obj.Name() == "prose" {
-			t.Errorf("prose is indexed as a document, want it left out: the inventory does not read it as one")
-		}
-	}
-	for _, document := range prog.unattributed {
-		if strings.Contains(document.Text, "Sent to GitLab") {
-			t.Errorf("prose is reported as unattributed, want it left out entirely: %+v", document)
-		}
+// ActionSpecs declares one read action per document: "read_touch" is the
+// constructed violation and "typename" is honest.
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		readSpec("read_touch", toolutil.RouteAction(client, Touch)),
+		readSpec("typename", toolutil.RouteAction(client, Typename)),
 	}
 }
 
-// TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported pins the
-// other direction, which is a false alarm rather than a silence.
-//
-// The inventory reads such a literal as a document; the body walk classifies it
-// as none and so places nothing at its position, which leaves it unattributed
-// and fails the run. That is the trade this gate makes everywhere else too: a
-// reviewable finding over a string it never classified, since the alternative is
-// a clean report over a document nobody judged.
-func TestLoadProgram_ALiteralOnlyTheInventoryReadsAsADocument_IsReported(t *testing.T) {
-	prog := loadFixture(t, map[string]string{"disagree": disagreeFixture})
+func readSpec(name string, route toolutil.ActionRoute) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{Usage: "fixture"})
+}
+`
 
-	if len(prog.unattributed) != 1 {
-		t.Fatalf("loadProgram() left %d document(s) unattributed, want the literal the two rules disagree about: %+v",
-			len(prog.unattributed), prog.unattributed)
+// edgeActions is the catalog the edge-shape test hands to [audit]: both actions
+// read-only, which is what makes the mutation one a finding.
+func edgeActions() []action {
+	return []action{
+		{ID: "edges.read_touch", Name: "read_touch", Owner: "edges", ReadOnly: true},
+		{ID: "edges.typename", Name: "typename", Owner: "edges", ReadOnly: true},
 	}
-	document := prog.unattributed[0]
-	if !strings.Contains(document.Text, "thing { id }") {
-		t.Errorf("the unattributed document reads %q, want the literal in send()", document.Text)
+}
+
+// TestLoadProgram_TheShapesTheTwoRulesDisagreedAbout_AreSeenAndClassified holds
+// the convergence the two rules were reduced to.
+//
+// One rule decided what a document is and another decided what it asks for, and
+// they did not describe the same set. The inventory is what this audit reads,
+// so the shapes only the other rule recognized never reached it: a mutation
+// written under a header line, or a one-field selection set written without a
+// space, left the inventory and was judged by nothing while the gate reported
+// that no read-only action reaches a mutation. Both are asked of the real
+// loader here, end to end, because that narrowing was invisible to every test
+// that put a string to one rule at a time.
+func TestLoadProgram_TheShapesTheTwoRulesDisagreedAbout_AreSeenAndClassified(t *testing.T) {
+	prog := loadFixture(t, map[string]string{"edges": edgeFixture})
+
+	indexed := map[string]documentKind{}
+	for obj, kind := range prog.documents {
+		if obj.Pkg() != nil && obj.Pkg().Name() == "edges" {
+			indexed[obj.Name()] = kind
+		}
 	}
-	if got := classifyDocument(document.Text); got != notADocument {
-		t.Errorf("classifyDocument() = %v for the literal, want %v: it is unattributed precisely because this "+
-			"audit's own rule reads it as no document", got, notADocument)
-	}
-	if !strings.HasSuffix(filepath.ToSlash(document.Position.Filename), "/disagree/disagree.go") {
-		t.Errorf("the unattributed document is positioned at %q, want the fixture file", document.Position.Filename)
-	}
+
+	t.Run("a mutation that does not open the string it is written in", func(t *testing.T) {
+		if got, ok := indexed["headedMutation"]; !ok || got != writeDocument {
+			t.Fatalf("headedMutation indexed as %v (present=%t), want %v", got, ok, writeDocument)
+		}
+		result := audit(prog, edgeActions(), repoRoot(t))
+		if len(result.findings) != 1 {
+			t.Fatalf("audit() reported %d finding(s), want the read-only action that sends it: %+v",
+				len(result.findings), result.findings)
+		}
+		if !strings.Contains(result.findings[0].message, "edges.read_touch") ||
+			!strings.Contains(result.findings[0].message, "headedMutation") {
+			t.Errorf("the finding names neither the action nor the document:\n%s", result.findings[0].message)
+		}
+	})
+
+	t.Run("a selection set written without a space", func(t *testing.T) {
+		if got, ok := indexed["spacelessRead"]; !ok || got != readDocument {
+			t.Errorf("spacelessRead indexed as %v (present=%t), want %v", got, ok, readDocument)
+		}
+	})
+
+	t.Run("a document whose selection set opens on the next line", func(t *testing.T) {
+		if len(prog.unattributed) != 0 {
+			t.Errorf("loadProgram() left %+v unattributed, want nothing: the inline document is in a body and "+
+				"the rule that reads it is the rule that classifies it", prog.unattributed)
+		}
+	})
 }
 
 // unplacedFixture writes a document in the one shape no walk in this audit can

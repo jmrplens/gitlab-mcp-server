@@ -8,6 +8,12 @@ import "testing"
 // this repository actually writes (raw literals opening with a newline,
 // indented documents, named and anonymous operations, documents assembled from
 // a fragment constant) and the prose that must not be mistaken for one.
+//
+// Whether a string is a document at all is the inventory's answer now, so the
+// shapes it refuses are notADocument here rather than a read nobody sends: a
+// JSON object and a metric's unit annotation were classified by this audit
+// alone and by nothing else, and the shapes it admits that this audit used to
+// be asked about separately are classified the same way from one rule.
 func TestClassifyDocument_OperationTypes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -90,9 +96,34 @@ func TestClassifyDocument_OperationTypes(t *testing.T) {
 			want: notADocument,
 		},
 		{
-			name: "json object is a selection set as far as this audit cares",
+			name: "json object is not a document",
 			doc:  "{\"a\": 1}",
+			want: notADocument,
+		},
+		{
+			name: "mutation under a template hole",
+			doc:  "{{/* header */}}\nmutation Touch($id: ID!) {\n  touch(id: $id) { errors }\n}",
+			want: writeDocument,
+		},
+		{
+			name: "mutation under a header line",
+			doc:  "\nSent to GitLab:\nmutation { thing { errors } }\n",
+			want: writeDocument,
+		},
+		{
+			name: "mutation opening on the line below its keyword",
+			doc:  "mutation\n{ thing { errors } }",
+			want: writeDocument,
+		},
+		{
+			name: "spaceless selection set on an introspection field",
+			doc:  "{__typename}",
 			want: readDocument,
+		},
+		{
+			name: "an OpenTelemetry unit annotation is not a document",
+			doc:  "{entry}",
+			want: notADocument,
 		},
 		{
 			name: "a fragment spliced into a mutation is still a mutation",

@@ -345,7 +345,7 @@ func documentText(value constant.Value) (string, bool) {
 		return "", false
 	}
 	text := constant.StringVal(value)
-	if !looksLikeDocument(text) {
+	if !LooksLikeDocument(text) {
 		return "", false
 	}
 	return text, true
