@@ -151,30 +151,6 @@ func TestTaskPrompt_IssueLinkConfirmationStaysSurfaceSpecific(t *testing.T) {
 	}
 }
 
-// TestCompactExactTaskPrompt_UsesExpectedToolName verifies compact exact prompts
-// do not force unified gitlab when a split meta-tool is expected.
-func TestCompactExactTaskPrompt_UsesExpectedToolName(t *testing.T) {
-	task := evalTask{ID: "MT-job", Prompt: "Download attestation for project `1` job `2`."}
-	step := evalStep{ExpectedTool: "gitlab_attestation", ExpectedAction: "attestation.download", RequiredParams: []string{"project_id", "job_id"}}
-	got := compactExactTaskPrompt(task, "No", step)
-	if !strings.Contains(got, "Use the gitlab_attestation tool once") {
-		t.Fatalf("compact prompt = %s", got)
-	}
-}
-
-// TestSchemaFirstTaskPrompt_RendersFallbackGuidance verifies unresolved exact
-// params produce schema-first instructions instead of placeholder examples.
-func TestSchemaFirstTaskPrompt_RendersFallbackGuidance(t *testing.T) {
-	got := schemaFirstTaskPrompt(evalTask{ID: "MT-999", Prompt: "Find the thing."}, "no", evalStep{ExpectedTool: "", ExpectedAction: "project.get"})
-	for _, want := range []string{"Task MT-999", "Do not use placeholder values", "call gitlab with action project.get"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(got, want) {
-				t.Fatalf("schemaFirstTaskPrompt() missing %q:\n%s", want, got)
-			}
-		})
-	}
-}
-
 // requireContainsAll returns contains all test data or fails the test.
 func requireContainsAll(t *testing.T, name, content string, wants []string) {
 	t.Helper()
@@ -841,86 +817,6 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 	}
 }
 
-// TestTaskPrompt_SingleFileCreateUsesExactToolCall verifies TaskPrompt when single file create uses exact tool call.
-func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-030",
-		Prompt:         "Create file `tmp/eval.txt` with content `evaluation file` and commit_message `Create evaluation file` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab_repository",
-		ExpectedAction: "file_create",
-		RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"Exact required call: use the gitlab_repository tool once with input",
-		`"action":"file_create"`,
-		`"file_path":"tmp/eval.txt"`,
-		`"content":"evaluation file"`,
-		`"branch":"feature/eval"`,
-		`"commit_message":"Create evaluation file"`,
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want exact file_create guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_ProjectGetUsesExactToolCall verifies exact project path
-// lookups do not drift into project search in meta-surface evaluations.
-func TestTaskPrompt_ProjectGetUsesExactToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-002",
-		Prompt:         "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.",
-		ExpectedTool:   "gitlab_project",
-		ExpectedAction: "get",
-		RequiredParams: []string{"project_id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"Exact required call: use the gitlab_project tool once with input",
-		`"action":"get"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		"do not call gitlab_discover_project",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want exact project_get guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_InstanceVariableCreateUsesExactToolCall verifies TaskPrompt when instance variable create uses exact tool call.
-func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-068",
-		Prompt:         "Create instance CI variable `INSTANCE_EVAL_TOKEN` with value `masked-value-123`.",
-		ExpectedTool:   "gitlab_ci_variable",
-		ExpectedAction: "instance_create",
-		RequiredParams: []string{"key", "value"},
-		OptionalParams: []string{"masked", "protected"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"Exact required call: use the gitlab_ci_variable tool once with input",
-		`"action":"instance_create"`,
-		`"key":"INSTANCE_EVAL_TOKEN"`,
-		`"value":"masked-value-123"`,
-		"Return exactly one tool call and no text answer",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want exact instance_create guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
 // TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes verifies TaskPrompt when pipeline schedule CRUD avoids project prefetch and confirms deletes.
 func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(t *testing.T) {
 	task := evalTask{
@@ -1212,35 +1108,6 @@ func TestTaskPrompt_DiscussionResolveIncludesQuotedEnvelopeGuidance(t *testing.T
 	}
 }
 
-// TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall verifies TaskPrompt when split discussion resolve uses exact tool call.
-func TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-061",
-		Prompt:         "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab_mr_review",
-		ExpectedAction: "discussion_resolve",
-		RequiredParams: []string{"project_id", "merge_request_iid", "discussion_id"},
-		OptionalParams: []string{"resolved"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"Exact required call",
-		"use the gitlab_mr_review tool once",
-		`"action":"discussion_resolve"`,
-		`"discussion_id":"abc123"`,
-		`"merge_request_iid":7`,
-		`"resolved":true`,
-		"Return exactly one tool call and no text answer",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want split discussion_resolve guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
 // TestTaskPrompt_SearchCodeAvoidsProjectDiscovery verifies TaskPrompt when search code avoids project discovery.
 func TestTaskPrompt_SearchCodeAvoidsProjectDiscovery(t *testing.T) {
 	task := evalTask{
@@ -1286,26 +1153,6 @@ func TestTaskPrompt_AdminSettingsUsesDispatcherDirectly(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact verifies TaskPrompt when artifact from numeric job uses single artifact.
-func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-065",
-		Prompt:         "Download artifact `coverage/report.xml` from job `999` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab_job",
-		ExpectedAction: "download_single_artifact",
-		RequiredParams: []string{"project_id", "job_id", "artifact_path"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{"Exact required call", "use the gitlab_job tool once", `"action":"download_single_artifact"`, `"job_id":999`, `"artifact_path":"coverage/report.xml"`} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want artifact guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
 // TestTaskPrompt_FailedPipelineJobsUseJobList verifies TaskPrompt when failed pipeline jobs use job list.
 func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	task := evalTask{
@@ -1328,1060 +1175,16 @@ func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 	}
 }
 
-// TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall verifies TaskPrompt when single failed pipeline jobs uses exact tool call.
-func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-021",
-		Prompt:         "List failed jobs in pipeline `1323` for project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab_job",
-		ExpectedAction: "list",
-		RequiredParams: []string{"project_id", "pipeline_id"},
-		OptionalParams: []string{"scope"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		"Exact required call",
-		"use the gitlab_job tool once",
-		`"action":"list"`,
-		`"pipeline_id":1323`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"scope":"failed"`,
-		"Return exactly one tool call and no text answer",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want single failed-job guidance containing %q", prompt, want)
-			}
-		})
-	}
-
-	system := systemPromptForTask(task, config.ToolSurfaceMeta)
-	if !strings.Contains(system, "Return tool calls only") || strings.Contains(system, "runner.list_project") {
-		t.Fatalf("systemPromptForTask() = %q, want compact exact-call system prompt", system)
-	}
-}
-
-// TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls covers TaskPrompt with table-driven subtests for single destructive split actions use exact tool calls.
-func TestTaskPrompt_SingleDestructiveSplitActionsUseExactToolCalls(t *testing.T) {
-	tests := []struct {
-		name   string
-		task   evalTask
-		wants  []string
-		absent []string
-	}{
-		{
-			name:  "job artifacts",
-			task:  evalTask{ID: "MT-024", Prompt: "Delete artifacts for job `999` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_job", ExpectedAction: "delete_artifacts", RequiredParams: []string{"project_id", "job_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			wants: []string{"use the gitlab_job tool once", `"action":"delete_artifacts"`, `"job_id":999`, `"confirm":true`},
-		},
-		{
-			name:  "wiki delete",
-			task:  evalTask{ID: "MT-108", Prompt: "Delete wiki page `obsolete-eval` from project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_wiki", ExpectedAction: "delete", RequiredParams: []string{"project_id", "slug"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			wants: []string{"use the gitlab_wiki tool once", `"action":"delete"`, `"slug":"obsolete-eval"`, `"confirm":true`},
-		},
-		{
-			name:  "mr emoji",
-			task:  evalTask{ID: "MT-109", Prompt: "Remove award emoji ID `12` from merge request `7` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_merge_request", ExpectedAction: "emoji_mr_delete", RequiredParams: []string{"project_id", "merge_request_iid", "award_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			wants: []string{"use the gitlab_merge_request tool once", `"action":"emoji_mr_delete"`, `"award_id":12`, `"merge_request_iid":7`, "do not use gitlab_mr_review"},
-		},
-		{
-			name:  "commit discussion note",
-			task:  evalTask{ID: "MT-113", Prompt: "Delete commit discussion note `999` from discussion `abc123` on commit `abc1234` in project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_repository", ExpectedAction: "commit_discussion_delete_note", RequiredParams: []string{"project_id", "commit_sha", "discussion_id", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
-			wants: []string{"use the gitlab_repository tool once", `"action":"commit_discussion_delete_note"`, `"commit_sha":"abc1234"`, `"discussion_id":"abc123"`, `"note_id":999`},
-		},
-		{
-			name:   "archive",
-			task:   evalTask{ID: "MT-055", Prompt: "Archive project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_project", ExpectedAction: "archive", RequiredParams: []string{"project_id"}},
-			wants:  []string{"use the gitlab_project tool once", `"action":"archive"`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
-			absent: []string{`"action":"delete"`},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPrompt(tt.task)
-			for _, want := range tt.wants {
-				if !strings.Contains(prompt, want) {
-					t.Fatalf("taskPrompt() = %q, want exact guidance containing %q", prompt, want)
-				}
-			}
-			for _, absent := range tt.absent {
-				if strings.Contains(prompt, absent) {
-					t.Fatalf("taskPrompt() = %q, want exact guidance without %q", prompt, absent)
-				}
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID verifies TaskPrompt when pipeline trigger delete uses trigger ID.
-func TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-102",
-		Prompt:         "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "pipeline.trigger_delete",
-		RequiredParams: []string{"project_id", "trigger_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"pipeline.trigger_delete"`,
-		`"trigger_id":77`,
-		"Exact required call",
-		"The supplied ID maps to the matching *_id param",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want pipeline trigger delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact pipeline trigger delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-	system := systemPromptForTask(task, config.ToolSurfaceMeta)
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(system, unwanted) {
-				t.Fatalf("systemPromptForTask() = %q, want compact pipeline trigger delete system prompt without %q", system, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID verifies TaskPrompt when pipeline schedule delete uses schedule ID.
-func TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-103",
-		Prompt:         "Delete pipeline schedule ID `49` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "pipeline.schedule_delete",
-		RequiredParams: []string{"project_id", "schedule_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"pipeline.schedule_delete"`,
-		`"schedule_id":49`,
-		"Exact required call",
-		"The supplied ID maps to the matching *_id param",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want pipeline schedule delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact pipeline schedule delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-	system := systemPromptForTask(task, config.ToolSurfaceMeta)
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(system, unwanted) {
-				t.Fatalf("systemPromptForTask() = %q, want compact pipeline schedule delete system prompt without %q", system, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_UserBlockUsesUserID verifies TaskPrompt when user block uses user ID.
-func TestTaskPrompt_UserBlockUsesUserID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-104",
-		Prompt:         "Block user ID `69`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "user.block",
-		RequiredParams: []string{"user_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"user.block"`,
-		`"user_id":69`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want user block guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"runner_id", "target_branch", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact user block guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_FeatureFlagDeleteUsesName verifies TaskPrompt when feature flag delete uses name.
-func TestTaskPrompt_FeatureFlagDeleteUsesName(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-106",
-		Prompt:         "Delete feature flag `eval_flag` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "feature_flags.feature_flag_delete",
-		RequiredParams: []string{"project_id", "name"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"feature_flags.feature_flag_delete"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"name":"eval_flag"`,
-		"Exact required call",
-		"The supplied values map to the matching params",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want feature flag delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact feature flag delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_WikiDeleteUsesSlug verifies TaskPrompt when wiki delete uses slug.
-func TestTaskPrompt_WikiDeleteUsesSlug(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-108",
-		Prompt:         "Delete wiki page `obsolete-eval` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "wiki.delete",
-		RequiredParams: []string{"project_id", "slug"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"wiki.delete"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"slug":"obsolete-eval"`,
-		"Exact required call",
-		"The supplied values map to the matching params",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want wiki delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact wiki delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_MRAwardDeleteUsesAwardID verifies TaskPrompt when MR award delete uses award ID.
-func TestTaskPrompt_MRAwardDeleteUsesAwardID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-109",
-		Prompt:         "Remove award emoji ID `21` from merge request `1` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "merge_request.emoji_mr_delete",
-		RequiredParams: []string{"project_id", "merge_request_iid", "award_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"merge_request.emoji_mr_delete"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"merge_request_iid":1`,
-		`"award_id":21`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want MR award delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"mr_review.emoji_mr_note_delete", "note_id", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact MR award delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_IssueAwardDeleteUsesAwardID verifies TaskPrompt when issue award delete uses award ID.
-func TestTaskPrompt_IssueAwardDeleteUsesAwardID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-110",
-		Prompt:         "Remove award emoji ID `22` from issue `42` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "issue.emoji_issue_delete",
-		RequiredParams: []string{"project_id", "issue_iid", "award_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"issue.emoji_issue_delete"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"issue_iid":42`,
-		`"award_id":22`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want issue award delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"note_id", "target_branch", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact issue award delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID verifies TaskPrompt when deploy key delete uses deploy key ID.
-func TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-111",
-		Prompt:         "Delete deploy key ID `32` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "access.deploy_key_delete",
-		RequiredParams: []string{"project_id", "deploy_key_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"access.deploy_key_delete"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"deploy_key_id":32`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want deploy key delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID verifies TaskPrompt when deploy token delete uses deploy token ID.
-func TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-112",
-		Prompt:         "Delete project deploy token ID `66` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "access.deploy_token_delete_project",
-		RequiredParams: []string{"project_id", "deploy_token_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"access.deploy_token_delete_project"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"deploy_token_id":66`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want deploy token delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote verifies TaskPrompt when commit discussion delete uses discussion and note.
-func TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-113",
-		Prompt:         "Delete commit discussion note `999` from discussion `abc123` on commit `abc1234` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "repository.commit_discussion_delete_note",
-		RequiredParams: []string{"project_id", "commit_sha", "discussion_id", "note_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"repository.commit_discussion_delete_note"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"commit_sha":"abc1234"`,
-		`"discussion_id":"abc123"`,
-		`"note_id":999`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want commit discussion delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"issue.discussion_delete_note", "merge_request_iid", "params.variables"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want compact commit discussion delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_AttestationDownloadUsesAttestationIID verifies TaskPrompt when attestation download uses attestation IID.
-func TestTaskPrompt_AttestationDownloadUsesAttestationIID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-117",
-		Prompt:         "Download attestation IID `5` from project `my-org/tools/gitlab-mcp-server`; use the project-scoped attestation IID, not the database ID.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "attestation.download",
-		RequiredParams: []string{"project_id", "attestation_iid"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"attestation.download"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"attestation_iid":5`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want attestation guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_AuditEventGetUsesEventID verifies TaskPrompt when audit event get uses event ID.
-func TestTaskPrompt_AuditEventGetUsesEventID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-118",
-		Prompt:         "Get instance audit event ID `77`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "audit_event.get_instance",
-		RequiredParams: []string{"event_id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"audit_event.get_instance"`,
-		`"event_id":77`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want audit event get guidance containing %q", prompt, want)
-			}
-		})
-	}
-	if strings.Contains(prompt, "user_id") {
-		t.Fatalf("taskPrompt() = %q, want event_id guidance without user_id", prompt)
-	}
-}
-
-// TestTaskPrompt_AuditEventListUsesCreatedRange verifies TaskPrompt when audit event list uses created range.
-func TestTaskPrompt_AuditEventListUsesCreatedRange(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-119",
-		Prompt:         "List project audit events for project `my-org/tools/gitlab-mcp-server` created during January 2026.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "audit_event.list_project",
-		RequiredParams: []string{"project_id"},
-		OptionalParams: []string{"created_after", "created_before", "per_page"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"audit_event.list_project"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"created_after":"2026-01-01"`,
-		`"created_before":"2026-02-01"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want audit event list guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID verifies TaskPrompt when compliance policy update uses namespace ID.
-func TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-120",
-		Prompt:         "Update the admin compliance policy settings to use namespace ID `123`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "compliance_policy.update",
-		RequiredParams: []string{"csp_namespace_id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"compliance_policy.update"`,
-		`"csp_namespace_id":123`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want compliance policy guidance containing %q", prompt, want)
-			}
-		})
-	}
-	if strings.Contains(prompt, "issue_iid") {
-		t.Fatalf("taskPrompt() = %q, want csp_namespace_id guidance without issue_iid", prompt)
-	}
-}
-
-// TestTaskPrompt_DependencyExportCreateUsesPipelineID verifies TaskPrompt when dependency export create uses pipeline ID.
-func TestTaskPrompt_DependencyExportCreateUsesPipelineID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-121",
-		Prompt:         "Create a dependency list export for pipeline ID `12345`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "dependency.export_create",
-		RequiredParams: []string{"pipeline_id"},
-		OptionalParams: []string{"export_type"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"dependency.export_create"`,
-		`"pipeline_id":12345`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want dependency export create guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_DependencyExportDownloadUsesExportID verifies TaskPrompt when dependency export download uses export ID.
-func TestTaskPrompt_DependencyExportDownloadUsesExportID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-122",
-		Prompt:         "Download dependency list export ID `987`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "dependency.export_download",
-		RequiredParams: []string{"export_id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"dependency.export_download"`,
-		`"export_id":987`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want dependency export download guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"project_id", "attestation_iid"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want export_id guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_DORAMetricsGroupUsesMetric verifies TaskPrompt when dora metrics group uses metric.
-func TestTaskPrompt_DORAMetricsGroupUsesMetric(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-123",
-		Prompt:         "Get group DORA lead time metrics for group `my-org` from `2026-01-01` to `2026-01-31`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "dora_metrics.group",
-		RequiredParams: []string{"group_id", "metric"},
-		OptionalParams: []string{"start_date", "end_date", "interval", "environment_tiers"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"dora_metrics.group"`,
-		`"group_id":"my-org"`,
-		`"metric":"lead_time_for_changes"`,
-		`"start_date":"2026-01-01"`,
-		`"end_date":"2026-01-31"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want DORA guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID verifies TaskPrompt when enterprise user get uses group and user ID.
-func TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-124",
-		Prompt:         "Get enterprise user ID `55` in group `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "enterprise_user.get",
-		RequiredParams: []string{"group_id", "user_id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"enterprise_user.get"`,
-		`"group_id":"my-org"`,
-		`"user_id":55`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want enterprise user guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction verifies TaskPrompt uses enterprise action for enterprise user disable 2FA.
-func TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-125",
-		Prompt:         "Disable two-factor authentication for enterprise user ID `55` in group `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "enterprise_user.disable_2fa",
-		RequiredParams: []string{"group_id", "user_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"enterprise_user.disable_2fa"`,
-		`"group_id":"my-org"`,
-		`"user_id":55`,
-		`"confirm":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want enterprise 2FA guidance containing %q", prompt, want)
-			}
-		})
-	}
-	if strings.Contains(prompt, "user.disable_two_factor") {
-		t.Fatalf("taskPrompt() = %q, want enterprise action guidance without base user 2FA action", prompt)
-	}
-}
-
-// TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL verifies TaskPrompt when external status check create uses external URL.
-func TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-126",
-		Prompt:         "Create external project status check `Eval Gate` on project `my-org/tools/gitlab-mcp-server` pointing at `https://example.com/check`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "external_status_check.create_project",
-		RequiredParams: []string{"project_id", "name", "external_url"},
-		OptionalParams: []string{"shared_secret", "protected_branch_ids"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"external_status_check.create_project"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"name":"Eval Gate"`,
-		`"external_url":"https://example.com/check"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want external check create guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID verifies TaskPrompt when external status check status uses check ID.
-func TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-127",
-		Prompt:         "Mark external status check ID `8` as passed for merge request IID `7` at SHA `abc123` in project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "external_status_check.set_project_mr_status",
-		RequiredParams: []string{"project_id", "merge_request_iid", "sha", "external_status_check_id", "status"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"external_status_check.set_project_mr_status"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"merge_request_iid":7`,
-		`"sha":"abc123"`,
-		`"external_status_check_id":8`,
-		`"status":"passed"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want external check status guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID verifies TaskPrompt when external status check delete uses check ID.
-func TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-128",
-		Prompt:         "Delete external project status check ID `8` from project `my-org/tools/gitlab-mcp-server`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "external_status_check.delete_project",
-		RequiredParams: []string{"project_id", "check_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"external_status_check.delete_project"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"check_id":8`,
-		`"confirm":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want external check delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"rule_id", "deploy_key_id"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want check_id guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GeoGetUsesID verifies TaskPrompt when geo get uses ID.
-func TestTaskPrompt_GeoGetUsesID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-129",
-		Prompt:         "Get Geo site ID `3`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "geo.get",
-		RequiredParams: []string{"id"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"geo.get"`,
-		`"id":3`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want Geo get guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GeoCreateUsesEnabledAndPrimary verifies TaskPrompt when geo create uses enabled and primary.
-func TestTaskPrompt_GeoCreateUsesEnabledAndPrimary(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-130",
-		Prompt:         "Create a disabled Geo secondary site named `eval-geo` with URL `https://geo.example.com`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "geo.create",
-		RequiredParams: []string{"name", "url"},
-		OptionalParams: []string{"enabled", "primary"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"geo.create"`,
-		`"name":"eval-geo"`,
-		`"url":"https://geo.example.com"`,
-		`"enabled":false`,
-		`"primary":false`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want Geo create guidance containing %q", prompt, want)
-			}
-		})
-	}
-	if strings.Contains(prompt, "paused") {
-		t.Fatalf("taskPrompt() = %q, want Geo create guidance without paused", prompt)
-	}
-}
-
-// TestTaskPrompt_GeoDeleteUsesID verifies TaskPrompt when geo delete uses ID.
-func TestTaskPrompt_GeoDeleteUsesID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-131",
-		Prompt:         "Delete Geo site ID `3`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "geo.delete",
-		RequiredParams: []string{"id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"geo.delete"`,
-		`"id":3`,
-		`"confirm":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want Geo delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"geo_node_id", "site_id", "path"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want Geo delete guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupCredentialListUsesCredentialAction verifies TaskPrompt when group credential list uses credential action.
-func TestTaskPrompt_GroupCredentialListUsesCredentialAction(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-133",
-		Prompt:         "List group personal access tokens for group `my-org`, filtering active tokens.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.credential_list_pats",
-		RequiredParams: []string{"group_id"},
-		OptionalParams: []string{"state", "per_page"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.credential_list_pats"`,
-		`"group_id":"my-org"`,
-		`"state":"active"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group credential list guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupCredentialRevokeUsesTokenID verifies TaskPrompt when group credential revoke uses token ID.
-func TestTaskPrompt_GroupCredentialRevokeUsesTokenID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-134",
-		Prompt:         "Revoke group personal access token ID `77` in group `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.credential_revoke_pat",
-		RequiredParams: []string{"group_id", "token_id"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.credential_revoke_pat"`,
-		`"group_id":"my-org"`,
-		`"token_id":77`,
-		`"confirm":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group credential revoke guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction verifies TaskPrompt when group epic board list uses epic board action.
-func TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-135",
-		Prompt:         "List epic boards for group `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.epic_board_list",
-		RequiredParams: []string{"group_id"},
-		OptionalParams: []string{"per_page"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.epic_board_list"`,
-		`"group_id":"my-org"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic board list guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicListUsesFullPath verifies TaskPrompt when group epic list uses full path.
-func TestTaskPrompt_GroupEpicListUsesFullPath(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-136",
-		Prompt:         "List epics in group full path `my-org` including descendant groups.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.epic_list",
-		RequiredParams: []string{"full_path"},
-		OptionalParams: []string{"include_descendants", "state", "first"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.epic_list"`,
-		`"full_path":"my-org"`,
-		`"include_descendants":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic list guidance containing %q", prompt, want)
-			}
-		})
-	}
-	for _, unwanted := range []string{"group_path", "group_id", "include_descendant_groups"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want group epic list guidance without %q", prompt, unwanted)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle verifies TaskPrompt when group epic create uses full path and title.
-func TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-137",
-		Prompt:         "Create an epic titled `Evaluation Epic` in group full path `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.epic_create",
-		RequiredParams: []string{"full_path", "title"},
-		OptionalParams: []string{"description", "start_date", "due_date"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.epic_create"`,
-		`"full_path":"my-org"`,
-		`"title":"Evaluation Epic"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic create guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicUpdateUsesEpicIID verifies TaskPrompt when group epic update uses epic IID.
-func TestTaskPrompt_GroupEpicUpdateUsesEpicIID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-138",
-		Prompt:         "Update epic IID `12` in group full path `my-org` to close it.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.epic_update",
-		RequiredParams: []string{"full_path", "epic_iid"},
-		OptionalParams: []string{"state_event", "title"},
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.epic_update"`,
-		`"full_path":"my-org"`,
-		`"epic_iid":12`,
-		`"state_event":"close"`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic update guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicDeleteUsesEpicIID verifies TaskPrompt when group epic delete uses epic IID.
-func TestTaskPrompt_GroupEpicDeleteUsesEpicIID(t *testing.T) {
-	task := evalTask{
-		ID:             "MT-139",
-		Prompt:         "Delete epic IID `12` from group full path `my-org`.",
-		ExpectedTool:   "gitlab",
-		ExpectedAction: "group.epic_delete",
-		RequiredParams: []string{"full_path", "epic_iid"},
-		OptionalParams: []string{"confirm"},
-		Destructive:    true,
-	}
-
-	prompt := taskPrompt(task)
-	for _, want := range []string{
-		`"action":"group.epic_delete"`,
-		`"full_path":"my-org"`,
-		`"epic_iid":12`,
-		`"confirm":true`,
-		"Exact required call",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic delete guidance containing %q", prompt, want)
-			}
-		})
-	}
-}
-
-// TestTaskPrompt_GroupEpicIssueAssignUsesChildParams verifies TaskPrompt when group epic issue assign uses child params.
-func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
+// TestTaskPrompt_GroupEpicIssueAssign_IsNoLongerHandedItsOwnCall is what the
+// leak test for MT-140 became.
+//
+// It used to assert the opposite of this: that the prompt contained
+// `"action":"group.epic_issue_assign"` with all four params marshaled, and the
+// sentence "Exact required call". That is the answer the model was then scored
+// on producing, so the case measured transcription rather than whether the
+// meta surface describes itself. V05 deleted the builder that wrote it, and
+// the assertion is inverted rather than dropped so the deletion stays deleted.
+func TestTaskPrompt_GroupEpicIssueAssign_IsNoLongerHandedItsOwnCall(t *testing.T) {
 	task := evalTask{
 		ID:             "MT-140",
 		Prompt:         "Assign issue IID `99` from child project path `my-org/tools/gitlab-mcp-server` to epic IID `12` in group full path `my-org`.",
@@ -2391,27 +1194,26 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 	}
 
 	prompt := taskPrompt(task)
-	for _, want := range []string{
+	for _, leaked := range []string{
 		`"action":"group.epic_issue_assign"`,
-		`"full_path":"my-org"`,
 		`"epic_iid":12`,
 		`"child_project_path":"my-org/tools/gitlab-mcp-server"`,
 		`"child_iid":99`,
 		"Exact required call",
 	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(prompt, want) {
-				t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance containing %q", prompt, want)
+		t.Run(leaked, func(t *testing.T) {
+			if strings.Contains(prompt, leaked) {
+				t.Fatalf("taskPrompt() still hands the case its own call: found %q in\n%s", leaked, prompt)
 			}
 		})
 	}
-	for _, unwanted := range []string{"project_id", "issue_iid", "target_full_path"} {
-		t.Run(unwanted, func(t *testing.T) {
-			if strings.Contains(prompt, unwanted) {
-				t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance without %q", prompt, unwanted)
-			}
-		})
-	}
+	// The user's own words stay: what V05 removes is the scaffolding around
+	// them, never the request the case is asking a model to carry out.
+	t.Run("keeps the user request", func(t *testing.T) {
+		if !strings.Contains(prompt, task.Prompt) {
+			t.Fatalf("taskPrompt() dropped the user request:\n%s", prompt)
+		}
+	})
 }
 
 // TestDynamicExampleResolvers_PromptMarkers_ReturnTypedValues verifies each
@@ -2888,69 +1690,6 @@ func TestTaskRetryGuidanceRules_UnmatchedShapes_LeaveGuidanceUnchanged(t *testin
 	}
 }
 
-// TestUsesExactSingleToolPrompt_ClassifiesSteps verifies the exact-tool prompt
-// is selected for the failed-jobs list shape, the dynamic actions that
-// require it, and the enumerated meta-tool routes, and declined otherwise.
-func TestUsesExactSingleToolPrompt_ClassifiesSteps(t *testing.T) {
-	cases := []struct {
-		name   string
-		prompt string
-		step   evalStep
-		want   bool
-	}{
-		{name: "failed jobs list", prompt: "List failed jobs in pipeline `1`", step: evalStep{ExpectedTool: "gitlab_job", ExpectedAction: "list"}, want: true},
-		{name: "job list without prompt", prompt: "List jobs", step: evalStep{ExpectedTool: "gitlab_job", ExpectedAction: "list"}, want: false},
-		{name: "dynamic issue update", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update"}, want: true},
-		{name: "dynamic other", step: evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list"}, want: false},
-		{name: "project get", step: evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, want: true},
-		{name: "project list", step: evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "list"}, want: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := usesExactSingleToolPrompt(evalTask{Prompt: tc.prompt}, tc.step); got != tc.want {
-				t.Fatalf("usesExactSingleToolPrompt() = %t, want %t", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestExpectedPromptToolName_DefaultsToUnifiedDispatcher verifies an empty
-// expected tool renders as the unified gitlab dispatcher.
-func TestExpectedPromptToolName_DefaultsToUnifiedDispatcher(t *testing.T) {
-	cases := []struct {
-		name string
-		step evalStep
-		want string
-	}{
-		{name: "explicit tool", step: evalStep{ExpectedTool: "gitlab_project"}, want: "gitlab_project"},
-		{name: "empty tool", step: evalStep{}, want: "gitlab"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := expectedPromptToolName(tc.step); got != tc.want {
-				t.Fatalf("expectedPromptToolName() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-// TestActionGuidanceExample_DynamicDestructive_HoistsConfirm verifies the
-// dynamic execute envelope moves confirm to the top level for destructive
-// steps while meta-tool envelopes keep confirm inside params.
-func TestActionGuidanceExample_DynamicDestructive_HoistsConfirm(t *testing.T) {
-	dynamicExample := actionGuidanceExample(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", Destructive: true}, map[string]any{"project_id": "a/b", "confirm": true})
-	if dynamicExample["confirm"] != true {
-		t.Fatalf("dynamic example = %#v, want top-level confirm", dynamicExample)
-	}
-	if params, _ := dynamicExample["params"].(map[string]any); params["confirm"] != nil {
-		t.Fatalf("dynamic params = %#v, want confirm removed", params)
-	}
-	metaExample := actionGuidanceExample(evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true}, map[string]any{"confirm": true})
-	if _, hoisted := metaExample["confirm"]; hoisted {
-		t.Fatalf("meta example = %#v, want confirm kept inside params", metaExample)
-	}
-}
-
 // TestTaskWithRenderedCasePrompt_ResolvesPromptSources verifies the task
 // prompt is kept when set, taken from the typed case prompt, rendered from a
 // variable-free template, and left empty when a template needs fixture data.
@@ -3146,5 +1885,530 @@ func TestTaskPromptForSurface_RewritesToolDetailURIForMeta(t *testing.T) {
 	prompt := taskPromptForSurface(task, config.ToolSurfaceMeta)
 	if !strings.Contains(prompt, "gitlab://tools/gitlab_project.get") || strings.Contains(prompt, dynamicProjectGetToolDetailURI) {
 		t.Fatalf("prompt = %q, want meta tool detail URI", prompt)
+	}
+}
+
+// exactCallParamFixtures are the thirty-eight task fixtures the per-case prompt
+// tests V05 deleted carried, with the parameter values each of them pinned.
+//
+// It sits at package level because the table is the data and the loop over it
+// is four lines; inlining thirty-eight fixtures inside the test function makes
+// the function itself unreadable by any measure, including the linter's.
+var exactCallParamFixtures = []struct {
+	name string
+	task evalTask
+	want map[string]any
+}{
+	{
+		name: "ArtifactFromNumericJobUsesSingleArtifact",
+		task: evalTask{
+			ID:             "MT-065",
+			Prompt:         "Download artifact `coverage/report.xml` from job `999` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab_job",
+			ExpectedAction: "download_single_artifact",
+			RequiredParams: []string{"project_id", "job_id", "artifact_path"},
+		},
+		want: map[string]any{"job_id": 999, "artifact_path": "coverage/report.xml"},
+	},
+	{
+		name: "AttestationDownloadUsesAttestationIID",
+		task: evalTask{
+			ID:             "MT-117",
+			Prompt:         "Download attestation IID `5` from project `my-org/tools/gitlab-mcp-server`; use the project-scoped attestation IID, not the database ID.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "attestation.download",
+			RequiredParams: []string{"project_id", "attestation_iid"},
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "attestation_iid": 5},
+	},
+	{
+		name: "AuditEventGetUsesEventID",
+		task: evalTask{
+			ID:             "MT-118",
+			Prompt:         "Get instance audit event ID `77`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "audit_event.get_instance",
+			RequiredParams: []string{"event_id"},
+		},
+		want: map[string]any{"event_id": 77},
+	},
+	{
+		name: "AuditEventListUsesCreatedRange",
+		task: evalTask{
+			ID:             "MT-119",
+			Prompt:         "List project audit events for project `my-org/tools/gitlab-mcp-server` created during January 2026.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "audit_event.list_project",
+			RequiredParams: []string{"project_id"},
+			OptionalParams: []string{"created_after", "created_before", "per_page"},
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "created_after": "2026-01-01", "created_before": "2026-02-01"},
+	},
+	{
+		name: "CommitDiscussionDeleteUsesDiscussionAndNote",
+		task: evalTask{
+			ID:             "MT-113",
+			Prompt:         "Delete commit discussion note `999` from discussion `abc123` on commit `abc1234` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "repository.commit_discussion_delete_note",
+			RequiredParams: []string{"project_id", "commit_sha", "discussion_id", "note_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "commit_sha": "abc1234", "discussion_id": "abc123", "note_id": 999},
+	},
+	{
+		name: "CompliancePolicyUpdateUsesNamespaceID",
+		task: evalTask{
+			ID:             "MT-120",
+			Prompt:         "Update the admin compliance policy settings to use namespace ID `123`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "compliance_policy.update",
+			RequiredParams: []string{"csp_namespace_id"},
+		},
+		want: map[string]any{"csp_namespace_id": 123},
+	},
+	{
+		name: "DependencyExportCreateUsesPipelineID",
+		task: evalTask{
+			ID:             "MT-121",
+			Prompt:         "Create a dependency list export for pipeline ID `12345`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "dependency.export_create",
+			RequiredParams: []string{"pipeline_id"},
+			OptionalParams: []string{"export_type"},
+		},
+		want: map[string]any{"pipeline_id": 12345},
+	},
+	{
+		name: "DependencyExportDownloadUsesExportID",
+		task: evalTask{
+			ID:             "MT-122",
+			Prompt:         "Download dependency list export ID `987`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "dependency.export_download",
+			RequiredParams: []string{"export_id"},
+		},
+		want: map[string]any{"export_id": 987},
+	},
+	{
+		name: "DeployKeyDeleteUsesDeployKeyID",
+		task: evalTask{
+			ID:             "MT-111",
+			Prompt:         "Delete deploy key ID `32` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "access.deploy_key_delete",
+			RequiredParams: []string{"project_id", "deploy_key_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "deploy_key_id": 32},
+	},
+	{
+		name: "DeployTokenDeleteUsesDeployTokenID",
+		task: evalTask{
+			ID:             "MT-112",
+			Prompt:         "Delete project deploy token ID `66` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "access.deploy_token_delete_project",
+			RequiredParams: []string{"project_id", "deploy_token_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "deploy_token_id": 66},
+	},
+	{
+		name: "DORAMetricsGroupUsesMetric",
+		task: evalTask{
+			ID:             "MT-123",
+			Prompt:         "Get group DORA lead time metrics for group `my-org` from `2026-01-01` to `2026-01-31`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "dora_metrics.group",
+			RequiredParams: []string{"group_id", "metric"},
+			OptionalParams: []string{"start_date", "end_date", "interval", "environment_tiers"},
+		},
+		want: map[string]any{"group_id": "my-org", "metric": "lead_time_for_changes", "start_date": "2026-01-01", "end_date": "2026-01-31"},
+	},
+	{
+		name: "EnterpriseUserDisable2FAUsesEnterpriseAction",
+		task: evalTask{
+			ID:             "MT-125",
+			Prompt:         "Disable two-factor authentication for enterprise user ID `55` in group `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "enterprise_user.disable_2fa",
+			RequiredParams: []string{"group_id", "user_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"group_id": "my-org", "user_id": 55},
+	},
+	{
+		name: "EnterpriseUserGetUsesGroupAndUserID",
+		task: evalTask{
+			ID:             "MT-124",
+			Prompt:         "Get enterprise user ID `55` in group `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "enterprise_user.get",
+			RequiredParams: []string{"group_id", "user_id"},
+		},
+		want: map[string]any{"group_id": "my-org", "user_id": 55},
+	},
+	{
+		name: "ExternalStatusCheckCreateUsesExternalURL",
+		task: evalTask{
+			ID:             "MT-126",
+			Prompt:         "Create external project status check `Eval Gate` on project `my-org/tools/gitlab-mcp-server` pointing at `https://example.com/check`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "external_status_check.create_project",
+			RequiredParams: []string{"project_id", "name", "external_url"},
+			OptionalParams: []string{"shared_secret", "protected_branch_ids"},
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "name": "Eval Gate", "external_url": "https://example.com/check"},
+	},
+	{
+		name: "ExternalStatusCheckDeleteUsesCheckID",
+		task: evalTask{
+			ID:             "MT-128",
+			Prompt:         "Delete external project status check ID `8` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "external_status_check.delete_project",
+			RequiredParams: []string{"project_id", "check_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "check_id": 8},
+	},
+	{
+		name: "ExternalStatusCheckStatusUsesCheckID",
+		task: evalTask{
+			ID:             "MT-127",
+			Prompt:         "Mark external status check ID `8` as passed for merge request IID `7` at SHA `abc123` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "external_status_check.set_project_mr_status",
+			RequiredParams: []string{"project_id", "merge_request_iid", "sha", "external_status_check_id", "status"},
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "merge_request_iid": 7, "sha": "abc123", "external_status_check_id": 8, "status": "passed"},
+	},
+	{
+		name: "FeatureFlagDeleteUsesName",
+		task: evalTask{
+			ID:             "MT-106",
+			Prompt:         "Delete feature flag `eval_flag` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "feature_flags.feature_flag_delete",
+			RequiredParams: []string{"project_id", "name"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "name": "eval_flag"},
+	},
+	{
+		name: "GeoCreateUsesEnabledAndPrimary",
+		task: evalTask{
+			ID:             "MT-130",
+			Prompt:         "Create a disabled Geo secondary site named `eval-geo` with URL `https://geo.example.com`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "geo.create",
+			RequiredParams: []string{"name", "url"},
+			OptionalParams: []string{"enabled", "primary"},
+		},
+		want: map[string]any{"name": "eval-geo", "url": "https://geo.example.com", "enabled": false, "primary": false},
+	},
+	{
+		name: "GeoDeleteUsesID",
+		task: evalTask{
+			ID:             "MT-131",
+			Prompt:         "Delete Geo site ID `3`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "geo.delete",
+			RequiredParams: []string{"id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"id": 3},
+	},
+	{
+		name: "GeoGetUsesID",
+		task: evalTask{
+			ID:             "MT-129",
+			Prompt:         "Get Geo site ID `3`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "geo.get",
+			RequiredParams: []string{"id"},
+		},
+		want: map[string]any{"id": 3},
+	},
+	{
+		name: "GroupCredentialListUsesCredentialAction",
+		task: evalTask{
+			ID:             "MT-133",
+			Prompt:         "List group personal access tokens for group `my-org`, filtering active tokens.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.credential_list_pats",
+			RequiredParams: []string{"group_id"},
+			OptionalParams: []string{"state", "per_page"},
+		},
+		want: map[string]any{"group_id": "my-org", "state": "active"},
+	},
+	{
+		name: "GroupCredentialRevokeUsesTokenID",
+		task: evalTask{
+			ID:             "MT-134",
+			Prompt:         "Revoke group personal access token ID `77` in group `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.credential_revoke_pat",
+			RequiredParams: []string{"group_id", "token_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"group_id": "my-org", "token_id": 77},
+	},
+	{
+		name: "GroupEpicBoardListUsesEpicBoardAction",
+		task: evalTask{
+			ID:             "MT-135",
+			Prompt:         "List epic boards for group `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.epic_board_list",
+			RequiredParams: []string{"group_id"},
+			OptionalParams: []string{"per_page"},
+		},
+		want: map[string]any{"group_id": "my-org"},
+	},
+	{
+		name: "GroupEpicCreateUsesFullPathAndTitle",
+		task: evalTask{
+			ID:             "MT-137",
+			Prompt:         "Create an epic titled `Evaluation Epic` in group full path `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.epic_create",
+			RequiredParams: []string{"full_path", "title"},
+			OptionalParams: []string{"description", "start_date", "due_date"},
+		},
+		want: map[string]any{"full_path": "my-org", "title": "Evaluation Epic"},
+	},
+	{
+		name: "GroupEpicDeleteUsesEpicIID",
+		task: evalTask{
+			ID:             "MT-139",
+			Prompt:         "Delete epic IID `12` from group full path `my-org`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.epic_delete",
+			RequiredParams: []string{"full_path", "epic_iid"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"full_path": "my-org", "epic_iid": 12},
+	},
+	{
+		name: "GroupEpicListUsesFullPath",
+		task: evalTask{
+			ID:             "MT-136",
+			Prompt:         "List epics in group full path `my-org` including descendant groups.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.epic_list",
+			RequiredParams: []string{"full_path"},
+			OptionalParams: []string{"include_descendants", "state", "first"},
+		},
+		want: map[string]any{"full_path": "my-org", "include_descendants": true},
+	},
+	{
+		name: "GroupEpicUpdateUsesEpicIID",
+		task: evalTask{
+			ID:             "MT-138",
+			Prompt:         "Update epic IID `12` in group full path `my-org` to close it.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "group.epic_update",
+			RequiredParams: []string{"full_path", "epic_iid"},
+			OptionalParams: []string{"state_event", "title"},
+		},
+		want: map[string]any{"full_path": "my-org", "epic_iid": 12, "state_event": "close"},
+	},
+	{
+		name: "InstanceVariableCreateUsesExactToolCall",
+		task: evalTask{
+			ID:             "MT-068",
+			Prompt:         "Create instance CI variable `INSTANCE_EVAL_TOKEN` with value `masked-value-123`.",
+			ExpectedTool:   "gitlab_ci_variable",
+			ExpectedAction: "instance_create",
+			RequiredParams: []string{"key", "value"},
+			OptionalParams: []string{"masked", "protected"},
+		},
+		want: map[string]any{"key": "INSTANCE_EVAL_TOKEN", "value": "masked-value-123"},
+	},
+	{
+		name: "IssueAwardDeleteUsesAwardID",
+		task: evalTask{
+			ID:             "MT-110",
+			Prompt:         "Remove award emoji ID `22` from issue `42` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "issue.emoji_issue_delete",
+			RequiredParams: []string{"project_id", "issue_iid", "award_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "issue_iid": 42, "award_id": 22},
+	},
+	{
+		name: "MRAwardDeleteUsesAwardID",
+		task: evalTask{
+			ID:             "MT-109",
+			Prompt:         "Remove award emoji ID `21` from merge request `1` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "merge_request.emoji_mr_delete",
+			RequiredParams: []string{"project_id", "merge_request_iid", "award_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "merge_request_iid": 1, "award_id": 21},
+	},
+	{
+		name: "PipelineScheduleDeleteUsesScheduleID",
+		task: evalTask{
+			ID:             "MT-103",
+			Prompt:         "Delete pipeline schedule ID `49` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "pipeline.schedule_delete",
+			RequiredParams: []string{"project_id", "schedule_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"schedule_id": 49},
+	},
+	{
+		name: "PipelineTriggerDeleteUsesTriggerID",
+		task: evalTask{
+			ID:             "MT-102",
+			Prompt:         "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "pipeline.trigger_delete",
+			RequiredParams: []string{"project_id", "trigger_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"trigger_id": 77},
+	},
+	{
+		name: "ProjectGetUsesExactToolCall",
+		task: evalTask{
+			ID:             "MT-002",
+			Prompt:         "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.",
+			ExpectedTool:   "gitlab_project",
+			ExpectedAction: "get",
+			RequiredParams: []string{"project_id"},
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"},
+	},
+	{
+		name: "SingleFailedPipelineJobsUsesExactToolCall",
+		task: evalTask{
+			ID:             "MT-021",
+			Prompt:         "List failed jobs in pipeline `1323` for project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab_job",
+			ExpectedAction: "list",
+			RequiredParams: []string{"project_id", "pipeline_id"},
+			OptionalParams: []string{"scope"},
+		},
+		want: map[string]any{"pipeline_id": 1323, "project_id": "my-org/tools/gitlab-mcp-server", "scope": "failed"},
+	},
+	{
+		name: "SingleFileCreateUsesExactToolCall",
+		task: evalTask{
+			ID:             "MT-030",
+			Prompt:         "Create file `tmp/eval.txt` with content `evaluation file` and commit_message `Create evaluation file` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab_repository",
+			ExpectedAction: "file_create",
+			RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"},
+		},
+		want: map[string]any{"file_path": "tmp/eval.txt", "content": "evaluation file", "branch": "feature/eval", "commit_message": "Create evaluation file"},
+	},
+	{
+		name: "SplitDiscussionResolveUsesExactToolCall",
+		task: evalTask{
+			ID:             "MT-061",
+			Prompt:         "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7` in project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab_mr_review",
+			ExpectedAction: "discussion_resolve",
+			RequiredParams: []string{"project_id", "merge_request_iid", "discussion_id"},
+			OptionalParams: []string{"resolved"},
+		},
+		want: map[string]any{"discussion_id": "abc123", "merge_request_iid": 7, "resolved": true},
+	},
+	{
+		name: "UserBlockUsesUserID",
+		task: evalTask{
+			ID:             "MT-104",
+			Prompt:         "Block user ID `69`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "user.block",
+			RequiredParams: []string{"user_id"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"user_id": 69},
+	},
+	{
+		name: "WikiDeleteUsesSlug",
+		task: evalTask{
+			ID:             "MT-108",
+			Prompt:         "Delete wiki page `obsolete-eval` from project `my-org/tools/gitlab-mcp-server`.",
+			ExpectedTool:   "gitlab",
+			ExpectedAction: "wiki.delete",
+			RequiredParams: []string{"project_id", "slug"},
+			OptionalParams: []string{"confirm"},
+			Destructive:    true,
+		},
+		want: map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "slug": "obsolete-eval"},
+	},
+}
+
+// TestExactCallParams_ResolvesEveryRecordedFixture is what those thirty-eight
+// per-case prompt tests became.
+//
+// Each of them built one task fixture, rendered its prompt through the
+// exact-call builder, and asserted the marshaled envelope contained the
+// resolved values. The envelope is the leak V05 removes and the assertion on it
+// went with the builder; the resolution underneath it did not. exactCallParams
+// and resolveExactParamProvenance are kept for V09, they are still reached from
+// runner.go and validation.go, and those prompt tests were their only coverage,
+// so deleting them outright would have left two live functions almost untested
+// and the loss would have surfaced a gate later as a coverage number.
+//
+// What is asserted is therefore what those tests were really worth: that a
+// value written in a user's sentence is recovered as the parameter it belongs
+// to. Containment rather than map equality, which is what the old assertions
+// did against the marshaled JSON, so an optional parameter no fixture pins
+// stays out of the comparison.
+func TestExactCallParams_ResolvesEveryRecordedFixture(t *testing.T) {
+	for _, tc := range exactCallParamFixtures {
+		t.Run(tc.name, func(t *testing.T) {
+			steps := taskSteps(tc.task)
+			if len(steps) != 1 {
+				t.Fatalf("taskSteps() = %d steps, want exactly one", len(steps))
+			}
+			got, _ := exactCallParams(steps[0], tc.task.Prompt, true)
+			assertResolvedParams(t, got, tc.want)
+		})
+	}
+}
+
+// assertResolvedParams fails for every expected parameter the resolver did not
+// recover, or recovered as something else.
+func assertResolvedParams(t *testing.T, got, want map[string]any) {
+	t.Helper()
+	for param, expected := range want {
+		value, ok := got[param]
+		if !ok {
+			t.Errorf("param %s not resolved; got %#v", param, got)
+			continue
+		}
+		// DeepEqual rather than a string comparison: the claim is that a value
+		// is recovered as the parameter it belongs to *and* as the type that
+		// parameter takes, and rendering both sides through fmt.Sprint would
+		// make 7 and "7" the same answer, which is exactly the resolver bug
+		// worth catching.
+		if !reflect.DeepEqual(value, expected) {
+			t.Errorf("param %s = %#v, want %#v", param, value, expected)
+		}
 	}
 }

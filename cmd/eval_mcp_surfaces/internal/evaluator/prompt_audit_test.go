@@ -12,11 +12,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
 
-// exactCallPromptSignature is the sentence only exactToolTaskPrompt writes. It
-// is how a test names the cases that reach that builder without reimplementing
-// the predicate that selects it, and it is what makes the assertions below
-// fail loudly when the builder is deleted: the set they compare against the
-// twelve becomes empty.
+// exactCallPromptSignature is the sentence exactToolTaskPrompt used to write,
+// kept after V05 deleted that builder because a deletion is only permanent
+// while something still looks for what it removed. Any prompt that says this
+// again is handing a model the call it is about to be scored on.
 const exactCallPromptSignature = "Exact required call: use the "
 
 // answerKeyedDestructiveClause is the dynamic prompt's destructive line.
@@ -34,9 +33,14 @@ const answerKeyedProjectGetClause = "the requested catalog operation is project.
 // clause, which no case in today's corpus reaches.
 const answerKeyedReleaseCompareClause = "For release-summary workflows that compare refs before generating notes"
 
-// exactCallPromptCases are the cases whose meta task prompt is built by
-// exactToolTaskPrompt today, measured against the tree rather than copied from
-// a plan.
+// exactCallPromptCases are the twelve cases whose meta task prompt was built
+// by exactToolTaskPrompt before V05 deleted it, measured against the tree at
+// the time rather than copied from a plan.
+//
+// The list outlives the builder on purpose. A test that only asserted "no
+// prompt carries the signature" would pass just as well if these twelve cases
+// disappeared from the corpus, which is the opposite of what V05 claims: they
+// are still evaluated, and they are evaluated without being told the answer.
 var exactCallPromptCases = []string{
 	"MT-002", "MT-021", "MT-024", "MT-030", "MT-055", "MT-061",
 	"MT-065", "MT-068", "MT-104", "MT-108", "MT-109", "MT-113",
@@ -81,66 +85,60 @@ func casesWithFindingKind(report promptAuditReport, kind promptAuditKind) []stri
 	return ids
 }
 
-// TestAuditPrompts_MetaExactCallCases_CarryTheirOwnMarshaledEnvelope pins the
-// leak V05 deletes. Twelve meta cases are handed the whole call they are then
-// scored on, marshaled as the envelope the model must emit.
+// TestAuditPrompts_MetaExactCallBuilder_ReachesNoCase pins V05's deletion.
 //
-// The assertion is set equality against the twelve, so the deletion of
-// exactToolTaskPrompt fails it with an empty set rather than passing quietly.
-func TestAuditPrompts_MetaExactCallCases_CarryTheirOwnMarshaledEnvelope(t *testing.T) {
+// Two assertions, and neither is enough alone. That no prompt carries the
+// builder's sentence is the deletion; that the twelve cases which used to
+// carry it are still audited is what stops the first assertion passing because
+// the corpus lost them. A deletion that also deleted the measurement would
+// look identical on the first check and be worthless.
+func TestAuditPrompts_MetaExactCallBuilder_ReachesNoCase(t *testing.T) {
 	report := promptAuditForSurface(t, config.ToolSurfaceMeta)
-	exact := casesCarrying(report, exactCallPromptSignature)
-	if !slices.Equal(exact, exactCallPromptCases) {
-		t.Fatalf("cases reaching exactToolTaskPrompt = %v, want %v", exact, exactCallPromptCases)
+	if exact := casesCarrying(report, exactCallPromptSignature); len(exact) > 0 {
+		t.Errorf("cases reaching the deleted exact-call builder = %v, want none", exact)
 	}
-	for _, audited := range report.Cases {
-		if !slices.Contains(exactCallPromptCases, audited.ID) {
-			continue
+	audited := make(map[string]bool, len(report.Cases))
+	for _, one := range report.Cases {
+		audited[one.ID] = true
+	}
+	for _, id := range exactCallPromptCases {
+		if !audited[id] {
+			t.Errorf("case %s is no longer audited: this test would then pass for the wrong reason", id)
 		}
-		assertCarriesOwnEnvelope(t, audited)
 	}
 }
 
-// assertCarriesOwnEnvelope fails unless the case's task prompt carries a
-// marshaled envelope naming an action the case itself expects.
-func assertCarriesOwnEnvelope(t *testing.T, audited promptAuditCase) {
-	t.Helper()
-	for _, finding := range audited.Findings {
-		if finding.Kind != promptLeakEnvelope {
-			continue
-		}
-		if !slices.Contains(finding.Sites, promptSiteTask) {
-			t.Errorf("%s: envelope %s found at %v, want the task scaffolding", audited.ID, finding.Value, finding.Sites)
-		}
-		return
-	}
-	t.Errorf("%s: no envelope finding, yet its prompt carries %q", audited.ID, exactCallPromptSignature)
+// envelopeCasesAfterV05 are the meta cases still handed a marshaled envelope
+// once the exact-call builder is gone, measured against the tree.
+//
+// Six are the guidance-clause population V04 already counted apart. The other
+// three, MT-021, MT-061 and MT-065, are the interesting ones: they were among
+// the twelve the exact-call builder served, and deleting it did not stop them
+// leaking. It was *masking* a guidance clause that spells an envelope for the
+// same case, because the exact branch returned before the guidance was reached.
+// So the plan's arithmetic for this step, eighteen down to six, was one source
+// short: a leak with two causes only looks fixed until the first is removed.
+// V06 deletes the guidance clauses and takes this list to none.
+var envelopeCasesAfterV05 = []string{
+	"MS-002", "MS-008", "MS-017", "MS-028",
+	"MT-016", "MT-021", "MT-052", "MT-061", "MT-065",
 }
 
-// TestAuditPrompts_MetaEnvelopes_ComeFromTwoBuildersNotOne records that the
-// exact-call builder is not the only path that marshals the expected call into
-// a prompt: six further cases get one from the guidance clauses V06 removes.
-// V05 takes this population from eighteen to six; V06 takes it to none.
-func TestAuditPrompts_MetaEnvelopes_ComeFromTwoBuildersNotOne(t *testing.T) {
+// TestAuditPrompts_MetaEnvelopes_ComeOnlyFromGuidanceNow records where the
+// remaining marshaled envelopes come from after V05, and pins which cases they
+// are so V06 has something exact to empty.
+//
+// It is a set comparison rather than a count because the number alone cannot
+// tell "V06 removed three" from "V06 removed three and a fourth appeared".
+func TestAuditPrompts_MetaEnvelopes_ComeOnlyFromGuidanceNow(t *testing.T) {
 	report := promptAuditForSurface(t, config.ToolSurfaceMeta)
 	withEnvelope := casesWithFindingKind(report, promptLeakEnvelope)
-	exact := casesCarrying(report, exactCallPromptSignature)
-	for _, id := range exact {
-		if !slices.Contains(withEnvelope, id) {
-			t.Errorf("case %s reaches the exact-call builder and carries no envelope finding", id)
-		}
+	if !slices.Equal(withEnvelope, envelopeCasesAfterV05) {
+		t.Errorf("cases carrying an envelope = %v, want %v", withEnvelope, envelopeCasesAfterV05)
 	}
-	var fromGuidance []string
-	for _, id := range withEnvelope {
-		if !slices.Contains(exact, id) {
-			fromGuidance = append(fromGuidance, id)
-		}
+	if exact := casesCarrying(report, exactCallPromptSignature); len(exact) > 0 {
+		t.Errorf("envelopes still coming from the exact-call builder: %v", exact)
 	}
-	if len(fromGuidance) == 0 {
-		t.Fatalf("no case gets an envelope from a guidance clause; the whole population is %v", withEnvelope)
-	}
-	t.Logf("envelopes: %d cases, %d from the exact-call builder, %d from guidance clauses (%v)",
-		len(withEnvelope), len(exact), len(fromGuidance), fromGuidance)
 }
 
 // TestAuditPrompts_DynamicPrompts_CarryTheAnswerKeyedClauses pins the three
