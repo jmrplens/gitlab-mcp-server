@@ -469,20 +469,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,289 |     286,649 |
-| Unit tests (`_test.go`)  |       791 |     471,375 |
+| Source (`.go`, non-test) |     1,289 |     286,352 |
+| Unit tests (`_test.go`)  |       791 |     470,883 |
 | End-to-end tests         |       386 |      71,743 |
-| **Total**                | **2,466** | **829,767** |
+| **Total**                | **2,466** | **828,978** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,569 |
+| Source functions                | 10,547 |
 | . Exported (public)             |  3,164 |
-| . Unexported (private)          |  7,405 |
-| Unit test functions (`TestXxx`) | 15,459 |
-| Subtests (`t.Run(...)`)         |  4,697 |
+| . Unexported (private)          |  7,383 |
+| Unit test functions (`TestXxx`) | 15,439 |
+| Subtests (`t.Run(...)`)         |  4,681 |
 | End-to-end test functions       |    910 |
 
 ### Ratios worth noting
@@ -491,7 +491,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~596 lines |
+| Average test file length           |                 ~595 lines |
 | Comment lines in source            |  58,086 (~20.3% of source) |
 | Test functions per source function |                       1.5× |
 
@@ -524,8 +524,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,211 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,500 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,206 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,422 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

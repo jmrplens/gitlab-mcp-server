@@ -108,36 +108,29 @@ func TestAuditPrompts_MetaExactCallBuilder_ReachesNoCase(t *testing.T) {
 	}
 }
 
-// envelopeCasesAfterV05 are the meta cases still handed a marshaled envelope
-// once the exact-call builder is gone, measured against the tree.
+// TestAuditPrompts_MetaEnvelopes_AreGone pins the end of the envelope leak.
 //
-// Six are the guidance-clause population V04 already counted apart. The other
-// three, MT-021, MT-061 and MT-065, are the interesting ones: they were among
-// the twelve the exact-call builder served, and deleting it did not stop them
-// leaking. It was *masking* a guidance clause that spells an envelope for the
-// same case, because the exact branch returned before the guidance was reached.
-// So the plan's arithmetic for this step, eighteen down to six, was one source
-// short: a leak with two causes only looks fixed until the first is removed.
-// V06 deletes the guidance clauses and takes this list to none.
-var envelopeCasesAfterV05 = []string{
-	"MS-002", "MS-008", "MS-017", "MS-028",
-	"MT-016", "MT-021", "MT-052", "MT-061", "MT-065",
-}
-
-// TestAuditPrompts_MetaEnvelopes_ComeOnlyFromGuidanceNow records where the
-// remaining marshaled envelopes come from after V05, and pins which cases they
-// are so V06 has something exact to empty.
+// It had two sources and they were removed one step apart. V04 measured
+// eighteen meta cases handed a marshaled `{"action":…,"params":{…}}` naming
+// their own expected action. V05 deleted the exact-call builder and nine
+// remained, three of them cases the builder had been *masking* a guidance
+// clause for. V06 deletes those clauses and the population is empty.
 //
-// It is a set comparison rather than a count because the number alone cannot
-// tell "V06 removed three" from "V06 removed three and a fourth appeared".
-func TestAuditPrompts_MetaEnvelopes_ComeOnlyFromGuidanceNow(t *testing.T) {
-	report := promptAuditForSurface(t, config.ToolSurfaceMeta)
-	withEnvelope := casesWithFindingKind(report, promptLeakEnvelope)
-	if !slices.Equal(withEnvelope, envelopeCasesAfterV05) {
-		t.Errorf("cases carrying an envelope = %v, want %v", withEnvelope, envelopeCasesAfterV05)
-	}
-	if exact := casesCarrying(report, exactCallPromptSignature); len(exact) > 0 {
-		t.Errorf("envelopes still coming from the exact-call builder: %v", exact)
+// Empty is asserted on both surfaces, because the whole claim is that no case
+// on either is handed the call it is scored on emitting, and a check of meta
+// alone would have passed throughout the period when dynamic was the surface
+// the README publishes.
+func TestAuditPrompts_MetaEnvelopes_AreGone(t *testing.T) {
+	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(surface, func(t *testing.T) {
+			report := promptAuditForSurface(t, surface)
+			if withEnvelope := casesWithFindingKind(report, promptLeakEnvelope); len(withEnvelope) > 0 {
+				t.Errorf("cases carrying a marshaled envelope = %v, want none", withEnvelope)
+			}
+			if exact := casesCarrying(report, exactCallPromptSignature); len(exact) > 0 {
+				t.Errorf("cases reaching the deleted exact-call builder = %v, want none", exact)
+			}
+		})
 	}
 }
 
