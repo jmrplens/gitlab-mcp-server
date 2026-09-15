@@ -660,7 +660,7 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 // meta-tool title.
 func TestWriteReportHeader_MetaTitle(t *testing.T) {
 	var b strings.Builder
-	writeReportHeader(&b, options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, TerminalLog: "eval.log"}, false)
+	writeReportHeader(&b, options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, TerminalLog: "eval.log"}, false, nil)
 	requireContainsAll(t, "meta report header", b.String(), []string{
 		"# Meta-Tool Model Evaluation",
 		"Terminal output: `eval.log`",
@@ -689,7 +689,7 @@ func TestWriteReportHeader_ResourceAccessState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var b strings.Builder
-			writeReportHeader(&b, tt.opts, false)
+			writeReportHeader(&b, tt.opts, false, nil)
 			requireContainsAll(t, "resource access header", b.String(), []string{tt.want})
 		})
 	}
@@ -996,7 +996,7 @@ func TestWriteReportHeader_IncludesOptionalMetadata(t *testing.T) {
 		ExposeResources:        true,
 		CapabilityAccessActive: true,
 		PromptAccessActive:     true,
-	}, false)
+	}, false, nil)
 	header := b.String()
 	for _, want := range []string{"Edition: `ce`", "Terminal output: `term.log`", "Preset: `docker-read`", "Tools file: `tools.json`", "Partition: `base-read`", "MCP capability bridge: `enabled`", "Resource access: `requested but not active`", "Prompt access: `enabled`", "Completion access: `requested but not active`"} {
 		t.Run(want, func(t *testing.T) {
@@ -1196,7 +1196,7 @@ func TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn(t *testing.T) {
 			TokenScopes:   []string{"api", "read_user"},
 			GitLabVersion: "18.4.1",
 		},
-	}, false)
+	}, false, nil)
 	header := b.String()
 
 	cases := []struct {
@@ -1238,7 +1238,7 @@ func TestWriteReportHeader_StatesWhatTheRunWasMeasuredOn(t *testing.T) {
 // construction and the assertion is stable.
 func TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine(t *testing.T) {
 	var b strings.Builder
-	writeReportHeader(&b, options{}, true)
+	writeReportHeader(&b, options{}, true, nil)
 	header := b.String()
 
 	for _, key := range []string{
@@ -1274,7 +1274,7 @@ func TestWriteReportHeader_UnresolvedProvenance_ReportsUnknownRatherThanNoLine(t
 // a full run published nothing.
 func TestWriteReportHeader_StimulusDeclaration_IsRefusedByPublication(t *testing.T) {
 	var b strings.Builder
-	writeReportHeader(&b, options{}, true)
+	writeReportHeader(&b, options{}, true, nil)
 	declared := firstMetadataValue(b.String(), reportKeyStimulus)
 	if declared != stimulusCoached {
 		t.Fatalf("declared stimulus = %q, want %q", declared, stimulusCoached)
