@@ -85,6 +85,15 @@ is the request. Every English phrasing of it is "commit message"; the alternativ
 tried either drop the message from the request or say it in words no person would use.`,
 	},
 	{
+		Case:     "MT-031",
+		Value:    "commit_message",
+		Category: promptCategoryLiteralIsTheRequest,
+		Reason: `the deletion is asked for with a particular commit message, and the message is part of
+the request: the key compares it, so withholding the two words that name it in English would leave
+the case expecting a value it never stated. It is MT-030's request read backwards, and is declared
+on the same grounds.`,
+	},
+	{
 		Case:     "MT-199",
 		Value:    "per_page",
 		Category: promptCategoryLiteralIsTheRequest,
