@@ -141,6 +141,9 @@ jobs:
       - name: Check LobeHub manifest
         if: env.FRESHNESS == 'checked'
         run: make check-lhm-manifest
+      - name: Check the model evaluation corpus ledger
+        if: env.FRESHNESS == 'checked'
+        run: make check-model-corpus
       - name: Check documented tool names exist
         run: make check-doc-tool-names
       - name: Check no read-only action reaches a GraphQL mutation

@@ -20,7 +20,7 @@
 	gen-api-live check-api-live check-meta-descriptions \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -879,6 +879,15 @@ gen-llms:
 check-llms:
 	go run ./cmd/gen_llms/ --check
 
+## gen-model-corpus: regenerate the model evaluation corpus breadth ledger.
+gen-model-corpus:
+	go run ./cmd/gen_model_corpus/
+
+## check-model-corpus: verify the corpus breadth ledger matches the corpus and
+## the catalog this tree builds.
+check-model-corpus:
+	go run ./cmd/gen_model_corpus/ -check
+
 ## gen-lhm-manifest: regenerate the tools/prompts/resources arrays in lhm.plugin.json.
 gen-lhm-manifest:
 	go run ./cmd/gen_lhm_manifest/
@@ -1178,7 +1187,7 @@ gen-readme: gen-footprint gen-stats
 # e2e-coverage-record is out on the same ones: redrawing the coverage page
 # needs only the committed record, while measuring it needs a booted GitLab.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
