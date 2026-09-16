@@ -106,14 +106,14 @@ func licensedReadCases() []Case {
 		},
 		{
 			ID: "MT-088",
-			Prompt: "List the security findings of pipeline `{{ .Facts.pipeline_id }}` in project " +
+			Prompt: "List the security findings of pipeline `{{ .Facts.pipeline_iid }}` in project " +
 				"`{{ .Facts.project_path }}`.",
 			Recipe: RecipeVulnerability,
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
 				step("security_finding.list",
 					req("project_path", fact(FactProjectPath)),
-					req("pipeline_iid", fact(FactPipelineID))),
+					req("pipeline_iid", fact(FactPipelineIID))),
 			}},
 		},
 		{
@@ -329,14 +329,14 @@ func licensedReadCases() []Case {
 		},
 		{
 			ID: "MT-178",
-			Prompt: "Read the security summary of pipeline `{{ .Facts.pipeline_id }}` in project " +
+			Prompt: "Read the security summary of pipeline `{{ .Facts.pipeline_iid }}` in project " +
 				"`{{ .Facts.project_path }}`.",
 			Recipe: RecipeVulnerability,
 			Needs:  Needs{Tier: TierUltimate},
 			key: Key{Steps: []Step{
 				step("vulnerability.pipeline_security_summary",
 					req("project_path", fact(FactProjectPath)),
-					req("pipeline_iid", fact(FactPipelineID))),
+					req("pipeline_iid", fact(FactPipelineIID))),
 			}},
 		},
 		{

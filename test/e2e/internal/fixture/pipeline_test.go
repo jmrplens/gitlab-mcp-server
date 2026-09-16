@@ -8,6 +8,8 @@ package fixture
 import (
 	"context"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,5 +148,101 @@ func TestCIYAML_Shape_RunsOnAnyRunner(t *testing.T) {
 	}
 	if CIFilePath != ".gitlab-ci.yml" {
 		t.Errorf("CIFilePath = %q, want .gitlab-ci.yml", CIFilePath)
+	}
+}
+
+// TestManualJobCIYAML_Shape_DeclaresAPlayableJobInTheFirstStage pins the two
+// properties the world whose case plays a job rests on: the job is manual,
+// and it is in the same stage as the fast one. A manual job in a later stage
+// is "created" until GitLab reaches that stage, and playing one in that state
+// is the refusal this configuration exists to end.
+func TestManualJobCIYAML_Shape_DeclaresAPlayableJobInTheFirstStage(t *testing.T) {
+	if !strings.Contains(ManualJobCIYAML, ManualJobName+":\n  stage: test\n  when: manual\n") {
+		t.Errorf("ManualJobCIYAML declares no manual job named %q in the first stage:\n%s", ManualJobName, ManualJobCIYAML)
+	}
+	if strings.Count(ManualJobCIYAML, "stage: test") != 2 {
+		t.Errorf("ManualJobCIYAML does not keep both jobs in one stage:\n%s", ManualJobCIYAML)
+	}
+	if !strings.Contains(ManualJobCIYAML, "tags: []") {
+		t.Error("ManualJobCIYAML declares runner tags, so the instance's runner would not pick its jobs up")
+	}
+	if strings.Contains(CIYAML, "when: manual") {
+		t.Error("CIYAML declares a manual job, which would leave every pipeline world blocked")
+	}
+}
+
+// TestFindPipelineJob_Answers covers what the job wait distinguishes: the job
+// it was looking for, a listing that does not hold it yet, and a refusal.
+func TestFindPipelineJob_Answers(t *testing.T) {
+	manual := func(job *gl.Job) bool { return job.Name == ManualJobName }
+	anyJob := func(*gl.Job) bool { return true }
+
+	cases := []struct {
+		name      string
+		answer    scriptedAnswer
+		accept    func(*gl.Job) bool
+		want      int64
+		wantState string
+		wantErr   bool
+	}{
+		{
+			name: "the manual job",
+			answer: stubOK([]map[string]any{
+				{"id": 10, "name": "fast-pass", "status": "success"},
+				{"id": 11, "name": ManualJobName, "status": "manual"},
+			}),
+			accept: manual, want: 11,
+		},
+		{
+			name:      "no manual job yet",
+			answer:    stubOK([]map[string]any{{"id": 10, "name": "fast-pass", "status": "running"}}),
+			accept:    manual,
+			wantState: "fast-pass=running",
+		},
+		{
+			name:      "no job at all",
+			answer:    stubOK([]map[string]any{}),
+			accept:    anyJob,
+			wantState: "holds 0 job(s)",
+		},
+		{
+			name:   "the first job",
+			answer: stubOK([]map[string]any{{"id": 10, "name": "fast-pass", "status": "running"}}),
+			accept: anyJob, want: 10,
+		},
+		{
+			name:    "refused",
+			answer:  stubRefusal(http.StatusForbidden, "403 Forbidden"),
+			accept:  anyJob,
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.answers(http.MethodGet, "/api/v4/projects/2/pipelines/5/jobs", tc.answer)
+
+			got, state, err := findPipelineJob(t.Context(), client, 2, 5, tc.accept)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("findPipelineJob() error = %v, wantErr = %t", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("findPipelineJob() = %d, want %d", got, tc.want)
+			}
+			if tc.wantState != "" && !strings.Contains(state, tc.wantState) {
+				t.Errorf("findPipelineJob() state = %q, want it to mention %q", state, tc.wantState)
+			}
+		})
+	}
+}
+
+// TestJobDescription_NamesWhatTheWaitWantedOrSaysAnyJob covers both halves of
+// the message a job wait fails with.
+func TestJobDescription_NamesWhatTheWaitWantedOrSaysAnyJob(t *testing.T) {
+	if got := jobDescription(""); got != "at all" {
+		t.Errorf("jobDescription(%q) = %q, want %q", "", got, "at all")
+	}
+	if got := jobDescription("named deploy"); got != "named deploy" {
+		t.Errorf("jobDescription() = %q, want the description it was given", got)
 	}
 }

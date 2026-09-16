@@ -235,21 +235,30 @@ func removed(what string, err error) error {
 
 // The elicitation responder.
 //
-// One responder serves every interactive world, because what an elicitation
-// asks for is decided by the flow rather than by the world: the flows ask for
-// a title, a description, a name, a confirmation or a choice, and the answer
-// to each is the same whichever world the attempt runs in. What the world
-// contributes is the one value that has to be unique per attempt, the name a
-// creation flow will give the object, which is generated when the world is
-// built and closed over here.
-func elicitationResponder(unique string) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+// One responder serves every interactive world, because most of what an
+// elicitation asks for is decided by the flow rather than by the world: the
+// flows ask for a title, a description, a name, a confirmation or a choice,
+// and the answer to each is the same whichever world the attempt runs in.
+// What the world contributes is two things. One is the value that has to be
+// unique per attempt, the name a creation flow will give the object, which is
+// generated when the world is built and closed over here. The other is every
+// answer that has to name something GitLab already holds, which is the world's
+// own and nothing a schema can supply: the merge request flow asks for a
+// source and a target branch and refuses a request whose source does not
+// exist, and the release flow asks for a tag that "must already exist". Both
+// were answered from the unique name until this took them from the world, and
+// neither case could succeed for any model on any surface.
+func elicitationResponder(
+	unique string, fromTheWorld map[string]string,
+) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 	return func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-		return &mcp.ElicitResult{Action: "accept", Content: elicitedContent(req, unique)}, nil
+		return &mcp.ElicitResult{Action: "accept", Content: elicitedContent(req, unique, fromTheWorld)}, nil
 	}
 }
 
-// elicitedContent fills every property the requested schema names.
-func elicitedContent(req *mcp.ElicitRequest, unique string) map[string]any {
+// elicitedContent fills every property the requested schema names, from the
+// world where the world has an answer for it and from the schema otherwise.
+func elicitedContent(req *mcp.ElicitRequest, unique string, fromTheWorld map[string]string) map[string]any {
 	content := map[string]any{}
 	if req == nil || req.Params == nil {
 		return content
@@ -267,6 +276,10 @@ func elicitedContent(req *mcp.ElicitRequest, unique string) map[string]any {
 		if !isProperty {
 			continue
 		}
+		if answer, known := fromTheWorld[key]; known {
+			content[key] = answer
+			continue
+		}
 		content[key] = elicitedValue(key, property, unique)
 	}
 	return content
@@ -280,6 +293,11 @@ func elicitedContent(req *mcp.ElicitRequest, unique string) map[string]any {
 // created take the attempt's own unique name: two attempts of one model share
 // a session, so a constant there would have the second refused for a name the
 // first took.
+//
+// A tag name is deliberately not one of them, though it reads like one: the
+// only flow that asks for one is the release flow, which asks for a tag that
+// "must already exist", so it names something the world holds rather than
+// something the flow creates, and the world is what answers it.
 func elicitedValue(key string, property map[string]any, unique string) any {
 	switch key {
 	case "confirmed":
@@ -289,7 +307,7 @@ func elicitedValue(key string, property map[string]any, unique string) any {
 			return options[0]
 		}
 		return "default"
-	case "name", "path", "title", "tag_name":
+	case "name", "path", "title":
 		return unique
 	case "description":
 		return "Created by the model evaluation's scripted elicitation responder"
@@ -334,8 +352,10 @@ func freeWorlds() map[modelcorpus.Recipe]builder {
 		modelcorpus.RecipeWorld: {interactive: true, build: func(e *harness.Env) World {
 			shared := fixture.SharedWorld(e)
 			return World{
-				Facts:   with(projectFacts(shared.Project), groupFacts(shared.Group)),
-				Respond: elicitationResponder(e.Name("world")),
+				Facts: with(projectFacts(shared.Project), groupFacts(shared.Group)),
+				// Its interactive case creates a project, so every answer the
+				// flow wants is the name of something that does not exist yet.
+				Respond: elicitationResponder(e.Name("world"), nil),
 			}
 		}},
 
@@ -346,7 +366,16 @@ func freeWorlds() map[modelcorpus.Recipe]builder {
 			// answers with a refusal about the configuration rather than about
 			// the call.
 			ciConfiguration(e, project)
-			return World{Facts: projectFacts(project), Respond: elicitationResponder(e.Name("project"))}
+			// The tag is for the guided release flow, which asks for one that
+			// "must already exist" and is refused by GitLab when it does not.
+			// It is not a fact: no case names it, the flow asks the responder
+			// for it, and a fact nothing promises is a world the entry point
+			// refuses.
+			tag := fixture.NewTag(e, project)
+			return World{
+				Facts:   projectFacts(project),
+				Respond: elicitationResponder(e.Name("project"), map[string]string{"tag_name": tag.Name}),
+			}
 		}},
 
 		modelcorpus.RecipeGroup: {build: func(e *harness.Env) World {
@@ -399,13 +428,24 @@ func freeWorlds() map[modelcorpus.Recipe]builder {
 				Facts: with(projectFacts(project), map[string][]string{
 					modelcorpus.FactMergeRequestSource: {branch.Name},
 				}),
-				Respond: elicitationResponder(e.Name("mrsource")),
+				// The guided merge request flow asks for both branches by
+				// name, and GitLab refuses a request whose source branch does
+				// not exist. The world built the branch for exactly this case,
+				// so the responder hands it over rather than inventing one.
+				Respond: elicitationResponder(e.Name("mrsource"), map[string]string{
+					"source_branch": branch.Name,
+					"target_branch": project.DefaultBranch,
+				}),
 			}
 		}},
 
 		modelcorpus.RecipePipelineJob: {build: func(e *harness.Env) World {
 			project := fixture.NewProject(e, fixture.WithNamePrefix("pipeline"))
-			ciConfiguration(e, project)
+			// The configuration with a manual job in it, because one of this
+			// world's cases plays one. The plain configuration declares a
+			// single job that runs by itself, and GitLab answers a play of it
+			// with "Unplayable Job" whatever the model sends.
+			manualJobConfiguration(e, project)
 			// A case that cancels or deletes a pipeline declares no runner and
 			// is about a pipeline that has not finished, so the world is built
 			// without waiting wherever it can be: waiting would finish the very
@@ -413,7 +453,7 @@ func freeWorlds() map[modelcorpus.Recipe]builder {
 			pipeline := fixture.NewPipelineNoWait(e, project, project.DefaultBranch)
 			return World{Facts: with(projectFacts(project), map[string][]string{
 				modelcorpus.FactPipelineID: {number(pipeline.ID)},
-				modelcorpus.FactJobID:      {number(fixture.FirstPipelineJobID(e, project, pipeline.ID))},
+				modelcorpus.FactJobID:      {number(fixture.ManualPipelineJobID(e, project, pipeline.ID))},
 			})}
 		}},
 
@@ -433,42 +473,25 @@ func freeWorlds() map[modelcorpus.Recipe]builder {
 			commit := fixture.CommitFile(e, project, project.DefaultBranch,
 				e.Name("deploy")+".txt", "deployment fixture\n", "add the deployment fixture")
 			deployment := fixture.NewDeployment(e, project, environment, commit.SHA)
-			return World{
-				Facts: with(projectFacts(project), map[string][]string{
-					modelcorpus.FactEnvironmentID:   {number(environment.ID)},
-					modelcorpus.FactEnvironmentName: {environment.Name},
-					modelcorpus.FactDeploymentID:    {number(deployment.ID)},
-				}),
-				Verify: func(e *harness.Env) error {
-					return environmentStopped(e, project, environment.ID)
-				},
-			}
+			return World{Facts: with(projectFacts(project), map[string][]string{
+				modelcorpus.FactEnvironmentID:   {number(environment.ID)},
+				modelcorpus.FactEnvironmentName: {environment.Name},
+				modelcorpus.FactDeploymentID:    {number(deployment.ID)},
+			})}
 		}},
 
 		modelcorpus.RecipeRelease: {build: func(e *harness.Env) World {
 			project := fixture.NewProject(e, fixture.WithNamePrefix("release"))
 			release := fixture.NewRelease(e, project, "eval")
-			return World{
-				Facts: with(projectFacts(project), map[string][]string{
-					modelcorpus.FactReleaseTagName: {release.TagName},
-					modelcorpus.FactReleaseName:    {release.Name},
-				}),
-				Verify: func(e *harness.Env) error {
-					_, _, err := e.Client().GL().Releases.GetRelease(project.ID, release.TagName, gl.WithContext(e.Ctx))
-					return removed("release "+release.TagName, err)
-				},
-			}
+			return World{Facts: with(projectFacts(project), map[string][]string{
+				modelcorpus.FactReleaseTagName: {release.TagName},
+				modelcorpus.FactReleaseName:    {release.Name},
+			})}
 		}},
 
 		modelcorpus.RecipeSnippet: {build: func(e *harness.Env) World {
 			snippet := fixture.NewSnippet(e)
-			return World{
-				Facts: map[string][]string{modelcorpus.FactSnippetID: {number(snippet.ID)}},
-				Verify: func(e *harness.Env) error {
-					_, _, err := e.Client().GL().Snippets.GetSnippet(snippet.ID, gl.WithContext(e.Ctx))
-					return removed("snippet "+number(snippet.ID), err)
-				},
-			}
+			return World{Facts: map[string][]string{modelcorpus.FactSnippetID: {number(snippet.ID)}}}
 		}},
 
 		modelcorpus.RecipeMember: {build: func(e *harness.Env) World {
@@ -1118,8 +1141,11 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 		// A merge request with no pipeline of its own cannot board a train, and a
 		// project whose pipelines nothing runs cannot give it one, so the world is
 		// the train-enabled project and a request that has not boarded. GitLab
-		// answers the entry read with a not-found, which is what the end-to-end
-		// suite asserts for the same reason.
+		// refuses the add and answers the entry read with a not-found, which is
+		// what the end-to-end suite asserts, on a fixture of this same shape and
+		// for this same reason. The project is in a group because GitLab keeps
+		// the train switches only on a project whose namespace carries the
+		// licensed feature.
 		modelcorpus.RecipeMergeTrainEntry: {build: func(e *harness.Env) World {
 			train := fixture.NewMergeTrain(e)
 			return World{Facts: with(projectFacts(train.Project), map[string][]string{
@@ -1127,9 +1153,10 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 			})}
 		}},
 
-		// A repository storage move needs a second Gitaly storage to move to, and
-		// the Docker stack configures one. The world is the group and a move
-		// identifier nobody scheduled.
+		// A repository storage move needs a second Gitaly storage to move to,
+		// and the Docker stack configures a single one, which is what the
+		// end-to-end suite's own group storage move scenario rests on. The
+		// world is the group and a move identifier nobody scheduled.
 		modelcorpus.RecipeStorageMove: {build: func(e *harness.Env) World {
 			group := fixture.NewGroup(e, fixture.WithGroupNamePrefix("storagemove"))
 			return World{Facts: with(groupFacts(group), map[string][]string{
@@ -1150,14 +1177,18 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 			})}
 		}},
 
-		// An audit event is written by GitLab as a side effect of something else,
-		// and no endpoint creates one; which event a change writes, and when, is a
-		// background job. The world is a project and an event identifier nothing
-		// wrote.
+		// An audit event is written by GitLab as a side effect of something
+		// else, so the world causes one rather than creating it: it edits the
+		// project and waits for the record to appear, first in the project's
+		// own log and then in the instance's. Reserving an identifier nothing
+		// holds would have been wrong here, because the end-to-end suite's own
+		// audit event scenario asserts the read succeeds rather than that it
+		// is refused, and it causes its events the same way.
 		modelcorpus.RecipeInstanceAuditEvent: {build: func(e *harness.Env) World {
 			project := fixture.NewProject(e, fixture.WithNamePrefix("auditevent"))
+			event := fixture.NewInstanceAuditEvent(e, project)
 			return World{Facts: with(projectFacts(project), map[string][]string{
-				modelcorpus.FactAuditEventID: {missingID},
+				modelcorpus.FactAuditEventID: {number(event.ID)},
 			})}
 		}},
 
@@ -1174,12 +1205,16 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 
 		modelcorpus.RecipeVulnerability: {build: func(e *harness.Env) World {
 			scanned := fixture.NewVulnerableProject(e)
-			// The pipeline is rendered as the project-scoped number, which is
-			// what the security finding and pipeline summary actions take. The
-			// instance-wide one is accepted as a second spelling, for the
-			// dependency export case that shares this world and takes that.
+			// The two numbers of one pipeline are two facts, and each case
+			// renders the one its action takes: the security finding and
+			// pipeline summary actions take the project's number, the
+			// dependency export the instance's. They were one fact carrying
+			// both spellings, which rendered the project's number to the
+			// export case and let GitLab act on whichever pipeline on the
+			// instance happens to carry it.
 			return World{Facts: with(projectFacts(scanned.Project), map[string][]string{
-				modelcorpus.FactPipelineID:      {number(scanned.PipelineIID), number(scanned.Pipeline.ID)},
+				modelcorpus.FactPipelineIID:     {number(scanned.PipelineIID)},
+				modelcorpus.FactPipelineID:      {number(scanned.Pipeline.ID)},
 				modelcorpus.FactVulnerabilityID: {scanned.Vulnerabilities[0].ID},
 			})}
 		}},
@@ -1241,7 +1276,21 @@ func licensedWorlds() map[modelcorpus.Recipe]builder {
 // pipeline.
 func ciConfiguration(e *harness.Env, project fixture.Project) {
 	e.T.Helper()
-	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, fixture.CIYAML,
+	commitCIConfiguration(e, project, fixture.CIYAML)
+}
+
+// manualJobConfiguration is the same for the world whose case plays a job: a
+// configuration that declares a manual one, which the plain one does not.
+func manualJobConfiguration(e *harness.Env, project fixture.Project) {
+	e.T.Helper()
+	commitCIConfiguration(e, project, fixture.ManualJobCIYAML)
+}
+
+// commitCIConfiguration commits one pipeline configuration, telling GitLab not
+// to start a pipeline on the push for the reason above.
+func commitCIConfiguration(e *harness.Env, project fixture.Project, yaml string) {
+	e.T.Helper()
+	fixture.CommitFile(e, project, project.DefaultBranch, fixture.CIFilePath, yaml,
 		"ci: add the e2e pipeline configuration [skip ci]")
 }
 
@@ -1284,19 +1333,6 @@ func discussionResolved(e *harness.Env, project fixture.Project, iid int64, disc
 		if note != nil && note.Resolvable && !note.Resolved {
 			return fmt.Errorf("discussion %s of merge request !%d is still unresolved", discussionID, iid)
 		}
-	}
-	return nil
-}
-
-// environmentStopped reports whether the case stopped the environment it was
-// given.
-func environmentStopped(e *harness.Env, project fixture.Project, environmentID int64) error {
-	environment, _, err := e.Client().GL().Environments.GetEnvironment(project.ID, environmentID, gl.WithContext(e.Ctx))
-	if err != nil {
-		return fmt.Errorf("reading environment %d back: %w", environmentID, err)
-	}
-	if environment.State != "stopped" {
-		return fmt.Errorf("environment %d is %s, and the case was to stop it", environmentID, environment.State)
 	}
 	return nil
 }
@@ -1371,9 +1407,6 @@ func commitNoteRemoved(e *harness.Env, project fixture.Project, sha, discussionI
 // that Verify asserts.
 var verifiedRecipes = map[modelcorpus.Recipe]string{
 	modelcorpus.RecipeMergeRequestDiscussion:    "the discussion the world opened is resolved",
-	modelcorpus.RecipeEnvironment:               "the environment the world deployed to is stopped",
-	modelcorpus.RecipeRelease:                   "the release is gone",
-	modelcorpus.RecipeSnippet:                   "the snippet is gone",
 	modelcorpus.RecipeFile:                      "the file is gone from the branch",
 	modelcorpus.RecipeMilestone:                 "the milestone is gone",
 	modelcorpus.RecipeProjectAccessToken:        "the project access token is revoked",
@@ -1414,6 +1447,9 @@ var unverifiedRecipes = map[modelcorpus.Recipe]string{
 	modelcorpus.RecipeIssue:                 "one case deletes the issue and two update it, which are two endings",
 	modelcorpus.RecipeMergeRequest:          "its cases write notes, discussions and drafts on the request rather than changing the request",
 	modelcorpus.RecipeMergeRequestSource:    "its cases open a merge request from the branch, and the branch is where the world left it",
+	modelcorpus.RecipeEnvironment:           "reading the environment, reading its deployment and stopping the environment are three endings",
+	modelcorpus.RecipeRelease:               "listing the releases and deleting the release are two endings",
+	modelcorpus.RecipeSnippet:               "reading the snippet's content, deleting it and scheduling a storage move for it are three endings",
 	modelcorpus.RecipePipelineJob:           "canceling, playing and deleting the pipeline are three endings",
 	modelcorpus.RecipeFailedJob:             "retrying the job and deleting its artifacts are two endings",
 	modelcorpus.RecipeMember:                "its case reads the membership the world added",
@@ -1421,7 +1457,7 @@ var unverifiedRecipes = map[modelcorpus.Recipe]string{
 	modelcorpus.RecipeCIVariable:            "updating the variable and deleting it are two endings",
 	modelcorpus.RecipeInstanceVariable:      "the world reserves a name and creates nothing, so the only thing to read back is what the case made",
 	modelcorpus.RecipePackageFiles:          "the world is local files, and nothing of it is on GitLab to read back",
-	modelcorpus.RecipeMergeableMergeRequest: "merging the request and asking for a train place are two endings",
+	modelcorpus.RecipeMergeableMergeRequest: "its case asks for a merge once the pipeline passes, and a request with no pipeline is either merged straight away or has the scheduled merge refused, which are two endings",
 	modelcorpus.RecipeUser:                  "blocking the user and turning two-factor authentication off are two endings",
 	modelcorpus.RecipeDatabaseMigration:     "the world is a version the setup script made pending, and whether GitLab marked it applied is not a read the API offers",
 	modelcorpus.RecipeProjectMirror:         "its case forces a push, which leaves nothing a read can tell from a mirror that never pushed",
@@ -1438,10 +1474,10 @@ var unverifiedRecipes = map[modelcorpus.Recipe]string{
 	modelcorpus.RecipeProjectAlias:          "reading the alias and deleting it are two endings",
 	modelcorpus.RecipeProjectAliasName:      "the world reserves an alias name and creates nothing",
 	modelcorpus.RecipeExternalStatusCheck:   "reporting a status against the check and deleting the check are two endings",
-	modelcorpus.RecipeMergeTrainEntry:       "nothing boarded the train, so there is no entry to read back",
+	modelcorpus.RecipeMergeTrainEntry:       "GitLab refuses to board a request with no pipeline, so nothing is on the train whether a case asked for a place or read one",
 	modelcorpus.RecipeStorageMove:           "nothing scheduled a move, so there is no move to read back",
 	modelcorpus.RecipeDependencyExport:      "nothing exported a dependency list, and the export a case creates is named by GitLab in the answer",
-	modelcorpus.RecipeInstanceAuditEvent:    "nothing wrote the event, and no endpoint writes one",
+	modelcorpus.RecipeInstanceAuditEvent:    "its case reads the event the world caused, and an audit log is append-only anyway",
 	modelcorpus.RecipeAttestation:           "nothing published an attestation, so there is none to read back",
 	modelcorpus.RecipeVulnerability:         "reading a vulnerability, dismissing one and creating an export are three endings",
 	modelcorpus.RecipeEnterpriseUser:        "the group manages nobody, so there is no enterprise user to read back",

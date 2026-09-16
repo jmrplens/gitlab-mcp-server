@@ -19,8 +19,15 @@
 package modeleval
 
 import (
+	"errors"
+	"maps"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 )
@@ -238,5 +245,178 @@ func TestElicitedValue_AnswersEachKindOfProperty(t *testing.T) {
 				t.Errorf("elicitedValue(%q) = %v, want %v", tc.key, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestElicitedContent_TheWorldAnswersBeforeTheSchemaDoes is the property the
+// two interactive flows that name existing objects depend on: a source branch
+// and a tag are things GitLab already holds, and an answer invented from the
+// schema is one GitLab refuses. The unique name still answers everything the
+// world says nothing about.
+func TestElicitedContent_TheWorldAnswersBeforeTheSchemaDoes(t *testing.T) {
+	request := elicitRequestFor("source_branch", "target_branch", "title", "confirmed")
+	fromTheWorld := map[string]string{"source_branch": "feature/eval", "target_branch": "main"}
+
+	content := elicitedContent(request, "unique-name", fromTheWorld)
+
+	want := map[string]any{
+		"source_branch": "feature/eval",
+		"target_branch": "main",
+		"title":         "unique-name",
+		"confirmed":     true,
+	}
+	if !maps.Equal(content, want) {
+		t.Errorf("elicitedContent() = %v, want %v", content, want)
+	}
+}
+
+// TestElicitedContent_NothingToAnswer covers the five shapes a request can
+// have that name no property this responder can fill, each of which is an
+// empty answer rather than a panic.
+func TestElicitedContent_NothingToAnswer(t *testing.T) {
+	cases := []struct {
+		name    string
+		request *mcp.ElicitRequest
+	}{
+		{name: "no request"},
+		{name: "no params", request: &mcp.ElicitRequest{}},
+		{
+			name:    "a schema that is not an object",
+			request: &mcp.ElicitRequest{Params: &mcp.ElicitParams{RequestedSchema: "not a schema"}},
+		},
+		{
+			name: "an object with no properties",
+			request: &mcp.ElicitRequest{Params: &mcp.ElicitParams{
+				RequestedSchema: map[string]any{"type": "object"},
+			}},
+		},
+		{
+			name: "a property that is not an object",
+			request: &mcp.ElicitRequest{Params: &mcp.ElicitParams{
+				RequestedSchema: map[string]any{"properties": map[string]any{"title": "not a property"}},
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if content := elicitedContent(tc.request, "unique-name", nil); len(content) != 0 {
+				t.Errorf("elicitedContent() = %v, want nothing", content)
+			}
+		})
+	}
+}
+
+// TestElicitationResponder_Accepts checks the one thing the responder adds to
+// the content: every elicitation of an evaluation attempt is accepted, since a
+// declined one would report the flow as refused by the user.
+func TestElicitationResponder_Accepts(t *testing.T) {
+	respond := elicitationResponder("unique-name", map[string]string{"tag_name": "v1.2.3"})
+
+	result, err := respond(t.Context(), elicitRequestFor("tag_name"))
+	if err != nil {
+		t.Fatalf("the responder returned an error: %v", err)
+	}
+	if result.Action != "accept" {
+		t.Errorf("the responder answered %q, want accept", result.Action)
+	}
+	if result.Content["tag_name"] != "v1.2.3" {
+		t.Errorf("the responder answered tag_name = %v, want the world's tag", result.Content["tag_name"])
+	}
+}
+
+// elicitRequestFor builds the request a flow asking for these properties
+// sends, which is the shape the wizard's own schema has: an object whose
+// properties are strings.
+func elicitRequestFor(keys ...string) *mcp.ElicitRequest {
+	properties := map[string]any{}
+	for _, key := range keys {
+		properties[key] = map[string]any{"type": "string"}
+	}
+	return &mcp.ElicitRequest{Params: &mcp.ElicitParams{
+		RequestedSchema: map[string]any{"type": "object", "properties": properties},
+	}}
+}
+
+// TestStillThere_Verdicts covers the helper every predicate-backed
+// verification is written through: the object being gone is the case having
+// done its work, the object being there is the failure, and a read that could
+// not be made is neither.
+func TestStillThere_Verdicts(t *testing.T) {
+	cases := []struct {
+		name    string
+		present bool
+		err     error
+		wantHas string
+	}{
+		{name: "gone"},
+		{name: "still there", present: true, wantHas: "the tag is still there"},
+		{name: "unreadable", err: errors.New("403 Forbidden"), wantHas: "403 Forbidden"},
+		{
+			name:    "unreadable and reported present",
+			present: true, err: errors.New("403 Forbidden"),
+			wantHas: "403 Forbidden",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := stillThere("the tag", tc.present, tc.err)
+			assertVerdict(t, "stillThere", err, tc.wantHas)
+		})
+	}
+}
+
+// TestRemoved_Verdicts covers the same three verdicts read off a plain GitLab
+// read rather than off a predicate.
+func TestRemoved_Verdicts(t *testing.T) {
+	cases := []struct {
+		name    string
+		err     error
+		wantHas string
+	}{
+		{name: "gone", err: gl.ErrNotFound},
+		{name: "gone, as a response", err: statusError(http.StatusNotFound, "404 Release Not Found")},
+		{name: "still there", wantHas: "the release is still there"},
+		{
+			name:    "unreadable",
+			err:     statusError(http.StatusForbidden, "403 Forbidden"),
+			wantHas: "reading the release back",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := removed("the release", tc.err)
+			assertVerdict(t, "removed", err, tc.wantHas)
+		})
+	}
+}
+
+// statusError builds the structured error client-go returns for an HTTP
+// refusal, with the request a real one carries so its message formats.
+func statusError(code int, message string) error {
+	request := &http.Request{
+		Method: http.MethodGet,
+		URL:    &url.URL{Scheme: "https", Host: "gitlab.example", Path: "/api/v4/projects/1"},
+	}
+	return &gl.ErrorResponse{
+		Response: &http.Response{StatusCode: code, Request: request},
+		Message:  message,
+	}
+}
+
+// assertVerdict holds one verification verdict to what it should say: nothing
+// when the change happened, and a message naming the reason otherwise.
+func assertVerdict(t *testing.T, helper string, err error, wantHas string) {
+	t.Helper()
+	if wantHas == "" {
+		if err != nil {
+			t.Errorf("%s() = %v, want no verdict", helper, err)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("%s() reported nothing, want a verdict mentioning %q", helper, wantHas)
+	}
+	if !strings.Contains(err.Error(), wantHas) {
+		t.Errorf("%s() = %v, want it to mention %q", helper, err, wantHas)
 	}
 }
