@@ -185,26 +185,27 @@ func TestLinearXTicks_ThinnedToWhatTheWidthCarries(t *testing.T) {
 // best evidence there is that they could not be read.
 func TestPlaceEndLabels_SeparatesWhatWouldOverprint(t *testing.T) {
 	const x = 800
-	crowded := []endLabel{
-		{x: x, y: 130, width: 30, text: "16559"},
-		{x: x, y: 134, width: 26, text: "8857"},
-		{x: x, y: 137, width: 26, text: "6808"},
-		{x: x, y: 139, width: 26, text: "4974"},
-	}
-	placed := placeEndLabels(crowded)
-	if len(placed) != len(crowded) {
-		t.Fatalf("placed %d of %d labels, want all of them: the plot has room", len(placed), len(crowded))
-	}
-	for i := 1; i < len(placed); i++ {
-		if gap := placed[i].y - placed[i-1].y; gap < endLabelPitch {
-			t.Errorf("%q and %q are %.1f apart, want at least %v", placed[i-1].text, placed[i].text, gap, endLabelPitch)
+
+	t.Run("a crowded group is spread around where it sat", func(t *testing.T) {
+		crowded := []endLabel{
+			{x: x, y: 130, width: 30, text: "16559"},
+			{x: x, y: 134, width: 26, text: "8857"},
+			{x: x, y: 137, width: 26, text: "6808"},
+			{x: x, y: 139, width: 26, text: "4974"},
 		}
-	}
-	// Spread around where they wanted to be rather than hung below the first,
-	// or every label but one ends up sitting on the line it belongs to.
-	if placed[0].y >= 130 {
-		t.Errorf("the topmost label stayed at %.1f, so the group was not centered on itself", placed[0].y)
-	}
+		placed := placeEndLabels(crowded)
+		if len(placed) != len(crowded) {
+			t.Fatalf("placed %d of %d labels, want all of them: the plot has room", len(placed), len(crowded))
+		}
+		assertEndLabelsSeparated(t, placed)
+		assertEndLabelsInsideThePlot(t, placed)
+		// Spread around where they wanted to be rather than hung below the
+		// first, or every label but one ends up sitting on the line it
+		// belongs to.
+		if placed[0].y >= 130 {
+			t.Errorf("the topmost label stayed at %.1f, so the group was not centered on itself", placed[0].y)
+		}
+	})
 
 	// The processor-time figure is this case: two lines a hair apart along the
 	// bottom of the plot, where spreading them would push the lower one under
@@ -218,12 +219,8 @@ func TestPlaceEndLabels_SeparatesWhatWouldOverprint(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("placed %d of 2 labels, want both: the plot has room above them", len(got))
 		}
-		if got[1].y > floor {
-			t.Errorf("the lower label sits at %.1f, below the plot floor %d", got[1].y, floor)
-		}
-		if gap := got[1].y - got[0].y; gap < endLabelPitch {
-			t.Errorf("the two labels are %.1f apart, want at least %v", gap, endLabelPitch)
-		}
+		assertEndLabelsSeparated(t, got)
+		assertEndLabelsInsideThePlot(t, got)
 	})
 
 	t.Run("labels at different counts are left alone", func(t *testing.T) {
@@ -243,11 +240,7 @@ func TestPlaceEndLabels_SeparatesWhatWouldOverprint(t *testing.T) {
 		if len(got) == 0 || len(got) == len(many) {
 			t.Fatalf("placed %d of %d, want some dropped and some kept", len(got), len(many))
 		}
-		for _, label := range got {
-			if label.y < padT || label.y > padT+plotH {
-				t.Errorf("a kept label sits at %.1f, outside the plot [%d, %d]", label.y, padT, padT+plotH)
-			}
-		}
+		assertEndLabelsInsideThePlot(t, got)
 	})
 
 	t.Run("nothing to place", func(t *testing.T) {
@@ -255,6 +248,30 @@ func TestPlaceEndLabels_SeparatesWhatWouldOverprint(t *testing.T) {
 			t.Errorf("placeEndLabels(nil) = %+v, want nothing", got)
 		}
 	})
+}
+
+// assertEndLabelsSeparated fails when two labels of one placement are closer
+// than the pitch a value needs to be read on its own, which is the whole
+// property the placement exists for. The labels come back in ascending y, so
+// neighbors are the only pair that can collide.
+func assertEndLabelsSeparated(t *testing.T, placed []endLabel) {
+	t.Helper()
+	for i := 1; i < len(placed); i++ {
+		if gap := placed[i].y - placed[i-1].y; gap < endLabelPitch {
+			t.Errorf("%q and %q are %.1f apart, want at least %v", placed[i-1].text, placed[i].text, gap, endLabelPitch)
+		}
+	}
+}
+
+// assertEndLabelsInsideThePlot fails when a label that was kept sits outside
+// the plot area, where it would be drawn over the legend or under the axis.
+func assertEndLabelsInsideThePlot(t *testing.T, placed []endLabel) {
+	t.Helper()
+	for _, label := range placed {
+		if label.y < padT || label.y > padT+plotH {
+			t.Errorf("a kept label sits at %.1f, outside the plot [%d, %d]", label.y, padT, padT+plotH)
+		}
+	}
 }
 
 // TestScale_Positions_StayInsideThePlot verifies both scales map their whole
