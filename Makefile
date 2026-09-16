@@ -4,6 +4,7 @@
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
+	modeleval-ce modeleval-ee modeleval-probe \
 	check-eval-prompts audit-eval-prompts \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck sonar sonar-status \
@@ -580,6 +581,54 @@ check-eval-prompts:
 audit-eval-prompts:
 	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface meta
 	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface dynamic
+
+# The rebuilt model evaluation: the corpus put to a model against the real
+# binary and a real GitLab, recorded as observation and scored afterwards.
+#
+# The two targets below are the e2e Docker lifecycle with one package swapped
+# in, so a model run boots the same GitLab, the same runner and the same
+# fixture service the end-to-end suite does. Nothing about them is scheduled:
+# a run with a real model costs money at a provider and refuses to start
+# without MODELEVAL_SPEND=yes, and a run with no MODELEVAL_MODELS at all skips.
+#
+# The two record directories are deliberately both under dist/modeleval and
+# neither under $(E2E_CALLS_DIR). The coverage audit reads a calls directory's
+# parent when it is given one, so a model run recording beside the end-to-end
+# suite's shards would fold into the coverage record, and a model call is
+# credited to no action by design.
+MODELEVAL_DIR=dist/modeleval
+
+## modeleval-ce: put the corpus to the configured models against an ephemeral GitLab CE (usage: MODELEVAL_MODELS=fake:perfect make modeleval-ce)
+modeleval-ce: ensure-gotestsum e2e-server-binary
+	$(call RM_RF,$(MODELEVAL_DIR)/ce)
+	$(call MKDIR_P,$(MODELEVAL_DIR)/ce)
+	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_REPORT_NAME=modeleval-ce \
+	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ce/e2e-calls \
+	GOTESTSUM=$(GOTESTSUM) \
+	./test/e2e/scripts/run-docker-e2e.sh ce -- -timeout $(E2E_GITLAB_TIMEOUT) ./test/e2e/modeleval/
+
+## modeleval-ee: the same against an ephemeral licensed GitLab EE, which is what the licensed cases need.
+modeleval-ee: ensure-gotestsum e2e-server-binary
+	$(call RM_RF,$(MODELEVAL_DIR)/ee)
+	$(call MKDIR_P,$(MODELEVAL_DIR)/ee)
+	E2E_SERVER_BINARY=$(CURDIR)/$(E2E_SERVER_BINARY) \
+	E2E_REPORT_DIR=$(CURDIR)/$(E2E_REPORT_DIR) \
+	E2E_REPORT_NAME=modeleval-ee \
+	GITLAB_MCP_TEST_MODELEVAL_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee \
+	GITLAB_MCP_TEST_E2E_CALLS_DIR=$(CURDIR)/$(MODELEVAL_DIR)/ee/e2e-calls \
+	GOTESTSUM=$(GOTESTSUM) \
+	./test/e2e/scripts/run-docker-e2e.sh ee -- -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/modeleval/
+
+## modeleval-probe: ask each configured provider whether it accepts the request this repository builds (PAID; needs MODELEVAL_PROBE=yes).
+# It needs no GitLab: it never opens an Env, so the bootstrap that probes an
+# instance never runs. It is the only paid thing here that is not a run, and it
+# is two requests per model plus one slice request, which is a contract check.
+modeleval-probe:
+	MODELEVAL_PROBE=$${MODELEVAL_PROBE:-yes} \
+	go test -tags e2e -count=1 -v -run TestProviderContract ./test/e2e/modeleval/
 
 ## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read] [SERVER_MODE=read-only|safe-mode])
 eval-surfaces-docker:

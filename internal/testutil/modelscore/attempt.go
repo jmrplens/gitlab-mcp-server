@@ -191,6 +191,30 @@ func Score(attempt Attempt, key modelcorpus.Key) (Verdict, error) {
 	return verdict, nil
 }
 
+// ScoreCase is [Score] for a caller that may not hold a key: it resolves the
+// answer for the case the attempt names and scores against that.
+//
+// It exists for the runner. A run is meant to say what each attempt came to as
+// it ends, and the corpus's boundary refuses a run that reads an answer, so
+// the two statements could not both be true while the only entry point took a
+// key. This package is one of the sanctioned readers, so the lookup happens
+// here and what crosses back is a verdict about an attempt that has already
+// ended: nothing a model was shown can be derived from it, and nothing written
+// to the record comes from it either, since the record stays observation and a
+// report re-scores it from the corpus at HEAD.
+//
+// A case the corpus does not have is an error rather than an empty verdict. A
+// zero verdict reads as a model that did nothing, which is a measurement, and
+// an attempt naming a case nobody wrote is not one.
+func ScoreCase(attempt Attempt) (Verdict, error) {
+	key, known := modelcorpus.Keys()[attempt.Line.Case]
+	if !known {
+		return Verdict{}, fmt.Errorf("score attempt %q: the corpus has no case %q",
+			attempt.Line.ID, attempt.Line.Case)
+	}
+	return Score(attempt, key)
+}
+
 // scorer is one attempt under one catalog: everything scoring a step needs,
 // held once rather than threaded through every function that wants a piece of
 // it.

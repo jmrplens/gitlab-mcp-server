@@ -1,7 +1,10 @@
 package modelcorpus
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"text/template"
@@ -59,9 +62,11 @@ func (c Case) stimulus() Stimulus {
 // fifth: the scorer, which is the one thing a key is for; the two generators,
 // each of which publishes about a key and produces no stimulus; and the fake
 // provider, which replays a key to prove the pipe and whose every row the
-// publisher refuses. The map that test reads lists this package too, since the
-// corpus's own gate is written against the key, which is why it holds five
-// entries and this sentence names four.
+// publisher refuses. The list that test reads names this package too, since
+// the corpus's own gate is written against the key, which is why it holds five
+// entries and this sentence names four. It is one of three such lists, one per
+// accessor answering about a key: [StepCount] and [Digest] have their own, and
+// are allowed where this is not.
 func Keys() map[string]Key {
 	all := cases()
 	keys := make(map[string]Key, len(all))
@@ -160,4 +165,74 @@ func interpolatedFact(node string) (string, bool) {
 		return "", false
 	}
 	return key, true
+}
+
+// Digest returns a fingerprint of the whole corpus, key included.
+//
+// A run writes it on its record, and the report is scored from the corpus at
+// HEAD rather than from anything the run carried: a key that moved between the
+// two is a record being scored against an answer it was never put to, and the
+// digest is what lets the publisher refuse that instead of publishing it.
+//
+// It therefore has to cover the key, which is why it is here and not in the
+// runner. A run may not read a key, and a digest of the stimuli alone would be
+// unmoved by exactly the edit it exists to catch.
+//
+// Sixteen hex characters, the repository's own length for a comparison
+// fingerprint a person reads off two rows of a table.
+func Digest() string {
+	sum := sha256.New()
+	for _, one := range cases() {
+		writeCaseDigest(sum, one)
+	}
+	return hex.EncodeToString(sum.Sum(nil))[:digestLength]
+}
+
+// digestLength is how much of the hash [Digest] carries.
+const digestLength = 16
+
+// writeCaseDigest folds one case into the hash, field by field.
+//
+// By hand rather than through encoding/json, because the key is unexported and
+// a marshaler would skip it silently: the digest would then be stable across
+// the one change it is meant to notice, and nothing would say so.
+func writeCaseDigest(sum io.Writer, one Case) {
+	_, _ = fmt.Fprintf(sum, "case\x00%s\x00%s\x00%s\x00%s\x00%t\x00%t\x00%t\x00%s\x00%v\n",
+		one.ID, one.Prompt, one.Recipe, one.Needs.MinimumTier(),
+		one.Needs.Runner, one.Needs.Admin, one.Needs.FixtureService,
+		one.Surfaces.Reason, one.Surfaces.Only)
+	for _, step := range one.key.Steps {
+		_, _ = fmt.Fprintf(sum, "step\x00%s\x00%s\x00%t\x00%v\n",
+			step.Action, step.Standalone, step.Optional, step.Produces)
+		for _, arg := range step.Args {
+			_, _ = fmt.Fprintf(sum, "arg\x00%s\x00%t\x00%s\x00%s\x00%d\x00%s\x00%t\n",
+				arg.Name, arg.Required, arg.Truth.Fact, arg.Truth.Literal,
+				arg.Truth.Produced.Step, arg.Truth.Produced.Field, arg.Truth.Authored)
+		}
+	}
+}
+
+// StepCount returns how many steps one case's key declares, and whether the
+// corpus has that case.
+//
+// It is the one number a run is told about a key, and it is told for one
+// reason: the turn cap an attempt is bounded by is a multiple of the steps
+// plus a margin, so a case of one step cannot spend a conversation's worth of
+// tokens going nowhere. A cap is an ending and never a message, so nothing a
+// model is shown can be derived from it; what a run learns is how long it may
+// go on, never what it should say.
+//
+// It is deliberately not a field of [Stimulus]. That type is the enumeration of
+// what a run may see, and growing it is how the boundary erodes; a function
+// asked for by name is a use a reader can find, and access_test.go holds this
+// name to a list of callers of its own, as it holds [Keys] to one. The runner
+// is on that list; the file that composes a prompt is refused by a second lock
+// of its own.
+func StepCount(id string) (int, bool) {
+	for _, one := range cases() {
+		if one.ID == id {
+			return len(one.key.Steps), true
+		}
+	}
+	return 0, false
 }

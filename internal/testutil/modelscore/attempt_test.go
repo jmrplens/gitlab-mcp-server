@@ -356,6 +356,48 @@ func TestScore_DynamicTrajectoryWithAFind_CountsTheSearchApartFromTheStep(t *tes
 	}
 }
 
+// TestScoreCase_ResolvesTheKeyForACallerThatMayNotReadOne covers the entry
+// point a run scores an attempt through.
+//
+// The runner may not read an answer, and a run is meant to say what each
+// attempt came to as it ends. Both hold only if the lookup happens on this
+// side, so what is checked here is that it happens and that it resolves the
+// same key a caller holding one would have passed.
+func TestScoreCase_ResolvesTheKeyForACallerThatMayNotReadOne(t *testing.T) {
+	trip := trajectory{calls: []modelrecord.Call{
+		dynamicFind(1, "get a project"),
+		dynamicExecute(2, "project.get", "project.get", projectParams()),
+	}}
+	attempt := trip.build()
+	attempt.Line.Case = "MT-002"
+
+	resolved, err := ScoreCase(attempt)
+	if err != nil {
+		t.Fatalf("ScoreCase error = %v, want nil", err)
+	}
+	given, err := Score(attempt, keyFor(t, "MT-002"))
+	if err != nil {
+		t.Fatalf("Score error = %v, want nil", err)
+	}
+	if resolved.Outcome != OutcomeCompleted {
+		t.Errorf("Outcome = %q (%s), want %q", resolved.Outcome, resolved.Reason, OutcomeCompleted)
+	}
+	if resolved.Outcome != given.Outcome || len(resolved.Steps) != len(given.Steps) ||
+		resolved.Discovery != given.Discovery {
+		t.Errorf("ScoreCase = %+v, want the verdict Score gives for the corpus's own key %+v", resolved, given)
+	}
+
+	unknown := attempt
+	unknown.Line.Case = "MT-nothing-has-this-id"
+	verdict, refused := ScoreCase(unknown)
+	if refused == nil {
+		t.Fatalf("ScoreCase of a case the corpus does not have = %+v, want an error", verdict)
+	}
+	if !strings.Contains(refused.Error(), unknown.Line.Case) {
+		t.Errorf("the refusal is %v, want it to name the case it could not find", refused)
+	}
+}
+
 // TestScore_DynamicTrajectoryWithNoFind_ReachesTheStepWithNoOverhead is the
 // other half of the same fix: a model that knows the action and calls it
 // directly pays nothing, where the old key would have reported a missing step.
