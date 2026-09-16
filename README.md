@@ -309,6 +309,7 @@ They were withdrawn because the measurement did not measure what it claimed. One
 The replacement is being built as a tagged package under `test/e2e/` on the end-to-end harness, which already keeps the stimulus, the environment and the record apart. Numbers return here when that harness produces them.
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
+
 Withdrawn. The CE dynamic table published here, last refreshed from a Docker run dated 20260627-232303, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
@@ -316,14 +317,17 @@ Withdrawn. The CE dynamic table published here, last refreshed from a Docker run
 <summary>Meta-tools and Enterprise evaluation results</summary>
 
 <!-- START MODEL EVAL META SUMMARY -->
+
 Withdrawn. No CE meta-tools table was ever published here, and none will be until the rebuilt harness produces one.
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
+
 Withdrawn. The Enterprise meta table published here, last refreshed from a Docker run dated 20260527, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
+
 Withdrawn. The Enterprise dynamic table published here, last refreshed from a Docker run dated 20260628-015421, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
