@@ -1,6 +1,7 @@
 package shardio
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -265,5 +266,53 @@ func TestRead_RefusesALineBeyondTheCap(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "fixture-long.jsonl") {
 		t.Errorf("Read error = %v, want it to name the shard", err)
+	}
+}
+
+// TestRead_TakesTheLongestLineTheWriterWrites verifies that the longest line
+// the writer accepts is one the reader reads back.
+//
+// The two halves read one constant from opposite sides, and nothing above
+// holds them to each other at the value where they meet: the refusal test
+// drives a longer line and every other test a much shorter one. The writer
+// refuses a line whose encoded text plus its newline is past MaxLine, so the
+// longest it writes encodes to MaxLine-1 bytes and occupies exactly MaxLine in
+// the file, which is what the scanner's maximum buffer must hold, newline
+// included. An off-by-one either way would leave this package unable to read a
+// shard it wrote itself, and it would show up on a long answer in a real run
+// rather than here.
+func TestRead_TakesTheLongestLineTheWriterWrites(t *testing.T) {
+	dir := t.TempDir()
+	shards := newFixture(t, plainSpec())
+
+	// Measured rather than assumed: the envelope's own bytes are whatever the
+	// fixture record encodes to, and the text field carries no escapes, so one
+	// more byte of text is one more byte of line.
+	empty, err := json.Marshal((&note{}).record())
+	if err != nil {
+		t.Fatalf("Marshal error = %v", err)
+	}
+	longest := &note{Text: strings.Repeat("a", MaxLine-1-len(empty))}
+	encoded, err := json.Marshal(longest.record())
+	if err != nil {
+		t.Fatalf("Marshal error = %v", err)
+	}
+	if len(encoded) != MaxLine-1 {
+		t.Fatalf("the fixture line encodes to %d bytes, want %d", len(encoded), MaxLine-1)
+	}
+
+	reporter := &recordingReporter{}
+	shards.OpenDir(dir).Write(reporter, longest)
+	wantNoMessage(t, reporter)
+
+	records, err := shards.Read(dir)
+	if err != nil {
+		t.Fatalf("Read error = %v, want the line the writer accepted", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records = %d, want 1", len(records))
+	}
+	if records[0].Note == nil || records[0].Note.Text != longest.Text {
+		t.Error("Read returned a record that is not the line that was written")
 	}
 }

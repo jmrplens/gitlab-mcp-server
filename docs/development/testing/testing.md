@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,348 |
-| Unit test functions                                   | 15,436 |
+| Total test functions                                  | 16,351 |
+| Unit test functions                                   | 15,439 |
 | E2E test functions                                    |    912 |
 | cmd test functions                                    |  3,208 |
 | Test files (internal/)                                |    563 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,189 | 74.6% |
+| `TestFunc_Scenario` (2-part)           | 12,192 | 74.6% |
 | `TestFunc` (no underscore)             |    932 |  5.7% |
 | `TestFunc_Scenario_Expected` (3+ part) |  3,227 | 19.7% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,744 |        167 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,747 |        167 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,118 |        380 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            912 |        330 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          3,208 |        227 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,348** |  **1,120** |                                                                                                 |
+| **Total**               |     **16,351** |  **1,120** |                                                                                                 |
 
 ### Core Packages
 
@@ -78,9 +78,9 @@
 | telemetry         |       102 |    93.1% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                      |
 | testutil          |       119 |    99.5% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                           |
 | testutil/e2ecalls |        14 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                              |
-| testutil/shardio  |        27 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
+| testutil/shardio  |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
 | toolutil          |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                           |
-| **Subtotal**      | **2,744** |          |                                                                                                                                                                                                                                                                         |
+| **Subtotal**      | **2,747** |          |                                                                                                                                                                                                                                                                         |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

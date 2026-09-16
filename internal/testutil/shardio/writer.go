@@ -207,7 +207,16 @@ func (w *Writer[R, L]) stopf(reporter Reporter, format string, args ...any) {
 	reporter.Errorf(format, args...)
 }
 
-// release closes this writer's shard, if it opened one.
+// release closes this writer's shard, if it opened one, and returns the writer
+// to the state a fresh one is in.
+//
+// The file is not the only thing a shard's identity lives in: seen is the
+// deduplication of that file's lines, and stopped is a refusal earned by that
+// file. A caller that kept the writer writes into a new shard after this, so
+// carrying either across would drop a line the new shard does not hold, or
+// drop every line for a failure the new shard never had. Nothing in a run
+// reaches that, where releasing is the last thing that happens to a writer; a
+// test that keeps the one it released does.
 func (w *Writer[R, L]) release() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -215,4 +224,6 @@ func (w *Writer[R, L]) release() {
 		_ = w.file.Close()
 		w.file = nil
 	}
+	w.seen = map[[sha256.Size]byte]bool{}
+	w.stopped = false
 }

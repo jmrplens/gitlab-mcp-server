@@ -473,3 +473,54 @@ func TestRelease_LetsTheSameWriterStartAnotherShard(t *testing.T) {
 		t.Errorf("shards = %d, want 2: a released writer holds no file and opens another", len(entries))
 	}
 }
+
+// TestRelease_DoesNotDeduplicateTheNewShardAgainstTheOldOne verifies that a
+// line written before a release is written again into the shard opened after
+// it.
+//
+// The deduplication exists so that a line offered twice costs one write, and
+// what it is deduplicating against is the shard it already wrote to. A release
+// ends that shard, so a set carried across it would refuse a line on the
+// evidence of a file the new shard has nothing to do with, and refuse it in
+// silence, which is the one failure this whole record is built not to have.
+func TestRelease_DoesNotDeduplicateTheNewShardAgainstTheOldOne(t *testing.T) {
+	dir := t.TempDir()
+	shards := newFixture(t, plainSpec())
+	writer := shards.OpenDir(dir)
+	reporter := &recordingReporter{}
+	line := &note{Text: "written on both sides of the release"}
+
+	writer.Write(reporter, line)
+	shards.Release()
+	writer.Write(reporter, line)
+
+	wantNoMessage(t, reporter)
+	records, err := shards.Read(dir)
+	if err != nil {
+		t.Fatalf("Read error = %v", err)
+	}
+	if len(records) != 2 {
+		t.Errorf("records = %d, want 2: the new shard holds the line whatever the old shard held", len(records))
+	}
+}
+
+// TestRelease_ReportsAgainAfterTheWriterWasStopped verifies that a writer
+// silenced by a failure reports once more after a release.
+//
+// A stop is a refusal earned by the shard the writer was writing, and a
+// release ends that shard. Keeping the flag would make the writer silent for
+// the rest of the process about a directory it has not tried since, and
+// silence from this writer means nothing went wrong.
+func TestRelease_ReportsAgainAfterTheWriterWasStopped(t *testing.T) {
+	shards := newFixture(t, plainSpec())
+	writer := shards.OpenDir("relative")
+	reporter := &recordingReporter{}
+
+	writer.Write(reporter, &note{Text: "first"})
+	shards.Release()
+	writer.Write(reporter, &note{Text: "second"})
+
+	if len(reporter.messages) != 2 {
+		t.Errorf("messages = %d, want 2: the release ended the refusal the first write earned", len(reporter.messages))
+	}
+}
