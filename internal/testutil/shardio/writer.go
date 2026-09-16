@@ -77,6 +77,14 @@ func (s *Shards[R, L]) OpenDir(dir string) *Writer[R, L] {
 	if dir == "" {
 		return nil
 	}
+	// Cleaned before it becomes the registry key, so two spellings of one
+	// directory are one writer. They would otherwise be two, each with its own
+	// shard and its own seen set, which is how a process ends up split across
+	// two files and how a line deduplicated against one of them is written
+	// again into the other. Cleaning after the empty check, because
+	// filepath.Clean("") is ".", which is a directory and not the absence of
+	// one.
+	dir = filepath.Clean(dir)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.writers[dir]; ok {

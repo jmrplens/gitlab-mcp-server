@@ -108,6 +108,33 @@ func TestShardsOpenDir_ReturnsOneWriterPerDirectory(t *testing.T) {
 	}
 }
 
+// TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter verifies that the
+// registry key is the cleaned path, so two spellings of one directory share a
+// writer.
+//
+// Two writers for one directory is not a tidiness problem. Each opens its own
+// shard and keeps its own seen set, so the process is split across two files
+// and a line already deduplicated against one of them is written again into
+// the other, which is exactly the double counting the seen set exists to
+// prevent. The spellings below are what a Makefile and an environment variable
+// actually produce between them.
+func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
+	dir := t.TempDir()
+	shards := newFixture(t, plainSpec())
+
+	canonical := shards.OpenDir(dir)
+	if canonical == nil {
+		t.Fatal("OpenDir(dir) = nil, want a writer")
+	}
+	for _, spelling := range []string{dir + "/.", dir + "/", dir + "/sub/.."} {
+		t.Run(spelling, func(t *testing.T) {
+			if got := shards.OpenDir(spelling); got != canonical {
+				t.Errorf("OpenDir(%q) returned a second writer for one directory", spelling)
+			}
+		})
+	}
+}
+
 // TestWriterWrite_NilWriterWritesNothing verifies that writing to the nil
 // writer is a no-op rather than a panic.
 //
