@@ -344,7 +344,7 @@
 | cmd/eval_mcp_surfaces/internal/termio          |   100.0% |
 | cmd/format_md_tables                           |    95.8% |
 | cmd/gen_action_catalog_manifest                |    57.9% |
-| cmd/gen_api_live                               |    80.1% |
+| cmd/gen_api_live                               |    79.4% |
 | cmd/gen_brand                                  |    87.1% |
 | cmd/gen_graphql_schema                         |    85.9% |
 | cmd/gen_icon_webp                              |    92.3% |
@@ -585,7 +585,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 
 - **cmd/gen_action_catalog_manifest** (57.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_api_live** (80.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_api_live** (79.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **progress** (83.8%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_install_buttons** (84.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_graphql_schema** (85.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
