@@ -13,15 +13,19 @@
 // record holds the scored columns, not the observation; redrawing a page
 // re-reads them and scores nothing; and a second fold of a run already
 // published is refused by name rather than replacing it. So a corrected rule
-// reaches a published row through one path, -refold, which drops the rows the
-// given shards publish and folds them again, each drop named. A run whose
+// reaches a published row through one path, -refold, which merges the given
+// shards into the rows they publish again, case by case, naming each case it
+// replaces. The case is the unit and not the row: replacing the row is what it
+// used to do, and a re-run of one corrected case then replaced a row measured
+// over every case with one measured over that case alone. A run whose
 // shards were not kept cannot be re-scored at all, which is the reason to keep
 // them.
 //
-// Four flags, of which the three writing ones compose:
+// Five flags, of which the writing ones compose:
 //
 //	go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -render            # fold a run in and redraw
-//	go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -refold -render    # re-score that run under today's rules
+//	go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -refold -render    # merge that run in again, case by case
+//	go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -dry-run -render   # rehearse the whole path into dist/, publishing nothing
 //	go run ./cmd/gen_model_results/ -render                                      # redraw from the record alone
 //	go run ./cmd/gen_model_results/ -check                                       # the offline gate
 //

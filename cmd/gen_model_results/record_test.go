@@ -183,7 +183,7 @@ func foldShard(t *testing.T, records []modelrecord.Record, claimed map[string]st
 // when anything refused it.
 func publishOne(t *testing.T, records []modelrecord.Record) row {
 	t.Helper()
-	rows, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	rows, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge the shard: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestScore_UnknownCase_IsAnErrorAndNotAnEmptyVerdict(t *testing.T) {
 	records := publishableShard()
 	records[1].Attempt.Case = "MT-does-not-exist"
 
-	_, _, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, _, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err == nil {
 		t.Fatal("a case the corpus does not have was scored rather than reported")
 	}
@@ -334,7 +334,7 @@ func TestScore_ASurfaceTheCatalogCannotBeBuiltFor_IsAnError(t *testing.T) {
 	records := publishableShard()
 	records[1].Attempt.Surface = "a surface nobody serves"
 
-	_, _, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, _, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err == nil {
 		t.Fatal("a surface the catalog cannot be built for was scored rather than reported")
 	}
@@ -573,7 +573,7 @@ func TestFold_TwoShardsOfOneConfiguration_RefuseTheSecondByShardName(t *testing.
 		t.Fatalf("folded %d candidates, want one per shard", len(candidates))
 	}
 
-	rows, refusals, err := judge(candidates, modelcorpus.Keys())
+	rows, refusals, err := judge(candidates, modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}
@@ -607,7 +607,7 @@ func TestRunDate_ARunThatNeverStarted_LeavesTheDateEmpty(t *testing.T) {
 	records := publishableShard()
 	records[0].Run.StartedAt = time.Time{}
 
-	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}

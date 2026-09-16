@@ -110,7 +110,7 @@ func TestRefusals_EachRule_RefusesTheRowItIsFor(t *testing.T) {
 			records := publishableShard()
 			one.breakIt(records)
 
-			rows, refusals, err := judge(foldShard(t, records, one.claimed), modelcorpus.Keys())
+			rows, refusals, err := judge(foldShard(t, records, one.claimed), modelcorpus.Keys(), false)
 			if err != nil {
 				t.Fatalf("judge: %v", err)
 			}
@@ -173,7 +173,7 @@ func TestRefusals_OnlyTheFirstRuleFires(t *testing.T) {
 	records[0].Run.Providers[0].Name = fakeProvider
 	records[0].Run.CorpusDigest = "a corpus that has moved"
 
-	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRefusals_AToolSchemaDigestNobodyNoted_IsRefusedOnBothSides(t *testing.T
 	records := publishableShard()
 	records[4].Session.ToolSchemaDigests = nil
 
-	rows, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	rows, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestRefusals_AModelTheRunNeverDescribed_IsRefusedByName(t *testing.T) {
 	records := publishableShard()
 	records[0].Run.Providers = nil
 
-	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestRefusals_ASessionThatCalledNothing_IsNotRefused(t *testing.T) {
 	records := publishableShard()
 	records = append(records[:3], records[4:]...) // drop the call line
 
-	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys())
+	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
 	if err != nil {
 		t.Fatalf("judge: %v", err)
 	}

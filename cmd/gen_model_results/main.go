@@ -55,6 +55,10 @@ type options struct {
 	// check verifies the record and the pages offline instead of writing
 	// anything.
 	check bool
+	// dryRun folds and renders into a throwaway directory instead of the
+	// repository, admitting the fake provider so a rehearsal can be read as a
+	// published page would be. See [prepareDryRun].
+	dryRun bool
 }
 
 // main folds a run in, redraws the pages, or gates both.
@@ -65,9 +69,10 @@ type options struct {
 // the half update-all runs and the half a stack refreshes at its tip.
 func main() {
 	shards := flag.String("shards", "", "fold a model evaluation run's shards from this directory into the committed record")
-	refold := flag.Bool("refold", false, "with -shards: drop the rows those shards publish, naming each, and fold them again from the corpus at HEAD")
+	refold := flag.Bool("refold", false, "with -shards: merge those shards into the rows they publish again, case by case, naming each case replaced")
 	render := flag.Bool("render", false, "redraw the managed blocks of README.md and the results page from the record")
 	check := flag.Bool("check", false, "verify the committed record and the pages drawn from it, writing nothing")
+	dryRun := flag.Bool("dry-run", false, "with -shards: fold and render into "+dryRunRelDir+" instead of the repository, admitting the fake provider so a rehearsal can be read")
 	flag.Parse()
 
 	root, err := cmdutil.RepositoryRoot(".")
@@ -75,18 +80,22 @@ func main() {
 		fmt.Fprintf(os.Stderr, logLead+"find repository root: %v\n", err)
 		os.Exit(exitUsage)
 	}
-	os.Exit(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check}, os.Stdout, os.Stderr))
+	os.Exit(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check, dryRun: *dryRun}, os.Stdout, os.Stderr))
 }
 
 // run is main with its inputs handed to it, so a test can drive every path
 // against a tree of its own.
 func run(root string, opts options, stdout, stderr io.Writer) int {
-	if opts.check && (opts.shards != "" || opts.render || opts.refold) {
-		fmt.Fprintln(stderr, logLead+"-check writes nothing, so it cannot be given -shards, -refold or -render")
+	if opts.check && (opts.shards != "" || opts.render || opts.refold || opts.dryRun) {
+		fmt.Fprintln(stderr, logLead+"-check writes nothing, so it cannot be given -shards, -refold, -render or -dry-run")
+		return exitUsage
+	}
+	if opts.dryRun && opts.shards == "" {
+		fmt.Fprintln(stderr, logLead+"-dry-run rehearses folding a run in, so it needs the -shards of the run to rehearse")
 		return exitUsage
 	}
 	if opts.refold && opts.shards == "" {
-		fmt.Fprintln(stderr, logLead+"-refold drops the rows a run's shards publish, so it needs the -shards those rows would come from")
+		fmt.Fprintln(stderr, logLead+"-refold merges a run's shards into the rows they publish again, so it needs the -shards those rows would come from")
 		return exitUsage
 	}
 	if opts.check {
@@ -107,12 +116,25 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, logPrefix, err)
 		return exitUsage
 	}
+
+	// A rehearsal reads the committed record and the real pages, and writes
+	// neither: from here on, root is a throwaway tree under dist/.
+	written := root
+	if opts.dryRun {
+		scratch, prepErr := prepareDryRun(root, stdout)
+		if prepErr != nil {
+			fmt.Fprintln(stderr, logPrefix, prepErr)
+			return exitUsage
+		}
+		written = scratch
+	}
+
 	if opts.shards != "" {
-		if foldErr := foldInto(&doc, opts.shards, opts.refold, stdout); foldErr != nil {
+		if foldErr := foldInto(&doc, opts.shards, opts.refold, opts.dryRun, stdout); foldErr != nil {
 			fmt.Fprintln(stderr, logPrefix, foldErr)
 			return exitUsage
 		}
-		if writeErr := writeRecord(root, doc); writeErr != nil {
+		if writeErr := writeRecord(written, doc); writeErr != nil {
 			fmt.Fprintln(stderr, logPrefix, writeErr)
 			return exitUsage
 		}
@@ -121,7 +143,7 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 	}
 
 	if opts.render {
-		changed, _, pageErr := applyPages(root, doc.Rows, false)
+		changed, _, pageErr := applyPages(written, doc.Rows, false)
 		if pageErr != nil {
 			fmt.Fprintln(stderr, logPrefix, pageErr)
 			return exitUsage
@@ -131,6 +153,12 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 		}
 		if !committed {
 			fmt.Fprintf(stdout, logLead+"no %s yet, so every block says that nothing is published\n", recordRelPath)
+		}
+	}
+	if opts.dryRun {
+		if markErr := bannerDryRun(written, stdout); markErr != nil {
+			fmt.Fprintln(stderr, logPrefix, markErr)
+			return exitUsage
 		}
 	}
 	for _, orphan := range unpublishedRows(doc.Rows) {
@@ -158,7 +186,7 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 // corrected case was found to replace a row measured over every case with a row
 // measured over that one, report success, and leave nothing saying the rest of
 // a paid run had been discarded.
-func foldInto(doc *document, dir string, refold bool, stdout io.Writer) error {
+func foldInto(doc *document, dir string, refold, dryRun bool, stdout io.Writer) error {
 	shards, err := modelrecord.ReadShards(dir)
 	if err != nil {
 		return err
@@ -176,7 +204,7 @@ func foldInto(doc *document, dir string, refold bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	rows, refusals, err := judge(candidates, modelcorpus.Keys())
+	rows, refusals, err := judge(candidates, modelcorpus.Keys(), dryRun)
 	if err != nil {
 		return err
 	}

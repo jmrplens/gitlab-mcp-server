@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 )
 
 // newRoot builds a repository root holding the two pages with their markers,
@@ -735,5 +737,99 @@ func TestRun_AMergedRow_SaysWhichRunMeasuredEachCase(t *testing.T) {
 	}
 	if held.Date == reran.Date {
 		t.Errorf("both cases name the day %q, so the row cannot say when each was last put to the model", held.Date)
+	}
+}
+
+// fakeRunShard is a rehearsal: the corpus key replayed by the fake provider,
+// which is what `MODELEVAL_MODELS=fake:perfect` leaves behind.
+func fakeRunShard() []modelrecord.Record {
+	records := publishableShard()
+	records[0].Run.Providers[0].Name = fakeProvider
+	records[0].Run.Providers[0].Spec = "fake:perfect"
+	records[1].Attempt.Model = "fake:perfect"
+	records[4].Session.ToolSchemaDigests = map[string]string{"fake:perfect": fixtureTools}
+	return records
+}
+
+// TestRun_ADryRun_PublishesTheRehearsalAndTouchesNothingCommitted is the
+// rehearsal a maintainer can read before spending anything.
+//
+// Folding a fake run publishes nothing, and rightly: the fake answers from the
+// corpus's own key, so its figures are a reading of this repository rather than
+// of a model. What that cost was that the only way to see how a result is
+// stored and how a page is drawn from it was to pay for a real run first. A dry
+// run sets that one rule aside and writes where nothing published can be
+// reached, which is the whole of the difference.
+func TestRun_ADryRun_PublishesTheRehearsalAndTouchesNothingCommitted(t *testing.T) {
+	root := newRoot(t)
+	before := map[string][]byte{}
+	for _, path := range pagePaths() {
+		body, err := os.ReadFile(filepath.Join(root, path)) //#nosec G304 -- a path this test just built
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		before[path] = body
+	}
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, fakeRunShard()), render: true, dryRun: true})
+	if status != exitOK {
+		t.Fatalf("the dry run exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "1 published") {
+		t.Errorf("the dry run said %q, want the fake's row published into the rehearsal", stdout)
+	}
+	if !strings.Contains(stdout, dryRunRelDir) {
+		t.Errorf("the dry run said %q, want it to name where it wrote", stdout)
+	}
+
+	// Nothing committed moved: not the pages, and no record beside them.
+	for _, path := range pagePaths() {
+		body, err := os.ReadFile(filepath.Join(root, path)) //#nosec G304 -- a path this test just built
+		if err != nil {
+			t.Fatalf("read %s back: %v", path, err)
+		}
+		if string(body) != string(before[path]) {
+			t.Errorf("the dry run edited the committed %s", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
+		t.Errorf("the dry run wrote the committed record; stat said %v", err)
+	}
+
+	// And the rehearsal is there, carrying the fake's figures and saying so.
+	scratch := filepath.Join(root, dryRunRelDir)
+	if _, err := os.Stat(filepath.Join(scratch, recordRelPath)); err != nil {
+		t.Errorf("the rehearsal has no record: %v", err)
+	}
+	page, err := os.ReadFile(filepath.Join(scratch, pageRelPath)) //#nosec G304 -- a path this command just wrote
+	if err != nil {
+		t.Fatalf("read the rehearsed page: %v", err)
+	}
+	if !strings.HasPrefix(string(page), "> **This is a rehearsal, not a measurement.**") {
+		t.Errorf("the rehearsed page does not open with the banner:\n%.200s", page)
+	}
+	if !strings.Contains(string(page), "fake:perfect") {
+		t.Errorf("the rehearsed page carries no figures from the fake run:\n%s", page)
+	}
+}
+
+// TestRun_ADryRunOfARealRun_StillRefusesWhatARealFoldWould keeps the rehearsal
+// a rehearsal of the real thing: only the fake-provider rule is set aside, so
+// shards a real fold would refuse are refused here too and a maintainer
+// rehearsing a broken run is told before they pay for one.
+func TestRun_ADryRunOfARealRun_StillRefusesWhatARealFoldWould(t *testing.T) {
+	root := newRoot(t)
+	records := publishableShard()
+	records[0].Run.Filter = "TestModelEval/MT-002"
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, records), dryRun: true})
+	if status != exitOK {
+		t.Fatalf("the dry run exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "[filtered-run]") {
+		t.Errorf("the dry run said %q, want the filtered run refused as a real fold would refuse it", stdout)
+	}
+	if !strings.Contains(stdout, "0 published") {
+		t.Errorf("the dry run said %q, want nothing published", stdout)
 	}
 }
