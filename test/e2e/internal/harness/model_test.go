@@ -73,6 +73,25 @@ func TestCallAsModel_ExecutedAction_ReturnsTheServersOwnDispatch(t *testing.T) {
 	if answer.Dispatch.Domain != "project" {
 		t.Errorf("Dispatch.Domain = %q, want project", answer.Dispatch.Domain)
 	}
+	// The three facts nothing else here reads, against a live span. The stub
+	// answers this path with a 404, so the handler returned a tool error and
+	// the server's own span says so; a scorer reading either of them as empty
+	// would read a refused call as a call that succeeded.
+	if answer.Dispatch.ErrorType != "tool_error" {
+		t.Errorf("Dispatch.ErrorType = %q, want tool_error: the stub refused the action with a 404",
+			answer.Dispatch.ErrorType)
+	}
+	if answer.Dispatch.Status != "STATUS_CODE_ERROR" {
+		t.Errorf("Dispatch.Status = %q, want STATUS_CODE_ERROR", answer.Dispatch.Status)
+	}
+	// A floor rather than an equality, because the count is one: the client
+	// spans end before the server's and are exported before it, so they have
+	// landed by the time this returns, but a batch queue that overflowed drops
+	// them silently and a run must not fail for that. Zero is the defect this
+	// catches, and it is the one that would write no count on every line.
+	if answer.Requests < 1 {
+		t.Errorf("Requests = %d, want at least the one request the handler made", answer.Requests)
+	}
 	if answer.TraceID == "" {
 		t.Error("TraceID is empty: the call carried no trace, so no span could ever be joined to it")
 	}
@@ -290,6 +309,62 @@ func TestCallAsModel_UnregisteredTool_IsAProtocolErrorWithNoDispatch(t *testing.
 	}
 }
 
+// TestDispatchFactsOf_ASpanCarryingEveryFact_CopiesEachIntoItsOwnField pins
+// the copy a live run cannot check.
+//
+// Every field here is a plausible value for every other field, so a copy taken
+// from the wrong one produces a record a reader would believe: a line naming
+// the domain as the action, or an error type that is really a refusal reason,
+// says something false about what the server did and looks like an ordinary
+// line while doing it. Distinct values are what make the swap visible, and a
+// hand-written span is what makes the assertion exact where the live tests can
+// only say what the stub happened to answer.
+func TestDispatchFactsOf_ASpanCarryingEveryFact_CopiesEachIntoItsOwnField(t *testing.T) {
+	kept := traceSpans{
+		dispatch: dispatchRecord{
+			tool:          "gitlab_execute_action",
+			action:        "issue.list",
+			domain:        "issue",
+			refusalReason: "safe_mode",
+			errorType:     "tool_error",
+			status:        "STATUS_CODE_ERROR",
+		},
+		requests: 3,
+	}
+
+	facts, requests := dispatchFactsOf(kept)
+
+	want := DispatchFacts{
+		Tool:          "gitlab_execute_action",
+		Action:        "issue.list",
+		Domain:        "issue",
+		RefusalReason: "safe_mode",
+		ErrorType:     "tool_error",
+		Status:        "STATUS_CODE_ERROR",
+	}
+	if facts != want {
+		t.Errorf("dispatchFactsOf() = %+v, want %+v", facts, want)
+	}
+	if requests != kept.requests {
+		t.Errorf("dispatchFactsOf() reports %d requests, want %d: the count is written verbatim onto every "+
+			"record line, so a zero here is a zero on every call of a run", requests, kept.requests)
+	}
+}
+
+// TestDispatchFactsOf_ASpanThatSaidNothing_IsTheZeroValue is the other half:
+// the facts of a trace the server reported nothing about are empty rather than
+// whatever a previous copy left behind.
+func TestDispatchFactsOf_ASpanThatSaidNothing_IsTheZeroValue(t *testing.T) {
+	facts, requests := dispatchFactsOf(traceSpans{})
+
+	if facts != (DispatchFacts{}) {
+		t.Errorf("dispatchFactsOf() = %+v, want the zero value", facts)
+	}
+	if requests != 0 {
+		t.Errorf("dispatchFactsOf() reports %d requests, want 0", requests)
+	}
+}
+
 // TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace checks the
 // answer for a call the server never reported on.
 //
@@ -308,10 +383,14 @@ func TestDispatchOf_NoSpanArrives_ReportsUnobservedWithinTheGrace(t *testing.T) 
 	t.Cleanup(func() { startedSpans.Store(previous) })
 	startedSpans.Store(&spanReceiver{issued: map[string]struct{}{}, seen: map[string]traceSpans{}})
 
-	// The give-up flag is what turns the budget down, and a run that has seen
-	// spans has never set it. Setting it here is the state under test, and it
-	// is left set on purpose: for the real receiver, which has observed
-	// spans, the flag changes no budget at all.
+	// The give-up flag is what turns the budget down, and it is restored for
+	// the same reason the receiver is. It is process-wide and set once: left
+	// set, every later wait on a receiver that has observed nothing takes the
+	// grace instead of the full budget, and the once-only CompareAndSwap in
+	// awaitTraces can never fire again, so a run whose telemetry breaks after
+	// this test is never told. Under -shuffle this test is not last.
+	previousGaveUp := dispatchGaveUp.Load()
+	t.Cleanup(func() { dispatchGaveUp.Store(previousGaveUp) })
 	dispatchGaveUp.Store(true)
 
 	started := time.Now()

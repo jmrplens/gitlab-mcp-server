@@ -102,8 +102,19 @@ type ModelAnswer struct {
 	// Failure is the harness's class for an unhappy answer, empty on success.
 	// It is the same judgement as Outcome in a form a caller can switch on.
 	Failure Failure
-	// Text is what the model actually read: the first text block of the
-	// result, which is where every refusal this server makes puts its reason.
+	// Text is classify's reading of the answer, which is the first text block
+	// of the result for every answer but two. It is where every refusal this
+	// server makes puts its reason, and it is the same string the record and
+	// the assertions of an ordinary call are written from.
+	//
+	// The two exceptions are why this is not documented as what the model
+	// read, which is the thing a caller reaching for it wants. A safe-mode
+	// preview has it replaced with a summary of the mutation that did not
+	// happen ("safe mode blocked gitlab_project"), and the card the model was
+	// actually shown is in Result. A JSON-RPC error leaves it empty, because
+	// there is no result to read a block out of, and the message the model was
+	// handed is Err. A caller that has to hand a model back what it read
+	// therefore reads all three fields, and never this one alone.
 	Text string
 	// Duration is how long the call took.
 	Duration time.Duration
@@ -194,6 +205,22 @@ func dispatchOf(traceID string) (facts DispatchFacts, requests int, observed boo
 	if !arrived {
 		return DispatchFacts{}, 0, false
 	}
+	facts, requests = dispatchFactsOf(kept)
+	return facts, requests, true
+}
+
+// dispatchFactsOf copies what the receiver kept about one trace into the shape
+// a caller reads.
+//
+// It is a function of its own rather than six lines inside [dispatchOf]
+// because this copy is the whole of what a scorer is ever told about what the
+// server did, and nothing in a live run notices a field taken from the wrong
+// place: a record line carrying no request count, no error type and no status
+// is a plausible line, and a run that wrote one on every call would look
+// exactly like a run of calls that reached no GitLab. A value in and a value
+// out is what lets a fixture say which span must produce which facts, the way
+// [dispatchLine] is already held to its own.
+func dispatchFactsOf(kept traceSpans) (facts DispatchFacts, requests int) {
 	return DispatchFacts{
 		Tool:          kept.dispatch.tool,
 		Action:        kept.dispatch.action,
@@ -201,5 +228,5 @@ func dispatchOf(traceID string) (facts DispatchFacts, requests int, observed boo
 		RefusalReason: kept.dispatch.refusalReason,
 		ErrorType:     kept.dispatch.errorType,
 		Status:        kept.dispatch.status,
-	}, kept.requests, true
+	}, kept.requests
 }
