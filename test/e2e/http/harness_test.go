@@ -730,11 +730,16 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	return string(out), err
 }
 
-// genericServerSettings are the settings this server reads under names generic
-// enough to belong to something else in the same shell. They are listed here
-// rather than imported because this module builds the binary rather than
-// linking it, so the list is duplicated on purpose and a name added to the
-// server without being added here only weakens the isolation, never the build.
+// genericServerSettings are the retired names this server used to read, each
+// generic enough to belong to something else in the same shell. 3.1.0 stopped
+// reading them and the prefixed spellings are covered by the GITLAB_ rule
+// below, so nothing here configures the child any more: the list stays because
+// two of these retired names now stop the server starting, and a developer who
+// still has one exported would measure nothing at all.
+//
+// They are listed rather than imported because this module builds the binary
+// rather than linking it, so the list is duplicated on purpose and a name
+// missing from it only weakens the isolation, never the build.
 var genericServerSettings = []string{
 	"AUTH_MODE", "CAPABILITY_SURFACE", "CLIENT_COMPAT", "EXCLUDE_TOOLS",
 	"LOG_LEVEL", "MAX_HTTP_CLIENTS", "META_PARAM_SCHEMA", "META_TOOLS",

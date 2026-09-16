@@ -107,8 +107,8 @@ func presentVariableCases() []presentVariableCase {
 			// but not the resource identifier oauth mode requires.
 			name: "public url and trusted origins reach the overlay",
 			env: map[string]string{
-				"PUBLIC_URL":      " https://mcp.example.com/gitlab ",
-				"TRUSTED_ORIGINS": " https://claude.ai,https://inspector.example ",
+				"GITLAB_MCP_PUBLIC_URL":      " https://mcp.example.com/gitlab ",
+				"GITLAB_MCP_TRUSTED_ORIGINS": " https://claude.ai,https://inspector.example ",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -121,7 +121,7 @@ func presentVariableCases() []presentVariableCase {
 			// for HTTP mode and read by nothing there: the overlay never
 			// carried it, so only the flag admitted an application.
 			name: "oauth client uid reaches the overlay verbatim",
-			env:  map[string]string{"OAUTH_CLIENT_UID": " 12ab, 34cd "},
+			env:  map[string]string{"GITLAB_MCP_OAUTH_CLIENT_UID": " 12ab, 34cd "},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "OAuthClientUID", o.OAuthClientUID, "12ab, 34cd")
@@ -129,7 +129,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "tool surface resolves the canonical selector",
-			env:  map[string]string{"TOOL_SURFACE": ToolSurfaceMeta},
+			env:  map[string]string{"GITLAB_MCP_TOOL_SURFACE": ToolSurfaceMeta},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "ToolSurface", o.ToolSurface, ToolSurfaceMeta)
@@ -137,7 +137,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "capability surface",
-			env:  map[string]string{"CAPABILITY_SURFACE": CapabilitySurfaceMinimal},
+			env:  map[string]string{"GITLAB_MCP_CAPABILITY_SURFACE": CapabilitySurfaceMinimal},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "CapabilitySurface", o.CapabilitySurface, CapabilitySurfaceMinimal)
@@ -145,7 +145,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "meta param schema",
-			env:  map[string]string{"META_PARAM_SCHEMA": MetaParamSchemaCompact},
+			env:  map[string]string{"GITLAB_MCP_META_PARAM_SCHEMA": MetaParamSchemaCompact},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "MetaParamSchema", o.MetaParamSchema, MetaParamSchemaCompact)
@@ -173,7 +173,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "exclude tools is carried verbatim for the flag layer to split",
-			env:  map[string]string{"EXCLUDE_TOOLS": "gitlab_runner,gitlab_geo"},
+			env:  map[string]string{"GITLAB_MCP_EXCLUDE_TOOLS": "gitlab_runner,gitlab_geo"},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "ExcludeTools", o.ExcludeTools, "gitlab_runner,gitlab_geo")
@@ -182,11 +182,11 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "booleans",
 			env: map[string]string{
-				"GITLAB_MCP_SKIP_TLS_VERIFY": "true",
-				"GITLAB_MCP_READ_ONLY":       "true",
-				"GITLAB_MCP_SAFE_MODE":       "true",
-				"EMBEDDED_RESOURCES":         "false",
-				"GITLAB_MCP_IGNORE_SCOPES":   "true",
+				"GITLAB_MCP_SKIP_TLS_VERIFY":    "true",
+				"GITLAB_MCP_READ_ONLY":          "true",
+				"GITLAB_MCP_SAFE_MODE":          "true",
+				"GITLAB_MCP_EMBEDDED_RESOURCES": "false",
+				"GITLAB_MCP_IGNORE_SCOPES":      "true",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -200,12 +200,12 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "pool limits",
 			env: map[string]string{
-				"MAX_HTTP_CLIENTS":            "250",
-				"SESSION_TIMEOUT":             "10m",
-				"POOL_IDLE_TIMEOUT":           "6h",
-				"SESSION_REVALIDATE_INTERVAL": "5m",
-				"ACTION_TIMEOUT":              "20m",
-				"DRAIN_DELAY":                 "5s",
+				"GITLAB_MCP_MAX_HTTP_CLIENTS":            "250",
+				"GITLAB_MCP_SESSION_TIMEOUT":             "10m",
+				"GITLAB_MCP_POOL_IDLE_TIMEOUT":           "6h",
+				"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL": "5m",
+				"GITLAB_MCP_ACTION_TIMEOUT":              "20m",
+				"GITLAB_MCP_DRAIN_DELAY":                 "5s",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -222,8 +222,8 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "zero disables the two settings documented as disableable",
 			env: map[string]string{
-				"POOL_IDLE_TIMEOUT":           "0",
-				"SESSION_REVALIDATE_INTERVAL": "0",
+				"GITLAB_MCP_POOL_IDLE_TIMEOUT":           "0",
+				"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL": "0",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -234,7 +234,7 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "an explicit zero drain delay closes the listener at once",
 			env: map[string]string{
-				"DRAIN_DELAY": "0",
+				"GITLAB_MCP_DRAIN_DELAY": "0",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -244,10 +244,10 @@ func presentVariableCases() []presentVariableCase {
 		{
 			name: "auth and rate limiting",
 			env: map[string]string{
-				"AUTH_MODE":        "oauth",
-				"OAUTH_CACHE_TTL":  "30m",
-				"RATE_LIMIT_RPS":   "12.5",
-				"RATE_LIMIT_BURST": "80",
+				"GITLAB_MCP_AUTH_MODE":        "oauth",
+				"GITLAB_MCP_OAUTH_CACHE_TTL":  "30m",
+				"GITLAB_MCP_RATE_LIMIT_RPS":   "12.5",
+				"GITLAB_MCP_RATE_LIMIT_BURST": "80",
 			},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
@@ -263,7 +263,7 @@ func presentVariableCases() []presentVariableCase {
 		},
 		{
 			name: "whitespace counts as absent",
-			env:  map[string]string{"AUTH_MODE": "   "},
+			env:  map[string]string{"GITLAB_MCP_AUTH_MODE": "   "},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				if o.AuthMode != nil {
@@ -283,31 +283,33 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		value   string
 		wantMsg string
 	}{
-		{"TOOL_SURFACE", "bogus", "TOOL_SURFACE"},
-		{"CAPABILITY_SURFACE", "bogus", "CAPABILITY_SURFACE"},
-		{"META_PARAM_SCHEMA", "bogus", "META_PARAM_SCHEMA"},
-		// The renamed switches, under both spellings: the message names the
-		// canonical variable either way, since that is the one to fix.
-		{"GITLAB_TIER", "bogus", "GITLAB_MCP_TIER"},
+		// wantMsg is the setting's name rather than the variable's for the
+		// parsers shared with the flag layer: --tool-surface reaches the same
+		// message, and naming an environment variable there would be wrong.
+		{"GITLAB_MCP_TOOL_SURFACE", "bogus", "TOOL_SURFACE"},
+		{"GITLAB_MCP_CAPABILITY_SURFACE", "bogus", "CAPABILITY_SURFACE"},
+		{"GITLAB_MCP_META_PARAM_SCHEMA", "bogus", "META_PARAM_SCHEMA"},
+		// The renamed switches used to be listed twice here, once under each
+		// spelling, because both were read. 3.1.0 reads one, so the retired
+		// spelling of each is gone from this table: a bogus value under it is
+		// not an invalid value any more, it is a variable nobody consults.
 		{"GITLAB_MCP_TIER", "bogus", "GITLAB_MCP_TIER"},
-		{"GITLAB_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
 		{"GITLAB_MCP_SKIP_TLS_VERIFY", "bogus", "GITLAB_MCP_SKIP_TLS_VERIFY"},
-		{"GITLAB_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},
 		{"GITLAB_MCP_READ_ONLY", "bogus", "GITLAB_MCP_READ_ONLY"},
 		{"GITLAB_MCP_SAFE_MODE", "bogus", "GITLAB_MCP_SAFE_MODE"},
 		{"GITLAB_MCP_IGNORE_SCOPES", "bogus", "GITLAB_MCP_IGNORE_SCOPES"},
-		{"MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
-		{"SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
-		{"POOL_IDLE_TIMEOUT", "bogus", "POOL_IDLE_TIMEOUT"},
-		{"SESSION_REVALIDATE_INTERVAL", "bogus", "SESSION_REVALIDATE_INTERVAL"},
-		{"OAUTH_CACHE_TTL", "bogus", "OAUTH_CACHE_TTL"},
-		{"RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
-		{"RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
-		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
-		{"ACTION_TIMEOUT", "bogus", "ACTION_TIMEOUT"},
-		{"ACTION_TIMEOUT", "48h", "exceeds maximum"},
-		{"DRAIN_DELAY", "bogus", "DRAIN_DELAY"},
-		{"DRAIN_DELAY", "10m", "exceeds maximum"},
+		{"GITLAB_MCP_MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
+		{"GITLAB_MCP_SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
+		{"GITLAB_MCP_POOL_IDLE_TIMEOUT", "bogus", "POOL_IDLE_TIMEOUT"},
+		{"GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "bogus", "SESSION_REVALIDATE_INTERVAL"},
+		{"GITLAB_MCP_OAUTH_CACHE_TTL", "bogus", "OAUTH_CACHE_TTL"},
+		{"GITLAB_MCP_RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
+		{"GITLAB_MCP_RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
+		{"GITLAB_MCP_POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
+		{"GITLAB_MCP_ACTION_TIMEOUT", "bogus", "ACTION_TIMEOUT"},
+		{"GITLAB_MCP_ACTION_TIMEOUT", "48h", "exceeds maximum"},
+		{"GITLAB_MCP_DRAIN_DELAY", "bogus", "DRAIN_DELAY"},
+		{"GITLAB_MCP_DRAIN_DELAY", "10m", "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
@@ -338,7 +340,7 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 // would duplicate the rule in two places.
 func TestLoadHTTPEnvOverlay_AuthModeIsValidatedDownstream(t *testing.T) {
 	clearOverlayEnv(t)
-	t.Setenv("AUTH_MODE", "bogus")
+	t.Setenv("GITLAB_MCP_AUTH_MODE", "bogus")
 
 	overlay, err := LoadHTTPEnvOverlay()
 	if err != nil {
@@ -353,8 +355,8 @@ func TestLoadHTTPEnvOverlay_AuthModeIsValidatedDownstream(t *testing.T) {
 // is the mode that triggered it.
 func TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors(t *testing.T) {
 	clearOverlayEnv(t)
-	t.Setenv("AUTH_MODE", "oauth")
-	t.Setenv("OAUTH_CACHE_TTL", "bogus")
+	t.Setenv("GITLAB_MCP_AUTH_MODE", "oauth")
+	t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "bogus")
 
 	if _, err := LoadHTTPEnvOverlay(); err == nil {
 		t.Error("LoadHTTPEnvOverlay() error = nil, want the invalid TTL to fail the load")
@@ -365,25 +367,19 @@ func TestLoadHTTPEnvOverlay_AuthModeSurfacesCacheTTLErrors(t *testing.T) {
 // what it sets and the developer's own environment cannot leak into a result.
 func clearOverlayEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{
-		"GITLAB_URL", "GITLAB_SKIP_TLS_VERIFY", "TOOL_SURFACE", "META_TOOLS",
-		"CAPABILITY_SURFACE", "META_PARAM_SCHEMA", "GITLAB_TIER", "GITLAB_ENTERPRISE",
-		"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE", "EMBEDDED_RESOURCES",
-		"GITLAB_IGNORE_SCOPES", "EXCLUDE_TOOLS", "MAX_HTTP_CLIENTS",
-		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
-		"ACTION_TIMEOUT", "DRAIN_DELAY",
-		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL", "OAUTH_CLIENT_UID",
-		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
-	} {
+	// Derived from the list rather than restated, so a setting added there
+	// cannot leave a value of the developer's own standing in a case that
+	// claims the variable is unset. The hand-written list this replaced still
+	// named META_TOOLS and GITLAB_ENTERPRISE, which 3.0.0 removed.
+	for _, name := range append(PrefixedEnvNames(), "GITLAB_URL") {
 		// t.Setenv registers the restore; unsetting afterwards makes the
 		// variable genuinely absent rather than present-and-empty, which is
 		// the state these tests claim to exercise.
 		//
-		// Both spellings: the prefixed one wins when both are set, so a
-		// GITLAB_MCP_* value exported by the developer would override the
-		// bare-name fixture a case sets and fail it for a reason outside the
-		// test.
-		for _, spelling := range []string{name, EnvPrefix + name} {
+		// Both spellings: only the prefixed one is read, and the retired one
+		// is cleared because a case that asserts nothing was reported would
+		// otherwise be answered by a report about the developer's shell.
+		for _, spelling := range []string{RetiredEnvName(name), EnvPrefix + name} {
 			t.Setenv(spelling, "")
 			if err := os.Unsetenv(spelling); err != nil {
 				t.Fatalf("unset %s: %v", spelling, err)

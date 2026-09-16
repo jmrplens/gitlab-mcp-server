@@ -683,9 +683,9 @@ func writeJSON(w http.ResponseWriter, body string) {
 // that looks real.
 func baseEnv(gitlabURL string) map[string]string {
 	return map[string]string{
-		"GITLAB_URL":   gitlabURL,
-		"GITLAB_TOKEN": "glpat-stdio-e2e-token",
-		"LOG_LEVEL":    "info",
+		"GITLAB_URL":           gitlabURL,
+		"GITLAB_TOKEN":         "glpat-stdio-e2e-token",
+		"GITLAB_MCP_LOG_LEVEL": "info",
 	}
 }
 

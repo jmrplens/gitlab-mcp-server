@@ -67,7 +67,7 @@ func TestCollectorLogs_TheAnnouncedSignalActuallyProducesSomething(t *testing.T)
 func TestCollectorLogs_DebugRecordsAreNotExported(t *testing.T) {
 	c := startCollector(t)
 	env := collectorEnv(c)
-	env["LOG_LEVEL"] = "debug"
+	env["GITLAB_MCP_LOG_LEVEL"] = "debug"
 	env["OTEL_BLRP_SCHEDULE_DELAY"] = "100"
 	srv := startServer(t, env)
 

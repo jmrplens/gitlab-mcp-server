@@ -46,7 +46,7 @@ func TestEnvBackedFlags_APassedFlagBeatsTheEnvironment(t *testing.T) {
 	// makes that write revert with this test instead of leaking a log level
 	// into every later test in the package.
 	t.Setenv(config.EnvPrefix+"LOG_LEVEL", "")
-	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("GITLAB_MCP_LOG_LEVEL", "debug")
 
 	registerEnvBackedFlags()
 	if err := flag.CommandLine.Parse([]string{"-log-level=error"}); err != nil {
@@ -69,10 +69,10 @@ func TestEnvBackedFlags_APassedFlagBeatsTheEnvironment(t *testing.T) {
 // compatibility mode, and with the upload limit back to its default.
 func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 	withFreshFlagSet(t)
-	t.Setenv("LOG_LEVEL", "debug")
-	t.Setenv("CLIENT_COMPAT", "off")
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "1048576")
-	t.Setenv("YOLO_MODE", "true")
+	t.Setenv("GITLAB_MCP_LOG_LEVEL", "debug")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "off")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "1048576")
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 
 	registerEnvBackedFlags()
 	if err := flag.CommandLine.Parse(nil); err != nil {
@@ -81,10 +81,10 @@ func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 	applyEnvBackedFlags()
 
 	for name, want := range map[string]string{
-		"LOG_LEVEL":            "debug",
-		"CLIENT_COMPAT":        "off",
-		"UPLOAD_MAX_FILE_SIZE": "1048576",
-		"YOLO_MODE":            "true",
+		"GITLAB_MCP_LOG_LEVEL":            "debug",
+		"GITLAB_MCP_CLIENT_COMPAT":        "off",
+		"GITLAB_MCP_UPLOAD_MAX_FILE_SIZE": "1048576",
+		"GITLAB_MCP_YOLO_MODE":            "true",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := os.Getenv(name); got != want {

@@ -29,7 +29,7 @@ func envFileNaming(t *testing.T, gitlabURL string) string {
 // reaches.
 func TestEnvFileFlag_NamesTheFileToLoad(t *testing.T) {
 	genuine := startFakeGitLab(t)
-	s := startSessionWithArgs(t, map[string]string{"LOG_LEVEL": "info"}, "--env-file="+envFileNaming(t, genuine.URL))
+	s := startSessionWithArgs(t, map[string]string{"GITLAB_MCP_LOG_LEVEL": "info"}, "--env-file="+envFileNaming(t, genuine.URL))
 
 	called := s.call(t, request(1, "tools/call",
 		`{"name":"gitlab_execute_action","arguments":{"action":"user.current","params":{}}}`))
@@ -49,7 +49,7 @@ func TestEnvFileFlag_WinsOverTheVariable(t *testing.T) {
 	genuine := startFakeGitLab(t)
 	impostor := startEnvFileImpostor(t)
 	s := startSessionWithArgs(t,
-		map[string]string{"LOG_LEVEL": "info", "GITLAB_MCP_ENV_FILE": envFileNaming(t, impostor.URL)},
+		map[string]string{"GITLAB_MCP_LOG_LEVEL": "info", "GITLAB_MCP_ENV_FILE": envFileNaming(t, impostor.URL)},
 		"--env-file="+envFileNaming(t, genuine.URL))
 
 	called := s.call(t, request(1, "tools/call",

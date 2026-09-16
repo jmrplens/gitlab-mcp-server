@@ -63,7 +63,7 @@ func TestRealCollector_EverySurfaceResolvesTheAction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := startCollector(t)
 			env := telemetryEnv(c)
-			env["TOOL_SURFACE"] = tc.surface
+			env["GITLAB_MCP_TOOL_SURFACE"] = tc.surface
 			// Pinned, so the individual case tests the resolver rather than the
 			// auto policy's decision to drop the attribute on that surface.
 			env["GITLAB_MCP_TELEMETRY_TOOL_NAME"] = "on"
@@ -117,7 +117,7 @@ func TestRealCollector_EverySurfaceResolvesTheAction(t *testing.T) {
 func TestRealCollector_IndividualSurfaceDropsTheNameFromMetricsByDefault(t *testing.T) {
 	c := startCollector(t)
 	env := telemetryEnv(c)
-	env["TOOL_SURFACE"] = "individual"
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
 	srv := startServer(t, env, "--gitlab-url="+startFakeGitLab(t))
 
 	for i := range 3 {

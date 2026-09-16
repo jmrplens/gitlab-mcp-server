@@ -52,6 +52,9 @@ func TestConfigFreeEnviron_DropsEverythingThisServerReads(t *testing.T) {
 	t.Setenv("GITLAB_MCP_TOOL_SURFACE", "individual")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.invalid")
 	t.Setenv("OTEL_SDK_DISABLED", "true")
+	// The retired spelling on purpose: it configures nothing now, and a
+	// developer who still has it exported would stop the measured process
+	// starting rather than misconfigure it, so it has to be stripped too.
 	t.Setenv("TOOL_SURFACE", "meta")
 	t.Setenv("BENCH_RESOURCES_KEEP_ME", "kept")
 
@@ -74,12 +77,13 @@ func TestConfigFreeEnviron_DropsEverythingThisServerReads(t *testing.T) {
 		}
 	})
 
-	// The old spellings are the ones nobody would think to strip by hand, so
-	// check the whole list rather than the one spelled out above; for the
-	// settings that already carried GITLAB_, the old spelling is that name
-	// and not the bare suffix.
+	// The retired spellings are the ones nobody would think to strip by hand,
+	// so check the whole list rather than the one spelled out above; for the
+	// settings that already carried GITLAB_, the retired spelling is that name
+	// and not the bare suffix. Two of them would stop the child starting at
+	// all, which is why this matters more now than when they were merely read.
 	for _, name := range config.PrefixedEnvNames() {
-		old := config.LegacyEnvName(name)
+		old := config.RetiredEnvName(name)
 		t.Run("drops the old spelling "+old, func(t *testing.T) {
 			t.Setenv(old, "set-by-the-developer")
 			if _, ok := envValue(configFreeEnviron(), old); ok {

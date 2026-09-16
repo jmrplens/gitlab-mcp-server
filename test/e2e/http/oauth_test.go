@@ -449,10 +449,10 @@ func TestOAuth_RequiresPublicURL(t *testing.T) {
 func TestOAuth_ConfigurableFromTheEnvironmentAlone(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 	srv := startServer(t, map[string]string{
-		"AUTH_MODE":       "oauth",
-		"GITLAB_URL":      gitlab.url,
-		"PUBLIC_URL":      publicURL,
-		"TRUSTED_ORIGINS": trustedOrigin,
+		"GITLAB_MCP_AUTH_MODE":       "oauth",
+		"GITLAB_URL":                 gitlab.url,
+		"GITLAB_MCP_PUBLIC_URL":      publicURL,
+		"GITLAB_MCP_TRUSTED_ORIGINS": trustedOrigin,
 	})
 
 	got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})

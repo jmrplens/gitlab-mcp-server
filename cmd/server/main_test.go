@@ -2684,7 +2684,7 @@ func TestRunStdio_ClientAndShellFailures_AreReportedBeforeServing(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", gitlab.URL)
 			t.Setenv("GITLAB_TOKEN", testToken)
-			t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+			t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
 			tc.arrange(t)
 
 			err := runStdio(t.Context())
@@ -2705,7 +2705,7 @@ func TestRunStdio_ACatalogThatCannotBeBuilt_StopsTheServer(t *testing.T) {
 	gitlab := newMockGitLabServer(t)
 	t.Setenv("GITLAB_URL", gitlab.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
 	forced := failDynamicCatalog(t, nil)
 	heldOpenStdin(t)
 
@@ -2753,7 +2753,7 @@ func TestRunStdio_StartupOutlivingTheClient_IsCutOffAtTheDrain(t *testing.T) {
 	gitlab := newMockGitLabServer(t)
 	t.Setenv("GITLAB_URL", gitlab.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
 	restoreDrain := stdioStartupDrainTimeout
 	stdioStartupDrainTimeout = time.Millisecond
 	t.Cleanup(func() { stdioStartupDrainTimeout = restoreDrain })
@@ -7490,7 +7490,7 @@ func TestRateLimit_HTTPModeLimitsToolCallsByDefault(t *testing.T) {
 func TestRateLimit_StdioLeavesItOffUnlessAsked(t *testing.T) {
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "glpat-whatever")
-	t.Setenv("RATE_LIMIT_RPS", "")
+	t.Setenv("GITLAB_MCP_RATE_LIMIT_RPS", "")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -8050,9 +8050,9 @@ func TestUploadMaxFileSize_HTTPMode_HonorsTheSetting(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Cleared first, so the "unset" case tests an absent variable
 			// rather than whatever the developer's shell happens to export.
-			t.Setenv("UPLOAD_MAX_FILE_SIZE", "")
+			t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "")
 			if tc.set {
-				t.Setenv("UPLOAD_MAX_FILE_SIZE", tc.value)
+				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", tc.value)
 			}
 			if got := uploadMaxFileSize(); got != tc.want {
 				t.Errorf("uploadMaxFileSize() = %d, want %d", got, tc.want)
@@ -8329,7 +8329,7 @@ func TestCreateServer_ClientCompatMiddlewareWiring(t *testing.T) {
 // TestCreateServer_ClientCompatKillSwitch verifies CLIENT_COMPAT=off skips
 // the middleware install, so even Codex sessions keep the float priorities.
 func TestCreateServer_ClientCompatKillSwitch(t *testing.T) {
-	t.Setenv("CLIENT_COMPAT", "off")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "off")
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic})
 
@@ -8504,10 +8504,10 @@ func TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.value == "" {
-				t.Setenv("UPLOAD_MAX_FILE_SIZE", "")
+				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "")
 				os.Unsetenv("UPLOAD_MAX_FILE_SIZE")
 			} else {
-				t.Setenv("UPLOAD_MAX_FILE_SIZE", tt.value)
+				t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", tt.value)
 			}
 
 			if got := uploadMaxFileSize(); got != tt.want {
@@ -8851,7 +8851,7 @@ func TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses(t *test
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("TOOL_SURFACE", tt.envSurface)
+			t.Setenv("GITLAB_MCP_TOOL_SURFACE", tt.envSurface)
 
 			if got := resolveToolSurfaceForTelemetry(tt.hcfg); got != tt.want {
 				t.Errorf("resolveToolSurfaceForTelemetry = %q, want %q", got, tt.want)
@@ -9059,7 +9059,7 @@ func TestRunHTTP_RefusesABadConfigurationBeforeBinding(t *testing.T) {
 	}{
 		{
 			name:    "an environment value that does not parse",
-			env:     map[string]string{"CAPABILITY_SURFACE": "some"},
+			env:     map[string]string{"GITLAB_MCP_CAPABILITY_SURFACE": "some"},
 			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com"},
 			wantErr: "loading environment configuration",
 		},
@@ -9347,8 +9347,8 @@ func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
 	gitlab := newMockGitLabServerWithUser(t)
 	t.Setenv("GITLAB_URL", gitlab.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
-	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
-	t.Setenv("LOG_LEVEL", "error")
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("GITLAB_MCP_LOG_LEVEL", "error")
 
 	originalArgs := os.Args
 	os.Args = []string{"gitlab-mcp-server"}
@@ -10347,14 +10347,23 @@ func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *t
 // updates itself into 3.0.0 with nobody reading a release note. A warning that
 // names the wrong release is worse than none, so it is pinned here as well as
 // where the text is built.
-func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
+// TestReportRetiredEnvNames_WarnsAndKeepsStarting verifies that an ordinary
+// retired name is reported through the configured logger and does not stop
+// startup, and that the retired name is genuinely no longer read.
+//
+// The second half is the one worth pinning: the warning would be just as
+// convincing if the value were still being honored, which is exactly the state
+// this release leaves behind.
+func TestReportRetiredEnvNames_WarnsAndKeepsStarting(t *testing.T) {
 	// The prefixed name is cleared rather than assumed absent: another test in
 	// this package passes -log-level, and that flag writes the prefixed
 	// spelling into the process environment.
 	os.Unsetenv(config.EnvPrefix + "LOG_LEVEL")
+	// The retired spelling on purpose: what is under test is that setting it
+	// configures nothing and is reported rather than obeyed.
 	t.Setenv("LOG_LEVEL", "warn")
-	if got := config.Getenv("LOG_LEVEL"); got != "warn" {
-		t.Fatalf("config.Getenv(%q) = %q, want the deprecated name to be read", "LOG_LEVEL", got)
+	if got := config.Getenv("LOG_LEVEL"); got != "" {
+		t.Fatalf("config.Getenv(%q) = %q, want the retired name to be read by nothing", "LOG_LEVEL", got)
 	}
 
 	var logged bytes.Buffer
@@ -10362,12 +10371,43 @@ func TestLogDeprecatedEnvNames_WarnsThroughTheConfiguredLogger(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 
-	logDeprecatedEnvNames()
+	if !reportRetiredEnvNames() {
+		t.Error("reportRetiredEnvNames() = false for a name that only reconfigures, want startup to continue")
+	}
 
 	for _, want := range []string{"LOG_LEVEL", config.EnvPrefix + "LOG_LEVEL", "3.1.0"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(logged.String(), want) {
-				t.Errorf("the startup warning does not mention %q: %s", want, logged.String())
+				t.Errorf("the startup report does not mention %q: %s", want, logged.String())
+			}
+		})
+	}
+}
+
+// TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired verifies that a
+// deployment still carrying GITLAB_READ_ONLY or GITLAB_SAFE_MODE is refused
+// rather than started.
+//
+// Both of those take capability away, and a version that stopped reading one
+// without saying so would serve writes on a deployment whose whole
+// configuration was the request not to. A warning is the wrong answer because
+// the deployments most likely to still carry these are the unattended ones,
+// where nobody reads stderr.
+func TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired(t *testing.T) {
+	for _, retired := range []string{"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE"} {
+		t.Run(retired, func(t *testing.T) {
+			t.Setenv(retired, "true")
+
+			var logged bytes.Buffer
+			previous := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+			if reportRetiredEnvNames() {
+				t.Fatalf("reportRetiredEnvNames() = true with %s set, want startup refused", retired)
+			}
+			if !strings.Contains(logged.String(), retired) {
+				t.Errorf("the refusal does not name %s: %s", retired, logged.String())
 			}
 		})
 	}

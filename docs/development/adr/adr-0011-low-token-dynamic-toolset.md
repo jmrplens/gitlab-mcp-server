@@ -14,7 +14,7 @@ superseded_by: "ADR-0014 for catalog source and compatibility ownership"
 
 Status: Accepted.
 
-**Update (2026-09)**: the mode is the default. `config.DefaultToolSurface` is `dynamic`, so a configuration that sets neither `GITLAB_MCP_TOOL_SURFACE` nor the legacy `GITLAB_MCP_META_TOOLS` gets the two-tool surface; the "explicit configuration flag" below describes the rollout as it started. [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) refined the catalog source the mode reads from.
+**Update (2026-09)**: the mode is the default. `config.DefaultToolSurface` is `dynamic`, so a configuration that does not set `GITLAB_MCP_TOOL_SURFACE` gets the two-tool surface (the legacy `GITLAB_MCP_META_TOOLS` fallback described below was removed in 3.0.0); the "explicit configuration flag" below describes the rollout as it started. [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) refined the catalog source the mode reads from.
 
 ## Context
 

@@ -188,7 +188,11 @@ func TestDockerEnterpriseRuntime_DetectsEditionPresetAndEnvironment(t *testing.T
 		{name: "enterprise preset", opts: options{Preset: presetDockerEnterpriseRead}, want: true},
 		{name: "tier ultimate", env: map[string]string{"GITLAB_MCP_TIER": "ultimate"}, want: true},
 		{name: "tier free", env: map[string]string{"GITLAB_MCP_TIER": "free"}, want: false},
-		{name: "tier ultimate under the old spelling", env: map[string]string{"GITLAB_TIER": "ultimate"}, want: true},
+		// The retired spelling decided this until 3.1.0 removed it. Kept as the
+		// opposite claim, because an evaluation silently measuring the Free
+		// surface while its operator believes they pinned Ultimate is a run
+		// whose numbers are wrong in a way nothing else here would catch.
+		{name: "the retired tier spelling decides nothing", env: map[string]string{"GITLAB_TIER": "ultimate"}, want: false},
 		{name: "legacy enterprise toggle", env: map[string]string{"GITLAB_ENTERPRISE": "true"}, want: true},
 		{name: "ee image", env: map[string]string{"GITLAB_IMAGE": "gitlab/gitlab-ee:latest"}, want: true},
 		{name: "eval ee image", env: map[string]string{"EVAL_DOCKER_GITLAB_IMAGE": "gitlab/gitlab-ee:16"}, want: true},

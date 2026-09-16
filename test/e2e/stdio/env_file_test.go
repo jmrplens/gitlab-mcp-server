@@ -189,8 +189,8 @@ func TestWorkingDirEnvFile_HostileDotenvConfiguresNothing(t *testing.T) {
 	dir, _, description := envFileHostileDir(t, impostor.URL)
 
 	s := startSessionInDir(t, dir, map[string]string{
-		"HOME":      envFileHome(t, genuine.URL),
-		"LOG_LEVEL": "info",
+		"HOME":                 envFileHome(t, genuine.URL),
+		"GITLAB_MCP_LOG_LEVEL": "info",
 	})
 
 	listed := s.call(t, request(1, "tools/list", ""))
@@ -241,8 +241,8 @@ func TestWorkingDirEnvFile_IgnoredFileIsAnnouncedByAbsolutePath(t *testing.T) {
 	dir, envPath, _ := envFileHostileDir(t, startEnvFileImpostor(t).URL)
 
 	s := startSessionInDir(t, dir, map[string]string{
-		"HOME":      envFileHome(t, genuine.URL),
-		"LOG_LEVEL": "info",
+		"HOME":                 envFileHome(t, genuine.URL),
+		"GITLAB_MCP_LOG_LEVEL": "info",
 	})
 	// One completed exchange, so the startup logging has certainly been
 	// written by the time stderr is read; not necessarily copied into the

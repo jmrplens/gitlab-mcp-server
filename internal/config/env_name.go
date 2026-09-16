@@ -1,11 +1,9 @@
 package config
 
 import (
-	"maps"
 	"os"
 	"slices"
 	"strings"
-	"sync"
 )
 
 // EnvPrefix is what every variable this project defines is named with from
@@ -18,15 +16,20 @@ import (
 // given and behaves in a way nobody configured.
 const EnvPrefix = "GITLAB_MCP_"
 
-// prefixedNames are the variables that gained EnvPrefix in 2.8.0 and still
-// answer to their old name. The old spelling is removed in 3.1.0.
+// prefixedNames are the variables this project defines, named without their
+// prefix. Each is read as EnvPrefix + the name and under no other spelling.
 //
-// It was to have gone in 3.0.0, the release that renumbers when client-go
-// does, and it was held back one release on purpose: 2.7.5 still carries a
-// self-updater and 3.0.0 does not, so a 2.7.5 deployment updates itself into
-// 3.0.0 without anyone reading a release note. Removing the old spellings in
-// the release that arrives unannounced would break those deployments in
-// silence. 3.1.0 is the first version nobody is carried into.
+// They gained the prefix in 2.8.0 and answered to their old name as well until
+// 3.1.0, which removes it. The removal was held back from 3.0.0 on purpose:
+// 2.7.5 still carries a self-updater and 3.0.0 does not, so a 2.7.5 deployment
+// updates itself into 3.0.0 without anyone reading a release note, and taking
+// the old spellings away in the release that arrives unannounced would have
+// broken those deployments in silence. 3.1.0 is the first version nobody is
+// carried into.
+//
+// What is left of the old spellings is [RetiredEnvUses], which finds them in
+// the environment so that a deployment still setting one is told rather than
+// quietly reconfigured.
 //
 // Every variable this server defines is on this list; the rule has no
 // exception for a name that already began with GITLAB_. Two names stay bare
@@ -68,11 +71,11 @@ var prefixedNames = []string{
 	"YOLO_MODE",
 }
 
-// legacyNames spells the old name of the settings whose old name was not the
-// bare suffix. The first batch dropped a generic name to a prefixed one
+// retiredNames spells the removed name of the settings whose old name was not
+// the bare suffix. The first batch dropped a generic name to a prefixed one
 // (TOOL_SURFACE to GITLAB_MCP_TOOL_SURFACE); these carried a GITLAB_ of their
-// own, and the fallback has to look for that spelling rather than for TIER.
-var legacyNames = map[string]string{
+// own, so the name to look for is that spelling rather than TIER.
+var retiredNames = map[string]string{
 	"IGNORE_SCOPES":   "GITLAB_IGNORE_SCOPES",
 	"READ_ONLY":       "GITLAB_READ_ONLY",
 	"SAFE_MODE":       "GITLAB_SAFE_MODE",
@@ -80,118 +83,73 @@ var legacyNames = map[string]string{
 	"TIER":            "GITLAB_TIER",
 }
 
-// LegacyEnvName returns the spelling a setting answered to before it gained
+// RetiredEnvName returns the spelling a setting answered to before it gained
 // EnvPrefix: the bare suffix for most, a GITLAB_-prefixed name for the ones
-// that already had one.
-func LegacyEnvName(name string) string {
-	if legacy, ok := legacyNames[name]; ok {
-		return legacy
+// that already had one. Nothing reads a setting under it any more.
+func RetiredEnvName(name string) string {
+	if retired, ok := retiredNames[name]; ok {
+		return retired
 	}
 	return name
 }
 
-// deprecatedEnvUses records, once per unprefixed name actually read, that the
-// old spelling was the value's source. The warning is emitted once at startup
-// rather than at each read, because several of these are consulted more than
-// once and a per-read warning would say the same thing four times.
+// protectionNames are the settings an operator sets to take capability away
+// from a deployment, and the reason [RetiredEnvUses] splits its answer.
 //
-// It is a typed map behind a mutex rather than a [sync.Map] because every key
-// this package stores is a setting name and every value one of two kinds: the
-// any-typed alternative bought nothing here but two assertions whose false
-// branch no input could reach, and the map is written a handful of times at
-// startup, where lock contention is not a consideration.
-var (
-	deprecatedEnvMu   sync.Mutex
-	deprecatedEnvUses = map[string]envUseKind{}
-)
+// Ignoring any retired name reconfigures a deployment that did not ask to be
+// reconfigured, but these two decide whether a tool call may write. A
+// deployment carrying GITLAB_READ_ONLY=true and nothing else has asked to serve
+// reads, and a version that silently stops reading that variable serves writes
+// instead. There is no warning quiet enough to be the right answer to that,
+// because the deployments most likely to be running unattended are exactly the
+// ones nobody is reading stderr for.
+var protectionNames = map[string]struct{}{
+	"READ_ONLY": {},
+	"SAFE_MODE": {},
+}
 
-// Getenv reads a setting under its prefixed name, falling back to the
-// unprefixed one and recording that it did.
+// RetiredEnvUses reports the retired spellings present in this environment,
+// split by what ignoring one would cost: refuse names a setting whose absence
+// would leave the deployment able to do more than it was configured for, and
+// warn names the rest.
 //
-// The prefixed name wins when both are set, and that case is recorded too:
-// an operator who set both has one of them doing nothing, which is worth
-// saying out loud rather than resolving in silence.
+// It reads the environment rather than what was consulted, which is the
+// opposite of what the deprecation warning it replaces did. That warning could
+// report only what had been read, because reading was still happening. Nothing
+// reads these now, so the only moment they can be noticed is this one.
+func RetiredEnvUses() (refuse, warn []string) {
+	for _, name := range prefixedNames {
+		retired := RetiredEnvName(name)
+		if _, set := os.LookupEnv(retired); !set {
+			continue
+		}
+		line := retired + " is no longer read (removed in 3.1.0): rename it to " + EnvPrefix + name
+		if _, protects := protectionNames[name]; protects {
+			refuse = append(refuse, line)
+			continue
+		}
+		warn = append(warn, line)
+	}
+	return refuse, warn
+}
+
+// Getenv reads a setting under its prefixed name, and under that name alone.
 //
 // A name outside [prefixedNames] is read verbatim, so this is safe to use for
-// GITLAB_URL, GITLAB_TOKEN and anything else that never gained a prefix.
+// GITLAB_URL, GITLAB_TOKEN and anything else that never gained a prefix. That
+// is the whole of what the list decides now: whether a name is one this
+// project defines, and therefore carries EnvPrefix, or somebody else's.
 func Getenv(name string) string {
 	if !slices.Contains(prefixedNames, name) {
 		return os.Getenv(name)
 	}
-
-	prefixed, prefixedSet := os.LookupEnv(EnvPrefix + name)
-	legacy, legacySet := os.LookupEnv(LegacyEnvName(name))
-
-	switch {
-	case prefixedSet && legacySet:
-		recordDeprecatedEnvUse(name, bothSet)
-		return prefixed
-	case prefixedSet:
-		return prefixed
-	case legacySet:
-		recordDeprecatedEnvUse(name, legacyOnly)
-		return legacy
-	default:
-		return ""
-	}
+	return os.Getenv(EnvPrefix + name)
 }
 
-// envUseKind is how an unprefixed name came to be noticed, which decides what
-// the warning tells the operator to do about it.
-type envUseKind int
-
-const (
-	legacyOnly envUseKind = iota
-	bothSet
-)
-
-// recordDeprecatedEnvUse notes that name was read under its unprefixed
-// spelling, in the way kind describes.
-func recordDeprecatedEnvUse(name string, kind envUseKind) {
-	deprecatedEnvMu.Lock()
-	defer deprecatedEnvMu.Unlock()
-	deprecatedEnvUses[name] = kind
-}
-
-// DeprecatedEnvWarnings returns one line per unprefixed variable that was
-// actually read, in a stable order, ready to be logged at startup.
-//
-// It reports what was read rather than what is set, so an operator is never
-// warned about a variable this deployment ignores anyway.
-func DeprecatedEnvWarnings() []string {
-	deprecatedEnvMu.Lock()
-	recorded := maps.Clone(deprecatedEnvUses)
-	deprecatedEnvMu.Unlock()
-
-	names := slices.Sorted(maps.Keys(recorded))
-
-	warnings := make([]string, 0, len(names))
-	for _, name := range names {
-		kind := recorded[name]
-		legacy := LegacyEnvName(name)
-		if kind == bothSet {
-			warnings = append(warnings, "both "+EnvPrefix+name+" and "+legacy+
-				" are set; "+EnvPrefix+name+" is being used and "+legacy+" is ignored")
-			continue
-		}
-		warnings = append(warnings, legacy+" is deprecated and will be removed in 3.1.0; rename it to "+EnvPrefix+name)
-	}
-	return warnings
-}
-
-// PrefixedEnvNames returns the variables that answer to both spellings, for
-// tests and for documentation generators that must not drift from this list.
+// PrefixedEnvNames returns the variables this project defines, for tests and
+// for documentation generators that must not drift from this list.
 func PrefixedEnvNames() []string {
 	return slices.Clone(prefixedNames)
-}
-
-// resetDeprecatedEnvUses clears what has been recorded. Tests need it because
-// the record is process-wide by design: the warning belongs to the process, not
-// to a call.
-func resetDeprecatedEnvUses() {
-	deprecatedEnvMu.Lock()
-	defer deprecatedEnvMu.Unlock()
-	clear(deprecatedEnvUses)
 }
 
 // TrimmedGetenv is [Getenv] with surrounding whitespace removed, which is what

@@ -571,19 +571,19 @@ func TestSanitizeForCodex_UnhandledResultPassesThrough(t *testing.T) {
 // TestEnabled_EnvKillSwitch verifies CLIENT_COMPAT=off disables the
 // middleware installation gate while any other value keeps it enabled.
 func TestEnabled_EnvKillSwitch(t *testing.T) {
-	t.Setenv("CLIENT_COMPAT", "")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "")
 	if !clientcompat.Enabled() {
 		t.Error("Enabled() = false with empty env, want true")
 	}
-	t.Setenv("CLIENT_COMPAT", "off")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "off")
 	if clientcompat.Enabled() {
 		t.Error("Enabled() = true with CLIENT_COMPAT=off, want false")
 	}
-	t.Setenv("CLIENT_COMPAT", "OFF")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "OFF")
 	if clientcompat.Enabled() {
 		t.Error("Enabled() = true with CLIENT_COMPAT=OFF, want false")
 	}
-	t.Setenv("CLIENT_COMPAT", "auto")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "auto")
 	if !clientcompat.Enabled() {
 		t.Error("Enabled() = false with CLIENT_COMPAT=auto, want true")
 	}

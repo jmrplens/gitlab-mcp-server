@@ -55,7 +55,7 @@ func TestCollectorSurfaces_EachOneRecordsWhatIdentifiesACall(t *testing.T) {
 			gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 			c := startCollector(t)
 			env := collectorEnv(c)
-			env["TOOL_SURFACE"] = tc.surface
+			env["GITLAB_MCP_TOOL_SURFACE"] = tc.surface
 			// The tool name is dropped from metrics on the individual surface
 			// by default, and this asserts it on the SPAN, so the policy is
 			// pinned on to keep the two questions separate.
@@ -118,7 +118,7 @@ func TestCollectorSurfaces_TheActionIsTheRouteThatRan(t *testing.T) {
 			gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 			c := startCollector(t)
 			env := collectorEnv(c)
-			env["TOOL_SURFACE"] = tc.surface
+			env["GITLAB_MCP_TOOL_SURFACE"] = tc.surface
 			// Protected environments are a licensed feature: on the Free tier
 			// the fake instance is detected as, protected_get does not exist
 			// and get stays get.
@@ -169,7 +169,7 @@ func TestCollectorSurfaces_IndividualKeepsTheToolNameOnSpans(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 	c := startCollector(t)
 	env := collectorEnv(c)
-	env["TOOL_SURFACE"] = "individual"
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
 	srv := startServer(t, env, "--gitlab-url="+gitlab.url)
 
 	for range 3 {
