@@ -89,9 +89,10 @@ func dockerEnterpriseRuntime(opts options) bool {
 	if opts.Edition == editionEnterprise || strings.HasPrefix(opts.Preset, "docker-enterprise-") {
 		return true
 	}
-	// Harness-side toggle: accept the tier under either of its spellings
-	// (GITLAB_MCP_TIER, GITLAB_TIER) and the legacy GITLAB_ENTERPRISE for
-	// back-compat of existing eval invocations.
+	// Harness-side toggle: the tier under the one spelling that is read
+	// (GITLAB_MCP_TIER, since 3.1.0 retired GITLAB_TIER), plus the legacy
+	// GITLAB_ENTERPRISE, which is not this project's variable to retire and
+	// still names existing eval invocations.
 	if tier, ok := edition.ParseTier(config.Getenv("TIER")); ok && tier.IsEnterprise() {
 		return true
 	}
