@@ -15,6 +15,13 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
 
+// awardRefusal is how GitLab refuses an award the user already gave: the
+// endpoint hands the model's own messages to not_found!, so the answer is a
+// 404 rather than the 400 a refused create usually is. The builder matches
+// the message and not the status, which is what makes it right, and the stub
+// says what GitLab says so that it stays true for a reason.
+const awardRefusal = `Award Emoji ["Name has already been taken"] Not Found`
+
 // TestCreateMergeRequestAward_Created_ReadsTheAwardBack checks the ordinary
 // ending: one POST and the award GitLab answered with.
 func TestCreateMergeRequestAward_Created_ReadsTheAwardBack(t *testing.T) {
@@ -37,7 +44,7 @@ func TestCreateMergeRequestAward_Created_ReadsTheAwardBack(t *testing.T) {
 func TestCreateMergeRequestAward_AlreadyTaken_ReadsTheExistingOneOutOfTheListing(t *testing.T) {
 	stub, client := newStubGitLab(t)
 	stub.answers(http.MethodPost, "/api/v4/projects/1/merge_requests/2/award_emoji",
-		stubRefusal(http.StatusBadRequest, "name has already been taken"))
+		stubRefusal(http.StatusNotFound, awardRefusal))
 	stub.answers(http.MethodGet, "/api/v4/projects/1/merge_requests/2/award_emoji", stubOK([]any{
 		map[string]any{"id": 12, "name": "thumbsup"},
 		map[string]any{"id": 55, "name": AwardEmojiName},
@@ -59,7 +66,7 @@ func TestCreateMergeRequestAward_AlreadyTaken_ReadsTheExistingOneOutOfTheListing
 func TestCreateIssueAward_AlreadyTakenAndNotListed_IsAnErrorNamingTheEmoji(t *testing.T) {
 	stub, client := newStubGitLab(t)
 	stub.answers(http.MethodPost, "/api/v4/projects/1/issues/3/award_emoji",
-		stubRefusal(http.StatusBadRequest, "name has already been taken"))
+		stubRefusal(http.StatusNotFound, awardRefusal))
 	stub.answers(http.MethodGet, "/api/v4/projects/1/issues/3/award_emoji", stubOK([]any{
 		map[string]any{"id": 12, "name": "thumbsup"},
 	}))

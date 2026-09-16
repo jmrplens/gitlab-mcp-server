@@ -8,6 +8,14 @@
 // refuses a second with "has already been taken". That refusal is what a
 // retried create sees after an attempt whose answer was lost, and treating it
 // as a failure would turn a flaky network into a failed fixture.
+//
+// Recognizing that refusal takes the status as well as the message, and the
+// reason is worth stating once. GitLab spells it as a 404 carrying the
+// model's own messages, since the endpoint hands them to not_found!, and
+// client-go returns its shared ErrNotFound sentinel for every 404 without
+// reading the body at all, so by the time the refusal reaches this file it
+// says "404 Not Found" and nothing else. A builder matching the message
+// alone would never see a duplicate on a real instance.
 
 package fixture
 
@@ -27,8 +35,23 @@ import (
 // case comparing what it read knows the name to expect.
 const AwardEmojiName = "eyes"
 
-// awardAlreadyTaken is what GitLab answers an award the user already gave.
+// awardAlreadyTaken is what GitLab answers an award the user already gave,
+// in the answers that still carry a message by the time client-go is done
+// with them.
 const awardAlreadyTaken = "already been taken"
+
+// awardRefusalIsDuplicate reports whether a refused award is the one a
+// retried attempt gets rather than a refusal to be handed back.
+//
+// Both halves are needed. A 404 is what GitLab answers a duplicate, and is
+// all that survives client-go, so it is read here as the duplicate and
+// confirmed by the listing that follows; that listing is also what tells a
+// 404 about the award apart from a 404 about the object, since an object
+// this fixture cannot read answers the listing the same way and is reported.
+// The message is kept beside it for the refusals that do carry one.
+func awardRefusalIsDuplicate(err error) bool {
+	return IsStatus(err, http.StatusNotFound) || strings.Contains(err.Error(), awardAlreadyTaken)
+}
 
 // Award is an award emoji a builder created.
 type Award struct {
@@ -88,7 +111,7 @@ func createMergeRequestAward(ctx context.Context, client *gitlabclient.Client, p
 	if err == nil {
 		return Award{ID: created.ID, Name: created.Name}, nil
 	}
-	if !strings.Contains(err.Error(), awardAlreadyTaken) {
+	if !awardRefusalIsDuplicate(err) {
 		return Award{}, err
 	}
 	existing, _, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(projectID, mergeRequestIID, nil, gl.WithContext(ctx))
@@ -105,7 +128,7 @@ func createIssueAward(ctx context.Context, client *gitlabclient.Client, projectI
 	if err == nil {
 		return Award{ID: created.ID, Name: created.Name}, nil
 	}
-	if !strings.Contains(err.Error(), awardAlreadyTaken) {
+	if !awardRefusalIsDuplicate(err) {
 		return Award{}, err
 	}
 	existing, _, listErr := client.GL().AwardEmoji.ListIssueAwardEmoji(projectID, issueIID, nil, gl.WithContext(ctx))
@@ -124,7 +147,7 @@ func firstAwardNamed(awards []*gl.AwardEmoji, objectIID int64) (Award, error) {
 			return Award{ID: award.ID, Name: award.Name}, nil
 		}
 	}
-	return Award{}, fmt.Errorf("the award %q was refused as already given on %d and is not in the listing", AwardEmojiName, objectIID)
+	return Award{}, fmt.Errorf("the award %q was refused on %d and the listing does not hold it either", AwardEmojiName, objectIID)
 }
 
 // toleratingGoneAward reports a removal failure unless the award is already
