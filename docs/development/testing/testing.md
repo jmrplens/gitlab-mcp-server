@@ -20,11 +20,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,900 |
-| Unit test functions                                   | 15,704 |
+| Total test functions                                  | 16,908 |
+| Unit test functions                                   | 15,712 |
 | E2E test functions                                    |  1,196 |
 | cmd test functions                                    |  3,288 |
-| Test files (internal/)                                |    578 |
+| Test files (internal/)                                |    579 |
 | Test files (cmd/)                                     |    233 |
 | Test files (test/e2e/)                                |    383 |
 | Tool sub-packages tested                              |    178 |
@@ -37,7 +37,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,487 | 73.9% |
+| `TestFunc_Scenario` (2-part)           | 12,495 | 73.9% |
 | `TestFunc` (no underscore)             |    934 |  5.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |  3,479 | 20.6% |
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,932 |        182 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,940 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,118 |        380 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,196 |        383 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          3,288 |        233 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,900** |  **1,194** |                                                                                                 |
+| **Total**               |     **16,908** |  **1,195** |                                                                                                 |
 
 ### Core Packages
 
@@ -81,11 +81,11 @@
 | testutil             |       119 |    99.5% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                           |
 | testutil/e2ecalls    |        14 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                              |
 | testutil/modelcorpus |        53 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                      |
-| testutil/modelrecord |        39 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                             |
+| testutil/modelrecord |        47 |    95.9% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                             |
 | testutil/modelscore  |        92 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                              |
 | testutil/shardio     |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
 | toolutil             |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                           |
-| **Subtotal**         | **2,932** |          |                                                                                                                                                                                                                                                                         |
+| **Subtotal**         | **2,940** |          |                                                                                                                                                                                                                                                                         |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -402,7 +402,7 @@
 | testutil             |    99.5% |
 | testutil/e2ecalls    |   100.0% |
 | testutil/modelcorpus |   100.0% |
-| testutil/modelrecord |   100.0% |
+| testutil/modelrecord |    95.9% |
 | testutil/modelscore  |   100.0% |
 | testutil/shardio     |   100.0% |
 | toolutil             |    98.5% |
