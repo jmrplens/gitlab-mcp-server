@@ -260,6 +260,67 @@ type counts struct {
 	// Confirmations is how many destructive steps carried their approval each
 	// way.
 	Confirmations map[string]int `json:"confirmations,omitempty"`
+	// Shown is what the attempts behind the row were shown, nil where no
+	// attempt recorded it.
+	//
+	// It is a span and not a number because the individual surface chooses the
+	// list per case: the key's slice_size is the budget, and a row that
+	// published only the budget would seat an attempt shown 312 tools under
+	// the figure 128 with nothing saying so. Off that surface the span is one
+	// value, since every attempt is shown the whole served list.
+	Shown *shown `json:"shown,omitempty"`
+}
+
+// shown is the span of tool-list sizes the attempts behind one row received.
+type shown struct {
+	// Min and Max bound what the attempts were shown. Equal on every surface
+	// but individual.
+	Min int `json:"min"`
+	Max int `json:"max"`
+	// Overflowed is how many of them were shown more than the budget because
+	// the tools their case needed outnumbered it. A row with a non-zero count
+	// here is measuring above its own slice size, which is a fact about the
+	// measurement rather than about the model.
+	Overflowed int `json:"overflowed,omitempty"`
+}
+
+// String renders the span as a caption names it.
+func (s shown) String() string {
+	span := strconv.Itoa(s.Min)
+	if s.Max != s.Min {
+		span += " to " + strconv.Itoa(s.Max)
+	}
+	if s.Overflowed > 0 {
+		span += ", " + strconv.Itoa(s.Overflowed) + " over budget"
+	}
+	return span
+}
+
+// shownOf reads the span off the attempts, and nil when none of them recorded
+// what it was shown.
+//
+// A run made before the attempt line carried the count leaves every value
+// zero, and a span of nothing would read as attempts shown no tools at all,
+// which is a claim no record made. Nil is the reading that says the run did
+// not answer.
+func shownOf(attempts []modelscore.Attempt) *shown {
+	span := shown{Min: -1}
+	for _, attempt := range attempts {
+		if attempt.Line.ShownTools <= 0 {
+			continue
+		}
+		if span.Min < 0 || attempt.Line.ShownTools < span.Min {
+			span.Min = attempt.Line.ShownTools
+		}
+		span.Max = max(span.Max, attempt.Line.ShownTools)
+		if attempt.Line.Overflowed {
+			span.Overflowed++
+		}
+	}
+	if span.Min < 0 {
+		return nil
+	}
+	return &span
 }
 
 // ratio is one published column: what happened over what could have.
@@ -583,6 +644,7 @@ func countsOf(totals modelscore.Totals, attempts []modelscore.Attempt) counts {
 		Outcomes:       namedCounts(totals.Outcomes),
 		Declines:       namedCounts(totals.Declines),
 		Confirmations:  namedCounts(totals.Confirmations),
+		Shown:          shownOf(attempts),
 	}
 }
 

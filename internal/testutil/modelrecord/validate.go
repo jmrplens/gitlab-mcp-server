@@ -161,6 +161,14 @@ func (a *Attempt) validate() error {
 	if err := positive("repeat", a.Repeat); err != nil {
 		return fmt.Errorf("attempt line: %w", err)
 	}
+	// An attempt shown a negative number of tools is the same class as a
+	// negative token counter: a reader compares it with the session's budget
+	// and with other attempts of the row, and a number below zero makes the
+	// row's span reach somewhere no attempt was. Zero is left legal, because
+	// it is what an attempt that never reached a session carries.
+	if a.ShownTools < 0 {
+		return fmt.Errorf("attempt line: shown_tools is %d", a.ShownTools)
+	}
 	if !slices.Contains(endings, a.EndedBy) {
 		return fmt.Errorf("attempt line: ended_by is %q, and an attempt is scored by how it ended", a.EndedBy)
 	}
@@ -191,6 +199,26 @@ func (t *Turn) validate() error {
 	}
 	if !slices.Contains(turnStatuses, t.Status) {
 		return fmt.Errorf("turn line: status is %q", t.Status)
+	}
+	// A negative counter is worse than a wrong one, because both places that
+	// read these numbers add them up: costOf multiplies each by its price into
+	// what the run has spent, and tokensOf sums them into the published totals.
+	// One negative value therefore makes a run look cheaper than it was and a
+	// model look more frugal than it was, and the spend is what stops a paid
+	// run. The values come from a provider's own decoded response, so this is
+	// the boundary where they stop being somebody else's number.
+	for _, counter := range []struct {
+		name  string
+		value int
+	}{
+		{"usage.input", t.Usage.Input},
+		{"usage.output", t.Usage.Output},
+		{"usage.cache_created", t.Usage.CacheCreated},
+		{"usage.cache_read", t.Usage.CacheRead},
+	} {
+		if counter.value < 0 {
+			return fmt.Errorf("turn line: %s is %d", counter.name, counter.value)
+		}
 	}
 	for index, block := range t.Blocks {
 		switch block.Kind {

@@ -386,14 +386,14 @@ func (r *runner) attempt(
 	session, tools := r.sessionFor(env, one, surface, spec)
 	sessionLine := r.record.describeSession(session, r.cfg)
 	line.Session = sessionLine.Label
-	// The digest is of what the session serves, not of what this attempt was
-	// shown, and on the individual surface those differ: the slice is chosen
-	// per case, so a digest of one attempt's list would be one case's slice
-	// standing for the row. What the digest is for is unaffected, since a
-	// provider that rewrites a schema rewrites it in whichever list it
-	// receives, and what each attempt saw is still exactly determined by the
-	// row: this digest, the slice size beside it, and the corpus digest that
-	// fixes the case IDs the slices are seeded from.
+	// The digest is of what the session serves, which is what the row is keyed
+	// on: it is per provider because a provider that rewrites a schema rewrites
+	// it in whichever list it receives, and every attempt of the row shares the
+	// served list whatever it was shown out of it. What one attempt received is
+	// the attempt's own, written below, and the two are kept apart rather than
+	// folded: keying a row on the per-case digest would make every individual
+	// case a row of its own, and keying it on this one while publishing nothing
+	// else would claim the provider received a list it did not.
 	r.record.noteToolDigest(sessionLine.Label, spec, adapter.ToolDigest(tools))
 
 	progress.at("reading the catalog a call is resolved against")
@@ -410,6 +410,13 @@ func (r *runner) attempt(
 	if shown.Sliced {
 		t.Logf("%s on %s: shown %s", one.ID, surface, shown.Summary(len(tools)))
 	}
+	// What this attempt was actually sent, written at the moment it is true.
+	// The session's slice_size is the budget and its digest is of the served
+	// list, so on the individual surface neither says what this provider
+	// received, and no combination of what the record holds can rebuild it:
+	// sliceTools needs the served definitions and the domain of each.
+	line.ShownTools, line.Overflowed = len(shown.Tools), shown.Overflowed
+	line.ToolDigest = adapter.ToolDigest(shown.Tools)
 
 	if world.Respond != nil {
 		progress.at("lending the scripted session this attempt's answers")

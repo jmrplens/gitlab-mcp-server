@@ -26,15 +26,25 @@
 // it. What is here is built and runnable, against the fake provider now and
 // against a local model later, and it is deliberately an unfinished path.
 //
-// One thing is owed before it is ever measured for real: an attempt has to
-// record what it was shown, not only what it asked for. Against the real
-// catalog the budget of 128 is exceeded by the case's own domains alone in 7 of
-// 258 cases on Free and 89 of 258 on Premium and Ultimate, and MS-037 reaches
-// 312. Overflowed says so to the run's log and to nothing else, so a row would
-// read slice_size: 128 for an attempt that was shown 168 tools, and two rows
-// under that one number would not be comparable. Keeping every tool the case
-// needs is still the right call, for the reason on Overflowed below; publishing
-// the count beside the budget is the part that is missing.
+// What the attempt records about its own slice was owed until review asked for
+// it, and is written down now rather than when the surface is first measured.
+// The budget of 128 is exceeded by the case's own domains alone in 7 of 258
+// cases on Free and 89 of 258 on Premium and Ultimate, and MS-037 reaches 312.
+// Overflowed used to say so to the run's log and to nothing else, so a row read
+// slice_size: 128 for an attempt that was shown 312 tools and two attempts
+// under that one number were not comparable. Keeping every tool the case needs
+// is still the right call, for the reason on Overflowed below; the fix is that
+// the count is published beside the budget.
+//
+// The reason it had to be a record rather than a computation is that the shown
+// list cannot be reconstructed afterwards. slice_size is the budget and not a
+// length, the tool-schema digest a row is keyed on is the session's and taken
+// from the served list, and the two together with served_tools and the corpus
+// digest still do not determine the slice: sliceTools also needs the served
+// tool definitions and the domain of each, and the record persists neither. So
+// an attempt writes its own shown count, its overflow state and a digest of the
+// list it was actually sent, at the moment each is true, and a published row
+// carries the span those counts make.
 //
 // Two things this is not. It is not a narrowing of the server: the session
 // serves its whole catalog and a call to a tool outside the slice is dispatched

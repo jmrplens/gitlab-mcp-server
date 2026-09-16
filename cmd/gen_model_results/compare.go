@@ -125,7 +125,17 @@ func crossSurfaceKey(one row) surfaceKey {
 func surfaceLabel(one row) string {
 	var parts []string
 	if one.Key.SliceSize > 0 {
-		parts = append(parts, "slice of "+strconv.Itoa(one.Key.SliceSize)+" tools")
+		// The budget, and beside it what the attempts were actually shown. A
+		// case whose own domains outnumber the budget is shown all of them
+		// rather than fewer tools than it needs, so the two figures differ on
+		// the individual surface and the caption has to carry both: a reader
+		// told only the budget would compare an attempt shown 312 tools with
+		// one shown 96 as though they had seen the same catalog.
+		slice := "slice of " + strconv.Itoa(one.Key.SliceSize) + " tools"
+		if one.Counts.Shown != nil {
+			slice += " (shown " + one.Counts.Shown.String() + ")"
+		}
+		parts = append(parts, slice)
 	}
 	if one.Key.MetaParamSchema != "" {
 		parts = append(parts, "meta schema `"+one.Key.MetaParamSchema+"`")

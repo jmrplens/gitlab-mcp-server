@@ -452,6 +452,65 @@ func TestColumnsOf_AndCountsOf_PutEveryFigureUnderTheNameItWasComputedFor(t *tes
 	}
 }
 
+// TestShownOf_ReadsTheSpanTheAttemptsRecorded covers the figure that keeps an
+// individual row from being read under its budget.
+//
+// The budget is one number and the slice is chosen per case, so a row that
+// published only the budget would seat an attempt shown 312 tools under the
+// figure 128. The span is what says otherwise, and the nil case is what keeps a
+// run made before the attempt carried the count from reading as attempts shown
+// no tools at all.
+func TestShownOf_ReadsTheSpanTheAttemptsRecorded(t *testing.T) {
+	shownAttempt := func(count int, overflowed bool) modelscore.Attempt {
+		return modelscore.Attempt{Line: modelrecord.Attempt{ShownTools: count, Overflowed: overflowed}}
+	}
+
+	for _, testCase := range []struct {
+		name     string
+		attempts []modelscore.Attempt
+		want     *shown
+		caption  string
+	}{
+		{
+			name:     "nothing recorded reads as no answer, not as nothing shown",
+			attempts: []modelscore.Attempt{{}, {}},
+		},
+		{
+			name:     "one value on a surface that shows the whole list",
+			attempts: []modelscore.Attempt{shownAttempt(2, false), shownAttempt(2, false)},
+			want:     &shown{Min: 2, Max: 2},
+			caption:  "2",
+		},
+		{
+			name: "a span with the over-budget attempts counted",
+			attempts: []modelscore.Attempt{
+				shownAttempt(96, false), shownAttempt(312, true), shownAttempt(128, false), shownAttempt(168, true),
+			},
+			want:    &shown{Min: 96, Max: 312, Overflowed: 2},
+			caption: "96 to 312, 2 over budget",
+		},
+		{
+			name:     "an attempt that never reached a session does not floor the span",
+			attempts: []modelscore.Attempt{shownAttempt(0, false), shownAttempt(64, false)},
+			want:     &shown{Min: 64, Max: 64},
+			caption:  "64",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := shownOf(testCase.attempts)
+			if !reflect.DeepEqual(got, testCase.want) {
+				t.Fatalf("span\n got %+v\nwant %+v", got, testCase.want)
+			}
+			if got == nil {
+				return
+			}
+			if rendered := got.String(); rendered != testCase.caption {
+				t.Errorf("caption is %q, want %q", rendered, testCase.caption)
+			}
+		})
+	}
+}
+
 // TestProvenanceOf_IsAssertedWhole holds the other mapping nothing else does.
 //
 // Two fields of the same type read off the same line swap without a symptom:

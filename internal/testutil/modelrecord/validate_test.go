@@ -202,6 +202,26 @@ func TestValidateCall_TakesARefusalWithItsReason(t *testing.T) {
 	}
 }
 
+// TestValidateAttempt_RefusesANegativeShownCount covers the number a row's
+// span is built from. A value below zero would put the span's floor somewhere
+// no attempt was, and the span is what says an individual row measured above
+// its own slice size.
+func TestValidateAttempt_RefusesANegativeShownCount(t *testing.T) {
+	attempt := validAttempt()
+	attempt.ShownTools = -1
+
+	if err := attempt.record().validate(); err == nil {
+		t.Error("shown_tools of -1 was accepted, and a row's shown span would reach below every attempt")
+	}
+
+	// Zero stays legal: it is what an attempt that never reached a session
+	// carries, and those are exactly the lines the record exists to keep.
+	attempt.ShownTools = 0
+	if err := attempt.record().validate(); err != nil {
+		t.Errorf("an attempt that was shown nothing was refused: %v", err)
+	}
+}
+
 // TestValidateTurn_RefusesAPositionNobodyWrote covers the zero value of a
 // 1-based index, which is the shape a field left unset takes and reads as a
 // real position.
@@ -222,6 +242,36 @@ func TestValidateTurn_RefusesAPositionNobodyWrote(t *testing.T) {
 				t.Errorf("index=%d try=%d was accepted", testCase.index, testCase.try)
 			}
 		})
+	}
+}
+
+// TestValidateTurn_RefusesNegativeUsage covers the counters both readers add
+// up. A negative one does not merely misreport: it subtracts, so a run reads as
+// cheaper than it was and the spend is what stops a paid run.
+func TestValidateTurn_RefusesNegativeUsage(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		usage Usage
+	}{
+		{name: "input", usage: Usage{Input: -1}},
+		{name: "output", usage: Usage{Output: -1}},
+		{name: "cache created", usage: Usage{CacheCreated: -1}},
+		{name: "cache read", usage: Usage{CacheRead: -1}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			turn := validTurn()
+			turn.Usage = testCase.usage
+
+			if err := turn.record().validate(); err == nil {
+				t.Errorf("usage %+v was accepted, and both costOf and tokensOf would subtract it", testCase.usage)
+			}
+		})
+	}
+
+	turn := validTurn()
+	turn.Usage = Usage{Input: 10, Output: 5, CacheCreated: 0, CacheRead: 3}
+	if err := turn.record().validate(); err != nil {
+		t.Errorf("an ordinary usage was refused: %v", err)
 	}
 }
 

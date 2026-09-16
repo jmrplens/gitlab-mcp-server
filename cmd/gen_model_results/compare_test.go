@@ -220,6 +220,21 @@ func TestSurfaceLabel_SaysWhatARowDecidedForItself(t *testing.T) {
 			},
 			want: "slice of 64 tools, meta schema `compact`",
 		},
+		// The budget alone is what a reader would otherwise compare two
+		// individual rows under, and the slice is chosen per case, so the span
+		// the attempts recorded goes beside it.
+		{
+			name: "an individual row says what its attempts were shown",
+			edit: func(r *row) {
+				r.Key.Surface, r.Key.SliceSize = "individual", 128
+				r.Counts.Shown = &shown{Min: 96, Max: 312, Overflowed: 2}
+			},
+			want: "slice of 128 tools (shown 96 to 312, 2 over budget)",
+		},
+		{
+			name: "a span with no budget beside it labels nothing",
+			edit: func(r *row) { r.Counts.Shown = &shown{Min: 2, Max: 2} },
+		},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
