@@ -224,16 +224,17 @@ func TestLockedBuffer_ConcurrentWrites_LoseNothing(t *testing.T) {
 	}
 }
 
-// TestFreePort_ReturnsAPortThatCanBeBound verifies the reservation hands back
+// TestFreePorts_ReturnsAPortThatCanBeBound verifies the reservation hands back
 // a usable port and releases it, since the caller's next move is to give it to
 // a child process.
-func TestFreePort_ReturnsAPortThatCanBeBound(t *testing.T) {
-	port, err := freePort(context.Background())
+func TestFreePorts_ReturnsAPortThatCanBeBound(t *testing.T) {
+	ports, err := freePorts(context.Background(), 1)
 	if err != nil {
-		t.Fatalf("freePort: %v", err)
+		t.Fatalf("freePorts: %v", err)
 	}
+	port := ports[0]
 	if port <= 0 || port > 65535 {
-		t.Fatalf("freePort returned %d, want a usable TCP port", port)
+		t.Fatalf("freePorts returned %d, want a usable TCP port", port)
 	}
 
 	// The port has to be free again, or the process this reserves it for
@@ -248,31 +249,51 @@ func TestFreePort_ReturnsAPortThatCanBeBound(t *testing.T) {
 	}
 }
 
-// TestFreePort_SuccessiveCalls_DoNotCollide verifies two reservations do not
+// TestFreePorts_OneCall_HandsBackDistinctPorts verifies a single call's ports
+// differ from each other.
+//
+// This is what holding every listener until the last is bound buys, and the
+// server is what needs it: given the same number to serve on and to profile
+// on, it refuses to start with the address already in use, which reads as the
+// collision with another process that start retries around and is not one.
+func TestFreePorts_OneCall_HandsBackDistinctPorts(t *testing.T) {
+	ports, err := freePorts(context.Background(), 4)
+	if err != nil {
+		t.Fatalf("freePorts: %v", err)
+	}
+	seen := make(map[int]bool, len(ports))
+	for _, port := range ports {
+		if seen[port] {
+			t.Errorf("port %d came back twice in %v", port, ports)
+		}
+		seen[port] = true
+	}
+}
+
+// TestFreePorts_SuccessiveCalls_DoNotCollide verifies two reservations do not
 // hand back the same port while the first is still unused.
 //
-// The race with another process is documented and accepted, which is why start
-// waits for health rather than trusting the reservation. This only pins that
-// the command does not race with itself, which it would if the port came from
-// anywhere but the kernel.
-func TestFreePort_SuccessiveCalls_DoNotCollide(t *testing.T) {
-	first, err := freePort(context.Background())
+// The race with another process is what start retries around; this only pins
+// that the command does not race with itself, which it would if the port came
+// from anywhere but the kernel.
+func TestFreePorts_SuccessiveCalls_DoNotCollide(t *testing.T) {
+	first, err := freePorts(context.Background(), 1)
 	if err != nil {
-		t.Fatalf("freePort: %v", err)
+		t.Fatalf("freePorts: %v", err)
 	}
 	var listenConfig net.ListenConfig
-	held, err := listenConfig.Listen(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(first)))
+	held, err := listenConfig.Listen(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(first[0])))
 	if err != nil {
 		t.Fatalf("holding the first port: %v", err)
 	}
 	defer func() { _ = held.Close() }()
 
-	second, err := freePort(context.Background())
+	second, err := freePorts(context.Background(), 1)
 	if err != nil {
-		t.Fatalf("freePort: %v", err)
+		t.Fatalf("freePorts: %v", err)
 	}
-	if second == first {
-		t.Errorf("both reservations returned %d while the first was held", first)
+	if second[0] == first[0] {
+		t.Errorf("both reservations returned %d while the first was held", first[0])
 	}
 }
 
@@ -436,10 +457,10 @@ type fakeListener struct {
 func (f fakeListener) Addr() net.Addr { return f.addr }
 func (f fakeListener) Close() error   { return f.closeErr }
 
-// TestFreePort_ReservationFailures covers the port reservation's three
+// TestFreePorts_ReservationFailures covers the port reservation's three
 // failures through its seam: nothing could be bound, the listener is not a
 // TCP one, and releasing it fails.
-func TestFreePort_ReservationFailures(t *testing.T) {
+func TestFreePorts_ReservationFailures(t *testing.T) {
 	cases := []struct {
 		name    string
 		reserve func(context.Context) (net.Listener, error)
@@ -470,9 +491,13 @@ func TestFreePort_ReservationFailures(t *testing.T) {
 			previous := reservePort
 			reservePort = tc.reserve
 			t.Cleanup(func() { reservePort = previous })
-			_, err := freePort(t.Context())
+			// Two, because a failure partway through a reservation has to give
+			// back what it had already bound: the second and third cases leave
+			// a listener held when they fail, and asking for one port would
+			// never reach that.
+			_, err := freePorts(t.Context(), 2)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("freePort = %v, want an error saying %q", err, tc.want)
+				t.Errorf("freePorts = %v, want an error saying %q", err, tc.want)
 			}
 		})
 	}
@@ -493,30 +518,99 @@ func TestHTTPTarget_StartFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("never healthy", func(t *testing.T) {
+	t.Run("exits before answering", func(t *testing.T) {
 		mute, err := exec.LookPath("true")
 		if err != nil {
 			t.Skipf("no true binary to stand in for a server that serves nothing: %v", err)
 		}
-		previous := healthWait
-		healthWait = 300 * time.Millisecond
-		t.Cleanup(func() { healthWait = previous })
 		tgt := &httpTarget{binary: mute, plan: standinPlan(transportHTTP), stubURL: "http://127.0.0.1:1"}
 		_, err = tgt.start(t.Context())
-		if err == nil || !strings.Contains(err.Error(), "never became healthy") {
-			t.Errorf("start = %v, want the health timeout", err)
+		if !errors.Is(err, errServerGone) {
+			t.Errorf("start = %v, want the process that ended before serving", err)
 		}
-		if procs := tgt.processes(); len(procs) != 1 {
-			t.Errorf("%d processes after a failed start, want the one that was reaped", len(procs))
+		if want := strconv.Itoa(startAttempts) + " attempts"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("start = %v, want it to say %q", err, want)
+		}
+		if procs := tgt.processes(); procs != nil {
+			t.Errorf("%v after a failed start, want nothing: every attempt was stopped and reaped", procs)
+		}
+	})
+
+	t.Run("alive and never answers", func(t *testing.T) {
+		// Driven at waitHealthy rather than through start, because the wait
+		// this covers is the one nothing interrupts: a process that is up and
+		// silent runs out the deadline, and the port used here has no process
+		// behind it at all, which is the same wait with nothing to reap. The
+		// nil channel is what a caller with no process to watch passes.
+		previous := healthWait
+		healthWait = 200 * time.Millisecond
+		t.Cleanup(func() { healthWait = previous })
+		tgt := &httpTarget{addr: "127.0.0.1:1", output: &lockedBuffer{}}
+		if _, err := tgt.waitHealthy(t.Context(), nil); err == nil || !strings.Contains(err.Error(), "never became healthy") {
+			t.Errorf("waitHealthy = %v, want the health timeout", err)
 		}
 	})
 
 	t.Run("address that is not a url", func(t *testing.T) {
 		tgt := &httpTarget{addr: "bad host", output: &lockedBuffer{}}
-		if _, err := tgt.waitHealthy(t.Context()); err == nil || !strings.Contains(err.Error(), "build health request") {
+		if _, err := tgt.waitHealthy(t.Context(), nil); err == nil || !strings.Contains(err.Error(), "build health request") {
 			t.Errorf("waitHealthy = %v, want the request failure", err)
 		}
 	})
+}
+
+// TestHTTPTarget_LostPort_IsRetriedOnAnotherAddress verifies the handover the
+// benchmark cannot make atomic: a port is reserved and released here, the
+// child binds it a moment later, and anything on the machine may take it in
+// between.
+//
+// The collision is staged rather than waited for, by handing the first attempt
+// an address this test keeps bound for the whole of it. The measured process
+// then fails to bind, exits, and the target has to notice and come back on a
+// port of its own instead of polling an address it never got for the length of
+// the health deadline. That is what happened to a real run: one lost port made
+// a benchmark test fail after sixty seconds, which failed the unit suite,
+// which left the request inventory unwritten with a clean git status
+// (https://github.com/jmrplens/gitlab-mcp-server/issues/660).
+func TestHTTPTarget_LostPort_IsRetriedOnAnotherAddress(t *testing.T) {
+	stub := startStubGitLab()
+	t.Cleanup(stub.close)
+
+	var listenConfig net.ListenConfig
+	squatter, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("binding the address the first attempt will lose: %v", err)
+	}
+	t.Cleanup(func() { _ = squatter.Close() })
+
+	// Reservations happen on this goroutine, inside start, so a plain counter
+	// is enough to tell the first attempt from the ones after it.
+	reservations := 0
+	previous := reservePort
+	reservePort = func(ctx context.Context) (net.Listener, error) {
+		reservations++
+		if reservations == 1 {
+			// Its Close is a no-op, so the address stays held: this is the
+			// port the kernel handed out and something else already owns.
+			return fakeListener{addr: squatter.Addr()}, nil
+		}
+		return previous(ctx)
+	}
+	t.Cleanup(func() { reservePort = previous })
+
+	tgt := &httpTarget{binary: standinBinary(t), plan: standinPlan(transportHTTP), stubURL: stub.url}
+	t.Cleanup(tgt.close)
+
+	if _, startErr := tgt.start(t.Context()); startErr != nil {
+		t.Fatalf("start = %v, want a second attempt on an address that was free", startErr)
+	}
+	if reservations < 2 {
+		t.Errorf("%d reservations, want the lost one and at least one more", reservations)
+	}
+	if tgt.addr == squatter.Addr().String() {
+		t.Errorf("the target is on %s, which is the address it lost", tgt.addr)
+	}
+	assertClientTalks(t, tgt, 0)
 }
 
 // TestStdioTarget_Goroutines_ProcessNeverStarted covers the guard on a
