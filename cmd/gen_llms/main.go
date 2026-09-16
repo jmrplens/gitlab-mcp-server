@@ -290,8 +290,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, referenceSizeBytes map[st
 	b.WriteString("- GITLAB_MCP_SAFE_MODE: Answer a mutating action with a JSON preview naming it instead of running it; reads keep working (default: false). GITLAB_MCP_READ_ONLY takes precedence\n")
 	b.WriteString("- GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n")
 	b.WriteString("- GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC\n")
-	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n")
-	b.WriteString("- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs\n\n")
+	b.WriteString("- GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path\n\n")
 
 	b.WriteString("Tool domains:\n\n")
 	b.WriteString(strings.Join(domains, ", "))
