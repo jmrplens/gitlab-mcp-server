@@ -21,7 +21,7 @@
 	gen-api-live check-api-live check-meta-descriptions \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -937,6 +937,39 @@ gen-model-corpus:
 check-model-corpus:
 	go run ./cmd/gen_model_corpus/ -check
 
+## gen-model-results: redraw the eight managed result blocks from the committed
+## record. It measures nothing and needs no shards, which is why update-all
+## runs it: the measurement is a paid run, like the e2e coverage record's half.
+gen-model-results:
+	go run ./cmd/gen_model_results/ -render
+
+## model-results-record: fold a model evaluation run's shards into the committed
+## record and redraw the pages from it (usage: make model-results-record
+## MODELEVAL_SHARDS=dist/modeleval/ce). Every row the refusals of the plan's
+## section 4.7 name is reported and dropped, the fake provider's included, so a
+## run of the fake publishes nothing and says why row by row.
+model-results-record:
+	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
+	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -render
+
+## model-results-refold: re-score a run already published, from the shards it
+## left behind (usage: make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce).
+## It drops the rows those shards publish, naming each, and folds them again
+## under today's scoring rules and the corpus at HEAD. This is the only path by
+## which a corrected rule reaches a row already published: the record holds
+## scored columns and a redraw scores nothing, so a run whose shards were not
+## kept cannot be re-scored.
+model-results-refold:
+	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
+	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -refold -render
+
+## check-model-results: the offline gate over the committed results record and
+## the blocks drawn from it. No GitLab, no network and no provider; a tree with
+## no record yet passes with a note, which is the state until the first paid run
+## is published.
+check-model-results:
+	go run ./cmd/gen_model_results/ -check
+
 ## gen-lhm-manifest: regenerate the tools/prompts/resources arrays in lhm.plugin.json.
 gen-lhm-manifest:
 	go run ./cmd/gen_lhm_manifest/
@@ -1235,8 +1268,11 @@ gen-readme: gen-footprint gen-stats
 # e2e-coverage-record-render is in on exactly the same terms and
 # e2e-coverage-record is out on the same ones: redrawing the coverage page
 # needs only the committed record, while measuring it needs a booted GitLab.
+# gen-model-results is in and model-results-record is out for the third time on
+# those terms, and the measurement there is not merely slow: it is a paid run
+# against a provider.
 update-all:
-	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
+	@for target in brand gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-model-corpus gen-model-results gen-testing-docs gen-action-catalog-manifest bench-resources-render e2e-coverage-record-render; do \
 		$(MAKE) --no-print-directory $$target || exit 1; \
 	done
 	go run ./cmd/format_md_tables/
