@@ -203,8 +203,8 @@ func callOf(index int, tool string, args map[string]any, opts ...callOption) mod
 }
 
 // dynamicFind is a catalog search on the dynamic surface.
-func dynamicFind(index int, query string) modelrecord.Call {
-	return callOf(index, dynamictools.FindActionToolName, map[string]any{"query": query})
+func dynamicFind(index int, query string, opts ...callOption) modelrecord.Call {
+	return callOf(index, dynamictools.FindActionToolName, map[string]any{"query": query}, opts...)
 }
 
 // dynamicExecute is one action run through the dynamic execute tool. ran names
@@ -429,6 +429,12 @@ func TestScore_AnAliasRewrite_KeepsTheRequestAndTheDispatchApart(t *testing.T) {
 		if verdict.Outcome != OutcomeFailed {
 			t.Errorf("Outcome = %q, want %q", verdict.Outcome, OutcomeFailed)
 		}
+		// The span arrived and named another action, so "nothing named this
+		// step" is a reading of what ran. The same trajectory with no span is
+		// the unobserved test below, and the two differ only in that.
+		if !verdict.Steps[0].Observed {
+			t.Error("Observed = false, want true: every call of this attempt had its span arrive")
+		}
 	})
 }
 
@@ -456,6 +462,13 @@ func TestScore_RightArgumentNameAndWrongValue_IsAMiss(t *testing.T) {
 	}
 	if argument.Sent != "somebody-else/their-project" {
 		t.Errorf("Sent = %q, want what the model actually sent", argument.Sent)
+	}
+	// Nothing of ours refused this attempt anything, so the only thing keeping
+	// it out of the unaided column is that it did not complete. Unaided is
+	// published as a completion, so an attempt that failed unaided is a
+	// contradiction a reader would take for a success.
+	if verdict.Unaided {
+		t.Error("Unaided = true for an attempt that did not complete: the column counts completions")
 	}
 }
 
@@ -609,6 +622,128 @@ func TestScore_GitLabRefusingAfterACorrectDispatch_IsItsOwnOutcome(t *testing.T)
 	}
 	if !strings.Contains(step.Reason, "GitLab refused") {
 		t.Errorf("Reason = %q, want it to say the action ran and the far side refused it", step.Reason)
+	}
+}
+
+// projectThenIssues is a two-step key of the shape most cases have: read the
+// project, then read something inside it. The second step is what the first
+// step's answer makes possible, which is what the refusal rule is about.
+func projectThenIssues() modelcorpus.Key {
+	return modelcorpus.Key{Steps: []modelcorpus.Step{
+		{Action: "project.get", Args: []modelcorpus.Arg{
+			requiredFact("project_id", modelcorpus.FactProjectPath),
+		}},
+		{Action: "issue.list", Args: []modelcorpus.Arg{
+			requiredFact("project_id", modelcorpus.FactProjectPath),
+		}},
+	}}
+}
+
+// TestScore_GitLabRefusingAFirstStep_DoesNotChargeTheStepsAfterIt is the other
+// half of keeping the instance out of the model's column.
+//
+// A case's steps are a sequence: a model that asked for the project and was
+// answered with an error has nothing to look the issues up by, so the step
+// after it is unreached for a reason that is not the model's. Reading the steps
+// one at a time reports that second step as "no call named this step" and fails
+// the attempt, which moves the instance's fixture from the class built to hold
+// it into the completion column.
+func TestScore_GitLabRefusingAFirstStep_DoesNotChargeTheStepsAfterIt(t *testing.T) {
+	trip := trajectory{calls: []modelrecord.Call{
+		dynamicExecute(1, "project.get", "project.get", projectParams(),
+			answered(modelrecord.OutcomeToolError)),
+	}}
+
+	verdict := trip.score(t, projectThenIssues())
+
+	if verdict.Outcome != OutcomeGitLabRefused {
+		t.Fatalf("Outcome = %q (%s), want %q", verdict.Outcome, verdict.Reason, OutcomeGitLabRefused)
+	}
+	if !strings.Contains(verdict.Reason, "step 1") || !strings.Contains(verdict.Reason, "step 2") {
+		t.Errorf("Reason = %q, want it to name the step GitLab refused and the one that went unreached",
+			verdict.Reason)
+	}
+	if verdict.Steps[0].Answer != AnswerGitLabRefused {
+		t.Errorf("Answer = %q, want %q", verdict.Steps[0].Answer, AnswerGitLabRefused)
+	}
+	if verdict.Steps[1].Reached {
+		t.Error("the second step was reached, which is not the trajectory this test is about")
+	}
+}
+
+// TestScore_AStepReachedAndWrongAfterARefusal_IsStillAFailure is the boundary of
+// the rule above: a refusal excuses the steps it made impossible, and nothing
+// else. A model that did call the next action and called it wrongly could have
+// called it rightly.
+func TestScore_AStepReachedAndWrongAfterARefusal_IsStillAFailure(t *testing.T) {
+	trip := trajectory{calls: []modelrecord.Call{
+		dynamicExecute(1, "project.get", "project.get", projectParams(),
+			answered(modelrecord.OutcomeToolError)),
+		dynamicExecute(2, "issue.list", "issue.list", map[string]any{"project_id": "someone/else"}),
+	}}
+
+	verdict := trip.score(t, projectThenIssues())
+
+	if verdict.Outcome != OutcomeFailed {
+		t.Fatalf("Outcome = %q (%s), want %q", verdict.Outcome, verdict.Reason, OutcomeFailed)
+	}
+	if !strings.Contains(verdict.Reason, "step 2") {
+		t.Errorf("Reason = %q, want it to name the step the model reached and got wrong", verdict.Reason)
+	}
+}
+
+// TestScore_AnUnreachedStepWithAnUnobservedCallInTheWindow_IsUnobserved is the
+// claim this package refuses to make about a call the server's span never
+// described.
+//
+// The trajectory is the alias case with the span dropped. gitlab_environment
+// with action get runs protected_get, so a key naming protected_get is reached
+// by that call and by nothing the model typed. With no span there is no
+// dispatch to read, the request names environment.get, and the step reads as
+// one nothing named. That verdict is derived from the missing dispatch exactly
+// as a reached one would be, so it is unobserved rather than a failure.
+func TestScore_AnUnreachedStepWithAnUnobservedCallInTheWindow_IsUnobserved(t *testing.T) {
+	params := map[string]any{
+		"project_id":  defaultFacts()[modelcorpus.FactProjectPath],
+		"environment": "production",
+	}
+	trip := trajectory{calls: []modelrecord.Call{
+		dynamicFind(1, "read an environment"),
+		dynamicExecute(2, "environment.get", "environment.protected_get", params, unobserved()),
+	}}
+
+	verdict := trip.score(t, oneStep("environment.protected_get",
+		requiredFact("project_id", modelcorpus.FactProjectPath)))
+
+	if verdict.Outcome != OutcomeUnobserved {
+		t.Fatalf("Outcome = %q (%s), want %q", verdict.Outcome, verdict.Reason, OutcomeUnobserved)
+	}
+	step := verdict.Steps[0]
+	if step.Reached {
+		t.Error("Reached = true, want false: nothing the record holds names this step")
+	}
+	if step.Observed {
+		t.Error("Observed = true, want false: the dispatch that never arrived might have named the step")
+	}
+}
+
+// TestScore_AnUnreachedStepWithOnlyASearchUnobserved_IsStillAFailure keeps that
+// rule off the one call that could not have named a step whatever its span
+// said. The find tool dispatches no action, so a model that searched and then
+// did nothing missed the step, and treating the missing span as a doubt would
+// leave every model that searched once unable to be told it missed anything.
+func TestScore_AnUnreachedStepWithOnlyASearchUnobserved_IsStillAFailure(t *testing.T) {
+	trip := trajectory{calls: []modelrecord.Call{
+		dynamicFind(1, "get a project", unobserved()),
+	}}
+
+	verdict := trip.score(t, keyFor(t, "MT-002"))
+
+	if verdict.Outcome != OutcomeFailed {
+		t.Fatalf("Outcome = %q (%s), want %q", verdict.Outcome, verdict.Reason, OutcomeFailed)
+	}
+	if !verdict.Steps[0].Observed {
+		t.Error("Observed = false, want true: a search names no action, so no span of one could have")
 	}
 }
 

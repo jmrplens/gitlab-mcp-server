@@ -233,6 +233,13 @@ func (s scorer) step(match stepMatch) StepVerdict {
 		verdict.Complete = match.step.Optional
 		if !verdict.Complete {
 			verdict.Reason = unreachedReason(match)
+			// "Nothing named this step" is read from what the calls in the
+			// window named, so a call whose span never arrived leaves it
+			// unanswerable: the dispatch that did not arrive might have named
+			// the step, which is exactly the alias case, where the model asks
+			// for one action and the server runs another. An optional step is
+			// not asked, because nothing was owed there and no column reads it.
+			verdict.Observed = !match.unobservedInWindow
 		}
 	}
 	verdict.Confirmation = confirmationOf(match, s.facts)
@@ -490,8 +497,16 @@ func outcomeOf(attempt Attempt, verdict Verdict) (outcome Outcome, reason string
 }
 
 // outcomeFromSteps reads the verdict of an attempt that finished talking.
+//
+// A refusal by GitLab carries forward, which is the half a step-by-step reading
+// gets wrong. A case's steps are a sequence, so a step GitLab refused takes the
+// steps after it with it: the identifier the next call needed was never
+// answered, and the model had nothing to send. Charging those to the model
+// would fold the instance into the very column the refusal is its own class to
+// stay out of. A later step the model did reach and get wrong is still a
+// failure, because that one it could have got right.
 func outcomeFromSteps(verdict Verdict) (outcome Outcome, reason string) {
-	refused := false
+	refused := ""
 	for _, step := range verdict.Steps {
 		if !step.Observed {
 			return OutcomeUnobserved, fmt.Sprintf("step %d rests on a call whose dispatch was never "+
@@ -501,15 +516,21 @@ func outcomeFromSteps(verdict Verdict) (outcome Outcome, reason string) {
 			continue
 		}
 		if step.Answer == AnswerGitLabRefused && argumentsMatched(step.Arguments) {
-			refused = true
+			refused = fmt.Sprintf("step %d (%s)", step.Position, step.Name)
 			continue
+		}
+		// A step nothing reached, after a refusal. Whether it was declined is
+		// not asked, because a declined step is complete and this one is not.
+		if refused != "" && !step.Reached {
+			return OutcomeGitLabRefused, fmt.Sprintf("%s was dispatched as the case declares and GitLab "+
+				"refused it, so step %d (%s) was never reached", refused, step.Position, step.Name)
 		}
 		return OutcomeFailed, fmt.Sprintf("step %d (%s): %s", step.Position, step.Name, step.Reason)
 	}
 	if !verdict.Verified {
 		return OutcomeFailed, "a recipe check against GitLab did not hold afterwards"
 	}
-	if refused {
+	if refused != "" {
 		return OutcomeGitLabRefused, "every step was dispatched as the case declares and GitLab refused one"
 	}
 	return OutcomeCompleted, ""

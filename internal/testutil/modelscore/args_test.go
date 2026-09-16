@@ -102,6 +102,64 @@ func TestCompareArgument_AFactRecordedUnderOnlyItsOtherSpelling_IsStillAccepted(
 	}
 }
 
+// TestCompareArgument_AFactBoundByItsIdentifier_DoesNotAcceptThePath is the
+// direction the spellings table deliberately does not have.
+//
+// A case binds the numeric spelling only where the action's schema types the
+// argument as an integer, and an integer argument refuses a path, so a scorer
+// that widened this relation both ways would pass a call GitLab answers with a
+// 400. The widening is one-way on purpose, and nothing in the table's shape
+// says so, which is why it is asserted here.
+func TestCompareArgument_AFactBoundByItsIdentifier_DoesNotAcceptThePath(t *testing.T) {
+	cases := []struct {
+		name    string
+		fact    string
+		sent    string
+		matched bool
+	}{
+		{
+			name:    "a project bound by its identifier, sent the path",
+			fact:    modelcorpus.FactProjectID,
+			sent:    "eval-group/eval-project",
+			matched: false,
+		},
+		{
+			name:    "a project bound by its identifier, sent the identifier",
+			fact:    modelcorpus.FactProjectID,
+			sent:    "42",
+			matched: true,
+		},
+		{
+			name:    "a group bound by its identifier, sent the path",
+			fact:    modelcorpus.FactGroupID,
+			sent:    "eval-group",
+			matched: false,
+		},
+		{
+			name:    "a group bound by its identifier, sent the identifier",
+			fact:    modelcorpus.FactGroupID,
+			sent:    "7",
+			matched: true,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			step := modelcorpus.Step{Args: []modelcorpus.Arg{requiredFact("id", testCase.fact)}}
+			sent := map[string]json.RawMessage{"id": mustJSON(testCase.sent)}
+
+			verdicts := compareArguments(step, sent, defaultFacts(), noProduced)
+
+			if !verdicts[0].Compared {
+				t.Fatal("Compared = false, want a value that was sent to be compared")
+			}
+			if verdicts[0].Matched != testCase.matched {
+				t.Errorf("Matched = %v, want %v (sent %q, want %q)",
+					verdicts[0].Matched, testCase.matched, verdicts[0].Sent, verdicts[0].Want)
+			}
+		})
+	}
+}
+
 // TestCompareArgument_AFactTheAttemptNeverRecorded_SaysSoRatherThanMissing
 // keeps a hole in the record from reading as a model that sent the wrong value.
 func TestCompareArgument_AFactTheAttemptNeverRecorded_SaysSoRatherThanMissing(t *testing.T) {

@@ -56,6 +56,12 @@ type stepMatch struct {
 	// what "accepted first time" is read from and where the server-aided
 	// confirmation class is found.
 	prior []Event
+	// unobservedInWindow is whether the window a step nothing reached was
+	// looked for in holds a call whose span never arrived. Such a call names
+	// the step by what the model requested and by nothing else, so a dispatch
+	// that did not arrive might have named it and "nothing named this step" is
+	// then a claim about a request. It is meaningless when reached.
+	unobservedInWindow bool
 }
 
 // matchSteps walks the key against the events in order.
@@ -99,6 +105,7 @@ func matchSteps(key modelcorpus.Key, events []Event) []stepMatch {
 			// no calls, so a later step is still matched against everything
 			// after the last step that was answered.
 			match.prior = priorEvents(events[from:], step)
+			match.unobservedInWindow = anyUnobserved(events[from:])
 		}
 		matches = append(matches, match)
 	}
@@ -121,6 +128,21 @@ func priorEvents(window []Event, step modelcorpus.Step) []Event {
 		}
 	}
 	return prior
+}
+
+// anyUnobserved reports whether a window holds a call whose span never arrived.
+//
+// A discovery call is left out for the reason this file skips it everywhere
+// else: the find tool dispatches no action, so a span that failed to arrive for
+// one cannot have named a step, and counting it would leave a model that
+// searched once unable to be told it missed a step.
+func anyUnobserved(window []Event) bool {
+	for _, event := range window {
+		if !event.Discovery && !event.Observed {
+			return true
+		}
+	}
+	return false
 }
 
 // namesStep reports whether one call names one step, and by which reading.

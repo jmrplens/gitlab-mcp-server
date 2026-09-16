@@ -259,15 +259,100 @@ func TestAggregate_AnOptionalStepAndAServerAidedConfirmation_AreCountedAsDeclare
 // TestAggregate_OnlyACompletedAttempt_CountsInTheCompletionColumn is the column
 // a published table is read by, so what goes into its numerator is worth one
 // test of its own rather than being implied by a fixture.
+//
+// The third attempt is over budget, which is the model's own: it had the turns
+// and did not finish inside them, so it is in the denominator and not in the
+// numerator. The endings that are not the model's are the test below.
 func TestAggregate_OnlyACompletedAttempt_CountsInTheCompletionColumn(t *testing.T) {
 	totals := Aggregate([]Verdict{
 		completedVerdict(),
 		failedVerdict(),
-		{Case: "MT-006", Outcome: OutcomeGitLabRefused},
+		{Case: "MT-006", Outcome: OutcomeOverBudget},
 	})
 
 	if got := totals.Completion.String(); got != "1 / 3" {
 		t.Errorf("Completion = %q, want one completed attempt of the three that ran", got)
+	}
+}
+
+// apartVerdict is an attempt that ended in a way that is not the model's, with
+// a step of its own so that the steps-go-with-it half of the rule is measured
+// rather than implied.
+func apartVerdict(outcome Outcome) Verdict {
+	return Verdict{
+		Case:    "MT-007",
+		Outcome: outcome,
+		Steps: []StepVerdict{{
+			Position:          1,
+			Name:              "project.get",
+			Reached:           true,
+			Observed:          true,
+			Complete:          true,
+			AcceptedFirstTime: true,
+			Arguments:         []ArgumentVerdict{{Name: "project_id", Compared: true, Matched: true}},
+		}},
+	}
+}
+
+// TestAggregate_AnEndingThatIsNotTheModels_IsInNoDenominator is the rule that
+// keeps a provider's outage, a bug of ours and an instance's fixture out of the
+// columns a model is ranked by.
+//
+// The record says of the first two that they "are not the model's at all", and
+// section 4.2 says of the third that a GitLab refusal after a correct dispatch
+// is "never folded into a model failure". A completion column counting them in
+// its denominator folds all three in: the attempt is counted as run and not
+// completed, which is what a reader takes for a model that did not do the task.
+// Each is counted beside the columns instead, and its steps go with it.
+func TestAggregate_AnEndingThatIsNotTheModels_IsInNoDenominator(t *testing.T) {
+	cases := []struct {
+		name    string
+		outcome Outcome
+		counter func(Totals) int
+	}{
+		{
+			name:    "the provider would not answer",
+			outcome: OutcomeProviderError,
+			counter: func(totals Totals) int { return totals.ProviderErrors },
+		},
+		{
+			name:    "this side broke",
+			outcome: OutcomeHarnessError,
+			counter: func(totals Totals) int { return totals.HarnessErrors },
+		},
+		{
+			name:    "GitLab refused a call the case declares",
+			outcome: OutcomeGitLabRefused,
+			counter: func(totals Totals) int { return totals.GitLabRefused },
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			totals := Aggregate([]Verdict{
+				completedVerdict(),
+				failedVerdict(),
+				apartVerdict(testCase.outcome),
+			})
+
+			if totals.Attempts != 2 {
+				t.Errorf("Attempts = %d, want the two the model is answerable for", totals.Attempts)
+			}
+			if got := totals.Completion.String(); got != "1 / 2" {
+				t.Errorf("Completion = %q, want the third attempt in neither number", got)
+			}
+			if got := totals.Unaided.String(); got != "1 / 2" {
+				t.Errorf("Unaided = %q, want the third attempt in neither number", got)
+			}
+			if got := totals.Reached.String(); got != "2 / 3" {
+				t.Errorf("Reached = %q, want the third attempt's step left out with it", got)
+			}
+			if got := testCase.counter(totals); got != 1 {
+				t.Errorf("the count beside the columns = %d, want the one attempt", got)
+			}
+			if totals.Outcomes[testCase.outcome] != 1 {
+				t.Errorf("outcomes = %v, want the ending still visible on the row", totals.Outcomes)
+			}
+		})
 	}
 }
 

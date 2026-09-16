@@ -69,8 +69,8 @@ func (o Overhead) Ratio() Ratio {
 // Totals is one row: the seven columns, the counts behind them, and what was
 // left out of them.
 type Totals struct {
-	// Attempts is how many attempts were scored into this row, skipped and
-	// unobserved ones excluded.
+	// Attempts is how many attempts were scored into this row, the five
+	// outcomes counted apart below excluded.
 	Attempts int
 	// Skipped is how many attempts never ran because the instance did not meet
 	// the case's needs.
@@ -79,7 +79,18 @@ type Totals struct {
 	// observed. They are counted here and nowhere else: a verdict about a call
 	// the server's span never described is a claim about what was asked.
 	Unobserved int
-	// Outcomes is how many attempts ended each way, the two counts above
+	// ProviderErrors is how many attempts the provider would not answer, and
+	// HarnessErrors how many this side broke. Neither is the model's, which is
+	// what the record says of them in so many words, so neither is in any
+	// column.
+	ProviderErrors int
+	HarnessErrors  int
+	// GitLabRefused is how many attempts were dispatched as the case declares,
+	// with the arguments it declares, and refused by GitLab. What that reports
+	// is the instance or the fixture, so it is counted here rather than folded
+	// into a column a model is read by.
+	GitLabRefused int
+	// Outcomes is how many attempts ended each way, the five counts above
 	// included, so a reader can see the shape of a row and not only its rates.
 	Outcomes map[Outcome]int
 	// Declines is how many steps were correctly declined each way, published
@@ -113,10 +124,22 @@ type Totals struct {
 
 // Aggregate adds a set of verdicts into one row.
 //
-// A skipped attempt is counted and then left out of everything: it never ran,
-// so it is in no denominator, and a row that counted it would rank a model by
-// the license of the instance it was measured on. An unobserved attempt is left
-// out on the other ground, that nothing about it can be said.
+// Five outcomes are counted and then left out of every column, each on its own
+// ground. A skipped attempt never ran, so it is in no denominator, and a row
+// that counted it would rank a model by the license of the instance it was
+// measured on. An unobserved attempt ran and was not seen, so nothing about it
+// can be said at all. The other three are left out because none of them is the
+// model's: the provider would not answer, this side broke, or GitLab refused a
+// call the model dispatched with the arguments the case declares. Counting any
+// of those three would publish a provider's outage, a bug of ours or an
+// instance's fixture as a model that did not complete the task, which is the
+// fold section 4.2 refuses in so many words.
+//
+// Their steps go with them. A step of such an attempt says as little as the
+// attempt does: the work stopped where the outage or the refusal fell, so the
+// steps after it were never reached for a reason that is not the model's, and
+// counting them would move the charge from the completion column into the
+// reached one rather than dropping it.
 func Aggregate(verdicts []Verdict) Totals {
 	totals := Totals{
 		Outcomes:      map[Outcome]int{},
@@ -125,21 +148,39 @@ func Aggregate(verdicts []Verdict) Totals {
 	}
 	for _, verdict := range verdicts {
 		totals.Outcomes[verdict.Outcome]++
-		switch verdict.Outcome {
-		case OutcomeSkipped:
-			totals.Skipped++
+		if totals.countApart(verdict.Outcome) {
 			continue
-		case OutcomeUnobserved:
-			totals.Unobserved++
-			continue
-		default:
 		}
 		totals.count(verdict)
 	}
 	return totals
 }
 
-// count adds one attempt that ran and was observed.
+// countApart records one attempt that is counted and then left out of every
+// column, and reports whether this outcome was one of those.
+//
+// The five are kept in one place so that the reasons above are stated once and
+// the columns below cannot come to disagree with them: a sixth outcome that
+// ought to be apart is added here, and every denominator follows.
+func (t *Totals) countApart(outcome Outcome) bool {
+	switch outcome {
+	case OutcomeSkipped:
+		t.Skipped++
+	case OutcomeUnobserved:
+		t.Unobserved++
+	case OutcomeProviderError:
+		t.ProviderErrors++
+	case OutcomeHarnessError:
+		t.HarnessErrors++
+	case OutcomeGitLabRefused:
+		t.GitLabRefused++
+	default:
+		return false
+	}
+	return true
+}
+
+// count adds one attempt that ran, was seen, and is the model's to answer for.
 func (t *Totals) count(verdict Verdict) {
 	t.Attempts++
 	t.Completion.Denominator++
