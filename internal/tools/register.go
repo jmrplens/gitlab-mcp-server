@@ -29,8 +29,32 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, tier edition.T
 	}
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
-		SchemaCacheKey:             "individual|" + tier.String(),
+		SchemaCacheKey:             IndividualSchemaCacheKey(tier),
 	})
 	RegisterMetaStandaloneTools(server, client)
 	return catalog
+}
+
+// IndividualSchemaCacheKey names the process-wide compiled-schema cache entry
+// for the individual projection of the catalog built for tier (see
+// [IndividualCatalogRegisterOptions.SchemaCacheKey], which toolutil's
+// CompileToolSchemas caches under).
+//
+// The tier identifies the content because the projection reads the catalog
+// action's route and nothing else: the register options choose which actions
+// are registered and what description each carries, never the shape of a
+// schema, and the tier is what [pruneSchemaFieldsByTier] narrows a schema by.
+// The instance class is deliberately not part of it — a GitLab.com catalog
+// carries actions a self-managed one does not, and the tools both carry project
+// the same schemas — and neither is anything about the credential, since the
+// only thing a client changes in a catalog is its handlers.
+//
+// It is one function rather than the three copies of the same string it
+// replaces (this package, cmd/server and cmd/internal/mcpsurface) because a key
+// whose whole contract is "the same content is named the same way" cannot be
+// left to three places to spell alike. A catalog built with
+// [ActionCatalogOptions.SpecGroups] overrides is not the tier's catalog and
+// must not be registered under this key.
+func IndividualSchemaCacheKey(tier edition.Tier) string {
+	return "individual|" + tier.String()
 }

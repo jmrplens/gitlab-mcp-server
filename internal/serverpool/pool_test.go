@@ -884,8 +884,26 @@ func TestStartRevalidation_CancelledContext(t *testing.T) {
 }
 
 // TestGetOrCreate_FactoryError_ReturnsError verifies GetOrCreate returns error with factory error.
+//
+// The base URL is the loopback stub rather than a plausible-looking hostname,
+// and that is worth five seconds of every run of this package. Every build runs
+// the credential probe before it reaches the factory, and against an address
+// nothing answers that probe spends the whole of [credentialCheckTimeout]
+// waiting for a verdict that will never arrive.
+//
+// Nothing the test asserts changes: verifyCredential rejects on an explicit 401
+// or 403 and on nothing else, so the stub's 200 and the timed-out dial are the
+// same verdict — no rejection — and the build proceeds to the factory either
+// way. What is left is the claim itself, that a factory error reaches the
+// caller and leaves no entry behind.
+//
+// It also removes a dependency on the machine, which is the same reason
+// [stubGitLabBase] exists at all: the probe's outcome against a name this
+// repository does not control is whatever the runner's resolver and network
+// decide, and a host answering that name 401 would fail this test for a reason
+// that has nothing to do with the factory.
 func TestGetOrCreate_FactoryError_ReturnsError(t *testing.T) {
-	cfg := testConfig("https://gitlab.example.com")
+	cfg := testConfig(stubGitLabBase)
 	factoryErr := errors.New("catalog unavailable")
 	pool := New(cfg, func(_ *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
 		return nil, factoryErr

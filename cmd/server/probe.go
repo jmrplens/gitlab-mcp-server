@@ -335,8 +335,9 @@ type probePeer struct {
 	args []string
 }
 
-// probeDeps are the two things about the machine a discovery probe reads,
-// injectable so the decision logic is testable without live processes.
+// probeDeps are the things about the machine a discovery probe reads, plus the
+// budget the run is given, injectable so the decision logic is testable without
+// live processes and without spending the real budget to watch it run out.
 type probeDeps struct {
 	// peers lists the other instances of this binary, with their command
 	// lines.
@@ -344,6 +345,9 @@ type probeDeps struct {
 	// stdinIsNull reports whether a peer's file descriptor 0 is the null
 	// device.
 	stdinIsNull func(pid int32) (bool, error)
+	// budget bounds the whole run. Zero, which is what the binary passes,
+	// means probeBudget.
+	budget time.Duration
 }
 
 // runProbe implements --probe and returns the process exit code: 0 when a
@@ -354,9 +358,13 @@ func runProbe(ctx context.Context, args []string, certFile string, deps probeDep
 	// One deadline for the whole run, so a peer that never answers cannot
 	// spend the next peer's time. A caller with an earlier deadline of its
 	// own keeps it: the context already carries the tighter one.
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > probeBudget {
+	budget := deps.budget
+	if budget <= 0 {
+		budget = probeBudget
+	}
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > budget {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, probeBudget)
+		ctx, cancel = context.WithTimeout(ctx, budget)
 		defer cancel()
 	}
 

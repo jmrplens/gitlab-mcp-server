@@ -240,19 +240,41 @@ func countingFailureServer(t *testing.T, failStatus, failures int, rateLimited b
 	return srv.URL, hits
 }
 
+// testRetryCeiling is the backoff ceiling the end-to-end retry cases build
+// their client with, in place of the production [maxRetryBackoff].
+//
+// The clamp can only be observed by waiting the clamped wait out, so at five
+// seconds the one case that reaches it is a five-second test. Twenty-five
+// milliseconds observes exactly the same thing: the wait client-go takes
+// between attempts is the ceiling this client was given, and not the hour the
+// RateLimit-Reset header names. That the production ceiling is itself a humane
+// number is asserted on the constant, in
+// [TestRetryPolicy_BoundsOneCallsUpstreamWait], because no elapsed measurement
+// can prove a constant.
+const testRetryCeiling = 25 * time.Millisecond
+
 // TestClient_RetryBudget_IsBounded verifies that one tool call cannot become
-// an unbounded number of upstream requests, nor park its goroutine for hours.
+// an unbounded number of upstream requests, nor park its goroutine on a wait
+// the policy did not choose.
 //
 // Three things are pinned. A failing read is re-sent [maxRetries] times and no
 // more, so client-go's default of five — one call, six upstream requests, a
 // latency floor around twelve seconds — cannot come back. A failing write is
 // not re-sent at all, because the server may already have applied it. And a
-// 429 naming a reset an hour ahead costs a bounded wait rather than an hour,
-// which is the case with no upper bound at all before the clamp.
+// 429 naming a reset an hour ahead waits the ceiling instead, which is the
+// case with no upper bound at all before the clamp.
 //
-// The elapsed-time assertions are deliberately loose: they are an order of
-// magnitude away from both the fixed and the unfixed behavior, so they
-// discriminate without turning CI load into a failure.
+// The client is built with [testRetryCeiling] rather than the production
+// ceiling, which is what keeps the third case from costing five seconds. The
+// regressions it was written against are both still caught: a backoff that
+// stops being wired into client-go, or a clamp that stops being applied,
+// leaves the 429 case waiting out the hour the header names and blows every
+// bound below. What the small ceiling cannot see is the production constant
+// growing, and that is asserted on the constant instead.
+//
+// The elapsed-time assertions are deliberately loose: they are far away from
+// both the fixed and the unfixed behavior, so they discriminate without
+// turning CI load into a failure.
 func TestClient_RetryBudget_IsBounded(t *testing.T) {
 	t.Parallel()
 
@@ -265,23 +287,21 @@ func TestClient_RetryBudget_IsBounded(t *testing.T) {
 		wantHits    int64
 		maxElapsed  time.Duration
 	}{
-		{name: "server error on a read is retried a bounded number of times", status: http.StatusInternalServerError, failures: -1, wantHits: maxRetries + 1, maxElapsed: 8 * time.Second},
-		{name: "server error on a write is not retried", status: http.StatusInternalServerError, failures: -1, write: true, wantHits: 1, maxElapsed: 8 * time.Second},
-		{name: "rate limit reset an hour ahead does not park the call", status: http.StatusTooManyRequests, failures: 1, rateLimited: true, wantHits: 2, maxElapsed: 30 * time.Second},
+		{name: "server error on a read is retried a bounded number of times", status: http.StatusInternalServerError, failures: -1, wantHits: maxRetries + 1, maxElapsed: 2 * time.Second},
+		{name: "server error on a write is not retried", status: http.StatusInternalServerError, failures: -1, write: true, wantHits: 1, maxElapsed: 2 * time.Second},
+		{name: "rate limit reset an hour ahead does not park the call", status: http.StatusTooManyRequests, failures: 1, rateLimited: true, wantHits: 2, maxElapsed: 2 * time.Second},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// The three cases spend their time waiting out a real backoff,
-			// which is the point of the assertion and cannot be shortened
-			// without measuring something else. They share nothing — each
-			// builds its own server and its own client — so waiting through
-			// them at the same time costs the longest rather than the sum.
+			// They share nothing — each builds its own server and its own
+			// client — so the waits they do spend cost the longest rather
+			// than the sum.
 			t.Parallel()
 
 			srvURL, hits := countingFailureServer(t, tt.status, tt.failures, tt.rateLimited)
 
-			client, err := NewClientWithTokenRetries(srvURL, testValidToken, false, false)
+			client, err := newTokenClient(srvURL, testValidToken, false, false, testRetryCeiling)
 			if err != nil {
 				t.Fatalf(fmtNewClientErr, err)
 			}
@@ -304,5 +324,45 @@ func TestClient_RetryBudget_IsBounded(t *testing.T) {
 				t.Errorf("call took %v, want no more than %v", elapsed, tt.maxElapsed)
 			}
 		})
+	}
+}
+
+// TestRetryPolicy_BoundsOneCallsUpstreamWait pins the wait a single tool call
+// can spend inside the retry policy, on the constants rather than on a clock.
+//
+// This is the half of [TestClient_RetryBudget_IsBounded] that an elapsed
+// measurement cannot carry. That test builds its client with
+// [testRetryCeiling], so it proves the ceiling the client was given is the one
+// client-go waits — and would keep passing if [maxRetryBackoff] were raised to
+// an hour. It used to prove both at once by waiting out the production
+// ceiling, which cost five seconds per run for an assertion that is arithmetic
+// over two constants.
+//
+// The bound is thirty seconds because that is what the elapsed assertion it
+// replaces allowed one call, and every attempt waits at most the ceiling:
+// [maxRetries] retries can therefore cost no more than the product. The other
+// two assertions guard the multiplicands, since a bounded product with an
+// enormous ceiling and no retries would satisfy the first alone while parking
+// the one attempt it does make.
+func TestRetryPolicy_BoundsOneCallsUpstreamWait(t *testing.T) {
+	t.Parallel()
+
+	const (
+		maxCallWait        = 30 * time.Second
+		maxSingleWait      = 10 * time.Second
+		maxUpstreamRetries = 3
+	)
+
+	if worst := time.Duration(maxRetries) * maxRetryBackoff; worst > maxCallWait {
+		t.Errorf("one call can wait %v across %d retries of at most %v, want no more than %v",
+			worst, maxRetries, maxRetryBackoff, maxCallWait)
+	}
+	if maxRetryBackoff > maxSingleWait {
+		t.Errorf("maxRetryBackoff = %v, want no more than %v: a caller is waiting on the request",
+			maxRetryBackoff, maxSingleWait)
+	}
+	if maxRetries > maxUpstreamRetries {
+		t.Errorf("maxRetries = %d, want no more than %d: one call must not multiply itself against a struggling instance",
+			maxRetries, maxUpstreamRetries)
 	}
 }

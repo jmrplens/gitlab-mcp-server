@@ -43,6 +43,12 @@ func (c genRun) target() graphqlintrospect.Target {
 	return graphqlintrospect.Target{Endpoint: c.endpoint, Token: c.token, Client: c.client}
 }
 
+// osExit is a seam over os.Exit, so a test can observe the status main hands
+// the process instead of being terminated by it. Everything else main does is
+// reachable from a test as it stands: run takes its streams and its clock, and
+// the flags and the credential are read from os.Args and the environment.
+var osExit = os.Exit
+
 func main() {
 	endpoint := flag.String("url", defaultEndpoint, "GraphQL endpoint to introspect")
 	dir := flag.String("dir", defaultDir, "directory holding the pinned schema and its provenance record")
@@ -59,7 +65,7 @@ func main() {
 	if withheld != "" {
 		fmt.Fprintln(os.Stderr, prefix+" note:", withheld)
 	}
-	os.Exit(run(genRun{
+	osExit(run(genRun{
 		endpoint: *endpoint,
 		dir:      *dir,
 		check:    *check,

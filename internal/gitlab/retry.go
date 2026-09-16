@@ -50,31 +50,64 @@ const (
 // restricts 5xx retries to idempotent methods, which upstream says will become
 // the default in the next major version.
 func retryOptions() []gl.ClientOptionFunc {
+	return retryOptionsWithCeiling(maxRetryBackoff)
+}
+
+// retryOptionsWithCeiling is [retryOptions] with the wait ceiling given rather
+// than read from [maxRetryBackoff].
+//
+// The ceiling is a parameter for one reason, and it is a test's. Proving the
+// clamp holds means driving client-go's real retry path and waiting the
+// clamped wait out, and at the production ceiling that is a five-second test
+// for one assertion. Every caller in this server passes [maxRetryBackoff];
+// nothing configures it and no exported API exposes it.
+func retryOptionsWithCeiling(ceiling time.Duration) []gl.ClientOptionFunc {
 	return []gl.ClientOptionFunc{
 		gl.WithCustomRetryMax(maxRetries),
-		gl.WithCustomBackoff(clampedBackoff),
+		gl.WithCustomBackoff(retryBackoff{ceiling: ceiling}.wait),
 		gl.WithOnlyIdempotentRetries(),
 	}
 }
 
-// clampedBackoff decides how long to wait before re-sending a failed request.
+// retryBackoff is the backoff policy with the one number that varies.
+//
+// It is a type carrying a ceiling rather than a function returning a closure
+// so that the value handed to [gl.WithCustomBackoff] is a method value: a
+// constructor returning a func whose signature names *http.Response reads to
+// bodyclose as a call producing a response nobody closes.
+type retryBackoff struct {
+	// ceiling is the longest one wait between attempts may be.
+	ceiling time.Duration
+}
+
+// clampedBackoff is the policy every client in this server is built with:
+// [retryBackoff.wait] at [maxRetryBackoff].
+func clampedBackoff(minWait, maxWait time.Duration, attemptNum int, resp *http.Response) time.Duration {
+	return retryBackoff{ceiling: maxRetryBackoff}.wait(minWait, maxWait, attemptNum, resp)
+}
+
+// wait decides how long to wait before re-sending a failed request, waiting no
+// longer than the ceiling.
 //
 // It keeps client-go's intent — honor RateLimit-Reset on a 429 so the retry
 // lands after the window reopens, back off linearly on anything else — and
-// adds the ceiling client-go leaves out. Waiting past [maxRetryBackoff] is not
+// adds the ceiling client-go leaves out. Waiting past the ceiling is not
 // politeness: the request has a caller waiting on it, and a wait longer than
 // the caller's patience only converts a fast failure into a pinned goroutine.
 // A reset further out than the ceiling is answered by giving up sooner and
 // letting the caller see the 429, which is information the caller can act on.
-func clampedBackoff(minWait, maxWait time.Duration, attemptNum int, resp *http.Response) time.Duration {
+//
+// The ceiling is applied last as well as first, so neither the caller's own
+// minimum nor the jitter can lift the wait back above it.
+func (b retryBackoff) wait(minWait, maxWait time.Duration, attemptNum int, resp *http.Response) time.Duration {
 	wait := time.Duration(attemptNum+1) * retryBackoffStep
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		if reset := rateLimitResetWait(resp); reset > wait {
 			wait = reset
 		}
 	}
-	if wait > maxRetryBackoff {
-		wait = maxRetryBackoff
+	if wait > b.ceiling {
+		wait = b.ceiling
 	}
 	if wait < minWait {
 		wait = minWait
@@ -84,8 +117,8 @@ func clampedBackoff(minWait, maxWait time.Duration, attemptNum int, resp *http.R
 	if maxWait > minWait {
 		wait += time.Duration(rand.Int64N(int64(maxWait - minWait))) //nolint:gosec // retry jitter, not a security decision
 	}
-	if wait > maxRetryBackoff {
-		wait = maxRetryBackoff
+	if wait > b.ceiling {
+		wait = b.ceiling
 	}
 	return wait
 }

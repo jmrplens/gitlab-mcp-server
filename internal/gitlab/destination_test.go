@@ -241,6 +241,15 @@ func TestIsPrivateAddress_ClassifiesTheRefusedRanges(t *testing.T) {
 // TestDestinationPolicy_CheckPrivate_TierBDecisions walks every way tier B can
 // resolve, so each branch is asserted in both directions rather than by the one
 // case that happens to be interesting.
+//
+// A case whose instance is spelled as a name says what that name resolves to,
+// in `resolves`, because the branch it lands in asks: an off-origin hop to a
+// private address is refused only where the instance itself is not private,
+// and answering that means resolving the instance host. Left to the real
+// resolver, the one case that reaches it paid a two-second
+// [instanceLookupTimeout] and then passed on the lookup having failed, which
+// is the same verdict for a different reason — a resolver that started
+// answering for gitlab.example.com would have decided the case instead.
 func TestDestinationPolicy_CheckPrivate_TierBDecisions(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -249,6 +258,7 @@ func TestDestinationPolicy_CheckPrivate_TierBDecisions(t *testing.T) {
 		allowPrivate bool
 		addr         string
 		offOrigin    bool
+		resolves     []string
 		wantRefused  bool
 	}{
 		{
@@ -273,7 +283,8 @@ func TestDestinationPolicy_CheckPrivate_TierBDecisions(t *testing.T) {
 		},
 		{
 			name:     "redirect off a public instance to a private address",
-			instance: "https://gitlab.example.com", addr: "10.0.0.1", offOrigin: true, wantRefused: true,
+			instance: "https://gitlab.example.com", addr: "10.0.0.1", offOrigin: true,
+			resolves: []string{"203.0.113.1"}, wantRefused: true,
 		},
 		{
 			name:     "redirect off a public instance to a public address",
@@ -296,6 +307,22 @@ func TestDestinationPolicy_CheckPrivate_TierBDecisions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			policy := newDestinationPolicy(tt.instance, tt.callerChosen, tt.allowPrivate)
+			// Never the real resolver, for any case: a lookup of a name this
+			// test invented waits out instanceLookupTimeout and is then
+			// decided by whatever the host's DNS happens to say. A case that
+			// reaches one without declaring what it resolves to is reporting
+			// that it lands in a branch it did not mean to.
+			policy.lookupIP = func(_ context.Context, host string) ([]netip.Addr, error) {
+				if len(tt.resolves) == 0 {
+					t.Errorf("the policy resolved %q, and this case declares no addresses for it", host)
+					return nil, errors.New("undeclared lookup")
+				}
+				addrs := make([]netip.Addr, 0, len(tt.resolves))
+				for _, raw := range tt.resolves {
+					addrs = append(addrs, netip.MustParseAddr(raw))
+				}
+				return addrs, nil
+			}
 
 			err := policy.checkPrivate(t.Context(), netip.MustParseAddr(tt.addr), tt.offOrigin)
 

@@ -37,12 +37,17 @@
 // module rather than of this front end.
 //
 // [github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared.LoadToolPackages]
-// is deliberately not folded in. It loads with NeedDeps, so it pays for the
-// dependency tree these four refuse to pay for, and it refuses more widely
-// than [Load] does: it collects every error of every loaded package, the
-// dependencies included, and aborts on all of them at once, where [Load]
-// stops at the first error of a package the caller asked for. It also returns
-// a subset rather than what it loaded, keeping the packages under
-// internal/tools and dropping the rest, and memoizes that result per root.
-// That is a different contract, not a different wording of this one.
+// is deliberately not folded in. Its mode is now this one less
+// NeedCompiledGoFiles, which it has no reader for, but its contract is not
+// this one: it refuses more widely than [Load] does, collecting every error
+// of every package it loaded and aborting on all of them at once where [Load]
+// stops at the first error of a package the caller asked for; it returns a
+// subset rather than what it loaded, keeping the packages under internal/tools
+// and dropping the rest; and it memoizes that result per root. That is a
+// different contract, not a different wording of this one.
+//
+// It did load with NeedDeps, and the reason it no longer does is the one
+// written above: nothing in the audit reads a dependency's syntax, so
+// type-checking the tree from source cost about half of every load and
+// changed no answer in any of the six reports.
 package goprogram

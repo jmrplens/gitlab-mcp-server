@@ -1,12 +1,15 @@
-// main_test.go covers the gen_action_catalog_manifest generator helpers.
+// main_test.go covers the gen_action_catalog_manifest generator.
 //
 // Tests verify deterministic builder discovery (sorted output, exclusion of
 // helper functions and _gen/_test.go files), deterministic manifest
-// generation, and the stale-manifest detection branch used by --check.
+// generation, the stale-manifest detection branch used by --check, and the
+// command entry point: the exit code each outcome returns, what it reports on
+// stderr, and that main spends that code on the exit seam.
 package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,43 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 )
+
+// builderFixtureSource is the one builder file every command-level fixture
+// tree carries: two builders, declared out of order so a test that compares
+// the rendered manifest also witnesses the sorting.
+const builderFixtureSource = "package tools\n\nfunc buildWikiActionSpecs() {}\nfunc buildAccessActionSpecs() {}\n"
+
+// currentManifest renders what the fixture source above must produce.
+func currentManifest(t *testing.T) []byte {
+	t.Helper()
+	content, err := generateManifest([]string{"buildAccessActionSpecs", "buildWikiActionSpecs"})
+	if err != nil {
+		t.Fatalf("generateManifest() error = %v", err)
+	}
+	return content
+}
+
+// manifestFixtureRoot stages a repository-shaped tree under a temp directory
+// and makes it the working directory, so cmdutil.RepositoryRoot resolves there
+// and the command's own default flags address the fixture: a go.mod for the
+// root to be found, the builder file under internal/tools, and the committed
+// manifest when one is given. It returns the path the default --output names.
+func manifestFixtureRoot(t *testing.T, manifest string) string {
+	t.Helper()
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module fixture\n")
+	sourceDir := filepath.Join(root, defaultSourceDir)
+	if err := os.MkdirAll(sourceDir, 0o750); err != nil {
+		t.Fatalf("mkdir source dir: %v", err)
+	}
+	writeTestFile(t, filepath.Join(sourceDir, "action_specs.go"), builderFixtureSource)
+	target := filepath.Join(root, defaultOutputPath)
+	if manifest != "" {
+		writeTestFile(t, target, manifest)
+	}
+	t.Chdir(root)
+	return target
+}
 
 // TestDiscoverActionSpecGroupBuilders_SortsBuilders verifies DiscoverActionSpecGroupBuilders sorts builders.
 func TestDiscoverActionSpecGroupBuilders_SortsBuilders(t *testing.T) {
@@ -149,6 +189,175 @@ func runManifestCase(t *testing.T, tt manifestRunCase, want []byte) {
 	}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("manifest = %q, want %q", got, want)
+	}
+}
+
+// TestRun_RenderFails_NamesTheGenerateStageAndWritesNothing verifies that a
+// rendering failure is reported as the generate stage and leaves no manifest
+// behind. It goes through the renderManifest seam because no fixture tree can
+// produce the failure: discovery returns the names of parsed Go functions, so
+// every builder name gofmt is asked to format is already an identifier.
+func TestRun_RenderFails_NamesTheGenerateStageAndWritesNothing(t *testing.T) {
+	target := manifestFixtureRoot(t, "")
+	renderManifest = func([]string) ([]byte, error) { return nil, errors.New("boom") }
+	t.Cleanup(func() { renderManifest = generateManifest })
+
+	err := run(".", defaultSourceDir, defaultOutputPath, false)
+	if err == nil || !strings.Contains(err.Error(), "generate manifest: boom") {
+		t.Fatalf("run() error = %v, want the generate stage carrying boom", err)
+	}
+	if _, statErr := os.Stat(target); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("os.Stat(manifest) = %v, want it never written", statErr)
+	}
+}
+
+// TestRunMain_WriteRun_WritesTheManifestAndExitsZero verifies the default
+// invocation from a repository root: the builders under internal/tools are
+// discovered, the manifest lands at the default output path with the builders
+// sorted, the exit code is 0 and stderr stays empty.
+func TestRunMain_WriteRun_WritesTheManifestAndExitsZero(t *testing.T) {
+	want := currentManifest(t)
+	target := manifestFixtureRoot(t, "")
+
+	var stderr bytes.Buffer
+	if code := runMain([]string{"gen_action_catalog_manifest"}, &stderr); code != 0 {
+		t.Fatalf("runMain() = %d, want 0 (stderr %q)", code, stderr.String())
+	}
+	got, readErr := os.ReadFile(target)
+	if readErr != nil {
+		t.Fatalf("read manifest: %v", readErr)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("manifest = %q, want %q", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+// TestRunMain_CheckRun_ReportsStalenessWithoutWriting verifies --check on both
+// outcomes: a manifest that matches the source exits 0, and one that does not
+// exits 1 naming the artifact and the command that regenerates it. Neither run
+// may rewrite the file, which is what --check promises, so the committed bytes
+// are compared again afterwards.
+func TestRunMain_CheckRun_ReportsStalenessWithoutWriting(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		want     int
+		stale    bool
+	}{
+		{name: "a current manifest passes", manifest: string(currentManifest(t)), want: 0},
+		{
+			name:     "a stale manifest is named with its regeneration command",
+			manifest: "package tools\n",
+			want:     1,
+			stale:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := manifestFixtureRoot(t, tt.manifest)
+
+			var stderr bytes.Buffer
+			if code := runMain([]string{"gen_action_catalog_manifest", "--check"}, &stderr); code != tt.want {
+				t.Fatalf("runMain(--check) = %d, want %d (stderr %q)", code, tt.want, stderr.String())
+			}
+			// The staleness report names the artifact by the path the command
+			// wrote it to, which the fixture root makes absolute.
+			wantErr := "action spec manifest: " + target + " is stale; run go run ./cmd/gen_action_catalog_manifest/"
+			switch {
+			case !tt.stale && stderr.Len() != 0:
+				t.Errorf("stderr = %q, want empty", stderr.String())
+			case tt.stale && !strings.Contains(stderr.String(), wantErr):
+				t.Errorf("stderr = %q, want containing %q", stderr.String(), wantErr)
+			}
+			got, readErr := os.ReadFile(target)
+			if readErr != nil {
+				t.Fatalf("read manifest: %v", readErr)
+			}
+			if string(got) != tt.manifest {
+				t.Errorf("--check rewrote the manifest: %q, want %q", got, tt.manifest)
+			}
+		})
+	}
+}
+
+// TestRunMain_NoRepositoryAbove_ReportsTheRootLookup verifies the failure a
+// run outside a checkout gets: the root lookup is named on stderr and the exit
+// code is 1. The fixture is a temp directory, which the repository's other
+// root-lookup tests also rely on holding no go.mod above it.
+func TestRunMain_NoRepositoryAbove_ReportsTheRootLookup(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	var stderr bytes.Buffer
+	if code := runMain([]string{"gen_action_catalog_manifest"}, &stderr); code != 1 {
+		t.Fatalf("runMain() = %d, want 1 (stderr %q)", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "find repository root: go.mod not found") {
+		t.Errorf("stderr = %q, want the repository root lookup", stderr.String())
+	}
+}
+
+// TestRunMain_FlagParsing_ReturnsTheExitCode verifies that a parse failure is
+// an exit code this command returns rather than an os.Exit inside the flag
+// package: an unknown flag is the usage exit, 2, and -h is the one parse
+// failure that exits clean, which is what ExitOnError would have done for
+// both. Each writes to the stderr it was handed, and neither reaches the
+// generator, which the absent manifest witnesses.
+func TestRunMain_FlagParsing_ReturnsTheExitCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		want     int
+		wantText string
+	}{
+		{
+			name:     "an unknown flag is a usage error",
+			args:     []string{"gen_action_catalog_manifest", "--bogus"},
+			want:     2,
+			wantText: "flag provided but not defined: -bogus",
+		},
+		{
+			name:     "asking for help exits clean",
+			args:     []string{"gen_action_catalog_manifest", "-h"},
+			want:     0,
+			wantText: "-check",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := manifestFixtureRoot(t, "")
+
+			var stderr bytes.Buffer
+			if code := runMain(tt.args, &stderr); code != tt.want {
+				t.Fatalf("runMain(%v) = %d, want %d", tt.args, code, tt.want)
+			}
+			if !strings.Contains(stderr.String(), tt.wantText) {
+				t.Errorf("stderr = %q, want containing %q", stderr.String(), tt.wantText)
+			}
+			if _, statErr := os.Stat(target); !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("os.Stat(manifest) = %v, want no manifest written past a failed parse", statErr)
+			}
+		})
+	}
+}
+
+// TestMain_CheckRunOverACurrentManifest_ExitsZeroThroughTheSeam verifies main
+// wires runMain's result to the exit seam, reading its flags from os.Args.
+func TestMain_CheckRunOverACurrentManifest_ExitsZeroThroughTheSeam(t *testing.T) {
+	manifestFixtureRoot(t, string(currentManifest(t)))
+	oldArgs := os.Args
+	os.Args = []string{"gen_action_catalog_manifest", "--check"}
+	t.Cleanup(func() { os.Args = oldArgs })
+	code := -1
+	osExit = func(got int) { code = got }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	main()
+
+	if code != 0 {
+		t.Errorf("main() exited %d, want 0", code)
 	}
 }
 

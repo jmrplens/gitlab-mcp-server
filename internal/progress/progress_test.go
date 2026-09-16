@@ -512,3 +512,199 @@ func TestDone_ZeroTotalIsNoop(t *testing.T) {
 	tracker.Done(context.Background(), 0, "should-noop")
 	tracker.Done(context.Background(), -1, "should-noop")
 }
+
+// collectProgress runs report as the body of an MCP tool call over an in-memory
+// client/server pair, with a progress token set so the tracker is active, and
+// returns the progress notifications the client received in the order they
+// arrived. It waits until want of them have arrived, so a caller can assert on
+// the exact sequence a client sees rather than on what the handler attempted.
+//
+// A notification the tracker should have dropped still shows up in that
+// sequence, because the transport delivers in send order: an extra one arrives
+// before the last expected one and displaces it in the slice, which the
+// caller's sequence assertion reports.
+func collectProgress(t *testing.T, want int, report func(ctx context.Context, tracker Tracker)) []mcp.ProgressNotificationParams {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "scaled_tool", Description: "reports on a scaled sub-range"},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			tracker := FromRequest(req)
+			if !tracker.IsActive() {
+				// Off the test goroutine: report and answer deterministically.
+				t.Error("expected an active tracker when the client sends a progress token")
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "inactive"}}}, nil, nil
+			}
+			report(ctx, tracker)
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	var mu sync.Mutex
+	var received []mcp.ProgressNotificationParams
+	enough := make(chan struct{}, 1)
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			mu.Lock()
+			defer mu.Unlock()
+			received = append(received, *req.Params)
+			if len(received) >= want {
+				select {
+				case enough <- struct{}{}:
+				default:
+				}
+			}
+		},
+	})
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		serverSession.Wait()
+	})
+
+	if _, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "scaled_tool",
+		Meta: mcp.Meta{"progressToken": "scale-token"},
+	}); err != nil {
+		t.Fatalf("call tool: %v", err)
+	}
+
+	select {
+	case <-enough:
+	case <-ctx.Done():
+		mu.Lock()
+		got := len(received)
+		mu.Unlock()
+		t.Fatalf("timed out waiting for progress notifications: got %d, want %d", got, want)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	return append([]mcp.ProgressNotificationParams(nil), received...)
+}
+
+// TestOnScale_InterleavedSubStep_ClientSeesOneIncreasingSeries verifies the
+// property [Tracker.OnScale] exists for: a sub-step counting in its own units,
+// interleaved with the outer counter that spawned it, reaches the client as a
+// single strictly increasing series on one total.
+//
+// The shape is the one internal/tools/packages.PublishDir has — an outer
+// counter over files, an inner one over the bytes of the file being published.
+// Both write to one progress token, so the sub-step's own 0.25 must arrive
+// translated into where that file sits in the whole job, and carrying the whole
+// job's total rather than its own.
+func TestOnScale_InterleavedSubStep_ClientSeesOneIncreasingSeries(t *testing.T) {
+	const outerTotal = 3
+
+	got := collectProgress(t, 4, func(ctx context.Context, tracker Tracker) {
+		tracker.Step(ctx, 1, outerTotal, "file 1 of 3")
+
+		// File 2 measures itself in its own units, 0..1, placed after file 1.
+		bytes := tracker.OnScale(1, outerTotal)
+		bytes.Update(ctx, 0.25, 1, "file 2: 25%")
+		bytes.Update(ctx, 0.75, 1, "file 2: 75%")
+
+		tracker.Step(ctx, 3, outerTotal, "file 3 of 3")
+	})
+
+	want := []struct {
+		name     string
+		progress float64
+		message  string
+	}{
+		{"outer step 1", 0, "file 1 of 3"},
+		{"sub-step translated by base", 1.25, "file 2: 25%"},
+		{"sub-step still inside the outer range", 1.75, "file 2: 75%"},
+		{"outer counter resumes ahead of the sub-step", 2, "file 3 of 3"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("received %d notifications, want %d: %+v", len(got), len(want), got)
+	}
+	for i, tc := range want {
+		t.Run(tc.name, func(t *testing.T) {
+			if got[i].Progress != tc.progress {
+				t.Errorf("notification[%d].Progress = %v, want %v", i, got[i].Progress, tc.progress)
+			}
+			if got[i].Message != tc.message {
+				t.Errorf("notification[%d].Message = %q, want %q", i, got[i].Message, tc.message)
+			}
+			// The sub-step passed a total of 1; the client must be told the
+			// whole job's total, or the series it draws changes scale midway.
+			if got[i].Total != outerTotal {
+				t.Errorf("notification[%d].Total = %v, want %v", i, got[i].Total, float64(outerTotal))
+			}
+			if i > 0 && got[i].Progress <= got[i-1].Progress {
+				t.Errorf("notification[%d].Progress = %v is not ahead of notification[%d] = %v",
+					i, got[i].Progress, i-1, got[i-1].Progress)
+			}
+		})
+	}
+}
+
+// TestOnScale_OuterUpdateBehindTheSubStep_IsDropped verifies that the Tracker
+// [Tracker.OnScale] returns shares the monotonic state of the one it came from,
+// and that the guard compares translated values.
+//
+// Both halves are load-bearing. Were the state not shared, the outer update
+// below would compare against the outer Tracker's own last value and be sent,
+// putting the series backwards on the wire; were the guard applied before
+// translation, the sub-step's raw 0.5 would be what the outer 2 is measured
+// against.
+func TestOnScale_OuterUpdateBehindTheSubStep_IsDropped(t *testing.T) {
+	const outerTotal = 4
+
+	got := collectProgress(t, 2, func(ctx context.Context, tracker Tracker) {
+		sub := tracker.OnScale(2, outerTotal)
+		sub.Update(ctx, 0.5, 1, "sub-step halfway")   // translated to 2.5 of 4
+		tracker.Update(ctx, 2, outerTotal, "dropped") // behind 2.5, must not be sent
+		tracker.Update(ctx, 3, outerTotal, "resumed") // ahead of 2.5, must be sent
+	})
+
+	want := []struct {
+		name     string
+		progress float64
+		message  string
+	}{
+		{"sub-step on the outer scale", 2.5, "sub-step halfway"},
+		{"outer update ahead of it", 3, "resumed"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("received %d notifications, want %d: %+v", len(got), len(want), got)
+	}
+	for i, tc := range want {
+		t.Run(tc.name, func(t *testing.T) {
+			if got[i].Progress != tc.progress {
+				t.Errorf("notification[%d].Progress = %v, want %v", i, got[i].Progress, tc.progress)
+			}
+			if got[i].Message != tc.message {
+				t.Errorf("notification[%d].Message = %q, want %q", i, got[i].Message, tc.message)
+			}
+		})
+	}
+}
+
+// TestOnScale_InactiveTracker_StaysInactive verifies that scaling an inactive
+// [Tracker] yields an inactive one, so a caller that hands a sub-step its own
+// scale never has to check whether the call carried a progress token first.
+func TestOnScale_InactiveTracker_StaysInactive(t *testing.T) {
+	var tracker Tracker
+	scaled := tracker.OnScale(5, 10)
+	if scaled.IsActive() {
+		t.Error("OnScale on a zero-value Tracker returned an active tracker")
+	}
+	// Contract of an inactive Tracker: every method is a no-op, never a panic.
+	scaled.Update(context.Background(), 1, 2, "should not send")
+}

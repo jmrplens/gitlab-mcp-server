@@ -2263,7 +2263,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 			// Safe across an exclusion: the key is qualified per tool name,
 			// and excluding actions makes the catalog a subset rather than
 			// changing any surviving tool's schema.
-			SchemaCacheKey: "individual|" + cfg.Tier.String(),
+			SchemaCacheKey: gitlabtools.IndividualSchemaCacheKey(cfg.Tier),
 		})
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 		return serverSurfaceRegistration{

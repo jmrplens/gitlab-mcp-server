@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apilive"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
 // wholeEnough builds an introspection big enough to clear every floor, so a
@@ -78,6 +79,50 @@ func writeDump(t *testing.T, payload dumped) string {
 		t.Fatalf("write the fixture: %v", writeErr)
 	}
 	return path
+}
+
+// writeRecordAt commits a record made from payload, dated as given.
+//
+// It writes the document directly rather than through runGenerate, which
+// stamps today and refuses a short record: the cases that use it need a
+// retrieval date of their own, a record that is deliberately incomplete, or
+// both at once.
+func writeRecordAt(t *testing.T, dir string, payload dumped, retrievedAt string) {
+	t.Helper()
+	doc := apilive.Document{
+		SchemaVersion: apilive.SchemaVersion,
+		Source: apilive.Source{
+			Image: "gitlab/gitlab-ee:latest", Version: payload.Version,
+			RetrievedAt: retrievedAt,
+		},
+		Entities: payload.Entities, Routes: payload.Routes, Features: payload.Features,
+	}
+	if err := apilive.Write(dir, doc); err != nil {
+		t.Fatalf("write the fixture: %v", err)
+	}
+}
+
+// today is the retrieval date a record taken now would carry, spelled the way
+// the record spells it.
+func today() string { return time.Now().UTC().Format(time.DateOnly) }
+
+// quietStderr points os.Stderr at the null device for the length of the test.
+//
+// The flag set writes its usage there when a flag will not parse, and runMain
+// writes the refusal there before returning 1. A case about the exit code is
+// about neither, and both would otherwise be printed by a passing run.
+func quietStderr(t *testing.T) {
+	t.Helper()
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open %s: %v", os.DevNull, err)
+	}
+	previous := os.Stderr
+	os.Stderr = devNull
+	t.Cleanup(func() {
+		os.Stderr = previous
+		_ = devNull.Close()
+	})
 }
 
 // TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance verifies the half of
@@ -252,19 +297,7 @@ func TestRunCheck_AStaleOrTruncatedRecord_IsRefused(t *testing.T) {
 			if testCase.mutate != nil {
 				testCase.mutate(&payload)
 			}
-			// Written directly rather than through runGenerate, which stamps
-			// today and refuses a short record: this case needs both.
-			doc := apilive.Document{
-				SchemaVersion: apilive.SchemaVersion,
-				Source: apilive.Source{
-					Image: "gitlab/gitlab-ee:latest", Version: payload.Version,
-					RetrievedAt: testCase.retrievedAt,
-				},
-				Entities: payload.Entities, Routes: payload.Routes, Features: payload.Features,
-			}
-			if err := apilive.Write(dir, doc); err != nil {
-				t.Fatalf("write the fixture: %v", err)
-			}
+			writeRecordAt(t, dir, payload, testCase.retrievedAt)
 
 			err := runCheck(dir, testCase.now)
 
@@ -815,5 +848,510 @@ func TestRunnerDetail_ReportsTheStderrThatNamesTheFailure(t *testing.T) {
 				t.Errorf("runnerDetail() reported %d lines, want at most %d", lines, runnerStderrLines)
 			}
 		})
+	}
+}
+
+// TestRunCheck_WithNoRecordInTheDirectory_SaysItCouldNotReadIt verifies the
+// gate keeps apart the two ways it refuses.
+//
+// A record it could not read and a record it read and judged too small want
+// different things done: generate one, or regenerate this one. Reporting the
+// first through the second's sentence would send a contributor who has never
+// run the generator off to look for what shrank.
+func TestRunCheck_WithNoRecordInTheDirectory_SaysItCouldNotReadIt(t *testing.T) {
+	err := runCheck(t.TempDir(), time.Now())
+
+	if err == nil {
+		t.Fatal("runCheck passed a directory holding no record")
+	}
+	if !strings.Contains(err.Error(), "reading the live API record") {
+		t.Errorf("error = %q, want it to say it could not read the record", err)
+	}
+	if strings.Contains(err.Error(), "cannot be rested on") {
+		t.Errorf("error = %q, want a read failure rather than a verdict on a record", err)
+	}
+}
+
+// TestRunGenerate_WhenTheBootFails_ReportsItAndWritesNothing verifies a boot
+// that never produced an introspection stops the run where it is.
+//
+// The record is what every audit reads offline, and nothing downstream can
+// tell one written from half an answer from one written from a whole GitLab.
+// A failure that reached the write at all would therefore be permanent, so it
+// has to end here, carrying what the boot said.
+func TestRunGenerate_WhenTheBootFails_ReportsItAndWritesNothing(t *testing.T) {
+	previous := runner
+	t.Cleanup(func() { runner = previous })
+	runner = func(string, bool) ([]byte, origin, error) {
+		return nil, origin{}, errors.New("booting gitlab/gitlab-ee:latest: no such image")
+	}
+
+	dir := t.TempDir()
+	err := runGenerate(dir, dumpFrom{}, "gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("runGenerate returned no error for a boot that failed")
+	}
+	if !strings.Contains(err.Error(), "no such image") {
+		t.Errorf("error = %q, want the boot's own message in it", err)
+	}
+	if _, statErr := os.Stat(apilive.Path(dir)); statErr == nil {
+		t.Error("a record was written although nothing was introspected")
+	}
+}
+
+// TestRunGenerate_AnIntrospectionThatIsNotJSON_IsRefused verifies that what
+// comes back from the runner is decoded or refused, never partly read.
+//
+// Only stdout is taken as the answer, and stdout is not always the answer: a
+// script that dies before it prints, or a Rails that writes something of its
+// own there first, leaves bytes no decoder will accept. Decoding those
+// leniently would produce an empty record that passes for a small one.
+func TestRunGenerate_AnIntrospectionThatIsNotJSON_IsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "introspect.json")
+	if err := os.WriteFile(path, []byte("Ruby died before it printed anything\n"), 0o600); err != nil {
+		t.Fatalf("write the fixture: %v", err)
+	}
+
+	dir := t.TempDir()
+	err := runGenerate(dir, dumpFrom{path: path}, "gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("runGenerate accepted an introspection that is not JSON")
+	}
+	if !strings.Contains(err.Error(), "decoding the introspection") {
+		t.Errorf("error = %q, want it to name what it could not decode", err)
+	}
+	if _, statErr := os.Stat(apilive.Path(dir)); statErr == nil {
+		t.Error("a record was written from an introspection that did not decode")
+	}
+}
+
+// TestRunGenerate_WhenTheRecordCannotBeWritten_SaysSo verifies the last step
+// reports its own failure instead of returning the success message.
+//
+// runGenerate prints the record's provenance when it finishes, and that line
+// is what a maintainer reads as "the record is on disk". A write that failed
+// silently would print it over a directory that has no record in it.
+func TestRunGenerate_WhenTheRecordCannotBeWritten_SaysSo(t *testing.T) {
+	root := t.TempDir()
+	obstruction := filepath.Join(root, "docs")
+	if err := os.WriteFile(obstruction, []byte("a file where the directory should be\n"), 0o600); err != nil {
+		t.Fatalf("stage the obstruction: %v", err)
+	}
+
+	err := runGenerate(
+		filepath.Join(obstruction, "development"),
+		dumpFrom{path: writeDump(t, wholeEnough())},
+		"gitlab/gitlab-ee:latest", false,
+	)
+
+	if err == nil {
+		t.Fatal("runGenerate reported success for a record it could not write")
+	}
+	if !strings.Contains(err.Error(), "live API record") {
+		t.Errorf("error = %q, want it to name what could not be written", err)
+	}
+}
+
+// TestIntrospection_WithADumpThatIsNotThere_NeverFallsBackToABoot verifies
+// that naming a dump commits the run to it.
+//
+// -dump is what a person passes when the boot happened on another machine, so
+// falling back would start a twenty-minute pull on the machine chosen
+// precisely because it should not have to do one, and would then write a
+// record provenanced with the digest given beside a dump it never read.
+func TestIntrospection_WithADumpThatIsNotThere_NeverFallsBackToABoot(t *testing.T) {
+	previous := runner
+	t.Cleanup(func() { runner = previous })
+	runner = func(string, bool) ([]byte, origin, error) {
+		t.Error("a dump that could not be read fell back to booting a container")
+		return nil, origin{}, nil
+	}
+
+	absent := filepath.Join(t.TempDir(), "never-written.json")
+	_, _, err := introspection(dumpFrom{path: absent, digest: "sha256:abc"}, "gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("introspection returned no error for a dump that is not there")
+	}
+	if !strings.Contains(err.Error(), "reading the introspection dump") {
+		t.Errorf("error = %q, want it to say which file it could not read", err)
+	}
+}
+
+// TestDockerRun_WhenTheApplicationNeverComesUp_ReportsTheWaitAndStillTearsDown
+// verifies that a failure between the boot and the introspection is reported
+// with what the container said, and that the teardown runs anyway.
+//
+// The teardown half is the part a test of waitForRails alone cannot see: the
+// removal is deferred inside dockerRun, so a failure returned before the
+// introspection is exactly the shape that would leave three gigabytes running
+// if the defer were ever moved below the wait.
+func TestDockerRun_WhenTheApplicationNeverComesUp_ReportsTheWaitAndStillTearsDown(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "calls.log")
+	docker := stubDocker(t, `echo "$@" >> `+log+`
+case "$1" in
+  exec) exit 1 ;;
+  inspect) echo false ;;
+  logs) echo "the reconfigure failed" ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+	if err == nil {
+		t.Fatal("dockerRun returned no error for an application that never came up")
+	}
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+
+	t.Run("the container's own logs are the diagnosis", func(t *testing.T) {
+		if !strings.Contains(err.Error(), "the reconfigure failed") {
+			t.Errorf("error = %q, want the container's logs in it", err)
+		}
+	})
+	t.Run("nothing was run inside the container", func(t *testing.T) {
+		if strings.Contains(string(calls), "cp ") {
+			t.Errorf("calls were:\n%s\nwant nothing copied into a container that never came up", calls)
+		}
+	})
+	t.Run("the container is torn down anyway", func(t *testing.T) {
+		if strings.Count(string(calls), "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed after the failure too", calls)
+		}
+	})
+}
+
+// TestDockerRun_WhenTheScriptCannotBeStaged_NeverTouchesTheContainer verifies
+// the one step of this sequence that happens on the host rather than in the
+// container, and that failing it stops the run before docker is asked to copy
+// anything.
+//
+// It is staged through os.CreateTemp, so a temp directory that is not there is
+// the way the host refuses: os.TempDir reads TMPDIR, which is what this test
+// moves.
+func TestDockerRun_WhenTheScriptCannotBeStaged_NeverTouchesTheContainer(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "calls.log")
+	docker := stubDocker(t, `echo "$@" >> `+log+`
+case "$1" in
+  exec) echo `+readyAnswer+` ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+	// Last, because every t.TempDir above resolves through the same variable.
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "not-a-directory"))
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a script it could not stage")
+	}
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+
+	t.Run("the failure names the step", func(t *testing.T) {
+		if !strings.Contains(err.Error(), "staging the introspection script") {
+			t.Errorf("error = %q, want it to name the step that failed", err)
+		}
+	})
+	t.Run("nothing was copied into the container", func(t *testing.T) {
+		if strings.Contains(string(calls), "cp ") {
+			t.Errorf("calls were:\n%s\nwant no copy of a script that was never written", calls)
+		}
+	})
+	t.Run("the container is torn down anyway", func(t *testing.T) {
+		if strings.Count(string(calls), "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed after the failure too", calls)
+		}
+	})
+}
+
+// TestDockerRun_WhenTheScriptCannotBeCopiedIn_SaysWhatDockerSaid verifies the
+// copy reports docker's own message.
+//
+// A copy fails for reasons this command cannot distinguish on its own — a
+// container that died between the wait and the copy, a daemon that went away,
+// a path docker will not write — and the only account of which it was is on
+// docker's stderr.
+func TestDockerRun_WhenTheScriptCannotBeCopiedIn_SaysWhatDockerSaid(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec) echo `+readyAnswer+` ;;
+  cp) echo "no such container: `+containerName+`" >&2; exit 1 ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a copy that failed")
+	}
+	if !strings.Contains(err.Error(), "copying the introspection script in") {
+		t.Errorf("error = %q, want it to name the step that failed", err)
+	}
+	if !strings.Contains(err.Error(), "no such container") {
+		t.Errorf("error = %q, want docker's own message in it", err)
+	}
+}
+
+// TestDockerRun_WhenTheIntrospectionRaises_CarriesTheRunnersOwnStderr verifies
+// that a script which raised inside the container reports why, and that the
+// stderr runnerDetail formats is really reaching the error a caller sees.
+//
+// Only stdout is the answer, so stderr is discarded on every good run. On this
+// one it holds the only account of what happened, and without it a maintainer
+// is left with an exit status and a twenty-minute boot to repeat.
+func TestDockerRun_WhenTheIntrospectionRaises_CarriesTheRunnersOwnStderr(t *testing.T) {
+	docker := stubDocker(t, `case "$1" in
+  exec)
+    case "$5" in
+      /tmp/introspect.rb) echo "NoMethodError: undefined method exposures" >&2; exit 1 ;;
+      *) echo `+readyAnswer+` ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+`)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("dockerRun returned no error for an introspection that raised")
+	}
+	if !strings.Contains(err.Error(), "running the introspection") {
+		t.Errorf("error = %q, want it to name the step that failed", err)
+	}
+	if !strings.Contains(err.Error(), "NoMethodError: undefined method exposures") {
+		t.Errorf("error = %q, want the runner's own stderr in it", err)
+	}
+}
+
+// TestWaitForRails_WhenTheRunIsCancelledBetweenTwoPolls_StopsWaiting verifies
+// the third place an interrupt can land, and the only one that is not a docker
+// call failing under it: the pause between two attempts.
+//
+// A twenty-minute wait spends nearly all of its time asleep there, so this is
+// where a real interrupt almost always arrives. A loop that noticed a
+// cancellation only through a failing docker call would sleep out the whole
+// poll interval first, which is what the poll being an hour long here would
+// turn into a hang rather than a pass.
+func TestWaitForRails_WhenTheRunIsCancelledBetweenTwoPolls_StopsWaiting(t *testing.T) {
+	asked := filepath.Join(t.TempDir(), "inspected")
+	docker := stubDocker(t, `case "$1" in
+  exec) exit 1 ;;
+  inspect) echo true; echo asked >> `+asked+` ;;
+esac
+`)
+	previous := pollInterval
+	t.Cleanup(func() { pollInterval = previous })
+	pollInterval = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() {
+		// Cancelled once the container has been asked about, which is the last
+		// thing the loop does before it sleeps, and after a settle far longer
+		// than the moment between that answer and the sleep. Nothing is
+		// asserted here: the test goroutine checks afterwards that the stand-in
+		// really was asked, so a cancellation that arrived for any other reason
+		// cannot pass for this one.
+		for range 2000 {
+			if _, err := os.Stat(asked); err == nil {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	err := waitForRails(ctx, docker)
+
+	if err == nil {
+		t.Fatal("waitForRails returned no error for a run cancelled between polls")
+	}
+	if _, statErr := os.Stat(asked); statErr != nil {
+		t.Fatalf("the wait never reached the sleep: the container was never inspected (%v)", statErr)
+	}
+	if !strings.Contains(err.Error(), "waiting for the application") {
+		t.Errorf("error = %q, want it to name what it was waiting for", err)
+	}
+	if strings.Contains(err.Error(), "the container stopped") {
+		t.Errorf("error = %q, want it not to blame a container docker called running", err)
+	}
+}
+
+// TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode verifies every way
+// this command ends, which is the one thing main itself cannot be asked about
+// once it has handed the answer to os.Exit.
+//
+// The record on disk is checked in every case, not only the generating ones:
+// it is what says a parse that failed, or a check, left the directory exactly
+// as it found it.
+func TestRunMain_DispatchesOnItsFlagsAndReturnsTheExitCode(t *testing.T) {
+	quietStderr(t)
+
+	for _, testCase := range []struct {
+		name string
+		// stage returns the command line and the directory the case is about.
+		stage func(t *testing.T) (args []string, dir string)
+		want  int
+		// wantRecord is whether the directory holds a record afterwards.
+		wantRecord bool
+	}{
+		{
+			name: "a whole record passes -check",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				writeRecordAt(t, dir, wholeEnough(), today())
+				return []string{"gen_api_live", "-check", "-dir", dir}, dir
+			},
+			want: 0, wantRecord: true,
+		},
+		{
+			name: "a directory holding no record fails -check",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				return []string{"gen_api_live", "-check", "-dir", dir}, dir
+			},
+			want: 1,
+		},
+		{
+			name: "a dump on disk becomes the record",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				return []string{"gen_api_live", "-dump", writeDump(t, wholeEnough()), "-dir", dir}, dir
+			},
+			want: 0, wantRecord: true,
+		},
+		{
+			name: "a dump that is not there writes nothing",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				return []string{"gen_api_live", "-dump", filepath.Join(dir, "absent.json"), "-dir", dir}, dir
+			},
+			want: 1,
+		},
+		{
+			name: "a flag nobody can parse is the usage exit",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				return []string{"gen_api_live", "-bogus", "-dir", dir}, dir
+			},
+			want: 2,
+		},
+		{
+			name: "asking for help ends clean",
+			stage: func(t *testing.T) ([]string, string) {
+				t.Helper()
+				dir := t.TempDir()
+				return []string{"gen_api_live", "-h", "-dir", dir}, dir
+			},
+			want: 0,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			args, dir := testCase.stage(t)
+
+			got := runMain(args)
+
+			if got != testCase.want {
+				t.Errorf("runMain(%v) = %d, want %d", args, got, testCase.want)
+			}
+			_, statErr := os.Stat(apilive.Path(dir))
+			if onDisk := statErr == nil; onDisk != testCase.wantRecord {
+				t.Errorf("a record in %s = %v, want %v", dir, onDisk, testCase.wantRecord)
+			}
+		})
+	}
+}
+
+// TestRunMain_WithNoDirectory_AsksForTheCheckoutsOwn verifies that -dir is the
+// only thing that moves the record, and that passing one really does keep this
+// command out of the checkout it is running in.
+func TestRunMain_WithNoDirectory_AsksForTheCheckoutsOwn(t *testing.T) {
+	quietStderr(t)
+	previous := defaultRecordDir
+	t.Cleanup(func() { defaultRecordDir = previous })
+
+	dir := t.TempDir()
+	writeRecordAt(t, dir, wholeEnough(), today())
+	asked := 0
+	defaultRecordDir = func() string {
+		asked++
+		return dir
+	}
+
+	t.Run("with no -dir the checkout's own directory is read", func(t *testing.T) {
+		if got := runMain([]string{"gen_api_live", "-check"}); got != 0 {
+			t.Errorf("runMain = %d, want the record in the checkout's own directory to be read", got)
+		}
+		if asked != 1 {
+			t.Errorf("the checkout's directory was asked for %d times, want once", asked)
+		}
+	})
+	t.Run("with -dir the checkout is never consulted", func(t *testing.T) {
+		asked = 0
+		if got := runMain([]string{"gen_api_live", "-check", "-dir", dir}); got != 0 {
+			t.Errorf("runMain = %d, want 0", got)
+		}
+		if asked != 0 {
+			t.Error("the checkout's directory was asked for although -dir named one")
+		}
+	})
+}
+
+// TestRepositoryRecordDir_IsTheCheckoutsDocsDevelopment verifies what -dir
+// defaults to: the record beside the other pinned records of the checkout this
+// command was run from, rather than a path relative to whatever working
+// directory it happened to be started in.
+func TestRepositoryRecordDir_IsTheCheckoutsDocsDevelopment(t *testing.T) {
+	got := repositoryRecordDir()
+
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("RepositoryRoot: %v", err)
+	}
+	if want := filepath.Join(root, apilive.DefaultDir); got != want {
+		t.Errorf("repositoryRecordDir() = %q, want %q", got, want)
+	}
+	if _, statErr := os.Stat(apilive.Path(got)); statErr != nil {
+		t.Errorf("the committed record is not at %s: %v", apilive.Path(got), statErr)
+	}
+}
+
+// TestMain_HandsTheExitCodeToTheProcess verifies main is the one line it looks
+// like: whatever runMain decided becomes the process's status, failures
+// included.
+//
+// os.Args is replaced because the flag set would otherwise be handed the test
+// binary's own flags, and the case is a failing one so that a main which
+// exited zero unconditionally could not pass it.
+func TestMain_HandsTheExitCodeToTheProcess(t *testing.T) {
+	quietStderr(t)
+	previousArgs, previousExit := os.Args, osExit
+	t.Cleanup(func() { os.Args, osExit = previousArgs, previousExit })
+
+	os.Args = []string{"gen_api_live", "-check", "-dir", t.TempDir()}
+	got := -1
+	osExit = func(code int) { got = code }
+
+	main()
+
+	if got != 1 {
+		t.Errorf("main() exited %d, want 1 for a directory holding no record", got)
 	}
 }

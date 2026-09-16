@@ -413,6 +413,40 @@ func TestListSurface_ServesOneListingPerKey(t *testing.T) {
 	}
 }
 
+// TestListSurface_KeysOnTheInstanceClassRatherThanTheClient verifies what the
+// client contributes to the key: its instance class and nothing else. A second
+// self-managed client — a different pointer, a different stub URL — is served
+// the first one's listing, because the catalog beneath keys on the same bool
+// and a closed session hands back tool definitions that no binding reaches. A
+// GitLab.com client is a different key, since that instance registers Orbit.
+//
+// Keying on the pointer instead was correct and finer than the value it named:
+// a command holding two clients for one instance class paid for the surface
+// twice, which is what made a package of five listing tests take twice as long
+// as the one surface they all describe.
+func TestListSurface_KeysOnTheInstanceClassRatherThanTheClient(t *testing.T) {
+	first := MetaTools(newStubClientForTest(t), edition.Ultimate)
+	if len(first) == 0 {
+		t.Fatal("MetaTools(Ultimate) returned no tools")
+	}
+
+	sameClass := MetaTools(newStubClientForTest(t), edition.Ultimate)
+	if len(sameClass) == 0 {
+		t.Fatal("MetaTools(Ultimate) on a second self-managed client returned no tools")
+	}
+	if &first[0] != &sameClass[0] {
+		t.Error("a second self-managed client registered the surface again, want the memoized listing")
+	}
+
+	dotcom := MetaTools(NewGitLabComClient(), edition.Ultimate)
+	if len(dotcom) == 0 {
+		t.Fatal("MetaTools(Ultimate) on the GitLab.com client returned no tools")
+	}
+	if &dotcom[0] == &first[0] {
+		t.Error("the GitLab.com client was served the self-managed listing, so the instance class is not part of the cache key")
+	}
+}
+
 // TestSession_AppliesTheServedSchemaChain verifies a listing carries the two
 // transformations cmd/server installs: the lockdown's additionalProperties on
 // every object node, and the pagination bounds on page and per_page.

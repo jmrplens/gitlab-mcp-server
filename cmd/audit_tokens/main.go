@@ -85,6 +85,26 @@ func main() {
 	os.Exit(run(opts, os.Stdout, os.Stderr))
 }
 
+// newAuditClient builds the offline GitLab client every mode measures
+// against. One invocation of the command runs one mode, so the three modes
+// share the one client rather than each building its own.
+//
+// It is a variable for the same reason [measureFootprintRows] is: the served
+// surfaces are memoized per client (see [mcpsurface.IndividualTools]), so a
+// test driving several modes through [run] would otherwise register the whole
+// individual and meta surfaces again from cold for each of them, having
+// already measured them once.
+var newAuditClient = func() (client *gitlabclient.Client, cleanup func()) {
+	return auditshared.NewStubGitLabClient(auditshared.StubToken)
+}
+
+// measureAudit is the measurement the report and JSON modes render. It is a
+// variable for the same reason [measureFootprintRows] is: the test whose
+// subject is what run does with the result, by driving a writer that refuses
+// the summary, should not pay for every surface to be registered and measured
+// a second time just to reach the encode.
+var measureAudit = measureTokenAudit
+
 // run creates the mock GitLab-backed client, measures all MCP catalog modes,
 // and prints token overhead comparisons for tools, resources, and prompts.
 //
@@ -100,8 +120,11 @@ func main() {
 // an in-memory server — so it panics through [cmdutil.Must] rather than
 // threading a return path through every frame between here and the failure.
 func run(opts auditOptions, stdout, stderr io.Writer) int {
+	client, cleanup := newAuditClient()
+	defer cleanup()
+
 	if opts.footprint {
-		if err := runFootprintMode(opts.check); err != nil {
+		if err := runFootprintMode(client, opts.check); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
@@ -109,14 +132,11 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 	}
 
 	if opts.compareSchemas {
-		runMetaSchemaSizing()
+		runMetaSchemaSizing(client)
 		return 0
 	}
 
-	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
-	defer cleanup()
-
-	audit := measureTokenAudit(client)
+	audit := measureAudit(client)
 	if opts.jsonOut {
 		// A failed encode keeps the status it has always had: the message is
 		// reported and the exit code stays 0. Changing that is a behavior
@@ -620,10 +640,7 @@ func fmtNum(n int) string {
 // from a private in-memory server carrying neither middleware, which sized a
 // schema no client is ever sent and drew the ratio between three different
 // things.
-func runMetaSchemaSizing() {
-	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
-	defer cleanup()
-
+func runMetaSchemaSizing(client *gitlabclient.Client) {
 	routes := buildMetaActionMaps(client, true)
 	opaqueSizes := servedMetaSchemaSizes(client, config.MetaParamSchemaOpaque)
 	fullSizes := servedMetaSchemaSizes(client, config.MetaParamSchemaFull)
@@ -806,12 +823,9 @@ func (r tokenFootprintRow) totalTokens() int {
 // without paying for the full tier x surface x mode measurement each time.
 var measureFootprintRows = measureTokenFootprintRows
 
-// runFootprintMode builds the mock-backed client and runs the full token
-// footprint measurement, mirroring the self-contained client pattern of
-// [runMetaSchemaSizing].
-func runFootprintMode(check bool) error {
-	client, cleanup := auditshared.NewStubGitLabClient(auditshared.StubToken)
-	defer cleanup()
+// runFootprintMode runs the full token footprint measurement against the
+// client [run] built, writing the generated targets or checking them.
+func runFootprintMode(client *gitlabclient.Client, check bool) error {
 	if check {
 		return runFootprintCheck(client)
 	}

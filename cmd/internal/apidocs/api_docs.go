@@ -71,6 +71,7 @@ type Fetcher struct {
 	baseURL  string
 	areasURL string
 	maxAge   time.Duration
+	spacing  time.Duration
 	refresh  bool
 	offline  bool
 	strict   bool
@@ -91,6 +92,17 @@ type Options struct {
 	Strict bool
 	// MaxAge overrides the freshness window; 0 uses DefaultMaxAge.
 	MaxAge time.Duration
+	// Spacing overrides the pause after each successful download; 0 uses
+	// baseSpacing and a negative value removes the pause entirely.
+	//
+	// The pause exists for one destination, GitLab's raw endpoint, which
+	// answers a burst with HTTP 429. A caller pointed at a local httptest
+	// server has no rate limiter to be gentle with, and paying 500ms per page
+	// there buys nothing: it is what made one comparison test in
+	// cmd/audit_1to1/internal/paths take 2.00s for four fetches of a handler
+	// in the same process. Such a caller passes a negative value; nothing
+	// that reaches gitlab.com may.
+	Spacing time.Duration
 	// BaseURL overrides the doc root (used by tests); empty uses DefaultBaseURL.
 	BaseURL string
 	// AreasURL overrides the endpoint [Fetcher.Areas] lists doc/api from (used
@@ -114,6 +126,7 @@ func New(repoRoot string, opts Options) *Fetcher {
 		baseURL:  opts.BaseURL,
 		areasURL: opts.AreasURL,
 		maxAge:   opts.MaxAge,
+		spacing:  opts.Spacing,
 		refresh:  opts.Refresh,
 		offline:  opts.Offline,
 		strict:   opts.Strict,
@@ -127,6 +140,9 @@ func New(repoRoot string, opts Options) *Fetcher {
 	}
 	if f.maxAge <= 0 {
 		f.maxAge = DefaultMaxAge
+	}
+	if f.spacing == 0 {
+		f.spacing = baseSpacing
 	}
 	if f.client == nil {
 		f.client = &http.Client{Timeout: 30 * time.Second}
@@ -219,7 +235,7 @@ func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error
 		default:
 			// Gentle spacing so a full sweep does not trip the rate limiter.
 			// A cancel here is harmless — the body is already in hand.
-			_ = sleepCtx(ctx, baseSpacing)
+			_ = sleepCtx(ctx, f.spacing)
 			return body, nil
 		}
 		if attempt == maxAttempts {

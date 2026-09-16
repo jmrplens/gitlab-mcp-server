@@ -45,8 +45,23 @@ func docsServer(t *testing.T, pages map[string]string) *apidocs.Fetcher {
 		BaseURL:  srv.URL + "/docs/",
 		AreasURL: srv.URL + "/tree",
 		CacheDir: t.TempDir(),
+		Spacing:  noSpacing,
 	})
 }
+
+// noSpacing removes the fetcher's post-download pause for the tests below.
+//
+// That pause is 500ms and exists to keep a 250-page sweep from tripping
+// GitLab's raw endpoint, which answers a burst with HTTP 429. The server
+// every test here fetches from is an httptest handler in this process, which
+// rate-limits nothing, so the pause bought nothing and cost one wall-clock
+// half-second per page: four fetches made TestCheckEndpoints_RecordedPaths_
+// AreHeldToTheDocumentation take 2.00s. What these tests prove is which
+// recorded endpoints the documentation accounts for, and none of them says
+// anything about how fast the pages arrive. The pause itself is still the
+// default everywhere a fetcher reaches gitlab.com, and apidocs' own
+// TestRequest_Spacing_IsTheOptionTheCallerGave holds it to that.
+const noSpacing = -1
 
 // TestCheckEndpoints_RecordedPaths_AreHeldToTheDocumentation verifies the
 // comparison end to end, over the spellings the real documentation uses: a
@@ -105,7 +120,7 @@ func TestCheckEndpoints_APageItCannotRead_IsCountedNotFatal(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(srv.Close)
-	fetcher := apidocs.New(t.TempDir(), apidocs.Options{BaseURL: srv.URL + "/docs/", AreasURL: srv.URL + "/tree", CacheDir: t.TempDir()})
+	fetcher := apidocs.New(t.TempDir(), apidocs.Options{BaseURL: srv.URL + "/docs/", AreasURL: srv.URL + "/tree", CacheDir: t.TempDir(), Spacing: noSpacing})
 
 	check, err := checkEndpoints(t.Context(), fetcher, []requestinventory.Row{
 		{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:id/issues"},
@@ -139,7 +154,7 @@ func TestCheckEndpoints_ACancelledSweep_Fails(t *testing.T) {
 		_, _ = w.Write([]byte("```plaintext\nGET /projects/:id/repository/branches\n```\n"))
 	}))
 	t.Cleanup(srv.Close)
-	fetcher := apidocs.New(t.TempDir(), apidocs.Options{BaseURL: srv.URL + "/docs/", AreasURL: srv.URL + "/tree", CacheDir: cache})
+	fetcher := apidocs.New(t.TempDir(), apidocs.Options{BaseURL: srv.URL + "/docs/", AreasURL: srv.URL + "/tree", CacheDir: cache, Spacing: noSpacing})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -160,7 +175,7 @@ func TestCheckEndpoints_AListingItCannotGet_Fails(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(srv.Close)
-	fetcher := apidocs.New(t.TempDir(), apidocs.Options{AreasURL: srv.URL + "/tree", CacheDir: t.TempDir()})
+	fetcher := apidocs.New(t.TempDir(), apidocs.Options{AreasURL: srv.URL + "/tree", CacheDir: t.TempDir(), Spacing: noSpacing})
 
 	_, err := checkEndpoints(t.Context(), fetcher, nil)
 

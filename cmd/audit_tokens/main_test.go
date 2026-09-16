@@ -51,6 +51,23 @@ func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 	return sharedClient
 }
 
+// useSharedAuditClient points run's client seam at the one client this
+// package shares, and hands run a no-op cleanup because that client outlives
+// the test: closing its server would strand every later measurement.
+//
+// It is what keeps a mode driven through [run] from registering the whole
+// individual and meta surfaces again from cold. The listings are memoized per
+// client (see [mcpsurface.IndividualTools]), so a client of run's own turned
+// each of these tests into a second full surface registration measuring
+// exactly what the shared measurement had already measured.
+func useSharedAuditClient(t *testing.T) {
+	t.Helper()
+	client := newAuditTokensClient(t)
+	original := newAuditClient
+	newAuditClient = func() (*gitlabclient.Client, func()) { return client, func() {} }
+	t.Cleanup(func() { newAuditClient = original })
+}
+
 // measuredFootprintRows returns the full tier x surface x mode measurement,
 // taken once per process: it registers every surface three times over, so
 // tests share the result and treat it as read-only.
@@ -1333,6 +1350,8 @@ func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T
 // the registry build is the expensive part and paying for it twice to cover
 // two more statements would be the wrong trade.
 func TestRun_CompareSchemasMode_PrintsSortedSizingTable(t *testing.T) {
+	useSharedAuditClient(t)
+
 	var stdout, stderr bytes.Buffer
 	code := 0
 	output := captureStdoutAudit(t, func() {
@@ -1440,6 +1459,15 @@ func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 			}
 		})
 	}
+}
+
+// stubTokenAudit replaces the report and JSON modes' measurement for the test
+// with a function returning audit, restoring the real one afterwards.
+func stubTokenAudit(t *testing.T, audit tokenAudit) {
+	t.Helper()
+	original := measureAudit
+	measureAudit = func(*gitlabclient.Client) tokenAudit { return audit }
+	t.Cleanup(func() { measureAudit = original })
 }
 
 // --- Footprint write and check modes ------------------------------------------
@@ -1711,9 +1739,9 @@ func TestRunFootprint_Failures_ReturnErrors(t *testing.T) {
 }
 
 // TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite verifies the entry point
-// behind -footprint builds its own client and dispatches on the check flag:
-// with it set the committed targets are verified and nothing is written,
-// without it the targets are written.
+// behind -footprint dispatches on the check flag: with it set the committed
+// targets are verified and nothing is written, without it the targets are
+// written.
 func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 	t.Run("check verifies the committed targets", func(t *testing.T) {
 		root := useCommittedFootprintTargets(t)
@@ -1721,7 +1749,7 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 
 		var modeErr error
 		output := captureStdoutAudit(t, func() {
-			modeErr = runFootprintMode(true)
+			modeErr = runFootprintMode(newAuditTokensClient(t), true)
 		})
 		if modeErr != nil {
 			t.Fatalf("runFootprintMode(check) error: %v", modeErr)
@@ -1741,7 +1769,7 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 
 		var modeErr error
 		output := captureStdoutAudit(t, func() {
-			modeErr = runFootprintMode(false)
+			modeErr = runFootprintMode(newAuditTokensClient(t), false)
 		})
 		if modeErr != nil {
 			t.Fatalf("runFootprintMode(write) error: %v", modeErr)
@@ -1764,6 +1792,7 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 // its confirmation to stdout and exits 0.
 func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 	t.Run("unreadable target names the cause and exits one", func(t *testing.T) {
+		useSharedAuditClient(t)
 		stubFootprintRows(t, fullMatrixFootprintRows())
 		footprintReplica(t, "", "", "")
 
@@ -1782,6 +1811,7 @@ func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 	})
 
 	t.Run("current targets exit zero", func(t *testing.T) {
+		useSharedAuditClient(t)
 		useCommittedFootprintTargets(t)
 
 		code := 0
@@ -1808,6 +1838,8 @@ func TestRun_FootprintMode_ReportsTheOutcomeAndExitCode(t *testing.T) {
 // than returning failures nothing could act on, so a clean run has to arrive
 // back here intact.
 func TestRun_JSONMode_WritesTheSummaryToItsWriter(t *testing.T) {
+	useSharedAuditClient(t)
+
 	var stdout, stderr bytes.Buffer
 	code := run(auditOptions{jsonOut: true}, &stdout, &stderr)
 
@@ -1836,7 +1868,14 @@ func TestRun_JSONMode_WritesTheSummaryToItsWriter(t *testing.T) {
 // is named on stderr, and the exit code stays 0. That predates the error
 // rerouting and is deliberately preserved, so it needs a test of its own to
 // keep anyone from "fixing" it into a 1.
+//
+// What it encodes is the measurement the package already took, handed to run
+// through the seam: the subject is the writer's refusal, and measuring every
+// surface a second time to reach it buys nothing.
 func TestRun_JSONMode_EncoderFails_ReportsAndStillExitsZero(t *testing.T) {
+	useSharedAuditClient(t)
+	stubTokenAudit(t, measuredTokenAudit(t))
+
 	var stderr bytes.Buffer
 	code := run(auditOptions{jsonOut: true}, failingWriter{}, &stderr)
 
@@ -1853,6 +1892,8 @@ func TestRun_JSONMode_EncoderFails_ReportsAndStillExitsZero(t *testing.T) {
 // Markdown report to os.Stdout, capped at the requested ranking lengths, and
 // exits 0 without writing to either writer it was handed.
 func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
+	useSharedAuditClient(t)
+
 	var stdout, stderr bytes.Buffer
 	code := 0
 	output := captureStdoutAudit(t, func() {

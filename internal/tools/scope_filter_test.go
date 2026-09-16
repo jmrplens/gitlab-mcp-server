@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -62,7 +63,7 @@ func TestFilterScopeFilteredCatalog_AdminActionsRemovedOnEverySurface(t *testing
 	})
 
 	t.Run("meta: the admin dispatcher is not registered", func(t *testing.T) {
-		names := stringSet(registeredNamesForCatalog(t, scoped, false))
+		names := stringSet(registeredNamesForCatalog(t, scoped, false, ""))
 		if _, listed := names["gitlab_admin"]; listed {
 			t.Error("gitlab_admin is still registered for a token with no admin_mode")
 		}
@@ -72,7 +73,7 @@ func TestFilterScopeFilteredCatalog_AdminActionsRemovedOnEverySurface(t *testing
 	})
 
 	t.Run("individual: no tool of the admin group is registered", func(t *testing.T) {
-		names := stringSet(registeredNamesForCatalog(t, scoped, true))
+		names := stringSet(registeredNamesForCatalog(t, scoped, true, IndividualSchemaCacheKey(edition.Ultimate)))
 		for _, tool := range adminTools {
 			if _, listed := names[tool]; listed {
 				t.Errorf("%s is still registered for a token with no admin_mode", tool)
@@ -158,11 +159,17 @@ func actionIDsOfGroup(group actioncatalog.Group) []actioncatalog.ActionID {
 // registeredNamesForCatalog registers catalog on a fresh server, on the
 // individual surface when individual is true and the meta surface otherwise,
 // and returns the tool names a client would be served.
-func registeredNamesForCatalog(t *testing.T, catalog *actioncatalog.Catalog, individual bool) []string {
+//
+// schemaKey is the compiled-schema cache entry the individual registration
+// uses, and so names the tier catalog was built for; the meta surface takes no
+// such key. Filtering a catalog does not change any surviving tool's schema, so
+// a catalog narrowed by the scope filter is still registered under the key of
+// the tier it was built from.
+func registeredNamesForCatalog(t *testing.T, catalog *actioncatalog.Catalog, individual bool, schemaKey string) []string {
 	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 	if individual {
-		RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+		RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{SchemaCacheKey: schemaKey})
 	} else {
 		RegisterMetaCatalog(server, catalog)
 	}

@@ -26,11 +26,18 @@ import (
 // than as a clean report: a failing JSON encoder, a service enumeration that
 // fails after the root package resolved, and an enum rule that fails after
 // the same packages loaded.
+//
+// The root is the fixture module rather than the repository. What each case
+// asserts is that the seam's error reaches Run's caller, so the tree the
+// report was built from is scenery, and every other end-to-end case here
+// states its universe with that fixture for the same reason. Against the
+// repository each case first paid the typed load of ./internal/tools/... —
+// about a second warm and several times that cold — to reach a
+// json.MarshalIndent rigged to fail. Nothing about the real tree goes
+// unasserted: TestRun_Repository_GateIsGreenAndShapeIsStable drives the same
+// entry point over it.
 func TestRun_SeamFailures_AreReported(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
+	root := fixtureModule(t, nil)
 	boom := errors.New("boom")
 	cases := []struct {
 		name    string

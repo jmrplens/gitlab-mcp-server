@@ -10431,11 +10431,17 @@ func TestReportRetiredEnvNames_RefusesWhenAProtectionWasRetired(t *testing.T) {
 // cancellation instead of holding the drain, and the test would prove nothing.
 //
 // The serve context states a drain budget of its own, which is also what keeps
-// the test to a few seconds rather than the full fifteen. It has to be armed
-// after the warm-up rather than declared up front, because that warm-up builds
-// a catalog and costs seconds on a plain run and an order of magnitude more
-// under the race detector: a deadline picked before it would expire during
+// the test to a fraction of a second rather than the full fifteen. It has to be
+// armed after the warm-up rather than declared up front, because that warm-up
+// builds a catalog and costs seconds on a plain run and an order of magnitude
+// more under the race detector: a deadline picked before it would expire during
 // setup on exactly the slow runners this has to survive.
+//
+// How small that budget is does not weaken anything, because nothing here
+// waits for it to be enough. The request is held open by a stand-in that never
+// answers, so the budget is spent whatever its size and the forced close is
+// reached the same way; what the elapsed time says is only whose budget was
+// used, and any value this far below httpShutdownTimeout says it.
 func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure(t *testing.T) {
 	var enteredOnce, releaseOnce sync.Once
 	entered := make(chan struct{})
@@ -10511,7 +10517,7 @@ func TestServeHTTPOn_RequestInFlightAtShutdown_ExhaustedDrainBudgetIsNotAFailure
 		t.Fatal("the tool call never reached the GitLab stand-in, so no request was in flight at shutdown")
 	}
 
-	const budget = 2 * time.Second
+	const budget = 300 * time.Millisecond
 	ctx.arm(time.Now().Add(budget))
 	start := time.Now()
 	cancel()
@@ -10587,10 +10593,15 @@ func TestShutdownHTTPServer_CallersDeadline_BoundsTheDrain(t *testing.T) {
 		atLeast   time.Duration
 	}{
 		{
-			name:      "tighter than the default",
-			remaining: time.Second,
+			name: "tighter than the default",
+			// Any budget well under the smallest one ever shipped will do:
+			// what is read off the clock is which budget was used, and
+			// Shutdown returns as the deadline passes rather than after some
+			// fixed share of it. A larger number here would be the same
+			// assertion spending longer to make.
+			remaining: 300 * time.Millisecond,
 			// Proves the drain happened at all rather than being skipped.
-			atLeast: 500 * time.Millisecond,
+			atLeast: 150 * time.Millisecond,
 		},
 		{
 			name:      "already passed",

@@ -1,11 +1,18 @@
 // Package main tests the gateway character auditor: the per-string scan and
 // its excerpt window, the schema walk that skips data keywords, the report
-// formatting and exit codes, and one full scan of the served surface, which
-// is the CI gate's own assertion that nothing served offends.
+// formatting and exit codes, the command line main assembles out of its three
+// flags, and one full scan of the served surface, which is the CI gate's own
+// assertion that nothing served offends.
 package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,6 +32,53 @@ func captureOutput(t *testing.T) (out, errOut *bytes.Buffer) {
 	stdout, stderr = out, errOut
 	t.Cleanup(func() { stdout, stderr = prevOut, prevErr })
 	return out, errOut
+}
+
+// callMain runs main with args as the process command line and returns the
+// code it handed the exit seam along with everything it printed.
+//
+// The flag set is a fresh one for the duration, because main registers its
+// three flags on flag.CommandLine, where the test binary's own flags already
+// live and where a second call would panic on the redefinition.
+func callMain(t *testing.T, args ...string) (code int, out, errOut string) {
+	t.Helper()
+	setScanMode(t, false, nil)
+	outBuf, errBuf := captureOutput(t)
+
+	prevArgs, prevFlags, prevExit := os.Args, flag.CommandLine, osExit
+	t.Cleanup(func() { os.Args, flag.CommandLine, osExit = prevArgs, prevFlags, prevExit })
+
+	os.Args = append([]string{"audit_gateway_chars"}, args...)
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+
+	exits := 0
+	osExit = func(c int) { code, exits = c, exits+1 }
+	main()
+	if exits != 1 {
+		t.Fatalf("main() reached the exit seam %d times, want exactly once", exits)
+	}
+	return code, outBuf.String(), errBuf.String()
+}
+
+// sortedLines splits a report into its rows and orders them, so two reports
+// can be compared as the multisets of rows they are.
+func sortedLines(report string) []string {
+	lines := strings.Split(strings.TrimSuffix(report, "\n"), "\n")
+	slices.Sort(lines)
+	return lines
+}
+
+// firstDifference names where two ordered row lists part company, so a failure
+// points at one row instead of printing two reports of tens of thousands of
+// bytes.
+func firstDifference(left, right []string) string {
+	for i := range min(len(left), len(right)) {
+		if left[i] != right[i] {
+			return fmt.Sprintf("row %d: %q vs %q", i, left[i], right[i])
+		}
+	}
+	return fmt.Sprintf("row %d, where the shorter list ends", min(len(left), len(right)))
 }
 
 // setScanMode pins the two scan knobs for one test and restores them after.
@@ -95,6 +149,18 @@ func TestScanText_CharacterClasses_ReportsOnlyOffenders(t *testing.T) {
 // properties, and never the data keywords (pattern, enum, default, const) or
 // property names, since a validator rejecting a regex is not the reported
 // problem.
+//
+// The last two rows are the two ways a schema can refuse to serialize into the
+// form the walk descends. One cannot be marshaled at all (a func value); the
+// other marshals and cannot be read back, because a raw default outside
+// float64's range is valid JSON text that no `any` can hold. Both carry the
+// offending prose of top_level_description, which is reported when the schema
+// does serialize, so what these two rows assert is that a schema the walk
+// cannot read reports nothing at all.
+//
+// That is a claim about the guard rather than about an empty value: the failed
+// read leaves a map behind holding the description beside a +Inf default, so
+// without the guard the walk descends the half that survived and reports it.
 func TestScanSchema_ProseKeywords_SkipsDataAndNames(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -125,6 +191,14 @@ func TestScanSchema_ProseKeywords_SkipsDataAndNames(t *testing.T) {
 		{name: "property_name_is_not_prose", schema: map[string]any{"properties": map[string]any{"a;b": map[string]any{}}}, want: 0},
 		{name: "typed_schema_description", schema: &jsonschema.Schema{Type: "object", Description: "typed; prose"}, want: 1},
 		{name: "unmarshalable_schema_is_skipped", schema: map[string]any{"description": func() {}}, want: 0},
+		{
+			name: "schema_that_cannot_be_read_back_is_skipped",
+			schema: map[string]any{
+				"description": "one; two",
+				"default":     json.RawMessage(`1e400`),
+			},
+			want: 0,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -299,5 +373,70 @@ func TestRun_ServedSurfaceWithApply_IsClean(t *testing.T) {
 	}
 	if len(appliedSubstitutions) != 1 || appliedSubstitutions[0].Old != "zzqx-never-served" || appliedSubstitutions[0].New != "zzqy" {
 		t.Errorf("appliedSubstitutions = %+v, want the parsed environment pair", appliedSubstitutions)
+	}
+}
+
+// TestMain_ApplyWithAnEmptyConfiguration_RefusesAndHasAlreadyTakenFull
+// verifies the half of the command line main owns and the half it passes on.
+// -full is main's own: it is transferred to the scan knob before run is
+// called, and it is still set when the run refuses. -apply is passed on, and
+// with an empty GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS the run refuses on
+// stderr and exits 1 before any surface is listed, so nothing reaches stdout.
+func TestMain_ApplyWithAnEmptyConfiguration_RefusesAndHasAlreadyTakenFull(t *testing.T) {
+	t.Setenv(gatewaycompat.EnvVar, "")
+
+	code, out, errOut := callMain(t, "-full", "-apply")
+
+	if code != 1 {
+		t.Errorf("main() exited %d, want 1", code)
+	}
+	if want := "-apply: " + gatewaycompat.EnvVar + " is empty, nothing to apply"; !strings.Contains(errOut, want) {
+		t.Errorf("stderr = %q, want it to contain %q", errOut, want)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want nothing printed when -apply is refused", out)
+	}
+	if !fullStrings {
+		t.Error("-full did not reach the scan knob: fullStrings is false after main()")
+	}
+}
+
+// TestMain_CheckFlag_TurnsTheSameFindingsIntoAFailure verifies that -check
+// decides the exit code and nothing else. Both runs scan the served surface
+// under a substitution that puts a semicolon into every served string naming
+// GitLab, so both find the same offenders and print the same report; only the
+// run carrying -check exits non-zero. Asserting the two reports carry the same
+// rows is what separates "check gates" from "check also scans differently",
+// and the report being an offender list at all is what proves -apply reached
+// the scan rather than being parsed and dropped.
+//
+// The rows are compared as a multiset rather than as text. The report sorts by
+// surface and location only, and one schema holding several offending strings
+// contributes several rows under the one location; their relative order is
+// whatever gatewaycompat.RewriteSchemaProse's walk over the decoded map
+// produced, and Go randomizes map iteration per run.
+func TestMain_CheckFlag_TurnsTheSameFindingsIntoAFailure(t *testing.T) {
+	t.Setenv(gatewaycompat.EnvVar, "GitLab=GitLab;")
+	const offenders = "carry an offending character"
+
+	reportCode, reportOut, reportErr := callMain(t, "-apply")
+	gateCode, gateOut, gateErr := callMain(t, "-apply", "-check")
+
+	if !strings.Contains(reportOut, offenders) {
+		t.Fatalf("the substitution introduced no offender, so nothing about -check is under test; stdout:\n%s", reportOut)
+	}
+	if reportCode != 0 {
+		t.Errorf("main() without -check exited %d, want 0: findings alone are not a failure", reportCode)
+	}
+	if gateCode != 1 {
+		t.Errorf("main() with -check exited %d, want 1", gateCode)
+	}
+	reported, gated := sortedLines(reportOut), sortedLines(gateOut)
+	if !slices.Equal(reported, gated) {
+		t.Errorf("-check changed the report: %d rows without it, %d rows with it, first difference at %s",
+			len(reported), len(gated), firstDifference(reported, gated))
+	}
+	if reportErr != "" || gateErr != "" {
+		t.Errorf("stderr should stay empty, got %q and %q", reportErr, gateErr)
 	}
 }

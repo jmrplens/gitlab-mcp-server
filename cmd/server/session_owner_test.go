@@ -849,7 +849,7 @@ func TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			owners := newSessionOwners(tt.stateless)
-			session, _ := connectedSessions(t)
+			session, client := connectedSessions(t)
 
 			told := map[*mcp.ServerSession]struct{}{}
 			if tt.toldByStream {
@@ -861,13 +861,25 @@ func TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold
 			// orphan list must not take the loop down.
 			owners.endSessionsWithoutStreams([]*mcp.ServerSession{nil, session}, told)
 
-			if sessionEnded(t, session, time.Second) != tt.wantEnded {
-				if tt.wantEnded {
+			if tt.wantEnded {
+				// The close is made in the call above, so a session that was
+				// going to be closed already is; the window only covers the
+				// connection unwinding, and is generous because it is only
+				// spent when this fails.
+				if !sessionEnded(t, session, 5*time.Second) {
 					t.Error("the session was left open, so a client whose only activity was a " +
 						"session-era subscribe is never told its credential is gone")
-					return
 				}
-				t.Error("the session was terminated, which races the ending it was already being given")
+				return
+			}
+			// A session left alone is shown to be alive rather than watched
+			// for a while in case it dies: the decision was made in the call
+			// above, so anything it closed is closed by now, and a round trip
+			// the client completes says so at once. It says more than a window
+			// does, too, since a session ended in a way its own Wait is slow
+			// to notice would sit out any window and read as left alone.
+			if err := pingWithin(t, client, 5*time.Second); err != nil {
+				t.Errorf("the session was terminated (%v), which races the ending it was already being given", err)
 			}
 		})
 	}
@@ -887,6 +899,21 @@ func TestSessionOwners_EndSessionsWithoutStreams_TellsOnlyTheClientsNoStreamTold
 		}
 		owners.endSessionsWithoutStreams([]*mcp.ServerSession{session}, nil)
 	})
+}
+
+// pingWithin asks the server over the client's own session and reports what
+// came back, which is how a test says a session is still connected without
+// waiting to see whether it stops being.
+//
+// The bound is what keeps a failure a failure: a session torn down under the
+// client leaves the request with nobody to answer it, and without a deadline
+// the test would hang instead of reporting.
+func pingWithin(t *testing.T, client *mcp.ClientSession, within time.Duration) error {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), within)
+	defer cancel()
+	return client.Ping(ctx, nil)
 }
 
 // sessionEnded reports whether a server session has been closed, by waiting for

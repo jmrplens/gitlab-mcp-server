@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
 
 // TestParseTierBadge_Values_MapToMinimumTier verifies that a doc `- Tier:`
@@ -741,5 +745,275 @@ func assertFileGapsOnly(t *testing.T, ctx context.Context) {
 	findDomain(t, &rep, "tags")
 	if rep.Summary.Domains == len(rep.Domains) {
 		t.Errorf("summary domains = %d should still count every domain, not the %d kept", rep.Summary.Domains, len(rep.Domains))
+	}
+}
+
+// stubCatalogs points the buildCatalog seam at the two catalogs given, CE for
+// the Enterprise:false call and EE for the Enterprise:true one, and returns a
+// pointer to the number of times it was asked for one. The real seam is
+// restored when the test ends.
+func stubCatalogs(t *testing.T, ce, ee *actioncatalog.Catalog, err error) *int {
+	t.Helper()
+	calls := 0
+	buildCatalog = func(_ *gitlabclient.Client, opts tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		calls++
+		if err != nil {
+			return nil, err
+		}
+		if opts.Enterprise {
+			return ee, nil
+		}
+		return ce, nil
+	}
+	t.Cleanup(func() { buildCatalog = tools.BuildActionCatalog })
+	return &calls
+}
+
+// oneActionCatalog builds a catalog holding a single action under the given
+// domain and owner package, which is the shape the report keys its domains by.
+func oneActionCatalog(t *testing.T, domain, name, ownerPkg string) *actioncatalog.Catalog {
+	t.Helper()
+	cat := actioncatalog.NewCatalog()
+	group := actioncatalog.Group{
+		ToolName:    "gitlab_" + domain,
+		BaseDomain:  domain,
+		ActionOrder: []string{name},
+		Actions: map[string]actioncatalog.Action{
+			name: {Name: name, Domain: domain, OwnerPackage: ownerPkg},
+		},
+	}
+	if err := cat.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup: %v", err)
+	}
+	return cat
+}
+
+// TestBuildReport_CatalogBuildFailure_NamesWhichEditionFailed verifies that a
+// catalog that cannot be built is reported as the edition it was asked for,
+// rather than as one indistinguishable failure: the CE build is the first ask
+// and the EE build the second, so the stub fails on the call under test and
+// serves an empty catalog for the other.
+func TestBuildReport_CatalogBuildFailure_NamesWhichEditionFailed(t *testing.T) {
+	cause := errors.New("catalog is broken")
+	cases := []struct {
+		name       string
+		failOn     bool // the Enterprise value whose build fails
+		wantPrefix string
+	}{
+		{name: "ce_build_fails", failOn: false, wantPrefix: "build CE catalog: "},
+		{name: "ee_build_fails", failOn: true, wantPrefix: "build EE catalog: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buildCatalog = func(_ *gitlabclient.Client, opts tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+				if opts.Enterprise == tc.failOn {
+					return nil, cause
+				}
+				return actioncatalog.NewCatalog(), nil
+			}
+			t.Cleanup(func() { buildCatalog = tools.BuildActionCatalog })
+
+			rep, err := buildReport(context.Background(), newOfflineResolver(t, t.TempDir()))
+			if rep != nil {
+				t.Errorf("buildReport returned a report alongside the failure: %+v", rep)
+			}
+			if err == nil || !strings.HasPrefix(err.Error(), tc.wantPrefix) {
+				t.Fatalf("buildReport error = %v, want it to start with %q", err, tc.wantPrefix)
+			}
+			if !errors.Is(err, cause) {
+				t.Errorf("buildReport error = %v, want it to wrap the cause", err)
+			}
+		})
+	}
+}
+
+// TestRun_CatalogBuildFailure_IsReportedAsTheReportStage verifies run names the
+// stage that failed before handing the cause on, so an operator reading stderr
+// knows the report was never built rather than that writing it failed.
+func TestRun_CatalogBuildFailure_IsReportedAsTheReportStage(t *testing.T) {
+	cause := errors.New("catalog is broken")
+	stubCatalogs(t, nil, nil, cause)
+
+	var out bytes.Buffer
+	err := run(context.Background(), newOfflineResolver(t, t.TempDir()), false, "-", &out)
+	if err == nil || !strings.HasPrefix(err.Error(), "build edition tier report: ") {
+		t.Fatalf("run error = %v, want it to start with %q", err, "build edition tier report: ")
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("run error = %v, want it to wrap the cause", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("run wrote %q to stdout after failing to build the report", out.String())
+	}
+}
+
+// TestBuildReport_ActionOwner_KeysTheDomainOrFallsBackToTheActionDomain
+// verifies the grouping key: an action is reported under its owner package,
+// and one the catalog left without an owner package is reported under its
+// domain rather than under the empty string, which would collapse every such
+// action into one nameless domain.
+func TestBuildReport_ActionOwner_KeysTheDomainOrFallsBackToTheActionDomain(t *testing.T) {
+	cases := []struct {
+		name       string
+		ownerPkg   string
+		wantDomain string
+	}{
+		{name: "owner_package_keys_the_domain", ownerPkg: "ghostpkg", wantDomain: "ghostpkg"},
+		{name: "no_owner_package_falls_back_to_the_action_domain", ownerPkg: "", wantDomain: "ghost"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cat := oneActionCatalog(t, "ghost", "list", tc.ownerPkg)
+			stubCatalogs(t, actioncatalog.NewCatalog(), cat, nil)
+
+			rep, err := buildReport(context.Background(), newOfflineResolver(t, t.TempDir()))
+			if err != nil {
+				t.Fatalf("buildReport: %v", err)
+			}
+			if len(rep.Domains) != 1 {
+				t.Fatalf("report has %d domains, want the one the catalog holds: %+v", len(rep.Domains), rep.Domains)
+			}
+			d := rep.Domains[0]
+			if d.Domain != tc.wantDomain {
+				t.Errorf("domain = %q, want %q", d.Domain, tc.wantDomain)
+			}
+			if len(d.ActionDetails) != 1 || d.ActionDetails[0].OwnerPkg != tc.wantDomain {
+				t.Errorf("action details = %+v, want one action owned by %q", d.ActionDetails, tc.wantDomain)
+			}
+			if d.ActionDetails[0].CurrentGate != "enterprise" {
+				t.Errorf("gate = %q, want enterprise for an action the CE catalog does not hold", d.ActionDetails[0].CurrentGate)
+			}
+		})
+	}
+}
+
+// TestRunMain_FlagParsing_ReturnsTheExitCode verifies the parse failures are
+// exit codes this command returns rather than an os.Exit inside the flag
+// package: an unknown flag is the usage exit, 2, and -h is the one parse
+// failure that exits clean, which is what ExitOnError would have done for
+// both. Neither may reach the audit, so the catalog is never built.
+func TestRunMain_FlagParsing_ReturnsTheExitCode(t *testing.T) {
+	calls := stubCatalogs(t, actioncatalog.NewCatalog(), actioncatalog.NewCatalog(), nil)
+
+	cases := []struct {
+		name     string
+		args     []string
+		want     int
+		wantErr  string
+		wantHelp bool
+	}{
+		{name: "an unknown flag is a usage error", args: []string{"audit_edition_tier", "--bogus"}, want: 2, wantErr: "bogus"},
+		{name: "asking for help exits clean", args: []string{"audit_edition_tier", "-h"}, want: 0, wantHelp: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if got := runMain(tc.args, &stdout, &stderr); got != tc.want {
+				t.Errorf("runMain(%v) = %d, want %d", tc.args, got, tc.want)
+			}
+			if tc.wantErr != "" && !strings.Contains(stderr.String(), tc.wantErr) {
+				t.Errorf("stderr = %q, want it to name %q", stderr.String(), tc.wantErr)
+			}
+			if tc.wantHelp && !strings.Contains(stderr.String(), "-output") {
+				t.Errorf("stderr = %q, want the usage listing -output", stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want nothing on a parse failure", stdout.String())
+			}
+			if *calls != 0 {
+				t.Errorf("the catalog was built %d times past a failed parse", *calls)
+			}
+		})
+	}
+}
+
+// TestRunMain_OutsideARepository_ReportsTheRootFailure verifies the command
+// stops with exit 1 and says what it could not find when it is run from a
+// directory with no module root above it, instead of fetching docs into a
+// cache directory it would have to invent.
+func TestRunMain_OutsideARepository_ReportsTheRootFailure(t *testing.T) {
+	calls := stubCatalogs(t, actioncatalog.NewCatalog(), actioncatalog.NewCatalog(), nil)
+	t.Chdir(t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+	if got := runMain([]string{"audit_edition_tier", "-offline"}, &stdout, &stderr); got != 1 {
+		t.Errorf("runMain outside a repository = %d, want 1", got)
+	}
+	if !strings.HasPrefix(stderr.String(), "find repository root: ") {
+		t.Errorf("stderr = %q, want it to start with the root-lookup failure", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing when the root is not found", stdout.String())
+	}
+	if *calls != 0 {
+		t.Errorf("the catalog was built %d times without a repository root", *calls)
+	}
+}
+
+// TestRunMain_ReportFailure_IsReportedAndExitsOne verifies a run that cannot
+// produce its report exits 1 with the error on stderr and nothing on stdout,
+// which is the whole contract main hands to the exit seam.
+func TestRunMain_ReportFailure_IsReportedAndExitsOne(t *testing.T) {
+	stubCatalogs(t, nil, nil, errors.New("catalog is broken"))
+
+	var stdout, stderr bytes.Buffer
+	if got := runMain([]string{"audit_edition_tier", "-offline"}, &stdout, &stderr); got != 1 {
+		t.Errorf("runMain with an unbuildable report = %d, want 1", got)
+	}
+	if !strings.Contains(stderr.String(), "build edition tier report: build CE catalog: catalog is broken") {
+		t.Errorf("stderr = %q, want the report stage, the edition and the cause", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing when the report was never built", stdout.String())
+	}
+}
+
+// TestRunMain_OfflineToFile_WritesTheReportAndExitsClean verifies the whole
+// wiring of the entry point on the path an operator uses: the flags are read
+// from the arguments, -offline keeps the doc fetchers off the network, and
+// -output puts the report in the named file while stdout stays empty.
+func TestRunMain_OfflineToFile_WritesTheReportAndExitsClean(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "edition-tier.json")
+	var stdout, stderr bytes.Buffer
+
+	if got := runMain([]string{"audit_edition_tier", "-offline", "-output", path}, &stdout, &stderr); got != 0 {
+		t.Fatalf("runMain = %d (stderr %q), want 0", got, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing when a file was named", stdout.String())
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	var rep report
+	if unmarshalErr := json.Unmarshal(data, &rep); unmarshalErr != nil {
+		t.Fatalf("report file is not JSON: %v", unmarshalErr)
+	}
+	if rep.SchemaVersion != schemaVersion || len(rep.Domains) == 0 || rep.Summary.Actions == 0 {
+		t.Errorf("report = version %d over %d domains and %d actions, want the real catalog graded",
+			rep.SchemaVersion, len(rep.Domains), rep.Summary.Actions)
+	}
+}
+
+// TestMain_HandsTheExitCodeToOsExit verifies main wires runMain's result to the
+// exit seam. os.Args is replaced so the flag set parses no test flags, and the
+// report is written to a temporary file so the real stdout stays clean.
+func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "edition-tier.json")
+	oldArgs := os.Args
+	os.Args = []string{"audit_edition_tier", "-offline", "-output", path}
+	t.Cleanup(func() { os.Args = oldArgs })
+	got := -1
+	osExit = func(code int) { got = code }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	main()
+
+	if got != 0 {
+		t.Errorf("main() exited %d, want 0", got)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("main() wrote no report: %v", err)
 	}
 }

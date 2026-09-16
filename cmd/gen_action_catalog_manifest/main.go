@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"go/format"
+	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
@@ -15,6 +18,18 @@ import (
 const (
 	defaultSourceDir  = "internal/tools"
 	defaultOutputPath = "internal/tools/action_specs_manifest_gen.go"
+)
+
+// Seams over the two calls a test cannot make for itself. osExit would end the
+// test process, so runMain returns the code and main is the one line that
+// spends it. renderManifest is the rendering stage, whose only failure is a
+// builder name gofmt refuses: discovery reads those names off parsed Go
+// function declarations, so every name it can return is an identifier and no
+// fixture tree reaches that branch. The seam is what lets a test hold run to
+// naming the stage it failed in, which is the contract run documents.
+var (
+	osExit         = os.Exit
+	renderManifest = generateManifest
 )
 
 // main parses CLI flags, walks the source directory for buildXxxActionSpecs
@@ -30,18 +45,42 @@ const (
 //	go run ./cmd/gen_action_catalog_manifest/            # rewrite manifest
 //	go run ./cmd/gen_action_catalog_manifest/ --check    # fail if stale
 func main() {
-	sourceDir := flag.String("source", defaultSourceDir, "directory containing action spec group builder source files")
-	outputPath := flag.String("output", defaultOutputPath, "generated manifest path")
-	check := flag.Bool("check", false, "verify generated manifest is up to date without writing")
-	flag.Parse()
+	osExit(runMain(os.Args, os.Stderr))
+}
+
+// runMain parses args, resolves the repository root from the working
+// directory, and dispatches to run, returning the process exit code and
+// reporting every failure on stderr. It takes its arguments and its error
+// writer explicitly, the way run takes its paths, so a test can drive each
+// exit path without ending its own process.
+func runMain(args []string, stderr io.Writer) int {
+	// ContinueOnError rather than ExitOnError, so a bad flag is an exit code
+	// this function returns instead of an os.Exit the seam above never sees.
+	// The flag set has already written the error and the usage to stderr by
+	// the time Parse returns; -h is the one failure that exits clean, as the
+	// package's own ExitOnError would.
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	sourceDir := flags.String("source", defaultSourceDir, "directory containing action spec group builder source files")
+	outputPath := flags.String("output", defaultOutputPath, "generated manifest path")
+	check := flags.Bool("check", false, "verify generated manifest is up to date without writing")
+	if parseErr := flags.Parse(args[1:]); parseErr != nil {
+		if errors.Is(parseErr, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fmt.Fprintf(stderr, "find repository root: %v\n", err)
+		return 1
 	}
 	if runErr := run(root, *sourceDir, *outputPath, *check); runErr != nil {
-		cmdutil.Fatalf("%v", runErr)
+		fmt.Fprintf(stderr, "%v\n", runErr)
+		return 1
 	}
+	return 0
 }
 
 // run discovers the builders under root/sourceDir, renders the manifest, and
@@ -52,7 +91,7 @@ func run(root, sourceDir, outputPath string, check bool) error {
 	if err != nil {
 		return fmt.Errorf("discover action spec group builders: %w", err)
 	}
-	content, err := generateManifest(builders)
+	content, err := renderManifest(builders)
 	if err != nil {
 		return fmt.Errorf("generate manifest: %w", err)
 	}
