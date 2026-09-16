@@ -11,6 +11,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -20,10 +21,10 @@ import (
 // Figure geometry. One place, so the light and dark renderings cannot drift
 // apart and every chart on the page lines up with the others.
 // The canvas is twenty pixels taller than the plot needs so that every figure
-// can carry the host and the build it was measured on along its bottom edge. A
-// chart travels: it is embedded, screenshotted and quoted away from the page
-// that states the machine, and a resident-set curve with no machine attached
-// is a number nobody can act on.
+// can carry along its bottom edge the machine it was measured on and the day.
+// A chart travels: it is embedded, screenshotted and quoted away from the page
+// that states those, and a resident-set curve with no machine attached is a
+// number nobody can act on.
 const (
 	chartW = 900
 	chartH = 500
@@ -41,6 +42,28 @@ const (
 	provenanceY = chartH - 12
 
 	fontStack = `font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif"`
+)
+
+// How much room a label needs, which is what decides how many of them a
+// figure can carry. Stated beside the geometry because both numbers are read
+// against plotW and plotH rather than against anything about the data.
+const (
+	// xTickFontSize is the size the horizontal tick labels are drawn at, and
+	// xTickLabelGap the clear space each one needs beside it: about one and a
+	// half times that size, which is what a reader needs between two numbers
+	// before they stop reading as two. The credential ramp is why this is a
+	// rule rather than a habit. It labels every whole number, and with
+	// sixty-four of them across a 794-pixel plot each label has 12.6 pixels
+	// and two digits need about 14, so the axis was published as one
+	// continuous number, 10111213141516171819202122.
+	xTickFontSize = 11.0
+	xTickLabelGap = 16.0
+
+	// endLabelFontSize is the size of the value drawn beside a line's last
+	// point, and endLabelPitch the least distance two of them may be apart
+	// before they overprint.
+	endLabelFontSize = 10.5
+	endLabelPitch    = 13.0
 )
 
 // thresholdLine is a labeled horizontal rule, used for the memory limits an
@@ -70,7 +93,7 @@ type barSpec struct {
 	// surface to somebody who already knows, and a figure has to be legible
 	// away from the page that says so.
 	XAxis string
-	// Provenance is the machine and build the figure was measured on, drawn
+	// Provenance is the machine the figure was measured on and the day, drawn
 	// along the bottom edge so the chart carries it wherever it is quoted.
 	Provenance string
 	Categories []string
@@ -111,7 +134,7 @@ type lineSpec struct {
 	Subtitle string
 	XAxis    string
 	YAxis    string
-	// Provenance is the machine and build the figure was measured on, drawn
+	// Provenance is the machine the figure was measured on and the day, drawn
 	// along the bottom edge so the chart carries it wherever it is quoted.
 	Provenance string
 	Series     []lineSeries
@@ -215,7 +238,7 @@ func (c *canvas) axisLabels(yAxis, xAxis string) {
 	}
 }
 
-// provenance writes the machine and build along the bottom edge, so a figure
+// provenance writes the machine and the day along the bottom edge, so a figure
 // lifted out of its page still says what it is a measurement of.
 func (c *canvas) provenance(text string) {
 	if text == "" {
@@ -501,16 +524,12 @@ func xMapper(spec lineSpec, e lineExtent) func(float64) float64 {
 	}
 }
 
-// xTicks lists where the horizontal axis is labeled: every integer across
-// the range on a linear axis, and the series' own points on a logarithmic
-// one, deduplicated and in order.
+// xTicks lists where the horizontal axis is labeled: whole numbers across the
+// range on a linear axis, thinned to what the width can carry, and the series'
+// own points on a logarithmic one, deduplicated and in order.
 func xTicks(spec lineSpec, e lineExtent) []float64 {
 	if !spec.LogX {
-		var ticks []float64
-		for x := e.minX; x <= e.maxX; x++ {
-			ticks = append(ticks, x)
-		}
-		return ticks
+		return linearXTicks(e)
 	}
 	seen := map[float64]bool{}
 	var ticks []float64
@@ -524,6 +543,34 @@ func xTicks(spec lineSpec, e lineExtent) []float64 {
 	}
 	slices.Sort(ticks)
 	return ticks
+}
+
+// linearXTicks labels a linear axis at its first point, its last, and the
+// multiples of a stride between them, the stride being the smallest round
+// number of units that leaves every label its own width plus xTickLabelGap.
+//
+// The ends are kept whatever the stride, because they are the two counts a
+// reader looks for: where the measurement started and where it stopped. A
+// multiple that lands too close to either end is dropped instead, since a
+// label touching the last one is the very thing the stride exists to prevent.
+func linearXTicks(e lineExtent) []float64 {
+	if e.maxX <= e.minX {
+		return []float64{e.minX}
+	}
+	perUnit := float64(plotW) / (e.maxX - e.minX)
+	// The last tick is the largest, so it is the widest label the axis will
+	// carry: sizing the stride by it holds for every other one.
+	needed := textWidth(fmt.Sprintf("%.0f", e.maxX), xTickFontSize) + xTickLabelGap
+	stride := math.Max(1, niceStep(needed/perUnit))
+
+	ticks := []float64{e.minX}
+	for x := math.Ceil((e.minX+1)/stride) * stride; x < e.maxX; x += stride {
+		if (x-e.minX)*perUnit < needed || (e.maxX-x)*perUnit < needed {
+			continue
+		}
+		ticks = append(ticks, x)
+	}
+	return append(ticks, e.maxX)
 }
 
 // seriesColor picks a series' color: its group's when it names one, so a
@@ -572,10 +619,11 @@ func renderLines(p palette, spec lineSpec) string {
 	c.provenance(spec.Provenance)
 
 	for _, x := range xTicks(spec, e) {
-		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="11" text-anchor="middle" fill="%s">%.0f</text>`+"\n",
-			xPos(x), padT+plotH+20, fontStack, p.Muted, x)
+		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%d" %s font-size="%.0f" text-anchor="middle" fill="%s">%.0f</text>`+"\n",
+			xPos(x), padT+plotH+20, fontStack, xTickFontSize, p.Muted, x)
 	}
 
+	var ends []endLabel
 	for seriesIndex, series := range spec.Series {
 		color := seriesColor(p, spec, seriesIndex)
 		var path strings.Builder
@@ -597,12 +645,24 @@ func renderLines(p palette, spec lineSpec) string {
 				xPos(series.X[i]), sc.pos(series.Y[i]), color)
 		}
 		// The last point carries the value, which is the one a reader takes
-		// away: what the deployment weighs with every client attached.
-		last := len(series.X) - 1
-		if last >= 0 {
-			fmt.Fprintf(&c.sb, `<text x="%.1f" y="%.1f" %s font-size="10.5" text-anchor="end" fill="%s">%s</text>`+"\n",
-				xPos(series.X[last])-6, sc.pos(series.Y[last])-8, fontStack, color, xmlEscape(format(series.Y[last])))
+		// away: what the deployment weighs with every client attached. They
+		// are collected rather than drawn here, because where one goes
+		// depends on where the others went.
+		if last := len(series.X) - 1; last >= 0 {
+			text := format(series.Y[last])
+			ends = append(ends, endLabel{
+				x:     xPos(series.X[last]) - 6,
+				y:     sc.pos(series.Y[last]) - 8,
+				width: textWidth(text, endLabelFontSize),
+				text:  text,
+				color: color,
+			})
 		}
+	}
+	// Last, so a value sits over every line rather than under the next one.
+	for _, label := range placeEndLabels(ends) {
+		fmt.Fprintf(&c.sb, `<text x="%.1f" y="%.1f" %s font-size="%.1f" text-anchor="end" fill="%s">%s</text>`+"\n",
+			label.x, label.y, fontStack, endLabelFontSize, label.color, xmlEscape(label.text))
 	}
 
 	if spec.Threshold != nil {
@@ -618,6 +678,102 @@ func renderLines(p palette, spec lineSpec) string {
 			x-4, padT+14+14*i, fontStack, p.Threshold, xmlEscape(marker.Label))
 	}
 	return c.close()
+}
+
+// endLabel is the value drawn beside a series' last point, reduced to
+// coordinates and to the room it takes up.
+type endLabel struct {
+	x, y  float64
+	width float64
+	text  string
+	color string
+}
+
+// placeEndLabels separates the end labels that would be drawn on top of one
+// another, and drops the ones no room is left for.
+//
+// Two lines that finish near the same value put their labels at the same
+// height, and the result is a smudge rather than a number: series-latency
+// stacked six of them at the right edge and series-cpu fused two into one
+// mark. The labels of a group are therefore spread until each has
+// endLabelPitch to itself, and the spread is centered on where they wanted to
+// be rather than hung below the topmost one, which would leave every label but
+// the first sitting on the line it belongs to. What the plot then has no room
+// for is dropped, because a value drawn over the legend or under the axis is
+// worse than a value read off the grid.
+func placeEndLabels(labels []endLabel) []endLabel {
+	const top, bottom = padT + endLabelFontSize, padT + plotH
+	placed := make([]endLabel, 0, len(labels))
+	for _, group := range endLabelGroups(labels) {
+		slices.SortStableFunc(group, func(a, b endLabel) int { return cmp.Compare(a.y, b.y) })
+		wanted := meanEndLabelY(group)
+		for i := 1; i < len(group); i++ {
+			group[i].y = math.Max(group[i].y, group[i-1].y+endLabelPitch)
+		}
+		shiftEndLabels(group, wanted-meanEndLabelY(group))
+
+		if over := group[len(group)-1].y - bottom; over > 0 {
+			shiftEndLabels(group, -over)
+		}
+		if under := top - group[0].y; under > 0 {
+			shiftEndLabels(group, under)
+		}
+		for _, label := range group {
+			if label.y <= bottom {
+				placed = append(placed, label)
+			}
+		}
+	}
+	return placed
+}
+
+// shiftEndLabels moves a whole group, which is how it keeps the spacing the
+// pass just gave it.
+func shiftEndLabels(group []endLabel, by float64) {
+	for i := range group {
+		group[i].y += by
+	}
+}
+
+// meanEndLabelY is where a group sits, which is what the spread is centered on.
+func meanEndLabelY(group []endLabel) float64 {
+	sum := 0.0
+	for _, label := range group {
+		sum += label.y
+	}
+	return sum / float64(len(group))
+}
+
+// endLabelGroups collects the labels whose horizontal extents overlap, which
+// are the only ones that can collide: two series ending at different counts
+// write in different places whatever their values are. The sweep is over the
+// left edges, so a group is closed as soon as a label starts past everything
+// in it.
+func endLabelGroups(labels []endLabel) [][]endLabel {
+	order := make([]int, len(labels))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(a, b int) int {
+		return cmp.Compare(labels[a].x-labels[a].width, labels[b].x-labels[b].width)
+	})
+
+	var groups [][]endLabel
+	var current []endLabel
+	right := math.Inf(-1)
+	for _, i := range order {
+		label := labels[i]
+		if len(current) > 0 && label.x-label.width > right {
+			groups = append(groups, current)
+			current, right = nil, math.Inf(-1)
+		}
+		current = append(current, label)
+		right = math.Max(right, label.x)
+	}
+	if len(current) > 0 {
+		groups = append(groups, current)
+	}
+	return groups
 }
 
 // textWidth estimates a label's width, which is all the legend layout needs:

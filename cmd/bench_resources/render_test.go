@@ -480,9 +480,14 @@ func TestShortCommit_TrimsToEightCharacters(t *testing.T) {
 
 // TestSeriesBlocks_TablesAndStopSentencesInEachLanguage verifies the
 // generated block gains a concurrency section when the record holds a
-// series: a subheading per series naming its settings and budget, a row per
-// step, and a sentence saying where it stopped, in the page's language, and
-// nothing at all for a record without one.
+// series: a subheading per series naming its settings, a row per step, and a
+// sentence saying where it stopped, in the page's language, and nothing at
+// all for a record without one.
+//
+// The memory budget is not among the settings the subheading names. It says
+// when the harness would have given up rather than anything about the server,
+// and the one series it explains is one that stopped on it, where the
+// sentence under the table still names it.
 func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 	if got := seriesBlocks(sampleRun(), englishLabels(), "###"); got != "" {
 		t.Errorf("a record with no series produced %q", got)
@@ -491,7 +496,7 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 	english := docBlock(sampleSeriesRun(), englishLabels())
 	for _, want := range []string{
 		"### Concurrency series",
-		"#### http, dynamic surface: 4 in flight per credential, 10 s per step, memory budget 4000 MiB",
+		"#### http, dynamic surface: 4 in flight per credential, 10 s per step\n",
 		"#### http, meta surface",
 		"| Credentials |",
 		"| Settled heap | Settled resident |",
@@ -511,6 +516,11 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 	}
 	if strings.Contains(english, "\n\n\n") {
 		t.Error("the generated block has a run of blank lines, which markdownlint refuses")
+	}
+	// The one series that carries the budget is the one that stopped on it.
+	if strings.Count(english, "budget") != 1 {
+		t.Errorf("the block names the budget %d times, want only the sentence of the series that stopped on it",
+			strings.Count(english, "budget"))
 	}
 	// The cells are padded to the column, so the row for twenty credentials
 	// is matched by shape rather than by a literal. The settled pair sits
@@ -541,7 +551,7 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 	spanish := siteBlock(sampleSeriesRun(), spanishLabels())
 	for _, want := range []string{
 		"### Serie de concurrencia",
-		"presupuesto de memoria de 4000 MiB",
+		"#### http, superficie dynamic: 4 en vuelo por credencial, 10 s por paso\n",
 		"| Heap en reposo | Residente en reposo |",
 		"el pico de conjunto residente bajo carga crece 36.61 MiB por credencial",
 		"el heap vivo en reposo, leído con la carga detenida y una recolección forzada, crece 512.0 KiB por credencial",
@@ -558,7 +568,7 @@ func TestSeriesBlocks_TablesAndStopSentencesInEachLanguage(t *testing.T) {
 		})
 	}
 	for _, english := range []string{
-		"Stopped at", "Every planned step", "memory budget", "Credentials |",
+		"Stopped at", "Every planned step", "against a budget of", "Credentials |",
 		"Settled heap", "Settled resident", "per credential",
 	} {
 		t.Run(english, func(t *testing.T) {
@@ -640,8 +650,8 @@ func TestMibFine_KeepsWhatWholeNumbersWouldRoundAway(t *testing.T) {
 }
 
 // TestSeriesSentence_EveryKindOfEnding verifies the sentence under a series
-// table covers every way a series ends, including a failure and a series
-// that ran with no budget at all.
+// table covers every way a series ends, including a failure, and that the
+// budget is named there and nowhere else.
 func TestSeriesSentence_EveryKindOfEnding(t *testing.T) {
 	l := englishLabels()
 	cases := []struct {
@@ -670,14 +680,32 @@ func TestSeriesSentence_EveryKindOfEnding(t *testing.T) {
 			}
 		})
 	}
-	t.Run("no budget in the caption", func(t *testing.T) {
-		run := sampleSeriesRun()
-		run.Series = run.Series[:1]
-		run.Series[0].BudgetMiB = 0
-		if got := seriesBlocks(run, l, "###"); !strings.Contains(got, "10 s per step, no memory budget") {
-			t.Errorf("the caption does not say the series ran with no budget: %q", got)
-		}
-	})
+	// A series that ran every planned step says so and nothing about the
+	// budget it planned against, whether it had one or not: on a run that
+	// never approached it, the figure is about the harness rather than about
+	// the server, and printing it invited the reader to take 35000 MiB for a
+	// number this server has something to do with.
+	captions := []struct {
+		name   string
+		budget float64
+	}{
+		{name: "a series with a budget", budget: 4000},
+		{name: "a host that reported no available memory", budget: 0},
+	}
+	for _, tc := range captions {
+		t.Run(tc.name, func(t *testing.T) {
+			run := sampleSeriesRun()
+			run.Series = run.Series[:1]
+			run.Series[0].BudgetMiB = tc.budget
+			got := seriesBlocks(run, l, "###")
+			if !strings.Contains(got, "#### http, meta surface: 4 in flight per credential, 10 s per step\n") {
+				t.Errorf("the caption does not name the settings: %q", got)
+			}
+			if strings.Contains(got, "budget") {
+				t.Errorf("the caption names the budget: %q", got)
+			}
+		})
+	}
 }
 
 // TestRenderAll_ReportsWhatItCannotWriteOrCheck covers the four ways the

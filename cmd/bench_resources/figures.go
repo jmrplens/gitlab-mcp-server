@@ -67,7 +67,6 @@ type labels struct {
 	SeriesCPUSubtitle     string
 	SeriesCPUY            string
 	SeriesX               string
-	SeriesBudget          string
 	SeriesStopped         string
 	SeriesP50             string
 	SeriesP99             string
@@ -85,19 +84,23 @@ type labels struct {
 	SeriesSlopes        string
 	SeriesLoadSlopeOnly string
 	SeriesCaption       string
-	SeriesBudgetClause  string
-	SeriesNoBudget      string
 	SeriesComplete      string
 	SeriesStopBudget    string
 	SeriesStopLatency   string
 	SeriesStopFailure   string
 
 	MeasuredOn string
-	// ChartProvenance is the same claim as MeasuredOn, short enough to sit
-	// along a figure's bottom edge: the machine, the build and the date. A
-	// chart gets embedded, screenshotted and quoted away from the page that
-	// states those, and a memory curve with no machine attached is a number
-	// nobody can act on.
+	// ChartProvenance is what a figure carries along its bottom edge, and it
+	// is a strict subset of MeasuredOn: how many logical processors the
+	// machine had, which operating system and kernel served the measurement,
+	// and the day. A chart gets embedded, screenshotted and quoted away from
+	// the page that states those, and a processor-time figure with no CPU
+	// count attached is a number nobody can act on. Everything else that
+	// sentence carries, the processor model, the installed memory, the Go
+	// version and the build with its commit, stays on the page: on a chart it
+	// is detail about the machine rather than about the measurement, and the
+	// build hash in particular dates an image that nothing else on the page
+	// dates.
 	ChartProvenance string
 	// HostCPUs, HostRAM and HostKernel are the words the machine's own
 	// description is written with. The sentence naming the host is prose, so
@@ -158,14 +161,13 @@ func englishLabels() labels {
 		LatencyTitle:          "Request latency by method",
 		LatencySubtitle:       "solid bar p50, faint extension p99, log scale",
 		SeriesMemoryTitle:     "Resident memory as credentials accumulate",
-		SeriesMemorySubtitle:  "HTTP mode, one process: each step's peak, the memory budget, and where a series stopped",
+		SeriesMemorySubtitle:  "HTTP mode, one process: each step's peak, and where a series stopped",
 		SeriesLatencyTitle:    "tools/call latency as credentials accumulate",
 		SeriesLatencySubtitle: "solid line p50, dashed line p99, both axes on a log scale",
 		SeriesCPUTitle:        "Processor time per call as credentials accumulate",
 		SeriesCPUSubtitle:     "CPU time the server consumed over the steady phase, divided by the calls that completed",
 		SeriesCPUY:            "CPU milliseconds per call",
 		SeriesX:               "live credentials (log scale)",
-		SeriesBudget:          "budget %.0f MiB",
 		SeriesStopped:         "%s: stopped at %d",
 		SeriesP50:             "%s p50",
 		SeriesP99:             "%s p99",
@@ -182,18 +184,16 @@ func englishLabels() labels {
 		SeriesLoadSlopeOnly: "Fitted across these steps, the peak resident set under load grows %.2f MiB per credential. " +
 			"That is a credential together with the requests it keeps in flight, not what a credential costs to hold: " +
 			"this record carries no settled reading.",
-		SeriesCaption:      "%s, %s surface: %d in flight per credential, %.0f s per step, %s",
-		SeriesBudgetClause: "memory budget %.0f MiB",
-		SeriesNoBudget:     "no memory budget",
-		SeriesComplete:     "Every planned step ran, up to %d credentials.",
-		SeriesStopBudget:   "Stopped at %d credentials: the next step (%d) was estimated at %.0f MiB against a budget of %.0f MiB.",
-		SeriesStopLatency:  "Stopped at %d credentials: the tools/call p99 reached %.0f ms, above the %d ms ceiling.",
-		SeriesStopFailure:  "Stopped at %d credentials: admitting the credentials of the next step (%d) failed: %s.",
-		MeasuredOn:         "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
-		ChartProvenance:    "Measured on %s. Build %s, %s.",
-		HostCPUs:           "logical CPUs",
-		HostRAM:            "GiB RAM",
-		HostKernel:         "kernel",
+		SeriesCaption:     "%s, %s surface: %d in flight per credential, %.0f s per step",
+		SeriesComplete:    "Every planned step ran, up to %d credentials.",
+		SeriesStopBudget:  "Stopped at %d credentials: the next step (%d) was estimated at %.0f MiB against a budget of %.0f MiB.",
+		SeriesStopLatency: "Stopped at %d credentials: the tools/call p99 reached %.0f ms, above the %d ms ceiling.",
+		SeriesStopFailure: "Stopped at %d credentials: admitting the credentials of the next step (%d) failed: %s.",
+		MeasuredOn:        "Measured on %s, build %s, %s. %d rounds per method, resident set sampled every %d ms.",
+		ChartProvenance:   "%s, %s",
+		HostCPUs:          "logical CPUs",
+		HostRAM:           "GiB RAM",
+		HostKernel:        "kernel",
 		SummaryHead: []string{
 			"Scenario", "Clients", "Idle", "One client", "All clients", "Per extra client",
 			"Peak", "Goroutines", "CPU, % of one core",
@@ -215,7 +215,7 @@ func englishLabels() labels {
 			figureMemoryRamp:    "Lines showing resident memory growing as each new credential builds its own catalog in the HTTP pool.",
 			figureStartup:       "Grouped bars on a log scale comparing process readiness, the first cold tools/list and a warm one.",
 			figureLatency:       "Grouped bars on a log scale comparing resources/list, tools/call and tools/list latency across transports and surfaces.",
-			figureSeriesMemory:  "Lines on a log scale of credentials showing each surface's peak resident memory per step, the memory budget, and the count each series stopped at.",
+			figureSeriesMemory:  "Lines on a log scale of credentials showing each surface's peak resident memory per step and the count each series stopped at.",
 			figureSeriesLatency: "Lines on log scales showing the tools/call p50 and p99 per surface as the credential count grows.",
 			figureSeriesCPU:     "Lines on a log scale of credentials showing the processor time per call for each surface.",
 		},
@@ -256,14 +256,13 @@ func spanishLabels() labels {
 		LatencyTitle:          "Latencia de petición por método",
 		LatencySubtitle:       "barra sólida p50, extensión tenue p99, escala logarítmica",
 		SeriesMemoryTitle:     "Memoria residente según se acumulan credenciales",
-		SeriesMemorySubtitle:  "Modo HTTP, un proceso: el pico de cada paso, el presupuesto de memoria y dónde se detuvo cada serie",
+		SeriesMemorySubtitle:  "Modo HTTP, un proceso: el pico de cada paso y dónde se detuvo cada serie",
 		SeriesLatencyTitle:    "Latencia de tools/call según se acumulan credenciales",
 		SeriesLatencySubtitle: "línea continua p50, discontinua p99, ambos ejes en escala logarítmica",
 		SeriesCPUTitle:        "Tiempo de procesador por llamada según se acumulan credenciales",
 		SeriesCPUSubtitle:     "tiempo de CPU consumido por el servidor en la fase estable, dividido entre las llamadas completadas",
 		SeriesCPUY:            "milisegundos de CPU por llamada",
 		SeriesX:               "credenciales activas (escala logarítmica)",
-		SeriesBudget:          "presupuesto %.0f MiB",
 		SeriesStopped:         "%s: detenida en %d",
 		SeriesP50:             "%s p50",
 		SeriesP99:             "%s p99",
@@ -280,18 +279,16 @@ func spanishLabels() labels {
 		SeriesLoadSlopeOnly: "Ajustado sobre estos pasos, el pico de conjunto residente bajo carga crece %.2f MiB por credencial. " +
 			"Eso es una credencial junto con las peticiones que mantiene en vuelo, no lo que cuesta mantener una credencial: " +
 			"este registro no contiene ninguna lectura en reposo.",
-		SeriesCaption:      "%s, superficie %s: %d en vuelo por credencial, %.0f s por paso, %s",
-		SeriesBudgetClause: "presupuesto de memoria de %.0f MiB",
-		SeriesNoBudget:     "sin presupuesto de memoria",
-		SeriesComplete:     "Se ejecutaron todos los pasos previstos, hasta %d credenciales.",
-		SeriesStopBudget:   "Detenida en %d credenciales: el siguiente paso (%d) se estimó en %.0f MiB frente a un presupuesto de %.0f MiB.",
-		SeriesStopLatency:  "Detenida en %d credenciales: el p99 de tools/call alcanzó %.0f ms, por encima del techo de %d ms.",
-		SeriesStopFailure:  "Detenida en %d credenciales: no se pudieron admitir las credenciales del siguiente paso (%d): %s.",
-		MeasuredOn:         "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
-		ChartProvenance:    "Medido en %s. Compilación %s, %s.",
-		HostCPUs:           "CPU lógicas",
-		HostRAM:            "GiB de RAM",
-		HostKernel:         "núcleo",
+		SeriesCaption:     "%s, superficie %s: %d en vuelo por credencial, %.0f s por paso",
+		SeriesComplete:    "Se ejecutaron todos los pasos previstos, hasta %d credenciales.",
+		SeriesStopBudget:  "Detenida en %d credenciales: el siguiente paso (%d) se estimó en %.0f MiB frente a un presupuesto de %.0f MiB.",
+		SeriesStopLatency: "Detenida en %d credenciales: el p99 de tools/call alcanzó %.0f ms, por encima del techo de %d ms.",
+		SeriesStopFailure: "Detenida en %d credenciales: no se pudieron admitir las credenciales del siguiente paso (%d): %s.",
+		MeasuredOn:        "Medido en %s, compilación %s, %s. %d rondas por método, conjunto residente muestreado cada %d ms.",
+		ChartProvenance:   "%s, %s",
+		HostCPUs:          "CPU lógicas",
+		HostRAM:           "GiB de RAM",
+		HostKernel:        "núcleo",
 		SummaryHead: []string{
 			"Escenario", "Clientes", "En reposo", "Un cliente", "Todos los clientes",
 			"Por cliente extra", "Pico", "Goroutines", "CPU, % de un núcleo",
@@ -310,7 +307,7 @@ func spanishLabels() labels {
 			figureMemoryRamp:    "Líneas que muestran cómo crece la memoria residente cuando cada credencial nueva construye su catálogo en el pool HTTP.",
 			figureStartup:       "Barras agrupadas en escala logarítmica que comparan el arranque del proceso, el primer tools/list en frío y uno en caliente.",
 			figureLatency:       "Barras agrupadas en escala logarítmica que comparan la latencia de resources/list, tools/call y tools/list por transporte y superficie.",
-			figureSeriesMemory:  "Líneas sobre una escala logarítmica de credenciales con el pico de memoria residente de cada superficie por paso, el presupuesto de memoria y el número de credenciales en que se detuvo cada serie.",
+			figureSeriesMemory:  "Líneas sobre una escala logarítmica de credenciales con el pico de memoria residente de cada superficie por paso y el número de credenciales en que se detuvo cada serie.",
 			figureSeriesLatency: "Líneas en escalas logarítmicas con el p50 y el p99 de tools/call por superficie según crece el número de credenciales.",
 			figureSeriesCPU:     "Líneas sobre una escala logarítmica de credenciales con el tiempo de procesador por llamada de cada superficie.",
 		},
@@ -378,21 +375,23 @@ func buildFigures(run *Run, l labels) []figure {
 	return out
 }
 
-// chartProvenance is the line every figure carries along its bottom edge: the
-// machine, the build and the day.
+// chartProvenance is the line every figure carries along its bottom edge: how
+// many logical processors the machine had, the operating system and kernel
+// that served the measurement, and the day.
 //
 // It is deliberately shorter than the sentence under the "Measurements"
-// heading. That sentence has a paragraph's width to spend and names the kernel,
-// the installed memory, the round count and the sampling interval; this one has
-// a chart's width, and what a reader needs from a chart read on its own is
-// which machine and which build, not how the sampler was configured. The
-// date rather than the timestamp for the same reason: two runs on one day are
-// already told apart by the commit.
+// heading. That sentence has a paragraph's width to spend and names the
+// processor, the installed memory, the toolchain, the build, the round count
+// and the sampling interval; this one has a chart's width, and the only one of
+// those a reader needs in order to read the numbers is the processor count,
+// because a CPU-milliseconds-per-call figure means nothing without it. The
+// date rather than the timestamp, since two runs on one day are told apart by
+// the page rather than by a figure.
 func chartProvenance(run *Run, l labels) string {
 	if l.ChartProvenance == "" {
 		return ""
 	}
-	return fmt.Sprintf(l.ChartProvenance, run.Host.describeShort(l), buildLabel(run), measurementDay(run))
+	return fmt.Sprintf(l.ChartProvenance, run.Host.describeShort(l), measurementDay(run))
 }
 
 // measurementDay trims a record's timestamp to its date, leaving anything that
@@ -434,12 +433,19 @@ func seriesLine(series SeriesScenario, label string, pick func(SeriesStep) float
 }
 
 // seriesMemorySpec is the sizing figure at scale: each surface's peak
-// resident set per step, the budget the series planned against, and a
-// marker where each stopped early.
+// resident set per step, and a marker where each stopped early.
 //
 // The surfaces share one chart rather than getting one each, because the
 // comparison a reader makes is between surfaces at the same credential
-// count, and the budget and the stops read the same on one axis.
+// count, and the stops read the same on one axis.
+//
+// The memory budget is deliberately not drawn. It is a property of the run
+// rather than of the server, saying when the harness would have given up, and
+// on the published record it is 35000 MiB against a highest measurement of
+// 4677: as a rule it forced the axis to 40000 and squashed all three surfaces
+// into the bottom eighth of the plot, which is where the difference between
+// them, the whole point of the figure, became invisible. The number is still
+// named where it explains something, which is a series that stopped on it.
 func seriesMemorySpec(run *Run, l labels) lineSpec {
 	spec := lineSpec{
 		Title: l.SeriesMemoryTitle, Subtitle: l.SeriesMemorySubtitle,
@@ -448,9 +454,6 @@ func seriesMemorySpec(run *Run, l labels) lineSpec {
 	}
 	for _, series := range orderedSeries(run) {
 		spec.Series = append(spec.Series, seriesLine(series, series.Surface, func(s SeriesStep) float64 { return s.RSSPeakMiB }))
-		if spec.Threshold == nil && series.BudgetMiB > 0 {
-			spec.Threshold = &thresholdLine{Value: series.BudgetMiB, Label: fmt.Sprintf(l.SeriesBudget, series.BudgetMiB)}
-		}
 		if series.Stop != nil {
 			spec.Markers = append(spec.Markers, lineMarker{
 				X: float64(series.StoppedAt), Label: fmt.Sprintf(l.SeriesStopped, series.Surface, series.StoppedAt),

@@ -85,6 +85,45 @@ func TestHostInfo_Describe_OmitsWhatItDoesNotKnow(t *testing.T) {
 	}
 }
 
+// TestHostInfo_DescribeShort_KeepsTheProcessorsAndTheKernel verifies the
+// description a figure carries along its bottom edge survives the facts a
+// probe can fail to gather, and names each operating system the way a reader
+// writes it beside a kernel release.
+//
+// It carries the processor count because the figures report processor
+// milliseconds per call, which cannot be read without it, and the kernel
+// because that is the layer reporting the resident set. Everything else the
+// full sentence names is dropped, not abbreviated.
+func TestHostInfo_DescribeShort_KeepsTheProcessorsAndTheKernel(t *testing.T) {
+	l := englishLabels()
+	tests := []struct {
+		name string
+		host HostInfo
+		want string
+	}{
+		{
+			name: "linux",
+			host: HostInfo{OS: "linux", Arch: "amd64", CPUModel: "Intel(R) Core(TM) i5-14400", CPUs: 16, MemTotalGiB: 62, Kernel: "6.12.105-production+truenas", GoVersion: "go1.27.1"},
+			want: "16 logical CPUs, Linux 6.12.105-production+truenas",
+		},
+		// uname -r reports the Darwin release rather than the macOS version,
+		// so the name printed beside it is Darwin.
+		{name: "macos", host: HostInfo{OS: "darwin", CPUs: 10, Kernel: "24.6.0"}, want: "10 logical CPUs, Darwin 24.6.0"},
+		// Windows has no uname, so the probe answers "unknown" and the
+		// description says the system alone rather than "Windows unknown".
+		{name: "windows", host: HostInfo{OS: "windows", CPUs: 8, Kernel: "unknown"}, want: "8 logical CPUs, Windows"},
+		{name: "no processor count", host: HostInfo{OS: "linux", Kernel: "6.1.0"}, want: "Linux 6.1.0"},
+		{name: "an operating system this table never heard of", host: HostInfo{OS: "plan9"}, want: "plan9"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.host.describeShort(l); got != tc.want {
+				t.Errorf("describeShort() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestHostInfo_Describe_FollowsTheLanguage verifies the sentence is written in
 // the language of the page it is going on, so the Spanish page does not carry
 // an English fragment inside a translated sentence.
