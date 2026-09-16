@@ -19,15 +19,16 @@ package modeleval
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
 )
 
-// The settings that decide the shape of the server a model talks to, and which
-// models are asked. The remaining MODELEVAL_* settings, which decide which
-// cases are asked and what a run may spend, arrive with the runner.
+// The settings that decide the shape of the server a model talks to, which
+// models are asked, which cases they are asked, and what a run may spend.
 const (
 	// settingModels is the comma-separated list of provider:model;key=value
 	// specs a run asks. It replaces the old evaluator's EVAL_MODELS, which
@@ -41,6 +42,49 @@ const (
 	settingTier = "MODELEVAL_TIER"
 	// settingMetaParamSchema is the meta-tool input-schema mode to serve.
 	settingMetaParamSchema = "MODELEVAL_META_PARAM_SCHEMA"
+	// settingCases is the comma-separated list of case identifiers to ask.
+	// Empty asks every case the corpus has.
+	settingCases = "MODELEVAL_CASES"
+	// settingRepeat is how many times each attempt is run, so a per-case pass
+	// rate over n is publishable.
+	settingRepeat = "MODELEVAL_REPEAT"
+	// settingParallel is how many attempts of one model may be in flight at
+	// once.
+	settingParallel = "MODELEVAL_PARALLEL"
+	// settingBudget is the ceiling in US dollars a run stops at.
+	settingBudget = "MODELEVAL_BUDGET_USD"
+	// settingUnpriced lets a run start with a model the price table has no
+	// figure for.
+	settingUnpriced = "MODELEVAL_UNPRICED"
+	// settingSpend is the consent a run asking a real provider needs.
+	settingSpend = "MODELEVAL_SPEND"
+	// settingSlice is how many individual tools a model is shown on the
+	// individual surface.
+	settingSlice = "MODELEVAL_SLICE"
+)
+
+// The bounds and defaults the counted settings are held to.
+//
+// Each ceiling is there to turn a typo into a refusal rather than into a bill:
+// a repeat of 1000 or a parallelism of 500 is a mistyped figure every time,
+// and the first would multiply a sweep's cost by a thousand while the second
+// would open five hundred conversations against one GitLab.
+const (
+	// defaultRepeat runs each attempt once, which is what a sweep wants.
+	defaultRepeat = 1
+	// maxRepeat is the most repeats a run may ask for.
+	maxRepeat = 50
+	// defaultParallel runs one attempt of a model at a time, which is what
+	// makes a run reproducible and what the scripted-session lock is sized
+	// against.
+	defaultParallel = 1
+	// maxParallel is the most attempts of one model that may overlap.
+	maxParallel = 32
+	// defaultSlice is the individual surface's tool budget: the smallest
+	// per-request tool cap the four providers are documented to accept.
+	defaultSlice = 128
+	// maxSlice bounds it at something a request can still carry.
+	maxSlice = 2048
 )
 
 // runConfig is the server shape one run measures, in the harness's own terms.
@@ -56,6 +100,24 @@ type runConfig struct {
 	// dispatchers publish, or MetaParamSchemaDefault for the child's own
 	// default.
 	MetaParamSchema harness.MetaParamSchema
+	// Cases selects which of the corpus's cases this run asks. The empty
+	// selection asks all of them.
+	Cases caseSelection
+	// Repeat is how many times each attempt runs.
+	Repeat int
+	// Parallel is how many attempts of one model may overlap.
+	Parallel int
+	// BudgetUSD is the ceiling the run stops at, zero for none.
+	BudgetUSD float64
+	// Unpriced lets a run start with a model the price table has no figure
+	// for, which is what a fake run and a newly published model need.
+	Unpriced bool
+	// Spend is the consent a run asking a real provider needs before it sends
+	// anything. The fake needs none.
+	Spend bool
+	// Slice is how many individual tools a model is shown on the individual
+	// surface, where the whole list is over a context window outright.
+	Slice int
 }
 
 // defaultSurfaces are the surfaces a run measures when it was not told.
@@ -78,6 +140,17 @@ func loadRunConfig() (runConfig, error) { return parseRunConfig(harness.Setting)
 // the model list is what the contract probe reads without opening one at all.
 func configuredModels() ([]provider.Spec, error) {
 	return provider.ParseSpecs(harness.Setting(settingModels))
+}
+
+// modelsNamed reports whether this run was told to ask anybody at all.
+//
+// It is read before the configuration is otherwise acted on, because a run
+// that names no model is the ordinary state of this package: it is not run by
+// CI and costs money when it is, so `go test ./test/e2e/modeleval/` has to be
+// a run of the offline halves and nothing else, and it has to reach no GitLab
+// to be one.
+func modelsNamed() bool {
+	return strings.TrimSpace(harness.Setting(settingModels)) != ""
 }
 
 // credentialFor reads one provider's credential out of the run's settings.
@@ -112,7 +185,151 @@ func parseRunConfig(read func(string) string) (runConfig, error) {
 	if err != nil {
 		return runConfig{}, err
 	}
-	return runConfig{Surfaces: surfaces, Mode: mode, Tier: tier, MetaParamSchema: schema}, nil
+	selection, err := parseCases(read(settingCases))
+	if err != nil {
+		return runConfig{}, err
+	}
+	repeat, err := parseCount(settingRepeat, read(settingRepeat), defaultRepeat, maxRepeat)
+	if err != nil {
+		return runConfig{}, err
+	}
+	parallel, err := parseCount(settingParallel, read(settingParallel), defaultParallel, maxParallel)
+	if err != nil {
+		return runConfig{}, err
+	}
+	slice, err := parseCount(settingSlice, read(settingSlice), defaultSlice, maxSlice)
+	if err != nil {
+		return runConfig{}, err
+	}
+	budget, err := parseBudget(read(settingBudget))
+	if err != nil {
+		return runConfig{}, err
+	}
+	unpriced, err := parseConsent(settingUnpriced, read(settingUnpriced))
+	if err != nil {
+		return runConfig{}, err
+	}
+	spend, err := parseConsent(settingSpend, read(settingSpend))
+	if err != nil {
+		return runConfig{}, err
+	}
+	return runConfig{
+		Surfaces:        surfaces,
+		Mode:            mode,
+		Tier:            tier,
+		MetaParamSchema: schema,
+		Cases:           selection,
+		Repeat:          repeat,
+		Parallel:        parallel,
+		BudgetUSD:       budget,
+		Unpriced:        unpriced,
+		Spend:           spend,
+		Slice:           slice,
+	}, nil
+}
+
+// caseSelection is the set of cases a run asks, empty for all of them.
+type caseSelection struct {
+	ids []string
+}
+
+// Admits reports whether one case is in the selection.
+func (s caseSelection) Admits(id string) bool {
+	return len(s.ids) == 0 || slices.Contains(s.ids, id)
+}
+
+// Named returns the identifiers the selection names, in the order given.
+func (s caseSelection) Named() []string { return slices.Clone(s.ids) }
+
+// parseCases reads the case list, and refuses an identifier the corpus does
+// not have.
+//
+// Refusing rather than ignoring is what makes a mistyped identifier visible:
+// an unknown case silently dropped leaves a run that measures the cases that
+// happened to be spelled right, reports on those, and says nothing about the
+// one the maintainer meant to ask about.
+func parseCases(value string) (caseSelection, error) {
+	words := splitList(value)
+	if len(words) == 0 {
+		return caseSelection{}, nil
+	}
+
+	known := modelcorpus.IDs()
+	var selected []string
+	for _, word := range words {
+		id := strings.ToUpper(word)
+		if !slices.Contains(known, id) {
+			return caseSelection{}, fmt.Errorf("%s names %q, which the corpus has no case for", settingCases, word)
+		}
+		if !slices.Contains(selected, id) {
+			selected = append(selected, id)
+		}
+	}
+	return caseSelection{ids: selected}, nil
+}
+
+// parseCount reads one whole-number setting, held between one and a ceiling.
+//
+// Zero and a negative are refused rather than read as the default: a run told
+// to repeat each attempt zero times asked for something, and answering it with
+// one attempt each is a run reporting under a configuration it did not have.
+func parseCount(setting, value string, fallback, ceiling int) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback, nil
+	}
+	count, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a whole number", setting, value)
+	}
+	if count < 1 || count > ceiling {
+		return 0, fmt.Errorf("%s=%d is outside 1..%d", setting, count, ceiling)
+	}
+	return count, nil
+}
+
+// parseBudget reads the spending ceiling, in US dollars.
+//
+// Zero is no ceiling rather than a ceiling of nothing, which is the reading
+// every other optional bound in this repository takes; a run that means to
+// spend nothing asks the fake.
+func parseBudget(value string) (float64, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, nil
+	}
+	budget, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a number of dollars", settingBudget, value)
+	}
+	if budget < 0 {
+		return 0, fmt.Errorf("%s=%s is negative", settingBudget, trimmed)
+	}
+	return budget, nil
+}
+
+// consentWords are the values that read as yes. They are few and spelled out,
+// because the thing being consented to is money.
+var consentWords = []string{"yes", "true", "1"}
+
+// parseConsent reads a yes-or-no setting, and refuses a word that is neither.
+//
+// A misspelled consent must not read as no. A run refused for a typo costs a
+// second attempt at the command line; a run that read "ys" as no and started
+// anyway would be a run that spent nothing and reported that the models
+// declined everything.
+func parseConsent(setting, value string) (bool, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	switch {
+	case trimmed == "":
+		return false, nil
+	case slices.Contains(consentWords, trimmed):
+		return true, nil
+	case trimmed == "no" || trimmed == "false" || trimmed == "0":
+		return false, nil
+	default:
+		return false, unknownValue(setting, value, append(slices.Clone(consentWords), "no", "false", "0"))
+	}
 }
 
 // parseSurfaces reads the comma-separated surface list.

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
 )
@@ -239,5 +240,127 @@ func TestConfiguredModels_ReadsTheListThroughTheSettings(t *testing.T) {
 	_, configuredErr := configuredModels()
 	if configuredErr == nil && harness.Setting(settingModels) == "" {
 		t.Errorf("configuredModels() accepted an empty %s", settingModels)
+	}
+}
+
+// TestParseRunConfig_TheCountedSettingsHaveDefaultsARunCanRestOn checks the
+// half of the configuration that decides what a run costs.
+func TestParseRunConfig_TheCountedSettingsHaveDefaultsARunCanRestOn(t *testing.T) {
+	cfg, err := parseRunConfig(settingsReader(nil))
+	if err != nil {
+		t.Fatalf("parseRunConfig() error = %v, want nil", err)
+	}
+	if cfg.Repeat != defaultRepeat || cfg.Parallel != defaultParallel || cfg.Slice != defaultSlice {
+		t.Errorf("repeat %d, parallel %d, slice %d; want %d, %d, %d",
+			cfg.Repeat, cfg.Parallel, cfg.Slice, defaultRepeat, defaultParallel, defaultSlice)
+	}
+	if cfg.BudgetUSD != 0 || cfg.Spend || cfg.Unpriced {
+		t.Errorf("a run told nothing has budget %v, spend %t, unpriced %t", cfg.BudgetUSD, cfg.Spend, cfg.Unpriced)
+	}
+	if len(cfg.Cases.Named()) != 0 {
+		t.Errorf("a run told nothing selected %v", cfg.Cases.Named())
+	}
+
+	named, err := parseRunConfig(settingsReader(map[string]string{
+		settingRepeat:   "3",
+		settingParallel: "5",
+		settingSlice:    "64",
+		settingBudget:   "12.50",
+		settingSpend:    "yes",
+		settingUnpriced: "true",
+	}))
+	if err != nil {
+		t.Fatalf("parseRunConfig() error = %v, want nil", err)
+	}
+	if named.Repeat != 3 || named.Parallel != 5 || named.Slice != 64 {
+		t.Errorf("repeat %d, parallel %d, slice %d", named.Repeat, named.Parallel, named.Slice)
+	}
+	if named.BudgetUSD != 12.5 || !named.Spend || !named.Unpriced {
+		t.Errorf("budget %v, spend %t, unpriced %t", named.BudgetUSD, named.Spend, named.Unpriced)
+	}
+}
+
+// TestParseRunConfig_ARefusalNamesTheSettingThatWasWrong checks that every one
+// of the counted settings refuses rather than falling back.
+//
+// Falling back is the failure mode this is written against: a run told to
+// repeat each attempt zero times asked for something, and answering it with one
+// attempt each is a run reporting under a configuration it did not have.
+func TestParseRunConfig_ARefusalNamesTheSettingThatWasWrong(t *testing.T) {
+	tests := []struct {
+		name   string
+		values map[string]string
+		wantIn string
+	}{
+		{name: "a repeat that is not a number", values: map[string]string{settingRepeat: "twice"}, wantIn: settingRepeat},
+		{name: "a repeat of zero", values: map[string]string{settingRepeat: "0"}, wantIn: settingRepeat},
+		{name: "a repeat past the ceiling", values: map[string]string{settingRepeat: "9999"}, wantIn: settingRepeat},
+		{name: "a negative parallelism", values: map[string]string{settingParallel: "-1"}, wantIn: settingParallel},
+		{name: "a slice past the ceiling", values: map[string]string{settingSlice: "99999"}, wantIn: settingSlice},
+		{name: "a budget that is not money", values: map[string]string{settingBudget: "lots"}, wantIn: settingBudget},
+		{name: "a negative budget", values: map[string]string{settingBudget: "-5"}, wantIn: settingBudget},
+		{name: "a misspelled consent", values: map[string]string{settingSpend: "ys"}, wantIn: settingSpend},
+		{name: "a misspelled unpriced", values: map[string]string{settingUnpriced: "sure"}, wantIn: settingUnpriced},
+		{name: "a case nothing answers to", values: map[string]string{settingCases: "MT-nothing"}, wantIn: settingCases},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseRunConfig(settingsReader(tc.values))
+			if err == nil {
+				t.Fatalf("parseRunConfig(%v) returned no error", tc.values)
+			}
+			if !strings.Contains(err.Error(), tc.wantIn) {
+				t.Errorf("the refusal is %v, want it to name %s", err, tc.wantIn)
+			}
+		})
+	}
+}
+
+// TestParseConsent_ReadsOnlyTheWordsItStates checks the two readings that
+// matter: a yes, and a no that is not a typo.
+func TestParseConsent_ReadsOnlyTheWordsItStates(t *testing.T) {
+	for _, word := range []string{"yes", "YES", "true", "1", " yes "} {
+		t.Run("consented with "+word, func(t *testing.T) {
+			given, err := parseConsent(settingSpend, word)
+			if err != nil || !given {
+				t.Errorf("parseConsent(%q) = %t, %v, want true, nil", word, given, err)
+			}
+		})
+	}
+	for _, word := range []string{"", "no", "false", "0"} {
+		t.Run("withheld with "+word, func(t *testing.T) {
+			given, err := parseConsent(settingSpend, word)
+			if err != nil || given {
+				t.Errorf("parseConsent(%q) = %t, %v, want false, nil", word, given, err)
+			}
+		})
+	}
+}
+
+// TestParseCases_SelectsTheNamedCasesAndRefusesTheRest checks the filter, its
+// case-insensitivity and the refusal that makes a typo visible.
+func TestParseCases_SelectsTheNamedCasesAndRefusesTheRest(t *testing.T) {
+	known := modelcorpus.IDs()
+	if len(known) < 2 {
+		t.Fatalf("the corpus holds %d case(s), which is too few to select from", len(known))
+	}
+
+	empty, err := parseCases("")
+	if err != nil {
+		t.Fatalf("parseCases(\"\") error = %v", err)
+	}
+	if !empty.Admits(known[0]) || len(empty.Named()) != 0 {
+		t.Errorf("the empty selection admitted %t and named %v", empty.Admits(known[0]), empty.Named())
+	}
+
+	selection, err := parseCases(strings.ToLower(known[0]) + ", " + known[1] + ", " + known[1])
+	if err != nil {
+		t.Fatalf("parseCases error = %v", err)
+	}
+	if !slices.Equal(selection.Named(), []string{known[0], known[1]}) {
+		t.Errorf("parseCases selected %v, want the two named once each", selection.Named())
+	}
+	if selection.Admits("MS-999") {
+		t.Errorf("the selection admitted a case it does not name")
 	}
 }

@@ -1,6 +1,8 @@
 package modelcorpus
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"go/ast"
 	"go/types"
 	"os"
@@ -454,5 +456,63 @@ func TestFactPlaceholder_IsWhatARenderedPromptSpells(t *testing.T) {
 	keys, err := InterpolatedFacts(placeholder)
 	if err != nil || !slices.Equal(keys, []string{FactProjectPath}) {
 		t.Errorf("InterpolatedFacts(%q) = %v, %v, want the one fact", placeholder, keys, err)
+	}
+}
+
+// TestDigest_IsStableAndCoversTheKey is the whole claim the digest makes: two
+// readings of one corpus agree, and an edit to a key, which nothing outside
+// this package can see, moves it.
+//
+// The second half is what a digest taken over the stimuli alone would fail.
+// The publisher refuses a record whose digest no longer matches the corpus at
+// HEAD, and the case it refuses on is precisely a key that moved under an
+// answer already recorded.
+func TestDigest_IsStableAndCoversTheKey(t *testing.T) {
+	first := Digest()
+	if first != Digest() {
+		t.Fatalf("Digest() returned %q and then %q: two readings of one corpus disagree", first, Digest())
+	}
+	if len(first) != digestLength {
+		t.Errorf("Digest() = %q, %d characters, want %d", first, len(first), digestLength)
+	}
+
+	base := Case{ID: "MT-000", Prompt: "Do the thing", Recipe: RecipeWorld}
+	moved := base
+	moved.key = Key{Steps: []Step{step("issue.list", project())}}
+	if digestOf(base) == digestOf(moved) {
+		t.Errorf("a case with a step and the same case without one digest the same: the key is not covered")
+	}
+
+	other := moved
+	other.key = Key{Steps: []Step{step("issue.list", req("project_id", literal("my-org/tools")))}}
+	if digestOf(moved) == digestOf(other) {
+		t.Errorf("two steps differing only in an argument's truth digest the same")
+	}
+}
+
+// digestOf folds one case the way [Digest] folds every case, so a test can ask
+// what one case contributes without a corpus of its own.
+func digestOf(one Case) string {
+	sum := sha256.New()
+	writeCaseDigest(sum, one)
+	return hex.EncodeToString(sum.Sum(nil))[:digestLength]
+}
+
+// TestStepCount_AnswersFromTheKeyAndRefusesAnUnknownCase checks the one number
+// a run is told about an answer: how long its conversation may go on.
+func TestStepCount_AnswersFromTheKeyAndRefusesAnUnknownCase(t *testing.T) {
+	keys := Keys()
+	for id, key := range keys {
+		count, known := StepCount(id)
+		if !known {
+			t.Errorf("StepCount(%q) says the corpus has no such case, and Keys() does", id)
+			continue
+		}
+		if count != len(key.Steps) {
+			t.Errorf("StepCount(%q) = %d, want %d", id, count, len(key.Steps))
+		}
+	}
+	if count, known := StepCount("MT-nothing-has-this-id"); known || count != 0 {
+		t.Errorf("StepCount of an unknown case = %d, %t, want 0, false", count, known)
 	}
 }
