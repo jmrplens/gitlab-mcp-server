@@ -68,7 +68,7 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 	}
 	details, _, err := client.GL().Projects.GetProjectPullMirrorDetails(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, "not mirrored") {
+		if isNotMirrored(err) {
 			return PullMirrorOutput{}, toolutil.WrapErrWithHint("projectGetPullMirror", err, "configure pull mirroring first with gitlab_project_pull_mirror_configure or the gitlab_project action pull_mirror_configure, then retry pull_mirror_get")
 		}
 		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_project_get. Pull mirroring requires Premium license")
@@ -86,16 +86,28 @@ type ConfigurePullMirrorInput struct {
 	MirrorBranchRegex                string               `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror"`
 	MirrorTriggerBuilds              *bool                `json:"mirror_trigger_builds,omitempty" jsonschema:"Trigger CI builds when mirror updates"`
 	OnlyMirrorProtectedBranches      *bool                `json:"only_mirror_protected_branches,omitempty" jsonschema:"Only mirror protected branches"`
-	MirrorOverwritesDivergedBranches *bool                `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Overwrite diverged branches on mirror update"`
+	MirrorOverwritesDivergedBranches *bool                `json:"mirror_overwrites_diverged_branches,omitempty" jsonschema:"Replace this project's diverged branches with the source's versions on every sync, discarding the local commits. Without it GitLab stops updating a diverged branch instead. Requires confirm=true"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the guard reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms arming mirror_overwrites_diverged_branches, which discards local commits on every diverged branch. Only required when this call leaves the mirror overwriting"`
 }
 
 // ConfigurePullMirror sets up or updates pull mirroring for a project.
+//
+// A configuration that arms mirror_overwrites_diverged_branches is confirmed
+// first: see [confirmDivergedOverwrite] for which calls that covers and why the
+// rest are not destructive.
 func ConfigurePullMirror(ctx context.Context, client *gitlabclient.Client, input ConfigurePullMirrorInput) (PullMirrorOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return PullMirrorOutput{}, err
 	}
 	if input.ProjectID == "" {
 		return PullMirrorOutput{}, errors.New("projectConfigurePullMirror: project_id is required")
+	}
+	if err := confirmDivergedOverwrite(ctx, client, input); err != nil {
+		return PullMirrorOutput{}, err
 	}
 	opts := &gl.ConfigureProjectPullMirrorOptions{}
 	if input.Enabled != nil {
