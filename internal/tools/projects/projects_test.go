@@ -7157,6 +7157,10 @@ func TestUpdateApprovalRule_AllOptionalFields(t *testing.T) {
 
 // TestConfigurePullMirror_AllOptionalFields exercises every optional branch
 // in ConfigurePullMirror.
+//
+// The call carries mirror_overwrites_diverged_branches, so it is confirmed:
+// [confirmDivergedOverwrite] refuses that configuration otherwise, and the
+// guard's own cases live in pull_mirror_guard_test.go.
 func TestConfigurePullMirror_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/mirror/pull") {
@@ -7165,9 +7169,15 @@ func TestConfigurePullMirror_AllOptionalFields(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
+	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Name:      "gitlab_project_pull_mirror_configure",
+			Arguments: json.RawMessage(`{"project_id":"42","confirm":true}`),
+		},
+	})
 	bTrue := true
 	bFalse := false
-	out, err := ConfigurePullMirror(context.Background(), client, ConfigurePullMirrorInput{
+	out, err := ConfigurePullMirror(ctx, client, ConfigurePullMirrorInput{
 		ProjectID:                        "42",
 		Enabled:                          &bTrue,
 		URL:                              "https://mirror.example.com",
