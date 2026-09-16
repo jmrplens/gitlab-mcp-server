@@ -17,38 +17,58 @@ tree's scoring of that observation, computed when the run was folded in. Drawing
 a page re-reads them and scores nothing, and a second fold of a run already
 published is refused by name rather than replacing it. A scoring rule corrected
 later therefore reaches a published row by one path and no other:
-`make model-results-refold MODELEVAL_SHARDS=<dir>`, which drops the rows those
-shards publish, names each one it dropped, and folds them again. Keep a paid
-run's shards: a run whose shards are gone cannot be re-scored.
+`make model-results-refold MODELEVAL_SHARDS=<dir>`, which merges those shards
+into the rows they publish again, case by case, naming each case it replaces.
+The case is the unit and not the row: a re-run of one corrected case updates its
+own entry and every other case keeps the figures it had. Keep a paid run's
+shards: a run whose shards are gone cannot be re-scored.
 
 ## What the columns mean
 
-Every column is a numerator over a denominator, both printed, with a dash when
-there was nothing to divide. That is the first thing the withdrawn tables did
-not do: a rate over one attempt and a rate over ninety looked the same, and a
-column with nothing behind it read as a perfect score.
+<!-- START MODEL EVAL LEGEND -->
 
-| Column              | Numerator                                                                                | Denominator                   |
-| ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------- |
-| Reached             | steps reached in order, or correctly declined where the mode withholds them              | non-optional steps declared   |
-| Accepted first time | steps whose first call about them was the one that reached them                          | steps reached                 |
-| Argument fidelity   | argument values that matched their truth                                                 | arguments declared comparable |
-| Confirmation        | destructive steps whose reaching call carried the confirmation                           | destructive steps declared    |
-| Unaided             | attempts completed with no `invalid_params` and no `needs_confirmation` refusal anywhere | attempts run                  |
-| Completion          | attempts completed                                                                       | attempts run                  |
-| Overhead            | catalog searches plus `invalid_params` retries, with the two halves also printed apart   | steps reached                 |
+**How to read the tables below.** Every figure is a numerator over a denominator rather than a percentage, because a column reading 100% over one attempt and one reading 100% over ninety are not the same claim and a rate cannot tell them apart. The row here is invented; the columns are the real ones, drawn by the same code.
 
-An argument the case declares authored, such as the text of an issue title, is
-in neither half of the fidelity column: nothing compares prose a model was free
-to write. Five kinds of attempt are counted and then left out of every column,
-because none of them is the model's: one the instance could not offer, one whose
-server span never arrived, one the provider would not answer, one this side
-broke, and one GitLab refused after a correct dispatch with the right arguments.
-Each is published beside the columns rather than folded into them.
+| Model                      |  Clean | Reached | Accepted first time | Argument fidelity | Confirmation | Unaided | Completion |                           Overhead |
+| -------------------------- | -----: | ------: | ------------------: | ----------------: | -----------: | ------: | ---------: | ---------------------------------: |
+| `example:not-a-real-model` | 5 / 10 | 17 / 19 |             14 / 17 |           24 / 26 |        3 / 4 |  6 / 10 |     7 / 10 | 12 / 17 (9 find, 3 invalid_params) |
 
-Tokens are four numbers and never one. A cache read is not an input token, and
-adding them together is how one withdrawn table came to publish 62,638 tokens
-against five million.
+- **Clean** — The headline. Attempts that went right end to end **with no help at all**: the task finished, every step was reached, every argument the case gives a truth for matched, every destructive step carried its approval, nothing of ours had to refuse anything, and what it did to GitLab checked out afterwards. It is a conjunction of the columns after it, never an average of them: there is no defensible weighting between them, so a weighted score would be a reading of whoever chose the weights.
+- **Reached** — Steps the model got to, or correctly declined, over the steps the case declares. A step is reached when a call named it and the server dispatched it.
+- **Accepted first time** — Of the steps reached, how many were reached by the **first** call about them. A second call means the first was refused and repaired.
+- **Argument fidelity** — Argument **values** compared against the truth the case declares, not argument names. A model that places `title` correctly and writes the wrong title fails here, which is the whole reason values are compared.
+- **Confirmation** — Destructive steps whose reaching call carried the approval, over destructive steps declared. A deletion that ran without one is a finding, not a faster model.
+- **Unaided** — Attempts that finished with no refusal of ours anywhere. Weaker than Clean: an attempt can be unaided and still have written a wrong value.
+- **Completion** — Attempts that finished the task at all. Weakest of the three: it says the conversation ended correctly and nothing about how.
+- **Overhead** — What getting there cost, per step reached, with the two halves apart. A `find` is the dynamic surface's declared cost, since the catalog is not in the tool list and has to be searched. An `invalid_params` is the model learning a parameter name from a rejection, which is what the opaque meta schema leaves it to do. One rate over both would hide each inside the other.
+
+What the columns leave out: an attempt the instance could not offer, one the server's span never described, one the provider would not answer, one this side broke, and one GitLab refused after a correct dispatch. None of the five is the model's, so none is in any denominator.
+
+| Model                      | Attempts | Turns | Skipped | Unobserved | Provider errors | Harness errors | GitLab refused |
+| -------------------------- | -------: | ----: | ------: | ---------: | --------------: | -------------: | -------------: |
+| `example:not-a-real-model` |       10 |    23 |       2 |          1 |               1 |              0 |              1 |
+
+- **Attempts** — How many attempts are behind the figures above. The five columns after Turns are **not** in this number.
+- **Turns** — Provider requests the row paid for, which is not the same as calls: one turn can carry several tool calls, and a refused request is a turn of its own.
+- **Skipped** — The instance did not meet the case's needs, so it never ran. Counting it would rank a model by the license of the instance it was measured on.
+- **Unobserved** — It ran and the server's span never described it, so nothing can be said about it either way.
+- **Provider errors** — The provider would not answer.
+- **Harness errors** — This side broke.
+- **GitLab refused** — GitLab refused a call the model dispatched correctly, with the arguments the case declares. That reports the instance or the fixture, not the model.
+
+Tokens, never folded into one figure: a cache read is not an input token, and a table that added them together is how sixty thousand tokens came to be published against five million.
+
+| Model                      |  Input | Output | Cache created | Cache read |
+| -------------------------- | -----: | -----: | ------------: | ---------: |
+| `example:not-a-real-model` | 120000 |   4200 |         30000 |      88000 |
+
+- **Input** — Uncached input tokens.
+- **Output** — Output tokens, reasoning included where the provider bills it there.
+- **Cache created** — Input tokens written into the provider's prompt cache.
+- **Cache read** — Input tokens served from it, billed at a fraction of the others.
+
+And one thing no column carries: a row is only comparable with another row that agrees with it on surface, mode, tier, schema mode, corpus and tool schemas. The caption above each table says what that table holds fixed, and two tables with different captions are two measurements rather than two readings of one.
+<!-- END MODEL EVAL LEGEND -->
 
 ## Which tables may be compared with which
 

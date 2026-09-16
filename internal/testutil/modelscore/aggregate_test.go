@@ -442,6 +442,7 @@ func filledTotals() Totals {
 		Confirmation:      Ratio{Numerator: 26, Denominator: 27},
 		Unaided:           Ratio{Numerator: 28, Denominator: 29},
 		Completion:        Ratio{Numerator: 30, Denominator: 31},
+		Clean:             Ratio{Numerator: 35, Denominator: 36},
 		Overhead:          Overhead{Discovery: 32, InvalidParams: 33, Steps: 34},
 	}
 }

@@ -118,6 +118,11 @@ type Totals struct {
 	Unaided Ratio
 	// Completion is attempts completed over attempts run.
 	Completion Ratio
+	// Clean is attempts that went right end to end with no help, over attempts
+	// run. It is the headline figure and is a conjunction of the others rather
+	// than an average of them: see [Verdict.Clean] for why there is no weighted
+	// score here.
+	Clean Ratio
 	// Overhead is what the model spent getting there.
 	Overhead Overhead
 }
@@ -185,6 +190,10 @@ func (t *Totals) count(verdict Verdict) {
 	t.Attempts++
 	t.Completion.Denominator++
 	t.Unaided.Denominator++
+	t.Clean.Denominator++
+	if verdict.Clean() {
+		t.Clean.Numerator++
+	}
 	if verdict.Outcome == OutcomeCompleted {
 		t.Completion.Numerator++
 	}
@@ -282,6 +291,7 @@ func Sum(t, other Totals) Totals {
 		Confirmation:      t.Confirmation.add(other.Confirmation),
 		Unaided:           t.Unaided.add(other.Unaided),
 		Completion:        t.Completion.add(other.Completion),
+		Clean:             t.Clean.add(other.Clean),
 		Overhead: Overhead{
 			Discovery:     t.Overhead.Discovery + other.Overhead.Discovery,
 			InvalidParams: t.Overhead.InvalidParams + other.Overhead.InvalidParams,

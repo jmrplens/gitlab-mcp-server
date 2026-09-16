@@ -371,6 +371,11 @@ func (o overhead) Ratio() ratio {
 // columns are the seven figures a row publishes, named as the verdict names
 // them.
 type columns struct {
+	// Clean is the headline: attempts that went right end to end with no help,
+	// over attempts run. It is a conjunction of the six below rather than an
+	// average of them, because averaging columns measured over different
+	// denominators needs weights nothing here can justify.
+	Clean             ratio    `json:"clean"`
 	Reached           ratio    `json:"reached"`
 	AcceptedFirstTime ratio    `json:"accepted_first_time"`
 	ArgumentFidelity  ratio    `json:"argument_fidelity"`
@@ -443,13 +448,27 @@ func fold(shards []modelrecord.Shard, claimed map[string]string) ([]candidate, e
 
 // groupShard turns one shard's attempts into candidates, one per session and
 // model.
+//
+// An attempt that never opened a session is placed afterwards rather than
+// keyed, because it cannot be keyed: a row's identity reads the mode, the tier
+// pin, the meta schema and the slice size off the session line, and an attempt
+// that was skipped before a session existed has none of them. Keyed anyway it
+// forms a candidate of its own whose provenance is empty, which the provenance
+// rule then refuses — so the skip lines, which exist precisely so that a case
+// the runtime could not offer is not silently absent, were dropped on the floor
+// and every published row read `skipped: 0`. See [placeSessionless].
 func groupShard(shard string, attempts []modelscore.Attempt, claimed map[string]string) []candidate {
 	var order []string
 	byKey := map[string]*candidate{}
 	observed := sessionObservation(attempts)
 
+	var sessionless []modelscore.Attempt
 	for _, attempt := range attempts {
 		one := attempt
+		if one.Line.Session == "" {
+			sessionless = append(sessionless, one)
+			continue
+		}
 		key := keyOf(one)
 		name := key.String()
 		found, seen := byKey[name]
@@ -475,11 +494,73 @@ func groupShard(shard string, attempts []modelscore.Attempt, claimed map[string]
 		found.attempts = append(found.attempts, one)
 	}
 
+	placeSessionless(shard, sessionless, byKey, &order, claimed)
+
 	candidates := make([]candidate, 0, len(order))
 	for _, name := range order {
 		candidates = append(candidates, *byKey[name])
 	}
 	return candidates
+}
+
+// placeSessionless puts the attempts that never opened a session with the
+// measurement they belong to.
+//
+// A skipped attempt names its model and its surface and nothing else, so it
+// belongs to the one candidate of this shard measuring that model on that
+// surface. Where exactly one exists it joins it and is counted apart there, in
+// the Skipped column, which is what the column is for.
+//
+// Where none or several exist it keeps a candidate of its own, which the
+// provenance rule refuses by name. That is deliberate: guessing which of two
+// measurements a skip belongs to would put an attempt in a row that did not
+// make it, and a refusal a maintainer can read is better than a figure nobody
+// can check. In practice a shard is one run of one model on one surface, so the
+// ambiguous case is a shard somebody assembled by hand.
+func placeSessionless(
+	shard string,
+	sessionless []modelscore.Attempt,
+	byKey map[string]*candidate,
+	order *[]string,
+	claimed map[string]string,
+) {
+	for _, one := range sessionless {
+		var host *candidate
+		matches := 0
+		for _, name := range *order {
+			cand := byKey[name]
+			if cand.key.Model == one.Line.Model && cand.key.Surface == one.Line.Surface {
+				host = cand
+				matches++
+			}
+		}
+		if matches == 1 {
+			host.attempts = append(host.attempts, one)
+			continue
+		}
+
+		key := keyOf(one)
+		name := key.String()
+		found, seen := byKey[name]
+		if !seen {
+			line, known := providerLine(one.Run, one.Line.Model)
+			found = &candidate{
+				key:           key,
+				shard:         shard,
+				run:           one.Run,
+				session:       one.Session,
+				provider:      line,
+				providerKnown: known,
+				claimedBy:     claimed[name],
+			}
+			byKey[name] = found
+			*order = append(*order, name)
+			if _, taken := claimed[name]; !taken {
+				claimed[name] = shard
+			}
+		}
+		found.attempts = append(found.attempts, one)
+	}
 }
 
 // observation is how many calls a session made and how many of them the
@@ -707,6 +788,7 @@ func namedCounts[K ~string](tally map[K]int) map[string]int {
 // columnsOf reads the seven published figures off the totals.
 func columnsOf(totals modelscore.Totals) columns {
 	return columns{
+		Clean:             fromRatio(totals.Clean),
 		Reached:           fromRatio(totals.Reached),
 		AcceptedFirstTime: fromRatio(totals.AcceptedFirstTime),
 		ArgumentFidelity:  fromRatio(totals.ArgumentFidelity),

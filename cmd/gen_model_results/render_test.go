@@ -114,6 +114,12 @@ func TestRenderBlock_ASummaryTable_CarriesTheColumnsAndNothingElse(t *testing.T)
 // tell from a stale one.
 func TestRenderBlock_NoRows_SaysWhereTheWithdrawnTableWent(t *testing.T) {
 	for _, one := range blocks {
+		if one.Legend {
+			// The worked example carries no rows by design and is drawn
+			// whether or not anything is published, so it has no empty
+			// sentence to say.
+			continue
+		}
 		t.Run(one.Start, func(t *testing.T) {
 			got := renderBlock(one, nil)
 			if got != one.Empty {

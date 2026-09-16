@@ -71,6 +71,7 @@ func totalsOf(one caseFigures) modelscore.Totals {
 		Confirmation:      scoreRatio(one.Columns.Confirmation),
 		Unaided:           scoreRatio(one.Columns.Unaided),
 		Completion:        scoreRatio(one.Columns.Completion),
+		Clean:             scoreRatio(one.Columns.Clean),
 		Overhead: modelscore.Overhead{
 			Discovery:     one.Columns.Overhead.Discovery,
 			InvalidParams: one.Columns.Overhead.InvalidParams,

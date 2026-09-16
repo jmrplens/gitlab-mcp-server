@@ -38,8 +38,14 @@ type block struct {
 	// large, so a completion rate on it is not a reading of the same task.
 	Licensed bool
 	// Detailed is whether this block carries the counts, the tokens and the
-	// provenance beside the seven columns.
+	// provenance beside the published columns.
 	Detailed bool
+	// Legend is whether this block is the worked example rather than a
+	// measurement. It draws one made-up row of each table shape with a gloss
+	// per column, so the tables below it can be read without a reader holding
+	// the definitions in their head. It carries no rows and is drawn whether or
+	// not anything is published.
+	Legend bool
 	// Empty is what the block says when no row belongs to it. It names the
 	// commit the withdrawn table can be read at, because a reader who followed
 	// a link to a number is owed where it went.
@@ -55,7 +61,8 @@ const (
 	unsound   = "` and is not reproduced because the measurement behind it was unsound."
 )
 
-// blocks are the eight managed sections, in the order a reader meets them.
+// blocks are the nine managed sections, in the order a reader meets them:
+// the four README summaries, the worked example, and the four detailed tables.
 var blocks = []block{
 	{
 		Path: readmeRelPath, Start: "<!-- START MODEL EVAL DYNAMIC SUMMARY -->", End: "<!-- END MODEL EVAL DYNAMIC SUMMARY -->",
@@ -79,6 +86,10 @@ var blocks = []block{
 		Surface: surfaceDynamic, Licensed: true,
 		Empty: "Withdrawn. The Enterprise dynamic table published here, last refreshed from a Docker run dated 20260628-015421, is readable at commit `" +
 			withdrawn + unsound,
+	},
+	{
+		Path: pageRelPath, Start: "<!-- START MODEL EVAL LEGEND -->", End: "<!-- END MODEL EVAL LEGEND -->",
+		Legend: true,
 	},
 	{
 		Path: pageRelPath, Start: "<!-- START MODEL EVAL DYNAMIC RESULTS -->", End: "<!-- END MODEL EVAL DYNAMIC RESULTS -->",
@@ -141,6 +152,9 @@ func licensed(one row) bool {
 // rather than only its own rows so that a cross-surface note can name a row in
 // another block.
 func renderBlock(b block, all []row) string {
+	if b.Legend {
+		return legendBlock()
+	}
 	var mine []row
 	for _, one := range all {
 		if b.selects(one) {
@@ -188,6 +202,7 @@ func columnsTable(rows []row) string {
 	for _, one := range rows {
 		cells = append(cells, []string{
 			"`" + one.Key.Model + "`",
+			one.Columns.Clean.String(),
 			one.Columns.Reached.String(),
 			one.Columns.AcceptedFirstTime.String(),
 			one.Columns.ArgumentFidelity.String(),
@@ -198,9 +213,9 @@ func columnsTable(rows []row) string {
 		})
 	}
 	return docgen.RenderMarkdownTable(
-		[]string{"Model", "Reached", "Accepted first time", "Argument fidelity", "Confirmation", "Unaided", "Completion", "Overhead"},
+		[]string{"Model", "Clean", "Reached", "Accepted first time", "Argument fidelity", "Confirmation", "Unaided", "Completion", "Overhead"},
 		[]docgen.Alignment{
-			docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
+			docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
 			docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight,
 		},
 		cells,

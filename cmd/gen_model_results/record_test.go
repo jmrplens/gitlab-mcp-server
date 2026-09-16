@@ -731,3 +731,73 @@ func oneCaseRerunShard() []modelrecord.Record {
 		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeSession, Session: fixtureSessionLine()},
 	}, secondCaseRecords()...)
 }
+
+// skippedAttemptRecord is one case the runtime could not offer, written the way
+// the runner writes it: a model, a surface and a reason, and no session,
+// because none was ever opened.
+func skippedAttemptRecord(caseID string) modelrecord.Record {
+	return modelrecord.Record{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeAttempt, Attempt: &modelrecord.Attempt{
+		ID:      caseID + "/dynamic/1",
+		Case:    caseID,
+		Model:   fixtureModel,
+		Surface: "dynamic",
+		Repeat:  1,
+		EndedBy: modelrecord.EndedSkipped,
+		Reason:  "needs a licensed instance",
+	}}
+}
+
+// TestGroupShard_ASkippedAttempt_IsCountedInTheRowItBelongsTo covers the whole
+// reason the skip line exists.
+//
+// A case the runtime could not offer is written down so that it is not
+// silently absent from the record, and the row has a Skipped column to count it
+// in. But a skip never opened a session, and a row's identity reads the mode,
+// the tier pin, the meta schema and the slice size off the session line, so the
+// skip could not be keyed: it formed a candidate of its own whose provenance
+// was empty, the provenance rule refused it, and every published row read
+// skipped: 0 however many cases the instance had turned away.
+func TestGroupShard_ASkippedAttempt_IsCountedInTheRowItBelongsTo(t *testing.T) {
+	records := append(publishableShard(), skippedAttemptRecord("MT-017"))
+
+	rows, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+	if len(refusals) > 0 {
+		t.Fatalf("the skip was refused instead of counted: %v", refusals)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("published %d rows, want the skip folded into the one measurement", len(rows))
+	}
+	if got := rows[0].Counts.Skipped; got != 1 {
+		t.Errorf("the row counts %d skipped, want 1", got)
+	}
+	if got := rows[0].Counts.Attempts; got != 1 {
+		t.Errorf("the row counts %d attempts, want the skip left out of every denominator", got)
+	}
+}
+
+// TestGroupShard_ASkippedAttemptNothingClaims_IsRefusedRatherThanGuessed is the
+// other half: a skip naming only its model and its surface, with no measurement
+// of that model in the shard to belong to, keeps a candidate of its own and is
+// refused by name. Placing it anywhere would credit a row with an attempt it
+// never made, and a refusal a maintainer can read beats a figure nobody can
+// check.
+func TestGroupShard_ASkippedAttemptNothingClaims_IsRefusedRatherThanGuessed(t *testing.T) {
+	records := []modelrecord.Record{
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeRun, Run: fixtureRun()},
+		skippedAttemptRecord("MT-017"),
+	}
+
+	_, refusals, err := judge(foldShard(t, records, nil), modelcorpus.Keys(), false)
+	if err != nil {
+		t.Fatalf("judge: %v", err)
+	}
+	if len(refusals) != 1 {
+		t.Fatalf("a skip belonging to no measurement produced %d refusal(s), want one", len(refusals))
+	}
+	if !strings.Contains(refusals[0].Reason, "surface") && !strings.Contains(refusals[0].Reason, "mode") {
+		t.Errorf("the refusal reads %q, want it to name the provenance it has not got", refusals[0].Reason)
+	}
+}
