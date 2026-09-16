@@ -124,9 +124,17 @@ type runConfig struct {
 //
 // Individual is not among them, and not because it is uninteresting: the
 // individual tools/list is 682,878 tokens at Ultimate, over the context window
-// of at least one provider outright, so it is measured on a deterministic
-// domain slice and published as its own comparison class. Running it by
-// default would spend a run's budget on a request no provider can serve.
+// of at least one provider outright, so it can only be put to a model on a
+// deterministic domain slice.
+//
+// It is left out for a second reason that outlives the first, and the two are
+// worth telling apart. Even sliced, putting 258 cases to a provider on a third
+// surface costs real money on every run, and what a slice answers (tool choice
+// within a filtered list) is worth less than what the two surfaces above
+// answer, which is what a client is actually given. So the slice is built and
+// runnable and nothing published measures it: an unfinished path, kept for the
+// day it can be run against a local model for nothing. slice.go says what is
+// owed before that run would be worth reading.
 var defaultSurfaces = []harness.Surface{harness.SurfaceDynamic, harness.SurfaceMeta}
 
 // loadRunConfig reads the run's configuration from the settings the harness
