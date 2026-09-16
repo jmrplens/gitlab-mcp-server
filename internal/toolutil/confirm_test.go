@@ -766,31 +766,30 @@ func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
 // reading it: what the table above pins is that it no longer overrides
 // anything, and what this pins is that the name which replaced it still does.
 func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
-	for _, name := range []string{"GITLAB_MCP_YOLO_MODE"} {
-		t.Run(name, func(t *testing.T) {
-			// Claim both spellings through t.Setenv so the cleanup restores
-			// them, then remove them: a present-but-empty prefixed name is
-			// still the name that decides, which is not the case under test.
-			for _, spelling := range []string{"GITLAB_MCP_YOLO_MODE", "YOLO_MODE"} {
-				t.Setenv(spelling, "")
-				if err := os.Unsetenv(spelling); err != nil {
-					t.Fatalf("unsetting %s: %v", spelling, err)
-				}
-			}
-			t.Setenv("AUTOPILOT", "true")
-			t.Setenv(name, "false")
+	const name = "GITLAB_MCP_YOLO_MODE"
 
-			if IsYOLOMode() {
-				t.Errorf("%s=false lost to an inherited AUTOPILOT=true; the specific name must decide when set", name)
-			}
+	// Claim both spellings through t.Setenv so the cleanup restores them, then
+	// remove them: a present-but-empty prefixed name is still the name that
+	// decides, which is not the case under test.
+	// sequential: two spellings cleared in turn to reach one starting state, not two cases
+	for _, spelling := range []string{name, "YOLO_MODE"} {
+		t.Setenv(spelling, "")
+		if err := os.Unsetenv(spelling); err != nil {
+			t.Fatalf("unsetting %s: %v", spelling, err)
+		}
+	}
+	t.Setenv("AUTOPILOT", "true")
+	t.Setenv(name, "false")
 
-			if err := os.Unsetenv(name); err != nil {
-				t.Fatalf("unsetting %s: %v", name, err)
-			}
-			if !IsYOLOMode() {
-				t.Errorf("with %s unset, the AUTOPILOT alias must still work", name)
-			}
-		})
+	if IsYOLOMode() {
+		t.Errorf("%s=false lost to an inherited AUTOPILOT=true; the specific name must decide when set", name)
+	}
+
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatalf("unsetting %s: %v", name, err)
+	}
+	if !IsYOLOMode() {
+		t.Errorf("with %s unset, the AUTOPILOT alias must still work", name)
 	}
 }
 

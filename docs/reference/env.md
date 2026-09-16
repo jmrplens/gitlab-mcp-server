@@ -27,12 +27,12 @@ Two names are gone rather than renamed, both deprecated in 2.7.5 and removed in 
 
 Some names stay bare on purpose:
 
-| Names                        | Why they were not renamed                                                                                                                                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`, `GITLAB_TOKEN` | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory                                                              |
-| `OTEL_*`                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                                                                                          |
+| Names                        | Why they were not renamed                                                                                                                                                                                         |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`, `GITLAB_TOKEN` | GitLab's own convention. Every existing configuration sets them, and they are the two most likely to be written into a client configuration from memory                                                           |
+| `OTEL_*`                     | Owned by the OpenTelemetry specification. The exporters read those names themselves and would never see a prefixed spelling                                                                                       |
 | `AUTOPILOT`                  | A convention other agent tooling sets, honored as an alias of `GITLAB_MCP_YOLO_MODE` and never warned about. The setting itself is ours and carries the prefix; its old spelling `YOLO_MODE` was removed in 3.1.0 |
-| `EVAL_SURFACE_*`             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell                                                                 |
+| `EVAL_SURFACE_*`             | The surface evaluator's own variables, set by `make` targets in this repository. They never appear beside another tool's variables in a user's shell                                                              |
 
 The tables below always give the name to set, so read the name rather than
 deriving it. The renamed set is `internal/config.PrefixedEnvNames()`; a name
