@@ -106,6 +106,16 @@ type callAttribution struct {
 	// wantDispatch is the route the caller declared this call would run, when
 	// it is not the action named. Empty means the action itself.
 	wantDispatch ActionID
+	// traceOut, when it is not nil, receives the trace id this call was
+	// stamped with, so the caller can read the server's own span back while
+	// the call is still its business.
+	//
+	// Every other caller reads a dispatch at the flush, where the whole test's
+	// calls are resolved at once and the trace id never has to leave the
+	// middleware. [Session.CallAsModel] cannot wait that long: what the server
+	// dispatched for one call is what the next turn of a conversation is
+	// scored on, and by the flush the conversation is over.
+	traceOut *string
 }
 
 // attributionKey is the private context key the attribution travels under.
@@ -327,17 +337,26 @@ var dispatchGaveUp atomic.Bool
 // awaitDispatch waits until the server has reported on every call of this
 // test, or until the budget runs out.
 func awaitDispatch(calls []*pendingCall) {
-	received := receiverIfStarted()
-	if received == nil {
-		return
-	}
 	pending := make([]string, 0, len(calls))
 	for _, call := range calls {
 		if call.line.TraceID != "" {
 			pending = append(pending, call.line.TraceID)
 		}
 	}
-	if len(pending) == 0 {
+	awaitTraces(pending)
+}
+
+// awaitTraces waits for the server's own span of each of these traces.
+//
+// It is the flush's wait, factored out because [Session.CallAsModel] makes the
+// same wait for one call rather than for a test's worth of them. One
+// implementation and not two, because what the second would drift on is the
+// budget and the give-up flag: a per-call waiter that kept its own copy would
+// pay the full ten seconds on every call of a run whose telemetry is broken,
+// which is the outcome dispatchGrace exists to prevent.
+func awaitTraces(pending []string) {
+	received := receiverIfStarted()
+	if received == nil || len(pending) == 0 {
 		return
 	}
 
@@ -456,6 +475,12 @@ func (c *sessionConn) recordSending() mcp.Middleware {
 				traceID = ""
 			} else if received := receiverIfStarted(); received != nil {
 				received.issue(traceID)
+			}
+			// After the stamp and not before it: a request whose params could
+			// not carry the trace has no trace, and a caller told otherwise
+			// would wait the whole budget for a span that was never issued.
+			if attr.traceOut != nil {
+				*attr.traceOut = traceID
 			}
 
 			release := c.holdInFlight(attr)

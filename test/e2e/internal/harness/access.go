@@ -77,6 +77,13 @@ func (e *Env) Runtime() Runtime {
 // dotenv file set is visible here and nowhere else in this process, which is
 // what keeps a file this run reads from configuring the harness's own
 // environment by accident.
+//
+// This is the reading a test does, from the instance it is already running
+// against; [Setting] is the same value read without one, for a caller whose
+// question is about the configuration rather than about GitLab. Use this one
+// wherever there is an Env: the two answer the same map, and a test holding an
+// Env that reached for the package-level reader would be saying it does not
+// know which run it belongs to.
 func (e *Env) Setting(key string) string { return e.inst.settings.get(key) }
 
 // DockerMode reports whether the run is against the ephemeral Docker stack,

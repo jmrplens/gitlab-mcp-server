@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -210,6 +211,37 @@ func TestRunStatic_DeadExports_ListedNotFailedUntilRatchet(t *testing.T) {
 	}
 	if lines := findingLines(result, findingDeadExport); len(lines) != 0 {
 		t.Errorf("dead exports failed the gate with the ratchet off: %q", lines)
+	}
+}
+
+// TestRunStatic_UsedOnlyFromModelEval_IsNotDead verifies that a package
+// outside test/e2e/gitlab counts as a consumer.
+//
+// The model evaluation package is loaded for this rule and no other: it names
+// no catalog action, so it earns no ratchet credit and is never scanned for
+// placement, and what loading it buys is that a harness export it is the first
+// and only user of can be seen to have a user at all. Without it every seam
+// added for the model harness would be a finding on the day it landed, and the
+// gate runs on every push.
+func TestRunStatic_UsedOnlyFromModelEval_IsNotDead(t *testing.T) {
+	result := runFakeStatic(t, fakeStaticConfig(t))
+
+	if slices.Contains(result.DeadExports, "ModelOnly") {
+		t.Errorf("DeadExports = %q, want ModelOnly absent: test/e2e/modeleval calls it", result.DeadExports)
+	}
+	loaded := slices.ContainsFunc(result.Packages, func(pkg string) bool {
+		return strings.HasSuffix(pkg, "/test/e2e/modeleval")
+	})
+	if !loaded {
+		t.Errorf("packages = %q, want the model evaluation package among them", result.Packages)
+	}
+	// Loaded, and judged by nothing else: a placement finding here would mean
+	// the gate had started reading it as a runtime package.
+	for _, finding := range result.Findings {
+		if strings.Contains(finding.Pos, "/modeleval/") {
+			t.Errorf("the gate reported %s at %s: the package is loaded as a consumer and scanned for nothing",
+				finding.Kind, finding.Pos)
+		}
 	}
 }
 

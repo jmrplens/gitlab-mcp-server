@@ -92,6 +92,46 @@ const (
 // String returns the policy's name.
 func (e Elicitation) String() string { return string(e) }
 
+// MetaParamSchema is the meta-tool input-schema mode a session's server
+// publishes: how much of an action's parameters the tool a model reads carries.
+//
+// It is spelled as GITLAB_MCP_META_PARAM_SCHEMA takes it and its zero value is
+// the absence of a choice, the same shape as [TierPin] and for the same
+// reason: the binary has a default of its own, and a field that could not tell
+// "say nothing" from "ask for the default" would make the harness's default
+// the harness's rather than the program's.
+//
+// It matters to almost nothing the end-to-end suite asserts, which compares
+// names and outcomes, and to everything a model is measured on: under the
+// default the meta dispatcher's params is an object with no properties, so a
+// model learns a parameter name from a description and from a refusal and
+// nowhere else.
+type MetaParamSchema string
+
+// The three schema modes, and the empty value that asks for none.
+const (
+	// MetaParamSchemaDefault leaves GITLAB_MCP_META_PARAM_SCHEMA unset, so the
+	// child applies its own default. That is what a deployment gets and what
+	// every ordinary session wants.
+	MetaParamSchemaDefault MetaParamSchema = ""
+	// MetaParamSchemaOpaque publishes params as an object with no properties.
+	// It is the binary's own default, asked for by name.
+	MetaParamSchemaOpaque MetaParamSchema = config.MetaParamSchemaOpaque
+	// MetaParamSchemaCompact publishes a discriminated oneOf per action
+	// carrying the parameter names without their descriptions.
+	MetaParamSchemaCompact MetaParamSchema = config.MetaParamSchemaCompact
+	// MetaParamSchemaFull publishes a discriminated oneOf per action carrying
+	// the whole of each action's schema.
+	MetaParamSchemaFull MetaParamSchema = config.MetaParamSchemaFull
+)
+
+// String returns the mode as the environment variable spells it.
+func (m MetaParamSchema) String() string { return string(m) }
+
+// defaultMetaParamSchema is the mode the binary applies when the variable is
+// unset, read from the binary's own constant rather than written down here.
+const defaultMetaParamSchema = MetaParamSchema(config.DefaultMetaParamSchema)
+
 // TransportKind is how the harness reaches the server.
 type TransportKind string
 
@@ -154,6 +194,15 @@ type ServerConfig struct {
 	// Capabilities selects the resource and prompt catalog. Empty is
 	// CapabilitiesFull, the binary's own default.
 	Capabilities CapabilitySurface
+	// MetaParamSchema selects how much of an action's parameters the meta
+	// dispatchers publish. Empty is MetaParamSchemaDefault: the variable is
+	// left unset and the child applies its own default, which is opaque.
+	//
+	// It changes no tool name and so nothing the served-set check compares,
+	// which is why the suite had no reason to reach it until a model was the
+	// reader: on the meta surface this is the one knob that decides whether
+	// the reader can see a parameter name at all.
+	MetaParamSchema MetaParamSchema
 	// Token is the credential the server runs with. Empty is the run's own
 	// token; a fixture-minted one here is how a narrowed surface is tested.
 	Token string
@@ -205,6 +254,14 @@ func (c ServerConfig) normalized() ServerConfig {
 	if c.Capabilities == "" {
 		c.Capabilities = CapabilitiesFull
 	}
+	// The binary's own constant rather than a word written here, so the two
+	// cannot come to disagree: the key, the label and the environment are then
+	// built from the mode the child will actually serve, and a session that
+	// asked for opaque by name is the same server as one that asked for
+	// nothing at all rather than a second process serving the same schemas.
+	if c.MetaParamSchema == MetaParamSchemaDefault {
+		c.MetaParamSchema = defaultMetaParamSchema
+	}
 	if c.Elicitation == "" {
 		c.Elicitation = ElicitationNone
 	}
@@ -214,6 +271,18 @@ func (c ServerConfig) normalized() ServerConfig {
 	c.ExcludeTools = slices.Clone(c.ExcludeTools)
 	slices.Sort(c.ExcludeTools)
 	return c
+}
+
+// pinsSchemaMode reports whether this configuration asks the child for a schema
+// mode other than the one it would apply by itself.
+//
+// Both spellings of "it does not" are answered, because its callers are
+// reached from both sides: [ServerConfig.normalized] has already turned the
+// empty value into the default by the time a session is started, and a test
+// reading a label or an environment off a configuration it wrote by hand has
+// not.
+func (c ServerConfig) pinsSchemaMode() bool {
+	return c.MetaParamSchema != MetaParamSchemaDefault && c.MetaParamSchema != defaultMetaParamSchema
 }
 
 // validate reports a configuration the harness cannot start.
@@ -226,6 +295,14 @@ func (c ServerConfig) validate() error {
 	}
 	if c.Capabilities != CapabilitiesFull && c.Capabilities != CapabilitiesMinimal {
 		return fmt.Errorf("unknown capability surface %q", c.Capabilities)
+	}
+	// A misspelled mode would otherwise reach the child, which refuses to
+	// start on it, and the session would fail with whatever the child last
+	// wrote to stderr rather than with the word that was wrong.
+	switch c.MetaParamSchema {
+	case MetaParamSchemaOpaque, MetaParamSchemaCompact, MetaParamSchemaFull:
+	default:
+		return fmt.Errorf("unknown meta parameter-schema mode %q", c.MetaParamSchema)
 	}
 	if c.Elicitation == ElicitationScripted && c.Responder == nil {
 		return errors.New("an elicitation policy of scripted needs a Responder to answer with")
@@ -272,8 +349,14 @@ func (c ServerConfig) key(instance, token string) string {
 	// decides the catalog. A session that pinned one and a session that lets
 	// the child detect it are two different servers, and sharing one process
 	// between them would serve the second whatever the first registered.
+	//
+	// The schema mode is part of it for the plainest reason of all: it changes
+	// the tool schemas the child publishes and nothing else, so two sessions
+	// differing only in it would share a process and the second would be
+	// served the first's schemas with no sign that anything was wrong.
 	parts := []string{
 		string(c.Surface), string(c.Mode), string(c.Capabilities), string(c.Elicitation), string(c.Transport),
+		"schema=" + string(c.MetaParamSchema),
 		"tier=" + string(c.Tier),
 		"exclude=" + strings.Join(c.ExcludeTools, ","),
 		"instance=" + shortStableHash(instance),
@@ -294,6 +377,13 @@ func (c ServerConfig) label(private int64) string {
 	// server's log over the other's.
 	if c.Tier != "" {
 		label += "-" + string(c.Tier)
+	}
+	// Named only when it is not the default, on the same terms and for the
+	// same reason the directory name exists: a session serving the schemas
+	// every deployment gets is the ordinary one, and putting the word on every
+	// label would rename every session's log directory to say nothing.
+	if c.pinsSchemaMode() {
+		label += "-" + string(c.MetaParamSchema)
 	}
 	if len(c.ExcludeTools) > 0 {
 		label += "-excluded"
@@ -337,6 +427,13 @@ func (c ServerConfig) childVariables() map[string]string {
 	// rather than the default.
 	if c.Tier != "" {
 		vars["GITLAB_MCP_TIER"] = string(c.Tier)
+	}
+	// Set only when it is not the child's own default, for the reason the tier
+	// is set only when pinned: the variable's absence is what asks the child to
+	// decide, and writing the default here would freeze this harness's idea of
+	// what the default is on the day it was written.
+	if c.pinsSchemaMode() {
+		vars["GITLAB_MCP_META_PARAM_SCHEMA"] = string(c.MetaParamSchema)
 	}
 	maps.Copy(vars, telemetryVariables())
 	return vars

@@ -118,12 +118,17 @@ func (c credit) String() string {
 // and the one the test named otherwise: a call rewritten to another route
 // exercised that route and not the one it asked for. Whether the two differ
 // is reported separately as a mismatch.
+//
+// Two purposes earn nothing at all. A raw call is about the envelope, so what
+// the server made of it is somebody else's evidence; a model call was chosen
+// by a provider at run time, so crediting it would make this suite's coverage
+// a function of what a language model felt like trying.
 func creditOf(call *e2ecalls.Call) (earned credit, target string) {
 	target = call.Dispatched
 	if target == "" {
 		target = call.Action
 	}
-	if target == "" || call.Purpose == e2ecalls.PurposeRaw {
+	if target == "" || call.Purpose == e2ecalls.PurposeRaw || call.Purpose == e2ecalls.PurposeModel {
 		return creditNone, ""
 	}
 	return creditOfOutcome(call), target
