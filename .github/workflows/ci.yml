@@ -144,6 +144,13 @@ jobs:
       - name: Check the model evaluation corpus ledger
         if: env.FRESHNESS == 'checked'
         run: make check-model-corpus
+      # The published half of the same measurement: the committed results
+      # record judged by the refusal rules again, and the eight managed blocks
+      # compared with what the record renders to. It is offline, calls no
+      # provider, and passes with a note while no run has been published.
+      - name: Check the published model evaluation results
+        if: env.FRESHNESS == 'checked'
+        run: make check-model-results
       - name: Check documented tool names exist
         run: make check-doc-tool-names
       - name: Check no read-only action reaches a GraphQL mutation
