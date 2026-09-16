@@ -22,12 +22,17 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
 )
 
-// The settings that decide the shape of the server a model talks to. The
-// remaining MODELEVAL_* settings, which decide which models are asked and
-// which cases they are asked, arrive with the runner.
+// The settings that decide the shape of the server a model talks to, and which
+// models are asked. The remaining MODELEVAL_* settings, which decide which
+// cases are asked and what a run may spend, arrive with the runner.
 const (
+	// settingModels is the comma-separated list of provider:model;key=value
+	// specs a run asks. It replaces the old evaluator's EVAL_MODELS, which
+	// named the same providers and is retired with it.
+	settingModels = "MODELEVAL_MODELS"
 	// settingSurfaces is the comma-separated list of tool surfaces to run.
 	settingSurfaces = "MODELEVAL_SURFACES"
 	// settingMode is the protective mode every session runs in.
@@ -65,6 +70,28 @@ var defaultSurfaces = []harness.Surface{harness.SurfaceDynamic, harness.SurfaceM
 // loadRunConfig reads the run's configuration from the settings the harness
 // resolved.
 func loadRunConfig() (runConfig, error) { return parseRunConfig(harness.Setting) }
+
+// configuredModels reads the models this run was told to ask.
+//
+// It is apart from [runConfig] because the two are needed at different moments
+// by different callers: the server shape is what a session is opened with, and
+// the model list is what the contract probe reads without opening one at all.
+func configuredModels() ([]provider.Spec, error) {
+	return provider.ParseSpecs(harness.Setting(settingModels))
+}
+
+// credentialFor reads one provider's credential out of the run's settings.
+//
+// It goes through harness.Setting like everything else here, which is what lets
+// a probe learn whether a key is configured without requiring the GitLab an Env
+// would bootstrap.
+func credentialFor(spec provider.Spec) string {
+	name, needed := provider.KeyName(spec.Provider)
+	if !needed {
+		return ""
+	}
+	return strings.TrimSpace(harness.Setting(name))
+}
 
 // parseRunConfig is loadRunConfig with the reader passed in, so the parsing is
 // testable without a run.
