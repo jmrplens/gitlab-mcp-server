@@ -65,3 +65,39 @@ func TestTerraformBasicAuth_EncodesUserAndToken(t *testing.T) {
 		t.Errorf("terraformBasicAuth(root, glpat-xyz) = %q, want %q", got, want)
 	}
 }
+
+// TestTerraformStateIsLocked_Answers covers the three answers the lock
+// read-back distinguishes, including the two shapes of "no lock": a state that
+// carries none, and a project or state GitLab answered nothing for.
+func TestTerraformStateIsLocked_Answers(t *testing.T) {
+	cases := []struct {
+		name    string
+		answer  string
+		want    bool
+		wantErr bool
+	}{
+		{
+			name:   "locked",
+			answer: `{"data":{"project":{"terraformState":{"lockedAt":"2026-01-01T00:00:00Z"}}}}`,
+			want:   true,
+		},
+		{name: "unlocked", answer: `{"data":{"project":{"terraformState":{"lockedAt":null}}}}`},
+		{name: "no state", answer: `{"data":{"project":{"terraformState":null}}}`},
+		{name: "no project", answer: `{"data":{"project":null}}`},
+		{name: "refused", answer: `{"errors":[{"message":"forbidden"}]}`, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, client := newStubGitLab(t)
+			stub.configure(func() { stub.graphqlAnswers = []string{tc.answer} })
+
+			got, err := TerraformStateIsLocked(t.Context(), client, "group/project", "production")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("TerraformStateIsLocked() error = %v, wantErr = %t", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Errorf("TerraformStateIsLocked() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}

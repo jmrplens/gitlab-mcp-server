@@ -47,7 +47,10 @@ func licensedMutatingCases() []Case {
 		{
 			// The vulnerability world rather than the plain pipeline one:
 			// what an export is made from is a pipeline that ran a security
-			// scan, and that is the world a scan leaves behind.
+			// scan, and that is the world a scan leaves behind. The argument
+			// is the instance's number for that pipeline, where the two
+			// security reads of the same world take the project's, which is
+			// why the world publishes each under a fact of its own.
 			ID:     "MT-121",
 			Prompt: "Create a dependency list export for pipeline `{{ .Facts.pipeline_id }}`.",
 			Recipe: RecipeVulnerability,
@@ -260,11 +263,17 @@ func licensedMutatingCases() []Case {
 			}},
 		},
 		{
+			// The merge train world, which is a project in a group with the
+			// train switches on. GitLab keeps merge_trains_enabled only on a
+			// project whose namespace carries the licensed feature, so on the
+			// mergeable world this case named before, which is a project in a
+			// personal namespace, every model was refused for the project
+			// having no train at all rather than for anything it did.
 			ID: "MT-165",
 			Prompt: "Put merge request `{{ .Facts.merge_request_iid }}` on the merge train of project " +
 				"`{{ .Facts.project_path }}`.",
-			Recipe: RecipeMergeableMergeRequest,
-			Needs:  Needs{Tier: TierPremium, Runner: true},
+			Recipe: RecipeMergeTrainEntry,
+			Needs:  Needs{Tier: TierPremium},
 			key: Key{Steps: []Step{
 				step("merge_train.add", project(), req("merge_request_iid", fact(FactMergeRequestIID))),
 			}},

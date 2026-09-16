@@ -43,6 +43,7 @@ func auditFacts() map[string]string {
 		FactPackageTag:            "v0.0.0-eval-package",
 		FactPackageVersion:        "0.1.0",
 		FactPipelineID:            "12345",
+		FactPipelineIID:           "3",
 		FactReleaseName:           "v0.0.0-eval",
 		FactReleaseTagName:        "v0.0.0-eval",
 		FactRunnerID:              "99",

@@ -450,8 +450,8 @@ which is the ground the boundary test sanctions it on.
 | `merge_request_award`         |     1 |
 | `merge_request_discussion`    |     1 |
 | `merge_request_source`        |     2 |
-| `merge_train_entry`           |     1 |
-| `mergeable_merge_request`     |     2 |
+| `merge_train_entry`           |     2 |
+| `mergeable_merge_request`     |     1 |
 | `milestone`                   |     1 |
 | `model_version`               |     1 |
 | `package`                     |     2 |
@@ -488,7 +488,7 @@ which is the ground the boundary test sanctions it on.
 
 | Requirement            | Cases |
 | ---------------------- | ----: |
-| a CI runner            |    13 |
+| a CI runner            |    12 |
 | an administrator token |    33 |
 | tier free              |   162 |
 | tier premium           |    63 |

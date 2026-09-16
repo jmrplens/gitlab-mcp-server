@@ -78,8 +78,11 @@ const (
 // asking about the same object reuses the world instead of declaring a
 // near-copy of it.
 const (
-	// RecipeMergeableMergeRequest is a merge request whose pipeline is
-	// running, so a merge can be asked for and made to wait on it.
+	// RecipeMergeableMergeRequest is a merge request with nothing standing
+	// between it and a merge: the approval requirements a project may carry
+	// are cleared, so a refusal is about what the case did rather than about
+	// the project it did it in. It runs no pipeline, so a merge asked for as
+	// soon as one passes is refused by GitLab for want of one.
 	RecipeMergeableMergeRequest Recipe = "mergeable_merge_request"
 	// RecipeFile is a project with a file already committed on a branch
 	// beside the default one.
@@ -280,11 +283,19 @@ const (
 	FactPackageName           = "package_name"
 	FactPackageTag            = "package_tag"
 	FactPackageVersion        = "package_version"
-	FactPipelineID            = "pipeline_id"
-	FactReleaseName           = "release_name"
-	FactReleaseTagName        = "release_tag_name"
-	FactRunnerID              = "runner_id"
-	FactSnippetID             = "snippet_id"
+	// FactPipelineID is a pipeline as the instance numbers it, and
+	// FactPipelineIID is the same pipeline as the project numbers it. They
+	// are two facts rather than two spellings of one, because an action takes
+	// one or the other and nothing in a number says which it is: a world that
+	// offered both spellings under one key rendered the project's number to a
+	// model whose action takes the instance's, and GitLab then answered about
+	// whichever pipeline on the instance carries that number.
+	FactPipelineID     = "pipeline_id"
+	FactPipelineIID    = "pipeline_iid"
+	FactReleaseName    = "release_name"
+	FactReleaseTagName = "release_tag_name"
+	FactRunnerID       = "runner_id"
+	FactSnippetID      = "snippet_id"
 )
 
 // The fact keys the destructive and licensed worlds add.
@@ -453,7 +464,7 @@ var recipeFacts = map[Recipe][]string{
 	RecipeDependencyExport:   withProjectFacts(FactPipelineID, FactDependencyExportID),
 	RecipeInstanceAuditEvent: withProjectFacts(FactAuditEventID),
 	RecipeAttestation:        withProjectFacts(FactAttestationIID),
-	RecipeVulnerability:      withProjectFacts(FactPipelineID, FactVulnerabilityID),
+	RecipeVulnerability:      withProjectFacts(FactPipelineIID, FactPipelineID, FactVulnerabilityID),
 	RecipeEnterpriseUser:     withGroupFacts(FactUserID),
 	RecipeGroupAccessToken:   withGroupFacts(FactGroupAccessTokenID),
 	RecipeModelVersion: withProjectFacts(

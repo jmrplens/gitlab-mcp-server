@@ -352,6 +352,13 @@ func (s *stubGitLab) object(w http.ResponseWriter, r *http.Request, kind string,
 		writeJSON(w, http.StatusOK, serialize(obj))
 		return
 	}
+	// An edit answers with the object, the way a real GitLab does. The
+	// builders that edit one do it for the side effect rather than for the
+	// answer, and an audit event is the side effect they are after.
+	if r.Method == http.MethodPut {
+		writeJSON(w, http.StatusOK, serialize(obj))
+		return
+	}
 	if r.Method != http.MethodDelete {
 		writeError(w, http.StatusMethodNotAllowed, "stub: unexpected method")
 		return

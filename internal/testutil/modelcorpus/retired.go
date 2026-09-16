@@ -37,6 +37,22 @@ const (
 	// instance. It is declared here and used where the evidence is: the
 	// fixture step finds out by trying, and a retirement written before
 	// anybody tried would be a decision with no grounds.
+	//
+	// **Nothing carries it, and that is the answer rather than an omission.**
+	// The step that built the worlds tried every recipe this corpus names and
+	// raised one for each, so no case was left without a world. A handful of
+	// the licensed worlds do name an object a Docker instance cannot hold: an
+	// attestation is published by a CI job that attests, a SCIM identity by an
+	// identity provider, an enterprise user by a verified domain, a storage
+	// move by a second Gitaly storage. None of those retires its case. The
+	// world is raised around the object and the identifier it would have had
+	// is reserved, so the case still dispatches the action it is about and
+	// GitLab answers the not-found, which is the "dispatched, GitLab refused"
+	// class the scoring keeps apart from a model failure, and which the
+	// end-to-end suite's own scenarios already assert for the same actions.
+	// The category stays declared because that judgement can change: a
+	// fixture stack that grows an identity provider, or a corpus that grows a
+	// case whose world needs one, would use it.
 	RetiredNoRecipe = "no-recipe"
 )
 
@@ -65,6 +81,11 @@ type Retirement struct {
 // that were the capability partition entire, and four simulated-result cases
 // that were the error-recovery partition entire. 272 identifiers were
 // declared; 258 survive.
+//
+// The third category, [RetiredNoRecipe], holds none: the step that built the
+// worlds raised one for every recipe this corpus names, and the comment on
+// that constant says what it did with the objects a Docker instance cannot
+// hold.
 var retirements = []Retirement{
 	{
 		ID:       "MT-201",
