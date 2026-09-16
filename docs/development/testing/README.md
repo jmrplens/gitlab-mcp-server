@@ -21,12 +21,11 @@ correctly.
 
 ## Validation Layers
 
-| Layer                   | Runner                                                    | GitLab backend                     | What it proves                                                                                 |
-| ----------------------- | --------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Unit tests              | `go test ./internal/... ./cmd/...`                        | Mock `httptest` servers            | Handler logic, schema validation, formatting, routing, and error handling.                     |
-| E2E tests               | `go test -tags e2e -p 1 ./test/e2e/gitlab/...`            | Real GitLab, self-hosted or Docker | The MCP server can execute registered tools against GitLab APIs.                               |
-| Schema model evaluation | `cmd/eval_mcp_surfaces --preset schema-enterprise`        | Mock catalog                       | Models can select tools/actions and shape arguments from the MCP schema and descriptions.      |
-| Docker model evaluation | `cmd/eval_mcp_surfaces --preset docker-* --execute-tools` | Docker GitLab CE                   | Models can drive real MCP calls against a populated GitLab instance, including safe mutations. |
+| Layer            | Runner                                         | GitLab backend                     | What it proves                                                                                                                                    |
+| ---------------- | ---------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit tests       | `go test ./internal/... ./cmd/...`             | Mock `httptest` servers            | Handler logic, schema validation, formatting, routing, and error handling.                                                                        |
+| E2E tests        | `go test -tags e2e -p 1 ./test/e2e/gitlab/...` | Real GitLab, self-hosted or Docker | The MCP server can execute registered tools against GitLab APIs.                                                                                  |
+| Model evaluation | `make modeleval-ce`, `make modeleval-ee`       | Docker GitLab CE or licensed EE    | A real model, given the surface a client is served, can pick the action and shape the arguments, and what it did to GitLab is checked afterwards. |
 
 ## Beyond Statement Coverage
 
@@ -100,14 +99,28 @@ a real GitLab API.
 
 ## Result Policy
 
-Generated model reports and traces are written under
-`dist/evaluation/mcp-surfaces/` and are intentionally ignored by Git. Publish only
-curated summaries in [AI Model Evaluation Results](model-results.md). Use
-`cmd/eval_mcp_surfaces --publish-docs --publish-from <report>` after the selected
-reports have been reviewed; use `--check-docs` to verify the managed blocks
-without writing. A curated summary should include the model ID, evaluation mode,
-preset or task set, number of expected operations, emitted model/tool calls,
-success percentages, and any known caveats.
+A run writes observation and no verdict. Its shards land under `dist/modeleval/`,
+which Git ignores, and every number a page shows is computed later, from those
+shards and from the corpus at HEAD:
+
+```bash
+make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce   # fold a run in and redraw
+make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce   # re-score it under today's rules
+make check-model-results                                        # the offline freshness gate
+```
+
+Two consequences worth stating before a run rather than after it. The shards are
+the only thing a correction can be applied to, so **keep them**: the committed
+record holds scored columns, a redraw scores nothing, and a run whose shards
+were discarded can never be re-scored. And a fold refuses what it cannot
+publish honestly, row by row and by name, including every row of a run made
+with the fake provider, so folding a rehearsal publishes nothing and says why.
+
+Do not hand-write a summary. What a page says comes from the record, and the
+provenance a row carries (commit, date, instance edition and version, tier,
+surface, mode, the corpus and contract digests, the tool-schema digest, and
+what the run cost as four token figures) is what makes it a measurement rather
+than a claim.
 
 ## Maintenance Rules
 

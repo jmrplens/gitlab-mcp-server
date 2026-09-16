@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -428,4 +429,71 @@ func TestRun_RepositoryDocs_NameOnlyRegisteredTools(t *testing.T) {
 	if !strings.Contains(out.String(), "documentation files scanned") || strings.Contains(out.String(), " 0 documentation files scanned") {
 		t.Errorf("stdout = %q, want a non-zero scanned file count", out.String())
 	}
+}
+
+// TestAllowed_EveryEntryStillExcusesSomething holds the allow-list to the
+// tree it describes.
+//
+// An entry here is a judgement a person made about one token: it looks like a
+// tool name and is not one. When the prose that carried the token goes, the
+// entry stops being a judgement and becomes a claim about a document nobody
+// can read, and the next reader has no way to tell one from the other. Five
+// entries reached exactly that state when the evaluator whose documentation
+// used MCP method names as `gitlab_*` tokens was deleted, and nothing here
+// noticed, which is what this test is for.
+//
+// It walks the same roots the scan walks and skips the same historical
+// documents, because an entry excusing a token only a historical document
+// carries is excusing something the scan never sees.
+func TestAllowed_EveryEntryStillExcusesSomething(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	t.Chdir(root)
+
+	mentioned := make(map[string]struct{})
+	for _, docRoot := range docRoots {
+		walkErr := filepath.WalkDir(docRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+			switch {
+			case walkErr != nil:
+				return walkErr
+			case entry.IsDir():
+				return nil
+			}
+			for _, prefix := range historicalDocs {
+				if strings.HasPrefix(filepath.ToSlash(path), prefix) {
+					return nil
+				}
+			}
+			return collectTokens(path, mentioned)
+		})
+		if walkErr != nil && !os.IsNotExist(walkErr) {
+			t.Fatalf("walking %s: %v", docRoot, walkErr)
+		}
+	}
+
+	for token, reason := range allowed {
+		if _, ok := mentioned[token]; !ok {
+			t.Errorf("allowed[%q] (%s) excuses no token any scanned document carries; delete the entry", token, reason)
+		}
+	}
+}
+
+// collectTokens adds every tool-name-shaped token one file carries to
+// mentioned.
+//
+// It is a function of its own rather than the body of the walk above for the
+// reason scanFile is: reading a path a WalkDir callback was handed is a
+// symlink race the linter is right to name, and both readers here answer it
+// the same way, by doing the read outside the callback.
+func collectTokens(path string, mentioned map[string]struct{}) error {
+	data, err := os.ReadFile(path) //#nosec G304 -- test reading repository docs
+	if err != nil {
+		return err
+	}
+	for _, token := range toolToken.FindAllString(string(data), -1) {
+		mentioned[token] = struct{}{}
+	}
+	return nil
 }

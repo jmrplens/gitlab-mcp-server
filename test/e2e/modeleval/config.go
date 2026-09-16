@@ -31,8 +31,8 @@ import (
 // models are asked, which cases they are asked, and what a run may spend.
 const (
 	// settingModels is the comma-separated list of provider:model;key=value
-	// specs a run asks. It replaces the old evaluator's EVAL_MODELS, which
-	// named the same providers and is retired with it.
+	// specs a run asks. It replaced the old evaluator's EVAL_MODELS, which
+	// named the same providers and was retired with that evaluator.
 	settingModels = "MODELEVAL_MODELS"
 	// settingSurfaces is the comma-separated list of tool surfaces to run.
 	settingSurfaces = "MODELEVAL_SURFACES"

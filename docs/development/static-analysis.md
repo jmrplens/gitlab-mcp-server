@@ -210,7 +210,8 @@ ours.
 Be precise about what did **not** happen, because the shorter version of this
 story is wrong. The advisory is keyed to the module `golang.org/x/crypto`, not to
 the `openpgp` package, and that module is still a direct requirement:
-`cmd/eval_mcp_surfaces` imports `golang.org/x/crypto/ssh` to build its fixtures.
+`test/e2e/internal/fixture/user.go` imports `golang.org/x/crypto/ssh` to build
+the SSH keys its fixtures need.
 So `govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
 results, and always will. What changed is the only thing that was ever
 actionable: nothing in this repository calls into openpgp any more, so the

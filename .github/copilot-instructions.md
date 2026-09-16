@@ -48,7 +48,8 @@ gitlab-mcp-server/
 │   ├── gen_llms/           # llms.txt / llms-full.txt
 │   ├── gen_stats/          # README repository-statistics section (was inside gen_readme)
 │   ├── gen_testing_docs/   # docs/development/testing/testing.md test-metrics block
-│   ├── eval_mcp_surfaces/  # Model-behavior evaluation across MCP surfaces
+│   ├── gen_model_corpus/   # Model evaluation corpus breadth ledger
+│   ├── gen_model_results/  # Folds a model evaluation run's shards into the published record
 │   └── internal/           # Helpers shared by the commands (apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
 │   ├── config/             # Configuration loading (dotenv files, flags, env vars, HTTP env overlay)
@@ -181,27 +182,25 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...  # Linux
 - The suite records what the server actually dispatched; `make audit-e2e-coverage` reports it and `make audit-e2e-gaps` prints the work list
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies. Tests that call public URLs are opt-in behind `E2E_EXTERNAL_NETWORK=true`
 
-### Surface Evaluator (Docker)
+### Model Evaluation (Docker)
 
-Use these Makefile targets for model-backed surface evaluation with the Docker GitLab fixture:
+`test/e2e/modeleval` puts the corpus to a model against the **real binary** and a real GitLab. It asks a paid provider, so nothing schedules it:
 
 ```bash
-# CE case set
-make eval-surfaces-docker SURFACE=dynamic
-make eval-surfaces-docker SURFACE=meta
+# Rehearse the whole pipe with no provider call and no cost
+MODELEVAL_MODELS=fake:perfect make modeleval-ce
 
-# Enterprise case set on GitLab EE runtime
-make eval-surfaces-docker-enterprise SURFACE=dynamic
-make eval-surfaces-docker-enterprise SURFACE=meta
+# A real run needs a key, consent and a ceiling
+MODELEVAL_SPEND=yes MODELEVAL_BUDGET_USD=25 \
+MODELEVAL_MODELS='anthropic:claude-haiku-4-5-20251001' make modeleval-ce
 
-# CE + Enterprise case set together on GitLab EE runtime
-make eval-surfaces-docker-enterprise-all SURFACE=dynamic
-make eval-surfaces-docker-enterprise-all SURFACE=meta
+# The same against a licensed GitLab EE, which the licensed cases need
+MODELEVAL_SPEND=yes MODELEVAL_MODELS='...' make modeleval-ee
 ```
 
-- `SURFACE` must be `dynamic` or `meta`.
-- Add `PRESET=...` to run a single Docker preset.
-- `eval-surfaces-docker-enterprise-all` sets `EVAL_SURFACE_CASE_SET=all` and is the standard full validation command for CE+Enterprise regression checks.
+- `MODELEVAL_SURFACES` defaults to `dynamic,meta`; `MODELEVAL_CASES` narrows the run to named case IDs.
+- A run writes observation and scores nothing. Fold it in with `make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce`, and keep the shards: they are the only thing a corrected scoring rule can be re-applied to.
+- A prompt may not name its own case's answer. `TestContract_NoStimulusNamesItsOwnAnswer` gates that on every `go test ./internal/...`.
 
 ### Build & Cross-Compilation
 
@@ -245,10 +244,11 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_MCP_READ_ONLY`       | Read-only mode: removes mutating operations per action; reads keep working on every surface | `false` (default)  |
 | `GITLAB_MCP_SAFE_MODE`       | Safe mode: intercepts mutating operations per action and returns a JSON preview | `false` (default)  |
 | `GITLAB_MCP_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
-| `EVAL_SURFACE_ENTERPRISE` | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus | `false` (default)  |
-| `EVAL_SURFACE_CASE_SET`   | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (CE only), `all` (CE+Enterprise) | `ce` (default)     |
-| `EVAL_SURFACE_FIXTURE_SMOKE` | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) | `false` (default) |
-| `--max-output-retries`   | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output | `2` (default)      |
+| `MODELEVAL_MODELS`       | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs to ask; `fake:perfect` replays the corpus key with no provider call | —                  |
+| `MODELEVAL_SPEND`        | `test/e2e/modeleval`: consent to call a real provider (`yes`, `true`, `1`) | `no` (default)     |
+| `MODELEVAL_BUDGET_USD`   | `test/e2e/modeleval`: ceiling in US dollars a run stops at | —                  |
+| `MODELEVAL_SURFACES`     | `test/e2e/modeleval`: surfaces to measure; individual is left out by cost | `dynamic,meta`     |
+| `MODELEVAL_CASES`        | `test/e2e/modeleval`: comma-separated case IDs; empty asks every case | _(all)_            |
 | `GITLAB_MCP_MAX_HTTP_CLIENTS`       | Maximum unique (token, GitLab URL) server entries kept in the HTTP pool; bounds pooled entries, not sessions (also `--max-http-clients` flag) | `100` (default)    |
 | `GITLAB_MCP_SESSION_TIMEOUT` | Idle MCP session timeout, HTTP mode with `--stateless=false` only (also `--session-timeout` flag) | `30m` (default)  |
 | `GITLAB_MCP_ACTION_TIMEOUT`         | Cancel an action still running after this long, both transports (also `--action-timeout` in HTTP mode; `0` disables, max 24h). Above the longest wait any action offers | `65m`            |

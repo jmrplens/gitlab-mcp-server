@@ -91,10 +91,15 @@ catalog and a call to a tool outside the slice is dispatched like any other:
 what the slice bounds is what the model was shown, never what it was allowed to
 do.
 
-Two consequences a reader has to hold. The row publishes the budget rather than
-a length, because the slice is chosen per case and a row aggregates many; the
-served-tools figure in the provenance table beside it says what each attempt was
-shown out of. And an individual row measures tool choice **within a slice**,
+Two consequences a reader has to hold. The row publishes the budget **and** the
+span its attempts were actually shown, because the slice is chosen per case and
+a row aggregates many: the budget is one number, a case whose own domains
+outnumber it is shown all of them rather than fewer tools than it needs, and a
+caption carrying only the budget would seat an attempt shown 312 tools under
+the figure 128. The caption reads `slice of 128 tools (shown 96 to 312, 2 over
+budget)` where the attempts differed, and the served-tools figure in the
+provenance table beside it says what they were shown out of. And an individual
+row measures tool choice **within a slice**,
 which is a different question from choice across a whole catalog, so it is a
 comparison class of its own and never a column beside a dynamic or meta row that
 was shown everything.
@@ -112,7 +117,8 @@ the reasons it was meant to catch:
   `main`, so nothing on this page can be reproduced by checking out a released
   version.
 - **For part of the corpus the prompt contains the call the scorer checks
-  for.** The prompt builder in `cmd/eval_mcp_surfaces` interpolates the
+  for.** The prompt builder in the evaluator that produced these numbers
+  (`cmd/eval_mcp_surfaces`, deleted with them) interpolated the
   expected tool, action and parameters into the task text, and the system
   prompt names the correct action and parameter for about twenty domains. A
   tool-selection or action-selection figure taken from those tasks measures how

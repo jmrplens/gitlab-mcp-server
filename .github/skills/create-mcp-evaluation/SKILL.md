@@ -70,28 +70,35 @@ For each question:
 
 ### Step 5: Project Evaluator Execution
 
-For this repository, use `cmd/eval_mcp_surfaces` to validate model-facing MCP behavior after creating or updating evaluation tasks. Evaluation cases are typed `EvalCase` definitions compiled into `cmd/eval_mcp_surfaces/internal/evaluator/cases/` (ids such as `MS-001`, `MF-001`); the old `--tasks` Markdown file is deprecated and a custom task file is rejected. The default tool surface is `dynamic` (`gitlab_find_action` plus `gitlab_execute_action`). See `cmd/eval_mcp_surfaces/README.md` for the full option matrix.
+For this repository, the evaluation is `test/e2e/modeleval`: it boots a GitLab,
+drives the real `cmd/server` binary over stdio and puts the corpus to a model,
+so what is measured is the surface a client is served. Cases are typed
+declarations in `internal/testutil/modelcorpus` (ids such as `MS-001`,
+`MF-001`), each carrying its own answer key. See
+[the developer guide](../../../docs/development/testing/model-evaluation-developer.md)
+for the full setting matrix.
 
-Dry-run the current catalog without model calls:
+**A prompt may not name its own answer.** The stimulus you write must not
+contain the tool, action or parameter names of that case's key, or
+`TestContract_NoStimulusNamesItsOwnAnswer` fails: a prompt that hands the model
+the call measures copying rather than tool selection. Where the literal really
+is the request, declare it in `declarations.go` with its reason.
+
+Rehearse without spending anything. `fake:perfect` replays each case's key
+through the whole pipe and calls no provider:
 
 ```bash
-GITLAB_MCP_TIER=free timeout 180s go run ./cmd/eval_mcp_surfaces \
-  --dry-run \
-  --repeat=1 \
-  --out /tmp/eval-dry.md
+MODELEVAL_MODELS=fake:perfect make modeleval-ce
 ```
 
-Run a targeted model-backed schema sample:
+Put a couple of cases to a real model, which needs a key, consent and a ceiling:
 
 ```bash
-timeout 900s go run ./cmd/eval_mcp_surfaces \
-  --model anthropic:claude-haiku-4-5-20251001 \
-  --task MS-001,MF-001 \
-  --repeat=1 \
-  --pause=250ms \
-  --retries=8 \
-  --retry-wait=65s \
-  --out dist/evaluation/mcp-surfaces/schema-sample.md
+MODELEVAL_SPEND=yes \
+MODELEVAL_BUDGET_USD=5 \
+MODELEVAL_CASES=MS-001,MF-001 \
+MODELEVAL_MODELS='anthropic:claude-haiku-4-5-20251001' \
+make modeleval-ce
 ```
 
 ## Output Format

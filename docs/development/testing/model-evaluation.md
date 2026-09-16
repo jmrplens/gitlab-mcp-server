@@ -4,299 +4,173 @@
 > **Audience**: Users, evaluators, maintainers
 > **Prerequisites**: Basic understanding of MCP tools and GitLab operations
 
-AI model evaluation measures whether a model can use `gitlab-mcp-server` as an
-MCP tool provider. It is not a benchmark of prose quality. It is a benchmark of
-tool use: choosing the right MCP tool, choosing the right action, placing
-parameters in the correct schema, recovering from actionable errors, and
-finishing the requested GitLab operation with the fewest necessary calls.
+Model evaluation asks whether a real model can use `gitlab-mcp-server` to do a
+real thing to a real GitLab. It is not a benchmark of prose. It is a benchmark
+of tool use: choosing the action, shaping the arguments, carrying a
+confirmation where one is required, and finishing without being corrected.
 
-This matters because an MCP server is an interface for AI agents. A tool can be
-correct for humans and still be hard for models to use if descriptions are
-ambiguous, schemas are too large, aliases are missing, or errors do not explain
-how to recover.
+It exists because an MCP server is an interface for models. A tool can be right
+for a person and hard for a model: a description that does not say which of two
+actions to use, a schema too large to read, a parameter name a model has to
+learn from a rejection, an error that says what went wrong and not what to do.
+None of that shows up in a unit test.
 
-## What Is Evaluated
+## What it measures, and against what
 
-The evaluator uses natural-language tasks from the typed case catalog in
-`cmd/eval_mcp_surfaces/internal/evaluator/cases/`. Each case declares its
-prompt, the expected tool and action of every step, the required parameters,
-whether a step is destructive, the presets it belongs to, and the success
-condition.
+The whole of it runs in `test/e2e/modeleval`. A run boots a GitLab, starts the
+**real `cmd/server` binary** and drives it over stdio, so a model call crosses a
+process boundary and then the network, exactly as a client's would.
 
-| Case type           | Prefix | Purpose                                                                          |
-| ------------------- | ------ | -------------------------------------------------------------------------------- |
-| Single operation    | `MT-`  | One clear user task should usually require one model call and one MCP tool call. |
-| Multi-step workflow | `MS-`  | The model must sequence multiple MCP calls in the requested order.               |
-| Failure simulation  | `MF-`  | The model must recover from injected failures or unsafe output.                  |
+That is the load-bearing choice, and it is a correction of the evaluator this
+replaced. That one registered a server inside its own process. Everything the
+binary does on the way to serving a tool — its startup, its middleware chain,
+the post-registration visibility pass — was absent, so a read-only evaluation
+scored a surface on which the interactive create flows still created. What is
+measured now is the surface a client is served, because it is the same process
+serving it.
 
-The current catalog contains 260 cases declaring about 490 expected tool
-operations across both editions; the CE case set is 147 of those cases and
-about 285 operations:
+## What is asked
 
-| Area                          | Count |
-| ----------------------------- | ----: |
-| Single-operation cases        |   204 |
-| Multi-step workflow scenarios |    53 |
-| Failure simulation scenarios  |     3 |
-| Total cases                   |   260 |
-| Expected tool operations      |  ~490 |
+The corpus is `internal/testutil/modelcorpus`: **258 cases** declaring **464
+steps** and naming **313 of 1084 catalog actions** across 42 of 46 domains.
+Three kinds, by prefix:
 
-## Evaluation Modes
+| Prefix | Kind                | What it asks                                                       |
+| ------ | ------------------- | ------------------------------------------------------------------ |
+| `MT-`  | Single operation    | One clear task that should take one action.                        |
+| `MS-`  | Multi-step workflow | Several actions in the order the task requires.                    |
+| `MF-`  | Failure handling    | A step the server refuses, or one that needs an explicit approval. |
 
-The evaluator runs against the same model-facing tool surfaces as the server.
-`dynamic` is the default surface and exposes `gitlab_find_action` plus
-`gitlab_execute_action` over the canonical action catalog. `meta` exposes the
-domain grouped meta-tools. The evaluator does not reduce the server to only the
-manifest resources; when capability bridge tools are enabled they let the model
-inspect the resources, prompts, completions, and capability metadata that a full
-MCP session exposes.
+[Model evaluation corpus breadth](model-corpus.md) is the generated ledger of
+what that covers, per domain and per tier. Read it as breadth and never as
+coverage: it says which actions a model is asked to reach, and nothing about
+how well any model reaches them.
 
-The surface-aware `gitlab://tools` manifest is available in both surfaces. In
-dynamic mode it lists canonical `domain.action` IDs accepted by
-`gitlab_execute_action`; in meta mode it lists `gitlab_<domain>.<action>` entries
-and their `{action, params}` call shapes. Reading this manifest is useful for
-capability-discovery tasks, but ordinary task success is measured by the final
-GitLab operation, not by whether the model read the manifest first.
+**A case declares its answer, and the prompt may not contain it.** Each case
+carries a key: the steps, the action of each, the parameters that must be
+right, whether the step is destructive, and the world the case needs. The
+prompt is written separately and is held to a rule — a stimulus may not name
+its own case's tool, action or parameter — because a prompt that hands the
+model the call turns tool selection into copying. That rule is
+`TestContract_NoStimulusNamesItsOwnAnswer`, an ordinary unit test that runs on
+every `go test ./internal/...`, and `TestContract_FindsAPlantedAnswer` beside
+it proves the rule can fail. Where the literal really is the request (a case
+about creating a branch called `release`), the finding is written down in
+`declarations.go` with its reason rather than waved through.
 
-Dynamic Docker results use the same typed cases and presets as meta mode, but
-ordinary GitLab operation steps are projected into a `find -> execute` sequence.
-For each expected `gitlab_execute_action` operation, the evaluator first expects
-`gitlab_find_action` with a natural-language query, validates that the find
-result includes the target action, and then validates the follow-up execute call.
-Capability bridge steps remain direct bridge-tool calls because they represent
-MCP client capability access rather than GitLab catalog operations.
+## Observation and verdict are separate
 
-This means the aggregate Dynamic success rate now covers the discovery/ranker
-path, canonical action selection from find results, execute input shape,
-confirmation handling, MCP execution, and multi-step state transfer together.
-Use traces to separate a bad find query or missing finder result from a later
-execute-action parameter failure.
+A run writes down **what happened** and computes **nothing**. Every attempt,
+turn, call and post-run check lands in a shard as a record of observation: what
+the model was sent, what it emitted, which tool it called with which arguments,
+what the server dispatched, what GitLab held afterwards, and what the request
+was billed for.
 
-### Schema Evaluation
+The verdict is computed afterwards, by `cmd/gen_model_results`, from those
+shards and from the corpus at HEAD.
 
-Schema evaluation calls real model providers with the MCP tool catalog, but it
-does not execute GitLab operations. It validates whether the model can infer the
-correct tool, action, and argument shape from the schema and descriptions.
+The split is what makes a correction cheap and a published number durable. A
+scoring rule fixed today can re-score a run from last month without spending a
+token, through `make model-results-refold`. The price is that **the shards are
+the only thing a correction can be applied to**: the committed record holds
+scored columns, redrawing scores nothing, and a run whose shards were thrown
+away can never be re-scored.
 
-Use schema evaluation when changing:
+## The seven columns
 
-- Tool descriptions
-- Meta-tool action names
-- Parameter aliases
-- Provider adapters
-- Token-reduction strategies
-- `GITLAB_MCP_META_PARAM_SCHEMA` behavior
+Each is a ratio, and both halves are published. A column reading 100% over one
+attempt and one reading 100% over ninety are not the same claim.
 
-The project currently keeps meta-tool params in opaque mode. Provider-specific
-compatibility, such as Google Gemini validated function calling, is handled by
-the evaluator/provider adapter rather than by changing the global MCP schema.
+| Column              | Numerator                                                     | Denominator                   |
+| ------------------- | ------------------------------------------------------------- | ----------------------------- |
+| Reached             | Steps reached, or correctly declined                          | Non-optional steps declared   |
+| Accepted first time | Steps whose first call about them was the one that reached it | Steps reached                 |
+| Argument fidelity   | Arguments whose value matched the truth                       | Arguments declared comparable |
+| Confirmation        | Destructive steps whose reaching call carried the approval    | Destructive steps declared    |
+| Unaided             | Attempts that completed with no refusal of ours anywhere      | Attempts run                  |
+| Completion          | Attempts that completed                                       | Attempts run                  |
+| Overhead            | Catalog searches plus refusals for arguments                  | Steps reached                 |
 
-### Docker Evaluation
+Two of them need their shape explained.
 
-Docker evaluation runs the model against the real MCP server and an ephemeral,
-populated GitLab instance. The default suite uses GitLab CE. Enterprise suites
-use the EE image plus a locally supplied Ultimate license. The model's validated
-tool calls are executed through MCP, so failures can come from model choice,
-argument shape, GitLab API state, permissions, license coverage, or fixture gaps.
+**Argument fidelity compares values, not names.** An argument the case declares
+a truth for is compared against that truth; an argument whose value the case
+leaves to the model is in neither half. A figure that compared only parameter
+names would say a model placed `title` correctly while it wrote the wrong title.
 
-Docker evaluation is split into safe presets:
+**Overhead keeps its two halves apart** and publishes them separately beside the
+combined rate. A discovery call is the dynamic surface's declared cost — the
+catalog is not in the tool list, so a model must search it, and that is the
+design. An `invalid_params` refusal is a model learning a parameter name from a
+rejection, which is what the default opaque meta schema leaves it to do, and it
+is the number that says what that mode costs. One rate over both would hide
+each inside the other.
 
-| Preset                    | Scope                     | Mutation policy                                                              |
-| ------------------------- | ------------------------- | ---------------------------------------------------------------------------- |
-| `docker-read`             | Read-only tasks           | No mutating or destructive operations.                                       |
-| `docker-mutating-safe`    | Safe create/update tasks  | Mutates disposable Docker fixtures.                                          |
-| `docker-destructive-safe` | Safe delete/archive tasks | Uses disposable or just-in-time fixtures and requires confirmation metadata. |
+## What is counted and then left out
 
-Enterprise Docker mode adds matching Premium/Ultimate presets:
+Five outcomes are counted, published, and kept out of every column. None of
+them is the model's:
 
-| Preset                               | Scope                                      | Mutation policy                                                      |
-| ------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------- |
-| `docker-enterprise-read`             | Enterprise read-only tasks                 | No mutating or destructive operations.                               |
-| `docker-enterprise-mutating-safe`    | Enterprise safe create/update/rotate tasks | Mutates licensed disposable Docker fixtures.                         |
-| `docker-enterprise-destructive-safe` | Enterprise safe delete/revoke tasks        | Requires confirmation metadata and uses refreshed licensed fixtures. |
+| Outcome        | Why it is not the model's                                               |
+| -------------- | ----------------------------------------------------------------------- |
+| Skipped        | The instance did not meet the case's needs; it never ran.               |
+| Unobserved     | It ran and the server's span never arrived, so nothing can be said.     |
+| Provider error | The provider would not answer.                                          |
+| Harness error  | This side broke.                                                        |
+| GitLab refused | GitLab refused a call the model dispatched with the declared arguments. |
 
-### One-Command Docker Suite
+Counting a skip would rank a model by the licence of the instance it was
+measured on. Counting the other four would publish a provider's outage, a bug
+of ours or a fixture's state as a model that did not finish the task.
 
-Use the wrapper when you want a full CE model run for one surface without
-assembling the Docker, fixture, preset, and publication commands by hand:
+**Declines are published apart**, in two kinds, because they are not one thing.
+A model that explains in text that a read-only deployment will not do this is
+what such a deployment wants. A model that sends the call and is refused is the
+conversation ending correctly and nothing more. Folding them together would
+credit the second with the first.
 
-```bash
-make eval-surfaces-docker SURFACE=dynamic
-```
+## Reading a row
 
-For a full Enterprise Ultimate run, set a 24-character activation code in
-`ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE` in `.env` or the shell, then run
-the Enterprise wrapper target. Legacy `.gitlab-license` keys can still be stored
-in `ENTERPRISE_LICENSE`. After the first successful activation-code run, the
-setup script exports the generated reusable license key to
-`test/e2e/.enterprise-license` and later Enterprise Docker runs prefer that
-gitignored cache before passing the activation code again. The wrapper uses
-`gitlab/gitlab-ee:latest` by default and writes Enterprise artifacts under the
-same run directory layout:
+A row is a measurement, and its identity is everything that changes **what** was
+measured rather than how well it went: the model, the surface, the protective
+mode, the tier and whether it was pinned, the meta schema mode, the slice size,
+the corpus and contract digests, the tool-schema digest as that provider
+received it, and the repeat count. Two rows differing anywhere there are two
+measurements and never two readings of one.
 
-```bash
-make eval-surfaces-docker-enterprise SURFACE=dynamic
-```
+Beside that, the provenance: the commit, the date, the instance's edition and
+version, the credential's scopes, how many tools the session served, and what
+the row cost as four token figures. Never one figure: folding a cache read into
+an input token is how a table came to claim sixty thousand tokens against five
+million.
 
-To rerun a single preset for focused regression checks, pass `PRESET`:
+A row with a hole in its provenance is refused rather than published with the
+hole, because the reader who would be misled is the one comparing it with
+another row.
 
-```bash
-make eval-surfaces-docker SURFACE=dynamic PRESET=docker-destructive-safe
-```
+**Surfaces are comparison classes.** Dynamic and meta are measured by default.
+The individual surface is not, and that is a decision rather than an oversight:
+its whole tool list is 682,878 tokens at Ultimate, over at least one provider's
+context window outright, so a model can only be shown a deterministic slice of
+it — and a measurement within a slice is a different question from choice
+across a whole catalog. Where an individual row exists it carries both the
+budget and the span its attempts were actually shown, since a case whose own
+domains outnumber the budget is shown all of them.
 
-The same workflow is available directly as
-`scripts/eval-surfaces-docker.sh dynamic`, with an optional second preset
-argument. The only required input is the tool surface (`dynamic` or `meta`). The
-wrapper cleans and starts the Docker GitLab stack, waits for readiness,
-provisions the E2E token and runner, prepares live fixtures, runs the selected
-Docker preset set with the requested edition flag, and then publishes the
-reviewed reports into the matching CE/base or Enterprise/Premium sections in
-[AI Model Evaluation Results](model-results.md) and the managed README summary
-after full runs. Single-preset runs skip documentation publishing so partial
-results do not replace the current full-run summary. Enterprise full runs use
-only the `docker-enterprise-*` presets; CE capability-discovery checks stay in
-the CE wrapper.
+## What a run costs
 
-Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
-The timestamp is captured once at startup and reused for every report, trace,
-fixture, and log file in that run.
+It asks a paid provider, so **nothing schedules it**. There is no CI job, no
+nightly, no hook. A run happens when somebody decides to spend the money and
+says so: `MODELEVAL_SPEND=yes` is required before a real provider is called,
+`MODELEVAL_BUDGET_USD` is the ceiling it stops at, and a model the price table
+has no figure for refuses to start unless `MODELEVAL_UNPRICED` says otherwise.
 
-The wrapper holds no model matrix of its own. It passes `--models` only when
-`EVAL_SURFACE_MODELS` is set, so with that variable unset the evaluator resolves
-the matrix itself from `EVAL_MODELS` in `.env` (see `.env.example` for the list a
-fresh clone starts with), and falls back to its source default when that is empty
-too. `google:gemini-flash-latest` is an alias resolved by Google to the latest
-Gemini Flash model available to the API key, so two runs a month apart are not
-necessarily the same model; use ListModels before pinning a different Google model
-ID. Set `EVAL_SURFACE_OUT_ROOT` to change the artifact root, or
-`EVAL_SURFACE_KEEP_DOCKER=1` to leave the Docker GitLab instance running for
-inspection after the run.
+A rehearsal costs nothing. `MODELEVAL_MODELS=fake:perfect` replays the corpus
+key through the whole pipe — the binary, GitLab, the recording, the scoring and
+the pages — without a provider call. What it proves is that the machinery runs;
+what it cannot prove is anything about a model, which is why folding a fake run
+refuses every row it would publish, by name.
 
-Publication is opt-in. A full multi-preset run writes its reports and stops;
-`EVAL_SURFACE_PUBLISH_DOCS=true` is what asks it to update `README.md` and
-`docs/development/testing/model-results.md` afterwards. The publisher refuses a
-report whose header does not declare `Stimulus: uncoached`, so a run whose prompts
-still carry the expected call cannot be published whatever the variable says.
-
-`EVAL_SURFACE_*` keeps its bare name. The rename to `GITLAB_MCP_<NAME>` exists
-because a stdio server shares a shell with every other tool its user runs, and
-these variables never do: they belong to `cmd/eval_mcp_surfaces`, are set by the
-`make` targets in this repository, and are read by no server. Prefixing them
-would cost every developer's muscle memory and protect against a collision that
-cannot happen.
-
-The Docker fixture base must contain all resources needed by successful tasks.
-If a task is not intentionally testing an error, missing GitLab state is treated
-as harness noise and should be fixed in fixtures before judging the model.
-
-## Core Metrics
-
-| Metric                          | Meaning                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Tool-selection accuracy         | The first or final model call selected the expected MCP tool name.                                                                   |
-| Action-selection accuracy       | The selected action matched the expected action inside an action-based meta-tool.                                                    |
-| First-call validation pass rate | The first emitted tool call matched schema, required params, and destructive-safety requirements.                                    |
-| Schema lookup use rate          | Percentage of attempts where the model used schema lookup before or during the task. Low is better for clear single-operation tasks. |
-| Repair success rate             | Percentage of invalid first calls that were corrected after the tool returned an error.                                              |
-| Destructive safety              | Destructive calls included the required confirmation and used the expected destructive route.                                        |
-| Final task success proxy        | The evaluator's final success signal after validation and optional MCP execution.                                                    |
-| Model requests                  | Number of provider calls made by the evaluator.                                                                                      |
-| Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
-| MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
-
-A rate whose denominator is empty prints `-`, not a percentage, everywhere a
-report or a published table states it: a run that attempted no repair has no
-repair success rate, and one that ran no destructive task has no destructive
-safety. An aggregate leaves such a row out of both sides of its average rather
-than counting it as a pass, and a comparison states no delta against it. Until
-3.1.0 an empty denominator scored 100%, so the emptier the sample the better a
-model looked.
-
-For clear single-operation meta tasks, the target is `model_calls=1` and
-`tool_calls=1`. For Dynamic tasks, one GitLab operation normally requires two
-tool calls: `gitlab_find_action` followed by `gitlab_execute_action`. Extra calls
-beyond the expected find/execute pair are acceptable only when the prompt is
-genuinely ambiguous, the task is multi-step, or a real GitLab error requires
-recovery.
-
-## Failure Categories
-
-Failures are useful only after separating model behavior from harness noise.
-Use these categories when triaging traces:
-
-| Category                   | Meaning                                                                  | Typical fix                                                        |
-| -------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Model route miss           | The model chose the wrong tool or action.                                | Improve descriptions, action names, examples, or aliases.          |
-| Model parameter shape miss | The model chose the right route but emitted invalid params.              | Strengthen schema descriptions or add safe alias normalization.    |
-| Provider adapter issue     | The provider API transformed or rejected a valid MCP schema.             | Fix the provider adapter without changing the global MCP contract. |
-| Fixture gap                | Docker GitLab lacks a resource the task expects.                         | Add initial or just-in-time fixture setup.                         |
-| GitLab limitation          | The Docker GitLab edition does not support the API.                      | Filter or mark the route unavailable for that edition.             |
-| MCP implementation bug     | The MCP handler fails despite valid model input and valid fixture state. | Fix the handler and add unit/E2E coverage.                         |
-
-## Compatibility Expectations
-
-The evaluator supports several provider families through adapters. A model is
-compatible when it can receive the tool catalog, emit tool calls, preserve tool
-call IDs across repair turns, and accept MCP-shaped JSON Schema.
-
-| Provider  | Example model                         | Compatibility expectation                                                 |
-| --------- | ------------------------------------- | ------------------------------------------------------------------------- |
-| Anthropic | `anthropic:claude-sonnet-4-6`         | Supported.                                                                |
-| Anthropic | `anthropic:claude-haiku-4-5-20251001` | Supported.                                                                |
-| Google    | `google:gemini-flash-latest`          | Supported with validated function-calling mode; resolves to latest Flash. |
-| OpenAI    | `openai:gpt-5.4-mini`                 | Supported.                                                                |
-| OpenAI    | `openai:gpt-5.4-nano`                 | Supported.                                                                |
-| Qwen      | `qwen:qwen3.6-flash`                  | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`.     |
-
-Published percentages belong in [AI Model Evaluation Results](model-results.md),
-not in this conceptual guide.
-
-## Reading Results
-
-### What the header says the run was
-
-Every report opens with the run's provenance, and each line is written on every
-run: `Git branch`, `Git commit`, `Server mode`, `Tier`, `Token scopes`,
-`Meta param schema`, `GitLab version`, `Temperature`, `Max output tokens` and
-`Stimulus`. A value the run could not resolve is stated as `unknown` rather
-than left out, because an omitted line and a line a reader failed to parse look
-the same, so a report with a hole in it would read as complete.
-
-They are there because two runs of the same cases are only comparable when they
-were measured on the same thing. The tier and the token scopes decide which
-actions exist in the catalog at all, the server mode decides whether the
-mutating ones were withdrawn or previewed, the schema mode decides how much of
-each action a model was shown, and the sampling decides what the model was
-asked with. `Stimulus` says whether the prompts withheld the answer the scorer
-checks for; it reads `coached` today, and publication refuses any report that
-does not declare `uncoached`.
-
-The published tables carry the same information per row: `Server mode` and
-`Tier` as columns of their own, the rest compressed into `Run conditions`. A
-cell covering several reports states the value only when they all agree and
-`mixed` when they do not, so an aggregate never names a deployment half its
-numbers were not measured on.
-
-Start with final success and first-call validation. If final success is high but
-first-call validation is low, the model can recover but the schema or
-description is still costing extra calls. If tool and action accuracy are high
-but final success is low, inspect Docker fixture state and MCP execution errors.
-If destructive safety is below 100%, treat it as a blocking issue before
-running broader destructive evaluations.
-
-For every failed model run, read the trace JSON in the report's `.traces/`
-directory. The trace records the system prompt, user prompt, emitted tool call,
-validation error, MCP result, and any repair attempt.
-
-In live Docker runs with `--execute-tools`, validated `gitlab_execute_action`
-calls and model-initiated `gitlab_find_action` calls are recorded as MCP
-`CallTool` exchanges in the trace. Simulated tool results should only appear for
-offline/schema runs or explicitly simulated failure scenarios.
-
-## Why Docker Mode Is Valuable
-
-Schema-only evaluations can show that a model understands the catalog, but they
-cannot prove the server works against GitLab. Docker mode closes that gap by
-executing the actual MCP call against a populated GitLab instance. This catches
-real problems such as GitLab API edge cases,
-stale fixture IDs, destructive ordering, and provider-specific argument repair.
+See [the developer guide](model-evaluation-developer.md) for how to run one,
+add a case, and read a shard, and [the results page](model-results.md) for what
+is published today.
