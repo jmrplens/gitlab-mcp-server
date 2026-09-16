@@ -112,8 +112,11 @@ func holdsShard(dir string) (bool, error) {
 		return false, fmt.Errorf("read %s: %w", dir, err)
 	}
 	for _, entry := range entries {
-		name := entry.Name()
-		if !entry.IsDir() && strings.HasPrefix(name, "calls-") && strings.HasSuffix(name, ".jsonl") {
+		// The predicate is the record package's own, because this is the same
+		// question its reader asks a moment later: a second spelling of the
+		// name here is how the two would come to disagree about what a shard
+		// is called.
+		if !entry.IsDir() && e2ecalls.IsShard(entry.Name()) {
 			return true, nil
 		}
 	}

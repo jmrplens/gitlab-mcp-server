@@ -126,8 +126,9 @@ func e2eObservation(dir string, actions []requestinventory.Action) E2EObservatio
 // One trace is one call is one action, and a trace can legitimately be written
 // twice: the harness flushes a dispatch line when its test ends and re-offers
 // every trace the receiver holds at the end of the run, while the writer's
-// dedupe is on the exact JSON text, so a line whose request count grew between
-// the two writes is written again rather than replacing the first. Counting
+// dedupe is on the exact encoded line, so a line whose request count grew
+// between the two writes is written again rather than replacing the first.
+// Counting
 // both would inflate [E2EObservation.Dispatches], which is published as a count
 // of traces, and would classify a call from the earliest and least informed
 // line the run produced.
