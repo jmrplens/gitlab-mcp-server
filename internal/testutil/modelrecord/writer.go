@@ -91,6 +91,12 @@ func OpenDir(dir string) *Writer {
 	if dir == "" {
 		return nil
 	}
+	// Cleaned before it becomes the key, because the key is what makes one
+	// directory one writer. Two spellings of one path ("shards" and "./shards")
+	// would otherwise open two writers over the same files, each with a seen set
+	// the other cannot consult, and Read concatenates shards without
+	// deduplicating: the duplicate observations would survive into scoring.
+	dir = filepath.Clean(dir)
 	writersMu.Lock()
 	defer writersMu.Unlock()
 	if existing, ok := writers[dir]; ok {

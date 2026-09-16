@@ -192,6 +192,61 @@ func TestSurfaceKey_String_NamesTheModelAndThePin(t *testing.T) {
 	}
 }
 
+// TestSurfaceLabel_SaysWhatARowDecidedForItself is the other half of the
+// cross-surface rule: what the key could not hold fixed has to be printed
+// beside the row, or an individual row measured on a slice reads as though it
+// had been shown the catalog.
+func TestSurfaceLabel_SaysWhatARowDecidedForItself(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(*row)
+		want string
+	}{
+		{name: "a dynamic row decides neither", edit: func(*row) {}},
+		{
+			name: "an individual row names its slice",
+			edit: func(r *row) { r.Key.Surface, r.Key.SliceSize = "individual", 128 },
+			want: "slice of 128 tools",
+		},
+		{
+			name: "a meta row names its schema mode",
+			edit: func(r *row) { r.Key.Surface, r.Key.MetaParamSchema = "meta", opaqueSchema },
+			want: "meta schema `opaque`",
+		},
+		{
+			name: "a run that pinned a schema mode has both on its individual row",
+			edit: func(r *row) {
+				r.Key.Surface, r.Key.SliceSize, r.Key.MetaParamSchema = "individual", 64, "compact"
+			},
+			want: "slice of 64 tools, meta schema `compact`",
+		},
+		// The budget alone is what a reader would otherwise compare two
+		// individual rows under, and the slice is chosen per case, so the span
+		// the attempts recorded goes beside it.
+		{
+			name: "an individual row says what its attempts were shown",
+			edit: func(r *row) {
+				r.Key.Surface, r.Key.SliceSize = "individual", 128
+				r.Counts.Shown = &shown{Min: 96, Max: 312, Overflowed: 2}
+			},
+			want: "slice of 128 tools (shown 96 to 312, 2 over budget)",
+		},
+		{
+			name: "a span with no budget beside it labels nothing",
+			edit: func(r *row) { r.Counts.Shown = &shown{Min: 2, Max: 2} },
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			one := oneRow()
+			testCase.edit(&one)
+			if got := surfaceLabel(one); got != testCase.want {
+				t.Errorf("surfaceLabel = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestRowKey_String_IsWhatACollisionIsRefusedBy holds the one property a key's
 // spelling has to have: two rows that differ anywhere must spell differently,
 // or a collision would hide one measurement behind another.

@@ -6,7 +6,9 @@ package modelrecord
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -121,8 +123,24 @@ func readShard(path string) ([]Record, error) {
 			continue
 		}
 		var record Record
-		if unmarshalErr := json.Unmarshal([]byte(text), &record); unmarshalErr != nil {
+		// Unknown fields are refused rather than ignored, which is what
+		// json.Unmarshal would do. Schema 1 is a fixed contract between this
+		// package's writer and this package's reader, not a version anything is
+		// meant to extend from outside, so a field the reader does not know is a
+		// shard written by something else or a name misspelled at the writer. The
+		// second is the one that matters: a misspelled payload field leaves the
+		// real one at its zero value, and an attempt with no ending scores as
+		// one with an ending nobody chose.
+		decoder := json.NewDecoder(strings.NewReader(text))
+		decoder.DisallowUnknownFields()
+		if unmarshalErr := decoder.Decode(&record); unmarshalErr != nil {
 			return nil, fmt.Errorf("parse %s line %d: %w", path, line, unmarshalErr)
+		}
+		// json.Unmarshal refused a line carrying a second value after the first;
+		// a Decoder does not, so the reader asks for the next token and requires
+		// the end of the input.
+		if _, trailingErr := decoder.Token(); !errors.Is(trailingErr, io.EOF) {
+			return nil, fmt.Errorf("parse %s line %d: more than one JSON value on the line", path, line)
 		}
 		if validateErr := record.validate(); validateErr != nil {
 			return nil, fmt.Errorf("%s line %d: %w", path, line, validateErr)

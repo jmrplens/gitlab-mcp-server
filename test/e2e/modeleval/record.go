@@ -177,12 +177,19 @@ func (r *recorder) describeSession(session *harness.Session, cfg runConfig) *mod
 		return known
 	}
 	line := &modelrecord.Session{
-		Label:             label,
-		Surface:           session.Surface().String(),
-		Mode:              session.Mode().String(),
-		Capabilities:      session.Capabilities().String(),
-		MetaParamSchema:   string(cfg.MetaParamSchema),
-		TierPin:           string(cfg.Tier),
+		Label:           label,
+		Surface:         session.Surface().String(),
+		Mode:            session.Mode().String(),
+		Capabilities:    session.Capabilities().String(),
+		MetaParamSchema: string(cfg.MetaParamSchema),
+		TierPin:         string(cfg.Tier),
+		// What the model was shown of what the session served, which is the
+		// whole list everywhere but the individual surface. It is the budget
+		// rather than a length because a slice is chosen per case and a row
+		// aggregates many: what the row can say is how many tools an attempt
+		// was shown at most, and ServedTools beside it says what it was shown
+		// out of.
+		SliceSize:         budgetFor(session.Surface(), cfg.Slice),
 		TokenScopes:       slices.Clone(r.scopes),
 		ServedTools:       len(session.Tools()),
 		ToolSchemaDigests: map[string]string{},

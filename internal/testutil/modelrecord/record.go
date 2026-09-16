@@ -338,7 +338,11 @@ func (r Record) validate() error {
 	if carried != 1 {
 		return fmt.Errorf("line type %q carries %d payloads, want exactly one", r.Type, carried)
 	}
-	return nil
+	// The envelope is sound; what it carries still has to mean something. See
+	// validate.go: an attempt with no case, model, session or ending passes
+	// every check above and describes nothing, and a scorer given it counts an
+	// attempt that never happened.
+	return r.validatePayload()
 }
 
 // invalidRawField names the first field of the record holding JSON that cannot
@@ -531,6 +535,22 @@ type Attempt struct {
 	Session string `json:"session"`
 	// Repeat is which run of this attempt it is, from 1.
 	Repeat int `json:"repeat"`
+	// ShownTools is how many tools this attempt was shown, Overflowed whether
+	// the tools it had to be shown outnumbered the budget, and ToolDigest the
+	// digest of the list as this attempt's provider received it.
+	//
+	// They are on the attempt and not on the session because on the individual
+	// surface the list is chosen per case, and the three session fields cannot
+	// be read back into it: slice_size is the budget rather than a length,
+	// served_tools is what the whole session listed, and rebuilding the list
+	// from them would need the served tool definitions and the domain of each,
+	// which nothing here persists. Without them a row reads slice_size: 128
+	// for an attempt that was shown 312 tools, and two attempts under that one
+	// number are not comparable. Off the individual surface they say the same
+	// thing the session does, since every attempt is shown the whole list.
+	ShownTools int    `json:"shown_tools,omitempty"`
+	Overflowed bool   `json:"overflowed,omitempty"`
+	ToolDigest string `json:"tool_digest,omitempty"`
 	// Facts are the fixture values the stimulus was rendered with, which is
 	// what makes a failed attempt reproducible: a prompt naming project 42
 	// says nothing without the project that was 42 that day.

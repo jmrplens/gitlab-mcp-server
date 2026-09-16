@@ -73,7 +73,12 @@ const (
 // 682,878 tokens at Ultimate, over at least one provider's context window
 // outright, so what can be measured there is a slice and this says whether that
 // slice is servable.
-const sliceSize = 128
+//
+// It is the run's own default rather than a second figure spelled here, so a
+// probe cannot come to answer about a size no run uses. A run told to use
+// another through MODELEVAL_SLICE is outside what this answers, which is why
+// the probe reads the default and not the configured value.
+const sliceSize = defaultSlice
 
 // probeResult is what one model's probe learned.
 type probeResult struct {

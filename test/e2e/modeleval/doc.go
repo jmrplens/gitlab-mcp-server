@@ -10,8 +10,9 @@
 // asked. The evaluator this replaces assembled an mcp.Server of its own from a
 // three-field configuration, and so measured an assembly nobody deploys.
 //
-// What is here is the run: the settings, the server shape, and the adapter
-// that turns one call a model chose into a line of the observation record. The
+// What is here is the run: the settings, the server shape, the tools a model
+// is shown of what that shape serves, and the adapter that turns one call a
+// model chose into a line of the observation record. The
 // data it runs on, the record it writes and the verdicts read back out of that
 // record are untagged packages elsewhere, so a scorer can be corrected and
 // every past run re-scored without spending a token:

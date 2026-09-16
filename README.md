@@ -309,6 +309,7 @@ They were withdrawn because the measurement did not measure what it claimed. One
 The replacement is being built as a tagged package under `test/e2e/` on the end-to-end harness, which already keeps the stimulus, the environment and the record apart. Numbers return here when that harness produces them.
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
+
 Withdrawn. The CE dynamic table published here, last refreshed from a Docker run dated 20260627-232303, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
@@ -316,14 +317,17 @@ Withdrawn. The CE dynamic table published here, last refreshed from a Docker run
 <summary>Meta-tools and Enterprise evaluation results</summary>
 
 <!-- START MODEL EVAL META SUMMARY -->
+
 Withdrawn. No CE meta-tools table was ever published here, and none will be until the rebuilt harness produces one.
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
+
 Withdrawn. The Enterprise meta table published here, last refreshed from a Docker run dated 20260527, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
+
 Withdrawn. The Enterprise dynamic table published here, last refreshed from a Docker run dated 20260628-015421, is readable at commit `4587cbfb3` and is not reproduced because the measurement behind it was unsound.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
@@ -445,47 +449,47 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,295 |     287,574 |
-| Unit tests (`_test.go`)  |       796 |     473,021 |
-| End-to-end tests         |       386 |      71,876 |
-| **Total**                | **2,477** | **832,471** |
+| Source (`.go`, non-test) |     1,330 |     298,763 |
+| Unit tests (`_test.go`)  |       818 |     483,637 |
+| End-to-end tests         |       491 |      93,796 |
+| **Total**                | **2,639** | **876,196** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,574 |
-| . Exported (public)             |  3,174 |
-| . Unexported (private)          |  7,400 |
-| Unit test functions (`TestXxx`) | 15,470 |
-| Subtests (`t.Run(...)`)         |  4,695 |
-| End-to-end test functions       |    912 |
+| Source functions                | 10,811 |
+| . Exported (public)             |  3,218 |
+| . Unexported (private)          |  7,593 |
+| Unit test functions (`TestXxx`) | 15,744 |
+| Subtests (`t.Run(...)`)         |  4,935 |
+| End-to-end test functions       |  1,196 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.64× more tests than code |
-| Average source file length         |                 ~222 lines |
-| Average test file length           |                 ~594 lines |
-| Comment lines in source            |  58,883 (~20.5% of source) |
+| Test lines vs source lines         | 1.62× more tests than code |
+| Average source file length         |                 ~225 lines |
+| Average test file length           |                 ~591 lines |
+| Comment lines in source            |  62,074 (~20.8% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,622 |
-| `defer` statements                 | 1,071 |
-| `struct` types defined             | 3,344 |
-| `//nolint` suppressions            |   207 |
+| `if err != nil` checks             | 9,062 |
+| `defer` statements                 | 1,150 |
+| `struct` types defined             | 3,403 |
+| `//nolint` suppressions            |   221 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   283 |
+| Go packages                    |   291 |
 | Direct dependencies (`go.mod`) |    34 |
 | Indirect dependencies          |    37 |
 
@@ -494,14 +498,14 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Record              | File                                    |
 | ------------------- | --------------------------------------- |
 | Longest source file | `cmd/server/main.go`. 4,734 lines       |
-| Longest test file   | `cmd/server/main_test.go`. 11,012 lines |
+| Longest test file   | `cmd/server/main_test.go`. 11,023 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,228 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 15,450 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,432 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 15,596 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

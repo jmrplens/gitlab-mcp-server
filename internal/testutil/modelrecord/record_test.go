@@ -260,12 +260,12 @@ func TestLineRecord_EachLineWrapsItselfInItsOwnEnvelope(t *testing.T) {
 		line Line
 		want string
 	}{
-		{name: TypeRun, line: &Run{Package: "modeleval"}, want: TypeRun},
-		{name: TypeSession, line: &Session{Label: "dynamic/default"}, want: TypeSession},
-		{name: TypeAttempt, line: &Attempt{ID: "a1"}, want: TypeAttempt},
-		{name: TypeTurn, line: &Turn{Attempt: "a1"}, want: TypeTurn},
-		{name: TypeCall, line: &Call{Attempt: "a1"}, want: TypeCall},
-		{name: TypeVerify, line: &Verify{Attempt: "a1"}, want: TypeVerify},
+		{name: TypeRun, line: validRun(), want: TypeRun},
+		{name: TypeSession, line: validSession(), want: TypeSession},
+		{name: TypeAttempt, line: validAttempt(), want: TypeAttempt},
+		{name: TypeTurn, line: validTurn(), want: TypeTurn},
+		{name: TypeCall, line: validCall(), want: TypeCall},
+		{name: TypeVerify, line: validVerify(), want: TypeVerify},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -298,12 +298,12 @@ func TestRecordValidate_AcceptsOnlyTheNamedPayload(t *testing.T) {
 		lineT string
 		own   Record
 	}{
-		{name: TypeRun, lineT: TypeRun, own: Record{Run: &Run{}}},
-		{name: TypeSession, lineT: TypeSession, own: Record{Session: &Session{}}},
-		{name: TypeAttempt, lineT: TypeAttempt, own: Record{Attempt: &Attempt{}}},
-		{name: TypeTurn, lineT: TypeTurn, own: Record{Turn: &Turn{}}},
-		{name: TypeCall, lineT: TypeCall, own: Record{Call: &Call{}}},
-		{name: TypeVerify, lineT: TypeVerify, own: Record{Verify: &Verify{}}},
+		{name: TypeRun, lineT: TypeRun, own: Record{Run: validRun()}},
+		{name: TypeSession, lineT: TypeSession, own: Record{Session: validSession()}},
+		{name: TypeAttempt, lineT: TypeAttempt, own: Record{Attempt: validAttempt()}},
+		{name: TypeTurn, lineT: TypeTurn, own: Record{Turn: validTurn()}},
+		{name: TypeCall, lineT: TypeCall, own: Record{Call: validCall()}},
+		{name: TypeVerify, lineT: TypeVerify, own: Record{Verify: validVerify()}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

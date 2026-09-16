@@ -335,20 +335,33 @@ func crossSurfaceNotes(rows, all []row) string {
 		var peers []string
 		for _, other := range all {
 			if other.Key.Surface != one.Key.Surface && crossSurfaceKey(other) == key {
-				peers = append(peers, "`"+other.Key.Surface+"`")
+				peers = append(peers, "its `"+other.Key.Surface+"` row"+bracketed(surfaceLabel(other)))
 			}
 		}
 		if len(peers) == 0 {
 			continue
 		}
 		sort.Strings(peers)
-		notes = append(notes, fmt.Sprintf("- `%s` may be read beside its %s row: they agree on %s.",
+		notes = append(notes, fmt.Sprintf("- `%s` may be read beside %s: they agree on %s.",
 			one.Key.Model, strings.Join(slicesCompact(peers), " and "), key))
 	}
 	if len(notes) == 0 {
 		return ""
 	}
 	return "Cross-surface comparisons this table takes part in:\n\n" + strings.Join(notes, "\n") + "\n"
+}
+
+// bracketed puts what a peer row decided for itself in brackets after its
+// surface, and nothing at all when it decided neither.
+//
+// The bracket is what makes the comparison honest rather than merely possible:
+// an individual peer was shown a slice of the catalog and the row reading it is
+// owed that fact in the same sentence, not two tables away.
+func bracketed(label string) string {
+	if label == "" {
+		return ""
+	}
+	return " (" + label + ")"
 }
 
 // slicesCompact removes the repeats a row measured twice on one other surface
@@ -368,11 +381,14 @@ func slicesCompact(values []string) []string {
 
 // unpublishedRows names the rows of a record that no block publishes.
 //
-// Today that is every row measured on the individual surface, which has no
-// block of its own: R11 of the rebuild plan is what adds one, and until then a
-// record holding such a row would have it measured, scored, committed and shown
-// to nobody. It is reported rather than dropped for the same reason the record
-// carries both halves of every ratio.
+// Today that is every row measured on the individual surface. The eight blocks
+// are the dynamic and meta pairs of the two pages, and an individual row is
+// neither: it is measured on a slice of the catalog rather than on the whole of
+// it, so it is a comparison class of its own and giving it a column beside
+// those would be the fold this record exists to stop. Until a page carries a
+// block for that class, such a row would be measured, scored, committed and
+// shown to nobody, which is why it is named here rather than dropped: the same
+// reason the record carries both halves of every ratio.
 func unpublishedRows(rows []row) []string {
 	var orphans []string
 	for _, one := range rows {

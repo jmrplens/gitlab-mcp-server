@@ -89,16 +89,21 @@ func populatedLines() (time.Time, []Line) {
 			ToolSchemaDigests: map[string]string{"anthropic:claude-x": "sha256:tools"},
 		},
 		&Attempt{
-			ID:       "MT-205/anthropic:claude-x/dynamic/1",
-			Case:     "MT-205",
-			Model:    "anthropic:claude-x",
-			Surface:  "dynamic",
-			Session:  "dynamic/read-only/premium",
-			Repeat:   1,
-			Facts:    map[string]string{"project_path": "g/p", "issue_iid": "7"},
-			Stimulus: "List the open issues of g/p and close the oldest one.",
-			EndedBy:  EndedMalformed,
-			Reason:   `the third turn's tool call did not parse: {"action": "issue.list", "params": {`,
+			ID:      "MT-205/anthropic:claude-x/dynamic/1",
+			Case:    "MT-205",
+			Model:   "anthropic:claude-x",
+			Surface: "dynamic",
+			Session: "dynamic/read-only/premium",
+			Repeat:  1,
+			// What this attempt was shown, which on the individual surface is
+			// neither the session's budget nor its served count.
+			ShownTools: 312,
+			Overflowed: true,
+			ToolDigest: "b1946ac92492d2347c6235b4d2611184",
+			Facts:      map[string]string{"project_path": "g/p", "issue_iid": "7"},
+			Stimulus:   "List the open issues of g/p and close the oldest one.",
+			EndedBy:    EndedMalformed,
+			Reason:     `the third turn's tool call did not parse: {"action": "issue.list", "params": {`,
 		},
 		// The request that was refused for rate and the try that answered are
 		// two lines at one index, which is what the record means by "each
@@ -296,10 +301,9 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 	t.Cleanup(Release)
 
 	reporter := &recordingReporter{}
-	OpenDir(root).Write(reporter,
-		&Run{Package: "modeleval", Edition: "community", Tier: "free"},
-		&Attempt{ID: "a1", Case: "MT-205", EndedBy: EndedCompleted},
-	)
+	attempt := validAttempt()
+	attempt.Case = "MT-205"
+	OpenDir(root).Write(reporter, validRun(), attempt)
 	if len(reporter.messages) != 0 {
 		t.Fatalf("reported %v, want nothing", reporter.messages)
 	}
