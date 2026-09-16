@@ -10,12 +10,19 @@
 // read at different prices and folding them into one figure is how a published
 // table came to show a model consuming a fraction of another's budget while
 // sending the same conversation more times.
+//
+// An answer's content is kept as the bytes it arrived as and handed back as
+// those same bytes. A thinking block carries a signature this API validates on
+// the next request, and [anthropicBlock] has no field for it: reading the
+// answer into that struct and marshaling it again drops the signature, the
+// request that drops it is accepted, and the turn after is refused.
 
 package provider
 
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
@@ -49,12 +56,20 @@ type anthropicTool struct {
 }
 
 // anthropicMessage is one turn.
+//
+// The content is a [wireValue] because an echoed turn's blocks go back as the
+// bytes this API sent them, signatures and all, while a turn this package built
+// is the block list it assembled.
 type anthropicMessage struct {
-	Role    string           `json:"role"`
-	Content []anthropicBlock `json:"content"`
+	Role    string    `json:"role"`
+	Content wireValue `json:"content"`
 }
 
 // anthropicBlock is one piece of a turn, in either direction.
+//
+// It is what this package reads and what it builds, never what it echoes: the
+// fields it does not name (a thinking block's signature, a redacted block's
+// data) exist on the wire and are preserved by going back as bytes.
 type anthropicBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text,omitempty"`
@@ -68,9 +83,12 @@ type anthropicBlock struct {
 }
 
 // anthropicResponse is one answer.
+//
+// The content is raw because it is echoed as it arrived; it is decoded into
+// blocks beside that, for the record's own reading of the turn.
 type anthropicResponse struct {
-	Content    []anthropicBlock `json:"content"`
-	StopReason string           `json:"stop_reason"`
+	Content    json.RawMessage `json:"content"`
+	StopReason string          `json:"stop_reason"`
 	Usage      struct {
 		InputTokens              int `json:"input_tokens"`
 		OutputTokens             int `json:"output_tokens"`
@@ -128,7 +146,12 @@ func (a anthropicAdapter) Call(ctx context.Context, request Request) (Response, 
 	if decoded.Error != nil {
 		return a.failed(answer, modelrecord.TurnRequestError, decoded.Error.Type+": "+decoded.Error.Message)
 	}
-	answer.Blocks = anthropicBlocks(decoded.Content)
+	content, contentErr := anthropicContentBlocks(decoded.Content)
+	if contentErr != nil {
+		return a.failed(answer, modelrecord.TurnServerError,
+			"the content is not a list of blocks: "+contentErr.Error())
+	}
+	answer.Blocks = anthropicBlocks(content)
 	answer.Echo = anthropicEcho(decoded.Content)
 	answer.Usage = modelrecord.Usage{
 		Input:        decoded.Usage.InputTokens,
@@ -139,35 +162,57 @@ func (a anthropicAdapter) Call(ctx context.Context, request Request) (Response, 
 	return answer, nil
 }
 
-// anthropicEcho keeps an answer's content blocks as this API returned them, so
-// the next turn can hand them back with whatever signature they carried.
-func anthropicEcho(content []anthropicBlock) json.RawMessage {
-	encoded, err := json.Marshal(content)
-	if err != nil {
+// anthropicEcho keeps an answer's content as the bytes this API sent, so the
+// next turn hands them back with whatever signature they carried.
+//
+// It is a copy rather than a slice of the response buffer: the answer outlives
+// the request that read it, and a caller holding an echo should not depend on
+// what else that buffer is used for.
+func anthropicEcho(content json.RawMessage) json.RawMessage {
+	if len(content) == 0 {
 		return nil
 	}
-	return encoded
+	return slices.Clone(content)
+}
+
+// anthropicContentBlocks reads an answer's content as the blocks the record
+// keeps. An answer carrying no content at all is not an error: the model
+// emitted nothing, which the turn records as no blocks.
+func anthropicContentBlocks(content json.RawMessage) ([]anthropicBlock, error) {
+	if len(content) == 0 {
+		return nil, nil
+	}
+	var blocks []anthropicBlock
+	if err := json.Unmarshal(content, &blocks); err != nil {
+		return nil, err
+	}
+	return blocks, nil
 }
 
 // anthropicMessages renders the conversation.
 func anthropicMessages(messages []Message) []anthropicMessage {
 	out := make([]anthropicMessage, 0, len(messages))
 	for _, message := range messages {
-		if blocks, echoed := anthropicEchoed(message); echoed {
-			out = append(out, anthropicMessage{Role: RoleAssistant, Content: blocks})
+		if echoed, ok := anthropicEchoed(message); ok {
+			out = append(out, anthropicMessage{Role: RoleAssistant, Content: wireRaw(echoed)})
 			continue
 		}
 		blocks := anthropicContent(message)
 		if len(blocks) == 0 {
 			continue
 		}
-		out = append(out, anthropicMessage{Role: anthropicRole(message.Role), Content: blocks})
+		out = append(out, anthropicMessage{Role: anthropicRole(message.Role), Content: wireBuilt(blocks)})
 	}
 	return out
 }
 
-// anthropicEchoed returns an assistant turn as this API itself rendered it.
-func anthropicEchoed(message Message) ([]anthropicBlock, bool) {
+// anthropicEchoed returns an assistant turn as this API itself rendered it,
+// which is the bytes it sent and not a re-rendering of them.
+//
+// The echo is decoded only to be checked. A conversation assembled from the
+// record carries none, and one carrying something that is not a list of blocks
+// is rebuilt from the blocks rather than sent as whatever it is.
+func anthropicEchoed(message Message) (json.RawMessage, bool) {
 	if message.Role != RoleAssistant || len(message.Echo) == 0 {
 		return nil, false
 	}
@@ -175,7 +220,7 @@ func anthropicEchoed(message Message) ([]anthropicBlock, bool) {
 	if err := json.Unmarshal(message.Echo, &blocks); err != nil || len(blocks) == 0 {
 		return nil, false
 	}
-	return blocks, true
+	return message.Echo, true
 }
 
 // anthropicRole maps a role. A tool result is carried by a user message here,

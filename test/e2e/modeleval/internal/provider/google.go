@@ -20,6 +20,14 @@
 // forces a function call; a model that should decline could not, and the
 // read-only rows would have measured willingness to call a tool the server did
 // not offer.
+//
+// An answer's parts are kept as the bytes they arrived as and go back as those
+// same bytes. [googlePart] names the two fields this package reads and none of
+// the rest: a thought part is marked with "thought", and reading a turn into
+// that struct and marshaling it again hands the model's own reasoning back as
+// ordinary model text. The role is this adapter's rather than the echo's, which
+// is the one thing a content wrapper carries that a request must be sure of: a
+// content sent without one is read as the user's.
 
 package provider
 
@@ -27,6 +35,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -43,9 +52,21 @@ type googleAdapter struct{ base }
 // googleRequest is one generateContent request.
 type googleRequest struct {
 	SystemInstruction *googleContent   `json:"system_instruction,omitempty"`
-	Contents          []googleContent  `json:"contents"`
+	Contents          []googleTurn     `json:"contents"`
 	Tools             []googleTool     `json:"tools,omitempty"`
 	GenerationConfig  googleGeneration `json:"generation_config"`
+}
+
+// googleTurn is one turn of a request: a role this adapter decides and parts
+// that are the bytes this API sent when the turn is its own answer handed back.
+//
+// The two halves are split for a reason each way. The parts are what a thinking
+// model signs, so they go back untouched; the role is the one thing a content
+// carries that a request must be sure of, and an answer's own content is not
+// guaranteed to spell it, so this adapter says it rather than echoing it.
+type googleTurn struct {
+	Role  string    `json:"role,omitempty"`
+	Parts wireValue `json:"parts"`
 }
 
 // googleGeneration is the sampling configuration.
@@ -60,14 +81,16 @@ type googleContent struct {
 	Parts []googlePart `json:"parts"`
 }
 
-// googlePart is one piece of a turn.
+// googlePart is one piece of a turn, as this package reads and builds one.
 //
-// ThoughtSignature is carried through untouched. A thinking model signs its
-// function call with it and refuses the next request when the signature does
-// not come back, which is why an assistant turn is echoed rather than rebuilt.
+// It is never what an echo is made of, and it names none of the fields that
+// make an echo necessary: a thought part is marked with "thought", and a
+// thinking model signs its function call with a thoughtSignature it refuses the
+// next request without. Both live in the bytes the API sent and nowhere in the
+// record, which is why an echoed turn goes back as those bytes rather than as
+// this struct marshaled again.
 type googlePart struct {
 	Text             string                  `json:"text,omitempty"`
-	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
 	FunctionCall     *googleFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *googleFunctionResponse `json:"functionResponse,omitempty"`
 }
@@ -100,10 +123,13 @@ type googleFunctionDeclaration struct {
 }
 
 // googleResponse is one answer.
+//
+// A candidate's content is raw because it is echoed as it arrived; it is
+// decoded into parts beside that, for the record's own reading of the turn.
 type googleResponse struct {
 	Candidates []struct {
-		Content      googleContent `json:"content"`
-		FinishReason string        `json:"finishReason,omitempty"`
+		Content      json.RawMessage `json:"content"`
+		FinishReason string          `json:"finishReason,omitempty"`
 	} `json:"candidates"`
 	UsageMetadata struct {
 		PromptTokenCount        int `json:"promptTokenCount"`
@@ -186,7 +212,12 @@ func (a googleAdapter) Call(ctx context.Context, request Request) (Response, err
 	if len(decoded.Candidates) == 0 {
 		return a.failed(answer, modelrecord.TurnServerError, googleEmptyDetail(decoded))
 	}
-	answer.Blocks = googleBlocks(decoded.Candidates[0].Content)
+	content, contentErr := googleCandidateContent(decoded.Candidates[0].Content)
+	if contentErr != nil {
+		return a.failed(answer, modelrecord.TurnServerError,
+			"the candidate's content does not decode: "+contentErr.Error())
+	}
+	answer.Blocks = googleBlocks(content)
 	answer.Echo = googleEcho(decoded.Candidates[0].Content)
 	answer.Usage = modelrecord.Usage{
 		// The prompt count includes what was served from the cache, and the
@@ -209,14 +240,31 @@ func googleEmptyDetail(decoded googleResponse) string {
 	return strings.Join(detail, "; ")
 }
 
-// googleEcho keeps an answer's content as this API returned it, thought
-// signatures included.
-func googleEcho(content googleContent) json.RawMessage {
-	encoded, err := json.Marshal(content)
-	if err != nil {
+// googleEcho keeps an answer's content as the bytes this API sent, thought
+// markers and thought signatures included.
+//
+// It is a copy rather than a slice of the response buffer: the answer outlives
+// the request that read it, and a caller holding an echo should not depend on
+// what else that buffer is used for.
+func googleEcho(content json.RawMessage) json.RawMessage {
+	if len(content) == 0 {
 		return nil
 	}
-	return encoded
+	return slices.Clone(content)
+}
+
+// googleCandidateContent reads a candidate's content as the parts the record
+// keeps. A candidate carrying no content is not an error: the model emitted
+// nothing, which the turn records as no blocks.
+func googleCandidateContent(content json.RawMessage) (googleContent, error) {
+	if len(content) == 0 {
+		return googleContent{}, nil
+	}
+	var decoded googleContent
+	if err := json.Unmarshal(content, &decoded); err != nil {
+		return googleContent{}, err
+	}
+	return decoded, nil
 }
 
 // googleContents renders the conversation.
@@ -226,23 +274,23 @@ func googleEcho(content googleContent) json.RawMessage {
 // carries an identifier. A result whose call this conversation never saw is
 // sent under the name the result itself records, which is what a runner that
 // starts a conversation from a stored turn produces.
-func googleContents(messages []Message) []googleContent {
+func googleContents(messages []Message) []googleTurn {
 	names := map[string]string{}
-	out := make([]googleContent, 0, len(messages))
+	out := make([]googleTurn, 0, len(messages))
 	for _, message := range messages {
-		content := googleContent{Role: googleRole(message.Role)}
-		if echoed, ok := googleEchoed(message); ok {
-			rememberGoogleNames(names, echoed.Parts)
-			out = append(out, googleContent{Role: roleModel, Parts: echoed.Parts})
+		if raw, parts, ok := googleEchoed(message); ok {
+			rememberGoogleNames(names, parts)
+			out = append(out, googleTurn{Role: roleModel, Parts: wireRaw(raw)})
 			continue
 		}
+		var built []googlePart
 		if text := strings.TrimSpace(message.Text); text != "" {
-			content.Parts = append(content.Parts, googlePart{Text: message.Text})
+			built = append(built, googlePart{Text: message.Text})
 		}
-		content.Parts = append(content.Parts, googleCallParts(message, names)...)
-		content.Parts = append(content.Parts, googleResultParts(message, names)...)
-		if len(content.Parts) > 0 {
-			out = append(out, content)
+		built = append(built, googleCallParts(message, names)...)
+		built = append(built, googleResultParts(message, names)...)
+		if len(built) > 0 {
+			out = append(out, googleTurn{Role: googleRole(message.Role), Parts: wireBuilt(built)})
 		}
 	}
 	return out
@@ -304,16 +352,29 @@ func googleResultParts(message Message, names map[string]string) []googlePart {
 	return parts
 }
 
-// googleEchoed returns an assistant turn as this API itself rendered it.
-func googleEchoed(message Message) (googleContent, bool) {
+// googleEchoed returns an assistant turn's parts as this API itself sent them,
+// beside the same parts decoded.
+//
+// Both halves are used: the bytes are what goes back, and the decoding is read
+// for the call names a later functionResponse has to quote and to check that
+// the echo is parts at all. A conversation assembled from the record carries no
+// echo, and one carrying something else is rebuilt from the blocks rather than
+// sent as whatever it is.
+func googleEchoed(message Message) (json.RawMessage, []googlePart, bool) {
 	if message.Role != RoleAssistant || len(message.Echo) == 0 {
-		return googleContent{}, false
+		return nil, nil, false
 	}
-	var echoed googleContent
+	var echoed struct {
+		Parts json.RawMessage `json:"parts"`
+	}
 	if err := json.Unmarshal(message.Echo, &echoed); err != nil || len(echoed.Parts) == 0 {
-		return googleContent{}, false
+		return nil, nil, false
 	}
-	return echoed, true
+	var parts []googlePart
+	if err := json.Unmarshal(echoed.Parts, &parts); err != nil || len(parts) == 0 {
+		return nil, nil, false
+	}
+	return echoed.Parts, parts, true
 }
 
 // rememberGoogleNames records the calls of an echoed turn, so the result that

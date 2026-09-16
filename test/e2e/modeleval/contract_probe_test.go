@@ -15,6 +15,11 @@
 // tool_result block on one API, a message with the tool role on another and a
 // functionResponse part on the third, and one request exercises none of it.
 //
+// What it sends is the tool list the server publishes, listed from a server
+// this file starts in its own process. See [probeTools]: a probe carrying a
+// simplified copy of the two schemas would answer a question about a request
+// nothing sends.
+//
 // It needs no GitLab. It never calls harness.New, so the bootstrap that probes
 // an instance never runs, and it reads its credentials through harness.Setting
 // like everything else here.
@@ -31,7 +36,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
 )
@@ -278,35 +288,160 @@ const probePrompt = "List the open issues of project 7."
 
 // probeTools builds a tool list of the given size.
 //
-// The first two are the dynamic surface's own pair, spelled as the server
-// publishes them. The rest, when a slice is asked for, are copies under other
-// names: the question a slice answers is whether a request carrying that many
-// declarations is served, and a provider counts declarations rather than
+// The first two are the dynamic surface's own pair, read from a tools/list of a
+// server that registers them through the server's own registration. They were
+// written out by hand here until that was compared with what is served, and the
+// two differ in the way that matters to this test: the action property carries
+// the SEP-2243 x-mcp-header annotation, an unknown keyword inside the schema,
+// and both tools carry the descriptions the server publishes rather than a
+// sentence written beside the test. A probe asking whether a provider accepts
+// the request this repository builds has to send that request; Gemini refusing
+// an unknown keyword inside parameters is the class this is about, and is why
+// the adapter this package replaces carried a sanitizer of its own.
+//
+// The rest, when a slice is asked for, are copies of the execute tool under
+// other names: the question a slice answers is whether a request carrying that
+// many declarations is served, and a provider counts declarations rather than
 // reading them.
 func probeTools(t *testing.T, count int) []provider.Tool {
 	t.Helper()
-	find, err := provider.NewTool("gitlab_find_action",
-		"Find the GitLab action that does something, by describing it.",
-		json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","maxLength":256}},`+
-			`"required":["query"]}`))
-	if err != nil {
-		t.Fatalf("building the find tool: %v", err)
-	}
-	execute, err := provider.NewTool("gitlab_execute_action",
-		"Execute a GitLab action by its canonical identifier, with its parameters.",
-		json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"},`+
-			`"params":{"type":"object"},"confirm":{"type":"boolean"}},"required":["action","params"]}`))
-	if err != nil {
-		t.Fatalf("building the execute tool: %v", err)
-	}
-
-	tools := []provider.Tool{find, execute}
+	tools := servedDynamicTools(t)
+	execute := toolNamed(t, tools, dynamictools.ExecuteActionToolName)
 	for index := len(tools); index < count; index++ {
 		filler := execute
 		filler.Name = "gitlab_slice_tool_" + strconv.Itoa(index)
 		tools = append(tools, filler)
 	}
 	return tools
+}
+
+// servedDynamicTools lists the dynamic surface's two tools as a client reads
+// them.
+//
+// It needs no GitLab, no credential and no child process: the catalog is the
+// shared unbound one, the registration is the server's own, and the listing
+// crosses an in-memory transport. What comes back is therefore the schema
+// tools/list serialized, which is the one a model is shown; deriving it from
+// the structs here instead would measure this test's reading of the surface
+// rather than the surface.
+//
+// The tier is Ultimate because it is the widest catalog, and the catalog is the
+// base one rather than the assembled dynamic catalog cmd/server hands the
+// surface: which actions exist decides what these two tools can reach and
+// nothing about what either of them is called, says or takes, which is all this
+// sends.
+func servedDynamicTools(t *testing.T) []provider.Tool {
+	t.Helper()
+	catalog, err := gitlabtools.SharedBaseCatalog(false, gitlabtools.ActionCatalogOptions{
+		Tier:       edition.Ultimate,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		t.Fatalf("building the action catalog: %v", err)
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "gitlab-mcp-server", Version: "probe"}, nil)
+	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	serverSide, clientSide := mcp.NewInMemoryTransports()
+	if _, connectErr := server.Connect(t.Context(), serverSide, nil); connectErr != nil {
+		t.Fatalf("connecting the server: %v", connectErr)
+	}
+	session, connectErr := mcp.NewClient(&mcp.Implementation{Name: "probe", Version: "probe"}, nil).
+		Connect(t.Context(), clientSide, nil)
+	if connectErr != nil {
+		t.Fatalf("connecting the client: %v", connectErr)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	listed, listErr := session.ListTools(t.Context(), nil)
+	if listErr != nil {
+		t.Fatalf("listing the served tools: %v", listErr)
+	}
+	tools := make([]provider.Tool, 0, len(listed.Tools))
+	for _, served := range listed.Tools {
+		if served.InputSchema == nil {
+			t.Fatalf("%s is served with no input schema", served.Name)
+		}
+		schema, marshalErr := json.Marshal(served.InputSchema)
+		if marshalErr != nil {
+			t.Fatalf("re-encoding the schema of %s: %v", served.Name, marshalErr)
+		}
+		tool, toolErr := provider.NewTool(served.Name, served.Description, schema)
+		if toolErr != nil {
+			t.Fatalf("building %s: %v", served.Name, toolErr)
+		}
+		tools = append(tools, tool)
+	}
+	return tools
+}
+
+// toolNamed returns one tool of a list by name.
+func toolNamed(t *testing.T, tools []provider.Tool, name string) provider.Tool {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	t.Fatalf("the served list carries no %s: %v", name, toolNames(tools))
+	return provider.Tool{}
+}
+
+// toolNames spells a tool list for a refusal message.
+func toolNames(tools []provider.Tool) []string {
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+	}
+	return names
+}
+
+// TestProbeTools_AreTheServedPairAndCarryWhatTheServerPublishes is what keeps
+// the probe honest, and it costs nothing: no provider is called and no GitLab
+// is contacted, so it runs on every push while the probe itself does not.
+//
+// It asserts the two things a hand-written copy of the pair got wrong. The list
+// is the surface's own two tools under the names the server registers, and the
+// execute tool's schema still carries the x-mcp-header annotation after the
+// round trip through tools/list and the adapters' normalization, which is the
+// keyword a strict provider may refuse and so the one a probe must actually
+// send.
+func TestProbeTools_AreTheServedPairAndCarryWhatTheServerPublishes(t *testing.T) {
+	tools := probeTools(t, 2)
+	if len(tools) != 2 {
+		t.Fatalf("the dynamic surface served %d tools, want its own pair: %v", len(tools), toolNames(tools))
+	}
+	for _, name := range []string{dynamictools.FindActionToolName, dynamictools.ExecuteActionToolName} {
+		t.Run(name, func(t *testing.T) {
+			tool := toolNamed(t, tools, name)
+			if strings.TrimSpace(tool.Description) == "" {
+				t.Errorf("%s is sent with no description, so the model is shown less than a client is", name)
+			}
+		})
+	}
+
+	execute := toolNamed(t, tools, dynamictools.ExecuteActionToolName)
+	var schema struct {
+		Properties map[string]map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal(execute.Schema, &schema); err != nil {
+		t.Fatalf("the execute schema does not decode: %v", err)
+	}
+	if _, annotated := schema.Properties["action"]["x-mcp-header"]; !annotated {
+		t.Errorf("the execute schema's action property is %v, want the x-mcp-header annotation the "+
+			"server publishes: a probe that drops it asks about a request nothing sends",
+			schema.Properties["action"])
+	}
+
+	// The slice is filled with copies of the execute tool, so a provider
+	// counting declarations sees the number the individual surface would send.
+	slice := probeTools(t, sliceSize)
+	if len(slice) != sliceSize {
+		t.Fatalf("the slice carries %d tools, want %d", len(slice), sliceSize)
+	}
+	if slice[sliceSize-1].Name == execute.Name {
+		t.Error("the filler tools share the execute tool's name, so the provider sees one tool declared twice")
+	}
 }
 
 // firstText returns the prose of an answer, bounded.

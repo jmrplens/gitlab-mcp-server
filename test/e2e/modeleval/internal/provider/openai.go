@@ -14,6 +14,12 @@
 // the digest: this adapter sends the schema it was given and hashes what it
 // sent.
 //
+// An answer's message is kept as the bytes it arrived as and handed back as
+// those same bytes. [openAIMessage] names what this package reads and builds,
+// which is not all an assistant message carries: DashScope returns a thinking
+// model's reasoning_content on it, and a message re-marshaled through this
+// struct reaches the next request without whatever the endpoint attached to it.
+//
 // It is also where a model's tool call arrives as a string of JSON rather than
 // as an object, which is the whole reason a malformed call is a class here at
 // all. The old adapter had five layers of repair for that string, tried them in
@@ -27,6 +33,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
@@ -92,10 +99,13 @@ type openAIFunctionCall struct {
 }
 
 // openAIResponse is one answer.
+//
+// A choice's message is raw because it is echoed as it arrived; it is decoded
+// beside that, for the record's own reading of the turn.
 type openAIResponse struct {
 	Choices []struct {
-		Message      openAIMessage `json:"message"`
-		FinishReason string        `json:"finish_reason"`
+		Message      json.RawMessage `json:"message"`
+		FinishReason string          `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
 		PromptTokens        int `json:"prompt_tokens"`
@@ -177,7 +187,12 @@ func (a openAIAdapter) Call(ctx context.Context, request Request) (Response, err
 	if len(decoded.Choices) == 0 {
 		return a.failed(answer, modelrecord.TurnServerError, "the answer carried no choices")
 	}
-	answer.Blocks = openAIBlocks(decoded.Choices[0].Message)
+	message, messageErr := openAIChoiceMessage(decoded.Choices[0].Message)
+	if messageErr != nil {
+		return a.failed(answer, modelrecord.TurnServerError,
+			"the choice's message does not decode: "+messageErr.Error())
+	}
+	answer.Blocks = openAIBlocks(message)
 	answer.Echo = openAIEcho(decoded.Choices[0].Message)
 	answer.Usage = modelrecord.Usage{
 		// This API reports the cached tokens inside the prompt total, so the
@@ -192,10 +207,10 @@ func (a openAIAdapter) Call(ctx context.Context, request Request) (Response, err
 }
 
 // messages renders the conversation, the system contract first.
-func (a openAIAdapter) messages(request Request) []openAIMessage {
-	out := make([]openAIMessage, 0, len(request.Messages)+1)
+func (a openAIAdapter) messages(request Request) []wireValue {
+	out := make([]wireValue, 0, len(request.Messages)+1)
 	if request.System != "" {
-		out = append(out, openAIMessage{Role: "system", Content: request.System})
+		out = append(out, wireBuilt(openAIMessage{Role: "system", Content: request.System}))
 	}
 	for _, message := range request.Messages {
 		out = append(out, openAIMessages(message)...)
@@ -203,35 +218,52 @@ func (a openAIAdapter) messages(request Request) []openAIMessage {
 	return out
 }
 
-// openAIEcho keeps an answer's message as this API returned it, so the next
-// turn hands back exactly the tool-call identifiers and any reasoning the
+// openAIEcho keeps an answer's message as the bytes this API sent, so the next
+// turn hands back exactly the tool-call identifiers and whatever else the
 // provider attached to them.
-func openAIEcho(message openAIMessage) json.RawMessage {
-	encoded, err := json.Marshal(message)
-	if err != nil {
+//
+// It is a copy rather than a slice of the response buffer: the answer outlives
+// the request that read it, and a caller holding an echo should not depend on
+// what else that buffer is used for.
+func openAIEcho(message json.RawMessage) json.RawMessage {
+	if len(message) == 0 {
 		return nil
 	}
-	return encoded
+	return slices.Clone(message)
+}
+
+// openAIChoiceMessage reads a choice's message as the record keeps it. A choice
+// carrying no message is not an error: the model emitted nothing, which the
+// turn records as no blocks.
+func openAIChoiceMessage(message json.RawMessage) (openAIMessage, error) {
+	if len(message) == 0 {
+		return openAIMessage{}, nil
+	}
+	var decoded openAIMessage
+	if err := json.Unmarshal(message, &decoded); err != nil {
+		return openAIMessage{}, err
+	}
+	return decoded, nil
 }
 
 // openAIMessages renders one neutral message as the one or more this API takes.
-func openAIMessages(message Message) []openAIMessage {
+func openAIMessages(message Message) []wireValue {
 	if echoed, ok := openAIEchoed(message); ok {
-		return []openAIMessage{echoed}
+		return []wireValue{wireRaw(echoed)}
 	}
 	if message.Role == RoleTool {
-		out := make([]openAIMessage, 0, len(message.Results))
+		out := make([]wireValue, 0, len(message.Results))
 		for _, result := range message.Results {
-			out = append(out, openAIMessage{
+			out = append(out, wireBuilt(openAIMessage{
 				Role:       RoleTool,
 				ToolCallID: result.CallID,
 				Content:    result.Content,
-			})
+			}))
 		}
 		return out
 	}
 	if message.Role != RoleAssistant {
-		return []openAIMessage{{Role: RoleUser, Content: message.Text}}
+		return []wireValue{wireBuilt(openAIMessage{Role: RoleUser, Content: message.Text})}
 	}
 
 	assistant := openAIMessage{Role: RoleAssistant, Content: message.Text}
@@ -252,19 +284,24 @@ func openAIMessages(message Message) []openAIMessage {
 		}
 	}
 	assistant.Content = strings.Join(text, "\n")
-	return []openAIMessage{assistant}
+	return []wireValue{wireBuilt(assistant)}
 }
 
-// openAIEchoed returns an assistant turn as this API itself rendered it.
-func openAIEchoed(message Message) (openAIMessage, bool) {
+// openAIEchoed returns an assistant turn as this API itself sent it, which is
+// the bytes it sent and not a re-rendering of them.
+//
+// The echo is decoded only to be checked. A conversation assembled from the
+// record carries none, and one carrying something that is not a message is
+// rebuilt from the blocks rather than sent as whatever it is.
+func openAIEchoed(message Message) (json.RawMessage, bool) {
 	if message.Role != RoleAssistant || len(message.Echo) == 0 {
-		return openAIMessage{}, false
+		return nil, false
 	}
 	var echoed openAIMessage
 	if err := json.Unmarshal(message.Echo, &echoed); err != nil || echoed.Role == "" {
-		return openAIMessage{}, false
+		return nil, false
 	}
-	return echoed, true
+	return message.Echo, true
 }
 
 // openAIBlocks reads what the model emitted.

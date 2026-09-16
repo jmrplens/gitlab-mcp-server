@@ -16,9 +16,16 @@ import (
 // preceded it has to carry the tool_calls array the result answers. An adapter
 // that got either wrong would fail on every attempt past the first, which is
 // every attempt the corpus actually holds.
+//
+// The first answer carries a reasoning_content, which DashScope returns on a
+// thinking model's message and [openAIMessage] has no field for. It is here for
+// the reason the Anthropic signature is in its fixture: an adapter that
+// re-marshals the message drops it, and a fixture carrying only the fields this
+// package models cannot tell an echo from a re-rendering.
 func TestOpenAI_TwoTurns(t *testing.T) {
 	backend := newRecorder(
-		`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function",
+		`{"choices":[{"message":{"role":"assistant","reasoning_content":"which tool fits",
+		   "tool_calls":[{"id":"call_1","type":"function",
 		   "function":{"name":"gitlab_execute_action",
 		               "arguments":"{\"action\":\"issue.list\",\"params\":{\"project_id\":7}}"}}]}}],
 		  "usage":{"prompt_tokens":300,"completion_tokens":40,"prompt_tokens_details":{"cached_tokens":250}}}`,
@@ -92,6 +99,10 @@ func TestOpenAI_TwoTurns(t *testing.T) {
 	toolCalls, _ := assistant["tool_calls"].([]any)
 	if len(toolCalls) != 1 {
 		t.Fatalf("the echoed assistant turn carries %d tool calls, want 1", len(toolCalls))
+	}
+	if assistant["reasoning_content"] != "which tool fits" {
+		t.Errorf("the echoed assistant turn is %v; it went back through this package's own struct "+
+			"rather than as the bytes the provider sent", assistant)
 	}
 	result, _ := nextMessages[3].(map[string]any)
 	if result["role"] != RoleTool || result["tool_call_id"] != "call_1" {
@@ -221,6 +232,36 @@ func TestOpenAI_ReportsAnAnswerWithNoChoices(t *testing.T) {
 	}
 }
 
+func TestOpenAI_ReportsAMessageThatDoesNotDecodeAndEchoesNothingWithoutOne(t *testing.T) {
+	// The choice's message is read twice, as bytes to echo and as a message to
+	// record, so each reading needs its own answer.
+	t.Run("a message that is not an object", func(t *testing.T) {
+		backend := newRecorder(`{"choices":[{"message":["assistant"]}],"usage":{}}`)
+		adapter := adapterFor(t, "openai:gpt-5.4-nano", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err == nil {
+			t.Fatal("a message that is not an object was read as a turn")
+		}
+		if answer.Status != modelrecord.TurnServerError {
+			t.Errorf("Status = %q, want %q", answer.Status, modelrecord.TurnServerError)
+		}
+	})
+
+	t.Run("a choice with no message", func(t *testing.T) {
+		backend := newRecorder(`{"choices":[{"finish_reason":"stop"}],"usage":{}}`)
+		adapter := adapterFor(t, "openai:gpt-5.4-nano", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err != nil {
+			t.Fatalf("Call: %v", err)
+		}
+		if len(answer.Blocks) != 0 || len(answer.Echo) != 0 {
+			t.Errorf("a choice with no message produced %+v and the echo %s", answer.Blocks, answer.Echo)
+		}
+	})
+}
+
 func TestOpenAI_ReportsTheProvidersOwnErrorObject(t *testing.T) {
 	backend := newRecorder(`{"error":{"type":"invalid_request_error","message":"no such model"}}`)
 	adapter := adapterFor(t, "openai:gpt-5.4-nano", backend.server(t))
@@ -246,17 +287,31 @@ func TestOpenAIMessages_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T) {
 	if len(built) != 1 {
 		t.Fatalf("built %d messages, want 1", len(built))
 	}
-	if built[0].Content != "first\nsecond" {
-		t.Errorf("content = %q, want both pieces of prose", built[0].Content)
+	assistant := openAIBuiltMessage(t, built[0])
+	if assistant.Content != "first\nsecond" {
+		t.Errorf("content = %q, want both pieces of prose", assistant.Content)
 	}
-	if len(built[0].ToolCalls) != 1 || built[0].ToolCalls[0].Function.Arguments != `{"a":1}` {
-		t.Errorf("tool calls = %+v", built[0].ToolCalls)
+	if len(assistant.ToolCalls) != 1 || assistant.ToolCalls[0].Function.Arguments != `{"a":1}` {
+		t.Errorf("tool calls = %+v", assistant.ToolCalls)
 	}
 
 	// An echo that does not decode falls back to the blocks rather than
 	// sending nothing, which is what a record-assembled conversation needs.
 	fallback := openAIMessages(Message{Role: RoleAssistant, Echo: json.RawMessage(`"not a message"`)})
-	if len(fallback) != 1 || fallback[0].Role != RoleAssistant {
+	if len(fallback) != 1 || openAIBuiltMessage(t, fallback[0]).Role != RoleAssistant {
 		t.Errorf("an undecodable echo produced %+v", fallback)
 	}
+}
+
+// openAIBuiltMessage reads back a message this package assembled.
+//
+// A turn carrying an echo has bytes rather than a message, which is the whole
+// point of [wireValue] and is why this says so rather than returning nothing.
+func openAIBuiltMessage(t *testing.T, value wireValue) openAIMessage {
+	t.Helper()
+	message, built := value.built.(openAIMessage)
+	if !built {
+		t.Fatalf("the turn carries %T, want the message this package assembled", value.built)
+	}
+	return message
 }

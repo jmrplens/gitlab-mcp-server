@@ -9,16 +9,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 )
 
+// thinkingSignature is the signature the first answer's thinking block carries.
+//
+// It is in the fixture because it is the thing this exchange is about: this API
+// signs a thinking block and validates the signature on the next request, and
+// an adapter that re-marshals the block through [anthropicBlock], which has no
+// field for it, drops the signature while every one-turn assertion still
+// passes. A fixture with no signature in it cannot tell the two apart.
+const thinkingSignature = "SIG-ABC-123"
+
 // TestAnthropic_TwoTurns is the exchange this adapter actually has to survive.
 //
 // One request is not a contract check: every adapter's failure surface is the
 // second turn, where the model's own call and the server's answer to it have to
 // go back in the provider's own shape. This drives both, and asserts the second
-// request carries the tool_result block addressed to the call by id, which is
-// where the knowledge the old adapter kept in one function lived.
+// request carries the thinking block with its signature and the tool_result
+// block addressed to the call by id, which is where the knowledge the old
+// adapter kept in one function lived.
 func TestAnthropic_TwoTurns(t *testing.T) {
 	backend := newRecorder(
-		`{"content":[{"type":"thinking","thinking":"which tool"},
+		`{"content":[{"type":"thinking","thinking":"which tool","signature":"`+thinkingSignature+`"},
 		  {"type":"tool_use","id":"toolu_1","name":"gitlab_execute_action",
 		   "input":{"action":"issue.list","params":{"project_id":7}}}],
 		  "usage":{"input_tokens":120,"output_tokens":30,
@@ -107,9 +117,15 @@ func assertAnthropicSecondRequest(t *testing.T, next map[string]any) {
 	}
 	// The assistant turn is echoed, thinking block included: this provider
 	// signs one and refuses the next request when the signature is missing.
-	if assistantBlocks, _ := assistant["content"].([]any); len(assistantBlocks) != 2 {
+	assistantBlocks, _ := assistant["content"].([]any)
+	if len(assistantBlocks) != 2 {
 		t.Fatalf("the echoed assistant turn carries %d blocks, want the thinking block and the call",
 			len(assistantBlocks))
+	}
+	thinking, _ := assistantBlocks[0].(map[string]any)
+	if thinking["signature"] != thinkingSignature {
+		t.Errorf("the echoed thinking block is %v; this API validates the signature on the next "+
+			"request, so a turn that goes back without it is refused", thinking)
 	}
 
 	result, _ := messages[2].(map[string]any)
@@ -179,6 +195,38 @@ func TestAnthropic_ReportsTheProvidersOwnErrorObject(t *testing.T) {
 	}
 }
 
+func TestAnthropic_ReportsAContentThatIsNotBlocksAndEchoesNothingWithoutOne(t *testing.T) {
+	// The content is read twice, as bytes to echo and as blocks to record, so
+	// each reading needs its own answer: one that is not a block list at all,
+	// and one that is not there.
+	t.Run("a content that is not a list", func(t *testing.T) {
+		backend := newRecorder(`{"content":{"type":"text","text":"ok"},"usage":{}}`)
+		adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err == nil {
+			t.Fatal("a content that is not a block list was read as a turn")
+		}
+		if answer.Status != modelrecord.TurnServerError {
+			t.Errorf("Status = %q, want %q", answer.Status, modelrecord.TurnServerError)
+		}
+	})
+
+	t.Run("no content at all", func(t *testing.T) {
+		backend := newRecorder(`{"usage":{"input_tokens":5}}`)
+		adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err != nil {
+			t.Fatalf("Call: %v", err)
+		}
+		if len(answer.Blocks) != 0 || len(answer.Echo) != 0 {
+			t.Errorf("an answer with no content produced %+v and the echo %s; an echo of nothing "+
+				"would be handed back as a turn saying nothing", answer.Blocks, answer.Echo)
+		}
+	})
+}
+
 func TestAnthropic_ReportsAnAnswerThatIsNotJSON(t *testing.T) {
 	backend := newRecorder(`<html>maintenance</html>`)
 	adapter := adapterFor(t, "anthropic:claude-haiku-4-5-20251001", backend.server(t))
@@ -210,12 +258,26 @@ func TestAnthropicMessages_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T
 	if len(built) != 3 {
 		t.Fatalf("built %d messages, want 3: an empty one is dropped rather than sent", len(built))
 	}
-	if built[1].Content[0].Type != "text" || built[1].Content[1].Type != "tool_use" {
-		t.Errorf("the rebuilt assistant turn is %+v", built[1])
+	assistant := anthropicBuiltBlocks(t, built[1])
+	if assistant[0].Type != "text" || assistant[1].Type != "tool_use" {
+		t.Errorf("the rebuilt assistant turn is %+v", assistant)
 	}
-	if !built[2].Content[0].IsError {
+	if !anthropicBuiltBlocks(t, built[2])[0].IsError {
 		t.Error("a failed tool result was fed back as a successful one")
 	}
+}
+
+// anthropicBuiltBlocks reads back the blocks of a turn this package assembled.
+//
+// A turn carrying an echo has bytes rather than blocks, which is the whole
+// point of [wireValue] and is why this says so rather than returning nothing.
+func anthropicBuiltBlocks(t *testing.T, message anthropicMessage) []anthropicBlock {
+	t.Helper()
+	blocks, built := message.Content.built.([]anthropicBlock)
+	if !built {
+		t.Fatalf("the turn carries %T, want the blocks this package assembled", message.Content.built)
+	}
+	return blocks
 }
 
 // sameJSON reports whether two documents are the same value.

@@ -14,12 +14,17 @@ import (
 //
 // A tool result here is a functionResponse part inside a user content, named by
 // the function it answers rather than only by an identifier, and the assistant
-// turn it follows carries a thoughtSignature this provider refuses the next
-// request without. Both are asserted, because both are invisible to a one-turn
-// contract check and both are what this adapter exists to get right.
+// turn it follows carries a thought part and a thoughtSignature this provider
+// refuses the next request without. All three are asserted, because they are
+// invisible to a one-turn contract check and they are what this adapter exists
+// to get right. The thought marker is in the fixture for the reason the
+// Anthropic signature is: [googlePart] has no field for it, so an adapter that
+// re-marshals the turn hands the model's own reasoning back as ordinary model
+// text and nothing local notices.
 func TestGoogle_TwoTurns(t *testing.T) {
 	backend := newRecorder(
 		`{"candidates":[{"content":{"role":"model","parts":[
+		   {"text":"which tool fits","thought":true},
 		   {"thoughtSignature":"sig-1","functionCall":{"id":"fc_1","name":"gitlab_execute_action",
 		    "args":{"action":"issue.list","params":{"project_id":7}}}}]}}],
 		  "usageMetadata":{"promptTokenCount":500,"candidatesTokenCount":20,
@@ -81,21 +86,40 @@ func TestGoogle_TwoTurns(t *testing.T) {
 		t.Errorf("the second turn returned %+v", second.Blocks)
 	}
 
-	next := backend.sent(t, 1)
+	assertGoogleSecondRequest(t, backend.sent(t, 1))
+}
+
+// assertGoogleSecondRequest checks that the model's own turn and the answer to
+// it went back in this API's shape: the turn under the model role with the
+// parts exactly as they arrived, and the result as a functionResponse naming
+// the function it answers.
+func assertGoogleSecondRequest(t *testing.T, next map[string]any) {
+	t.Helper()
 	contents, _ := next["contents"].([]any)
 	if len(contents) != 3 {
 		t.Fatalf("the second request carries %d contents, want 3: %v", len(contents), next["contents"])
 	}
+
 	model, _ := contents[1].(map[string]any)
 	if model["role"] != roleModel {
 		t.Errorf("the assistant turn travels as %v, want the model role", model["role"])
 	}
 	modelParts, _ := model["parts"].([]any)
-	call, _ := modelParts[0].(map[string]any)
+	if len(modelParts) != 2 {
+		t.Fatalf("the echoed turn carries %d parts, want the thought and the call: %v",
+			len(modelParts), modelParts)
+	}
+	thought, _ := modelParts[0].(map[string]any)
+	if thought["thought"] != true {
+		t.Errorf("the thought marker was dropped: %v; the part goes back as ordinary model text, "+
+			"which is not what the model wrote", thought)
+	}
+	call, _ := modelParts[1].(map[string]any)
 	if call["thoughtSignature"] != "sig-1" {
 		t.Errorf("the thought signature was dropped: %v; this provider refuses the next request without it",
 			call)
 	}
+
 	answer, _ := contents[2].(map[string]any)
 	if answer["role"] != RoleUser {
 		t.Errorf("the tool result travels as %v, want a user content on this API", answer["role"])
@@ -220,6 +244,36 @@ func TestGoogle_ReportsAnAnswerWithNoCandidateAndSaysWhy(t *testing.T) {
 	}
 }
 
+func TestGoogle_ReportsAContentThatDoesNotDecodeAndEchoesNothingWithoutOne(t *testing.T) {
+	// The candidate's content is read twice, as bytes to echo and as parts to
+	// record, so each reading needs its own answer.
+	t.Run("a content that is not an object", func(t *testing.T) {
+		backend := newRecorder(`{"candidates":[{"content":"ok"}],"usageMetadata":{}}`)
+		adapter := adapterFor(t, "google:gemini-flash-latest", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err == nil {
+			t.Fatal("a content that is not an object was read as a turn")
+		}
+		if answer.Status != modelrecord.TurnServerError {
+			t.Errorf("Status = %q, want %q", answer.Status, modelrecord.TurnServerError)
+		}
+	})
+
+	t.Run("a candidate with no content", func(t *testing.T) {
+		backend := newRecorder(`{"candidates":[{"finishReason":"STOP"}],"usageMetadata":{}}`)
+		adapter := adapterFor(t, "google:gemini-flash-latest", backend.server(t))
+
+		answer, err := adapter.Call(t.Context(), Request{})
+		if err != nil {
+			t.Fatalf("Call: %v", err)
+		}
+		if len(answer.Blocks) != 0 || len(answer.Echo) != 0 {
+			t.Errorf("a candidate with no content produced %+v and the echo %s", answer.Blocks, answer.Echo)
+		}
+	})
+}
+
 func TestGoogle_ReportsTheProvidersOwnErrorObject(t *testing.T) {
 	backend := newRecorder(`{"error":{"status":"INVALID_ARGUMENT","message":"unknown name"}}`)
 	adapter := adapterFor(t, "google:gemini-flash-latest", backend.server(t))
@@ -241,26 +295,43 @@ func TestGoogleContents_RebuildsATurnWhenThereIsNoEchoToHandBack(t *testing.T) {
 		}}},
 		{Role: RoleTool, Results: []ToolResult{{CallID: "c1", Content: "done"}}},
 		{Role: RoleAssistant, Echo: json.RawMessage(`{"parts":[]}`)},
+		// An echo that is not a content, and one whose parts are not parts, are
+		// both rebuilt rather than sent as whatever they are: the bytes go back
+		// untouched, so the check on the way in is the only one there will be.
+		{Role: RoleAssistant, Echo: json.RawMessage(`["which tool"]`)},
+		{Role: RoleAssistant, Echo: json.RawMessage(`{"parts":"which tool"}`)},
 		{Role: RoleUser},
 	})
 	if len(built) != 3 {
 		t.Fatalf("built %d contents, want 3: an empty one is dropped rather than sent", len(built))
 	}
-	if built[1].Parts[0].FunctionCall.Name != "t" {
-		t.Errorf("the rebuilt call is %+v", built[1].Parts[0])
+	if call := googleBuiltParts(t, built[1])[0]; call.FunctionCall.Name != "t" {
+		t.Errorf("the rebuilt call is %+v", call)
 	}
 	// The name is remembered from the call, which is the only place this API
 	// can learn what the result answers.
-	if built[2].Parts[0].FunctionResponse.Name != "t" {
+	if result := googleBuiltParts(t, built[2])[0]; result.FunctionResponse.Name != "t" {
 		t.Errorf("the rebuilt result names %q, want the function it answers",
-			built[2].Parts[0].FunctionResponse.Name)
+			result.FunctionResponse.Name)
 	}
 
 	// A result whose call this conversation never saw falls back to the name
 	// the result itself carries.
 	orphan := googleContents([]Message{{Role: RoleTool, Results: []ToolResult{{CallID: "x", Tool: "u"}}}})
-	if orphan[0].Parts[0].FunctionResponse.Name != "u" {
-		t.Errorf("an orphan result names %q, want the tool it records",
-			orphan[0].Parts[0].FunctionResponse.Name)
+	if named := googleBuiltParts(t, orphan[0])[0].FunctionResponse.Name; named != "u" {
+		t.Errorf("an orphan result names %q, want the tool it records", named)
 	}
+}
+
+// googleBuiltParts reads back the parts of a turn this package assembled.
+//
+// A turn carrying an echo has bytes rather than parts, which is the whole point
+// of [wireValue] and is why this says so rather than returning nothing.
+func googleBuiltParts(t *testing.T, turn googleTurn) []googlePart {
+	t.Helper()
+	parts, built := turn.Parts.built.([]googlePart)
+	if !built {
+		t.Fatalf("the turn carries %T, want the parts this package assembled", turn.Parts.built)
+	}
+	return parts
 }

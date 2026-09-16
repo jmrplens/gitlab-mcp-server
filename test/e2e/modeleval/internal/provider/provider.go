@@ -124,9 +124,50 @@ type Message struct {
 	// the same way. Rebuilding the turn from the blocks would drop both, and
 	// the failure lands on the second turn, which is the turn the old
 	// evaluator's adapters were never tested on.
+	//
+	// It travels as the bytes the provider sent and goes back out as those
+	// same bytes, through [wireValue]. See there for why a re-marshal is not
+	// good enough.
 	Echo json.RawMessage
 	// Results are the tool results a [RoleTool] message carries.
 	Results []ToolResult
+}
+
+// wireValue is one piece of a request: the bytes a provider returned, when the
+// piece is that provider's own answer handed back, and a value this package
+// built otherwise.
+//
+// It exists because re-marshaling an echo is not echoing it. A turn rebuilt
+// through a struct written here carries the fields that struct has room for and
+// silently drops the rest, and the dropped ones are exactly what a provider
+// signs and then demands back: the signature of an Anthropic thinking block,
+// the thought marker of a Gemini part, whatever an OpenAI-compatible endpoint
+// attaches to an assistant message. Nothing local fails when one goes missing.
+// The request is accepted, the provider refuses the turn after it, and the
+// adapter looks correct in every test that drives one turn.
+//
+// A value this package assembled is carried as the value rather than as bytes,
+// so a marshaling failure fails the whole request the way it always did,
+// instead of dropping one turn out of a conversation and sending the rest.
+type wireValue struct {
+	// raw is what a provider sent, written out verbatim when it is there.
+	raw json.RawMessage
+	// built is what this package assembled, marshaled when raw is empty.
+	built any
+}
+
+// wireRaw carries bytes a provider returned.
+func wireRaw(raw json.RawMessage) wireValue { return wireValue{raw: raw} }
+
+// wireBuilt carries a value this package assembled.
+func wireBuilt(built any) wireValue { return wireValue{built: built} }
+
+// MarshalJSON writes the provider's own bytes when this value has them.
+func (v wireValue) MarshalJSON() ([]byte, error) {
+	if len(v.raw) > 0 {
+		return v.raw, nil
+	}
+	return json.Marshal(v.built)
 }
 
 // Replay is what the fake needs and no real adapter ever reads.
