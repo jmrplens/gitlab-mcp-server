@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
+	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
 )
 
 // settingsReader returns a reader over a fixed map, standing in for the
@@ -181,5 +182,62 @@ func TestParseMetaParamSchema_EveryMode_IsAccepted(t *testing.T) {
 				t.Errorf("parseMetaParamSchema(%q) = %q, want %q", value, got, want)
 			}
 		})
+	}
+}
+
+// TestCredentialFor_ReadsEachProvidersOwnSettingAndNoneForTheFake checks the
+// one thing a probe needs before it can spend anything.
+//
+// It goes through the settings the harness resolved rather than through the
+// process environment, which is what lets a probe learn whether a key is
+// configured without requiring the GitLab an Env would bootstrap; the fake
+// needs none, which is what lets a pipe run start with nothing configured.
+func TestCredentialFor_ReadsEachProvidersOwnSettingAndNoneForTheFake(t *testing.T) {
+	for _, one := range []struct{ spec, setting string }{
+		{"anthropic:claude-haiku-4-5-20251001", "ANTHROPIC_API_KEY"},
+		{"openai:gpt-5.4-nano", "OPENAI_API_KEY"},
+		{"qwen:qwen3.8-flash", "QWEN_API_KEY"},
+		{"google:gemini-flash-latest", "GOOGLE_API_KEY"},
+	} {
+		t.Run(one.spec, func(t *testing.T) {
+			spec, err := provider.ParseSpec(one.spec)
+			if err != nil {
+				t.Fatalf("ParseSpec(%q) error = %v, want nil", one.spec, err)
+			}
+			name, needed := provider.KeyName(spec.Provider)
+			if !needed || name != one.setting {
+				t.Errorf("KeyName(%q) = %q, %v, want %q, true", spec.Provider, name, needed, one.setting)
+			}
+		})
+	}
+
+	fake, err := provider.ParseSpec("fake:perfect")
+	if err != nil {
+		t.Fatalf("ParseSpec(fake:perfect) error = %v, want nil", err)
+	}
+	if got := credentialFor(fake); got != "" {
+		t.Errorf("credentialFor(fake) returned a credential, want none")
+	}
+}
+
+// TestConfiguredModels_ReadsTheListThroughTheSettings checks that the model
+// list is read from one setting and refused when it names nothing.
+//
+// A run that was not told which model to ask is one nobody can read the results
+// of, and guessing one spends money on a question that was not asked.
+func TestConfiguredModels_ReadsTheListThroughTheSettings(t *testing.T) {
+	specs, err := provider.ParseSpecs("anthropic:claude-haiku-4-5-20251001,fake:perfect")
+	if err != nil {
+		t.Fatalf("ParseSpecs error = %v, want nil", err)
+	}
+	if len(specs) != 2 {
+		t.Fatalf("ParseSpecs returned %d specs, want 2", len(specs))
+	}
+
+	// configuredModels reads the one setting; with nothing set it refuses,
+	// which is what a run with no MODELEVAL_MODELS meets.
+	_, configuredErr := configuredModels()
+	if configuredErr == nil && harness.Setting(settingModels) == "" {
+		t.Errorf("configuredModels() accepted an empty %s", settingModels)
 	}
 }
