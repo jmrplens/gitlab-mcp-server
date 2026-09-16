@@ -103,6 +103,12 @@ type row struct {
 	// read into an input token is how a table came to claim sixty thousand
 	// tokens against five million.
 	Tokens tokens `json:"tokens"`
+	// Cases is what each case contributed, which is what makes the three blocks
+	// above re-derivable rather than final. A re-run of one corrected case
+	// replaces its entry and leaves the rest of the row standing; without it a
+	// row could only be refused or replaced whole, and replacing it discarded
+	// every case the re-run did not cover. See cases.go.
+	Cases map[string]caseFigures `json:"cases,omitempty"`
 }
 
 // rowKey is the full identity of a row.
@@ -572,14 +578,48 @@ func score(cand candidate, keys map[string]modelcorpus.Key) (row, error) {
 		}
 		verdicts = append(verdicts, verdict)
 	}
-	totals := modelscore.Aggregate(verdicts)
+	// Scored once per case as well as once for the row. The per-case figures
+	// are what let a later run of one corrected case replace its own
+	// contribution instead of the whole row, and they are derived from the
+	// same verdicts rather than from a second pass, so the two cannot come to
+	// disagree.
+	grouped := groupByCase(cand.attempts, verdicts)
+	cases := make(map[string]caseFigures, len(grouped))
+	for name, group := range grouped {
+		cases[name] = figuresFrom(cand, modelscore.Aggregate(group.verdicts), group.attempts)
+	}
+
+	rolled, published, spent := sumCases(cases)
 	return row{
 		Key:        cand.key,
 		Provenance: provenanceOf(cand),
-		Counts:     countsOf(totals, cand.attempts),
-		Columns:    columnsOf(totals),
-		Tokens:     tokensOf(cand.attempts),
+		Counts:     rolled,
+		Columns:    published,
+		Tokens:     spent,
+		Cases:      cases,
 	}, nil
+}
+
+// caseGroup is one case's attempts and the verdicts scored from them, kept
+// together so the per-case figures are read off the same pair the row is.
+type caseGroup struct {
+	attempts []modelscore.Attempt
+	verdicts []modelscore.Verdict
+}
+
+// groupByCase splits a candidate's attempts and their verdicts by the case
+// each names. The two slices are parallel, which [score] establishes by
+// scoring in order, and this is the only reader that relies on it.
+func groupByCase(attempts []modelscore.Attempt, verdicts []modelscore.Verdict) map[string]caseGroup {
+	grouped := make(map[string]caseGroup, len(attempts))
+	for i, attempt := range attempts {
+		name := attempt.Line.Case
+		group := grouped[name]
+		group.attempts = append(group.attempts, attempt)
+		group.verdicts = append(group.verdicts, verdicts[i])
+		grouped[name] = group
+	}
+	return grouped
 }
 
 // provenanceOf assembles what produced the row.

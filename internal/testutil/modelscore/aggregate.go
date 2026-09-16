@@ -245,3 +245,77 @@ func (t *Totals) countStep(step StepVerdict) {
 		}
 	}
 }
+
+// Sum returns the two sets of totals as one.
+//
+// Every figure a row publishes is a count or a ratio over attempts, and an
+// attempt belongs to exactly one case, so totals taken over disjoint sets of
+// cases add. That is what lets a published row be assembled from more than one
+// run: a case re-measured on its own replaces its own contribution and the
+// rest of the row keeps theirs, instead of the whole row being replaced by the
+// one case somebody re-ran.
+//
+// It is here rather than in the command that publishes rows because what is
+// additive is a property of the scoring, not of the record: a figure that
+// stopped being a sum of its cases would have to stop being added here, and a
+// reader looking for that rule should find it beside the rule that computes it.
+// TestSum_TouchesEveryField holds this to the struct by reflection, so a field
+// added above and forgotten here fails rather than quietly reading low.
+//
+// It is a function rather than a method because it mutates neither argument,
+// and Totals already carries pointer-receiver methods that do: mixing the two
+// receivers on one type is how a caller comes to believe a copy was updated.
+func Sum(t, other Totals) Totals {
+	sum := Totals{
+		Attempts:          t.Attempts + other.Attempts,
+		Skipped:           t.Skipped + other.Skipped,
+		Unobserved:        t.Unobserved + other.Unobserved,
+		ProviderErrors:    t.ProviderErrors + other.ProviderErrors,
+		HarnessErrors:     t.HarnessErrors + other.HarnessErrors,
+		GitLabRefused:     t.GitLabRefused + other.GitLabRefused,
+		Outcomes:          addTally(t.Outcomes, other.Outcomes),
+		Declines:          addTally(t.Declines, other.Declines),
+		Confirmations:     addTally(t.Confirmations, other.Confirmations),
+		Reached:           t.Reached.add(other.Reached),
+		AcceptedFirstTime: t.AcceptedFirstTime.add(other.AcceptedFirstTime),
+		ArgumentFidelity:  t.ArgumentFidelity.add(other.ArgumentFidelity),
+		Confirmation:      t.Confirmation.add(other.Confirmation),
+		Unaided:           t.Unaided.add(other.Unaided),
+		Completion:        t.Completion.add(other.Completion),
+		Overhead: Overhead{
+			Discovery:     t.Overhead.Discovery + other.Overhead.Discovery,
+			InvalidParams: t.Overhead.InvalidParams + other.Overhead.InvalidParams,
+			Steps:         t.Overhead.Steps + other.Overhead.Steps,
+		},
+	}
+	return sum
+}
+
+// add sums two ratios, which is the numerators and the denominators apart.
+//
+// A rate is never averaged with another rate here: two rows of 100% over one
+// attempt and 50% over ninety are not 75% of anything, and adding the halves is
+// the only reading that gives the same answer as scoring both sets at once.
+func (r Ratio) add(other Ratio) Ratio {
+	return Ratio{
+		Numerator:   r.Numerator + other.Numerator,
+		Denominator: r.Denominator + other.Denominator,
+	}
+}
+
+// addTally sums two named tallies into a new map, leaving both arguments
+// alone. An empty result stays nil, which is what [Aggregate]'s own readers
+// expect of a tally nothing filled.
+func addTally[K comparable](left, right map[K]int) map[K]int {
+	if len(left) == 0 && len(right) == 0 {
+		return nil
+	}
+	sum := make(map[K]int, len(left)+len(right))
+	for name, count := range left {
+		sum[name] += count
+	}
+	for name, count := range right {
+		sum[name] += count
+	}
+	return sum
+}

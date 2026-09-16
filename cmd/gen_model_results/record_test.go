@@ -660,3 +660,74 @@ func TestParseDate_Unreadable_IsTheZeroTime(t *testing.T) {
 		t.Errorf("parseDate(%q) = %v, want the zero time", "not a date", got)
 	}
 }
+
+// secondCaseRecords returns the attempt, turn and call lines of one more
+// completed single-step case, so a shard can carry more than the one case
+// publishableShard has.
+//
+// It exists for the partial-fold tests: a shard covering two cases and a
+// re-run covering one of them is the shape that tells a merge from a
+// replacement, and the base fixture cannot express it.
+func secondCaseRecords() []modelrecord.Record {
+	const (
+		caseID  = "MT-003"
+		action  = "project.list"
+		attempt = caseID + "/dynamic/1"
+	)
+	args := json.RawMessage(`{"action":"` + action + `","params":{"per_page":"10"}}`)
+	return []modelrecord.Record{
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeAttempt, Attempt: &modelrecord.Attempt{
+			ID:       attempt,
+			Case:     caseID,
+			Model:    fixtureModel,
+			Surface:  "dynamic",
+			Session:  fixtureSession,
+			Repeat:   1,
+			Stimulus: "List the 10 most recently updated projects I can access.",
+			EndedBy:  modelrecord.EndedCompleted,
+		}},
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeTurn, Turn: &modelrecord.Turn{
+			Attempt: attempt,
+			Index:   1,
+			Try:     1,
+			Blocks: []modelrecord.Block{{
+				Kind:      modelrecord.BlockToolCall,
+				Tool:      "gitlab_execute_action",
+				Arguments: args,
+				CallID:    "call_2",
+			}},
+			Usage:  modelrecord.Usage{Input: 900, Output: 40},
+			Status: modelrecord.TurnOK,
+		}},
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeCall, Call: &modelrecord.Call{
+			Attempt:          attempt,
+			Turn:             1,
+			Index:            1,
+			Tool:             "gitlab_execute_action",
+			Arguments:        args,
+			RequestedAction:  action,
+			DispatchedAction: action,
+			DispatchedTool:   "gitlab_execute_action",
+			Outcome:          modelrecord.OutcomeOK,
+			Result:           json.RawMessage(`{"projects":[{"id":42}]}`),
+			Text:             "| id |",
+			TraceID:          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2",
+			Requests:         1,
+			DispatchObserved: true,
+		}},
+	}
+}
+
+// twoCaseShard is a run that measured both MT-002 and MT-003.
+func twoCaseShard() []modelrecord.Record {
+	return append(publishableShard(), secondCaseRecords()...)
+}
+
+// oneCaseRerunShard is the same run configuration measuring MT-003 alone,
+// which is what `MODELEVAL_CASES=MT-003` leaves behind.
+func oneCaseRerunShard() []modelrecord.Record {
+	return append([]modelrecord.Record{
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeRun, Run: fixtureRun()},
+		{Schema: modelrecord.SchemaVersion, Type: modelrecord.TypeSession, Session: fixtureSessionLine()},
+	}, secondCaseRecords()...)
+}
