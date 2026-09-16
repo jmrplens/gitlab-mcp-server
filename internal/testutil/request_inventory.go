@@ -28,7 +28,7 @@ import (
 // It carries the project's prefix but is not one of the settings
 // internal/config resolves: it configures the test harness, cmd/server never
 // reads it, and there is no legacy spelling of it to warn anybody about. That
-// is the same standing the developer-only EVAL_SURFACE_* variables have.
+// is the same standing the developer-only MODELEVAL_* variables have.
 const InventoryDirEnv = "GITLAB_MCP_TEST_INVENTORY_DIR"
 
 const (

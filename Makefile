@@ -3,9 +3,8 @@
 	e2e-server-binary test-e2e-ce test-e2e-ee test-e2e-gitlab e2e-clean-orphans \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
-	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
+	coverage \
 	modeleval-ce modeleval-ee modeleval-probe \
-	check-eval-prompts audit-eval-prompts \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -568,19 +567,13 @@ orbit-run-live-tests: orbit-ensure-token
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
-## check-eval-prompts: fail when a prompt the evaluator writes carries the case's own answer.
-## Renders the stimulus every case would be sent, on both surfaces, and refuses
-## a prompt naming that case's expected tool, action or parameter names. Calls
-## no provider and needs no Docker. The case's own text is reported and does not
-## fail it; issue 778 carries the work that would make that gateable too.
-check-eval-prompts:
-	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface meta
-	go run ./cmd/eval_mcp_surfaces --audit-prompts -check --tool-surface dynamic
-
-## audit-eval-prompts: report what every case's stimulus repeats of its own answer, without failing.
-audit-eval-prompts:
-	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface meta
-	go run ./cmd/eval_mcp_surfaces --audit-prompts --tool-surface dynamic
+# A prompt that hands a case its own answer is refused by the unit suite now
+# rather than by a target nobody remembers to run: TestContract_NoStimulusNamesItsOwnAnswer
+# in internal/testutil/modelcorpus renders every case's stimulus and fails on
+# one that names that case's own tool, action or parameter, and
+# TestContract_FindsAPlantedAnswer proves the rule can fail. Both run under
+# `go test ./internal/...`, so there is nothing to schedule and nothing to
+# forget.
 
 # The rebuilt model evaluation: the corpus put to a model against the real
 # binary and a real GitLab, recorded as observation and scored afterwards.
@@ -629,51 +622,6 @@ modeleval-ee: ensure-gotestsum e2e-server-binary
 modeleval-probe:
 	MODELEVAL_PROBE=$${MODELEVAL_PROBE:-yes} \
 	go test -tags e2e -count=1 -v -run TestProviderContract ./test/e2e/modeleval/
-
-## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read] [SERVER_MODE=read-only|safe-mode])
-eval-surfaces-docker:
-	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker SURFACE=dynamic|meta" >&2; exit 1; fi
-	@if [ -n "$(PRESET)" ]; then \
-		./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
-	else \
-		./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
-	fi
-
-## eval-surfaces-docker-enterprise: run Docker Enterprise model evaluation for one surface (usage: make eval-surfaces-docker-enterprise SURFACE=dynamic)
-eval-surfaces-docker-enterprise:
-	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise SURFACE=dynamic|meta" >&2; exit 1; fi
-	@if [ -n "$(PRESET)" ]; then \
-		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
-	else \
-		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
-	fi
-
-## eval-surfaces-docker-enterprise-ce: run CE evaluation cases against Docker Enterprise runtime (usage: make eval-surfaces-docker-enterprise-ce SURFACE=dynamic)
-eval-surfaces-docker-enterprise-ce:
-	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-ce SURFACE=dynamic|meta" >&2; exit 1; fi
-	@if [ -n "$(PRESET)" ]; then \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=ce ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
-	else \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=ce ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
-	fi
-
-## eval-surfaces-docker-enterprise-all: run CE and Enterprise evaluation cases against Docker Enterprise runtime (usage: make eval-surfaces-docker-enterprise-all SURFACE=dynamic)
-eval-surfaces-docker-enterprise-all:
-	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-all SURFACE=dynamic|meta" >&2; exit 1; fi
-	@if [ -n "$(PRESET)" ]; then \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
-	else \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
-	fi
-
-## eval-surfaces-docker-enterprise-all-fixtures: prepare and smoke-test CE+Enterprise fixtures against Docker Enterprise runtime without model calls (usage: make eval-surfaces-docker-enterprise-all-fixtures SURFACE=dynamic)
-eval-surfaces-docker-enterprise-all-fixtures:
-	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-all-fixtures SURFACE=dynamic|meta" >&2; exit 1; fi
-	@if [ -n "$(PRESET)" ]; then \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all EVAL_SURFACE_FIXTURE_SMOKE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
-	else \
-		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all EVAL_SURFACE_FIXTURE_SMOKE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
-	fi
 
 ## coverage-conditions: report the boolean conditions of PKG never evaluated both ways (gobco). A line reported is a missing test case; `&&`, `||` and `!` operands count separately.
 coverage-conditions:
@@ -744,7 +692,7 @@ check-doc-links:
 
 ## audit-docs: run the complete documentation quality gate.
 audit-docs:
-	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "cmd/eval_mcp_surfaces/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
+	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
 	go run ./cmd/gen_lhm_manifest/ --check

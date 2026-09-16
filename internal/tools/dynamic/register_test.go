@@ -5626,8 +5626,8 @@ func TestExplanationSummary_FallbacksAndEscaping(t *testing.T) {
 // dynamic parameter normalization and unknown-parameter detection. It covers nil
 // schemas, alternative required groups, confirm bypasses, and nearest-name hints.
 func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
-	if got := NormalizeActionScopedParams("job.list", map[string]any{"status": "failed"}, schemaWithProperties("scope")); got["scope"] != "failed" {
-		t.Fatalf("NormalizeActionScopedParams() = %#v, want scope alias", got)
+	if got := normalizeActionScopedParams("job.list", map[string]any{"status": "failed"}, schemaWithProperties("scope")); got["scope"] != "failed" {
+		t.Fatalf("normalizeActionScopedParams() = %#v, want scope alias", got)
 	}
 	if got := unknownDynamicParamNames(nil, []string{"project_id"}); got != nil {
 		t.Fatalf("unknownDynamicParamNames(nil) = %v, want nil", got)
@@ -5807,13 +5807,13 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 		t.Fatalf("sourceForCompatibilityAlias(deprecated) = %q, want deprecated", got)
 	}
 
-	if got, ok := NormalizeCompatibilityActionAlias(" FEATURE_FLAG_USER_LIST.CREATE "); !ok || got != "feature_flags.ff_user_list_create" {
-		t.Fatalf("NormalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
+	if got, ok := normalizeCompatibilityActionAlias(" FEATURE_FLAG_USER_LIST.CREATE "); !ok || got != "feature_flags.ff_user_list_create" {
+		t.Fatalf("normalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
 	}
 	for _, actionID := range []string{"", "project.get", "project.unknown"} {
 		t.Run(actionID, func(t *testing.T) {
-			if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
-				t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
+			if got, ok := normalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
+				t.Fatalf("normalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
 			}
 		})
 	}
