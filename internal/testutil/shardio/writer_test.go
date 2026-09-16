@@ -487,6 +487,10 @@ func TestRelease_DoesNotDeduplicateTheNewShardAgainstTheOldOne(t *testing.T) {
 	dir := t.TempDir()
 	shards := newFixture(t, plainSpec())
 	writer := shards.OpenDir(dir)
+	// The shard written after the release belongs to a writer the registry has
+	// already let go of, so Release cannot close it; this test closes it
+	// itself, or Windows refuses to remove the directory holding it.
+	t.Cleanup(writer.release)
 	reporter := &recordingReporter{}
 	line := &note{Text: "written on both sides of the release"}
 
