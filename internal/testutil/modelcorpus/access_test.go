@@ -47,6 +47,13 @@ const (
 //     runner is told it so an attempt's turn cap can be a multiple of the work
 //     the case asks for. A cap is an ending and never a message, so nothing a
 //     model is shown can be derived from it.
+//   - [Domains] is the set of catalog domains the answer's steps touch, and it
+//     is the one door whose answer reaches the model: on the individual surface
+//     the served list does not fit a context window, so the runner shows a
+//     slice built around these domains. It is sanctioned because the
+//     alternative is measuring nothing there, and its cost is paid in the
+//     publication rather than hidden: an individual row is a comparison class
+//     of its own and says which slice it ran in.
 //   - [Digest] is a hash over the whole corpus, key included. The runner writes
 //     it on the run line and the publisher refuses a record whose digest no
 //     longer matches the corpus at HEAD.
@@ -70,6 +77,10 @@ var keyAccessors = map[string]map[string]string{
 	"StepCount": {
 		corpusPath: "the corpus itself",
 		runnerPath: "the runner, which bounds an attempt's turns by the steps its case declares",
+	},
+	"Domains": {
+		corpusPath: "the corpus itself",
+		runnerPath: "the runner, which builds the individual surface's tool slice around them",
 	},
 	"Digest": {
 		corpusPath:    "the corpus itself",
@@ -143,7 +154,7 @@ func TestAccess_OnlyTheSanctionedPackagesReadTheKey(t *testing.T) {
 // itself is still written by hand, which is the part a reader has to keep
 // honest.
 func TestKeyAccessors_NameEveryAccessorDerivedFromAnAnswer(t *testing.T) {
-	derived := map[string]any{"Keys": Keys, "StepCount": StepCount, "Digest": Digest}
+	derived := map[string]any{"Keys": Keys, "StepCount": StepCount, "Digest": Digest, "Domains": Domains}
 	for name := range keyAccessors {
 		if _, exists := derived[name]; !exists {
 			t.Errorf("keyAccessors holds %q, which this package no longer has: the boundary is "+
@@ -594,5 +605,82 @@ func TestStepCount_AnswersFromTheKeyAndRefusesAnUnknownCase(t *testing.T) {
 	}
 	if count, known := StepCount("MT-nothing-has-this-id"); known || count != 0 {
 		t.Errorf("StepCount of an unknown case = %d, %t, want 0, false", count, known)
+	}
+}
+
+// TestDomains_AnswerFromTheKeyAndLeaveOutWhatNamesNoDomain checks the door the
+// slice is built through against the answer it reads.
+//
+// Every case is asked, because the property is about the corpus and not about
+// one entry of it: the domains are the prefixes of the key's own action IDs,
+// sorted, without repeats, and a step naming a standalone tool contributes
+// nothing. A case whose key is standalone-only therefore answers with no domain
+// at all, which is a real answer and not an absence: the slice keeps every tool
+// it cannot place, so such a case is shown its tool regardless.
+func TestDomains_AnswerFromTheKeyAndLeaveOutWhatNamesNoDomain(t *testing.T) {
+	for id, key := range Keys() {
+		t.Run(id, func(t *testing.T) {
+			domains, known := Domains(id)
+			if !known {
+				t.Fatalf("Domains(%q) says the corpus has no such case, and Keys() does", id)
+			}
+			if want := domainsOfSteps(t, key); !slices.Equal(domains, want) {
+				t.Errorf("Domains(%q) = %v, want %v", id, domains, want)
+			}
+			if !slices.IsSorted(domains) {
+				t.Errorf("Domains(%q) = %v, which is not sorted: a slice built from it would differ run to run",
+					id, domains)
+			}
+		})
+	}
+	if domains, known := Domains("MT-nothing-has-this-id"); known || domains != nil {
+		t.Errorf("Domains of an unknown case = %v, %t, want nil, false", domains, known)
+	}
+}
+
+// domainsOfSteps is the answer the test expects, read from the key a second
+// time: the sorted domains of the steps that name an action, with a step that
+// names none held to being a standalone tool.
+func domainsOfSteps(t *testing.T, key Key) []string {
+	t.Helper()
+
+	var want []string
+	for _, step := range key.Steps {
+		domain, named := domainOf(step.Action)
+		switch {
+		case named && !slices.Contains(want, domain):
+			want = append(want, domain)
+		case !named && step.Standalone == "":
+			t.Errorf("step %q names neither an action with a domain nor a standalone tool", step.Action)
+		}
+	}
+	slices.Sort(want)
+	return want
+}
+
+// TestDomainOf_ReadsThePrefixAndRefusesWhatIsNotOne checks the one line the
+// whole slice rests on, including the spellings no case should ever carry.
+func TestDomainOf_ReadsThePrefixAndRefusesWhatIsNotOne(t *testing.T) {
+	tests := []struct {
+		name   string
+		action Action
+		want   string
+		named  bool
+	}{
+		{name: "an ordinary action", action: "issue.list", want: "issue", named: true},
+		{name: "a dotted operation", action: "project.push_rule_create", want: "project", named: true},
+		{name: "a standalone step, which carries no action", action: "", named: false},
+		{name: "a domain with no operation", action: "issue.", want: "issue", named: true},
+		{name: "an operation with no domain", action: ".list", named: false},
+		{name: "a word that is not an action ID", action: "issue", named: false},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			domain, named := domainOf(testCase.action)
+			if domain != testCase.want || named != testCase.named {
+				t.Errorf("domainOf(%q) = %q, %t, want %q, %t",
+					testCase.action, domain, named, testCase.want, testCase.named)
+			}
+		})
 	}
 }

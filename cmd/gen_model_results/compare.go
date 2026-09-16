@@ -109,6 +109,30 @@ func crossSurfaceKey(one row) surfaceKey {
 	}
 }
 
+// surfaceLabel is what one row decided for itself, which a cross-surface
+// comparison cannot hold fixed and therefore has to print beside the row.
+//
+// It is the other half of the cross-surface rule. The key above says what two
+// rows agree on; this says what they could not, so that a reader comparing a
+// dynamic row with an individual one can see that the second was measured on a
+// slice of the catalog and the first on all of it. Leaving it out would make
+// the two look alike in the one respect they are not, which is the whole reason
+// the individual surface is a class of its own.
+//
+// A row can carry both: the schema mode is a property of the child a run
+// started, so a run that pinned one has it on every surface's session, while
+// the slice size is the individual surface's alone.
+func surfaceLabel(one row) string {
+	var parts []string
+	if one.Key.SliceSize > 0 {
+		parts = append(parts, "slice of "+strconv.Itoa(one.Key.SliceSize)+" tools")
+	}
+	if one.Key.MetaParamSchema != "" {
+		parts = append(parts, "meta schema `"+one.Key.MetaParamSchema+"`")
+	}
+	return strings.Join(parts, ", ")
+}
+
 // String renders what a cross-surface comparison holds fixed.
 func (k surfaceKey) String() string {
 	parts := []string{

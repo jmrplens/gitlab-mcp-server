@@ -204,6 +204,9 @@ func TestCrossSurfaceNotes_NameThePeerRowAndNothingElse(t *testing.T) {
 	if !strings.Contains(note, "`meta` row") {
 		t.Errorf("the note does not name the surface the row may be read beside:\n%s", note)
 	}
+	if !strings.Contains(note, "(meta schema `opaque`)") {
+		t.Errorf("the note does not say what the peer decided for itself:\n%s", note)
+	}
 	if strings.Contains(note, "openai:other-model") {
 		t.Error("the note names a model with no peer")
 	}

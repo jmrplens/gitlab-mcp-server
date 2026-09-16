@@ -134,7 +134,12 @@ func readCases() []Case {
 			ID:     "MT-040",
 			Prompt: "Check that the MCP server can reach GitLab.",
 			Recipe: RecipeWorld,
-			key:    Key{Steps: []Step{step("server.health_check")}},
+			Surfaces: Restrict{
+				Only: []Surface{SurfaceDynamic, SurfaceMeta},
+				Reason: "server.health_check declares no individual tool of its own: it shares its " +
+					"handler with server.status, which is the action the individual surface publishes",
+			},
+			key: Key{Steps: []Step{step("server.health_check")}},
 		},
 		{
 			ID:     "MT-043",

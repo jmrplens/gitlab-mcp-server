@@ -73,6 +73,32 @@ nothing else, and its argument fidelity cannot be read beside a dynamic row,
 where `gitlab_find_action` returns the schema, or an individual row, where the
 tool carries it. What the mode costs shows up in the overhead column instead.
 
+### What a slice size is
+
+The individual surface publishes one tool per action, and its whole `tools/list`
+is 682,878 tokens at Ultimate, 648,852 at Premium and 539,274 at Free/CE
+([token footprint](../token-footprint.md)). That is past the context window of
+at least one of the providers outright and leaves no room for a conversation on
+the others, so nothing there can be measured by sending the whole list.
+
+A case is therefore put to a model on a slice of the catalog, chosen by
+`test/e2e/modeleval/slice.go` and seeded by the case identifier: every tool of
+the domains the case's own steps touch, every tool registered outside the
+catalog, and distractors from other domains filled to a budget, which is 128 by
+default and set by `MODELEVAL_SLICE`. The order mixes the two, so position says
+nothing about which tool the case needs. The session still serves its whole
+catalog and a call to a tool outside the slice is dispatched like any other:
+what the slice bounds is what the model was shown, never what it was allowed to
+do.
+
+Two consequences a reader has to hold. The row publishes the budget rather than
+a length, because the slice is chosen per case and a row aggregates many; the
+served-tools figure in the provenance table beside it says what each attempt was
+shown out of. And an individual row measures tool choice **within a slice**,
+which is a different question from choice across a whole catalog, so it is a
+comparison class of its own and never a column beside a dynamic or meta row that
+was shown everything.
+
 ## Withdrawn: what the numbers measured, and what they did not
 
 Kept as history, because a reader who followed a link to a figure is owed the

@@ -192,6 +192,46 @@ func TestSurfaceKey_String_NamesTheModelAndThePin(t *testing.T) {
 	}
 }
 
+// TestSurfaceLabel_SaysWhatARowDecidedForItself is the other half of the
+// cross-surface rule: what the key could not hold fixed has to be printed
+// beside the row, or an individual row measured on a slice reads as though it
+// had been shown the catalog.
+func TestSurfaceLabel_SaysWhatARowDecidedForItself(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(*row)
+		want string
+	}{
+		{name: "a dynamic row decides neither", edit: func(*row) {}},
+		{
+			name: "an individual row names its slice",
+			edit: func(r *row) { r.Key.Surface, r.Key.SliceSize = "individual", 128 },
+			want: "slice of 128 tools",
+		},
+		{
+			name: "a meta row names its schema mode",
+			edit: func(r *row) { r.Key.Surface, r.Key.MetaParamSchema = "meta", opaqueSchema },
+			want: "meta schema `opaque`",
+		},
+		{
+			name: "a run that pinned a schema mode has both on its individual row",
+			edit: func(r *row) {
+				r.Key.Surface, r.Key.SliceSize, r.Key.MetaParamSchema = "individual", 64, "compact"
+			},
+			want: "slice of 64 tools, meta schema `compact`",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			one := oneRow()
+			testCase.edit(&one)
+			if got := surfaceLabel(one); got != testCase.want {
+				t.Errorf("surfaceLabel = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestRowKey_String_IsWhatACollisionIsRefusedBy holds the one property a key's
 // spelling has to have: two rows that differ anywhere must spell differently,
 // or a collision would hide one measurement behind another.

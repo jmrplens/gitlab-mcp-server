@@ -386,12 +386,29 @@ func (r *runner) attempt(
 	session, tools := r.sessionFor(env, one, surface, spec)
 	sessionLine := r.record.describeSession(session, r.cfg)
 	line.Session = sessionLine.Label
+	// The digest is of what the session serves, not of what this attempt was
+	// shown, and on the individual surface those differ: the slice is chosen
+	// per case, so a digest of one attempt's list would be one case's slice
+	// standing for the row. What the digest is for is unaffected, since a
+	// provider that rewrites a schema rewrites it in whichever list it
+	// receives, and what each attempt saw is still exactly determined by the
+	// row: this digest, the slice size beside it, and the corpus digest that
+	// fixes the case IDs the slices are seeded from.
 	r.record.noteToolDigest(sessionLine.Label, spec, adapter.ToolDigest(tools))
 
 	progress.at("reading the catalog a call is resolved against")
 	requested, err := r.actions.For(session.Tier(), surface)
 	if err != nil {
 		progress.failf(t, "reading the catalog a call is resolved against: %v", err)
+	}
+
+	progress.at("choosing the tools this attempt is shown")
+	shown, err := r.show(one, surface, session.Tier(), tools)
+	if err != nil {
+		progress.failf(t, "choosing the tools this attempt is shown: %v", err)
+	}
+	if shown.Sliced {
+		t.Logf("%s on %s: shown %s", one.ID, surface, shown.Summary(len(tools)))
 	}
 
 	if world.Respond != nil {
@@ -407,7 +424,7 @@ func (r *runner) attempt(
 	talk := &conversation{
 		adapter:   adapter,
 		dispatch:  sendThrough(session),
-		tools:     tools,
+		tools:     shown.Tools,
 		contract:  r.contractFor(t, surface),
 		stimulus:  sent,
 		caseID:    one.ID,
@@ -622,6 +639,41 @@ func (r *runner) sessionFor(
 	return session, tools
 }
 
+// show returns the tools this attempt puts in front of the model.
+//
+// On dynamic and meta it is everything the session serves. On individual it is
+// a slice, because the served list does not fit a request there, and the slice
+// is built around the domains the case's key touches: the corpus hands those
+// over through a door of its own, which is the one thing about an answer that
+// reaches a model and is why an individual row is published as a comparison
+// class of its own.
+//
+// A case the corpus does not have is a failure and not an empty domain list. An
+// attempt shown a slice of pure distractors would end without completing, and a
+// row cannot tell that from a model that chose badly.
+func (r *runner) show(
+	one modelcorpus.Stimulus,
+	surface harness.Surface,
+	tier edition.Tier,
+	served []provider.Tool,
+) (toolSlice, error) {
+	if budgetFor(surface, r.cfg.Slice) < 1 {
+		// Nothing is chosen here, so nothing about the answer is read: a
+		// surface whose list fits a request is shown whole, which is the same
+		// list sliceTools returns for a budget of none.
+		return toolSlice{Tools: slices.Clone(served)}, nil
+	}
+	domains, known := modelcorpus.Domains(one.ID)
+	if !known {
+		return toolSlice{}, fmt.Errorf("the corpus has no case %s", one.ID)
+	}
+	domainOf, err := r.actions.Domains(tier, surface)
+	if err != nil {
+		return toolSlice{}, err
+	}
+	return shownTools(served, surface, one.ID, domains, r.cfg.Slice, domainOf), nil
+}
+
 // contractFor returns the surface's own introduction, failing the test when
 // there is none: a model given no contract is a model told nothing about the
 // surface it was handed.
@@ -824,6 +876,50 @@ func (i *identifiers) For(
 	tier edition.Tier,
 	surface harness.Surface,
 ) (func(tool string, arguments json.RawMessage) string, error) {
+	identify, err := i.identifier(tier, surface)
+	if err != nil {
+		return nil, err
+	}
+	return func(tool string, arguments json.RawMessage) string {
+		identity, named := identify.Identify(tool, arguments)
+		if !named {
+			return ""
+		}
+		return identity.ActionID
+	}, nil
+}
+
+// Domains returns the reader that names the catalog domain a served tool
+// belongs to, and the empty string for one that belongs to none.
+//
+// It is the same identifier [identifiers.For] resolves a call with, asked for
+// the other half of what it knows, so the domain a tool is placed in when the
+// slice is built and the domain a call is credited to afterwards are one
+// reading. The arguments are nil because they are not part of the question: the
+// individual surface's resolver decodes none, which is stated at its definition,
+// and this reader is for that surface.
+func (i *identifiers) Domains(
+	tier edition.Tier,
+	surface harness.Surface,
+) (func(tool string) string, error) {
+	identify, err := i.identifier(tier, surface)
+	if err != nil {
+		return nil, err
+	}
+	return func(tool string) string {
+		identity, named := identify.Identify(tool, nil)
+		if !named {
+			return ""
+		}
+		return identity.Domain
+	}, nil
+}
+
+// identifier builds one tier and surface's reading of a call, once.
+func (i *identifiers) identifier(
+	tier edition.Tier,
+	surface harness.Surface,
+) (mcpotel.CallIdentifier, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
@@ -840,13 +936,7 @@ func (i *identifiers) For(
 		identify = gitlabtools.NewCallIdentifier(catalog, string(surface))
 		i.built[key] = identify
 	}
-	return func(tool string, arguments json.RawMessage) string {
-		identity, named := identify.Identify(tool, arguments)
-		if !named {
-			return ""
-		}
-		return identity.ActionID
-	}, nil
+	return identify, nil
 }
 
 // TestConsentToSpend_RefusesARealProviderWithoutIt checks the gate that stops

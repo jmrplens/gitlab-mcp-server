@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -215,12 +216,12 @@ func writeCaseDigest(sum io.Writer, one Case) {
 // StepCount returns how many steps one case's key declares, and whether the
 // corpus has that case.
 //
-// It is the one number a run is told about a key, and it is told for one
-// reason: the turn cap an attempt is bounded by is a multiple of the steps
-// plus a margin, so a case of one step cannot spend a conversation's worth of
-// tokens going nowhere. A cap is an ending and never a message, so nothing a
-// model is shown can be derived from it; what a run learns is how long it may
-// go on, never what it should say.
+// It is one of the two things a run is told about a key, [Domains] being the
+// other, and it is told for one reason: the turn cap an attempt is bounded by
+// is a multiple of the steps plus a margin, so a case of one step cannot spend
+// a conversation's worth of tokens going nowhere. A cap is an ending and never
+// a message, so nothing a model is shown can be derived from it; what a run
+// learns is how long it may go on, never what it should say.
 //
 // It is deliberately not a field of [Stimulus]. That type is the enumeration of
 // what a run may see, and growing it is how the boundary erodes; a function
@@ -235,4 +236,62 @@ func StepCount(id string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// Domains returns the catalog domains one case's key touches, sorted, and
+// whether the corpus has that case.
+//
+// It is the widest of the three narrow doors, so what it is for has to be
+// stated rather than assumed. The individual surface publishes one tool per
+// action and its whole list is 682,878 tokens at Ultimate, over the context
+// window of at least one provider outright, so a model there is shown a slice:
+// every tool of these domains, plus distractors from others, filled to a budget
+// seeded by the case ID. A slice chosen without them would be a list the case's
+// own tools are missing from, and an attempt against that measures nothing but
+// the shuffle.
+//
+// What it hands over and what it does not. It narrows the field from a thousand
+// tools to a few dozen, which is a hint no dynamic or meta attempt gets, and
+// that is exactly why an individual row is published as a comparison class of
+// its own rather than beside them: choice within a slice is a different
+// question from choice across a catalog. It says nothing about which tool of a
+// domain a step wants, in what order, or with what arguments, so a case that
+// touches issues is shown every issue tool with the right one among them.
+//
+// A step naming a standalone tool contributes no domain, because such a tool is
+// registered outside the catalog under one name on every surface. The slice
+// keeps every tool it cannot place in a domain, so the standalone ones are
+// shown whether or not a case names one, and this accessor stays a statement
+// about the catalog rather than about a particular key's tools.
+func Domains(id string) ([]string, bool) {
+	for _, one := range cases() {
+		if one.ID != id {
+			continue
+		}
+		var domains []string
+		for _, step := range one.key.Steps {
+			domain, named := domainOf(step.Action)
+			if named && !slices.Contains(domains, domain) {
+				domains = append(domains, domain)
+			}
+		}
+		sort.Strings(domains)
+		return domains, true
+	}
+	return nil, false
+}
+
+// domainOf reads the domain half of a canonical action ID: "issue" of
+// "issue.list".
+//
+// A step with no action, which is how a standalone tool is spelled, names no
+// domain and is reported as naming none rather than as naming the empty one:
+// the difference decides whether the slice reserves room for a domain that does
+// not exist.
+func domainOf(action Action) (string, bool) {
+	domain, _, dotted := strings.Cut(string(action), ".")
+	if !dotted || domain == "" {
+		return "", false
+	}
+	return domain, true
 }

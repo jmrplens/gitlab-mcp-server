@@ -27,12 +27,16 @@ import (
 // answerAccessors are the corpus accessors the file that composes a prompt may
 // not name, and what each one would hand it.
 //
-// Two of the three. [modelcorpus.Keys] is the answer itself, and
-// [modelcorpus.StepCount] is a number taken from one: the runner may ask for
-// it, because a turn cap is an ending the run decides and no part of it is
-// shown to anybody, and this file may not, because the moment a number from
-// the key can reach the sentence a model reads, whether it did is a question
-// about this file's control flow rather than about its imports.
+// Three of the four. [modelcorpus.Keys] is the answer itself,
+// [modelcorpus.StepCount] is a number taken from one and [modelcorpus.Domains]
+// is the set of domains one touches: the runner may ask for all three, because
+// a turn cap is an ending the run decides and a tool slice is a list the run
+// shows, and this file may not ask for any of them, because the moment
+// something from the key can reach the sentence a model reads, whether it did
+// is a question about this file's control flow rather than about its imports.
+// Domains is the one of the three that does reach the model, through the tools
+// the individual surface shows; it reaches the model as a list of tools and
+// never as a word in the prompt, and this is what keeps those two apart.
 //
 // [modelcorpus.Digest] is deliberately absent. It is a hash over the whole
 // corpus rather than anything about the case being composed, there is no
@@ -46,6 +50,7 @@ import (
 var answerAccessors = map[string]string{
 	"Keys":      "the answer itself",
 	"StepCount": "a number taken from an answer",
+	"Domains":   "the domains an answer touches",
 }
 
 // TestStimulus_TheFileThatComposesAPromptCannotReadAnAnswer parses stimulus.go
