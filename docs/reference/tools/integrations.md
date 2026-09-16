@@ -74,7 +74,7 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 
 The group-level Datadog integration is configured at the group scope and inherits down to descendant subgroups when `use_inherited_settings=true`. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The `api_key` field is write-only — the read endpoint never returns it.
 
-The read and set outputs are dual-shape, mirroring client-go's own struct: the canonical Datadog configuration lives in the nested `properties` object (`api_url`, `datadog_env`, `datadog_service`, `datadog_site`, `datadog_tags`, `datadog_ci_visibility`, `archive_trace_events`), while the flat top-level copies of those fields are **deprecated** conveniences that will be removed together with client-go's deprecated flat fields at the v3 dependency bump — prefer `properties.*`. On older GitLab servers that omit the nested object, `properties` is absent and the flat fields carry the data.
+The read and set outputs publish the Datadog configuration in one place, the nested `properties` object (`api_url`, `datadog_env`, `datadog_service`, `datadog_site`, `datadog_tags`, `datadog_ci_visibility`, `archive_trace_events`). The flat top-level copies these outputs carried during v2 were removed in 3.0.0, so `properties.*` is the only shape. An older GitLab that omits the nested object and sends the configuration flat is still read: those fields are decoded into `properties` rather than published beside it, so a caller reads one shape whatever the server sent. Such a payload never carried `datadog_ci_visibility`, which therefore reads `false` because the server said nothing about it.
 
 ### `gitlab_get_group_datadog_integration`
 

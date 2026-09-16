@@ -441,22 +441,24 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ### File counts
 
+> Counted over every git-tracked `.go` file, which includes the fixture trees under `cmd/audit_e2e_coverage/testdata` that exist to be read by the coverage audit rather than to run. `docs/development/testing/testing.md` counts the packages `go list` returns instead, so its unit-test figures are lower. Both are correct answers to different questions.
+
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,295 |     287,543 |
-| Unit tests (`_test.go`)  |       796 |     472,863 |
+| Source (`.go`, non-test) |     1,295 |     287,588 |
+| Unit tests (`_test.go`)  |       796 |     472,918 |
 | End-to-end tests         |       386 |      71,871 |
-| **Total**                | **2,477** | **832,277** |
+| **Total**                | **2,477** | **832,377** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                | 10,575 |
+| Source functions                | 10,576 |
 | . Exported (public)             |  3,174 |
-| . Unexported (private)          |  7,401 |
-| Unit test functions (`TestXxx`) | 15,468 |
-| Subtests (`t.Run(...)`)         |  4,694 |
+| . Unexported (private)          |  7,402 |
+| Unit test functions (`TestXxx`) | 15,469 |
+| Subtests (`t.Run(...)`)         |  4,695 |
 | End-to-end test functions       |    912 |
 
 ### Ratios worth noting
@@ -466,7 +468,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.64× more tests than code |
 | Average source file length         |                 ~222 lines |
 | Average test file length           |                 ~594 lines |
-| Comment lines in source            |  58,826 (~20.5% of source) |
+| Comment lines in source            |  58,864 (~20.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns

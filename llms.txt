@@ -60,7 +60,6 @@ Configuration (environment variables, stdio mode). Settings this project defines
 - GITLAB_MCP_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
 - GITLAB_MCP_LOG_LEVEL: debug, info (default), warn, error. Logs go to stderr; stdout carries nothing but JSON-RPC
 - GITLAB_MCP_ENV_FILE: One dotenv file to load besides `~/.gitlab-mcp-server.env`; give an absolute path
-- GITLAB_MCP_META_TOOLS: Deprecated compatibility selector; prefer GITLAB_MCP_TOOL_SURFACE for new configs
 
 Tool domains:
 

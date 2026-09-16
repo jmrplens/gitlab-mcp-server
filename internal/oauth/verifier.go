@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +21,39 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
+
+// decodeInstanceJSON reads the one JSON document an instance answered with
+// into out, and refuses a document that names any object member twice.
+//
+// It is [jsonv2.UnmarshalRead] given v1's own semantics through
+// [json.DefaultOptionsV1], so a valid document decodes to exactly what this
+// package decoded before: the option set is v1's, and the only behavior that
+// differs is the one named here. That matters because "omitempty" and the
+// handling of a Go zero are not the same under the two defaults, and nothing
+// on this path should change because its decoder did.
+//
+// A duplicate member is refused because what is read from these documents are
+// authorization decisions: the scopes a token carries, the application it
+// belongs to, and when an admission expires. encoding/json v1 keeps the last
+// occurrence and reports nothing, so a body carrying `"scopes"` twice grants
+// whichever copy the reader happened to keep, and two readers of one body can
+// disagree about it. The bodies come from whatever instance the request named,
+// which under --allow-any-gitlab-url is a host the caller chose rather than
+// the operator, and this runs before any other check.
+//
+// Reading to the end rather than stopping at the first value is part of the
+// same decision: a body that carries a second document after the first is one
+// two readers can disagree about too.
+//
+// It belongs only where refusing a document is the safe answer. A caller whose
+// failure branch grants something, as introspectToken's does when nothing
+// answered, is made weaker by this rather than stronger: it would turn an
+// ambiguous document into an absent one and take the fallback's grant. That
+// decoder therefore stays on encoding/json, with the reason written where it
+// is read.
+func decodeInstanceJSON(r io.Reader, out any) error {
+	return jsonv2.UnmarshalRead(r, out, json.DefaultOptionsV1(), jsontext.AllowDuplicateNames(false))
+}
 
 // GitLab API scopes this server can operate under. api permits reads and
 // writes; read_api is enough for a deployment that never mutates, and is
@@ -213,7 +248,7 @@ func isInsufficientScope(resp *http.Response) bool {
 	var payload struct {
 		Error string `json:"error"`
 	}
-	if json.NewDecoder(io.LimitReader(resp.Body, insufficientScopeLimit)).Decode(&payload) != nil {
+	if decodeInstanceJSON(io.LimitReader(resp.Body, insufficientScopeLimit), &payload) != nil {
 		return false
 	}
 	// GitLab emits both spellings, the second for granular PAT scopes.
@@ -448,7 +483,7 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 
 		var user gitlabUserResponse
-		if decErr := json.NewDecoder(io.LimitReader(resp.Body, verificationBodyLimit)).Decode(&user); decErr != nil {
+		if decErr := decodeInstanceJSON(io.LimitReader(resp.Body, verificationBodyLimit), &user); decErr != nil {
 			return nil, fmt.Errorf("decode GitLab user response: %w", decErr)
 		}
 		if user.ID == 0 {
@@ -747,6 +782,15 @@ func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, toke
 		}
 		return nil
 	}
+	// Deliberately not decodeInstanceJSON: refusing a body here is not the
+	// strict reading it looks like. A nil return means "the endpoint did not
+	// answer", and introspectToken's last branch treats that as an instance
+	// that could not be asked and assumes api, which is fail-open by design.
+	// So refusing a document that names "scopes" twice would resolve it to
+	// more authority than either copy carries whenever the duplicate would
+	// have read as the narrower scope. The ambiguity is real and is recorded
+	// in decodeInstanceJSON; the answer to it belongs on a path whose failure
+	// mode is refusal, not here.
 	var payload map[string]any
 	if json.NewDecoder(io.LimitReader(resp.Body, verificationBodyLimit)).Decode(&payload) != nil {
 		return nil
