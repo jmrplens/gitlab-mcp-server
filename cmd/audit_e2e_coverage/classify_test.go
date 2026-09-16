@@ -566,6 +566,11 @@ func TestCreditOf_Outcomes_Credited(t *testing.T) {
 		{name: "no status is not passed", call: &e2ecalls.Call{Method: methodCallTool, Purpose: e2ecalls.PurposeTest, Action: "a.b", Outcome: e2ecalls.OutcomeOK}, want: creditFailed},
 		{name: "skipped test", call: &e2ecalls.Call{Method: methodCallTool, Purpose: e2ecalls.PurposeTest, Action: "a.b", Outcome: e2ecalls.OutcomeOK, TestStatus: e2ecalls.StatusSkipped}, want: creditSkipped},
 		{name: "raw credits nothing", call: &e2ecalls.Call{Method: methodCallTool, Purpose: e2ecalls.PurposeRaw, Dispatched: "a.b", Outcome: e2ecalls.OutcomeOK, TestStatus: e2ecalls.StatusPassed}, want: creditNone},
+		// A passing model call, dispatched and answered, still earns nothing:
+		// what it named was decided by a provider at run time, so crediting it
+		// would make this suite's coverage a function of what a language model
+		// felt like trying and would move with every run.
+		{name: "model credits nothing", call: &e2ecalls.Call{Method: methodCallTool, Purpose: e2ecalls.PurposeModel, Dispatched: "a.b", Outcome: e2ecalls.OutcomeOK, TestStatus: e2ecalls.StatusPassed}, want: creditNone},
 		{name: "no action credits nothing", call: &e2ecalls.Call{Method: methodCallTool, Purpose: e2ecalls.PurposeTest, Outcome: e2ecalls.OutcomeOK, TestStatus: e2ecalls.StatusPassed}, want: creditNone},
 	}
 	for _, tc := range cases {
@@ -588,6 +593,7 @@ func TestCreditOf_Target_IsWhatRan(t *testing.T) {
 		{name: "dispatched wins", call: &e2ecalls.Call{Action: "a.b", Dispatched: "a.c", TestStatus: e2ecalls.StatusPassed}, want: "a.c"},
 		{name: "requested when no span", call: &e2ecalls.Call{Action: "a.b", TestStatus: e2ecalls.StatusPassed}, want: "a.b"},
 		{name: "nothing for a raw call", call: &e2ecalls.Call{Purpose: e2ecalls.PurposeRaw, Dispatched: "a.c"}, want: ""},
+		{name: "nothing for a model call", call: &e2ecalls.Call{Purpose: e2ecalls.PurposeModel, Dispatched: "a.c"}, want: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

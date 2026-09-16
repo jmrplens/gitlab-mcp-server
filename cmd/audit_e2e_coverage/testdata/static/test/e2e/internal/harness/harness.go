@@ -111,3 +111,9 @@ func Eventually[O any](s *Session, id ActionID, params map[string]any, until fun
 // Unused is exported and referenced by nothing, which is what the dead-export
 // rule reports.
 func Unused() {}
+
+// ModelOnly is exported and called only from test/e2e/modeleval, which is the
+// shape the gate has to accept: the model evaluation package is loaded as a
+// consumer of the harness and never scanned for placement, so a symbol it is
+// the first and only user of is live.
+func ModelOnly() {}

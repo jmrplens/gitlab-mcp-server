@@ -359,6 +359,10 @@ func TestServerConfigFor_CarriesTheShapeTheBinaryBuilt(t *testing.T) {
 		{name: "tier", got: serverCfg.Tier, want: inst.facts.Tier},
 		{name: "instance", got: serverCfg.GitLabURL, want: inst.facts.URL},
 		{name: "exclusions", got: strings.Join(serverCfg.ExcludeTools, ","), want: "gitlab_issue"},
+		// Normalization has already turned the session's empty value into the
+		// binary's own default, so what the expectation is built from and what
+		// the child serves are the same word.
+		{name: "schema mode", got: serverCfg.MetaParamSchema, want: config.DefaultMetaParamSchema},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -366,6 +370,26 @@ func TestServerConfigFor_CarriesTheShapeTheBinaryBuilt(t *testing.T) {
 				t.Errorf("%s = %v, want %v", testCase.name, testCase.got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestServerConfigFor_PinnedSchemaMode_ReachesTheAssemblers checks that a
+// session asking for a schema mode is answered with one.
+//
+// It was the default outright until a model was the reader of these schemas,
+// and the expectation the served-set check compares is built from this same
+// configuration: a harness that kept passing the default while the child
+// served compact would compare the right names against the wrong surface, and
+// the names are all that check compares, so nothing would have said so.
+func TestServerConfigFor_PinnedSchemaMode_ReachesTheAssemblers(t *testing.T) {
+	inst := stubInstance(t)
+
+	serverCfg := serverConfigFor(inst,
+		ServerConfig{Surface: SurfaceMeta, MetaParamSchema: MetaParamSchemaCompact}.normalized(),
+		credentialFacts{scopes: []string{"api"}, tier: inst.facts.Tier})
+
+	if serverCfg.MetaParamSchema != config.MetaParamSchemaCompact {
+		t.Errorf("MetaParamSchema = %q, want %q", serverCfg.MetaParamSchema, config.MetaParamSchemaCompact)
 	}
 }
 

@@ -441,7 +441,10 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 	for _, want := range []string{
 		"static: note: harness export Unused is used by nothing yet",
 		"non-constant id tc.id",
-		"static: 22 id sites in 3 packages, 2 non-constant sites, 4 unused harness exports, 11 findings",
+		// Four packages: the three runtime packages and the model evaluation
+		// package, which is loaded as a consumer of the harness and scanned
+		// for no id sites of its own.
+		"static: 22 id sites in 4 packages, 2 non-constant sites, 4 unused harness exports, 11 findings",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout, want) {

@@ -153,6 +153,24 @@ func Main(m *testing.M, req Requirement) int {
 	return state.finish(code)
 }
 
+// Setting returns one value of the run's configuration, or the empty string.
+//
+// It is [Env.Setting] without an Env, and the difference is the whole of why
+// it exists: [New] runs the bootstrap, which probes the instance, so a test
+// that only needs to know whether an API key is configured cannot ask through
+// an Env without first requiring a GitLab it has no use for. [Main] resolves
+// the settings before any test runs, so this answers from the moment the
+// binary starts.
+//
+// Like [Env.Setting] it reads the map [Main] loaded and never the process
+// environment, which is what keeps a dotenv file this run reads out of the
+// harness's own environment and out of every child's.
+//
+// The value is what the run was configured with, so a caller that reads a
+// credential with it holds a credential: it is no more and no less safe to
+// print than the file it came from.
+func Setting(key string) string { return state.settings.get(key) }
+
 // finish reports what the run left behind and returns the exit code.
 func (s *runState) finish(code int) int {
 	if s.inst != nil && s.inst.snapshot != nil {

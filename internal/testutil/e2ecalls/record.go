@@ -80,6 +80,16 @@ const (
 	// PurposeRaw is a call made through the harness's raw escape hatch, where
 	// the protocol rather than the action is what the test is about.
 	PurposeRaw = "raw"
+	// PurposeModel is a call a language model chose and the model evaluation
+	// harness sent on its behalf.
+	//
+	// It is never credited as coverage, for a reason stronger than the one
+	// that exempts PurposeRaw: a raw call at least names a tool a test wrote
+	// down, while what a model calls is decided at run time by a provider. A
+	// shard of model calls pointed at the coverage audit by mistake would
+	// otherwise raise this suite's coverage by whatever the model happened to
+	// try, and lower it again when the next run tried something else.
+	PurposeModel = "model"
 )
 
 // What the caller expected. Anything other than these two names a harness
