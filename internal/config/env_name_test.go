@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+// absentForTest makes each name genuinely absent for one test and restores
+// whatever the process had afterwards.
+//
+// The order is the whole point and is easy to get backwards. t.Setenv is what
+// registers the restore, so it has to run first: unsetting a name the test
+// never claimed leaves a developer's own inherited value gone for every test
+// that follows, and a case asserting that neither spelling is set claims
+// neither of them, so nothing would be put back. The unset after it is what
+// makes the name absent rather than present and empty, which is the state
+// these cases are about: Getenv cannot tell those apart and the tests can.
+//
+// clearOverlayEnv in http_overlay_test.go does the same for the whole overlay
+// list; this is the same reasoning for the two or three names one case names.
+func absentForTest(t *testing.T, names ...string) {
+	t.Helper()
+	for _, name := range names {
+		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("unsetting %s: %v", name, err)
+		}
+	}
+}
+
 // TestGetenv_EveryPrefixedName_ResolvesUnderThePrefixedNameAlone verifies both
 // halves of the 3.1.0 contract for each variable individually rather than for
 // a sample: the prefixed name is read, and the retired one is not.
@@ -28,7 +51,7 @@ func TestGetenv_EveryPrefixedName_ResolvesUnderThePrefixedNameAlone(t *testing.T
 				t.Errorf("Getenv(%q) = %q with only the prefixed name set, want %q", name, got, "from-prefixed")
 			}
 
-			os.Unsetenv(EnvPrefix + name)
+			absentForTest(t, EnvPrefix+name)
 			t.Setenv(RetiredEnvName(name), "from-retired")
 			if got := Getenv(name); got != "" {
 				t.Errorf("Getenv(%q) = %q with only %s set, want the retired name read by nothing",
@@ -61,8 +84,7 @@ func TestGetenv_ReadsThePrefixedNameAndNothingElse(t *testing.T) {
 		{name: "neither", want: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			os.Unsetenv(EnvPrefix + name)
-			os.Unsetenv(name)
+			absentForTest(t, EnvPrefix+name, name)
 			if tc.prefixed != "" {
 				t.Setenv(EnvPrefix+name, tc.prefixed)
 			}
@@ -154,8 +176,7 @@ func TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, name := range PrefixedEnvNames() {
-				os.Unsetenv(RetiredEnvName(name))
-				os.Unsetenv(EnvPrefix + name)
+				absentForTest(t, RetiredEnvName(name), EnvPrefix+name)
 			}
 			for name, value := range tc.env {
 				t.Setenv(name, value)
@@ -250,10 +271,7 @@ func TestGetenv_RenamedGitLabSwitch_NoLongerFallsBackToItsOldSpelling(t *testing
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("GITLAB_TIER", "")
-			t.Setenv("GITLAB_MCP_TIER", "")
-			os.Unsetenv("GITLAB_TIER")
-			os.Unsetenv("GITLAB_MCP_TIER")
+			absentForTest(t, "GITLAB_TIER", "GITLAB_MCP_TIER")
 			if tt.old != "" {
 				t.Setenv("GITLAB_TIER", tt.old)
 			}
