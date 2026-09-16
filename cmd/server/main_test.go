@@ -10970,12 +10970,18 @@ func TestServerCardSubscriptions_PublishesTheEndingVocabulary(t *testing.T) {
 // internal/testutil/e2ecalls is the record the end-to-end harness writes and
 // cmd/audit_e2e_coverage reads, internal/testutil/shardio is the shard
 // mechanism under it, internal/testutil/modelrecord is the record the model
-// evaluation run writes and cmd/gen_model_results reads, and
-// internal/testutil/modelcorpus is the corpus that run is driven from; each is
-// named here in its own right because this list matches exact import paths, so
-// internal/testutil does not cover a subpackage of it.
+// evaluation run writes and cmd/gen_model_results reads,
+// internal/testutil/modelcorpus is the corpus that run is driven from, and
+// internal/testutil/modelscore is the scorer that reads a record back against
+// that corpus; each is named here in its own right because this list matches
+// exact import paths, so internal/testutil does not cover a subpackage of it.
 //
-// Today all seven stay out by accident, because nothing in the server's import
+// The scorer is the one of them that would cost nothing to link and still
+// belongs out: it imports internal/tools for the action catalog, which the
+// binary already carries, so its arrival would be invisible in a binary size
+// and would mean that scoring code had become part of the server.
+//
+// Today all eight stay out by accident, because nothing in the server's import
 // graph happens to reach them. This makes it hold on purpose: the day somebody
 // imports test support from production code, this is the check that says so,
 // and it says so before the binary grows.
@@ -10987,6 +10993,7 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		"internal/testutil/shardio",
 		"internal/testutil/modelrecord",
 		"internal/testutil/modelcorpus",
+		"internal/testutil/modelscore",
 		"internal/graphqlschema",
 		"internal/freshness",
 	}
