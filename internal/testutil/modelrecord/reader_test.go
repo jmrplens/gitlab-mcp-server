@@ -296,10 +296,9 @@ func TestRead_MergesEveryShardUnderTheDirectory(t *testing.T) {
 	t.Cleanup(Release)
 
 	reporter := &recordingReporter{}
-	OpenDir(root).Write(reporter,
-		&Run{Package: "modeleval", Edition: "community", Tier: "free"},
-		&Attempt{ID: "a1", Case: "MT-205", EndedBy: EndedCompleted},
-	)
+	attempt := validAttempt()
+	attempt.Case = "MT-205"
+	OpenDir(root).Write(reporter, validRun(), attempt)
 	if len(reporter.messages) != 0 {
 		t.Fatalf("reported %v, want nothing", reporter.messages)
 	}

@@ -338,7 +338,11 @@ func (r Record) validate() error {
 	if carried != 1 {
 		return fmt.Errorf("line type %q carries %d payloads, want exactly one", r.Type, carried)
 	}
-	return nil
+	// The envelope is sound; what it carries still has to mean something. See
+	// validate.go: an attempt with no case, model, session or ending passes
+	// every check above and describes nothing, and a scorer given it counts an
+	// attempt that never happened.
+	return r.validatePayload()
 }
 
 // invalidRawField names the first field of the record holding JSON that cannot
