@@ -23,6 +23,7 @@ package modeleval
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelscore"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
@@ -93,7 +95,22 @@ func TestModelEval(t *testing.T) {
 		"budget %s, individual slice %d tools",
 		len(selected), len(specs), len(cfg.Surfaces), cfg.Repeat, budgetText(cfg.BudgetUSD), cfg.Slice)
 
-	run.openScripted(t, adapters, selected)
+	// The run's own Env, opened before any case can be skipped.
+	//
+	// Everything that names a run is read off an Env: the run identifier every
+	// attempt id is built from, the edition and version of the instance, and
+	// the tier a row is published under. A case skipped inside harness.New for
+	// a need this instance does not meet writes its lines from here rather
+	// than from an Env of its own, so a run whose first case is skipped would
+	// otherwise write identifiers with an empty run in them, and a run whose
+	// every case is skipped would leave a run line with no instance on it at
+	// all, which is unpublishable. It costs a probe the run was going to make
+	// anyway: there is a model and there is a case, so this run reaches the
+	// instance.
+	env := harness.New(t)
+	run.record.noteRuntime(env)
+
+	run.openScripted(t, env, adapters, selected)
 
 	for _, adapter := range adapters {
 		t.Run(modelName(adapter.Spec().String()), func(t *testing.T) {
@@ -129,7 +146,16 @@ type runner struct {
 // opening a session can fail the test, which must happen on this goroutine:
 // attempts may run in parallel, and a failure raised from one of those against
 // the parent's Env would abort the wrong test.
-func (r *runner) openScripted(t *testing.T, adapters []provider.Provider, selected []modelcorpus.Stimulus) {
+//
+// The Env is the run's own rather than one of this function's, because a run
+// with no interactive case still needs one: the identifiers and the instance
+// facts are read off it before any case can be skipped.
+func (r *runner) openScripted(
+	t *testing.T,
+	env *harness.Env,
+	adapters []provider.Provider,
+	selected []modelcorpus.Stimulus,
+) {
 	t.Helper()
 
 	var wanted []harness.Surface
@@ -147,8 +173,6 @@ func (r *runner) openScripted(t *testing.T, adapters []provider.Provider, select
 		return
 	}
 
-	env := harness.New(t)
-	r.record.noteRuntime(env)
 	for _, adapter := range adapters {
 		for _, surface := range wanted {
 			if _, err := r.scripted.Open(env, r.cfg, surface, adapter.Spec().String()); err != nil {
@@ -319,43 +343,66 @@ func (r *runner) attempt(
 	t := env.T
 	spec := adapter.Spec().String()
 	id := attemptID(env.RunID(), one.ID, spec, surface, repeat)
+	line := &modelrecord.Attempt{
+		ID: id, Case: one.ID, Model: spec, Surface: surface.String(), Repeat: repeat,
+	}
+
+	// Registered before anything that can end this subtest, and therefore run
+	// after all of it.
+	//
+	// Every step from here to the conversation ends the attempt with t.Fatalf
+	// when it cannot go on, and a Fatalf writes no line: the attempt would be
+	// absent from the record with nothing saying it was ever made, and a
+	// report cannot tell an attempt the run could not put from a case nobody
+	// asked. That is the silent denominator this record exists to remove, so
+	// what the failure did not write, this does.
+	progress := &attemptProgress{stage: "opening the attempt"}
+	t.Cleanup(func() { r.noteHarnessError(t, t.Failed(), progress, *line) })
 
 	if r.spend.Exhausted() {
-		r.record.writeAttempt(t, &modelrecord.Attempt{
-			ID: id, Case: one.ID, Model: spec, Surface: surface.String(), Repeat: repeat,
-			EndedBy: modelrecord.EndedSkipped,
-			Reason: fmt.Sprintf("the run's budget of %s was spent before this attempt began",
-				budgetText(r.cfg.BudgetUSD)),
-		}, nil, nil, nil)
+		line.EndedBy = modelrecord.EndedSkipped
+		line.Reason = fmt.Sprintf("the run's budget of %s was spent before this attempt began",
+			budgetText(r.cfg.BudgetUSD))
+		r.record.writeAttempt(t, line, nil, nil, nil)
+		progress.written = true
 		env.Skipf("the run's budget of %s is spent", budgetText(r.cfg.BudgetUSD))
 		return
 	}
 
+	progress.at("building the world the case runs in")
 	world, known := BuildWorld(env, one.Recipe)
 	if !known {
-		t.Fatalf("case %s names recipe %q, which this package cannot build", one.ID, one.Recipe)
+		progress.failf(t, "case %s names recipe %q, which this package cannot build", one.ID, one.Recipe)
 	}
+	progress.at("rendering the stimulus")
 	sent, err := renderStimulus(one, world)
 	if err != nil {
-		t.Fatalf("rendering the stimulus: %v", err)
+		progress.failf(t, "rendering the stimulus: %v", err)
 	}
+	line.Facts = sent.Facts
+	line.Stimulus = sent.Text
 
+	progress.at("opening the session this attempt talks to")
 	session, tools := r.sessionFor(env, one, surface, spec)
-	line := r.record.describeSession(session, r.cfg)
-	r.record.noteToolDigest(line.Label, spec, adapter.ToolDigest(tools))
+	sessionLine := r.record.describeSession(session, r.cfg)
+	line.Session = sessionLine.Label
+	r.record.noteToolDigest(sessionLine.Label, spec, adapter.ToolDigest(tools))
 
+	progress.at("reading the catalog a call is resolved against")
 	requested, err := r.actions.For(session.Tier(), surface)
 	if err != nil {
-		t.Fatalf("reading the catalog a call is resolved against: %v", err)
+		progress.failf(t, "reading the catalog a call is resolved against: %v", err)
 	}
 
 	if world.Respond != nil {
+		progress.at("lending the scripted session this attempt's answers")
 		defer r.lendResponder(t, world, surface, spec)()
 	}
 
+	progress.at("reading how long this attempt's conversation may go on")
 	steps, hasSteps := modelcorpus.StepCount(one.ID)
 	if !hasSteps {
-		t.Fatalf("the corpus has no case %s", one.ID)
+		progress.failf(t, "the corpus has no case %s", one.ID)
 	}
 	talk := &conversation{
 		adapter:   adapter,
@@ -370,25 +417,159 @@ func (r *runner) attempt(
 		requested: requested,
 		charge:    func(usage modelrecord.Usage) { r.spend.charge(usage, r.prices[spec]) },
 	}
+	progress.at("putting the case to the model")
 	outcome := talk.run(env.Ctx)
 
+	progress.at("checking against GitLab what the model did")
 	checks := r.verify(env, world, one, id)
-	r.record.writeAttempt(t, &modelrecord.Attempt{
-		ID:       id,
-		Case:     one.ID,
-		Model:    spec,
-		Surface:  surface.String(),
-		Session:  line.Label,
-		Repeat:   repeat,
-		Facts:    sent.Facts,
-		Stimulus: sent.Text,
-		EndedBy:  outcome.EndedBy,
-		Reason:   outcome.Reason,
-	}, outcome.Turns, outcome.Calls, checks)
+	line.EndedBy = outcome.EndedBy
+	line.Reason = outcome.Reason
+	r.record.writeAttempt(t, line, outcome.Turns, outcome.Calls, checks)
+	progress.written = true
 
 	t.Logf("%s on %s: %s after %d turn(s) and %d call(s)%s",
 		one.ID, surface, outcome.EndedBy, len(outcome.Turns), len(outcome.Calls), detailOf(outcome.Reason))
+	r.logVerdict(t, *line, *sessionLine, outcome, checks)
 	r.judgeAttempt(t, adapter.Spec(), outcome, checks)
+}
+
+// attemptProgress is how far one attempt got and what stopped it, which is all
+// the line a failed attempt leaves behind can say.
+//
+// The testing package keeps a Fatalf's message to itself, so a cleanup can
+// read that the subtest failed and nothing about why. This is what the attempt
+// wrote down as it went, so the line says what the run was doing rather than
+// only that something went wrong.
+type attemptProgress struct {
+	// stage is what the attempt was about to do, updated as it goes.
+	stage string
+	// detail is the message of a failure this file raised itself, empty for
+	// one raised inside the harness, a recipe or the corpus.
+	detail string
+	// written says an attempt line has already reached the shard, so nothing
+	// more is owed.
+	written bool
+}
+
+// at records what the attempt is about to do.
+func (p *attemptProgress) at(stage string) { p.stage = stage }
+
+// failf records why the run could not make this attempt and ends the subtest.
+//
+// The detail is recorded before the Fatalf and not after, because there is no
+// after: t.Fatalf does not return.
+func (p *attemptProgress) failf(t *testing.T, format string, args ...any) {
+	t.Helper()
+	p.detail = fmt.Sprintf(format, args...)
+	t.Fatalf("%s", p.detail)
+}
+
+// reason spells why an attempt ended for the line that says it did.
+func (p *attemptProgress) reason() string {
+	if p.detail != "" {
+		return p.detail
+	}
+	return "the run failed while " + p.stage + ", and said why only to the test log"
+}
+
+// noteHarnessError writes the attempt line an attempt leaves behind when the
+// run itself could not make it.
+//
+// It is the write side of [modelrecord.EndedHarnessError], which the judgement
+// below already treats as the run's own failure: without this nothing ever
+// produced that ending, so the constant was read and never written and every
+// attempt the run could not put vanished from the record.
+func (r *runner) noteHarnessError(
+	reporter modelrecord.Reporter,
+	failed bool,
+	progress *attemptProgress,
+	line modelrecord.Attempt,
+) {
+	if progress.written || !failed {
+		return
+	}
+	line.EndedBy = modelrecord.EndedHarnessError
+	line.Reason = progress.reason()
+	r.record.writeAttempt(reporter, &line, nil, nil, nil)
+}
+
+// logVerdict scores the attempt that just ended and puts the verdict in the
+// log.
+//
+// It is for the person watching a run, who otherwise reads an ending and a
+// call count and cannot tell an attempt that did the right thing from one that
+// completed doing the wrong one. Nothing is written to the record: the record
+// stays observation and a report re-scores it from the corpus at HEAD, so a
+// scoring rule corrected later re-reads every past run.
+//
+// The key is resolved by the scorer, which is a sanctioned reader of one; this
+// package is not, and never learns what the answer was. The verdict is
+// computed after the conversation has ended, so nothing a model was shown can
+// be derived from it.
+//
+// A verdict that cannot be computed is logged and never failed. It is a
+// convenience for a reader, the record already holds everything it was
+// computed from, and failing a paid attempt over the log line it printed
+// afterwards would throw away the measurement.
+func (r *runner) logVerdict(
+	t *testing.T,
+	line modelrecord.Attempt,
+	session modelrecord.Session,
+	outcome conversationResult,
+	checks []*modelrecord.Verify,
+) {
+	t.Helper()
+
+	verdict, err := modelscore.ScoreCase(modelscore.Attempt{
+		Run:      r.record.runLine(),
+		Session:  session,
+		Line:     line,
+		Turns:    valuesOf(outcome.Turns),
+		Calls:    valuesOf(outcome.Calls),
+		Verifies: valuesOf(checks),
+	})
+	if err != nil {
+		t.Logf("%s on %s: no live verdict: %v", line.Case, line.Surface, err)
+		return
+	}
+	t.Logf("%s on %s: verdict %s", line.Case, line.Surface, verdictText(verdict))
+}
+
+// verdictText is one verdict on one line.
+//
+// The step count is what a reader wants first and the outcome is what they
+// want to act on, so both are there whatever happened; the rest is only said
+// when it has something to say, since "0 discovery call(s)" on every row of a
+// meta run is a line nobody reads.
+func verdictText(verdict modelscore.Verdict) string {
+	complete := 0
+	for _, step := range verdict.Steps {
+		if step.Complete {
+			complete++
+		}
+	}
+	text := fmt.Sprintf("%s, %d/%d step(s)", verdict.Outcome, complete, len(verdict.Steps))
+	if verdict.Discovery > 0 {
+		text += fmt.Sprintf(", %d discovery call(s)", verdict.Discovery)
+	}
+	if verdict.InvalidParams > 0 {
+		text += fmt.Sprintf(", %d refused for arguments", verdict.InvalidParams)
+	}
+	if !verdict.Verified {
+		text += ", the check against GitLab failed"
+	}
+	return text + detailOf(verdict.Reason)
+}
+
+// valuesOf is the record's own lines as the scorer takes them: a run holds
+// pointers, because a writer takes each line as one, and an attempt is scored
+// from values.
+func valuesOf[T any](lines []*T) []T {
+	values := make([]T, 0, len(lines))
+	for _, line := range lines {
+		values = append(values, *line)
+	}
+	return values
 }
 
 // lendResponder gives the scripted session this attempt's answers and returns
@@ -960,6 +1141,169 @@ func TestIdentifiers_ResolveACallOverTheWholeCatalog(t *testing.T) {
 	}
 	if got := meta("gitlab_issue", json.RawMessage(`{"action":"list"}`)); got != "issue.list" {
 		t.Errorf("the meta dispatcher resolved to %q, want issue.list", got)
+	}
+}
+
+// TestNoteHarnessError_WritesDownTheAttemptAFatalWouldHaveLost covers the one
+// ending nothing used to write.
+//
+// An attempt this side could not put ends with t.Fatalf, which writes no line,
+// so the attempt was absent from the record with nothing saying it had been
+// made: a report could not tell it from a case nobody asked, which is exactly
+// the silent denominator this record exists to remove. What is checked here is
+// that the line is written when the attempt failed and had written none, that
+// it is not written twice, and that it says why as far as this side can know.
+func TestNoteHarnessError_WritesDownTheAttemptAFatalWouldHaveLost(t *testing.T) {
+	tests := []struct {
+		name      string
+		progress  *attemptProgress
+		failed    bool
+		wantLines int
+		wantIn    string
+	}{
+		{
+			name: "a failure this file raised is written down as it was raised",
+			progress: &attemptProgress{
+				stage:  "building the world the case runs in",
+				detail: `case MT-900 names recipe "nothing", which this package cannot build`,
+			},
+			failed:    true,
+			wantLines: 1,
+			wantIn:    "names recipe",
+		},
+		{
+			name:      "a failure raised elsewhere is written down as how far the attempt got",
+			progress:  &attemptProgress{stage: "opening the session this attempt talks to"},
+			failed:    true,
+			wantLines: 1,
+			wantIn:    "opening the session",
+		},
+		{
+			name:      "an attempt that wrote its own line is not written a second time",
+			progress:  &attemptProgress{stage: "putting the case to the model", written: true},
+			failed:    true,
+			wantLines: 0,
+		},
+		{
+			name:      "an attempt that did not fail leaves nothing behind",
+			progress:  &attemptProgress{stage: "putting the case to the model"},
+			failed:    false,
+			wantLines: 0,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Cleanup(modelrecord.Release)
+			run := &runner{record: &recorder{
+				writer:   modelrecord.OpenDir(dir),
+				sessions: map[string]*modelrecord.Session{},
+			}}
+
+			run.noteHarnessError(&failureSpy{}, tc.failed, tc.progress, modelrecord.Attempt{
+				ID: "run-1/MT-900/fake-perfect/dynamic/r1", Case: "MT-900",
+				Model: "fake:perfect", Surface: "dynamic", Repeat: 1,
+			})
+
+			written := attemptLines(t, dir)
+			if len(written) != tc.wantLines {
+				t.Fatalf("the shard holds %d attempt line(s), want %d", len(written), tc.wantLines)
+			}
+			if tc.wantLines == 0 {
+				return
+			}
+			line := written[0]
+			if line.EndedBy != modelrecord.EndedHarnessError {
+				t.Errorf("the line ended %q, want %q", line.EndedBy, modelrecord.EndedHarnessError)
+			}
+			if line.Case != "MT-900" || line.Model != "fake:perfect" || line.Surface != "dynamic" {
+				t.Errorf("the line is %+v, want it to name the attempt that was not made", line)
+			}
+			if !strings.Contains(line.Reason, tc.wantIn) {
+				t.Errorf("the reason is %q, want it to say %q", line.Reason, tc.wantIn)
+			}
+		})
+	}
+}
+
+// attemptLines reads the attempt lines a directory holds, treating a directory
+// with no shard in it as a run that wrote nothing.
+//
+// A shard is created by the first line written and not before, so "wrote
+// nothing" leaves an empty directory, which [modelrecord.ReadShards] refuses as
+// a directory that was never recorded into. Here that is an answer rather than
+// a failure, so the empty directory is recognized before the read.
+func attemptLines(t *testing.T, dir string) []modelrecord.Attempt {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", dir, err)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	shards, err := modelrecord.ReadShards(dir)
+	if err != nil {
+		t.Fatalf("reading the shards under %s: %v", dir, err)
+	}
+	var lines []modelrecord.Attempt
+	for _, shard := range shards {
+		for _, record := range shard.Records {
+			if record.Attempt != nil {
+				lines = append(lines, *record.Attempt)
+			}
+		}
+	}
+	return lines
+}
+
+// TestVerdictText_SaysTheOutcomeAndOnlyWhatHappened checks the line a run
+// prints as each attempt is scored.
+//
+// The outcome and the steps are always there, since a reader watching a run
+// wants both whatever happened; the rest is said only when there is something
+// to say, because a line that ends "0 discovery call(s)" on every row is a
+// line nobody reads.
+func TestVerdictText_SaysTheOutcomeAndOnlyWhatHappened(t *testing.T) {
+	clean := verdictText(modelscore.Verdict{
+		Outcome:  modelscore.OutcomeCompleted,
+		Verified: true,
+		Steps:    []modelscore.StepVerdict{{Complete: true}, {Complete: true}},
+	})
+	if clean != "completed, 2/2 step(s)" {
+		t.Errorf("verdictText of a clean attempt = %q", clean)
+	}
+
+	noisy := verdictText(modelscore.Verdict{
+		Outcome:       modelscore.OutcomeFailed,
+		Reason:        "the second step was never reached",
+		Discovery:     2,
+		InvalidParams: 1,
+		Steps:         []modelscore.StepVerdict{{Complete: true}, {}},
+	})
+	const want = "failed, 1/2 step(s), 2 discovery call(s), 1 refused for arguments, " +
+		"the check against GitLab failed: the second step was never reached"
+	if noisy != want {
+		t.Errorf("verdictText of an attempt that went wrong = %q, want %q", noisy, want)
+	}
+}
+
+// TestAttemptProgress_SaysWhatTheRunWasDoingWhenItCouldNotGoOn covers the
+// reason the line above carries.
+func TestAttemptProgress_SaysWhatTheRunWasDoingWhenItCouldNotGoOn(t *testing.T) {
+	staged := &attemptProgress{stage: "rendering the stimulus"}
+	if reason := staged.reason(); !strings.Contains(reason, "rendering the stimulus") {
+		t.Errorf("reason = %q, want it to name the stage the attempt reached", reason)
+	}
+	staged.at("putting the case to the model")
+	if reason := staged.reason(); !strings.Contains(reason, "putting the case to the model") {
+		t.Errorf("reason after at() = %q, want it to name the newer stage", reason)
+	}
+
+	detailed := &attemptProgress{stage: "rendering the stimulus", detail: "no fact named issue_iid"}
+	if reason := detailed.reason(); reason != "no fact named issue_iid" {
+		t.Errorf("reason = %q, want the message the failure itself carried", reason)
 	}
 }
 

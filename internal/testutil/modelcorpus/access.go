@@ -62,9 +62,11 @@ func (c Case) stimulus() Stimulus {
 // fifth: the scorer, which is the one thing a key is for; the two generators,
 // each of which publishes about a key and produces no stimulus; and the fake
 // provider, which replays a key to prove the pipe and whose every row the
-// publisher refuses. The map that test reads lists this package too, since the
-// corpus's own gate is written against the key, which is why it holds five
-// entries and this sentence names four.
+// publisher refuses. The list that test reads names this package too, since
+// the corpus's own gate is written against the key, which is why it holds five
+// entries and this sentence names four. It is one of three such lists, one per
+// accessor answering about a key: [StepCount] and [Digest] have their own, and
+// are allowed where this is not.
 func Keys() map[string]Key {
 	all := cases()
 	keys := make(map[string]Key, len(all))
@@ -222,7 +224,10 @@ func writeCaseDigest(sum io.Writer, one Case) {
 //
 // It is deliberately not a field of [Stimulus]. That type is the enumeration of
 // what a run may see, and growing it is how the boundary erodes; a function
-// asked for by name is a use a reader can find.
+// asked for by name is a use a reader can find, and access_test.go holds this
+// name to a list of callers of its own, as it holds [Keys] to one. The runner
+// is on that list; the file that composes a prompt is refused by a second lock
+// of its own.
 func StepCount(id string) (int, bool) {
 	for _, one := range cases() {
 		if one.ID == id {

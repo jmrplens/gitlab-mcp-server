@@ -24,24 +24,52 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
 
+// answerAccessors are the corpus accessors the file that composes a prompt may
+// not name, and what each one would hand it.
+//
+// Two of the three. [modelcorpus.Keys] is the answer itself, and
+// [modelcorpus.StepCount] is a number taken from one: the runner may ask for
+// it, because a turn cap is an ending the run decides and no part of it is
+// shown to anybody, and this file may not, because the moment a number from
+// the key can reach the sentence a model reads, whether it did is a question
+// about this file's control flow rather than about its imports.
+//
+// [modelcorpus.Digest] is deliberately absent. It is a hash over the whole
+// corpus rather than anything about the case being composed, there is no
+// question about an answer a reader could put to it, and this file computes a
+// digest of its own over the surface contracts beside it.
+//
+// The identifier alone is what this matches, since the file is parsed and not
+// type-checked, so a local named StepCount would trip it too. That is the
+// right side to err on here: the type-aware reading is the corpus's own
+// boundary test, and this is the lock a reviewer editing this file sees.
+var answerAccessors = map[string]string{
+	"Keys":      "the answer itself",
+	"StepCount": "a number taken from an answer",
+}
+
 // TestStimulus_TheFileThatComposesAPromptCannotReadAnAnswer parses stimulus.go
-// and fails on any mention of the corpus's key accessor.
+// and fails on any mention of the corpus's answer-derived accessors.
 //
 // It reads the syntax rather than the text, so a spelling a search would miss
 // is caught too: an aliased import, a dot import, a method value taken without
 // being called.
 func TestStimulus_TheFileThatComposesAPromptCannotReadAnAnswer(t *testing.T) {
 	const file = "stimulus.go"
-	parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.SkipObjectResolution)
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, file, nil, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatalf("parsing %s: %v", file, err)
 	}
 
 	ast.Inspect(parsed, func(node ast.Node) bool {
 		ident, isIdent := node.(*ast.Ident)
-		if isIdent && ident.Name == "Keys" {
-			t.Errorf("%s names Keys at %v: the file that composes a stimulus may not read an answer",
-				file, parsed.Name.NamePos)
+		if !isIdent {
+			return true
+		}
+		if what, refused := answerAccessors[ident.Name]; refused {
+			t.Errorf("%s names %s at %s, which is %s: the file that composes a stimulus may not read one",
+				file, ident.Name, fset.Position(ident.Pos()), what)
 		}
 		return true
 	})

@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -236,6 +237,64 @@ func TestConversation_CarriesTheAnswersForwardAndTheStructureBeside(t *testing.T
 	}
 }
 
+// TestConversation_ChargesTheBudgetForEveryTryIncludingTheRetriedOnes is the
+// join between the loop and the accountant.
+//
+// The budget is the only thing that stops a paid run, and it is charged from
+// inside this loop: an accountant tested on its own and a loop that never calls
+// it are both green while a run spends without limit. Every try is charged and
+// not only the one that worked, for the reason every try is a turn line: a
+// request the provider refused for rate was still a request, and a rate-limited
+// run that was charged once would read as costing the same as a clean one.
+func TestConversation_ChargesTheBudgetForEveryTryIncludingTheRetriedOnes(t *testing.T) {
+	withoutBackoff(t)
+
+	refused := modelrecord.Usage{Input: 1_000, CacheRead: 500}
+	served := modelrecord.Usage{Input: 1_200, Output: 300}
+	closing := modelrecord.Usage{Input: 1_500, Output: 40}
+	stub := &stubProvider{answers: []stubAnswer{
+		{status: modelrecord.TurnRateLimited, err: errors.New("slow down"), usage: refused},
+		{tool: "gitlab_execute_action", usage: served},
+		{text: "Done.", usage: closing},
+	}}
+	talk := newTestConversation(stub)
+
+	var charged []modelrecord.Usage
+	talk.charge = func(usage modelrecord.Usage) { charged = append(charged, usage) }
+
+	result := talk.run(context.Background())
+	if result.EndedBy != modelrecord.EndedCompleted {
+		t.Fatalf("EndedBy = %q (%s), want the conversation to have run to its end",
+			result.EndedBy, result.Reason)
+	}
+	want := []modelrecord.Usage{refused, served, closing}
+	if len(charged) != len(want) {
+		t.Fatalf("the budget was charged %d time(s) for %d request(s): %+v", len(charged), stub.calls, charged)
+	}
+	if !slices.Equal(charged, want) {
+		t.Errorf("the budget was charged %+v, want each request's own usage %+v", charged, want)
+	}
+	if len(result.Turns) != len(charged) {
+		t.Errorf("the run recorded %d turn(s) and charged %d time(s): every request is both",
+			len(result.Turns), len(charged))
+	}
+}
+
+// TestConversation_ChargesNothingWhenTheRunHasNoAccountant checks the other
+// half: a conversation with no budget behind it makes the same requests.
+func TestConversation_ChargesNothingWhenTheRunHasNoAccountant(t *testing.T) {
+	stub := &stubProvider{answers: []stubAnswer{{text: "Done.", usage: modelrecord.Usage{Input: 10}}}}
+	talk := newTestConversation(stub)
+	talk.charge = nil
+
+	if result := talk.run(context.Background()); result.EndedBy != modelrecord.EndedNoToolCall {
+		t.Errorf("EndedBy = %q, want the answer's own ending", result.EndedBy)
+	}
+	if stub.calls != 1 {
+		t.Errorf("the provider was asked %d times, want once", stub.calls)
+	}
+}
+
 // TestToolResultOf_SaysWhetherTheCallWorked checks what a model is handed back.
 //
 // A refusal has to read as an error, because the one thing a read-only
@@ -414,6 +473,9 @@ func answering(
 
 // stubAnswer is one turn a stub provider gives.
 type stubAnswer struct {
+	// usage is what the provider says the request cost, which is what the
+	// budget is charged for.
+	usage modelrecord.Usage
 	// text is prose the model wrote.
 	text string
 	// tool names a tool call it made.
@@ -447,7 +509,11 @@ func (s *stubProvider) Call(_ context.Context, request provider.Request) (provid
 	}
 	s.calls++
 
-	response := provider.Response{Status: modelrecord.TurnOK, Echo: json.RawMessage(answer.echo)}
+	response := provider.Response{
+		Status: modelrecord.TurnOK,
+		Echo:   json.RawMessage(answer.echo),
+		Usage:  answer.usage,
+	}
 	if answer.status != "" {
 		response.Status = answer.status
 	}

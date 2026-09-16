@@ -20,36 +20,71 @@ import (
 // alias or a dot import is exactly what a source scan would miss.
 const corpusPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 
-// keyReaders are the packages allowed to call [Keys], with why each one is.
+// The import paths the boundary below is written in terms of.
+const (
+	scorerPath    = "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelscore"
+	publisherPath = "github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_model_results"
+	ledgerPath    = "github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_model_corpus"
+	runnerPath    = "github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval"
+	fakePath      = "github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider"
+)
+
+// keyAccessors are this package's answer-derived accessors, each with the
+// packages allowed to call it and why.
 //
-// Four of them are callers outside the corpus. Three of those never produce a
-// stimulus: the scorer is what a key is for, and the two generators publish
-// about a key, one the breadth ledger and one the results. The fourth is the
-// fake provider, which is the one sanctioned reader on the run path: it
-// replays a key to prove the pipe end to end, and every row it produces is
-// refused by the publisher.
+// Three doors rather than one list for all three, because what each hands over
+// differs and so does who has any business with it. A single list was the
+// first shape of this and it was a lock on one door of three: it matched the
+// identifier [Keys] and nothing else, so [StepCount] and [Digest], which read
+// the key too, could be called from anywhere including the file that composes
+// a prompt.
 //
-// The fifth entry is the corpus itself, which no failure here can ever name:
-// the only packages that import this one from inside it are its own test
-// variant and the binary built from that, and [importersOf] leaves both out,
-// so the load below never asks about either. It is listed because this map is
-// also the permission a failure prints, and that sentence should name every
-// package that may read a key rather than only the ones a failure could name.
-var keyReaders = map[string]string{
-	corpusPath: "the corpus itself, whose own gate is written against the key",
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelscore": "the scorer",
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_model_results":        "the results publisher",
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/gen_model_corpus":         "the breadth ledger",
-	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/modeleval/internal/provider": "the fake provider, " +
-		"which replays a key and whose rows the publisher refuses",
+//   - [Keys] is the answer itself, and its list is the narrowest: the scorer,
+//     which is what a key is for; the two generators, which publish about a key
+//     and produce no stimulus; and the fake provider, which replays a key to
+//     prove the pipe and whose every row the publisher refuses.
+//   - [StepCount] is one integer, how many steps the answer declares. The
+//     runner is told it so an attempt's turn cap can be a multiple of the work
+//     the case asks for. A cap is an ending and never a message, so nothing a
+//     model is shown can be derived from it.
+//   - [Digest] is a hash over the whole corpus, key included. The runner writes
+//     it on the run line and the publisher refuses a record whose digest no
+//     longer matches the corpus at HEAD.
+//
+// The corpus itself is on every list and no failure here can ever name it: the
+// only packages that import this one from inside it are its own test variant
+// and the binary built from that, and [importersOf] leaves both out, so the
+// load below never asks about either. It is listed because these maps are also
+// the permission a failure prints, and that sentence should name every package
+// that may read rather than only the ones a failure could name. The publisher
+// is listed for the same reason before it exists: the entry is the decision,
+// not the evidence of one.
+var keyAccessors = map[string]map[string]string{
+	"Keys": {
+		corpusPath:    "the corpus itself, whose own gate is written against the key",
+		scorerPath:    "the scorer",
+		publisherPath: "the results publisher",
+		ledgerPath:    "the breadth ledger",
+		fakePath:      "the fake provider, which replays a key and whose rows the publisher refuses",
+	},
+	"StepCount": {
+		corpusPath: "the corpus itself",
+		runnerPath: "the runner, which bounds an attempt's turns by the steps its case declares",
+	},
+	"Digest": {
+		corpusPath:    "the corpus itself",
+		runnerPath:    "the runner, which writes the digest on the run line",
+		publisherPath: "the results publisher, which refuses a record the corpus has moved under",
+	},
 }
 
 // TestAccess_OnlyTheSanctionedPackagesReadTheKey is the boundary.
 //
 // The unexported key field closes the machine half of the leak, and this is
 // what keeps it closed as the run path grows: a builder, a repair message or a
-// simulated result derived from the key would have to name [Keys] to get one,
-// and naming it anywhere but in the five packages above fails here.
+// simulated result derived from the key would have to name one of the
+// accessors above to get one, and naming it outside that accessor's own list
+// fails here.
 //
 // It loads the whole module with the e2e tag and with test variants, because
 // the runner and its provider adapters exist only behind that tag and a
@@ -87,13 +122,45 @@ func TestAccess_OnlyTheSanctionedPackagesReadTheKey(t *testing.T) {
 		t.Fatalf("type-checking the packages that import the corpus: %v", err)
 	}
 	for _, pkg := range typed {
-		for _, position := range keyReferences(pkg) {
-			if _, sanctioned := keyReaders[packagePath(pkg)]; sanctioned {
+		for _, read := range keyReferences(pkg) {
+			if _, sanctioned := keyAccessors[read.accessor][packagePath(pkg)]; sanctioned {
 				continue
 			}
-			t.Errorf("%s reads the answer key at %s: only %s may, and adding one is a decision to "+
-				"be made in the plan rather than in an import", packagePath(pkg), position, sanctionedList())
+			t.Errorf("%s reads the answer key through %s at %s: only %s may, and adding one is a "+
+				"decision to be made in the plan rather than in an import",
+				packagePath(pkg), read.accessor, read.position, sanctionedList(read.accessor))
 		}
+	}
+}
+
+// TestKeyAccessors_NameEveryAccessorDerivedFromAnAnswer keeps the boundary from
+// going stale as this package grows.
+//
+// The map above is written in identifiers, so an accessor added or renamed and
+// not named there is a door with no lock on it and nothing would say so. The
+// values here are the functions themselves rather than their names, so a rename
+// stops this file compiling and the decision has to be taken again; the list
+// itself is still written by hand, which is the part a reader has to keep
+// honest.
+func TestKeyAccessors_NameEveryAccessorDerivedFromAnAnswer(t *testing.T) {
+	derived := map[string]any{"Keys": Keys, "StepCount": StepCount, "Digest": Digest}
+	for name := range keyAccessors {
+		if _, exists := derived[name]; !exists {
+			t.Errorf("keyAccessors holds %q, which this package no longer has: the boundary is "+
+				"guarding a name nothing answers to", name)
+		}
+	}
+	for name := range derived {
+		t.Run(name, func(t *testing.T) {
+			readers, watched := keyAccessors[name]
+			if !watched {
+				t.Fatalf("%s is derived from an answer and no list says who may call it", name)
+			}
+			if _, listed := readers[corpusPath]; !listed {
+				t.Errorf("%s is not readable by the corpus itself, whose own gate is written "+
+					"against the key", name)
+			}
+		})
 	}
 }
 
@@ -129,32 +196,45 @@ func packagePath(pkg *packages.Package) string {
 	return path
 }
 
-// keyReferences returns the positions at which a package names the corpus's
-// key accessor. It reads the type checker's record rather than the text, so an
-// import alias and a dot import are seen the same way a compiler sees them.
-func keyReferences(pkg *packages.Package) []string {
-	var positions []string
+// keyRead is one mention of an answer-derived accessor: which one, and where.
+type keyRead struct {
+	accessor string
+	position string
+}
+
+// keyReferences returns the answer-derived accessors a package names, and
+// where. It reads the type checker's record rather than the text, so an import
+// alias and a dot import are seen the same way a compiler sees them.
+func keyReferences(pkg *packages.Package) []keyRead {
+	var reads []keyRead
 	for _, file := range pkg.Syntax {
 		ast.Inspect(file, func(node ast.Node) bool {
 			identifier, isIdentifier := node.(*ast.Ident)
-			if !isIdentifier || identifier.Name != "Keys" {
+			if !isIdentifier {
+				return true
+			}
+			if _, watched := keyAccessors[identifier.Name]; !watched {
 				return true
 			}
 			used, isUsed := pkg.TypesInfo.Uses[identifier].(*types.Func)
 			if !isUsed || used.Pkg() == nil || used.Pkg().Path() != corpusPath {
 				return true
 			}
-			positions = append(positions, pkg.Fset.Position(identifier.Pos()).String())
+			reads = append(reads, keyRead{
+				accessor: identifier.Name,
+				position: pkg.Fset.Position(identifier.Pos()).String(),
+			})
 			return true
 		})
 	}
-	return positions
+	return reads
 }
 
-// sanctionedList spells the sanctioned readers for a failure message.
-func sanctionedList() string {
+// sanctionedList spells one accessor's sanctioned readers for a failure
+// message.
+func sanctionedList(accessor string) string {
 	var listed []string
-	for path, why := range keyReaders {
+	for path, why := range keyAccessors[accessor] {
 		listed = append(listed, path+" ("+why+")")
 	}
 	slices.Sort(listed)

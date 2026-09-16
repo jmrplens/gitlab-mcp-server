@@ -8,10 +8,11 @@
 // holds a stimulus and its key in one value with the key unexported, so the
 // only way a prompt could carry the answer is for a run to look one up and
 // write it in; this is the file where such a lookup would live, so
-// stimulus_test.go parses it and fails on any mention of modelcorpus.Keys.
-// That is a second lock on a door the corpus's own boundary test already
-// bolts, and it is worth having because this is the one file whose output is
-// sent to a provider.
+// stimulus_test.go parses it and fails on any mention of modelcorpus.Keys or
+// modelcorpus.StepCount, the two accessors that answer about a key. That is a
+// second lock on a door the corpus's own boundary test already bolts, and it
+// is worth having because this is the one file whose output is sent to a
+// provider.
 //
 // A fact has several spellings, and the difference between what is rendered
 // and what is compared is deliberate. A project is a numeric id and a path,

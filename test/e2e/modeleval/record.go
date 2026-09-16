@@ -137,6 +137,19 @@ func (r *recorder) RunID() string {
 	return r.run.RunID
 }
 
+// runLine returns the run line as it stands.
+//
+// It is what a reader joining an attempt to its run needs before the shard has
+// been written, and the only reader is the live verdict the runner logs as
+// each attempt ends: the tier a catalog is read at is on the run line and on
+// nothing else. It hands back a copy rather than a pointer, so a reader cannot
+// replace a field of the line the shard is going to hold.
+func (r *recorder) runLine() modelrecord.Run {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.run
+}
+
 // editionName spells what the instance reported about itself.
 //
 // It is the version endpoint's own flag and not the tier: an enterprise image
