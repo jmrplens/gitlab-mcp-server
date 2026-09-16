@@ -1,9 +1,9 @@
 //go:build e2e
 
-// hook.go reads what GitLab recorded about a webhook's deliveries, which
-// client-go offers no method for: the events endpoint is reached through the
-// SDK's own request plumbing, the way the server reaches an endpoint the SDK
-// has no wrapper for.
+// hook.go builds a project webhook and reads what GitLab recorded about a
+// webhook's deliveries, the second of which client-go offers no method for:
+// the events endpoint is reached through the SDK's own request plumbing, the
+// way the server reaches an endpoint the SDK has no wrapper for.
 
 package fixture
 
@@ -18,6 +18,66 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/test/e2e/internal/harness"
 )
+
+// HookReceiverPath is where the fixture service answers a delivery. A hook
+// fixture points at it so that a case asking GitLab to test the hook gets a
+// delivery rather than a connection refused.
+const HookReceiverPath = "/hook"
+
+// ProjectHook is a webhook a builder added to a project.
+type ProjectHook struct {
+	// ID is what the hook actions take.
+	ID int64
+	// URL is where GitLab was told to deliver.
+	URL string
+}
+
+// NewProjectHook adds a push-and-merge-request webhook to the project,
+// pointing at the fixture service, and registers its deletion.
+func NewProjectHook(e *harness.Env, project Project) ProjectHook {
+	e.T.Helper()
+
+	url := ServiceURL(e, HookReceiverPath)
+	hook, err := retryTransient(e, "create project hook", createRetries, func() (ProjectHook, error) {
+		return createProjectHook(e.Ctx, e.Client(), project.ID, url)
+	})
+	if err != nil {
+		e.T.Fatalf("adding a webhook to project %d: %v", project.ID, err)
+	}
+
+	e.Defer(fmt.Sprintf("project hook %d", hook.ID), func(ctx context.Context) error {
+		ctx, cancel := withCleanupTimeout(ctx)
+		defer cancel()
+		return deleteProjectHook(ctx, e.Client(), project.ID, hook.ID)
+	})
+	return hook
+}
+
+// createProjectHook asks GitLab for the hook.
+//
+// SSL verification is off because the fixture service speaks plain HTTP, and
+// GitLab refuses to deliver to an unverifiable endpoint with it on.
+func createProjectHook(ctx context.Context, client *gitlabclient.Client, projectID int64, url string) (ProjectHook, error) {
+	created, _, err := client.GL().Projects.AddProjectHook(projectID, &gl.AddProjectHookOptions{
+		URL:                   new(url),
+		PushEvents:            new(true),
+		MergeRequestsEvents:   new(true),
+		EnableSSLVerification: new(false),
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return ProjectHook{}, err
+	}
+	return ProjectHook{ID: created.ID, URL: created.URL}, nil
+}
+
+// deleteProjectHook removes the hook and tolerates one a case deleted.
+func deleteProjectHook(ctx context.Context, client *gitlabclient.Client, projectID, hookID int64) error {
+	_, err := client.GL().Projects.DeleteProjectHook(projectID, hookID, gl.WithContext(ctx))
+	if err != nil && !IsStatus(err, http.StatusNotFound) {
+		return fmt.Errorf("deleting hook %d of project %d: %w", hookID, projectID, err)
+	}
+	return nil
+}
 
 // hookEventWait bounds the wait for a delivery to be recorded: GitLab
 // delivers a test event through Sidekiq, and the fixture service answers
