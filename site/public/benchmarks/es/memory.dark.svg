@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500" role="img" aria-label="Memoria residente por superficie de herramientas. stdio mantiene un catálogo por proceso, HTTP uno por configuración compartido por todas las credenciales. Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906081503-18bed59da189 (18bed59d), 2026-09-06.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500" role="img" aria-label="Memoria residente por superficie de herramientas. stdio mantiene un catálogo por proceso, HTTP uno por configuración compartido por todas las credenciales. 16 CPU lógicas, Linux 6.12.105-production+truenas, 2026-09-06">
 <title>Memoria residente por superficie de herramientas</title>
 <rect width="900" height="500" fill="#0d1117"/>
 <text x="30" y="30" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="17" font-weight="600" fill="#e6edf3">Memoria residente por superficie de herramientas</text>
@@ -20,7 +20,7 @@
 <text x="68" y="96.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="11" text-anchor="end" fill="#8b949e">600</text>
 <text x="18" y="248.0" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#8b949e" text-anchor="middle" transform="rotate(-90 18 248.0)">Conjunto residente (MiB)</text>
 <text x="473.0" y="446" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" text-anchor="middle" fill="#8b949e">superficie de herramientas</text>
-<text x="30" y="488" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" fill="#8b949e">Medido en Intel(R) Core(TM) i5-14400, 16 CPU lógicas, linux/amd64, go1.27.1. Compilación 2.7.6-0.20260906081503-18bed59da189 (18bed59d), 2026-09-06.</text>
+<text x="30" y="488" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" fill="#8b949e">16 CPU lógicas, Linux 6.12.105-production+truenas, 2026-09-06</text>
 <rect x="106.1" y="348.8" width="66.8" height="55.2" fill="#a78bfa"/>
 <text x="139.5" y="344.8" font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="middle" fill="#e6edf3">106</text>
 <rect x="174.9" y="347.8" width="66.8" height="56.2" fill="#fc8a3d"/>

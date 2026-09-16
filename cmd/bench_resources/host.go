@@ -181,19 +181,49 @@ func (h HostInfo) describe(l labels) string {
 	return strings.Join(parts, ", ")
 }
 
-// describeShort renders the host for a figure's bottom edge: the processor,
-// how many threads it has, the platform and the toolchain.
+// describeShort renders the host for a figure's bottom edge: how many logical
+// processors it has, and the operating system and kernel that measured.
 //
-// The kernel and the installed memory are dropped rather than abbreviated.
-// Both belong in the sentence under the measurements, which has the width for
-// them; on a chart they would push the build off the canvas, and neither
-// answers the question a chart read on its own raises, which is what machine
-// and what build.
+// Everything else the full sentence carries is dropped rather than
+// abbreviated. The processor count is here because the figures report
+// processor milliseconds per call, which cannot be read without it, and the
+// kernel because it is the layer that reported the resident set. The processor
+// model, the architecture, the installed memory and the toolchain are detail
+// about the machine rather than about the measurement, and they belong in the
+// sentence under the measurements, which has the width for them.
 func (h HostInfo) describeShort(l labels) string {
-	parts := []string{h.CPUModel}
+	var parts []string
 	if h.CPUs > 0 {
 		parts = append(parts, strconv.Itoa(h.CPUs)+" "+l.HostCPUs)
 	}
-	parts = append(parts, h.OS+"/"+h.Arch, h.GoVersion)
+	parts = append(parts, joinNonEmpty(" ", osLabel(h.OS), knownKernel(h.Kernel)))
 	return strings.Join(parts, ", ")
+}
+
+// osLabel writes an operating system the way a reader does, since the short
+// description puts the kernel release beside it and "linux 6.12.105" reads as
+// half a sentence. macOS is spelled Darwin here on purpose: what sits beside
+// it is `uname -r`, which reports the Darwin release rather than the macOS
+// version, and pairing the two spellings would state a version the machine
+// never had. Anything else is printed as GOOS recorded it.
+func osLabel(goos string) string {
+	switch goos {
+	case "linux":
+		return "Linux"
+	case "darwin":
+		return "Darwin"
+	case "windows":
+		return "Windows"
+	default:
+		return goos
+	}
+}
+
+// knownKernel drops a kernel release nothing could read, so a figure says
+// "Windows" rather than "Windows unknown".
+func knownKernel(kernel string) string {
+	if kernel == "unknown" {
+		return ""
+	}
+	return kernel
 }

@@ -5,7 +5,9 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -121,6 +123,154 @@ func TestRenderLines_PublishedFigure_HasTheRequiredParts(t *testing.T) {
 				t.Errorf("the figure does not contain %q", want)
 			}
 		})
+	}
+}
+
+// TestLinearXTicks_ThinnedToWhatTheWidthCarries verifies a linear axis labels
+// every whole number it has room for and no more, and always keeps the two
+// counts a reader looks for, the first and the last.
+//
+// The credential ramp is the case this was written against: sixty-four points
+// across a 794-pixel plot leave 12.6 pixels per label while two digits need
+// about fourteen, so the published axis read as one continuous number. The
+// assertion is on the gap rather than on a stride, because the stride that
+// fits is a property of the canvas rather than a number worth pinning.
+func TestLinearXTicks_ThinnedToWhatTheWidthCarries(t *testing.T) {
+	tests := []struct {
+		name     string
+		extent   lineExtent
+		wantSome []float64
+	}{
+		// Eight credentials: every one of them fits.
+		{name: "a short ramp keeps every point", extent: lineExtent{minX: 1, maxX: 8}, wantSome: []float64{1, 2, 3, 4, 5, 6, 7, 8}},
+		{name: "the published ramp is thinned", extent: lineExtent{minX: 1, maxX: 64}, wantSome: []float64{1, 5, 60, 64}},
+		{name: "a thousand points still reads", extent: lineExtent{minX: 1, maxX: 1000}, wantSome: []float64{1, 1000}},
+		{name: "one point", extent: lineExtent{minX: 3, maxX: 3}, wantSome: []float64{3}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ticks := linearXTicks(tc.extent)
+			if ticks[0] != tc.extent.minX || ticks[len(ticks)-1] != tc.extent.maxX {
+				t.Errorf("ticks run %v..%v, want the first and the last point kept", ticks[0], ticks[len(ticks)-1])
+			}
+			for _, want := range tc.wantSome {
+				if !slices.Contains(ticks, want) {
+					t.Errorf("ticks %v do not label %v", ticks, want)
+				}
+			}
+			if tc.extent.maxX == tc.extent.minX {
+				return
+			}
+			perUnit := float64(plotW) / (tc.extent.maxX - tc.extent.minX)
+			for i := 1; i < len(ticks); i++ {
+				gap := (ticks[i] - ticks[i-1]) * perUnit
+				widest := textWidth(fmt.Sprintf("%.0f", tc.extent.maxX), xTickFontSize)
+				if gap < widest {
+					t.Errorf("labels %v and %v are %.1f px apart, closer than the %.1f px a label takes",
+						ticks[i-1], ticks[i], gap, widest)
+				}
+			}
+		})
+	}
+}
+
+// TestPlaceEndLabels_SeparatesWhatWouldOverprint verifies the values drawn
+// beside the last point of each line are spread when they collide, left alone
+// when they cannot collide, and dropped when the plot has no room.
+//
+// series-latency is the case: six lines finishing between 1791 and 16559 ms
+// on a log axis put all six labels within seventy pixels, and the published
+// figure carried them written over one another. The numbers the issue that
+// reported it quotes are themselves misreadings of that smudge, which is the
+// best evidence there is that they could not be read.
+func TestPlaceEndLabels_SeparatesWhatWouldOverprint(t *testing.T) {
+	const x = 800
+
+	t.Run("a crowded group is spread around where it sat", func(t *testing.T) {
+		crowded := []endLabel{
+			{x: x, y: 130, width: 30, text: "16559"},
+			{x: x, y: 134, width: 26, text: "8857"},
+			{x: x, y: 137, width: 26, text: "6808"},
+			{x: x, y: 139, width: 26, text: "4974"},
+		}
+		placed := placeEndLabels(crowded)
+		if len(placed) != len(crowded) {
+			t.Fatalf("placed %d of %d labels, want all of them: the plot has room", len(placed), len(crowded))
+		}
+		assertEndLabelsSeparated(t, placed)
+		assertEndLabelsInsideThePlot(t, placed)
+		// Spread around where they wanted to be rather than hung below the
+		// first, or every label but one ends up sitting on the line it
+		// belongs to.
+		if placed[0].y >= 130 {
+			t.Errorf("the topmost label stayed at %.1f, so the group was not centered on itself", placed[0].y)
+		}
+	})
+
+	// The processor-time figure is this case: two lines a hair apart along the
+	// bottom of the plot, where spreading them would push the lower one under
+	// the axis.
+	t.Run("a group along the bottom is lifted back inside", func(t *testing.T) {
+		const floor = padT + plotH
+		got := placeEndLabels([]endLabel{
+			{x: x, y: floor - 2, width: 22, text: "9.18"},
+			{x: x, y: floor - 1, width: 22, text: "8.33"},
+		})
+		if len(got) != 2 {
+			t.Fatalf("placed %d of 2 labels, want both: the plot has room above them", len(got))
+		}
+		assertEndLabelsSeparated(t, got)
+		assertEndLabelsInsideThePlot(t, got)
+	})
+
+	t.Run("labels at different counts are left alone", func(t *testing.T) {
+		apart := []endLabel{{x: 300, y: 200, width: 26, text: "one"}, {x: 800, y: 201, width: 26, text: "two"}}
+		got := placeEndLabels(apart)
+		if len(got) != 2 || got[0].y != 200 || got[1].y != 201 {
+			t.Errorf("placed = %+v, want both where they were: their extents do not overlap", got)
+		}
+	})
+
+	t.Run("more labels than the plot can hold", func(t *testing.T) {
+		var many []endLabel
+		for i := range 40 {
+			many = append(many, endLabel{x: x, y: float64(padT + i), width: 20, text: "v"})
+		}
+		got := placeEndLabels(many)
+		if len(got) == 0 || len(got) == len(many) {
+			t.Fatalf("placed %d of %d, want some dropped and some kept", len(got), len(many))
+		}
+		assertEndLabelsInsideThePlot(t, got)
+	})
+
+	t.Run("nothing to place", func(t *testing.T) {
+		if got := placeEndLabels(nil); len(got) != 0 {
+			t.Errorf("placeEndLabels(nil) = %+v, want nothing", got)
+		}
+	})
+}
+
+// assertEndLabelsSeparated fails when two labels of one placement are closer
+// than the pitch a value needs to be read on its own, which is the whole
+// property the placement exists for. The labels come back in ascending y, so
+// neighbors are the only pair that can collide.
+func assertEndLabelsSeparated(t *testing.T, placed []endLabel) {
+	t.Helper()
+	for i := 1; i < len(placed); i++ {
+		if gap := placed[i].y - placed[i-1].y; gap < endLabelPitch {
+			t.Errorf("%q and %q are %.1f apart, want at least %v", placed[i-1].text, placed[i].text, gap, endLabelPitch)
+		}
+	}
+}
+
+// assertEndLabelsInsideThePlot fails when a label that was kept sits outside
+// the plot area, where it would be drawn over the legend or under the axis.
+func assertEndLabelsInsideThePlot(t *testing.T, placed []endLabel) {
+	t.Helper()
+	for _, label := range placed {
+		if label.y < padT || label.y > padT+plotH {
+			t.Errorf("a kept label sits at %.1f, outside the plot [%d, %d]", label.y, padT, padT+plotH)
+		}
 	}
 }
 
