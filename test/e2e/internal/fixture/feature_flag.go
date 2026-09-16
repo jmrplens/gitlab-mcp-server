@@ -12,6 +12,8 @@ package fixture
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 
@@ -30,6 +32,14 @@ const (
 	featureFlagScope        = "*"
 )
 
+// What a fixture flag is called. The prefix is a literal and the rest is a
+// hash, which together are fifteen characters whatever name they were built
+// from.
+const (
+	featureFlagNamePrefix     = "flag-"
+	featureFlagNameHashLength = 10
+)
+
 // ProjectFeatureFlag is a feature flag a builder created on a project.
 type ProjectFeatureFlag struct {
 	// Name is how every feature flag action addresses it.
@@ -43,7 +53,7 @@ type ProjectFeatureFlag struct {
 func NewProjectFeatureFlag(e *harness.Env, project Project) ProjectFeatureFlag {
 	e.T.Helper()
 
-	name := e.Name("flag")
+	name := featureFlagNameFrom(e.Name("flag"))
 	flag, err := retryTransient(e, "create feature flag "+name, createRetries, func() (ProjectFeatureFlag, error) {
 		return createProjectFeatureFlag(e.Ctx, e.Client(), project.ID, name)
 	})
@@ -57,6 +67,22 @@ func NewProjectFeatureFlag(e *harness.Env, project Project) ProjectFeatureFlag {
 		return deleteProjectFeatureFlag(ctx, e.Client(), project.ID, flag.Name)
 	})
 	return flag
+}
+
+// featureFlagNameFrom spells a flag name GitLab accepts out of a run-scoped
+// one: the literal prefix and a hash of the name it was given.
+//
+// GitLab validates a project feature flag name as two to sixty-three
+// characters matching `\A[a-z]([-_a-z0-9]*[a-z0-9])?\z`, and a run-scoped
+// name is longer than that before a test has been named: the run ID alone is
+// up to fifty-one characters, and under a nested subtest the whole name
+// passes ninety, so every create would be refused as too long. Hashing keeps
+// two flags of one project apart, which is all the uniqueness a flag needs,
+// since a flag is unique within its project and it is the project's own name
+// that carries the run ID the sweep matches on.
+func featureFlagNameFrom(name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return featureFlagNamePrefix + hex.EncodeToString(sum[:])[:featureFlagNameHashLength]
 }
 
 // createProjectFeatureFlag asks GitLab for the flag.

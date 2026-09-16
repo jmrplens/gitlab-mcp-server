@@ -14,6 +14,7 @@ package fixture
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -69,16 +70,23 @@ func allowJobTokenProject(ctx context.Context, client *gitlabclient.Client, sour
 		return JobTokenScope{}, fmt.Errorf("switching the job token scope of project %d on: %w", sourceID, err)
 	}
 
-	_, _, err := client.GL().JobTokenScope.AddProjectToJobScopeAllowList(sourceID,
+	_, _, addErr := client.GL().JobTokenScope.AddProjectToJobScopeAllowList(sourceID,
 		&gl.JobTokenInboundAllowOptions{TargetProjectID: &targetID}, gl.WithContext(ctx))
-	// An entry a previous attempt of this retry already added is refused as a
-	// conflict, and is what the caller asked for.
-	if err != nil && !IsStatus(err, http.StatusConflict) {
-		return JobTokenScope{}, fmt.Errorf("adding project %d to the allowlist of project %d: %w", targetID, sourceID, err)
-	}
-
+	// A refused add is not judged here, because the refusal a retried attempt
+	// gets is not a status anything can match on: GitLab answers an entry a
+	// previous attempt already added with 400 and "This project is already in
+	// the job token allowlist.", since the endpoint hands the service's
+	// message to bad_request! rather than reporting a conflict. The read-back
+	// decides instead, which is the question the builder actually has: an
+	// allowlist holding the target is what the caller asked for however the
+	// add ended, and one that does not carries the add's own refusal, which
+	// is what names the cause.
 	if confirmErr := confirmJobTokenAllowlist(ctx, client, sourceID, targetID); confirmErr != nil {
-		return JobTokenScope{}, confirmErr
+		if addErr == nil {
+			return JobTokenScope{}, confirmErr
+		}
+		return JobTokenScope{}, fmt.Errorf("adding project %d to the allowlist of project %d: %w",
+			targetID, sourceID, errors.Join(addErr, confirmErr))
 	}
 	return JobTokenScope{SourceProjectID: sourceID, TargetProjectID: targetID}, nil
 }

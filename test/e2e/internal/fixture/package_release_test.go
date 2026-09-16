@@ -82,11 +82,19 @@ const publishPath = "/api/v4/projects/9/packages/generic/" + PackageName + "/" +
 // TestPublishPackage_Published_ReadsTheRegistryForTheID checks the read-back
 // that turns an upload into a fixture: the publish answers about the file, and
 // every package action takes the package's ID.
+//
+// The registry it reads holds three packages on purpose. One is another
+// package entirely, and one carries the fixture's own name under a version
+// nothing here published, which is the registry a case that published a
+// second version of the same package leaves behind: a read-back matching on
+// the name alone would hand that one back and every later action would
+// address the wrong package.
 func TestPublishPackage_Published_ReadsTheRegistryForTheID(t *testing.T) {
 	stub, client := newStubGitLab(t)
 	stub.answers(http.MethodPut, publishPath, stubCreated(map[string]any{"file_name": "gitlab-mcp-server-linux-amd64.txt"}))
 	stub.answers(http.MethodGet, "/api/v4/projects/9/packages", stubOK([]any{
 		map[string]any{"id": 2, "name": "something-else", "version": "9.9.9"},
+		map[string]any{"id": 8, "name": PackageName, "version": "0.0.9"},
 		map[string]any{"id": 17, "name": PackageName, "version": PackageVersion},
 	}))
 
