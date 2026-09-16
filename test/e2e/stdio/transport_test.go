@@ -60,7 +60,7 @@ func TestStdout_CarriesNothingButJSONRPC(t *testing.T) {
 func TestStderr_TakesTheLogsAndStdoutDoesNot(t *testing.T) {
 	gitlab := startFakeGitLab(t)
 	env := baseEnv(gitlab.URL)
-	env["LOG_LEVEL"] = "debug"
+	env["GITLAB_MCP_LOG_LEVEL"] = "debug"
 	s := startSession(t, env)
 
 	got := s.call(t, request(1, "tools/list", ""))
@@ -138,7 +138,7 @@ func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
 // present, and only a parser has to choose between them.
 func TestStderr_LogLinesKeepTheirSeverity(t *testing.T) {
 	env := baseEnv(startFakeGitLab(t).URL)
-	env["LOG_LEVEL"] = "debug"
+	env["GITLAB_MCP_LOG_LEVEL"] = "debug"
 	s := startSession(t, env)
 
 	if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
@@ -400,7 +400,7 @@ func TestToolSurface_IsReadFromTheEnvironment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			env := baseEnv(gitlab.URL)
 			if tt.surface != "" {
-				env["TOOL_SURFACE"] = tt.surface
+				env["GITLAB_MCP_TOOL_SURFACE"] = tt.surface
 			}
 			s := startSession(t, env)
 
@@ -427,7 +427,7 @@ func TestReadOnly_RemovesMutationFromTheEnvironment(t *testing.T) {
 	gitlab := startFakeGitLab(t)
 
 	env := baseEnv(gitlab.URL)
-	env["TOOL_SURFACE"] = "individual"
+	env["GITLAB_MCP_TOOL_SURFACE"] = "individual"
 	env["GITLAB_MCP_READ_ONLY"] = "true"
 	s := startSession(t, env)
 
