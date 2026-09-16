@@ -32,9 +32,23 @@ const (
 	e2eBuildTag = "e2e"
 )
 
-// staticPatterns are the packages the gate loads: the runtime packages, and
-// the harness and fixture libraries they consume.
-var staticPatterns = []string{"./" + gitlabTestDir + "/...", "./test/e2e/internal/..."}
+// staticPatterns are the packages the gate loads: the runtime packages, the
+// harness and fixture libraries they consume, and the model evaluation
+// package, which consumes the harness too.
+//
+// test/e2e/modeleval is loaded for one of the two rules alone. It is not under
+// gitlabTestDir, so the scan that judges where a scenario is placed skips it
+// (the !underGitlab branch below), and it deliberately spells no
+// [ActionID]: a model case is neither a scenario nor placed, so it earns no
+// ratchet credit and can never be the reason an action counts as covered. What
+// loading it does do is make it a consumer for [deadExports], which is the
+// only way an export the model harness is the first user of can be seen to
+// have a user at all.
+var staticPatterns = []string{
+	"./" + gitlabTestDir + "/...",
+	"./test/e2e/internal/...",
+	"./test/e2e/modeleval/...",
+}
 
 // placements are the three runtime packages and what each may run.
 const (

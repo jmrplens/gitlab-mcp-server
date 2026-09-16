@@ -113,6 +113,37 @@ func TestSettingsOverlay_ExistingKey_IsLeftAlone(t *testing.T) {
 	}
 }
 
+// TestSetting_ReadsWhatMainResolved_WithoutAnInstance checks the reader a
+// caller with no Env uses.
+//
+// It exists for the callers whose question is about the configuration rather
+// than about GitLab: New runs the bootstrap, which probes the instance, so a
+// test that only wants to know whether a provider key is configured could not
+// ask through an Env without first requiring a GitLab it has no use for. What
+// it must not become is a second source of truth, so it reads the same map
+// Env.Setting reads and the process environment is not it.
+func TestSetting_ReadsWhatMainResolved_WithoutAnInstance(t *testing.T) {
+	previous := state.settings
+	t.Cleanup(func() { state.settings = previous })
+	state.settings = testSettings(map[string]string{"MODELEVAL_EXAMPLE": "resolved"})
+
+	if got := Setting("MODELEVAL_EXAMPLE"); got != "resolved" {
+		t.Errorf("Setting() = %q, want the value Main resolved", got)
+	}
+	if got := Setting("MODELEVAL_NOTHING_SET"); got != "" {
+		t.Errorf("Setting() = %q for a key nothing set, want the empty string", got)
+	}
+
+	// The process environment is deliberately not consulted: the settings are
+	// resolved once, and a dotenv file this run reads must not be able to
+	// configure the harness's own process, since every server child is
+	// launched from an environment built from nothing.
+	t.Setenv("MODELEVAL_ONLY_IN_THE_ENVIRONMENT", "leaked")
+	if got := Setting("MODELEVAL_ONLY_IN_THE_ENVIRONMENT"); got != "" {
+		t.Errorf("Setting() = %q, want the empty string: it reads the resolved settings and not os.Getenv", got)
+	}
+}
+
 // TestRepoRoot_FromThisPackage_FindsTheModuleRoot checks the anchor every path
 // in the harness is resolved from.
 func TestRepoRoot_FromThisPackage_FindsTheModuleRoot(t *testing.T) {

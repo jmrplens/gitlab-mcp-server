@@ -247,6 +247,10 @@ func (inst *instance) credential() credentialFacts {
 // serverConfigFor builds the configuration the binary builds for itself from
 // the same inputs: what the environment said, and what the credential the
 // session runs with can do and can see.
+//
+// The configuration it is given is a normalized one, which is what lets every
+// field be copied across as written: the empty values a caller may leave have
+// already become the defaults the child will apply.
 func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *config.ServerConfig {
 	serverCfg := &config.ServerConfig{
 		GitLabURL:         inst.facts.URL,
@@ -257,7 +261,13 @@ func serverConfigFor(inst *instance, cfg ServerConfig, cred credentialFacts) *co
 		SafeMode:          cfg.Mode == ModeSafe,
 		ExcludeTools:      slices.Clone(cfg.ExcludeTools),
 		TokenScopes:       cred.scopes,
-		MetaParamSchema:   config.DefaultMetaParamSchema,
+		// What the session asked for, which [ServerConfig.normalized] has
+		// already resolved to the binary's own default when it asked for
+		// nothing. It was the default outright until a model was the reader of
+		// these schemas, and an expectation built from the default while the
+		// child served compact would compare the right names against the wrong
+		// surface.
+		MetaParamSchema: string(cfg.MetaParamSchema),
 	}
 	// The same call the binary makes, in the same place: a credential that
 	// cannot write is served a read-only surface whatever the deployment

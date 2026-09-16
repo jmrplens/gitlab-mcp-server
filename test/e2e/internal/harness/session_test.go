@@ -118,6 +118,7 @@ func TestServerConfig_Invalid_IsRefusedWithAReason(t *testing.T) {
 		{name: "scripted with no responder", config: ServerConfig{Elicitation: ElicitationScripted}, want: "needs a Responder"},
 		{name: "unknown transport", config: ServerConfig{Transport: TransportKind("carrier pigeon")}, want: "unknown transport"},
 		{name: "unknown tier pin", config: ServerConfig{Tier: TierPin("enterprise")}, want: "unknown tier pin"},
+		{name: "unknown schema mode", config: ServerConfig{MetaParamSchema: MetaParamSchema("verbose")}, want: "unknown meta parameter-schema mode"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -155,6 +156,11 @@ func TestServerConfig_Key_SeparatesWhatMakesADifferentServer(t *testing.T) {
 		{name: "exclusions", config: ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, url: "https://gitlab.test", token: "token-a"},
 		{name: "elicitation", config: ServerConfig{Elicitation: ElicitationAutoAccept}, url: "https://gitlab.test", token: "token-a"},
 		{name: "tier pin", config: ServerConfig{Tier: TierUltimate}, url: "https://gitlab.test", token: "token-a"},
+		// It changes no tool name, so nothing the served-set check compares
+		// would notice two sessions sharing one process; what the second would
+		// be served is the first's schemas, which is the whole of what this
+		// mode decides.
+		{name: "schema mode", config: ServerConfig{MetaParamSchema: MetaParamSchemaCompact}, url: "https://gitlab.test", token: "token-a"},
 		{name: "instance", config: ServerConfig{}, url: "https://other.test", token: "token-a"},
 		{name: "credential", config: ServerConfig{}, url: "https://gitlab.test", token: "token-b"},
 	}
@@ -249,6 +255,25 @@ func TestServerConfig_ChildVariables_AreTheOnesTheBinaryReads(t *testing.T) {
 			config: ServerConfig{Tier: TierUltimate},
 			want:   map[string]string{"GITLAB_MCP_TIER": "ultimate"},
 		},
+		{
+			// The same rule as the tier, for the same reason: the variable's
+			// absence is what asks the child to apply its own default, and
+			// writing the default here would freeze this harness's idea of
+			// what that default is on the day it was written.
+			name:   "the default schema mode",
+			config: ServerConfig{},
+			want:   map[string]string{"GITLAB_MCP_META_PARAM_SCHEMA": ""},
+		},
+		{
+			name:   "the default schema mode asked for by name",
+			config: ServerConfig{MetaParamSchema: MetaParamSchemaOpaque},
+			want:   map[string]string{"GITLAB_MCP_META_PARAM_SCHEMA": ""},
+		},
+		{
+			name:   "a schema mode that is not the default",
+			config: ServerConfig{MetaParamSchema: MetaParamSchemaFull},
+			want:   map[string]string{"GITLAB_MCP_META_PARAM_SCHEMA": "full"},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -277,6 +302,8 @@ func TestServerConfig_Label_NamesTheShapeWithoutHashes(t *testing.T) {
 		{name: "auto-accepting", config: ServerConfig{Elicitation: ElicitationAutoAccept}, want: "dynamic-default-full-auto-accept"},
 		{name: "private", config: ServerConfig{Private: true}, private: 3, want: "dynamic-default-full-private3"},
 		{name: "pinned tier", config: ServerConfig{Tier: TierPremium}, want: "dynamic-default-full-premium"},
+		{name: "the default schema mode", config: ServerConfig{MetaParamSchema: MetaParamSchemaOpaque}, want: "dynamic-default-full"},
+		{name: "compact schemas", config: ServerConfig{Surface: SurfaceMeta, MetaParamSchema: MetaParamSchemaCompact}, want: "meta-default-full-compact"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
