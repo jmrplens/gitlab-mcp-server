@@ -142,6 +142,53 @@ func waitForPipelineStatus(ctx context.Context, client *gitlabclient.Client, pro
 	return lastStatus, err
 }
 
+// NewPipelineNoWait creates a pipeline on ref and hands it back in whatever
+// status GitLab created it in, without waiting and without a runner.
+//
+// It exists for the cases whose subject is a pipeline that has not finished:
+// canceling one, or deleting one. Those declare no runner, so [NewPipeline]
+// would skip them, and on an instance that does have a runner it would wait
+// for the pipeline the case is about to cancel to finish first.
+//
+// The pipeline goes with the project, so nothing is registered.
+func NewPipelineNoWait(e *harness.Env, project Project, ref string) Pipeline {
+	e.T.Helper()
+
+	pipeline, err := retryTransient(e, "create pipeline", createRetries, func() (Pipeline, error) {
+		created, _, createErr := e.Client().GL().Pipelines.CreatePipeline(project.ID,
+			&gl.CreatePipelineOptions{Ref: new(ref)}, gl.WithContext(e.Ctx))
+		if createErr != nil {
+			return Pipeline{}, createErr
+		}
+		return Pipeline{ID: created.ID, Ref: created.Ref, SHA: created.SHA, Status: created.Status}, nil
+	})
+	if err != nil {
+		e.T.Fatalf("creating a pipeline on %q in project %d: %v", ref, project.ID, err)
+	}
+	return pipeline
+}
+
+// FirstPipelineJobID returns the ID of the first job of the pipeline, which is
+// what a job case addresses.
+//
+// A pipeline with no job yet is not an error: GitLab creates the jobs a moment
+// after the pipeline on a busy instance, and a world whose case is about the
+// pipeline rather than the job is still usable. The zero is the caller's to
+// judge.
+func FirstPipelineJobID(e *harness.Env, project Project, pipelineID int64) int64 {
+	e.T.Helper()
+
+	jobs, _, err := e.Client().GL().Jobs.ListPipelineJobs(project.ID, pipelineID,
+		&gl.ListJobsOptions{}, gl.WithContext(e.Ctx))
+	if err != nil {
+		e.T.Fatalf("listing the jobs of pipeline %d in project %d: %v", pipelineID, project.ID, err)
+	}
+	if len(jobs) == 0 {
+		return 0
+	}
+	return jobs[0].ID
+}
+
 // IsTerminalPipelineStatus reports whether status is one a pipeline never
 // leaves.
 func IsTerminalPipelineStatus(status string) bool {
