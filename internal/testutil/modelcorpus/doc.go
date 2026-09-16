@@ -53,4 +53,15 @@
 // why the numbers are not contiguous: MT-199 and above were renumbered out of
 // a collision, and every identifier a retirement takes out of the corpus stays
 // spent. access_test.go is what holds that.
+//
+// # What a retirement is
+//
+// [Retired] answers what became of an identifier the corpus no longer holds,
+// so a person reading a report from before the move is not left with a number
+// and nothing else. The categories are the survivor rule read backwards: a
+// case survives when every step of its key is a tools/call this server
+// registers, its result comes from the server or from GitLab, and a recipe can
+// build its world. retired.go carries the two classes that could be decided by
+// reading the old corpus; the third needs a builder to have been tried, so its
+// category is declared there and used by the step that tries.
 package modelcorpus

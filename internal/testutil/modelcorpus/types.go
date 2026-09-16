@@ -224,9 +224,29 @@ func project() Arg {
 	return req("project_id", fact(FactProjectPath))
 }
 
+// group is the argument the group-scoped actions take: the group a case works
+// in, satisfied by either spelling the recipe promises for it.
+func group() Arg {
+	return req("group_id", fact(FactGroupPath))
+}
+
+// fullPath is what the GraphQL-backed group actions call the same thing. It is
+// spelled apart from [group] rather than aliased to it, because the two names
+// are different properties of different input schemas and the corpus gate
+// checks each against the schema of the action it sits on.
+func fullPath() Arg {
+	return req("full_path", fact(FactGroupPath))
+}
+
 // fact binds an argument to a value the recipe produced.
 func fact(key string) Truth {
 	return Truth{Fact: key}
+}
+
+// produced binds an argument to a field of an earlier step's result, by the
+// step's 1-based position in the key.
+func produced(step int, field string) Truth {
+	return Truth{Produced: Ref{Step: step, Field: field}}
 }
 
 // literal binds an argument to a value the prompt states verbatim.

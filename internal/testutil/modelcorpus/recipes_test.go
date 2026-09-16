@@ -47,6 +47,63 @@ func auditFacts() map[string]string {
 		FactReleaseTagName:        "v0.0.0-eval",
 		FactRunnerID:              "99",
 		FactSnippetID:             "33",
+
+		// The destructive and licensed worlds. Where the old evaluator
+		// rendered a value for one of these, it is that value; where it
+		// spelled the same thing into the prompt by hand, the value is
+		// what it spelled.
+		FactProjectID:               "123",
+		FactAttestationIID:          "5",
+		FactAuditEventID:            "77",
+		FactAwardID:                 "12",
+		FactBadgeID:                 "8",
+		FactBroadcastMessageID:      "12",
+		FactCommitDiscussionID:      "abc123",
+		FactCommitNoteID:            "999",
+		FactCommitSHA:               "abc1234",
+		FactCustomEmojiID:           "gid://gitlab/CustomEmoji/77",
+		FactDatabaseMigration:       "20260101000000",
+		FactDependencyExportID:      "987",
+		FactDeployKeyID:             "88",
+		FactDeployTokenID:           "66",
+		FactEpicDiscussionID:        "def456",
+		FactEpicIID:                 "12",
+		FactEpicNoteID:              "44",
+		FactExternalStatusCheckID:   "8",
+		FactFeatureFlagName:         "eval_flag",
+		FactFilePath:                "tmp/eval.txt",
+		FactGeoSiteID:               "3",
+		FactGeoSiteName:             "eval-geo",
+		FactGeoSiteURL:              "https://geo.example.com",
+		FactGroupAccessTokenID:      "77",
+		FactHookID:                  "5",
+		FactJobTokenTargetProjectID: "456",
+		FactLDAPProvider:            "ldapmain",
+		FactMemberRoleID:            "44",
+		FactMilestoneIID:            "7",
+		FactMirrorID:                "9",
+		FactModelFileName:           "model.onnx",
+		FactModelFilePath:           "models",
+		FactModelVersionID:          "candidate:5",
+		FactPackageID:               "55",
+		FactPipelineScheduleID:      "12",
+		FactPipelineTriggerID:       "77",
+		FactProjectAccessTokenID:    "77",
+		FactProjectAliasName:        "eval-alias",
+		FactProtectedBranchName:     "release/*",
+		FactProtectedEnvironment:    "production",
+		FactSAMLGroupName:           "Engineering",
+		FactScimUID:                 "external-123",
+		FactServiceAccountID:        "55",
+		FactServiceAccountTokenID:   "66",
+		FactServiceAccountUsername:  "eval-service-account",
+		FactSSHCertificateID:        "44",
+		FactStorageMoveID:           "77",
+		FactTagName:                 "v0.0.0-eval",
+		FactTerraformStateName:      "production",
+		FactUserID:                  "55",
+		FactVulnerabilityID:         "gid://gitlab/Vulnerability/42",
+		FactWikiSlug:                "obsolete-eval",
 	}
 }
 
@@ -149,7 +206,25 @@ func TestWithProjectFacts_GivesEachRecipeItsOwnSlice(t *testing.T) {
 	if got := second[len(second)-1]; got != "two" {
 		t.Errorf("the second slice ends with %q, want two", got)
 	}
-	if len(first) != 4 || first[0] != FactProjectPath {
-		t.Errorf("withProjectFacts(one) = %v, want the three project facts and one more", first)
+	if len(first) != 5 || first[0] != FactProjectPath {
+		t.Errorf("withProjectFacts(one) = %v, want the four project facts and one more", first)
+	}
+}
+
+// TestWithGroupFacts_GivesEachRecipeItsOwnSlice is the same rule for the group
+// half, which exists for the same reason: a recipe that builds a group
+// promises both spellings of it, and spelling that out per recipe is how one
+// of them ends up promising only the path.
+func TestWithGroupFacts_GivesEachRecipeItsOwnSlice(t *testing.T) {
+	first := withGroupFacts("one")
+	second := withGroupFacts("two")
+	if got := first[len(first)-1]; got != "one" {
+		t.Errorf("the first slice ends with %q, want one", got)
+	}
+	if got := second[len(second)-1]; got != "two" {
+		t.Errorf("the second slice ends with %q, want two", got)
+	}
+	if len(first) != 3 || first[0] != FactGroupPath || first[1] != FactGroupID {
+		t.Errorf("withGroupFacts(one) = %v, want both group facts and one more", first)
 	}
 }
