@@ -11,6 +11,7 @@ package fixture
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -84,8 +85,29 @@ type stubGitLab struct {
 	// answered as a 404, which is how a real GitLab answers before the
 	// first delivery on some releases.
 	hookEventAnswers []string
+	// scripted holds the answers the catch-all route gives, keyed by method
+	// and path, consumed one per request with the last one repeating.
+	scripted map[string][]scriptedAnswer
+	// requests records what the catch-all route was sent, in order.
+	requests []stubRequest
 
 	server *httptest.Server
+}
+
+// scriptedAnswer is one answer the stub was told to give.
+type scriptedAnswer struct {
+	status int
+	body   any
+}
+
+// stubRequest is a request the catch-all route answered, as a test reads it
+// back: enough to assert what a builder put on the wire without asserting the
+// exact bytes client-go chose to encode it as.
+type stubRequest struct {
+	Method string
+	Path   string
+	Query  url.Values
+	Body   map[string]any
 }
 
 // newStubGitLab starts a stub and returns it beside a client pointed at it.
@@ -98,6 +120,7 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 		groups:   map[int64]*stubObject{},
 		users:    map[int64]string{},
 		state:    map[string]any{},
+		scripted: map[string][]scriptedAnswer{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects", stub.listProjects)
@@ -116,6 +139,12 @@ func newStubGitLab(t *testing.T) (*stubGitLab, *gitlabclient.Client) {
 	mux.HandleFunc("/api/v4/projects/{id}/milestones/{milestone}", stub.stateAnswer)
 	mux.HandleFunc("/api/v4/groups/{id}/hooks/{hook}/events", stub.hookEvents)
 	mux.HandleFunc("/api/graphql", stub.graphql)
+	// Everything else under the API root is answered from the script. The
+	// routes above are more specific patterns, so ServeMux still prefers
+	// them; this one is what the recipe tests add an endpoint through, and
+	// it keeps the catch-all's rule that an unasked-for request is a bug by
+	// failing the test when nothing is scripted for it.
+	mux.HandleFunc("/api/v4/", stub.scriptedRoute)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("stub GitLab: unexpected %s %s", r.Method, r.URL.Path)
 		http.NotFound(w, r)
@@ -468,6 +497,72 @@ func (s *stubGitLab) hookEvents(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(body))
+}
+
+// answers tells the stub what to answer one method and path with, in order,
+// the last answer repeating.
+func (s *stubGitLab) answers(method, path string, answers ...scriptedAnswer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scripted[method+" "+path] = answers
+}
+
+// recordedRequests returns what the scripted route was sent, in order.
+func (s *stubGitLab) recordedRequests() []stubRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]stubRequest(nil), s.requests...)
+}
+
+// The three shapes an answer takes: a body, an empty success, and a refusal.
+func stubOK(body any) scriptedAnswer { return scriptedAnswer{status: http.StatusOK, body: body} }
+
+func stubCreated(body any) scriptedAnswer {
+	return scriptedAnswer{status: http.StatusCreated, body: body}
+}
+
+func stubNoContent() scriptedAnswer { return scriptedAnswer{status: http.StatusNoContent} }
+
+func stubRefusal(status int, message string) scriptedAnswer {
+	return scriptedAnswer{status: status, body: map[string]string{"message": message}}
+}
+
+// scriptedRoute answers from the script and records what it was sent.
+//
+// A request nothing scripted fails the test rather than answering a plausible
+// empty object: a builder that reached an endpoint its recipe never meant to
+// touch is exactly what these tests are for, and a silent 404 would read as
+// the endpoint being absent.
+func (s *stubGitLab) scriptedRoute(w http.ResponseWriter, r *http.Request) {
+	recorded := stubRequest{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query(), Body: map[string]any{}}
+	if r.Body != nil {
+		if raw, err := io.ReadAll(r.Body); err == nil && json.Valid(raw) {
+			// A body that is a JSON array or scalar decodes into nothing,
+			// which is the empty map the request already carries.
+			_ = json.Unmarshal(raw, &recorded.Body)
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requests = append(s.requests, recorded)
+
+	key := r.Method + " " + r.URL.Path
+	scripted, known := s.scripted[key]
+	if !known || len(scripted) == 0 {
+		s.t.Errorf("stub GitLab: nothing scripted for %s", key)
+		writeError(w, http.StatusNotFound, "404 Not Found")
+		return
+	}
+	answer := scripted[0]
+	if len(scripted) > 1 {
+		s.scripted[key] = scripted[1:]
+	}
+	if answer.status == http.StatusNoContent {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, answer.status, answer.body)
 }
 
 // nextStatus pops the next status of a sequence, keeping the last one.
