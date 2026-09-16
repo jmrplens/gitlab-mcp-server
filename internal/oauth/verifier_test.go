@@ -1751,6 +1751,61 @@ func TestIntrospectToken_RefusedByBothEndpoints_ReportsNoScopesRatherThanAssumin
 	}
 }
 
+// TestNewGitLabVerifier_DuplicateIdentityMember_IsRefusedRatherThanResolved
+// verifies that an identity body naming "id" twice is refused instead of
+// resolved to one of the two.
+//
+// encoding/json v1 keeps the last occurrence and reports nothing, so this body
+// used to admit the token under whichever id the reader happened to keep. The
+// identity is what every later decision is attributed to, and the body comes
+// from whatever instance the request named, which under --allow-any-gitlab-url
+// is a host the caller chose rather than the operator. Refusing is the answer
+// that cannot differ between two readers of one document, and it is available
+// here precisely because this path's failure branch refuses the token: the
+// introspection path's grants, which is why it keeps the old decoder.
+//
+// The control case is what stops this passing for the wrong reason: the same
+// document without the duplicate must still admit.
+func TestNewGitLabVerifier_DuplicateIdentityMember_IsRefusedRatherThanResolved(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		body      string
+		wantAdmit bool
+	}{
+		{name: "duplicate member", body: `{"id":1,"username":"first","id":999}`},
+		{name: "single member", body: `{"id":999,"username":"only"}`, wantAdmit: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			instance := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/user" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(testCase.body))
+			}))
+			t.Cleanup(instance.Close)
+
+			verifier := NewGitLabVerifier(instance.URL, false, 15*time.Minute, nil)
+			info, err := verifier(t.Context(), "a-token",
+				httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+			if admitted := err == nil; admitted != testCase.wantAdmit {
+				t.Fatalf("verifier() err = %v, want admitted=%v", err, testCase.wantAdmit)
+			}
+			if testCase.wantAdmit && info.UserID != "999" {
+				t.Errorf("UserID = %q, want %q", info.UserID, "999")
+			}
+		})
+	}
+}
+
 // TestIntrospectToken_UnreachableInstance_StillAssumesAPI verifies the other
 // half, which is the reason the assumption exists at all.
 //

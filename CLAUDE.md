@@ -248,6 +248,24 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
+### encoding/json/v2: selectively, never as a migration
+
+Go 1.27 has the v2 engine in its baseline, so **every `json.Marshal` here already runs on it** without a line changing and there is no performance case for adopting the API. What the explicit API buys is per-call options, and that is the only reason to reach for it.
+
+**Never migrate a package wholesale to v2 semantics.** Under v2, `omitempty` means "empty in JSON" rather than "the Go zero", so an `int` at 0 and a `bool` at false stop being omitted: measured on this tree, **535 fields** in `internal/tools/` would start appearing in responses (the 834 pointers to a scalar and the 3044 strings would not). That moves the published surface, breaks the golden snapshots, and enlarges what a model pays tokens to read.
+
+**Adopt it one call at a time, with v1's own semantics restored**, so what a valid document decodes to is exactly what it decoded to before and the only thing that changes is the option you named:
+
+```go
+jsonv2.UnmarshalRead(r, out, json.DefaultOptionsV1(), jsontext.AllowDuplicateNames(false))
+```
+
+`internal/oauth.decodeInstanceJSON` is the worked example. It refuses a body that names an object member twice, because encoding/json v1 keeps the last occurrence and reports nothing: an instance answering `{"id":1,"id":999}` used to admit the token under whichever id the reader happened to keep, and the identity is what every later decision is attributed to.
+
+**The condition for using it is the caller's failure branch, not the document's origin.** It belongs where refusing is the safe answer. `fetchIntrospection` in the same file deliberately keeps encoding/json: a nil return there means "the endpoint did not answer", and `introspectToken` treats that as an instance it could not ask and assumes `api`, so refusing an ambiguous body would resolve it to **more** authority than either copy carries. Strictness on a fail-open path is a weakening, and it reads like a hardening, which is what makes it worth writing down.
+
+The package exists because `jsonv2` is in Go 1.27's baseline experiment set, which is the toolchain's default and which nothing here configures. Turning it off is possible and would stop the import compiling, but no workflow, image or script in this repository sets `GOEXPERIMENT` at all, so it is a property of the dependency rather than something to guard against.
+
 ### Fields client-go does not model
 
 A field GitLab sends that client-go's struct does not carry is read from the **captured response** rather than from a request of the handler's own ([ADR-0021](docs/development/adr/adr-0021-captured-response-for-fields-the-sdk-does-not-model.md)): wrap the context with `gitlabclient.WithResponseCapture`, pass it to the SDK call as always, and decode the capture into a small type naming the field as GitLab spells it. The transport hands the SDK the same bytes, so the route, the options, the retries, the pagination and the request inventory stay exactly what client-go makes them; a body that does not decode into the handler's type is an error the handler returns. The `invites` pattern (a `client.GL().NewRequest` of the handler's own) stays for an endpoint client-go has no method for at all. Each such gap is recorded in `docs/development/upstream-bugs.md` with the handler that carries it, since an upstream contribution retires it.
