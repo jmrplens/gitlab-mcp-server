@@ -521,6 +521,7 @@ func renderStats(s *repoStats) string {
 	var b strings.Builder
 
 	b.WriteString("### File counts\n\n")
+	b.WriteString("> Counted over every git-tracked `.go` file, which includes the fixture trees under `cmd/audit_e2e_coverage/testdata` that exist to be read by the coverage audit rather than to run. `docs/development/testing/testing.md` counts the packages `go list` returns instead, so its unit-test figures are lower. Both are correct answers to different questions.\n\n")
 	b.WriteString(docgen.RenderMarkdownTable(
 		[]string{"Category", "Files", "Lines"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight},

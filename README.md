@@ -441,12 +441,14 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ### File counts
 
+> Counted over every git-tracked `.go` file, which includes the fixture trees under `cmd/audit_e2e_coverage/testdata` that exist to be read by the coverage audit rather than to run. `docs/development/testing/testing.md` counts the packages `go list` returns instead, so its unit-test figures are lower. Both are correct answers to different questions.
+
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,295 |     287,587 |
+| Source (`.go`, non-test) |     1,295 |     287,588 |
 | Unit tests (`_test.go`)  |       796 |     472,918 |
 | End-to-end tests         |       386 |      71,871 |
-| **Total**                | **2,477** | **832,376** |
+| **Total**                | **2,477** | **832,377** |
 
 ### Functions
 
