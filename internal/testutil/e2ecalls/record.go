@@ -5,9 +5,10 @@
 package e2ecalls
 
 import (
-	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/shardio"
 )
 
 const (
@@ -40,7 +41,7 @@ const (
 	// never write to the same file and no cross-process locking is needed.
 	ShardPattern = shardPrefix + "*" + shardExt
 
-	// shardPrefix and shardExt bracket the name of a shard. [Read] matches
+	// shardPrefix and shardExt bracket the name of a shard. [IsShard] matches
 	// them directly instead of calling [path/filepath.Match] on ShardPattern,
 	// so it has no pattern error to discard.
 	shardPrefix = "calls-"
@@ -227,32 +228,14 @@ var payloadPresent = map[string]func(Record) bool{
 // A shard is machine-written, so every one of these means the artifact is
 // stale or truncated rather than that a caller made a mistake. Reporting it is
 // what keeps a coverage figure from being computed over lines nobody can read.
+//
+// The rule is [shardio.ValidateEnvelope], shared with every other record built
+// on the same mechanism: the schema, a type the reader knows, and exactly one
+// payload. This package contributes the table it is asked about, which is what
+// makes a line carrying a call and a dispatch together two claims under one
+// type rather than one the reader would half read.
 func (r Record) validate() error {
-	if r.Schema != SchemaVersion {
-		return fmt.Errorf("schema %d is not %d: the shard was written by another version of this package", r.Schema, SchemaVersion)
-	}
-	present, known := payloadPresent[r.Type]
-	if !known {
-		return fmt.Errorf("unknown line type %q", r.Type)
-	}
-	if !present(r) {
-		return fmt.Errorf("line type %q carries no payload", r.Type)
-	}
-	// Exactly one payload is the envelope's contract, and the type naming one
-	// says nothing about the other four: a line carrying a call and a
-	// dispatch together is two claims under one type, and a reader that took
-	// the named half would compute coverage over a record it had only half
-	// read. Machine-written or not, that is a shard to refuse.
-	carried := 0
-	for _, has := range payloadPresent {
-		if has(r) {
-			carried++
-		}
-	}
-	if carried != 1 {
-		return fmt.Errorf("line type %q carries %d payloads, want exactly one", r.Type, carried)
-	}
-	return nil
+	return shardio.ValidateEnvelope(r, r.Schema, SchemaVersion, r.Type, payloadPresent)
 }
 
 // FixtureProfile is what a runtime had available to the test package that ran

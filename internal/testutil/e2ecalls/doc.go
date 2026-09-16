@@ -20,8 +20,17 @@
 // type is what keeps the two halves from drifting, and it can only be shared
 // from a package both may import. internal/testutil cannot be that package: it
 // embeds the pinned GraphQL schema and net/http/httptest, which a command has
-// no use for and would carry anyway. So this package is untagged, imports only
-// the standard library, and holds nothing else.
+// no use for and would carry anyway. So this package is untagged and holds the
+// record and nothing else.
+//
+// The shard mechanism under it is
+// [github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/shardio], which is
+// the only thing this package imports beyond the standard library and is bound
+// by the same two rules: untagged, and never importing testing. What lives here
+// is the content, which lines exist, what each field means and which of them a
+// reader joins on; what lives there is how a line reaches a file and comes
+// back. The two were one package until a second record needed the same
+// mechanism and copied it.
 //
 // Being untagged means it is compiled by an ordinary build, enters make test,
 // the coverage job and Sonar, and is held to the same bar as production code.

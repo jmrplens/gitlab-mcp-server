@@ -90,21 +90,21 @@ func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
 		`{"schema":1,"type":"run","run":{"package":"ee","requirement":"enterprise","edition":"enterprise","tier":"ultimate","run_id":"r","status":"started"}}`,
 	)
 
-	shards, err := ReadShards(root)
+	shardFiles, err := ReadShards(root)
 	if err != nil {
 		t.Fatalf("ReadShards error = %v", err)
 	}
-	if len(shards) != 2 {
-		t.Fatalf("shards = %d, want 2: %+v", len(shards), shards)
+	if len(shardFiles) != 2 {
+		t.Fatalf("shards = %d, want 2: %+v", len(shardFiles), shardFiles)
 	}
-	if shards[0].Path != common || shards[1].Path != ee {
-		t.Errorf("paths = %q, %q; want %q then %q in walk order", shards[0].Path, shards[1].Path, common, ee)
+	if shardFiles[0].Path != common || shardFiles[1].Path != ee {
+		t.Errorf("paths = %q, %q; want %q then %q in walk order", shardFiles[0].Path, shardFiles[1].Path, common, ee)
 	}
-	if len(shards[0].Records) != 2 || shards[0].Records[0].Type != TypeCall || shards[0].Records[1].Type != TypeRun {
-		t.Errorf("common shard = %+v, want its call then its run line", shards[0].Records)
+	if len(shardFiles[0].Records) != 2 || shardFiles[0].Records[0].Type != TypeCall || shardFiles[0].Records[1].Type != TypeRun {
+		t.Errorf("common shard = %+v, want its call then its run line", shardFiles[0].Records)
 	}
-	if len(shards[1].Records) != 1 || shards[1].Records[0].Run == nil || shards[1].Records[0].Run.Package != "ee" {
-		t.Errorf("ee shard = %+v, want the one run line naming ee", shards[1].Records)
+	if len(shardFiles[1].Records) != 1 || shardFiles[1].Records[0].Run == nil || shardFiles[1].Records[0].Run.Package != "ee" {
+		t.Errorf("ee shard = %+v, want the one run line naming ee", shardFiles[1].Records)
 	}
 
 	merged, err := Read(root)
@@ -121,7 +121,8 @@ func TestReadShards_KeepsTheFileBoundaries(t *testing.T) {
 //
 // An empty result would be read as a suite that covered nothing, which is a
 // claim about the server made from a fact about the harness: nothing was
-// recorded because nothing asked for recording.
+// recorded because nothing asked for recording. The variable the refusal names
+// is this package's, which is the half of the message it contributes.
 func TestRead_RefusesADirectoryHoldingNoShard(t *testing.T) {
 	records, err := Read(t.TempDir())
 
@@ -133,105 +134,14 @@ func TestRead_RefusesADirectoryHoldingNoShard(t *testing.T) {
 	}
 }
 
-// TestRead_ReportsADirectoryItCannotWalk verifies that a directory that is not
-// there is reported with its path.
-func TestRead_ReportsADirectoryItCannotWalk(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "never-created")
-
-	_, err := Read(missing)
-
-	if err == nil {
-		t.Fatal("Read error = nil, want an error for a missing directory")
-	}
-	if !strings.Contains(err.Error(), missing) {
-		t.Errorf("Read error = %v, want it to name %s", err, missing)
-	}
-}
-
-// TestRead_ReportsALineItCannotRead verifies that a shard line which is not
-// JSON, or which is JSON the record does not hold together, is reported with
-// the file and the line number.
-//
-// A shard is machine-written, so either means the artifact is stale or
-// truncated. The line number is what makes that diagnosable at all, since a
-// shard has no other landmarks.
-func TestRead_ReportsALineItCannotRead(t *testing.T) {
-	cases := []struct {
-		name    string
-		lines   []string
-		wantErr string
-	}{
-		{
-			name:    "not json",
-			lines:   []string{`{"schema":1,"type":"skip","skip":{"test":"a","reason":"b"}}`, "{"},
-			wantErr: "parse",
-		},
-		{
-			name:    "type without its payload",
-			lines:   []string{`{"schema":1,"type":"call"}`},
-			wantErr: "carries no payload",
-		},
-		{
-			name:    "another schema",
-			lines:   []string{`{"schema":99,"type":"skip","skip":{"test":"a","reason":"b"}}`},
-			wantErr: "schema",
-		},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := writeShard(t, dir, "calls-broken.jsonl", testCase.lines...)
-
-			_, err := Read(dir)
-
-			if err == nil {
-				t.Fatalf("Read error = nil, want one mentioning %q", testCase.wantErr)
-			}
-			if !strings.Contains(err.Error(), testCase.wantErr) {
-				t.Errorf("Read error = %v, want it to mention %q", err, testCase.wantErr)
-			}
-			if !strings.Contains(err.Error(), path) {
-				t.Errorf("Read error = %v, want it to name %s", err, path)
-			}
-		})
-	}
-}
-
-// TestRead_NamesTheLineTheBadRecordIsOn verifies that the error counts lines
-// from one and names the line the bad record is actually on, with a good
-// record and a blank line ahead of it.
-//
-// The number is the whole value of the message: a shard is one line per call
-// and can hold thousands, so an error that names the file and not the line
-// says only that the run is unreadable. A blank line is skipped rather than
-// counted, because the writer ends every line with a newline and the last one
-// therefore reads as empty.
-func TestRead_NamesTheLineTheBadRecordIsOn(t *testing.T) {
-	dir := t.TempDir()
-	writeShard(t, dir, "calls-numbered.jsonl",
-		`{"schema":1,"type":"skip","skip":{"test":"a","reason":"b"}}`,
-		"",
-		`{"schema":1,"type":"skip"}`,
-	)
-
-	_, err := Read(dir)
-
-	if err == nil {
-		t.Fatal("Read error = nil, want one naming the third line")
-	}
-	if !strings.Contains(err.Error(), "line 3") {
-		t.Errorf("Read error = %v, want it to name line 3", err)
-	}
-}
-
 // TestShardPattern_MatchesWhatTheWriterNames verifies that the pattern a
 // reader is told to look for is the one a writer's own file name satisfies,
-// and that isShard agrees with filepath.Match on it.
+// and that IsShard agrees with filepath.Match on it.
 //
-// The two are spelled apart on purpose, the pattern from its prefix and
-// extension and the predicate from the same two constants, so nothing but a
-// test holds them to each other.
+// The three are spelled apart on purpose: the pattern from its prefix and
+// extension, the file name from the pattern the spec hands the mechanism, and
+// the predicate from the same two constants. Nothing but a test holds them to
+// each other.
 func TestShardPattern_MatchesWhatTheWriterNames(t *testing.T) {
 	if ShardPattern != "calls-*.jsonl" {
 		t.Errorf("ShardPattern = %q, want calls-*.jsonl", ShardPattern)
@@ -257,43 +167,7 @@ func TestShardPattern_MatchesWhatTheWriterNames(t *testing.T) {
 	if !matched {
 		t.Errorf("the shard the writer named, %q, does not match ShardPattern %q", name, ShardPattern)
 	}
-	if !isShard(name) {
-		t.Errorf("isShard(%q) = false, want true: it must agree with ShardPattern", name)
-	}
-}
-
-// TestReadShard_ReportsAFileItCannotOpen verifies that a shard that cannot be
-// opened is reported.
-//
-// It is called directly because a walk only offers files it has just listed,
-// so this branch is unreachable through Read on any tree a test can build.
-func TestReadShard_ReportsAFileItCannotOpen(t *testing.T) {
-	_, err := readShard(filepath.Join(t.TempDir(), "calls-missing.jsonl"))
-
-	if err == nil {
-		t.Fatal("readShard error = nil, want an error for a file that is not there")
-	}
-	if !strings.Contains(err.Error(), "open shard") {
-		t.Errorf("readShard error = %v, want it to say the shard could not be opened", err)
-	}
-}
-
-// TestRead_RefusesALineBeyondTheCap verifies that a line longer than the cap is
-// reported rather than skipped.
-//
-// A line silently dropped for being long looks exactly like a call nobody
-// made, and a coverage record that can lose calls quietly is not one anybody
-// should act on.
-func TestRead_RefusesALineBeyondTheCap(t *testing.T) {
-	dir := t.TempDir()
-	writeShard(t, dir, "calls-long.jsonl", strings.Repeat("x", maxShardLine+1))
-
-	_, err := Read(dir)
-
-	if err == nil {
-		t.Fatal("Read error = nil, want an error for a line beyond the cap")
-	}
-	if !strings.Contains(err.Error(), "calls-long.jsonl") {
-		t.Errorf("Read error = %v, want it to name the shard", err)
+	if !IsShard(name) {
+		t.Errorf("IsShard(%q) = false, want true: it must agree with ShardPattern", name)
 	}
 }
