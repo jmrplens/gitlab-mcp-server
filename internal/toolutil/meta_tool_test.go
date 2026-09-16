@@ -4431,7 +4431,6 @@ func TestCoerceSingleStringArraysForSchema_NonStringValue_Skipped(t *testing.T) 
 // that a user decline cancels the action without invoking the handler.
 func TestMakeMetaHandler_DestructiveDeclined_ReturnsCancelled(t *testing.T) {
 	t.Setenv("GITLAB_MCP_YOLO_MODE", "")
-	t.Setenv("YOLO_MODE", "")
 	t.Setenv("AUTOPILOT", "")
 
 	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {

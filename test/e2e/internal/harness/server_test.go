@@ -100,7 +100,7 @@ func environMap(t *testing.T, environ []string) map[string]string {
 func TestChildEnv_ProcessCarriesYoloMode_TheChildNeverDoes(t *testing.T) {
 	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 	t.Setenv("AUTOPILOT", "1")
-	t.Setenv("YOLO_MODE", "yes")
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "yes")
 
 	env := newChildEnv(testSettings(map[string]string{envGitLabURL: "http://gitlab.test", envGitLabToken: "glpat-x"}),
 		t.TempDir(), map[string]string{"AUTOPILOT": "1", "GITLAB_MCP_TOOL_SURFACE": "meta"})

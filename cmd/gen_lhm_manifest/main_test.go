@@ -127,7 +127,7 @@ func TestGenerate_ReportsCapabilityCounts(t *testing.T) {
 // the expected result is unchanged output: reading the environment here would
 // make the committed file depend on the machine that generated it.
 func TestGenerate_DeclaresDefaultDynamicSurface(t *testing.T) {
-	t.Setenv("TOOL_SURFACE", "individual")
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", "individual")
 
 	m := generatedManifest(t, minimalManifest)
 

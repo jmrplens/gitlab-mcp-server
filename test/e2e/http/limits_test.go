@@ -68,11 +68,11 @@ func TestLimit_ToolSurface(t *testing.T) {
 	gitlab := acceptingGitLab(t)
 
 	dynamic := countTools(listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "dynamic"}, "--gitlab-url="+gitlab.url)))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "dynamic"}, "--gitlab-url="+gitlab.url)))
 	meta := countTools(listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "meta"}, "--gitlab-url="+gitlab.url)))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "meta"}, "--gitlab-url="+gitlab.url)))
 	individual := countTools(listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url)))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url)))
 
 	if dynamic != 2 {
 		t.Errorf("dynamic surface advertised %d tools, want 2 (find + execute)", dynamic)
@@ -91,7 +91,7 @@ func TestLimit_ExcludeTools(t *testing.T) {
 	gitlab := acceptingGitLab(t)
 
 	const victim = "gitlab_find_action"
-	srv := startServer(t, map[string]string{"EXCLUDE_TOOLS": victim}, "--gitlab-url="+gitlab.url)
+	srv := startServer(t, map[string]string{"GITLAB_MCP_EXCLUDE_TOOLS": victim}, "--gitlab-url="+gitlab.url)
 
 	body := listTools(t, srv)
 	if strings.Contains(body, `"name":"`+victim+`"`) {
@@ -119,9 +119,9 @@ func TestLimit_ReadOnlyRemovesMutations(t *testing.T) {
 	gitlab := acceptingGitLab(t)
 
 	full := listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url))
 	readOnly := listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url, "--read-only"))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url, "--read-only"))
 
 	if countTools(readOnly) >= countTools(full) {
 		t.Errorf("read-only advertised %d tools against %d for a writable server; nothing was removed",
@@ -143,9 +143,9 @@ func TestLimit_SafeModeKeepsToolsButRefusesToActFor(t *testing.T) {
 	gitlab := acceptingGitLab(t)
 
 	full := countTools(listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url)))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url)))
 	safe := countTools(listTools(t, startServer(t,
-		map[string]string{"TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url, "--safe-mode")))
+		map[string]string{"GITLAB_MCP_TOOL_SURFACE": "individual"}, "--gitlab-url="+gitlab.url, "--safe-mode")))
 
 	if safe != full {
 		t.Errorf("safe mode advertised %d tools against %d; it should keep the surface and intercept the call instead", safe, full)
@@ -173,9 +173,9 @@ func TestLimit_CapabilitySurfaceMinimal(t *testing.T) {
 	}
 
 	full := listResources(startServer(t,
-		map[string]string{"CAPABILITY_SURFACE": "full"}, "--gitlab-url="+gitlab.url))
+		map[string]string{"GITLAB_MCP_CAPABILITY_SURFACE": "full"}, "--gitlab-url="+gitlab.url))
 	minimal := listResources(startServer(t,
-		map[string]string{"CAPABILITY_SURFACE": "minimal"}, "--gitlab-url="+gitlab.url))
+		map[string]string{"GITLAB_MCP_CAPABILITY_SURFACE": "minimal"}, "--gitlab-url="+gitlab.url))
 
 	if minimal >= full {
 		t.Errorf("minimal served %d resources against %d for full; the surface was not reduced", minimal, full)

@@ -478,18 +478,23 @@ make analyze-report                        # generate LLM-consumable report
 
 ### Environment variables
 
-Settings this project defines are read as `GITLAB_MCP_<NAME>`; `config.Getenv`
-and `config.TrimmedGetenv` in `internal/config/env_name.go` resolve both
-spellings, prefer the prefixed one, and record the fallback so `cmd/server`
-can warn once at startup. A new setting is added to `prefixedNames` there and
-read through those helpers, never through `os.Getenv`.
+Settings this project defines are read as `GITLAB_MCP_<NAME>` and under no
+other spelling; `config.Getenv` and `config.TrimmedGetenv` in
+`internal/config/env_name.go` are the one way to read one. A new setting is
+added to `prefixedNames` there and read through those helpers, never through
+`os.Getenv`.
 
 Every variable this server defines carries the prefix, with no exception for
 a name that already began with `GITLAB_`: the switches that did (`GITLAB_TIER`,
 `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `GITLAB_IGNORE_SCOPES`,
-`GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and the old
-spellings keep working until 3.1.0 with the same startup warning, resolved through
-`config.LegacyEnvName`. Only three groups stay bare, because prefixing them
+`GITLAB_SKIP_TLS_VERIFY`) and `YOLO_MODE` were renamed in 2.8.0, and their old
+spellings were removed in 3.1.0. `config.RetiredEnvUses` finds one still set in
+the environment so a deployment is told rather than quietly reconfigured, and
+splits its answer: `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` **refuse startup**,
+because ignoring either in silence serves writes on a deployment that asked to
+be read-only, and every other retired name is a warning. The condition is what
+ignoring one would cost, not where it came from.
+Only three groups stay bare, because prefixing them
 would be wrong rather than churn: `GITLAB_URL` and `GITLAB_TOKEN` (GitLab's own
 convention, and what a user already has in the environment, so they are never
 spelled twice), every `OTEL_*` variable (owned by the OpenTelemetry

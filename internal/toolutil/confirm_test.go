@@ -61,23 +61,25 @@ func TestIsYOLOMode(t *testing.T) {
 		want      bool
 	}{
 		{"nothing set", "", "", "", false},
-		{"YOLO_MODE=true", "", "true", "", true},
-		{"YOLO_MODE=1", "", "1", "", true},
 		{"AUTOPILOT=true", "", "", "true", true},
 		{"AUTOPILOT=yes", "", "", "yes", true},
-		{"old spelling and alias both set", "", "true", "true", true},
-		{"YOLO_MODE=false", "", "false", "", false},
 		{"AUTOPILOT=0", "", "", "0", false},
 		{"GITLAB_MCP_YOLO_MODE=true", "true", "", "", true},
 		{"GITLAB_MCP_YOLO_MODE=false beats an inherited AUTOPILOT=true", "false", "", "true", false},
-		{"GITLAB_MCP_YOLO_MODE=false beats the old YOLO_MODE=true", "false", "true", "", false},
-		{"YOLO_MODE=false beats an inherited AUTOPILOT=true", "", "false", "true", false},
+		// The retired spelling, which 3.1.0 stopped reading. Unlike the two
+		// switches that refuse startup, ignoring this one leaves the server
+		// more protected rather than less: a destructive action goes back to
+		// asking for confirmation, so it is a warning at startup and no more.
+		{"the retired YOLO_MODE=true no longer skips confirmation", "", "true", "", false},
+		{"the retired YOLO_MODE=true does not revive an AUTOPILOT=0", "", "true", "0", false},
+		{"AUTOPILOT still decides when the retired spelling is beside it", "", "false", "true", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// An empty case means the variable is absent, not present and
-			// empty: the prefixed spelling wins whenever it is present, so
-			// leaving it set to "" would hide the old spelling behind it.
+			// empty: IsYOLOMode consults AUTOPILOT only when the prefixed
+			// name is unset, so leaving it present and empty would hide the
+			// alias behind it.
 			for name, value := range map[string]string{
 				"GITLAB_MCP_YOLO_MODE": tt.prefixed,
 				"YOLO_MODE":            tt.yolo,
@@ -127,7 +129,7 @@ func TestHasExplicitConfirm(t *testing.T) {
 // TestConfirmDestructiveAction_YOLOMode verifies that [ConfirmDestructiveAction]
 // returns nil (proceed) when YOLO_MODE is enabled.
 func TestConfirmDestructiveAction_YOLOMode(t *testing.T) {
-	t.Setenv("YOLO_MODE", "true")
+	t.Setenv("GITLAB_MCP_YOLO_MODE", "true")
 
 	result, guardErr := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
 	if guardErr != nil {
@@ -757,10 +759,14 @@ func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
 // --yolo-mode=false writes GITLAB_MCP_YOLO_MODE=false and that has to win.
 // ORing the two variables meant the most specific instruction lost to an
 // inherited one, and a destructive-action bypass that cannot be turned off is
-// a safety setting in name only. The old bare spelling decides the same way,
-// because it is the same setting under its previous name.
+// a safety setting in name only.
+//
+// Only the prefixed name is tried now. The bare spelling used to decide the
+// same way, being the same setting under its previous name, and 3.1.0 stopped
+// reading it: what the table above pins is that it no longer overrides
+// anything, and what this pins is that the name which replaced it still does.
 func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
-	for _, name := range []string{"GITLAB_MCP_YOLO_MODE", "YOLO_MODE"} {
+	for _, name := range []string{"GITLAB_MCP_YOLO_MODE"} {
 		t.Run(name, func(t *testing.T) {
 			// Claim both spellings through t.Setenv so the cleanup restores
 			// them, then remove them: a present-but-empty prefixed name is

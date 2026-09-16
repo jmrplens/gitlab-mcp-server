@@ -411,6 +411,11 @@ func main() {
 	})
 	slog.SetDefault(slog.New(baseLogHandler))
 
+	if !reportRetiredEnvNames() {
+		exitProcess(1)
+		return
+	}
+
 	// Held back until here: the transport had to be settled before the handler
 	// that formats this could be built, and the operator asked for JSON.
 	transportChoice.explain()
@@ -861,7 +866,6 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	toolutil.SetActionTimeout(cfg.ActionTimeout)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
-	logDeprecatedEnvNames()
 	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
 
@@ -1350,7 +1354,6 @@ func runStdio(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
-	logDeprecatedEnvNames()
 
 	var startupErr error
 	startupDone := make(chan struct{})
@@ -3471,22 +3474,36 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 	)
 }
 
-// logDeprecatedEnvNames warns once per unprefixed variable this process
-// actually read, naming its GITLAB_MCP_ replacement.
+// reportRetiredEnvNames says what this environment still sets under a name
+// 3.1.0 removed, and reports whether startup may continue.
 //
-// Called from each mode rather than from a shared entry point, and as late as
-// startup allows: the record fills up as configuration is read, and the last
-// of those reads happens while the MCP server itself is being built. Warning
-// any earlier would report a subset and call it the whole list.
+// It runs once, early, from main alone. Its predecessor warned about what had
+// been read and so had to run as late as startup allowed, when the last
+// configuration read was done. Nothing reads these names now, so the answer is
+// the same at any moment and the earliest one is the useful one: a deployment
+// that is about to be refused should be refused before it builds a catalog.
 //
-// The message carries the whole warning and no structured attribute repeats
-// it: each line already names the variable, its replacement and the deadline,
-// and a hint saying the same thing in different words is what teaches an
-// operator to stop reading these.
-func logDeprecatedEnvNames() {
-	for _, warning := range config.DeprecatedEnvWarnings() {
-		slog.Warn(warning) //#nosec G706 -- the text is built by config from its own compile-time name list
+// It runs after the dotenv files are loaded, which is the other half of being
+// correct here: a name set in ~/.gitlab-mcp-server.env configures a deployment
+// exactly as much as one exported in the shell, and a check placed above that
+// load would see neither.
+//
+// Refusing is reserved for the two that take capability away. A deployment
+// carrying GITLAB_READ_ONLY=true and nothing else asked to serve reads, and
+// starting anyway would serve writes on the strength of a variable this
+// version stopped reading. The rest are reported and start, because being
+// configured with a tier or a log level nobody chose is worth a line and not
+// an outage.
+func reportRetiredEnvNames() bool {
+	refuse, warn := config.RetiredEnvUses()
+	for _, line := range warn {
+		slog.Warn(line) //#nosec G706 -- the text is built by config from its own compile-time name list
 	}
+	for _, line := range refuse {
+		//#nosec G706 -- as above: the variable name is one of this package's own constants
+		slog.Error(line + ", and this deployment will not be started under a capability it did not ask for")
+	}
+	return len(refuse) == 0
 }
 
 // safeTokenSuffix returns a masked token suffix suitable for structured logs.

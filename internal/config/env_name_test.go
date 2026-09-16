@@ -7,53 +7,67 @@ import (
 	"testing"
 )
 
-// TestGetenv_EveryPrefixedName_ResolvesUnderBothSpellings verifies the
-// migration contract for each variable individually rather than for a sample.
+// TestGetenv_EveryPrefixedName_ResolvesUnderThePrefixedNameAlone verifies both
+// halves of the 3.1.0 contract for each variable individually rather than for
+// a sample: the prefixed name is read, and the retired one is not.
 //
 // A spot check would pass while one name in the middle of the list was never
 // wired, and that name's operator would find their setting silently ignored
 // after an upgrade. The table is generated from the list itself, so a variable
 // added to the list without being wired fails here rather than in someone's
 // deployment.
-func TestGetenv_EveryPrefixedName_ResolvesUnderBothSpellings(t *testing.T) {
+//
+// The second half is what this release is: a retired name left readable by one
+// setting would be a shim nobody knew was still there, and the only place that
+// could be noticed is here.
+func TestGetenv_EveryPrefixedName_ResolvesUnderThePrefixedNameAlone(t *testing.T) {
 	for _, name := range PrefixedEnvNames() {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(EnvPrefix+name, "from-prefixed")
 			if got := Getenv(name); got != "from-prefixed" {
 				t.Errorf("Getenv(%q) = %q with only the prefixed name set, want %q", name, got, "from-prefixed")
 			}
+
+			os.Unsetenv(EnvPrefix + name)
+			t.Setenv(RetiredEnvName(name), "from-retired")
+			if got := Getenv(name); got != "" {
+				t.Errorf("Getenv(%q) = %q with only %s set, want the retired name read by nothing",
+					name, got, RetiredEnvName(name))
+			}
 		})
 	}
 }
 
-// TestGetenv_Precedence verifies that the prefixed name wins, that the
-// unprefixed one still works, and that neither being set reads as empty.
+// TestGetenv_ReadsThePrefixedNameAndNothingElse verifies that the retired name
+// contributes nothing, whether it is set alone or beside the prefixed one.
 //
-// Precedence is the half of the contract an operator cannot see: with both set
-// the server obeys one of them, and picking the new name is what makes a
-// migration a migration rather than a coin toss.
-func TestGetenv_Precedence(t *testing.T) {
+// There used to be a precedence to verify here, because both spellings were
+// read and one had to win. There is no precedence now, and the case worth
+// keeping is the one that used to be the interesting half of it: with the
+// retired name set and the prefixed one absent, the answer is empty rather
+// than the value the operator can plainly see in their environment.
+func TestGetenv_ReadsThePrefixedNameAndNothingElse(t *testing.T) {
 	const name = "LOG_LEVEL"
 
 	for _, tc := range []struct {
 		name     string
 		prefixed string
-		legacy   string
-		setBoth  bool
+		retired  string
 		want     string
 	}{
 		{name: "only the prefixed name", prefixed: "debug", want: "debug"},
-		{name: "only the deprecated name", legacy: "warn", want: "warn"},
-		{name: "both, prefixed wins", prefixed: "debug", legacy: "warn", setBoth: true, want: "debug"},
+		{name: "only the retired name", retired: "warn", want: ""},
+		{name: "both, the retired one contributes nothing", prefixed: "debug", retired: "warn", want: "debug"},
 		{name: "neither", want: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resetDeprecatedEnvUses()
+			os.Unsetenv(EnvPrefix + name)
+			os.Unsetenv(name)
 			if tc.prefixed != "" {
 				t.Setenv(EnvPrefix+name, tc.prefixed)
 			}
-			if tc.legacy != "" || tc.setBoth {
-				t.Setenv(name, tc.legacy)
+			if tc.retired != "" {
+				t.Setenv(name, tc.retired)
 			}
 
 			if got := Getenv(name); got != tc.want {
@@ -73,78 +87,92 @@ func TestGetenv_Precedence(t *testing.T) {
 func TestGetenv_UnlistedName_IsReadVerbatim(t *testing.T) {
 	for _, name := range []string{"GITLAB_URL", "GITLAB_TOKEN", "OTEL_EXPORTER_OTLP_ENDPOINT"} {
 		t.Run(name, func(t *testing.T) {
-			resetDeprecatedEnvUses()
 			t.Setenv(name, "bare")
 			t.Setenv(EnvPrefix+name, "prefixed")
 
 			if got := Getenv(name); got != "bare" {
 				t.Errorf("Getenv(%q) = %q, want the bare value; this name is not part of the migration", name, got)
 			}
-			if warnings := DeprecatedEnvWarnings(); len(warnings) != 0 {
-				t.Errorf("reading %q warned about deprecation: %v", name, warnings)
+			refuse, warn := RetiredEnvUses()
+			if len(refuse) != 0 || len(warn) != 0 {
+				t.Errorf("reading %q reported it as retired: refuse=%v warn=%v", name, refuse, warn)
 			}
 		})
 	}
 }
 
-// TestDeprecatedEnvWarnings_ReportWhatWasRead verifies that the warning names
-// the variable and its replacement, that it distinguishes an old name from a
-// redundant pair, and that it is silent about a variable nobody read.
+// TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost verifies that a retired
+// name present in the environment is reported, that it names the replacement,
+// and that the two which take capability away are reported apart from the rest.
 //
-// One warning per variable in use, not one per read: several of these are
-// consulted more than once during startup, and an operator who set one old name
-// should be told once rather than four times.
-func TestDeprecatedEnvWarnings_ReportWhatWasRead(t *testing.T) {
+// It reports what is **set**, which is the opposite of the warning it replaces.
+// That one could report only what had been read, because reading was still
+// happening; nothing reads these now, so a check of what was consulted would
+// report nothing at all and an operator would learn of the change by watching
+// their deployment behave differently.
+func TestRetiredEnvUses_SplitsByWhatIgnoringOneWouldCost(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		env         map[string]string
-		read        []string
-		wantCount   int
+		wantRefuse  int
+		wantWarn    int
 		wantMention []string
 	}{
 		{
-			name:      "a variable nobody read is not mentioned",
-			env:       map[string]string{"AUTH_MODE": "oauth"},
-			wantCount: 0,
+			name:     "nothing retired is set",
+			env:      map[string]string{EnvPrefix + "TOOL_SURFACE": "meta"},
+			wantWarn: 0,
 		},
 		{
-			name:        "the deprecated name says what to rename it to",
+			name:        "an ordinary retired name is a warning that says what to rename it to",
 			env:         map[string]string{"AUTH_MODE": "oauth"},
-			read:        []string{"AUTH_MODE", "AUTH_MODE"},
-			wantCount:   1,
+			wantWarn:    1,
 			wantMention: []string{"AUTH_MODE", EnvPrefix + "AUTH_MODE", "3.1.0"},
 		},
 		{
-			name:        "both set says which one is ignored",
-			env:         map[string]string{"RATE_LIMIT_RPS": "5", EnvPrefix + "RATE_LIMIT_RPS": "10"},
-			read:        []string{"RATE_LIMIT_RPS"},
-			wantCount:   1,
-			wantMention: []string{"ignored", EnvPrefix + "RATE_LIMIT_RPS"},
+			name:        "the renamed switch is named as the operator spelled it",
+			env:         map[string]string{"GITLAB_TIER": "premium"},
+			wantWarn:    1,
+			wantMention: []string{"GITLAB_TIER", EnvPrefix + "TIER"},
 		},
 		{
-			name:      "only the prefixed name warns about nothing",
-			env:       map[string]string{EnvPrefix + "TOOL_SURFACE": "meta"},
-			read:      []string{"TOOL_SURFACE"},
-			wantCount: 0,
+			name:        "a retired read-only switch refuses",
+			env:         map[string]string{"GITLAB_READ_ONLY": "true"},
+			wantRefuse:  1,
+			wantMention: []string{"GITLAB_READ_ONLY", EnvPrefix + "READ_ONLY"},
+		},
+		{
+			name:       "a retired safe-mode switch refuses",
+			env:        map[string]string{"GITLAB_SAFE_MODE": "true"},
+			wantRefuse: 1,
+		},
+		{
+			name:       "the prefixed spelling of a protection is not a retired name",
+			env:        map[string]string{EnvPrefix + "READ_ONLY": "true"},
+			wantRefuse: 0,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resetDeprecatedEnvUses()
-			t.Cleanup(resetDeprecatedEnvUses)
+			for _, name := range PrefixedEnvNames() {
+				os.Unsetenv(RetiredEnvName(name))
+				os.Unsetenv(EnvPrefix + name)
+			}
 			for name, value := range tc.env {
 				t.Setenv(name, value)
 			}
-			for _, name := range tc.read {
-				_ = Getenv(name)
-			}
 
-			warnings := DeprecatedEnvWarnings()
-			if len(warnings) != tc.wantCount {
-				t.Fatalf("DeprecatedEnvWarnings() = %v, want %d warning(s)", warnings, tc.wantCount)
+			refuse, warn := RetiredEnvUses()
+
+			if len(refuse) != tc.wantRefuse {
+				t.Fatalf("RetiredEnvUses() refuse = %v, want %d", refuse, tc.wantRefuse)
 			}
+			if len(warn) != tc.wantWarn {
+				t.Fatalf("RetiredEnvUses() warn = %v, want %d", warn, tc.wantWarn)
+			}
+			reported := strings.Join(append(append([]string{}, refuse...), warn...), "\n")
 			for _, want := range tc.wantMention {
-				if !strings.Contains(warnings[0], want) {
-					t.Errorf("warning %q does not mention %q", warnings[0], want)
+				if !strings.Contains(reported, want) {
+					t.Errorf("the report %q does not mention %q", reported, want)
 				}
 			}
 		})
@@ -153,11 +181,16 @@ func TestDeprecatedEnvWarnings_ReportWhatWasRead(t *testing.T) {
 
 // TestPrefixedEnvNames_IsACopy verifies that a caller cannot reorder or empty
 // the list the whole migration is driven from.
-// TestLegacyEnvName_SpellsTheOldNameOfEachSetting pins the two shapes an old
-// name takes: the bare suffix for the settings that were generic, and the
-// GITLAB_-prefixed name for the switches that already carried one and were
+// TestRetiredEnvName_SpellsTheRemovedNameOfEachSetting pins the two shapes a
+// retired name takes: the bare suffix for the settings that were generic, and
+// the GITLAB_-prefixed name for the switches that already carried one and were
 // renamed in 2.8.0 so that every variable of this server starts alike.
-func TestLegacyEnvName_SpellsTheOldNameOfEachSetting(t *testing.T) {
+//
+// Nothing reads a setting under these any more. They are still spelled here
+// because [RetiredEnvUses] looks for them, and a report that named the bare
+// suffix of a switch the operator set as GITLAB_TIER would send them looking
+// for a variable they never set.
+func TestRetiredEnvName_SpellsTheRemovedNameOfEachSetting(t *testing.T) {
 	tests := []struct {
 		name string
 		want string
@@ -174,45 +207,49 @@ func TestLegacyEnvName_SpellsTheOldNameOfEachSetting(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := LegacyEnvName(tt.name); got != tt.want {
-				t.Errorf("LegacyEnvName(%q) = %q, want %q", tt.name, got, tt.want)
+			if got := RetiredEnvName(tt.name); got != tt.want {
+				t.Errorf("RetiredEnvName(%q) = %q, want %q", tt.name, got, tt.want)
 			}
 		})
 	}
 }
 
-// TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling verifies the
-// renamed switches through the whole path: the old GITLAB_TIER is read when
-// only it is set, the prefixed name wins when both are, and the warning names
-// the spelling the operator actually used rather than the bare suffix, since
-// "TIER is deprecated" would send them looking for a variable they never set.
-func TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling(t *testing.T) {
+// TestGetenv_RenamedGitLabSwitch_NoLongerFallsBackToItsOldSpelling verifies
+// the renamed switches through the whole path, on the terms 3.1.0 sets: the
+// old GITLAB_TIER decides nothing, the prefixed name is what is read, and the
+// report names the spelling the operator actually used rather than the bare
+// suffix, since "TIER is no longer read" would send them looking for a
+// variable they never set.
+//
+// This is the test that used to assert the fallback. It is kept rather than
+// deleted because the behavior it describes is the one an operator upgrading
+// into this release is most likely to be relying on, and a removal is only
+// really made when something says the old answer is gone.
+func TestGetenv_RenamedGitLabSwitch_NoLongerFallsBackToItsOldSpelling(t *testing.T) {
 	tests := []struct {
-		name        string
-		old, new    string
-		want        string
-		wantWarning string
+		name       string
+		old, new   string
+		want       string
+		wantReport string
 	}{
 		{
 			name: "only the old spelling set", old: "premium", new: "",
-			want:        "premium",
-			wantWarning: "GITLAB_TIER is deprecated and will be removed in 3.1.0; rename it to GITLAB_MCP_TIER",
+			want:       "",
+			wantReport: "GITLAB_TIER is no longer read (removed in 3.1.0): rename it to GITLAB_MCP_TIER",
 		},
 		{
-			name: "both set, the prefixed one wins", old: "premium", new: "ultimate",
-			want:        "ultimate",
-			wantWarning: "both GITLAB_MCP_TIER and GITLAB_TIER are set; GITLAB_MCP_TIER is being used and GITLAB_TIER is ignored",
+			name: "both set, the old one contributes nothing", old: "premium", new: "ultimate",
+			want:       "ultimate",
+			wantReport: "GITLAB_TIER is no longer read",
 		},
 		{
 			name: "only the prefixed one set", old: "", new: "free",
-			want:        "free",
-			wantWarning: "",
+			want:       "free",
+			wantReport: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resetDeprecatedEnvUses()
-			t.Cleanup(resetDeprecatedEnvUses)
 			t.Setenv("GITLAB_TIER", "")
 			t.Setenv("GITLAB_MCP_TIER", "")
 			os.Unsetenv("GITLAB_TIER")
@@ -226,18 +263,19 @@ func TestGetenv_RenamedGitLabSwitch_FallsBackToItsOldSpelling(t *testing.T) {
 			if got := Getenv("TIER"); got != tt.want {
 				t.Errorf("Getenv(TIER) = %q, want %q", got, tt.want)
 			}
-			warnings := strings.Join(DeprecatedEnvWarnings(), "\n")
-			if tt.wantWarning == "" {
-				if warnings != "" {
-					t.Errorf("warnings = %q, want none", warnings)
+			refuse, warn := RetiredEnvUses()
+			reported := strings.Join(append(append([]string{}, refuse...), warn...), "\n")
+			if tt.wantReport == "" {
+				if reported != "" {
+					t.Errorf("report = %q, want none", reported)
 				}
 				return
 			}
-			if !strings.Contains(warnings, tt.wantWarning) {
-				t.Errorf("warnings = %q, want %q", warnings, tt.wantWarning)
+			if !strings.Contains(reported, tt.wantReport) {
+				t.Errorf("report = %q, want %q", reported, tt.wantReport)
 			}
-			if strings.Contains(warnings, "TIER is deprecated") && !strings.Contains(warnings, "GITLAB_TIER is deprecated") {
-				t.Errorf("the warning names the bare suffix, which the operator never set: %q", warnings)
+			if strings.Contains(reported, "TIER is no longer") && !strings.Contains(reported, "GITLAB_TIER is no longer") {
+				t.Errorf("the report names the bare suffix, which the operator never set: %q", reported)
 			}
 		})
 	}
@@ -274,11 +312,11 @@ func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
 
 	for _, name := range PrefixedEnvNames() {
 		t.Run(name, func(t *testing.T) {
-			// Every spelling: a reader left on the old GITLAB_TIER is as
+			// Every spelling: a reader left on the retired GITLAB_TIER is as
 			// wrong as one left on the bare TOOL_SURFACE, and one that reads
-			// the prefixed name directly ignores the old one the same way.
+			// the prefixed name directly bypasses this package the same way.
 			bare := `os.Getenv("` + name + `")`
-			legacy := `os.Getenv("` + LegacyEnvName(name) + `")`
+			legacy := `os.Getenv("` + RetiredEnvName(name) + `")`
 			prefixed := `os.Getenv("` + EnvPrefix + name + `")`
 			for path, body := range sources {
 				if !strings.Contains(body, bare) && !strings.Contains(body, legacy) && !strings.Contains(body, prefixed) {

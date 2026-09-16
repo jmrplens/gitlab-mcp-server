@@ -29,7 +29,7 @@ func TestShutdown_IsNotBlockedByAnOpenSubscription(t *testing.T) {
 	t.Run("with no subscription open", func(t *testing.T) {
 		gitlab := startFakeGitLab(t)
 		env := baseEnv(gitlab.URL)
-		env["CAPABILITY_SURFACE"] = "full"
+		env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 		s := startSession(t, env)
 
 		if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
@@ -43,7 +43,7 @@ func TestShutdown_IsNotBlockedByAnOpenSubscription(t *testing.T) {
 	t.Run("with a subscription open", func(t *testing.T) {
 		gitlab := startFakeGitLab(t)
 		env := baseEnv(gitlab.URL)
-		env["CAPABILITY_SURFACE"] = "full"
+		env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 		s := startSession(t, env)
 
 		// The listen is a request that stays open; its acknowledgment arrives
@@ -164,7 +164,7 @@ func TestShutdown_ExitStatusSaysItWasClean(t *testing.T) {
 			gitlab := startFakeGitLab(t)
 			env := baseEnv(gitlab.URL)
 			if tt.subscriptions {
-				env["CAPABILITY_SURFACE"] = "full"
+				env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 			}
 			s := startSession(t, env)
 

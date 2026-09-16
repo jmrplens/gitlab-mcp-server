@@ -173,7 +173,7 @@ func TestLoad_SkipTLSVerifyInvalid(t *testing.T) {
 func TestLoad_DefaultToolSurface(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("TOOL_SURFACE", "")
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -189,7 +189,7 @@ func TestLoad_DefaultToolSurface(t *testing.T) {
 func TestLoad_ToolSurfaceInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("TOOL_SURFACE", "not-a-surface")
+	t.Setenv("GITLAB_MCP_TOOL_SURFACE", "not-a-surface")
 
 	_, err := Load()
 	if err == nil {
@@ -213,7 +213,7 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 		t.Run(tt.value, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", testGitLabURL)
 			t.Setenv("GITLAB_TOKEN", testGitLabToken)
-			t.Setenv("TOOL_SURFACE", tt.value)
+			t.Setenv("GITLAB_MCP_TOOL_SURFACE", tt.value)
 
 			cfg, err := Load()
 			if err != nil {
@@ -234,7 +234,7 @@ func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {
 		t.Run(value, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", testGitLabURL)
 			t.Setenv("GITLAB_TOKEN", testGitLabToken)
-			t.Setenv("CAPABILITY_SURFACE", value)
+			t.Setenv("GITLAB_MCP_CAPABILITY_SURFACE", value)
 
 			cfg, err := Load()
 			if err != nil {
@@ -252,7 +252,7 @@ func TestLoad_CapabilitySurfaceMinimal(t *testing.T) {
 func TestLoad_CapabilitySurfaceInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("CAPABILITY_SURFACE", "everything")
+	t.Setenv("GITLAB_MCP_CAPABILITY_SURFACE", "everything")
 
 	_, err := Load()
 	if err == nil {
@@ -338,7 +338,7 @@ func TestLoad_MetaParamSchemaDefault(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
 	// Pin META_PARAM_SCHEMA to empty so a value loaded from a developer's
 	// .env file cannot override the default-case assertion below.
-	t.Setenv("META_PARAM_SCHEMA", "")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -365,7 +365,7 @@ func TestLoad_MetaParamSchemaValid(t *testing.T) {
 		t.Run(tc.input, func(t *testing.T) {
 			t.Setenv("GITLAB_URL", testGitLabURL)
 			t.Setenv("GITLAB_TOKEN", testGitLabToken)
-			t.Setenv("META_PARAM_SCHEMA", tc.input)
+			t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", tc.input)
 
 			cfg, err := Load()
 			if err != nil {
@@ -383,7 +383,7 @@ func TestLoad_MetaParamSchemaValid(t *testing.T) {
 func TestLoad_MetaParamSchemaInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("META_PARAM_SCHEMA", "verbose")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "verbose")
 
 	_, err := Load()
 	if err == nil {
@@ -411,7 +411,7 @@ func TestLoad_UploadDefaults(t *testing.T) {
 func TestLoad_UploadHumanFriendlySizes(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5GB")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "5GB")
 
 	cfg, err := Load()
 	if err != nil {
@@ -426,7 +426,7 @@ func TestLoad_UploadHumanFriendlySizes(t *testing.T) {
 func TestLoad_UploadRawBytes(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "2147483648")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "2147483648")
 
 	cfg, err := Load()
 	if err != nil {
@@ -441,7 +441,7 @@ func TestLoad_UploadRawBytes(t *testing.T) {
 func TestLoad_UploadInvalidSize(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "notanumber")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "notanumber")
 
 	_, err := Load()
 	if err == nil {
@@ -606,7 +606,7 @@ func TestLoad_MaxHTTPClients(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("MAX_HTTP_CLIENTS", "")
+		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -617,7 +617,7 @@ func TestLoad_MaxHTTPClients(t *testing.T) {
 	})
 
 	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("MAX_HTTP_CLIENTS", "50")
+		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "50")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -628,7 +628,7 @@ func TestLoad_MaxHTTPClients(t *testing.T) {
 	})
 
 	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("MAX_HTTP_CLIENTS", "not-a-number")
+		t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "not-a-number")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for invalid MAX_HTTP_CLIENTS")
@@ -642,7 +642,7 @@ func TestLoad_SessionTimeout(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("SESSION_TIMEOUT", "")
+		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -653,7 +653,7 @@ func TestLoad_SessionTimeout(t *testing.T) {
 	})
 
 	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("SESSION_TIMEOUT", "1h")
+		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "1h")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -664,7 +664,7 @@ func TestLoad_SessionTimeout(t *testing.T) {
 	})
 
 	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("SESSION_TIMEOUT", "not-a-duration")
+		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "not-a-duration")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for invalid SESSION_TIMEOUT")
@@ -944,7 +944,7 @@ func TestLoad_InvalidReadOnly(t *testing.T) {
 // TestLoad_InvalidUploadMaxFileSize verifies that Load returns an error
 // when UPLOAD_MAX_FILE_SIZE has an invalid value.
 func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "notanumber")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "notanumber")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
@@ -957,12 +957,12 @@ func TestLoad_InvalidUploadMaxFileSize(t *testing.T) {
 
 // TestLoad_InvalidMaxHTTPClients verifies that Load rejects non-integer MAX_HTTP_CLIENTS.
 func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
-	t.Setenv("MAX_HTTP_CLIENTS", "abc")
+	t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "abc")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "5242880")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid MAX_HTTP_CLIENTS")
@@ -971,13 +971,13 @@ func TestLoad_InvalidMaxHTTPClients(t *testing.T) {
 
 // TestLoad_InvalidSessionTimeout verifies that Load rejects invalid SESSION_TIMEOUT.
 func TestLoad_InvalidSessionTimeout(t *testing.T) {
-	t.Setenv("SESSION_TIMEOUT", "notaduration")
+	t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "notaduration")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_MCP_SKIP_TLS_VERIFY", "false")
 	t.Setenv("GITLAB_MCP_READ_ONLY", "false")
-	t.Setenv("UPLOAD_MAX_FILE_SIZE", "5242880")
-	t.Setenv("MAX_HTTP_CLIENTS", "100")
+	t.Setenv("GITLAB_MCP_UPLOAD_MAX_FILE_SIZE", "5242880")
+	t.Setenv("GITLAB_MCP_MAX_HTTP_CLIENTS", "100")
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for invalid SESSION_TIMEOUT")
@@ -1077,7 +1077,7 @@ func TestLoad_AuthMode(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run("default is legacy", func(t *testing.T) {
-		t.Setenv("AUTH_MODE", "")
+		t.Setenv("GITLAB_MCP_AUTH_MODE", "")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1088,8 +1088,8 @@ func TestLoad_AuthMode(t *testing.T) {
 	})
 
 	t.Run("explicit oauth", func(t *testing.T) {
-		t.Setenv("AUTH_MODE", "oauth")
-		t.Setenv("PUBLIC_URL", "https://mcp.example.com")
+		t.Setenv("GITLAB_MCP_AUTH_MODE", "oauth")
+		t.Setenv("GITLAB_MCP_PUBLIC_URL", "https://mcp.example.com")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1106,7 +1106,7 @@ func TestLoad_OAuthCacheTTL(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("OAUTH_CACHE_TTL", "")
+		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1117,7 +1117,7 @@ func TestLoad_OAuthCacheTTL(t *testing.T) {
 	})
 
 	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("OAUTH_CACHE_TTL", "30m")
+		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "30m")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1128,7 +1128,7 @@ func TestLoad_OAuthCacheTTL(t *testing.T) {
 	})
 
 	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("OAUTH_CACHE_TTL", "not-a-duration")
+		t.Setenv("GITLAB_MCP_OAUTH_CACHE_TTL", "not-a-duration")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for invalid OAUTH_CACHE_TTL")
@@ -1156,7 +1156,7 @@ func TestLoad_InvalidSafeMode(t *testing.T) {
 func TestLoad_InvalidEmbeddedResources(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
-	t.Setenv("EMBEDDED_RESOURCES", "notabool")
+	t.Setenv("GITLAB_MCP_EMBEDDED_RESOURCES", "notabool")
 
 	_, err := Load()
 	if err == nil {
@@ -1360,7 +1360,7 @@ func TestLoad_InvalidIgnoreScopes(t *testing.T) {
 func TestLoad_SessionTimeoutExceedsMax(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("SESSION_TIMEOUT", "25h")
+	t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "25h")
 
 	_, err := Load()
 	if err == nil {
@@ -1375,7 +1375,7 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run(subtestDefault, func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", "")
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1386,7 +1386,7 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 	})
 
 	t.Run(subtestCustom, func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", "5m")
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "5m")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1397,7 +1397,7 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 	})
 
 	t.Run(subtestInvalid, func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", "notaduration")
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "notaduration")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for invalid SESSION_REVALIDATE_INTERVAL")
@@ -1405,7 +1405,7 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 	})
 
 	t.Run("exceeds maximum", func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", "25h")
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "25h")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("expected error for SESSION_REVALIDATE_INTERVAL exceeding maximum")
@@ -1416,7 +1416,7 @@ func TestLoad_RevalidateInterval(t *testing.T) {
 	// "well under" were asserted, so a bound that had drifted from > to >=
 	// would refuse the documented ceiling and no test would say so.
 	t.Run("the maximum itself is accepted", func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", MaxRevalidateInterval.String())
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", MaxRevalidateInterval.String())
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf("Load() refused the documented maximum: %v", err)
@@ -1469,7 +1469,7 @@ func TestParseCSV_Scenarios(t *testing.T) {
 func TestLoad_ExcludeTools(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("EXCLUDE_TOOLS", "gitlab_create_issue, gitlab_delete_project")
+	t.Setenv("GITLAB_MCP_EXCLUDE_TOOLS", "gitlab_create_issue, gitlab_delete_project")
 
 	cfg, err := Load()
 	if err != nil {
@@ -1572,7 +1572,7 @@ func TestLoad_RateLimitRPS(t *testing.T) {
 			t.Setenv("GITLAB_URL", testHTTPExampleURL)
 			t.Setenv("GITLAB_TOKEN", "test")
 			if tt.envVal != "" {
-				t.Setenv("RATE_LIMIT_RPS", tt.envVal)
+				t.Setenv("GITLAB_MCP_RATE_LIMIT_RPS", tt.envVal)
 			}
 			cfg, err := Load()
 			if tt.wantErr {
@@ -1610,7 +1610,7 @@ func TestLoad_RateLimitBurst(t *testing.T) {
 			t.Setenv("GITLAB_URL", testHTTPExampleURL)
 			t.Setenv("GITLAB_TOKEN", "test")
 			if tt.envVal != "" {
-				t.Setenv("RATE_LIMIT_BURST", tt.envVal)
+				t.Setenv("GITLAB_MCP_RATE_LIMIT_BURST", tt.envVal)
 			}
 			cfg, err := Load()
 			if tt.wantErr {
@@ -1634,8 +1634,8 @@ func TestLoad_RateLimitBurst(t *testing.T) {
 func TestValidate_RateLimitBurstRequiredWithRPS(t *testing.T) {
 	t.Setenv("GITLAB_URL", testHTTPExampleURL)
 	t.Setenv("GITLAB_TOKEN", "test")
-	t.Setenv("RATE_LIMIT_RPS", "10")
-	t.Setenv("RATE_LIMIT_BURST", "0")
+	t.Setenv("GITLAB_MCP_RATE_LIMIT_RPS", "10")
+	t.Setenv("GITLAB_MCP_RATE_LIMIT_BURST", "0")
 
 	_, err := Load()
 	if err == nil {
@@ -1713,7 +1713,7 @@ func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run("POOL_IDLE_TIMEOUT=0 disables idle eviction", func(t *testing.T) {
-		t.Setenv("POOL_IDLE_TIMEOUT", "0")
+		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "0")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1724,7 +1724,7 @@ func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
 	})
 
 	t.Run("SESSION_REVALIDATE_INTERVAL=0 disables revalidation", func(t *testing.T) {
-		t.Setenv("SESSION_REVALIDATE_INTERVAL", "0")
+		t.Setenv("GITLAB_MCP_SESSION_REVALIDATE_INTERVAL", "0")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1735,7 +1735,7 @@ func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
 	})
 
 	t.Run("zero stays invalid where it is not documented", func(t *testing.T) {
-		t.Setenv("SESSION_TIMEOUT", "0")
+		t.Setenv("GITLAB_MCP_SESSION_TIMEOUT", "0")
 		if _, err := Load(); err == nil {
 			t.Error("Load() error = nil, want an error for SESSION_TIMEOUT=0")
 		}
@@ -1780,7 +1780,7 @@ func TestLoad_PoolIdleTimeoutInvalid(t *testing.T) {
 	t.Setenv("GITLAB_TOKEN", "test")
 
 	t.Run("unparseable duration", func(t *testing.T) {
-		t.Setenv("POOL_IDLE_TIMEOUT", "notaduration")
+		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "notaduration")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("Load() error = nil, want error for unparseable POOL_IDLE_TIMEOUT")
@@ -1791,7 +1791,7 @@ func TestLoad_PoolIdleTimeoutInvalid(t *testing.T) {
 	})
 
 	t.Run("exceeds maximum", func(t *testing.T) {
-		t.Setenv("POOL_IDLE_TIMEOUT", "48h")
+		t.Setenv("GITLAB_MCP_POOL_IDLE_TIMEOUT", "48h")
 		_, err := Load()
 		if err == nil {
 			t.Fatal("Load() error = nil, want error for POOL_IDLE_TIMEOUT exceeding MaxPoolIdleTimeout")
@@ -1903,8 +1903,6 @@ func TestLoad_PrefixedNamesReachTheConfig(t *testing.T) {
 		{name: "excluded tools", env: "EXCLUDE_TOOLS", value: "gitlab_issue_delete", field: "ExcludeTools"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			resetDeprecatedEnvUses()
-			t.Cleanup(resetDeprecatedEnvUses)
 			t.Setenv("GITLAB_URL", testGitLabURL)
 			t.Setenv("GITLAB_TOKEN", testGitLabToken)
 			t.Setenv(EnvPrefix+tc.env, tc.value)
@@ -1921,8 +1919,9 @@ func TestLoad_PrefixedNamesReachTheConfig(t *testing.T) {
 			if got != tc.value {
 				t.Errorf("%s = %q, want %q", EnvPrefix+tc.env, got, tc.value)
 			}
-			if warnings := DeprecatedEnvWarnings(); len(warnings) != 0 {
-				t.Errorf("loading with only prefixed names warned: %v", warnings)
+			refuse, warn := RetiredEnvUses()
+			if len(refuse) != 0 || len(warn) != 0 {
+				t.Errorf("loading with only prefixed names reported retired ones: refuse=%v warn=%v", refuse, warn)
 			}
 		})
 	}

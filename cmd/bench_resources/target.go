@@ -199,11 +199,16 @@ func childEnv(plan scenarioPlan, stubURL, otlpURL string, stdio bool) []string {
 // configFreeEnviron is the process environment with every variable that
 // configures this server removed.
 //
-// The old spellings come from the config package rather than being restated,
-// so a setting added there is stripped here without anybody remembering to.
-// The prefixed spellings fall under the GITLAB_ rule; AUTOPILOT is the one
-// name read that carries neither prefix, as the alias other agent tooling
-// sets for the yolo mode.
+// The retired spellings come from the config package rather than being
+// restated, so a setting added there is stripped here without anybody
+// remembering to. The prefixed spellings fall under the GITLAB_ rule;
+// AUTOPILOT is the one name read that carries neither prefix, as the alias
+// other agent tooling sets for the yolo mode.
+//
+// Stripping the retired names matters more since 3.1.0 stopped reading them,
+// not less: the server refuses to start when it finds GITLAB_READ_ONLY or
+// GITLAB_SAFE_MODE set, so a developer who has one exported would measure
+// nothing at all rather than measure the wrong configuration.
 func configFreeEnviron() []string {
 	return withoutConfig(os.Environ())
 }
@@ -214,7 +219,7 @@ func configFreeEnviron() []string {
 func withoutConfig(environ []string) []string {
 	legacy := make([]string, 0, len(config.PrefixedEnvNames())+1)
 	for _, name := range config.PrefixedEnvNames() {
-		legacy = append(legacy, config.LegacyEnvName(name))
+		legacy = append(legacy, config.RetiredEnvName(name))
 	}
 	legacy = append(legacy, "AUTOPILOT")
 	kept := make([]string, 0, len(environ))

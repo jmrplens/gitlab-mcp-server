@@ -670,7 +670,7 @@ func TestListServerTools_IndividualAndMetaReturnsPopulatedLists(t *testing.T) {
 func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 	// The reporter resets the mode back to "opaque" on exit; capture the
 	// current state to restore it after the test runs.
-	t.Setenv("META_PARAM_SCHEMA", "compact")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "compact")
 
 	client := newAuditMetricsClient(t)
 	output := captureStdout(t, func() {
@@ -700,7 +700,7 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 // different sizes, so three equal totals would mean the memo returned the
 // first listing to every mode.
 func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
-	t.Setenv("META_PARAM_SCHEMA", "opaque")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "opaque")
 
 	output := captureStdout(t, func() {
 		printMetaSchemaModes(newAuditMetricsClient(t))
@@ -728,7 +728,7 @@ func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
 // TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset verifies the reporter
 // falls back to opaque mode when META_PARAM_SCHEMA is empty or invalid.
 func TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset(t *testing.T) {
-	t.Setenv("META_PARAM_SCHEMA", "bogus")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "bogus")
 
 	output := captureStdout(t, func() {
 		printMetaSchemaModes(newAuditMetricsClient(t))
@@ -888,7 +888,7 @@ func metricRow(label string, value int) string {
 // gathered payload, every section in its documented order, and the meta-tool
 // lists in full.
 func TestPrintReport_RealMetrics_PrintsEveryCountedRow(t *testing.T) {
-	t.Setenv("META_PARAM_SCHEMA", "opaque")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "opaque")
 	metrics := collectedMetrics(t)
 
 	output := captureStdout(t, func() {
@@ -975,7 +975,7 @@ func TestPrintReport_RealMetrics_PrintsEveryCountedRow(t *testing.T) {
 // previous one, the domain table is sorted and complete, and the enterprise
 // audit lists a missing spec when the payload carries one.
 func TestPrintReport_FixtureMetrics_ListsSurfaceDeltas(t *testing.T) {
-	t.Setenv("META_PARAM_SCHEMA", "full")
+	t.Setenv("GITLAB_MCP_META_PARAM_SCHEMA", "full")
 	metrics := auditMetrics{
 		individualTools:                   namedTools("gitlab_project_get", "gitlab_interactive_create_issue"),
 		gitLabComIndividualTools:          namedTools("gitlab_project_get", "gitlab_interactive_create_issue", "gitlab_orbit_status"),

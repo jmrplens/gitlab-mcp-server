@@ -32,7 +32,7 @@ import (
 // exactly the failure.
 func TestResourceList_SaysHowMuchOfTheCollectionItReturned(t *testing.T) {
 	env := baseEnv(startFakeGitLab(t).URL)
-	env["CAPABILITY_SURFACE"] = "full"
+	env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 	s := startSession(t, env)
 
 	got := s.call(t, request(1, "resources/read", `{"uri":"gitlab://groups"}`))
@@ -119,7 +119,7 @@ func TestResourceList_SaysHowMuchOfTheCollectionItReturned(t *testing.T) {
 // it is that the prompt catalog does not vary per caller.
 func TestCacheHints_ReachTheWire(t *testing.T) {
 	env := baseEnv(startFakeGitLab(t).URL)
-	env["CAPABILITY_SURFACE"] = "full"
+	env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 	s := startSession(t, env)
 
 	cases := []struct {
@@ -168,7 +168,7 @@ func TestCacheHints_ReachTheWire(t *testing.T) {
 // paginates.
 func TestResourceList_DescriptionsDoNotPromiseEverything(t *testing.T) {
 	env := baseEnv(startFakeGitLab(t).URL)
-	env["CAPABILITY_SURFACE"] = "full"
+	env["GITLAB_MCP_CAPABILITY_SURFACE"] = "full"
 	s := startSession(t, env)
 
 	// Both listings, because a description reaches a model through whichever
