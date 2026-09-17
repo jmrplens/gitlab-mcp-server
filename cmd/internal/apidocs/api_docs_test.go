@@ -3,6 +3,7 @@ package apidocs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,6 +34,20 @@ func newServer(t *testing.T, body string) (*httptest.Server, *int32) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
 		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &hits
+}
+
+// newStatusServer returns an httptest server answering every request with the
+// given status and no body, plus the count of requests that reached it. The
+// count is what says how often a status was retried.
+func newStatusServer(t *testing.T, status int) (*httptest.Server, *int32) {
+	t.Helper()
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(status)
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &hits
@@ -350,8 +365,141 @@ func TestSleepCtx_Scenarios_WaitsOrHonorsCancellation(t *testing.T) {
 	}
 }
 
+// TestFetch_AStatusTheServerKeepsReturning_DecidesHowOftenItIsAsked verifies
+// the retry classification by the one thing it changes that a caller can see:
+// how many times GitLab is asked.
+//
+// A 429 and anything from 500 up are transient, so they are retried until the
+// attempts run out and the error says so; every other non-200 is the endpoint's
+// answer and is returned from the first request, because retrying a 404 five
+// more times delays a 250-page sweep by nothing useful and tells the caller
+// nothing it did not know after the first. 499 is here for the boundary: it is
+// the largest status that is still not a server error, and a comparison that
+// slipped by one would retry it.
+//
+// The counts are the assertion rather than the error text alone, since the
+// loop gives up with the same message however many requests it made.
+func TestFetch_AStatusTheServerKeepsReturning_DecidesHowOftenItIsAsked(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       int
+		wantRequests int32
+		wantErr      string
+	}{
+		{name: "too many requests is retried to the last attempt", status: http.StatusTooManyRequests, wantRequests: maxAttempts, wantErr: "giving up on branches after 6 attempts"},
+		{name: "an internal server error is retried to the last attempt", status: http.StatusInternalServerError, wantRequests: maxAttempts, wantErr: "giving up on branches after 6 attempts"},
+		{name: "an unavailable service is retried to the last attempt", status: http.StatusServiceUnavailable, wantRequests: maxAttempts, wantErr: "giving up on branches after 6 attempts"},
+		{name: "the status just below a server error is answered at once", status: 499, wantRequests: 1, wantErr: "HTTP 499"},
+		{name: "a page that is gone is answered at once", status: http.StatusNotFound, wantRequests: 1, wantErr: "HTTP 404"},
+		{name: "a refusal is answered at once", status: http.StatusForbidden, wantRequests: 1, wantErr: "HTTP 403"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, hits := newStatusServer(t, tt.status)
+			f := New(t.TempDir(), Options{BaseURL: srv.URL + "/", CacheDir: t.TempDir()})
+
+			got, err := f.Fetch(context.Background(), "branches")
+
+			if err == nil {
+				t.Fatalf("Fetch() = %q, nil; want an error: nothing was cached to fall back to", got)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Fetch() error = %q, want it to name %q", err, tt.wantErr)
+			}
+			if asked := atomic.LoadInt32(hits); asked != tt.wantRequests {
+				t.Errorf("GitLab was asked %d time(s), want %d", asked, tt.wantRequests)
+			}
+		})
+	}
+}
+
+// TestFetch_OfflineWithACacheItCannotRead_Fails verifies that an offline run
+// whose cache entry exists but cannot be read refuses rather than serving an
+// empty document. A cache entry that stats and will not read is what a half
+// written file or a directory of the same name looks like, and answering a
+// caller with "" and no error would report the area as documenting nothing.
+func TestFetch_OfflineWithACacheItCannotRead_Fails(t *testing.T) {
+	cache := t.TempDir()
+	if err := os.Mkdir(filepath.Join(cache, "branches.md"), 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	srv, hits := newServer(t, "must not be fetched")
+	f := New(t.TempDir(), Options{BaseURL: srv.URL + "/", CacheDir: cache, Offline: true})
+
+	got, err := f.Fetch(context.Background(), "branches")
+
+	if err == nil {
+		t.Fatalf("Fetch() = %q, nil; want the offline refusal", got)
+	}
+	if !strings.Contains(err.Error(), "not cached and offline") {
+		t.Errorf("Fetch() error = %q, want it to say the area is not cached", err)
+	}
+	if asked := atomic.LoadInt32(hits); asked != 0 {
+		t.Errorf("offline made %d network request(s), want 0", asked)
+	}
+}
+
+// TestRequest_TheRetryLine_NamesTheAttemptStillToCome verifies the progress a
+// waiting operator reads: a line written before a backoff counts the attempt
+// about to be made, not the one that just failed, so the last line of a run
+// that gives up reads "retry 6/6" and never "retry 5/6" or "retry 0/6".
+func TestRequest_TheRetryLine_NamesTheAttemptStillToCome(t *testing.T) {
+	var lines []string
+	restore := progressf
+	progressf = func(message string, args ...any) { lines = append(lines, fmt.Sprintf(message, args...)) }
+	t.Cleanup(func() { progressf = restore })
+
+	srv, _ := newStatusServer(t, http.StatusTooManyRequests)
+	f := New(t.TempDir(), Options{BaseURL: srv.URL + "/", CacheDir: t.TempDir()})
+
+	if _, err := f.Fetch(context.Background(), "branches"); err == nil {
+		t.Fatal("Fetch() error = nil, want the giving-up error")
+	}
+
+	var retries []string
+	for _, line := range lines {
+		if strings.Contains(line, "retry ") {
+			retries = append(retries, line)
+		}
+	}
+	if len(retries) != maxAttempts-1 {
+		t.Fatalf("progress wrote %d retry line(s) %q, want %d: one before every backoff but not after the last attempt", len(retries), retries, maxAttempts-1)
+	}
+	for i, line := range retries {
+		want := fmt.Sprintf("retry %d/%d in ", i+2, maxAttempts)
+		if !strings.Contains(line, want) {
+			t.Errorf("retry line %d = %q, want it to name %q", i+1, line, want)
+		}
+	}
+}
+
+// TestSleepCtx_APositiveDuration_IsSpentBeforeItReturns verifies that the pause
+// between attempts is actually taken. It is the only thing keeping a 250-page
+// sweep under GitLab's raw rate limiter, and a sleep that returned the
+// context's state without waiting would read as a success at every call site
+// while retrying a 429 as fast as the network allows.
+func TestSleepCtx_APositiveDuration_IsSpentBeforeItReturns(t *testing.T) {
+	const wait = 60 * time.Millisecond
+
+	start := time.Now()
+	err := realSleepCtx(context.Background(), wait)
+	if err != nil {
+		t.Fatalf("sleepCtx() error = %v, want nil", err)
+	}
+	if elapsed := time.Since(start); elapsed < wait/2 {
+		t.Errorf("sleepCtx(%v) returned after %v, want it to have waited", wait, elapsed)
+	}
+}
+
 // TestNew_EmptyOptions_UsesDefaults verifies the zero Options fill in the
 // documented base URL, freshness window and HTTP client.
+//
+// The window and the client's timeout are checked against the durations the
+// documentation states rather than against the package's own names, because a
+// fetcher whose client never times out hangs a 250-page sweep on one
+// unanswered connection, and a freshness window that is not the documented
+// week either re-downloads GitLab's whole doc tree on every run or serves a
+// page that moved on months ago.
 func TestNew_EmptyOptions_UsesDefaults(t *testing.T) {
 	f := New(t.TempDir(), Options{})
 	if f.baseURL != DefaultBaseURL {
@@ -360,8 +508,50 @@ func TestNew_EmptyOptions_UsesDefaults(t *testing.T) {
 	if f.maxAge != DefaultMaxAge {
 		t.Errorf("maxAge = %v, want %v", f.maxAge, DefaultMaxAge)
 	}
+	if f.maxAge != 7*24*time.Hour {
+		t.Errorf("maxAge = %v, want the documented week", f.maxAge)
+	}
 	if f.client == nil {
-		t.Error("client = nil, want the default HTTP client")
+		t.Fatal("client = nil, want the default HTTP client")
+	}
+	if f.client.Timeout != 30*time.Second {
+		t.Errorf("client timeout = %v, want 30s: a fetcher with no timeout waits forever on one unanswered connection", f.client.Timeout)
+	}
+}
+
+// TestNew_TheOptionsGiven_AreUsed verifies that every override a caller states
+// survives New, the HTTP client above all: a caller supplying its own client
+// is supplying its own transport and timeout, and replacing it with the
+// default would send the audit's requests through neither.
+func TestNew_TheOptionsGiven_AreUsed(t *testing.T) {
+	client := &http.Client{Timeout: 3 * time.Second}
+	cache := t.TempDir()
+	f := New(t.TempDir(), Options{
+		BaseURL:  "https://example.test/doc/api/",
+		AreasURL: "https://example.test/tree",
+		MaxAge:   time.Minute,
+		Spacing:  -1,
+		CacheDir: cache,
+		Client:   client,
+	})
+
+	if f.client != client {
+		t.Errorf("client = %v, want the one the caller supplied", f.client)
+	}
+	if f.baseURL != "https://example.test/doc/api/" {
+		t.Errorf("baseURL = %q, want the caller's", f.baseURL)
+	}
+	if f.areasURL != "https://example.test/tree" {
+		t.Errorf("areasURL = %q, want the caller's", f.areasURL)
+	}
+	if f.maxAge != time.Minute {
+		t.Errorf("maxAge = %v, want the caller's minute", f.maxAge)
+	}
+	if f.spacing != -1 {
+		t.Errorf("spacing = %v, want the negative value that removes the pause", f.spacing)
+	}
+	if f.cacheDir != cache {
+		t.Errorf("cacheDir = %q, want %q", f.cacheDir, cache)
 	}
 }
 
