@@ -2150,3 +2150,150 @@ func TestLoad_ActionTimeoutAndDrainDelayInvalid(t *testing.T) {
 		})
 	}
 }
+
+// TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames states what the
+// two upload-size constants are, which nothing else in this package does.
+//
+// Every other assertion about them reads a loaded Config back against the same
+// constant that filled it, so one that collapsed would move both sides of the
+// comparison and fail nothing. The direction it would collapse in is the
+// dangerous one: toolutil reads a non-positive limit as no limit at all, so a
+// DefaultMaxFileSize that lost its multiplication would switch the
+// out-of-the-box upload ceiling off with the suite still green. MaxFileSize is
+// the figure Validate names when it refuses ("exceeds maximum of 1 TB"), so one
+// that moved would make that sentence a lie.
+//
+// The wanted sizes are spelled as shifts rather than as the product the
+// declaration uses, so the two sides cannot move together.
+func TestUploadSizeConstants_HoldTheDefaultBelowTheCeilingItNames(t *testing.T) {
+	t.Parallel()
+
+	const (
+		twoGiB = int64(2) << 30
+		oneTiB = int64(1) << 40
+	)
+	defaultSize, ceiling := int64(DefaultMaxFileSize), int64(MaxFileSize)
+
+	if defaultSize != twoGiB {
+		t.Errorf("DefaultMaxFileSize = %d bytes, want %d: the environment table publishes it as 2GB",
+			defaultSize, twoGiB)
+	}
+	if ceiling != oneTiB {
+		t.Errorf("MaxFileSize = %d bytes, want %d: Validate refuses anything above it by naming 1 TB",
+			ceiling, oneTiB)
+	}
+	if defaultSize <= 0 {
+		t.Errorf("DefaultMaxFileSize = %d: toolutil reads a non-positive limit as no limit at all, "+
+			"so a deployment that configured nothing would accept a file of any size", defaultSize)
+	}
+	if defaultSize > ceiling {
+		t.Errorf("DefaultMaxFileSize = %d is above MaxFileSize = %d: the configuration a deployment "+
+			"gets without asking for one would be refused by its own validation", defaultSize, ceiling)
+	}
+}
+
+// TestDurationConstants_ArePublishedAsTheDocumentationStatesThem pins every
+// duration this package declares.
+//
+// It exists for the reason the size test above does. The load tests compare a
+// parsed Config against the very constant that supplied its default, and the
+// bound tests hand a maximum back to the parser that enforces it, so a constant
+// that collapsed to zero would move both sides of every one of them. Zero is
+// what this arithmetic collapses to, and neither parser here has a floor to
+// catch it: parseBoundedDurationEnv only refuses a value above the maximum, and
+// parseDisableableDurationEnv reads zero as the operator asking for no bound at
+// all — so a DefaultActionTimeout that lost its multiplication would leave
+// every handler unbounded and say nothing, which is the opposite of what the
+// constant is for.
+//
+// The wanted durations are spelled in a smaller unit than each declaration
+// uses, so the two sides cannot move together.
+func TestDurationConstants_ArePublishedAsTheDocumentationStatesThem(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		got  time.Duration
+		want time.Duration
+	}{
+		{name: "DefaultSessionTimeout", got: DefaultSessionTimeout, want: 1800 * time.Second},
+		{name: "MaxSessionTimeout", got: MaxSessionTimeout, want: 1440 * time.Minute},
+		{name: "DefaultRevalidateInterval", got: DefaultRevalidateInterval, want: 900 * time.Second},
+		{name: "MaxRevalidateInterval", got: MaxRevalidateInterval, want: 1440 * time.Minute},
+		{name: "DefaultPoolIdleTimeout", got: DefaultPoolIdleTimeout, want: 60 * time.Minute},
+		{name: "MaxPoolIdleTimeout", got: MaxPoolIdleTimeout, want: 1440 * time.Minute},
+		{name: "DefaultActionTimeout", got: DefaultActionTimeout, want: 3900 * time.Second},
+		{name: "MaxActionTimeout", got: MaxActionTimeout, want: 1440 * time.Minute},
+		{name: "DefaultDrainDelay", got: DefaultDrainDelay, want: 0},
+		{name: "MaxDrainDelay", got: MaxDrainDelay, want: 300 * time.Second},
+		{name: "DefaultOAuthCacheTTL", got: DefaultOAuthCacheTTL, want: 900 * time.Second},
+		{name: "MinOAuthCacheTTL", got: MinOAuthCacheTTL, want: 60 * time.Second},
+		{name: "MaxOAuthCacheTTL", got: MaxOAuthCacheTTL, want: 120 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.got != tc.want {
+				t.Errorf("%s = %s, want %s: the environment and flag tables publish that figure",
+					tc.name, tc.got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDurationConstants_KeepEveryDefaultInsideItsOwnBound asserts the shape of
+// each pair rather than either figure in it, so a deliberate change to a
+// published default still has to leave the deployment that asks for nothing
+// working.
+//
+// A default above its own ceiling is not a lint: Load runs the default through
+// the same bound check an operator's value goes through, so such a pair refuses
+// startup for a deployment that set nothing at all. The two assertions after
+// the loop are the bounds that are not a plain default-and-maximum pair: the
+// OAuth TTL has a floor as well, and the action timeout has to outlast the
+// longest wait an action offers, which is the 3600-second ceiling a pipeline
+// wait imposes on itself. internal/toolutil pins that second one against the
+// real constant, which this package cannot import; here it is the number the
+// declaration's own comment names.
+func TestDurationConstants_KeepEveryDefaultInsideItsOwnBound(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		value   time.Duration
+		ceiling time.Duration
+	}{
+		{name: "session timeout", value: DefaultSessionTimeout, ceiling: MaxSessionTimeout},
+		{name: "revalidate interval", value: DefaultRevalidateInterval, ceiling: MaxRevalidateInterval},
+		{name: "pool idle timeout", value: DefaultPoolIdleTimeout, ceiling: MaxPoolIdleTimeout},
+		{name: "action timeout", value: DefaultActionTimeout, ceiling: MaxActionTimeout},
+		{name: "drain delay", value: DefaultDrainDelay, ceiling: MaxDrainDelay},
+		{name: "oauth cache TTL", value: DefaultOAuthCacheTTL, ceiling: MaxOAuthCacheTTL},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.ceiling <= 0 {
+				t.Errorf("%s maximum = %s: a non-positive ceiling refuses every value an operator "+
+					"could set, its own default included", tc.name, tc.ceiling)
+			}
+			if tc.value > tc.ceiling {
+				t.Errorf("%s default = %s is above its maximum of %s: Load puts the default through "+
+					"the same bound check, so a deployment that set nothing would not start",
+					tc.name, tc.value, tc.ceiling)
+			}
+		})
+	}
+
+	if DefaultOAuthCacheTTL < MinOAuthCacheTTL {
+		t.Errorf("DefaultOAuthCacheTTL = %s is below MinOAuthCacheTTL = %s: validateDurationRange "+
+			"refuses the default an oauth deployment never overrides",
+			DefaultOAuthCacheTTL, MinOAuthCacheTTL)
+	}
+	if longestWait := 3600 * time.Second; DefaultActionTimeout <= longestWait {
+		t.Errorf("DefaultActionTimeout = %s, want more than the %s a pipeline wait caps itself at: "+
+			"the deadline starts before the handler does, so a default at or under that ceiling "+
+			"cancels an action that was about to return on its own",
+			DefaultActionTimeout, longestWait)
+	}
+}
