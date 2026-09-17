@@ -83,10 +83,14 @@ func legendBlock() string {
 		strings.TrimRight(glossList(apartGlosses), "\n"),
 		strings.TrimRight(tokensTable([]row{example}), "\n"),
 		strings.TrimRight(glossList(tokenGlosses), "\n"),
-		"And one thing no column carries: a row is only comparable with another row that " +
-			"agrees with it on surface, mode, tier, schema mode, corpus and tool schemas. The caption above " +
-			"each table says what that table holds fixed, and two tables with different captions are two " +
-			"measurements rather than two readings of one.",
+		"And one thing no column carries: a row is only comparable with another row that agreed with it " +
+			"on everything a caption lists. That list is not written out here, it is drawn by the same " +
+			"code that captions the real tables, so it cannot come to say less than the rule enforces:",
+		"> Compared as one table because these rows agree on " + crossVendorKey(example).String() + ".",
+		"Two tables with different captions are two measurements rather than two readings of one. Case " +
+			"coverage is in there for a reason worth stating: the corpus fingerprint says which corpus was " +
+			"asked, never how much of it, so a run narrowed to a handful of cases would otherwise sit beside " +
+			"a full one under a caption claiming they agree.",
 	}
 	return strings.Join(sections, "\n\n")
 }
@@ -100,7 +104,19 @@ func legendBlock() string {
 // sentence they have to take on trust.
 func legendRow() row {
 	return row{
-		Key: rowKey{Model: legendModel},
+		// A whole key, not only the model, because the caption below is drawn
+		// from it and a key with holes in it renders as empty backticks rather
+		// than as the sentence a reader is meant to learn to read.
+		Key: rowKey{
+			Model:            legendModel,
+			Surface:          "dynamic",
+			Mode:             "default",
+			Tier:             "free",
+			CorpusDigest:     "example-corpus",
+			ContractDigest:   "example-contract",
+			ToolSchemaDigest: "example-tools",
+			Repeat:           1,
+		},
 		Counts: counts{
 			Attempts: 10, Turns: 23, Skipped: 2, Unobserved: 1,
 			ProviderErrors: 1, HarnessErrors: 0, GitLabRefused: 1,
@@ -116,7 +132,27 @@ func legendRow() row {
 			Overhead:          overhead{Discovery: 9, InvalidParams: 3, Steps: 17},
 		},
 		Tokens: tokens{Input: 120000, Output: 4200, CacheCreated: 30000, CacheRead: 88000},
+		// Ten invented cases, so the example caption shows a coverage that is
+		// part of the corpus rather than all of it. That is the shape a reader
+		// most needs to recognize: a row narrowed with MODELEVAL_CASES looks
+		// exactly like a full one except here.
+		Cases: legendCases(),
 	}
+}
+
+// legendCases are the invented case identifiers the example row covers. They
+// are spelled out rather than generated so the example's caption is the same
+// string on every run, which is what lets the page be gated.
+func legendCases() map[string]caseFigures {
+	names := []string{
+		"XX-001", "XX-002", "XX-003", "XX-004", "XX-005",
+		"XX-006", "XX-007", "XX-008", "XX-009", "XX-010",
+	}
+	cases := make(map[string]caseFigures, len(names))
+	for _, name := range names {
+		cases[name] = caseFigures{Run: "example-run", Date: "2026-09-17", Commit: "0000000000"}
+	}
+	return cases
 }
 
 // glossList renders the definitions as a list.

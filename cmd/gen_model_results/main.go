@@ -264,6 +264,14 @@ func mergeRows(doc *document, rows []row, stdout io.Writer) {
 		}
 
 		standing := doc.Rows[held]
+		if why := mergeRefusal(standing, incoming); why != "" {
+			// Refused, and the standing row is left exactly as it stood. The
+			// incoming figures are dropped rather than published under a
+			// heading that would describe only one of the two runs behind
+			// them, which is the fold this record exists to stop.
+			fmt.Fprintf(stdout, logLead+"refused to merge into the published row %s: %s\n", name, why)
+			continue
+		}
 		replaced := replacedCases(standing.Cases, incoming.Cases)
 		kept := len(standing.Cases) - len(replaced)
 		merged := mergeCases(standing.Cases, incoming.Cases)

@@ -67,7 +67,11 @@ Tokens, never folded into one figure: a cache read is not an input token, and a 
 - **Cache created** — Input tokens written into the provider's prompt cache.
 - **Cache read** — Input tokens served from it, billed at a fraction of the others.
 
-And one thing no column carries: a row is only comparable with another row that agrees with it on surface, mode, tier, schema mode, corpus and tool schemas. The caption above each table says what that table holds fixed, and two tables with different captions are two measurements rather than two readings of one.
+And one thing no column carries: a row is only comparable with another row that agreed with it on everything a caption lists. That list is not written out here, it is drawn by the same code that captions the real tables, so it cannot come to say less than the rule enforces:
+
+> Compared as one table because these rows agree on surface `dynamic`, mode `default`, tier `free`, corpus `example-corpus`, 10 of 258 cases (`aede312575a4dabf`), contract `example-contract`, tool schemas `example-tools`, repeat 1.
+
+Two tables with different captions are two measurements rather than two readings of one. Case coverage is in there for a reason worth stating: the corpus fingerprint says which corpus was asked, never how much of it, so a run narrowed to a handful of cases would otherwise sit beside a full one under a caption claiming they agree.
 <!-- END MODEL EVAL LEGEND -->
 
 ## Which tables may be compared with which
@@ -76,14 +80,19 @@ Two rules, because there are two questions.
 
 - **Across models**, holding the surface fixed: two rows belong in one table
   only when they agree on surface, protective mode, tier and tier pin, meta
-  schema mode, slice size, the corpus and contract fingerprints, the tool
-  schemas as that provider received them, and the repeat count. The tool-schema
-  fingerprint is in the key because a provider-specific rewrite of the schemas
-  is a different surface, whatever the row is called.
-- **Across surfaces**, holding the model fixed: everything above except the
-  surface and the three things a surface decides for itself, which are the meta
-  schema mode, the slice size and the tool-schema fingerprint. Each such row is
-  labeled with whichever of the first two it has.
+  schema mode, slice size, the corpus and contract fingerprints, **which cases
+  of that corpus were actually asked**, the tool schemas as that provider
+  received them, and the repeat count. The tool-schema fingerprint is in the key
+  because a provider-specific rewrite of the schemas is a different surface,
+  whatever the row is called. The case coverage is in it because the corpus
+  fingerprint says which corpus was asked and never how much of it: a run
+  narrowed with `MODELEVAL_CASES` produces a row whose key is otherwise
+  identical to a full run's, and the two would sit in one table with nothing
+  but a denominator to tell them apart.
+- **Across surfaces**, holding the model fixed: everything above, case coverage
+  included, except the surface and the three things a surface decides for
+  itself, which are the meta schema mode, the slice size and the tool-schema
+  fingerprint. Each such row is labeled with whichever of the first two it has.
 
 Anything else goes in a table of its own, captioned with what that table holds
 fixed. One comparison is never honest whatever the key says: the meta surface's
