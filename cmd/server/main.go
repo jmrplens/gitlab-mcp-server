@@ -736,6 +736,37 @@ func hostsOf(urls []string) []string {
 	return hosts
 }
 
+// metricHostsFor decides which GitLab hosts the http.client metric may name.
+//
+// Declared per mode, because the modes disagree about who chooses the instance:
+// stdio and a pinned HTTP deployment serve a known list, while the
+// free-selection mode serves whatever a caller names, which is exactly what
+// must not become a metric label. See [mcpotel.SetMetricServerAddresses].
+//
+// It is a function of its two inputs rather than a switch inside startup for
+// one reason: a decision taken in the middle of starting a server is asserted
+// by nothing, and five mutants of that switch survived the whole suite. Free
+// selection returns no host at all, which the setter stores as an empty set and
+// reads back exactly like the unset one it used to leave behind.
+func metricHostsFor(hcfg *httpConfig, envURL string) []string {
+	switch {
+	case hcfg != nil && len(hcfg.gitlabURLs) > 0:
+		return hostsOf(hcfg.gitlabURLs)
+	case hcfg != nil && envURL != "":
+		// The env overlay lets GITLAB_URL pin an HTTP deployment the same way
+		// the flag does, so it declares the metric's host the same way too.
+		return hostsOf([]string{envURL})
+	case hcfg != nil:
+		// Free selection: callers choose the instance, so no host is declared
+		// and every one lands on the metric as the other bucket.
+		return nil
+	case envURL != "":
+		return hostsOf([]string{envURL})
+	default:
+		return hostsOf([]string{config.DefaultGitLabURL})
+	}
+}
+
 // runWithContext dispatches to HTTP or stdio mode depending on hcfg.
 // A non-nil hcfg starts the HTTP server using CLI-flag configuration
 // (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
@@ -770,26 +801,7 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	// --tool-surface=individual the dynamic default's decision.
 	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
 
-	// Which GitLab hosts the http.client metric may name. Declared per mode,
-	// because the modes disagree about who chooses the instance: stdio and a
-	// pinned HTTP deployment serve a known list, while the free-selection mode
-	// serves whatever a caller names, which is exactly what must not become a
-	// metric label. See mcpotel.SetMetricServerAddresses.
-	switch {
-	case hcfg != nil && len(hcfg.gitlabURLs) > 0:
-		mcpotel.SetMetricServerAddresses(hostsOf(hcfg.gitlabURLs))
-	case hcfg != nil && os.Getenv("GITLAB_URL") != "":
-		// The env overlay lets GITLAB_URL pin an HTTP deployment the same way
-		// the flag does, so it declares the metric's host the same way too.
-		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
-	case hcfg != nil:
-		// Free selection: callers choose the instance, so no host is declared
-		// and every one lands on the metric as the other bucket.
-	case os.Getenv("GITLAB_URL") != "":
-		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
-	default:
-		mcpotel.SetMetricServerAddresses(hostsOf([]string{config.DefaultGitLabURL}))
-	}
+	mcpotel.SetMetricServerAddresses(metricHostsFor(hcfg, os.Getenv("GITLAB_URL")))
 
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryShutdownTimeout)

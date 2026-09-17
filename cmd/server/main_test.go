@@ -11117,3 +11117,94 @@ func TestDependencies_TestSupport_NeverReachesTheServerBinary(t *testing.T) {
 		})
 	}
 }
+
+// TestTelemetryShutdownTimeout_IsABoundRatherThanZero pins the one constant
+// that decides how long the final telemetry flush may take.
+//
+// Mutation testing reported `5 * time.Second` changed to `5 / time.Second`, a
+// constant-initializer mutation that evaluates to 0, surviving the whole
+// package suite. A zero there is not a shorter bound: context.WithTimeout with
+// a non-positive duration returns a context that is already past its deadline,
+// so the flush this defer exists to perform is cancelled before it starts and
+// every span, metric and log the process still held is dropped on exit. The
+// telemetry would go missing exactly at the moment a crash makes it most
+// wanted, and nothing anywhere would say so.
+//
+// Asserted against its magnitude rather than against itself: comparing the
+// constant with the constant is the shape that let this survive.
+func TestTelemetryShutdownTimeout_IsABoundRatherThanZero(t *testing.T) {
+	if telemetryShutdownTimeout <= 0 {
+		t.Fatalf("telemetryShutdownTimeout = %v; a non-positive duration makes context.WithTimeout return an already-expired context, so the final flush is cancelled before it runs",
+			telemetryShutdownTimeout)
+	}
+	if telemetryShutdownTimeout > time.Minute {
+		t.Errorf("telemetryShutdownTimeout = %v, want at most a minute: a process that will not exit is worse than telemetry that did not flush",
+			telemetryShutdownTimeout)
+	}
+}
+
+// TestMetricHostsFor_EachModeDeclaresWhoChoseTheInstance asserts the one
+// decision that bounds the http.client metric's server.address label.
+//
+// Which hosts the metric may name follows from who picks the instance: a flag
+// list and a pinned GITLAB_URL are the operator's choice and are declared, and
+// the free-selection HTTP mode declares nothing, so a caller's hostname lands
+// on the other bucket instead of minting a series. Taken inside startup, the
+// decision was asserted by nothing: five mutants of its switch, including the
+// one that hands free selection the default host, survived the whole suite.
+func TestMetricHostsFor_EachModeDeclaresWhoChoseTheInstance(t *testing.T) {
+	cases := []struct {
+		name   string
+		hcfg   *httpConfig
+		envURL string
+		want   []string
+	}{
+		{
+			name: "http flags name the instances, so the metric names them",
+			hcfg: &httpConfig{gitlabURLs: []string{"https://one.example.com", "https://two.example.com/"}},
+			want: []string{"one.example.com", "two.example.com"},
+		},
+		{
+			name:   "a flag list wins over the environment",
+			hcfg:   &httpConfig{gitlabURLs: []string{"https://flag.example.com"}},
+			envURL: "https://env.example.com",
+			want:   []string{"flag.example.com"},
+		},
+		{
+			name:   "the env overlay pins an HTTP deployment the same way the flag does",
+			hcfg:   &httpConfig{},
+			envURL: "https://env.example.com",
+			want:   []string{"env.example.com"},
+		},
+		{
+			name: "free selection declares no host at all",
+			hcfg: &httpConfig{},
+			want: nil,
+		},
+		{
+			name:   "stdio declares the instance it was configured with",
+			envURL: "https://stdio.example.com",
+			want:   []string{"stdio.example.com"},
+		},
+		{
+			name: "stdio with nothing configured declares the default instance",
+			want: []string{"gitlab.com"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricHostsFor(tc.hcfg, tc.envURL)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("metricHostsFor(%+v, %q) = %v, want %v", tc.hcfg, tc.envURL, got, tc.want)
+			}
+		})
+	}
+
+	// The default case is the one whose expectation is written down twice, so
+	// pin it to the constant rather than to the spelling above.
+	if want := "gitlab.com"; !strings.Contains(config.DefaultGitLabURL, want) {
+		t.Fatalf("config.DefaultGitLabURL = %q, which no longer contains %q: the default-instance case above is asserting a host the server does not use",
+			config.DefaultGitLabURL, want)
+	}
+}
