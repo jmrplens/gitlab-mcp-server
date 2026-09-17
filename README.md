@@ -449,10 +449,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,281 |     279,436 |
-| Unit tests (`_test.go`)  |       786 |     468,045 |
+| Source (`.go`, non-test) |     1,281 |     279,451 |
+| Unit tests (`_test.go`)  |       786 |     468,117 |
 | End-to-end tests         |       491 |      93,796 |
-| **Total**                | **2,558** | **841,277** |
+| **Total**                | **2,558** | **841,364** |
 
 ### Functions
 
@@ -461,7 +461,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  9,901 |
 | . Exported (public)             |  3,191 |
 | . Unexported (private)          |  6,710 |
-| Unit test functions (`TestXxx`) | 15,138 |
+| Unit test functions (`TestXxx`) | 15,140 |
 | Subtests (`t.Run(...)`)         |  4,708 |
 | End-to-end test functions       |  1,196 |
 
@@ -469,17 +469,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.67× more tests than code |
+| Test lines vs source lines         | 1.68× more tests than code |
 | Average source file length         |                 ~218 lines |
-| Average test file length           |                 ~595 lines |
-| Comment lines in source            |  60,974 (~21.8% of source) |
+| Average test file length           |                 ~596 lines |
+| Comment lines in source            |  60,980 (~21.8% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,612 |
+| `if err != nil` checks             | 8,616 |
 | `defer` statements                 | 1,058 |
 | `struct` types defined             | 3,268 |
 | `//nolint` suppressions            |   218 |
