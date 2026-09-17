@@ -27,7 +27,7 @@
 #
 #   Be precise about what did NOT happen: the advisory is keyed to the module
 #   golang.org/x/crypto, not to the openpgp package, and that module is still a
-#   direct requirement because cmd/eval_mcp_surfaces imports
+#   direct requirement because test/e2e/internal/fixture/user.go imports
 #   golang.org/x/crypto/ssh. So `govulncheck -show verbose ./...` still lists
 #   GO-2026-5932 under module results, and always will: it covers every version
 #   ("introduced: 0", "Fixed in: N/A"). What the removal cleared is the reachable

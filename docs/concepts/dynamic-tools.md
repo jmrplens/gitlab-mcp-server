@@ -370,7 +370,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/toolutil/action_spec.go`        | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance       |
 | `internal/toolutil/meta_tool.go`          | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers                                       |
 | `cmd/server/main.go`                      | Selects `GITLAB_MCP_TOOL_SURFACE` and registers meta, individual, or dynamic surfaces                                    |
-| `cmd/eval_mcp_surfaces`                   | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks                                          |
+| `test/e2e/modeleval`                      | Puts the corpus to a real model against the real binary and a real GitLab, and records what happened                     |
 | `test/e2e/gitlab/common/`                 | E2E coverage for the default dynamic two-tool surface: every scenario runs on it as a subtest                            |
 
 ### Registering New Actions
@@ -396,13 +396,18 @@ Dynamic mode has dedicated unit coverage for search ranking, schema cloning, reg
 make test-e2e-ce
 ```
 
-Model-facing evaluations can compare surfaces with `cmd/eval_mcp_surfaces`:
+Model-facing evaluations compare surfaces in `test/e2e/modeleval`, which boots
+a GitLab and drives the real binary over stdio, so what is measured is the
+surface a client is served rather than a copy of it assembled in a test
+process. It asks a paid provider, so nothing schedules it:
 
 ```bash
-go run ./cmd/eval_mcp_surfaces --tool-surface=dynamic --dry-run --partition base-read
+MODELEVAL_SURFACES=dynamic,meta MODELEVAL_SPEND=yes make modeleval-ce
 ```
 
-Use `dynamic` for production-like low-token configuration.
+See [Model evaluation](../development/testing/model-evaluation.md) for what a
+run costs, what it records and how to read a published row. Use `dynamic` for
+production-like low-token configuration.
 
 ## Troubleshooting
 

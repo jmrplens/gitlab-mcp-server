@@ -113,6 +113,8 @@ explicit configuration flag and must pass evaluation gates before it can become 
 - **IMP-005**: Return repairable validation failures as tool results with `isError: true`.
 - **IMP-006**: Require `confirm:true` for destructive execution and preserve safe mode previews.
 - **IMP-007**: Extend `cmd/eval_mcp_surfaces` to compare current meta-tools and the dynamic toolset.
+  That evaluator was replaced and deleted; the comparison it names now lives in `test/e2e/modeleval`,
+  which drives the real binary rather than registering a server of its own.
 - **IMP-008**: Add observability for find query, selected action, validation failure, policy block, and
   destructive confirmation events.
 

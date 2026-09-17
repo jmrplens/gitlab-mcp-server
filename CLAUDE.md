@@ -76,7 +76,8 @@ gitlab-mcp-server/
 │   ├── audit_test_subtests/     # Audits case loops that assert without a t.Run subtest; -fix rewrites the unambiguous ones (make check-test-subtests)
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
 │   ├── bench_resources/         # Measures what the server costs to run (CPU, memory) and draws the charts the docs publish (make bench-resources); the concurrency series steps one HTTP process up to a thousand credentials, profiling it through --pprof-addr, and -no-render measures on a host with no checkout. `-fairness <bound>` (make bench-fairness) is a separate mode: two populations of credentials driven differently, measured with the bound in force and without it, reporting the quiet population's served and refused counts apart and able to answer that the bound helped nobody. It writes bench/fairness.json, which is not committed, and draws nothing, so it never touches the record or the charts `-check` compares
-│   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
+│   ├── gen_model_corpus/        # Renders the model evaluation corpus breadth ledger: which catalog actions, domains and tiers the corpus asks a model to reach, counted against the catalog this tree builds. Breadth and never coverage
+│   ├── gen_model_results/       # The fold: a model evaluation run's observation shards into the committed record, scored here and not there, and the record into the published pages and README blocks. A run writes observation and no verdict, so a scoring rule corrected today re-scores a past run from its shards without spending a token (`-refold`, each dropped row named); a second fold of a run already published is refused rather than replacing it, and a run whose shards were not kept cannot be re-scored at all. `-check` is the offline gate
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_api_live/            # The one oracle here that is **evaluated rather than parsed**: boots a released `gitlab-ee` image, asks the loaded Rails application what its REST API is through one `gitlab-rails runner` script, and writes `docs/development/gitlab-api-live.json` (make gen-api-live). It carries every Grape entity with the fields it exposes, the entity each field renders with and the condition gating it **with that condition's text read back from inside the image**; every mounted route with the entity its `desc` annotates and its params with type, requiredness and default; and the licensed-feature table evaluated. An exposure declared `merge: true` is marked, and `apilive` resolves it into the keys it contributes instead of a key of its own: it sends its child's keys on the parent and none of its own, so reading it literally inverted both directions of the comparison at once (a member "carrying" a `user` object it never sends, while the nine `UserBasic` keys it does send read as invented by us), which cost 34 phantom findings and hid 16 real ones. `-check` gates the committed record with no Docker and no network (make check-api-live), refusing a record too small to have come from a GitLab, one holding an entity that refused to describe itself, or one past the shared staleness window. It needs **no licence and no fixtures**, because a licence gates `feature_available?` when a request is served and not when a class is defined. Why it exists: a scan of the same Ruby cannot see a name that is not written down, and `GeoSiteStatus` exposes ~600 fields by iterating a constant assembled from two method calls, so the source says "expose the loop variable"; measured against the scanned record with inheritance resolved, 551 of 582 entities agree and the 31 that do not hold 1935 fields the scan never saw
@@ -382,21 +383,21 @@ go test -tags e2e -c -o /dev/null ./test/e2e/gitlab/...    # Linux
 GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
 make test-e2e-gitlab-com                                # Orchestrated: ensure token, setup fixtures, wait indexer, run live tests
 
-# Surface evaluator (Docker GitLab fixture)
-# CE case set
-make eval-surfaces-docker SURFACE=dynamic
-make eval-surfaces-docker SURFACE=meta
+# Model evaluation: the corpus put to a model against the real binary and a
+# real GitLab. It asks a paid provider, so nothing schedules it.
+MODELEVAL_MODELS=fake:perfect make modeleval-ce          # rehearse the whole pipe, no provider call, no cost
+MODELEVAL_SPEND=yes MODELEVAL_BUDGET_USD=25 \
+  MODELEVAL_MODELS='anthropic:claude-haiku-4-5-20251001' make modeleval-ce
+MODELEVAL_SPEND=yes MODELEVAL_MODELS='...' make modeleval-ee   # the licensed half of the corpus
+MODELEVAL_PROBE=yes make modeleval-probe                 # does each provider accept the request we build
 
-# Enterprise-only case set on GitLab EE runtime
-make eval-surfaces-docker-enterprise SURFACE=dynamic
-make eval-surfaces-docker-enterprise SURFACE=meta
-
-# CE + Enterprise case set together on GitLab EE runtime
-make eval-surfaces-docker-enterprise-all SURFACE=dynamic
-make eval-surfaces-docker-enterprise-all SURFACE=meta
+# A run writes observation and scores nothing; the numbers are computed on the fold.
+make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce
+make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce   # re-score under today's rules
+make check-model-results                                        # the offline gate
 ```
 
-For targeted debugging, append `PRESET=...` to any evaluator target to run a single preset.
+`MODELEVAL_CASES` narrows a run to named case IDs, which is how one corrected case is re-run and re-folded without the other 257. **Keep the shards** under `dist/modeleval/`: the committed record holds scored columns, a redraw scores nothing, and a run whose shards were discarded can never be re-scored.
 
 ### Release process
 
@@ -500,7 +501,8 @@ convention, and what a user already has in the environment, so they are never
 spelled twice), every `OTEL_*` variable (owned by the OpenTelemetry
 specification and read by the exporters themselves), and `AUTOPILOT` (a
 convention other agent tooling sets, honored as an alias of
-`GITLAB_MCP_YOLO_MODE` and never warned about). The evaluator's `EVAL_SURFACE_*`
+`GITLAB_MCP_YOLO_MODE` and never warned about). The model evaluation's
+`MODELEVAL_*`
 and the test transport's `GITLAB_MCP_TEST_INVENTORY_DIR` are developer-only,
 driven by `make` targets, read by test code that `cmd/server` never links, and
 out of scope: they configure the harness rather than the server, and there is
@@ -551,13 +553,14 @@ no legacy spelling of either to warn anybody about.
 | `GITLAB_MCP_TELEMETRY_TOOL_NAME` | No | Whether `gen_ai.tool.name` is a metric dimension: `auto` (default), `on` or `off`. Auto keeps it on the dynamic and meta surfaces and drops it on individual, where ~1091 tools would exhaust the SDK's 2000-series cardinality limit and collapse the long tail into one `otel.metric.overflow` bucket, first-come-wins under cumulative temporality. Implemented as a metric View, because filtering runs before the limit is counted. Flag `--telemetry-tool-name` |
 | `GITLAB_MCP_LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`). Flag `--log-level` |
 | `GITLAB_MCP_PPROF_ADDR`             | No       | Serve Go's profiling handlers (`net/http/pprof`) on this address, on an `http.Server` of their own that starts before the transport and stops with the process, so a CPU profile of startup can be taken. Loopback only (`127.0.0.1:port`, `[::1]:port`, `localhost:port`): anything else is refused at startup, because a heap profile is a copy of the process's memory and the handlers take no credential. Empty (default) serves nothing. Both transports; flag `--pprof-addr`. `cmd/server/pprof.go`; the benchmark's concurrency series starts the server with it |
-| `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
-| `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
-| `EVAL_SURFACE_SERVER_MODE` | No     | `cmd/eval_mcp_surfaces`: protective server mode under evaluation — `default`, `read-only`, or `safe-mode`. Alias `SERVER_MODE=` on the Makefile target |
-| `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
+| `MODELEVAL_MODELS`       | No      | `test/e2e/modeleval`: comma-separated `provider:model;key=value` specs a run asks. `fake:perfect` replays each case's own answer key through the whole pipe with no provider call, which is the rehearsal; folding a fake run publishes nothing and refuses every row by name |
+| `MODELEVAL_SPEND`        | No      | `test/e2e/modeleval`: the consent a run asking a real provider needs (`yes`, `true`, `1`). Empty is no. A misspelled value is refused rather than read as no, because a run refused for a typo costs a moment and a run started by one costs money |
+| `MODELEVAL_BUDGET_USD`   | No      | `test/e2e/modeleval`: the ceiling in US dollars a run stops at. `MODELEVAL_UNPRICED` lets a run start with a model the price table has no figure for, which otherwise refuses |
+| `MODELEVAL_SURFACES`     | No      | `test/e2e/modeleval`: surfaces to measure (`dynamic,meta` by default). Individual is left out by cost, not by disinterest: its tools/list is 682,878 tokens at Ultimate, so it can only be put to a model on a deterministic slice, and `MODELEVAL_SLICE` (128) is that budget |
+| `MODELEVAL_CASES`        | No      | `test/e2e/modeleval`: comma-separated case IDs; empty asks every case. This is how one corrected case is re-run and re-folded on its own |
+| `MODELEVAL_MODE`, `MODELEVAL_TIER`, `MODELEVAL_META_PARAM_SCHEMA`, `MODELEVAL_REPEAT`, `MODELEVAL_PARALLEL`, `MODELEVAL_PROBE` | No | `test/e2e/modeleval`: the protective mode, the tier pin, the meta schema mode served, how many times each attempt runs, how many are in flight, and the consent the provider contract probe needs. Each counted setting has a ceiling, so a mistyped figure is a refusal rather than a bill |
 | `GITLAB_MCP_TEST_INVENTORY_DIR` | No | `internal/testutil`: absolute directory the test transport records every request it sees into, one shard per test process, merged by `cmd/gen_request_inventory`. Empty (default) records nothing. A relative path is refused rather than resolved, because a test binary runs in its own package directory and would scatter a shard under each of 178 of them |
 | `GITLAB_MCP_TEST_SNAPSHOT_PARITY` | No | Every unit test that compares a **committed, generated artifact** with what the tree generates now: `deferred` skips it with a message saying why, through the one reader, `internal/freshness`. Five packages read it: `internal/tools` (the golden snapshots: `TestToolSnapshots_*` and the two `GoldenSnapshotParity` tests), `cmd/audit_tokens` (the token footprint targets), `cmd/gen_llms` (one subtest per committed llms file, and only those: the surface facts asserted beside them are not about a committed artifact and keep running), `cmd/audit_metrics` (`site/src/data/stats.json`) and `cmd/gen_lhm_manifest` (`lhm.plugin.json`). CI sets it from `FRESHNESS` in `ci.yml`, in the coverage job and the cross-platform matrix alike, which is `deferred` on every layer of a GitHub stack below its top (told by `github.event.pull_request.stack.position`, since a stacked layer is tested as the stack merged into `main` and `github.base_ref` is `main` for all of them) and on a pull request outside a stack whose base is not `main`, and `checked` at the top of a stack, on a pull request to `main` and on a push to `main`: every freshness gate (stats, llms, footprint, testing reference, manifests, request inventory, snapshots) compares a committed artifact with what the tree generates now, and a stack refreshes those once at its top. Empty (default) compares, which is also what the race workflow and a developer's machine do. A test that pins the value to `checked` must therefore compare no committed artifact, or it fails on exactly the layer the deferral exempts |
-| `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
 None of the three `GITLAB_MCP_ALLOWED_*_DIRS` allow-lists applies in HTTP mode: a server reached over HTTP refuses every caller-supplied local path, since the caller has no files on the machine the server runs on and `content_base64` is the remote form. The transport is inferred from the process arguments in `internal/toolutil/file_utils.go`, so a deployment that never heard of this policy still gets the right answer.
 

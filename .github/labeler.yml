@@ -203,7 +203,6 @@ tooling:
           - cmd/audit_*/**
           - cmd/gen_*/**
           - cmd/bench_resources/**
-          - cmd/eval_mcp_surfaces/**
           - cmd/format_md_tables/**
           - cmd/godoc_tool/**
           - cmd/internal/**
@@ -230,7 +229,10 @@ e2e:
       - any-glob-to-any-file:
           - test/e2e/gitlab/**
           - test/e2e/internal/**
+          - test/e2e/modeleval/**
           - internal/testutil/e2ecalls/**
+          - internal/testutil/modelcorpus/**
+          - internal/testutil/modelrecord/**
           - test/e2e/orbit/**
           - test/e2e/collector/**
           - test/e2e/scripts/**

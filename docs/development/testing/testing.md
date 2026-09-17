@@ -20,26 +20,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,911 |
-| Unit test functions                                   | 15,715 |
+| Total test functions                                  | 16,218 |
+| Unit test functions                                   | 15,022 |
 | E2E test functions                                    |  1,196 |
-| cmd test functions                                    |  3,289 |
+| cmd test functions                                    |  2,596 |
 | Test files (internal/)                                |    579 |
-| Test files (cmd/)                                     |    233 |
+| Test files (cmd/)                                     |    197 |
 | Test files (test/e2e/)                                |    383 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     27 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.3% |
-| Overall coverage (`go test ./internal/...`)           |  98.6% |
-| Average package coverage                              |  98.5% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.9% |
+| Overall coverage (`go test ./internal/...`)           |  99.4% |
+| Average package coverage                              |  98.6% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,498 | 73.9% |
-| `TestFunc` (no underscore)             |    934 |  5.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,479 | 20.6% |
+| `TestFunc_Scenario` (2-part)           | 11,955 | 73.7% |
+| `TestFunc` (no underscore)             |    904 |  5.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,359 | 20.7% |
 
 ## Test Distribution
 
@@ -51,8 +51,8 @@
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,118 |        380 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,196 |        383 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,289 |        233 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,911** |  **1,195** |                                                                                                 |
+| cmd packages            |          2,596 |        197 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,218** |  **1,159** |                                                                                                 |
 
 ### Core Packages
 
@@ -310,70 +310,66 @@
 
 ### cmd Package Snapshot
 
-| Package                                        | Coverage |
-| ---------------------------------------------- | -------: |
-| cmd/audit_1to1                                 |   100.0% |
-| cmd/audit_1to1/internal/actions                |   100.0% |
-| cmd/audit_1to1/internal/enums                  |    99.7% |
-| cmd/audit_1to1/internal/merge                  |   100.0% |
-| cmd/audit_1to1/internal/metadata               |   100.0% |
-| cmd/audit_1to1/internal/paths                  |    99.6% |
-| cmd/audit_1to1/internal/sdk                    |   100.0% |
-| cmd/audit_1to1/internal/shared                 |   100.0% |
-| cmd/audit_1to1/internal/structs                |   100.0% |
-| cmd/audit_catalog_first                        |    93.2% |
-| cmd/audit_discovery_completeness               |    92.6% |
-| cmd/audit_doc_coverage                         |    91.6% |
-| cmd/audit_doc_tool_names                       |    94.2% |
-| cmd/audit_dynamic_aliases                      |    77.4% |
-| cmd/audit_e2e_coverage                         |    94.8% |
-| cmd/audit_edition_tier                         |    86.5% |
-| cmd/audit_gateway_chars                        |    87.5% |
-| cmd/audit_graphql_documents                    |    93.5% |
-| cmd/audit_graphql_shapes                       |    94.4% |
-| cmd/audit_install_buttons                      |    84.2% |
-| cmd/audit_md_escaping                          |   100.0% |
-| cmd/audit_meta_descriptions                    |    96.6% |
-| cmd/audit_metrics                              |    97.6% |
-| cmd/audit_readonly_graphql                     |    98.5% |
-| cmd/audit_supply_chain                         |    98.0% |
-| cmd/audit_surface_quality                      |    94.4% |
-| cmd/audit_test_goroutines                      |    94.6% |
-| cmd/audit_test_names                           |    91.1% |
-| cmd/audit_test_subtests                        |    99.7% |
-| cmd/audit_tokens                               |    98.0% |
-| cmd/bench_resources                            |   100.0% |
-| cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
-| cmd/eval_mcp_surfaces/internal/evaluator       |    93.9% |
-| cmd/eval_mcp_surfaces/internal/evaluator/cases |   100.0% |
-| cmd/eval_mcp_surfaces/internal/termio          |   100.0% |
-| cmd/format_md_tables                           |    95.8% |
-| cmd/gen_action_catalog_manifest                |    57.9% |
-| cmd/gen_api_live                               |    80.1% |
-| cmd/gen_brand                                  |    87.1% |
-| cmd/gen_graphql_schema                         |    85.9% |
-| cmd/gen_icon_webp                              |    92.3% |
-| cmd/gen_lhm_manifest                           |    90.2% |
-| cmd/gen_llms                                   |    98.9% |
-| cmd/gen_model_corpus                           |    91.0% |
-| cmd/gen_model_results                          |    96.0% |
-| cmd/gen_request_inventory                      |    90.2% |
-| cmd/gen_stats                                  |   100.0% |
-| cmd/gen_testing_docs                           |    98.0% |
-| cmd/godoc_tool                                 |   100.0% |
-| cmd/internal/apidocs                           |   100.0% |
-| cmd/internal/apilive                           |   100.0% |
-| cmd/internal/auditshared                       |   100.0% |
-| cmd/internal/docgen                            |   100.0% |
-| cmd/internal/golist                            |   100.0% |
-| cmd/internal/goprogram                         |   100.0% |
-| cmd/internal/graphqldocs                       |   100.0% |
-| cmd/internal/graphqlintrospect                 |   100.0% |
-| cmd/internal/mcpsurface                        |   100.0% |
-| cmd/internal/provenance                        |   100.0% |
-| cmd/internal/requestinventory                  |   100.0% |
-| cmd/internal/testsource                        |   100.0% |
-| cmd/server                                     |    99.8% |
+| Package                          | Coverage |
+| -------------------------------- | -------: |
+| cmd/audit_1to1                   |   100.0% |
+| cmd/audit_1to1/internal/actions  |   100.0% |
+| cmd/audit_1to1/internal/enums    |    99.7% |
+| cmd/audit_1to1/internal/merge    |   100.0% |
+| cmd/audit_1to1/internal/metadata |   100.0% |
+| cmd/audit_1to1/internal/paths    |    99.6% |
+| cmd/audit_1to1/internal/sdk      |   100.0% |
+| cmd/audit_1to1/internal/shared   |   100.0% |
+| cmd/audit_1to1/internal/structs  |   100.0% |
+| cmd/audit_catalog_first          |    93.2% |
+| cmd/audit_discovery_completeness |    92.6% |
+| cmd/audit_doc_coverage           |    91.6% |
+| cmd/audit_doc_tool_names         |    94.2% |
+| cmd/audit_dynamic_aliases        |    77.4% |
+| cmd/audit_e2e_coverage           |    94.8% |
+| cmd/audit_edition_tier           |    86.5% |
+| cmd/audit_gateway_chars          |    87.5% |
+| cmd/audit_graphql_documents      |    93.5% |
+| cmd/audit_graphql_shapes         |    94.4% |
+| cmd/audit_install_buttons        |    84.2% |
+| cmd/audit_md_escaping            |   100.0% |
+| cmd/audit_meta_descriptions      |    96.6% |
+| cmd/audit_metrics                |    97.6% |
+| cmd/audit_readonly_graphql       |    98.5% |
+| cmd/audit_supply_chain           |    98.0% |
+| cmd/audit_surface_quality        |    94.4% |
+| cmd/audit_test_goroutines        |    94.6% |
+| cmd/audit_test_names             |    91.1% |
+| cmd/audit_test_subtests          |    99.7% |
+| cmd/audit_tokens                 |    98.0% |
+| cmd/bench_resources              |   100.0% |
+| cmd/format_md_tables             |    95.8% |
+| cmd/gen_action_catalog_manifest  |    57.9% |
+| cmd/gen_api_live                 |    80.1% |
+| cmd/gen_brand                    |    87.1% |
+| cmd/gen_graphql_schema           |    85.9% |
+| cmd/gen_icon_webp                |    92.3% |
+| cmd/gen_lhm_manifest             |    90.2% |
+| cmd/gen_llms                     |    98.9% |
+| cmd/gen_model_corpus             |    91.0% |
+| cmd/gen_model_results            |    96.0% |
+| cmd/gen_request_inventory        |    90.2% |
+| cmd/gen_stats                    |   100.0% |
+| cmd/gen_testing_docs             |    98.0% |
+| cmd/godoc_tool                   |   100.0% |
+| cmd/internal/apidocs             |   100.0% |
+| cmd/internal/apilive             |   100.0% |
+| cmd/internal/auditshared         |   100.0% |
+| cmd/internal/docgen              |   100.0% |
+| cmd/internal/golist              |   100.0% |
+| cmd/internal/goprogram           |   100.0% |
+| cmd/internal/graphqldocs         |   100.0% |
+| cmd/internal/graphqlintrospect   |   100.0% |
+| cmd/internal/mcpsurface          |   100.0% |
+| cmd/internal/provenance          |   100.0% |
+| cmd/internal/requestinventory    |   100.0% |
+| cmd/internal/testsource          |   100.0% |
+| cmd/server                       |    99.8% |
 
 ### Core Packages
 
@@ -603,7 +599,6 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/gen_brand** (87.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_gateway_chars** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->
 

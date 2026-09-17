@@ -43,13 +43,14 @@ gitlab-mcp-server/
 │   ├── audit_test_subtests/     # Case loops that assert without a t.Run subtest (+ -fix)
 │   ├── audit_tokens/            # Token overhead audit (+ --compare-schemas sizing spike, -footprint)
 │   ├── bench_resources/         # Measures what the server costs to run; draws the published charts
-│   ├── eval_mcp_surfaces/       # Model-facing MCP surface evaluation harness
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
 │   ├── gen_brand/               # Emits every vector brand asset from one parametric geometry
 │   ├── gen_icon_webp/           # Light/dark WebP icon fallbacks (maintainer-only)
 │   ├── gen_lhm_manifest/        # Generates the LobeHub manifest capability arrays
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt
+│   ├── gen_model_corpus/        # Renders the model evaluation corpus breadth ledger
+│   ├── gen_model_results/       # Folds a model evaluation run's shards into the published record
 │   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
 │   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)

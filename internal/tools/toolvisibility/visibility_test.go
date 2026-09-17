@@ -319,12 +319,18 @@ func TestApply_WithoutAServer_ChangesNothingAndSaysWhy(t *testing.T) {
 }
 
 // TestApply_MetaSurface_ReachesTheInteractiveFlows verifies the case issue 617
-// is about, against the registrations cmd/server and the evaluator both make:
-// the meta catalog the shared assembler builds plus the standalone flows. In
-// read-only mode the four gitlab_interactive_* tools are withdrawn and a
-// catalog read still reaches GitLab; in safe mode they answer with a preview
-// and a catalog read still reaches GitLab. Before the pass was shared, an
-// evaluator session in either mode kept the flows' real handlers.
+// is about, against the registration cmd/server makes: the meta catalog the
+// shared assembler builds plus the standalone flows. In read-only mode the
+// four gitlab_interactive_* tools are withdrawn and a catalog read still
+// reaches GitLab; in safe mode they answer with a preview and a catalog read
+// still reaches GitLab.
+//
+// The defect it was written for belonged to an evaluator that registered a
+// server of its own, where either mode kept the flows' real handlers. That
+// evaluator is gone and the one under test/e2e drives the binary, so no second
+// registration exists to drift; this test is what holds the policy itself,
+// which cmd/server's exemption from the coverage rule would otherwise leave
+// unasserted.
 func TestApply_MetaSurface_ReachesTheInteractiveFlows(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/issues") {

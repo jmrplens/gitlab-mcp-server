@@ -26,7 +26,7 @@ const (
 	// It carries the project's prefix and is not one of the settings
 	// internal/config resolves: it configures the test harness, cmd/server
 	// never reads it, and there is no legacy spelling of it to warn anybody
-	// about. That is the standing the developer-only EVAL_SURFACE_* variables
+	// about. That is the standing the developer-only MODELEVAL_* variables
 	// have.
 	DirEnv = "GITLAB_MCP_TEST_E2E_CALLS_DIR"
 

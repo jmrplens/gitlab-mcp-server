@@ -45,7 +45,8 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `gen_icon_webp`                | Generators                    | Rasterizes the SVG icons into light/dark WebP fallbacks (maintainer-only)                                                                                                                                                                                                                                                                                 | `make gen-icon-webp`                                                                                                                                                    |
 | `format_md_tables`             | Formatters                    | Normalizes Markdown pipe tables in `README.md`, `docs/` and `site/src/content/docs/`                                                                                                                                                                                                                                                                      | part of `make audit-docs`                                                                                                                                               |
 | `bench_resources`              | Benchmarks                    | Measures what the server costs to run (memory, startup, a second credential), draws the published charts, and measures whether a bound leaves a quiet tenant better off                                                                                                                                                                                   | `make bench-resources`, `make bench-fairness`                                                                                                                           |
-| `eval_mcp_surfaces`            | Evaluation                    | Evaluates model behavior across MCP tool surfaces                                                                                                                                                                                                                                                                                                         | `make eval-surfaces-docker*`                                                                                                                                            |
+| `gen_model_corpus`             | Evaluation                    | Renders the model evaluation corpus breadth ledger: what the corpus asks about, counted against the action catalog                                                                                                                                                                                                                                        | `make gen-model-corpus`, `make check-model-corpus`                                                                                                                      |
+| `gen_model_results`            | Evaluation                    | Folds a run's observation shards into the committed record, scores them and redraws the published pages and README tables                                                                                                                                                                                                                                 | `make gen-model-results`, `make model-results-record`, `make model-results-refold`, `make check-model-results`                                                          |
 | `server`                       | Server                        | The main `gitlab-mcp-server` MCP binary (runtime entry point)                                                                                                                                                                                                                                                                                             | `make build`, `make run`                                                                                                                                                |
 
 ## SDK/API parity audits
@@ -1736,11 +1737,39 @@ The measurement record, the SVG chart pairs under the two chart directories, and
 
 ## Evaluation
 
-### eval_mcp_surfaces
+The evaluation itself is not a command. It is `test/e2e/modeleval`, which boots
+a GitLab and drives the real binary over stdio, so a run measures the surface a
+client is actually served. The two commands here are its generators: one says
+what the corpus asks about before any run, the other turns what a run observed
+into what is published.
 
-Evaluates model behavior across MCP tool surfaces by running typed evaluation cases against the server in mock or live (Docker/self-hosted) mode. See [`cmd/eval_mcp_surfaces/README.md`](../../cmd/eval_mcp_surfaces/README.md) for the full guide, case formats, and run modes.
+### gen_model_corpus
 
-**Make targets:** the `make eval-surfaces-docker*` family (`eval-surfaces-docker`, `eval-surfaces-docker-enterprise`, `eval-surfaces-docker-enterprise-ce`, `eval-surfaces-docker-enterprise-all`, `eval-surfaces-docker-enterprise-all-fixtures`).
+Renders the corpus breadth ledger: which catalog actions, domains and tiers the
+corpus asks about, counted against the action catalog this tree builds, so a
+reader can see what a published figure does and does not cover.
+
+**Make targets:** `make gen-model-corpus`, `make check-model-corpus`.
+
+### gen_model_results
+
+Turns what a run observed into what this repository publishes. A run writes
+observation and no verdict, so every number is computed here, from the shards
+and from the corpus at HEAD, at the moment a run is folded in. That is what
+lets a scoring rule corrected today re-score a past run without spending a
+token: `-refold` drops the rows the given shards publish and folds them again,
+naming each drop. A second fold of a run already published is refused by name
+rather than replacing it, and a run whose shards were not kept cannot be
+re-scored at all, which is the reason to keep them.
+
+```bash
+go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -render         # fold a run in and redraw
+go run ./cmd/gen_model_results/ -shards dist/modeleval/ce -refold -render # re-score it under today's rules
+go run ./cmd/gen_model_results/ -render                                   # redraw from the record alone
+go run ./cmd/gen_model_results/ -check                                    # the offline gate
+```
+
+**Make targets:** `make gen-model-results`, `make model-results-record`, `make model-results-refold`, `make check-model-results`.
 
 ## Server
 

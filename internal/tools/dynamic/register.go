@@ -867,9 +867,13 @@ func executeCallName(actionID string) string {
 	return ExecuteActionToolName + "/" + actionID
 }
 
-// NormalizeActionScopedParams applies compatibility aliases that are safe only
+// normalizeActionScopedParams applies compatibility aliases that are safe only
 // for a specific dynamic catalog action.
-func NormalizeActionScopedParams(actionID string, params, schema map[string]any) map[string]any {
+//
+// Unexported because the one caller outside this package was the evaluator
+// that used to live under cmd, and an exported name with no caller invites the
+// next one to reach past the registry rather than through it.
+func normalizeActionScopedParams(actionID string, params, schema map[string]any) map[string]any {
 	normalized, _ := NormalizeActionScopedParamsWithExplanation(actionID, params, schema)
 	return normalized
 }
@@ -2800,9 +2804,13 @@ func sourceForCompatibilityAlias(source string, deprecated bool) aliasSource {
 	return aliasSource(source)
 }
 
-// NormalizeCompatibilityActionAlias canonicalizes an unambiguous built-in
+// normalizeCompatibilityActionAlias canonicalizes an unambiguous built-in
 // dynamic compatibility alias without requiring a registry instance.
-func NormalizeCompatibilityActionAlias(actionID string) (string, bool) {
+//
+// Unexported for the same reason as [normalizeActionScopedParams]: the
+// registry-free form existed for the evaluator that used to live under cmd,
+// and nothing outside this package needs it now.
+func normalizeCompatibilityActionAlias(actionID string) (string, bool) {
 	return actioncompat.NormalizeActionAlias(actionID)
 }
 
