@@ -280,3 +280,55 @@ func TestPackageLoadError_CleanPackage_ReturnsNil(t *testing.T) {
 		t.Errorf("packageLoadError() = %v, want nil", err)
 	}
 }
+
+// TestModulePath_AgainstGoMod_IsTheModuleTheRepositoryDeclares pins the
+// constant to the one file that decides it.
+//
+// The constant is spelled here so a module move lands in one place, and the
+// move to v3 is what proved that failure real. Nothing in the toolchain
+// reconciles the two: a path that changes in go.mod and not here goes on
+// resolving to a module that no longer exists, every gate that compares an
+// object's package path against it matches nothing, and a gate whose target
+// resolves to nothing reports a clean run instead of failing.
+func TestModulePath_AgainstGoMod_IsTheModuleTheRepositoryDeclares(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(repoRoot(t), "go.mod"))
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	declared := ""
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
+			declared = strings.TrimSpace(rest)
+			break
+		}
+	}
+	if declared == "" {
+		t.Fatal("go.mod declares no module path")
+	}
+	if ModulePath != declared {
+		t.Errorf("ModulePath = %q, want the module go.mod declares, %q", ModulePath, declared)
+	}
+}
+
+// TestToolutilPath_AsAPattern_ResolvesToTheSharedHelpersPackage asserts what
+// the concatenation that builds the constant is for: the result has to be the
+// import path of a package that exists, spelled exactly as the type checker
+// spells it.
+//
+// Both gates that use it compare this string against the package path of a
+// resolved object, so a path assembled wrongly is not an error anywhere. It
+// simply matches no call, and the escaping audit then reports every formatter
+// clean. Loading it is the check, because a path that names nothing matches no
+// pattern and [Load] refuses the empty result.
+func TestToolutilPath_AsAPattern_ResolvesToTheSharedHelpersPackage(t *testing.T) {
+	loaded, err := Load(repoRoot(t), []string{ToolutilPath}, nil)
+	if err != nil {
+		t.Fatalf("Load(%q) error = %v, want the shared helpers package", ToolutilPath, err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("Load(%q) returned %d packages, want exactly 1", ToolutilPath, len(loaded))
+	}
+	if got := loaded[0].PkgPath; got != ToolutilPath {
+		t.Errorf("loaded package path = %q, want %q", got, ToolutilPath)
+	}
+}
