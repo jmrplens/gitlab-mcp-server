@@ -198,3 +198,80 @@ func TestKeyring_AConfiguredKeySurvivesABrokenRotation(t *testing.T) {
 		t.Errorf("configured=%v rotation=%s, want configured with no rotation", ring.Configured(), ring.Rotation())
 	}
 }
+
+// TestKeyring_AcceptsTheLongestIntervalItDocuments covers the far edge of the
+// range check, which the refusal test cannot reach.
+//
+// The cap is inclusive: an operator who writes the documented maximum has
+// written a legal value, and refusing it would make the documented number the
+// one figure the server will not take. The literal is spelled out rather than
+// referred back to MaxKeyRotation, so a change to the constant is a change to
+// this assertion rather than a tautology that follows it.
+func TestKeyring_AcceptsTheLongestIntervalItDocuments(t *testing.T) {
+	t.Parallel()
+
+	if MaxKeyRotation != 720*time.Hour {
+		t.Errorf("MaxKeyRotation = %s, want 720h (30 days), which is the bound the documentation states", MaxKeyRotation)
+	}
+
+	ring, err := NewKeyring("", MaxKeyRotation)
+	if err != nil {
+		t.Fatalf("NewKeyring refused the documented maximum %s: %v", MaxKeyRotation, err)
+	}
+	if ring.Rotation() != MaxKeyRotation {
+		t.Errorf("Rotation() = %s, want the %s it was built with", ring.Rotation(), MaxKeyRotation)
+	}
+}
+
+// TestKeyring_ARotationRestartsTheInterval covers what happens after a key
+// rotates, which is the half no test asserted.
+//
+// Two things are pinned here and both are about the moment the new key was
+// installed being recorded. The interval is measured inclusively, so a key
+// whose interval has exactly elapsed is due: reading it as "strictly past"
+// would hold every key one poll longer than the operator asked. And the
+// rotation must restart the clock, or the keyring stays permanently due and
+// generates fresh keys on every single call, which correlates nothing at all
+// while looking exactly like a working rotation from the outside.
+func TestKeyring_ARotationRestartsTheInterval(t *testing.T) {
+	t.Parallel()
+
+	ring := keyringFrom(t, "", time.Hour)
+
+	clock := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	ring.now = func() time.Time { return clock }
+	ring.rotatedAt = clock
+
+	before := ring.IdentityPseudonym("42")
+
+	// Exactly the interval, not a minute past it.
+	clock = clock.Add(time.Hour)
+	rotated := ring.IdentityPseudonym("42")
+	if rotated == before {
+		t.Errorf("the digest %q survived an interval that had exactly elapsed", rotated)
+	}
+
+	// Well inside the interval that the rotation above started.
+	clock = clock.Add(time.Minute)
+	if again := ring.IdentityPseudonym("42"); again != rotated {
+		t.Errorf("the digest moved again one minute after rotating (%q then %q): the rotation did not restart the interval",
+			rotated, again)
+	}
+}
+
+// TestKeyring_DueOnAKeyThatNeverGenerated_IsNotDue covers the guard that keeps
+// a keyring holding no generation instant from rotating.
+//
+// Its rotatedAt is what the elapsed time is measured from, so a zero one would
+// measure from the year zero and report every key as overdue on its first call.
+func TestKeyring_DueOnAKeyThatNeverGenerated_IsNotDue(t *testing.T) {
+	t.Parallel()
+
+	ring := &Keyring{rotation: time.Hour, now: func() time.Time {
+		return time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	}}
+
+	if ring.due() {
+		t.Error("a keyring with no recorded generation instant reported itself due to rotate")
+	}
+}
