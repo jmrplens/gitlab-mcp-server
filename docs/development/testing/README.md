@@ -118,6 +118,22 @@ That the suite tolerates this says the tests benefit from the memo and none of
 them asserts it, which is killed by a test that counts the builds, not by more
 margin.
 
+**A timeout can also be a hang, and a hang hides every assertion behind it.**
+`internal/gitlab` reported two, both in `limitedBody.Read`, and the assertion
+that kills them was already written: `TestLimitedBody_OffersOneByteBeyondWhatIsLeft`
+checks the size the inner reader is offered, and its own comment describes the
+exact failure — a window that shrinks to zero makes a reader answer "no bytes,
+no error" for ever. The tool never reached it. `capture_test.go` sorts before
+`response_limit_test.go`, it is the first test in the package to drain a body
+through the limiter, it drains with `io.ReadAll`, which takes no context, and
+so it spun until the `go test` timeout and took the rest of the binary with it
+unrun. Bounding that one drain — run the round trip on a goroutine, report the
+stall, keep the assertion on the test goroutine — turns both from a ten-minute
+timeout into a 5.3-second kill and costs nothing when the code is right. The
+general shape is worth remembering: a survivor or a timeout is a claim about
+the whole binary, so when the assertion you expected to kill it exists, check
+whether anything earlier in the run stops the binary from getting there.
+
 ### Reading a survivor
 
 Not every survivor is a gap. Three kinds cannot be killed by any test and
@@ -125,18 +141,42 @@ should be recorded rather than chased:
 
 - **A boundary whose two sides agree at the boundary.** Flipping `>` to `>=`
   where both branches assign the same value at the boundary changes nothing.
-  Six of the retry-clamp mutants in `internal/gitlab` are this shape.
+  Six of the retry-clamp mutants in `internal/gitlab` are this shape, and so
+  are three of `cmd/internal/apidocs`' four: `if secs <= 0 { return 0 }` is
+  followed by `return time.Duration(secs) * time.Second`, `if d := time.Until(t);
+  d > 0 { return d }` falls through to `return 0`, and `sleepCtx`'s
+  `if d <= 0 { return ctx.Err() }` falls through to a zero timer that fires at
+  once — at zero, each pair returns the same thing just as promptly.
+- **A tie-break comparator under an inequality guard.** The `sort.Slice` idiom
+  `if a.x != b.x { return a.x < b.x }` has proved its two operands unequal
+  before it compares them, so `<` and `<=` decide the same order and the
+  boundary is unreachable by construction. All four survivors in
+  `cmd/audit_1to1/internal/sdk` are this shape: three under an explicit guard,
+  and the last level under the dedup above it, which is what makes a tie
+  impossible there.
+- **A clock boundary no test can schedule.** `time.Since(modTime) >= maxAge`
+  and `> maxAge` differ only when the age is exactly `maxAge` to the
+  nanosecond. A test cannot arrange that: the only input is a file's mtime, the
+  filesystem clamps what is written to it (a pre-1901 time reads back as
+  1901-12-13, so `time.Time.Sub` never reaches the saturation that would pin
+  both sides to `math.MaxInt64`), and the wall clock moves between the write
+  and the comparison. Killing it would mean indirecting the clock in production
+  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check and
+  `internal/gitlab`'s initialization cooldown are the two here.
 - **A guard that a second guard makes unobservable.** The negative token
   cache used to check "disabled" in `Lookup` and `Contains` as well as in
   `RecordKind`, the only place an entry is stored, so removing either copy
   changed no answer. Such a copy is redundant code, and deleting it, as was
-  done there, is a better answer than recording its survivors.
+  done there, is a better answer than recording its survivors. The
+  `RateLimit-Reset` parser in `internal/gitlab` was the second case: its
+  `reset <= 0` check could not be observed through the deadline check below it,
+  since a Unix time at or before 1970 is already in the past, and it is gone.
 - **A tool artifact.** Mutations inside package-level constant initializers
   and `switch { case … }` expressions are reported as not covered because
   neither carries a statement counter, not because no test reaches them.
 
-**Read the third kind, do not wave it through.** "Reached" is not "asserted",
-and the tool that reports these can tell you neither. Of the 100 not-covered
+**Read the tool artifacts, do not wave them through.** "Reached" is not
+"asserted", and the tool that reports these can tell you neither. Of the 100 not-covered
 mutants `cmd/server` reports, 26 are unkillable for reasons that are not about
 the tests at all — 22 mutate a `+` between string literals into a `-`, which no
 longer compiles, and four sit in Windows-only files or in a `testdata`
@@ -148,6 +188,18 @@ compared with the same constant that wrote it, so a code that lost its sign
 passed. All twelve were confirmed by hand — apply the mutation, run the whole
 suite, see that nothing fails — and each now has a test that states the
 property the constant has to hold rather than repeating its value.
+
+`cmd/internal/apidocs` is the same lesson at one tenth the size, and worth
+naming because its ten not-covered mutants looked like nine artifacts and one
+more. Six sit in a `switch { case … }` classifying an HTTP status, and all six
+die when applied by hand. Four sit in the fetch-tuning constant block, three of
+which die too. The tenth is `baseSpacing = 500 * time.Millisecond` mutated to
+`500 / time.Millisecond`, which is zero, compiles, and survived: the only test
+that read it expected `baseSpacing`, so the pause keeping a 250-page sweep under
+GitLab's raw rate limiter could collapse to nothing with both sides of the
+comparison moving together. The fix is the one `cmd/server`'s timeouts got — a
+test that states what the constant has to be — and the general rule is that a
+constant asserted only through the code that reads it is asserted by nothing.
 
 ## When To Use Each Layer
 

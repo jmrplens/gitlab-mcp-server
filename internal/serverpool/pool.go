@@ -592,6 +592,13 @@ func (p *ServerPool) GetOrCreateEntry(token, gitlabURL string, scopes []string) 
 	key := sessionKey(token, gitlabURL)
 
 	// Fast path: read lock to check existing entry.
+	//
+	// Released explicitly rather than with defer, unlike every other lock site
+	// in this file, and it has to be: both arms of the switch below take the
+	// write lock — dropRejectedEntry directly, the stale arm through the slow
+	// path — and a read lock still held there deadlocks the process. The block
+	// under it is three field reads that cannot panic, so defer buys nothing
+	// here and costs the function.
 	p.mu.RLock()
 	cached, ok := p.entries[key]
 	// Read under the same lock that guards the field: lastValidated is

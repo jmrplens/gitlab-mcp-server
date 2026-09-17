@@ -132,9 +132,15 @@ func rateLimitResetWait(resp *http.Response) time.Duration {
 		return 0
 	}
 	reset, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || reset <= 0 {
+	if err != nil {
 		return 0
 	}
+	// No `reset <= 0` guard here: the deadline check below already answers it.
+	// A reset of zero or less is a Unix time at or before 1970, so time.Until
+	// returns a large negative duration and the wait is refused as past. The
+	// guard that used to stand here was unobservable, which mutation testing
+	// reported as a surviving mutant rather than as dead code, and removing it
+	// is the answer this repository's testing README gives for that shape.
 	wait := time.Until(time.Unix(reset, 0))
 	if wait < 0 {
 		return 0

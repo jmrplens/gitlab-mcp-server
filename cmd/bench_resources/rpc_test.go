@@ -71,11 +71,11 @@ func TestCheckResponse_ClassifiesResults(t *testing.T) {
 		{name: "rpc error", payload: `{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"method not found"}}`, wantErr: true},
 		{name: "tool error", payload: `{"jsonrpc":"2.0","id":1,"result":{"isError":true}}`, wantErr: true},
 		{name: "not json", payload: `<html>`, wantErr: true},
-		// An envelope carrying neither member is a well formed answer that
-		// reports nothing wrong, so it is not a failed measurement: reading
-		// the absent result as a failure would discard every timing taken
-		// against a method whose answer has no body.
-		{name: "neither result nor error", payload: `{"jsonrpc":"2.0","id":1}`, wantErr: false},
+		// JSON-RPC 2.0 puts exactly one of result and error in every response,
+		// so an envelope carrying neither answered nothing and its timing
+		// measures nothing. Every method this client calls carries an id and
+		// is a request, so there is no answer without a body to protect.
+		{name: "neither result nor error", payload: `{"jsonrpc":"2.0","id":1}`, wantErr: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,44 +211,83 @@ func TestHTTPRPC_SendsTheProtocolHeaders(t *testing.T) {
 	}
 }
 
-// TestHTTPRPC_NameHeader_OnlyOnAToolCall verifies the tool name is put in the
-// header for a tools/call and for nothing else, whatever the parameters carry.
+// TestHTTPRPC_NameHeader_ComesFromTheFieldTheMethodNamesIt verifies Mcp-Name
+// is derived from the request body for each of the three methods the
+// specification sources it for, and sent for nothing else.
 //
-// `name` is not the tools/call parameter alone: a prompts/get names the prompt
-// with it too. Protocol 2026-07-28 makes Mcp-Method required and the transport
-// refuses a POST whose headers and body disagree, so naming a prompt in a
-// header that means "the tool this call runs" would have the request rejected
-// before any handler saw it.
-func TestHTTPRPC_NameHeader_OnlyOnAToolCall(t *testing.T) {
-	var got http.Header
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.Header.Clone()
-		w.Header().Set(headerContentType, mediaJSON)
-		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
-	}))
-	defer server.Close()
-
-	client := newHTTPRPC(server.URL, "token")
-	defer client.close()
-
-	if _, err := client.call(context.Background(), "prompts/get", map[string]any{"name": "review_mr"}); err != nil {
-		t.Fatalf("call: %v", err)
+// Mcp-Name does not mean "the tool this call runs": SEP-2243 requires it for
+// tools/call, prompts/get and resources/read alike, taking params.name for the
+// first two and params.uri for the third, so a gateway can route without
+// parsing a body. Omitting it on a prompts/get is what a server validating its
+// headers refuses, which is the opposite of what this test used to assert.
+func TestHTTPRPC_NameHeader_ComesFromTheFieldTheMethodNamesIt(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		params map[string]any
+		want   string
+	}{
+		{
+			name:   "a tools/call names its tool",
+			method: methodToolsCall,
+			params: map[string]any{"name": "gitlab_issue"},
+			want:   "gitlab_issue",
+		},
+		{
+			name:   "a prompts/get names its prompt",
+			method: methodPromptsGet,
+			params: map[string]any{"name": "review_mr"},
+			want:   "review_mr",
+		},
+		{
+			name:   "a resources/read names its uri",
+			method: methodResourcesRead,
+			params: map[string]any{"uri": "gitlab://tools"},
+			want:   "gitlab://tools",
+		},
+		{
+			name:   "a listing names nothing, whatever it carries",
+			method: methodResourcesList,
+			params: map[string]any{"name": "not a name of this call"},
+			want:   "",
+		},
 	}
-	if name := got.Get("Mcp-Name"); name != "" {
-		t.Errorf("Mcp-Name = %q on a prompts/get, want no tool named", name)
-	}
-	if method := got.Get("Mcp-Method"); method != "prompts/get" {
-		t.Errorf("Mcp-Method = %q, want prompts/get", method)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got http.Header
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.Header.Clone()
+				w.Header().Set(headerContentType, mediaJSON)
+				_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+			}))
+			defer server.Close()
+
+			client := newHTTPRPC(server.URL, "token")
+			defer client.close()
+
+			if _, err := client.call(context.Background(), tc.method, tc.params); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+			if name := got.Get("Mcp-Name"); name != tc.want {
+				t.Errorf("Mcp-Name = %q on a %s, want %q", name, tc.method, tc.want)
+			}
+			if method := got.Get("Mcp-Method"); method != tc.method {
+				t.Errorf("Mcp-Method = %q, want %q", method, tc.method)
+			}
+		})
 	}
 }
 
-// TestHTTPRPC_AcceptedResponse_IsNotARefusal verifies a 202 is read as an
-// answer rather than as a transport refusal.
+// TestHTTPRPC_AcceptedResponse_IsNotAnAnswer verifies a 202 is a failed
+// measurement even when something that parses arrives alongside it.
 //
-// The streamable transport may acknowledge a request with 202 instead of 200,
-// and treating that as a failure would turn every such call into a failed
-// measurement and drop it out of the percentiles the page publishes.
-func TestHTTPRPC_AcceptedResponse_IsNotARefusal(t *testing.T) {
+// The streamable transport answers 202, with no body, to a notification or a
+// response. Every call this client makes carries an id and is a request, which
+// a server answers with 200 and a body, so a 202 here means the server did not
+// answer the thing that was timed. Taking whatever came with it as the answer
+// would put that timing into a published percentile, which is the failure this
+// client exists to avoid rather than one to be lenient about.
+func TestHTTPRPC_AcceptedResponse_IsNotAnAnswer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set(headerContentType, mediaJSON)
 		w.WriteHeader(http.StatusAccepted)
@@ -260,11 +299,12 @@ func TestHTTPRPC_AcceptedResponse_IsNotARefusal(t *testing.T) {
 	defer client.close()
 
 	payload, err := client.call(context.Background(), methodResourcesList, nil)
-	if err != nil {
-		t.Fatalf("a 202 response was reported as a failure: %v", err)
+	if err == nil {
+		t.Fatalf("call() = %q with no error, want a 202 to a request reported as a failure", payload)
 	}
-	if !bytes.Contains(payload, []byte(`"resources"`)) {
-		t.Errorf("payload = %q, want the body the server sent with its 202", payload)
+	var status *httpStatusError
+	if !errors.As(err, &status) || status.Status != http.StatusAccepted {
+		t.Errorf("call() error = %v, want an httpStatusError naming 202", err)
 	}
 }
 

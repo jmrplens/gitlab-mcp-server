@@ -20,10 +20,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,446 |
-| Unit test functions                                   | 15,249 |
+| Total test functions                                  | 16,451 |
+| Unit test functions                                   | 15,254 |
 | E2E test functions                                    |  1,197 |
-| cmd test functions                                    |  2,760 |
+| cmd test functions                                    |  2,763 |
 | Test files (internal/)                                |    580 |
 | Test files (cmd/)                                     |    200 |
 | Test files (test/e2e/)                                |    384 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,008 | 73.0% |
+| `TestFunc_Scenario` (2-part)           | 12,012 | 73.0% |
 | `TestFunc` (no underscore)             |    904 |  5.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,534 | 21.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,535 | 21.5% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,992 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,994 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |          9,131 |        381 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,197 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          2,760 |        200 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,446** |  **1,164** |                                                                                                 |
+| cmd packages            |          2,763 |        200 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,451** |  **1,164** |                                                                                                 |
 
 ### Core Packages
 
@@ -68,7 +68,7 @@
 | elicitation          |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                            |
 | freshness            |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                 |
 | gatewaycompat        |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.      |
-| gitlab               |       114 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                 |
+| gitlab               |       116 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                 |
 | graphqlschema        |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                        |
 | mcpotel              |       108 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                    |
 | oauth                |        81 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                 |
@@ -85,7 +85,7 @@
 | testutil/modelscore  |        93 |    98.8% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                              |
 | testutil/shardio     |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
 | toolutil             |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                           |
-| **Subtotal**         | **2,992** |          |                                                                                                                                                                                                                                                                         |
+| **Subtotal**         | **2,994** |          |                                                                                                                                                                                                                                                                         |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 

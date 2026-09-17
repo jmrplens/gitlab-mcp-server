@@ -1005,7 +1005,7 @@ func TestProviderShutdown_TakesTheTighterOfTheTwoBounds(t *testing.T) {
 		{
 			name:   "a caller deadline tighter than the internal one wins",
 			caller: 50 * time.Millisecond,
-			atMost: time.Second,
+			atMost: 50 * time.Millisecond,
 		},
 		{
 			name:   "a caller deadline looser than the internal one does not widen it",
