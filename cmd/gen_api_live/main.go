@@ -297,6 +297,25 @@ func introspection(dump dumpFrom, image string, keep bool) ([]byte, origin, erro
 // something a person can find and remove.
 const containerName = "gitlab-mcp-api-live"
 
+// scriptFile is the temp file the introspection script is staged in: exactly
+// what the staging below asks of it and nothing more.
+//
+// It is an interface, and the constructor below a variable, for the same reason
+// cmd/server seams the system calls on its socket path: a write that stops
+// short and a close that reports a write the kernel had deferred are what a
+// full or dying filesystem does, no filesystem a test can build here produces
+// either, and the two branches that exist to report them would otherwise never
+// be exercised at all. The default is the real call, so the failure a test
+// *can* build — no temp directory to create in — still goes through it.
+type scriptFile interface {
+	Name() string
+	WriteString(string) (int, error)
+	Close() error
+}
+
+// createScriptFile stages the temp file the script is written to.
+var createScriptFile = func() (scriptFile, error) { return os.CreateTemp("", "introspect-*.rb") }
+
 // dockerRun boots the image, waits for Rails, runs the script inside and
 // returns its output.
 //
@@ -337,7 +356,7 @@ func dockerRun(image string, keep bool) ([]byte, origin, error) {
 		return nil, origin{}, waitErr
 	}
 
-	script, err := os.CreateTemp("", "introspect-*.rb")
+	script, err := createScriptFile()
 	if err != nil {
 		return nil, origin{}, fmt.Errorf("staging the introspection script: %w", err)
 	}
