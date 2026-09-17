@@ -1169,6 +1169,47 @@ func TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor(t *testin
 	}
 }
 
+// TestRenderSiteFootprintJSON_UnknownTierRow_IsIgnored verifies the site
+// extract keys its individual-surface entries off the three tiers it publishes
+// and drops a row whose tier it does not know, instead of admitting it under
+// the empty key a missed map lookup returns.
+//
+// Nothing else reaches that branch: the measurement only ever produces Free/CE,
+// Premium and Ultimate rows, so the lookup always succeeds and the `!ok` half of
+// the guard is never decided. Remove it and this row is counted: the map gains
+// a fourth entry named by nothing, and a complete matrix is refused for having
+// four individual-surface rows. The assertion is therefore that an unknown tier
+// changes the published bytes not at all.
+func TestRenderSiteFootprintJSON_UnknownTierRow_IsIgnored(t *testing.T) {
+	want, err := renderSiteFootprintJSON(completeFootprintRows())
+	if err != nil {
+		t.Fatalf("renderSiteFootprintJSON(the published tiers) error: %v", err)
+	}
+
+	rows := append(completeFootprintRows(), tokenFootprintRow{
+		Tier: "Starter", Configuration: individualConfiguration,
+		VisibleTools: 900, ReachableActions: 900, ToolSchemaTokens: 800000, SharedTokens: 31758,
+	})
+	got, err := renderSiteFootprintJSON(rows)
+	if err != nil {
+		t.Fatalf("renderSiteFootprintJSON(with an unknown tier) error: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("an unknown tier changed the published site data:\ngot  %s\nwant %s", got, want)
+	}
+
+	var decoded siteFootprint
+	if unmarshalErr := json.Unmarshal(got, &decoded); unmarshalErr != nil {
+		t.Fatalf("unmarshal site footprint: %v", unmarshalErr)
+	}
+	if _, published := decoded.Individual[""]; published {
+		t.Errorf("the unknown tier was published under the empty key: %+v", decoded.Individual)
+	}
+	if len(decoded.Individual) != 3 {
+		t.Errorf("len(Individual) = %d, want only the three published tiers", len(decoded.Individual))
+	}
+}
+
 // TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError verifies generation fails
 // loudly rather than publishing a partial headline claim.
 func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
@@ -1440,6 +1481,17 @@ func parseHumanBytes(t *testing.T, s string) float64 {
 
 // TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix verifies the humanBytes byte formatter emits
 // expected B/KB/MB suffixes for the three supported magnitude ranges.
+//
+// The cases sit on the two thresholds on purpose, because the five mutants
+// gremlins reports as "not covered" at main.go:732 and main.go:734 all live in
+// this function's case expressions: a `switch { case … }` expression carries no
+// statement counter, so gremlins reads the position as unreached and never runs
+// the mutant, whatever the tests do. Each of the five was applied by hand and
+// each fails here (`>=` widened to `>` at either threshold, `>=` negated to `<`
+// at either, and `1024*1024` turned into `1024/1024`), so the survivors are a
+// coverage-profile artifact rather than a gap. Keep the 0, 512, 1024 and
+// 1024*1024 cases: drop any of them and the artifact becomes a real hole that
+// nothing would report.
 func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 	tests := []struct {
 		name string
