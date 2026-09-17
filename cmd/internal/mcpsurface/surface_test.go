@@ -95,6 +95,68 @@ func TestSortDynamicTools_PutsFindBeforeExecute(t *testing.T) {
 	}
 }
 
+// TestSortDynamicTools_AlreadyOrdered_LeavesTheOrderAlone verifies the
+// comparator answers "no" as well as "yes": every pair of the sorted surface is
+// asked in the order it already holds, so both comparisons — the ranked one and
+// the fallback by name — have to report that the later entry does not precede
+// the earlier one.
+//
+// A comparator that only ever says yes is one nothing has measured in the
+// direction that keeps a sort from reversing what it was given.
+func TestSortDynamicTools_AlreadyOrdered_LeavesTheOrderAlone(t *testing.T) {
+	dynamicTools := []*mcp.Tool{
+		{Name: DynamicFindToolName},
+		{Name: DynamicExecuteActionToolName},
+		{Name: "aaa_unexpected"},
+		{Name: "zzz_unexpected"},
+	}
+	want := []string{DynamicFindToolName, DynamicExecuteActionToolName, "aaa_unexpected", "zzz_unexpected"}
+
+	SortDynamicTools(dynamicTools)
+
+	got := make([]string, len(dynamicTools))
+	for i, tool := range dynamicTools {
+		got[i] = tool.Name
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("SortDynamicTools() reordered an already sorted surface: got %v, want %v", got, want)
+	}
+}
+
+// TestSortDynamicTools_EqualEntries_KeepTheirInputOrder verifies both
+// comparisons are strict at the one point where strictness is observable: two
+// entries the order table ranks the same, and two entries with the same name.
+//
+// Neither may report that it precedes the other. A comparator that does is no
+// longer a strict ordering, and the stable sort swaps the pair, so the same
+// registrations would be published in one order or the other depending on how
+// they happened to arrive. Stability is why this is [sort.SliceStable] rather
+// than [sort.Slice], and asserting it is what says so.
+func TestSortDynamicTools_EqualEntries_KeepTheirInputOrder(t *testing.T) {
+	dynamicTools := []*mcp.Tool{
+		{Name: "aaa_unexpected", Description: "unknown-first"},
+		{Name: "aaa_unexpected", Description: "unknown-second"},
+		{Name: DynamicFindToolName, Description: "find-first"},
+		{Name: DynamicFindToolName, Description: "find-second"},
+	}
+	want := []string{
+		DynamicFindToolName + ": find-first",
+		DynamicFindToolName + ": find-second",
+		"aaa_unexpected: unknown-first",
+		"aaa_unexpected: unknown-second",
+	}
+
+	SortDynamicTools(dynamicTools)
+
+	got := make([]string, len(dynamicTools))
+	for i, tool := range dynamicTools {
+		got[i] = tool.Name + ": " + tool.Description
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("SortDynamicTools() = %v, want equal entries in the order they arrived: %v", got, want)
+	}
+}
+
 // TestValidateDynamicToolContract_RejectsDrift verifies the dynamic tool
 // contract accepts the canonical pair and fails on every way it can drift.
 //
@@ -410,6 +472,62 @@ func TestListSurface_ServesOneListingPerKey(t *testing.T) {
 	other := MetaTools(client, edition.Free)
 	if len(other) != 0 && len(first) != 0 && &other[0] == &first[0] {
 		t.Error("MetaTools(Free) was served the Premium listing, so the tier is not part of the cache key")
+	}
+}
+
+// TestListSurface_RepeatedKey_RegistersTheSurfaceOnce verifies the memo by
+// counting registrations rather than by comparing what came back: one key
+// registers once however often it is asked for, and a key that differs
+// registers again.
+//
+// Counting is what makes the assertion cheap, and cheap is the point. The
+// listings this memo fronts carry some 1091 tools, so a lookup that stopped
+// memoizing would still hand every caller the right surface and would show up
+// only as a package that takes minutes instead of seconds — which is how a
+// mutation of this lookup survives a suite that measures nothing about it. The
+// setup here registers one throwaway tool, so the assertion is about the memo
+// and costs nothing to make.
+func TestListSurface_RepeatedKey_RegistersTheSurfaceOnce(t *testing.T) {
+	// A surface no config.ToolSurface* constant spells, so these entries can
+	// never be handed to a caller asking for a real one.
+	const surface = "mcpsurface-test-counting"
+
+	registrations := 0
+	setup := func(server *mcp.Server) {
+		registrations++
+		mcp.AddTool(server,
+			&mcp.Tool{Name: "probe", Description: "A tool registered only by this test."},
+			func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+				return nil, nil, nil
+			})
+	}
+
+	key := listKey{surface: surface, tier: edition.Free}
+	otherKey := listKey{surface: surface, tier: edition.Premium}
+	t.Cleanup(func() {
+		listedTools.Delete(key)
+		listedTools.Delete(otherKey)
+	})
+
+	first := listSurface(key, setup)
+	if len(first) != 1 || first[0].Name != "probe" {
+		t.Fatalf("listSurface() = %v, want the one tool setup registered", first)
+	}
+	if registrations != 1 {
+		t.Fatalf("setup ran %d times for the first call, want 1", registrations)
+	}
+
+	second := listSurface(key, setup)
+	if registrations != 1 {
+		t.Errorf("setup ran %d times over two calls for one key, want the second to be served from the memo", registrations)
+	}
+	if len(second) != 1 || &second[0] != &first[0] {
+		t.Errorf("the second call for one key returned %v, want the very slice the first call stored", second)
+	}
+
+	listSurface(otherKey, setup)
+	if registrations != 2 {
+		t.Errorf("setup ran %d times after a second key, want one registration per key", registrations)
 	}
 }
 
