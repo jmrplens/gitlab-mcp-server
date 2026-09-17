@@ -645,6 +645,14 @@ coverage-conditions:
 # A timeout that survives a budget this size is a finding rather than a setting:
 # it is a mutant that made the package pathologically slow, which is what
 # mutating a memo does, and the answer is a test that asserts the memo.
+# A package that does not pass its own tests is refused rather than measured.
+# The pipeline that reads the baseline duration takes its status from the last
+# command in it, so a failing `go test` did not stop the recipe; and a failing
+# run still ends in "FAIL <pkg> 1.234s", which the duration pattern matches, so
+# the baseline was not even empty. Gremlins would then run against a suite that
+# already fails, where every mutant is reported KILLED: a perfect score over a
+# broken package, which is the one reading this recipe exists to prevent.
+#
 # MUTANT_BUDGET is a knob and MUTANT_BUDGET_FLOOR is what it may not go under.
 # Raising the budget is the caller's business; lowering it past a few seconds
 # recreates the defect this whole recipe exists to prevent, since the budget
@@ -660,7 +668,12 @@ coverage-mutants:
 		'BEGIN{print (want+0 < floor+0) ? floor : want}'); \
 	[ "$$budget" = "$(MUTANT_BUDGET)" ] || \
 		echo "gremlins: MUTANT_BUDGET=$(MUTANT_BUDGET)s is under the $(MUTANT_BUDGET_FLOOR)s floor and would report untested mutants as timeouts; using $${budget}s"; \
-	base=$$(go test -count=1 $(PKG) 2>&1 | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
+	baseline=$$(go test -count=1 $(PKG) 2>&1) || { \
+		printf '%s\n' "$$baseline" >&2; \
+		echo "gremlins: $(PKG) does not pass its own tests, so every mutant would read as killed; refusing to measure" >&2; \
+		exit 1; \
+	}; \
+	base=$$(printf '%s\n' "$$baseline" | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
 	[ -n "$$base" ] || base=0.010; \
 	coeff=$$(awk -v b="$$base" -v f="$$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
 	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$${budget}s budget"; \
