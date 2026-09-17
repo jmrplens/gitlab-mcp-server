@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -364,6 +365,187 @@ func TestRun_Generation_WarnsWhenThePinIsNotOfGitLabCom(t *testing.T) {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
 				t.Errorf("stderr does not warn %q:\n%s", want, errOut)
+			}
+		})
+	}
+}
+
+// runMainCapturing drives main with args as the command line and returns the
+// status it handed the process along with what it wrote to each stream.
+//
+// main is the only place that reads the process itself: the flag names, os.Args,
+// the environment and the two real streams. Each is restored before the helper
+// returns, and the streams are pointed at files rather than a pipe, so no amount
+// of output can fill a pipe buffer and deadlock the test.
+func runMainCapturing(t *testing.T, args ...string) (int, string, string) {
+	t.Helper()
+	stdout, stderr := captureFile(t, "stdout"), captureFile(t, "stderr")
+
+	originalArgs, originalExit, originalFlags := os.Args, osExit, flag.CommandLine
+	originalOut, originalErr := os.Stdout, os.Stderr
+	defer func() {
+		os.Args, osExit, flag.CommandLine = originalArgs, originalExit, originalFlags
+		os.Stdout, os.Stderr = originalOut, originalErr
+	}()
+
+	os.Args = append([]string{"gen_graphql_schema"}, args...)
+	os.Stdout, os.Stderr = stdout, stderr
+	// main registers its flags on the package-level set, so a second call would
+	// redefine the flags the first one left there and panic. ContinueOnError
+	// keeps a flag this test got wrong a readable failure instead of an
+	// os.Exit(2) from inside the flag package, which no seam here covers.
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+
+	status, exited := 0, false
+	osExit = func(code int) { status, exited = code, true }
+
+	main()
+
+	if !exited {
+		t.Fatal("main returned without reaching osExit: the process would exit 0 whatever run reported")
+	}
+	return status, readCapture(t, stdout), readCapture(t, stderr)
+}
+
+// captureFile is one of the streams main is given in place of the process's own.
+func captureFile(t *testing.T, name string) *os.File {
+	t.Helper()
+	file, err := os.Create(filepath.Join(t.TempDir(), name))
+	if err != nil {
+		t.Fatalf("create the %s capture: %v", name, err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	return file
+}
+
+// readCapture reads back what main wrote to one of those streams.
+func readCapture(t *testing.T, file *os.File) string {
+	t.Helper()
+	written, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatalf("read back %s: %v", file.Name(), err)
+	}
+	return string(written)
+}
+
+// pinnedDir writes a sound pin whose record is dated today, because main
+// supplies time.Now: a fixture with a fixed date would pass until the window
+// closed on it and then fail for a reason no test here is about.
+func pinnedDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "pinned")
+	source := withSource(func(s *graphqlschema.Source) {
+		s.RetrievedAt = time.Now().UTC().Format(time.DateOnly)
+	})
+	if err := writeArtifacts(dir, wholeSDL, source); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	return dir
+}
+
+// TestMainEntry_CheckMode_ReportsThePinAndHandsBackTheStatus verifies the
+// command line the Makefile actually runs: --check names the offline half, -dir
+// names where the pin is, the report reaches the process's stdout, and the
+// status run returned is the status the process exits with.
+//
+// The flag names are the assertion that matters as much as the status. They are
+// spelled in the Makefile and in CI, so renaming one here breaks a gate in a
+// place nothing else in this package can see.
+func TestMainEntry_CheckMode_ReportsThePinAndHandsBackTheStatus(t *testing.T) {
+	t.Setenv("GITLAB_URL", "")
+	t.Setenv("GITLAB_TOKEN", "")
+
+	t.Run("a pin that passes", func(t *testing.T) {
+		status, out, errOut := runMainCapturing(t, "--check", "-dir", pinnedDir(t))
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
+		}
+		if !strings.Contains(out, "the pinned schema parses") || !strings.Contains(out, "GitLab 19.4.0") {
+			t.Errorf("stdout does not report the pin:\n%s", out)
+		}
+		if errOut != "" {
+			t.Errorf("a passing check wrote to stderr:\n%s", errOut)
+		}
+	})
+
+	t.Run("a directory with no pin in it", func(t *testing.T) {
+		status, out, errOut := runMainCapturing(t, "--check", "-dir", t.TempDir())
+
+		if status != 1 {
+			t.Fatalf("exit status %d, want 1: a refusal main swallowed is a gate that passes", status)
+		}
+		if !strings.Contains(errOut, prefix) {
+			t.Errorf("stderr does not name the command:\n%s", errOut)
+		}
+		if out != "" {
+			t.Errorf("a refused check wrote to stdout:\n%s", out)
+		}
+	})
+}
+
+// TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag verifies that
+// the token is judged against the instance GITLAB_URL names rather than followed
+// to whatever -url points at, and that the withholding is said out loud.
+//
+// -url takes an arbitrary endpoint, so this is the one decision in main that is
+// not plumbing: a token resolved against the flag instead of the environment is
+// a credential handed to an instance nobody named. A note that is not printed is
+// the same defect one step quieter, since the version then reads "unknown" with
+// nothing saying why.
+func TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag(t *testing.T) {
+	const instance = "https://gitlab.example.com"
+
+	cases := []struct {
+		name      string
+		instance  string
+		endpoint  []string
+		wantNote  string
+		wantQuiet bool
+	}{
+		{
+			name:     "an endpoint the token does not belong to",
+			instance: instance,
+			// No -url, so the default gitlab.com endpoint is asked while the
+			// token belongs somewhere else.
+			wantNote: "GITLAB_TOKEN belongs to https://gitlab.example.com",
+		},
+		{
+			name:     "a token nothing says the instance of",
+			instance: "",
+			wantNote: "GITLAB_TOKEN is set and GITLAB_URL is not",
+		},
+		{
+			name:      "the endpoint the token belongs to",
+			instance:  instance,
+			endpoint:  []string{"-url", instance + "/api/graphql"},
+			wantQuiet: true,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", testCase.instance)
+			t.Setenv("GITLAB_TOKEN", "glpat-not-a-real-token")
+			args := append([]string{"--check", "-dir", pinnedDir(t)}, testCase.endpoint...)
+
+			status, _, errOut := runMainCapturing(t, args...)
+
+			// Check mode sends nothing anywhere, so the note is the whole
+			// observable difference and must not change the outcome.
+			if status != 0 {
+				t.Fatalf("exit status %d, want 0: resolving a credential is not a reason to refuse. stderr:\n%s", status, errOut)
+			}
+			if testCase.wantQuiet {
+				if strings.Contains(errOut, "note:") {
+					t.Errorf("the token was withheld from the instance it belongs to:\n%s", errOut)
+				}
+				return
+			}
+			if !strings.Contains(errOut, prefix+" note:") {
+				t.Errorf("stderr does not carry the withholding note:\n%s", errOut)
+			}
+			if !strings.Contains(errOut, testCase.wantNote) {
+				t.Errorf("stderr does not say why the token was withheld (%q):\n%s", testCase.wantNote, errOut)
 			}
 		})
 	}

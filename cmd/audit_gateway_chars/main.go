@@ -54,6 +54,11 @@ var (
 	stderr io.Writer = os.Stderr
 )
 
+// osExit is os.Exit behind a variable, so a test can drive the command line
+// main assembles and read the code it asks the process to exit with. The
+// sibling audits keep the same seam.
+var osExit = os.Exit
+
 func main() {
 	check := flag.Bool("check", false, "exit non-zero if any offending character is served")
 	apply := flag.Bool("apply", false,
@@ -62,9 +67,9 @@ func main() {
 	flag.Parse()
 	fullStrings = *full
 
-	// os.Exit lives here, not in run: run holds the stub client's deferred
+	// The exit lives here, not in run: run holds the stub client's deferred
 	// cleanup, and an exit inside it would skip that defer.
-	os.Exit(run(*check, *apply))
+	osExit(run(*check, *apply))
 }
 
 // run performs the scan and returns the process exit code.

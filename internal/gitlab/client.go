@@ -221,6 +221,14 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 // probing a mock that answers 5xx otherwise sleeps through the whole
 // credential-check deadline instead of reading the answer it already has.
 func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetries bool) (*Client, error) {
+	return newTokenClient(baseURL, token, skipTLSVerify, disableRetries, maxRetryBackoff)
+}
+
+// newTokenClient is the body of [NewClientWithTokenRetries] with the backoff
+// ceiling passed in rather than read from [maxRetryBackoff]. See
+// [retryOptionsWithCeiling] for why that seam exists; every caller outside a
+// test passes the package constant.
+func newTokenClient(baseURL, token string, skipTLSVerify, disableRetries bool, retryCeiling time.Duration) (*Client, error) {
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
@@ -241,7 +249,7 @@ func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetr
 		gl.WithBaseURL(baseURL),
 		gl.WithHTTPClient(sdkHTTPClient),
 	}
-	options = append(options, retryOptions()...)
+	options = append(options, retryOptionsWithCeiling(retryCeiling)...)
 	if disableRetries {
 		options = append(options, gl.WithoutRetries())
 	}

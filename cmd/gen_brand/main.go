@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -311,16 +312,39 @@ func repoRoot() (string, error) {
 	}
 }
 
-func main() {
-	check := flag.Bool("check", false, "verify committed assets match the geometry instead of writing")
-	flag.Parse()
+// exit is os.Exit behind a variable, so the one line main carries is
+// reachable from a test rather than only from a process.
+var exit = os.Exit
+
+// cli is one invocation: parse the flags, find the repository root, then
+// write or verify the assets. It returns the process exit code and sends the
+// messages it produces itself to stderr, so a test reads both. The flags are
+// parsed into a set of its own rather than the global one, because a global
+// set can only be defined once per process and so is unreachable from a test
+// that drives the command twice. The per-asset staleness lines stay on
+// os.Stderr, where run writes them.
+func cli(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet("gen_brand", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	check := fs.Bool("check", false, "verify committed assets match the geometry instead of writing")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 	root, err := repoRoot()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 	if runErr := run(root, *check); runErr != nil {
-		fmt.Fprintln(os.Stderr, runErr)
-		os.Exit(1)
+		fmt.Fprintln(stderr, runErr)
+		return 1
 	}
+	return 0
+}
+
+func main() {
+	exit(cli(os.Args[1:], os.Stderr))
 }

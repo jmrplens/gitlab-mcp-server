@@ -262,10 +262,19 @@ func startForSnapshot(t *testing.T, signals Signals) Snapshot {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	// A tight teardown bound: these tests point exporters at .invalid hosts
-	// and assert on the snapshot, so the final flush has nowhere to deliver
-	// and waiting shutdownTimeout for it bought each test five silent
-	// seconds. Shutdown honors the tighter caller deadline.
+	// A tight teardown bound: these tests assert on the snapshot and never on
+	// an export, so the final flush has nowhere to deliver and waiting
+	// shutdownTimeout for it would buy each test five silent seconds.
+	// Shutdown honors the tighter caller deadline.
+	//
+	// The bound is necessary and not sufficient, which is why every endpoint
+	// below is an address and never a name. A gRPC exporter builds its
+	// ClientConn eagerly, so the resolver starts looking the host up at
+	// Start, and grpc.ClientConn.Close waits for that watcher to finish
+	// while ignoring the context it was given: a name nothing resolves cost
+	// the caller a full system-resolver timeout (5.00s here) that no
+	// deadline of ours could cut short. An IP literal is handed straight to
+	// gRPC's ipResolver with no lookup at all.
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
@@ -281,11 +290,15 @@ func startForSnapshot(t *testing.T, signals Signals) Snapshot {
 // not imprecise but false, in a document a client reads. The traces variable is
 // set here to a value nothing will use, which is precisely the shape that used
 // to be reported.
+//
+// The two endpoints are TEST-NET-1 addresses (RFC 5737), unreachable by
+// definition and distinct so the assertion below can say which one the
+// snapshot picked.
 func TestSnapshot_MetricsOnlyDeploymentIsNotDescribedByTraces(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "grpc")
-	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://traces.invalid:4318")
-	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://metrics.invalid:4317")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://192.0.2.1:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://192.0.2.2:4317")
 
 	got := startForSnapshot(t, Signals{Metrics: true})
 
@@ -295,7 +308,7 @@ func TestSnapshot_MetricsOnlyDeploymentIsNotDescribedByTraces(t *testing.T) {
 	if got.Protocol != "grpc" {
 		t.Errorf("protocol = %q, want %q: one enabled signal agrees with itself", got.Protocol, "grpc")
 	}
-	if got.Endpoint != "http://metrics.invalid:4317" {
+	if got.Endpoint != "http://192.0.2.2:4317" {
 		t.Errorf("endpoint = %q, want the metrics endpoint", got.Endpoint)
 	}
 	if got.SignalProtocols["metrics"] != "grpc" {
@@ -315,7 +328,7 @@ func TestSnapshot_MetricsOnlyDeploymentIsNotDescribedByTraces(t *testing.T) {
 func TestSnapshot_DisagreeingSignalsReportNoSummary(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "grpc")
-	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://shared.invalid:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://192.0.2.3:4318")
 
 	got := startForSnapshot(t, Signals{Traces: true, Metrics: true})
 
@@ -327,7 +340,7 @@ func TestSnapshot_DisagreeingSignalsReportNoSummary(t *testing.T) {
 	}
 	// The endpoint comes from the shared variable, so that one does agree, and
 	// disagreement on one field must not blank the other.
-	if got.Endpoint != "http://shared.invalid:4318" {
+	if got.Endpoint != "http://192.0.2.3:4318" {
 		t.Errorf("endpoint = %q; both signals resolve the same one, so it has a summary", got.Endpoint)
 	}
 }
@@ -337,14 +350,14 @@ func TestSnapshot_DisagreeingSignalsReportNoSummary(t *testing.T) {
 // one collector.
 func TestSnapshot_AgreeingSignalsKeepTheSummary(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
-	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.invalid:4317")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://192.0.2.4:4317")
 
 	got := startForSnapshot(t, AllSignals())
 
 	if got.Protocol != "grpc" {
 		t.Errorf("protocol = %q, want grpc for three signals that agree", got.Protocol)
 	}
-	if got.Endpoint != "http://collector.invalid:4317" {
+	if got.Endpoint != "http://192.0.2.4:4317" {
 		t.Errorf("endpoint = %q, want the shared one", got.Endpoint)
 	}
 	if len(got.SignalProtocols) != 3 {

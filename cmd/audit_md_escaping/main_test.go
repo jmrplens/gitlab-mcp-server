@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+// TestMain installs the load memo for every test in the package.
+//
+// It belongs here rather than in each test that drives a run because the tests
+// that pay for a load are not the ones that ask for it: execute loads the tree
+// itself, so five tests driving the whole audit over two fixtures used to pay
+// for five type-checks of what is two distinct loads. Installing it once, over
+// the real loader, leaves every run going through execute exactly as it does
+// in production.
+func TestMain(m *testing.M) {
+	loadTree = cachedLoad
+	os.Exit(m.Run())
+}
+
 // runFixture runs the audit over the named fixture packages, with the
 // repository as the root and the streams captured.
 func runFixture(t *testing.T, cfg auditRun, sources map[string]string) (code int, out, errOut string) {

@@ -1131,12 +1131,22 @@ func sharedCatalogReaders() []sharedCatalogReader {
 // its own and lists it through both tools/list middlewares. This is the path
 // the reported crash was on: registration re-derives each route's input schema
 // through NewActionSpec, which deep-copies it.
+//
+// No compiled-schema cache key, and that is the strict answer rather than a
+// concession. The copy is what reads the shared catalog, and it happens before
+// the key is consulted, so the key changes nothing about what this racer reads;
+// what it decides is only whether the private copy is then compiled once and
+// reused. A key of its own per label — what this passed until the copies were
+// measured — makes each goroutine compile its own thousand schemas into a
+// process-lived cache that never evicts, so six labels leave six thousand
+// schema trees alive for the rest of the binary and every later test pays for
+// them in GC. An empty key shares nothing between the racers, which is what
+// this test wants, and leaves nothing behind.
 func readByRegisteringIndividual(t *testing.T, catalog *actioncatalog.Catalog, _ *gitlabclient.Client, label string) {
 	t.Helper()
 	server := newListingServer()
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
-		SchemaCacheKey:             "individual|" + label,
 	})
 	listSharedCatalogTools(t, server, label)
 }

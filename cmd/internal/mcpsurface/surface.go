@@ -211,25 +211,34 @@ func DynamicToolsFromCatalog(catalog *actioncatalog.Catalog) []*mcp.Tool {
 }
 
 // listedTools memoizes [IndividualTools] and [MetaTools] per
-// (client, surface, tier, meta parameter-schema mode). Registering a full
-// surface costs seconds, the result depends only on the compiled-in catalog
-// and those inputs, and every caller only reads it.
+// (instance class, surface, tier, meta parameter-schema mode). Registering a
+// full surface costs seconds, the result depends only on the compiled-in
+// catalog and those inputs, and every caller only reads it.
 //
 // The schema mode is part of the key because the footprint measurement
 // re-lists the meta surface under each mode to size its input schemas; a key
 // without it would hand every mode the first listing and report three
-// identical sizes. The client is keyed by pointer, which is sound only while
-// a client is treated as immutable once built: the tools a client's surface
-// carries depend on the instance it names (GitLab.com registers Orbit), and
-// nothing here would notice a caller mutating one between calls.
+// identical sizes.
+//
+// The client enters the key as [gitlabclient.Client.IsGitLabDotCom] rather
+// than as a pointer, because that bool is the whole of what a client decides
+// about a listing: the catalog layer beneath already keys on it
+// ([tools.SharedBaseCatalog], [tools.SharedIndividualCatalog]), and what a
+// client is otherwise used for here — binding the catalog's handlers, naming
+// the standalone specs — never reaches a tool definition, which is all a
+// closed session hands back. A pointer key was finer than the value it named,
+// so a command holding two clients for one instance class registered the
+// surface twice and a caller could never tell which of them it got. Its own
+// test is what says that is deliberate: a second self-managed client is served
+// the first one's listing, and a GitLab.com client is not.
 //
 // The returned slice and the tools it holds are shared: read-only.
 var listedTools sync.Map // listKey -> []*mcp.Tool
 
 // listKey names one memoized listing. Surface is a config.ToolSurface*
-// constant.
+// constant; dotcom is the instance class the client names.
 type listKey struct {
-	client     *gitlabclient.Client
+	dotcom     bool
 	surface    string
 	tier       edition.Tier
 	schemaMode string
@@ -247,13 +256,13 @@ type listKey struct {
 // of leaving it describing a copy, which is the mistake the meta surface made
 // until issue 616.
 func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
-	return listSurface(listKey{client: client, surface: config.ToolSurfaceIndividual, tier: tier, schemaMode: tools.MetaParamSchema()},
+	return listSurface(listKey{dotcom: client.IsGitLabDotCom(), surface: config.ToolSurfaceIndividual, tier: tier, schemaMode: tools.MetaParamSchema()},
 		func(server *mcp.Server) {
 			catalog, _, err := tools.SharedIndividualCatalog(client, &config.ServerConfig{Tier: tier})
 			cmdutil.MustDo(err)
 			tools.RegisterIndividualCatalogTools(server, catalog, tools.IndividualCatalogRegisterOptions{
 				IncludeStandaloneUtilities: true,
-				SchemaCacheKey:             "individual|" + tier.String(),
+				SchemaCacheKey:             tools.IndividualSchemaCacheKey(tier),
 			})
 			tools.RegisterMetaStandaloneTools(server, client)
 		})
@@ -270,7 +279,7 @@ func IndividualTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool
 // it is the difference that had the published meta counts saying 33 where the
 // binary serves 34 (issue 616).
 func MetaTools(client *gitlabclient.Client, tier edition.Tier) []*mcp.Tool {
-	return listSurface(listKey{client: client, surface: config.ToolSurfaceMeta, tier: tier, schemaMode: tools.MetaParamSchema()},
+	return listSurface(listKey{dotcom: client.IsGitLabDotCom(), surface: config.ToolSurfaceMeta, tier: tier, schemaMode: tools.MetaParamSchema()},
 		func(server *mcp.Server) {
 			catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Tier: tier, IncludeMCP: true}))
 			tools.RegisterMetaCatalog(server, catalog)

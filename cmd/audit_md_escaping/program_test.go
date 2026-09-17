@@ -1,13 +1,22 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
 // fixtureDir is the directory the in-memory fixture packages pretend to live
@@ -54,7 +63,13 @@ func repoRoot(t *testing.T) string {
 // into a loader overlay rooted at the module.
 func fixtureOverlay(t *testing.T, sources map[string]string) map[string][]byte {
 	t.Helper()
-	root := repoRoot(t)
+	return overlayRootedAt(repoRoot(t), sources)
+}
+
+// overlayRootedAt is fixtureOverlay without a test to fail: the shared loads
+// below build overlays from the same fixture sets while resolving a load,
+// where there is no *testing.T in hand.
+func overlayRootedAt(root string, sources map[string]string) map[string][]byte {
 	overlay := make(map[string][]byte, len(sources))
 	for name, source := range sources {
 		overlay[filepath.Join(root, filepath.FromSlash(fixtureDir), filepath.FromSlash(name))] = []byte(source)
@@ -62,30 +77,256 @@ func fixtureOverlay(t *testing.T, sources map[string]string) map[string][]byte {
 	return overlay
 }
 
-// fixtureCache memoizes one loaded program per fixture source set. Loading is
-// a full type-check of the fixture against toolutil, the result is read-only
-// for everything the tests ask of it, and the tests run in one goroutine, so
-// paying for it once keeps the package's tests from re-parsing the same few
-// packages for every case.
-var fixtureCache = map[string]*program{}
+// loadCache memoizes one program per load. The result is read-only for
+// everything the tests ask of it — nothing writes to a program once
+// [indexProgram] has built it — and the tests run in one goroutine, so paying
+// for a given load once keeps the package from re-answering the same load for
+// every case that asks it.
+//
+// The directory, the patterns and the overlay decide the entry together,
+// because all three decide what is loaded and therefore what the audit
+// answers.
+var loadCache = map[string]*program{}
 
-// loadFixture loads the fixture packages described by sources.
-func loadFixture(t *testing.T, sources map[string]string) *program {
-	t.Helper()
-	names := make([]string, 0, len(sources))
-	for name := range sources {
+// cachedLoad is loadProgram behind that memo, installed over [loadTree] for
+// the whole test binary by TestMain. A miss is served by [loadFor], so a tree
+// that does not type-check is still refused by the loader and the error is not
+// remembered.
+func cachedLoad(dir string, patterns []string, overlay map[string][]byte) (*program, error) {
+	key := loadKey(dir, patterns, overlay)
+	if cached, ok := loadCache[key]; ok {
+		return cached, nil
+	}
+	prog, err := loadFor(dir, patterns, overlay)
+	if err != nil {
+		return nil, err
+	}
+	loadCache[key] = prog
+	return prog, nil
+}
+
+// loadFor produces the program for one load: a view over a shared load where
+// one carries the fixture, and a load of its own where none does.
+func loadFor(dir string, patterns []string, overlay map[string][]byte) (*program, error) {
+	for _, shared := range sharedLoads {
+		if shared.covers(dir, patterns, overlay) {
+			return shared.view(dir, overlay)
+		}
+	}
+	return loadProgram(dir, patterns, overlay)
+}
+
+// sharedLoads are the loads this package's tests are served from. Each is one
+// go/packages load carrying every fixture the sets name, and a test asking for
+// one of those fixtures is handed a view over it holding that fixture's
+// packages alone.
+//
+// It is here because of what a load costs and what it does not. A load is one
+// `go list` of this module: measured on this tree, four separate loads of the
+// four fixture sets take 1.66s and one load of all four takes 0.44s, so the
+// overlay's size is almost free and the invocation is the whole bill. Nine
+// loads of the same module was therefore nearly the whole cost of running this
+// package's tests.
+//
+// A view is what a separate load of that fixture would have produced, and
+// structurally rather than hopefully: [indexProgram] records the declarations
+// of the packages it is handed and the calls written in them, so indexing the
+// view's packages and only those records exactly what a load that never saw
+// the sibling fixtures would have recorded. The sibling packages stay in the
+// loader's result, where nothing the audit does can reach them.
+//
+// The two entries are two loads and not one because they load different
+// patterns, which is a difference in the answers and not only in the cost: the
+// tests that drive whole runs load the fixture alone, where toolutil arrives
+// as export data, and the tests that ask the classifier about one expression
+// load toolutil's source beside it, where its bodies are readable.
+//
+// A fixture no entry names still works and is simply loaded on its own, which
+// is how the broken fixture — whose whole point is that the load must fail —
+// stays out of every union.
+var sharedLoads = []*sharedLoad{
+	{patterns: fixturePatterns, sets: []map[string]string{caseFixture, cardFixture, fenceFixture, rawFixture}},
+	{patterns: []string{fixturePattern}, sets: []map[string]string{cleanFixture, caseFixture}},
+}
+
+// sharedLoad is one go/packages load serving the fixtures its sets name.
+type sharedLoad struct {
+	patterns []string
+	sets     []map[string]string
+
+	once   sync.Once
+	dir    string
+	loaded []*packages.Package
+	err    error
+}
+
+// covers reports whether this shared load carries exactly the source the
+// overlay asks for, under the same patterns. Byte equality is the test rather
+// than the file name, so a fixture that names its files like a covered one but
+// writes something else is loaded on its own instead of being served the
+// wrong program.
+//
+// A load carrying no overlay at all is never covered, and that is the rule
+// rather than a special case: what a shared load holds is fixture source that
+// exists nowhere on disk, so standing in for a load of the repository's real
+// source would answer about packages that load never had. The three loads that
+// pass no overlay are the run over internal/toolutil, the pattern that matches
+// nothing, and the directory that is not there — and the last of those is what
+// taught this the hard way. Its request reached [sharedLoad.load] with a
+// temporary directory, the once performed the shared load there, and every
+// later test was handed that directory's failure; the source order happened to
+// run it last, so only -shuffle=on ever saw it.
+func (s *sharedLoad) covers(dir string, patterns []string, overlay map[string][]byte) bool {
+	if len(overlay) == 0 || !slices.Equal(s.patterns, patterns) {
+		return false
+	}
+	carried := s.overlay(dir)
+	for name, source := range overlay {
+		if held, ok := carried[name]; !ok || !bytes.Equal(held, source) {
+			return false
+		}
+	}
+	return true
+}
+
+// overlay is the union of every fixture this shared load carries.
+func (s *sharedLoad) overlay(dir string) map[string][]byte {
+	union := map[string][]byte{}
+	for _, set := range s.sets {
+		maps.Copy(union, overlayRootedAt(dir, set))
+	}
+	return union
+}
+
+// view returns the program a load of just the fixtures the overlay names would
+// have produced.
+func (s *sharedLoad) view(dir string, overlay map[string][]byte) (*program, error) {
+	loaded, err := s.load(dir)
+	if err != nil {
+		return nil, err
+	}
+	named := fixturePackagesIn(dir, overlay)
+	found := make(map[string]bool, len(named))
+	kept := make([]*packages.Package, 0, len(loaded))
+	for _, pkg := range loaded {
+		name, isFixture := fixturePackageName(pkg.PkgPath)
+		if !isFixture {
+			kept = append(kept, pkg)
+			continue
+		}
+		if named[name] {
+			found[name] = true
+			kept = append(kept, pkg)
+		}
+	}
+	for name := range named {
+		if !found[name] {
+			return nil, fmt.Errorf("shared load of %s did not produce fixture package %s", strings.Join(s.patterns, " "), name)
+		}
+	}
+	if closedErr := viewIsClosed(kept, named); closedErr != nil {
+		return nil, closedErr
+	}
+	return indexProgram(kept), nil
+}
+
+// viewIsClosed refuses a view whose packages import a fixture package the view
+// leaves out.
+//
+// It is what keeps a view equal to a separate load rather than merely similar
+// to one. A fixture set that named every package it uses is the only shape
+// that could ever have been loaded on its own, and one that reaches into a
+// sibling set compiles under the union while it could not compile alone: the
+// union would resolve the import from source and the view would then index the
+// importing package without the imported one, answering "cannot follow" where
+// a separate load answered nothing at all because it refused to load. Both
+// halves of that are a lie, so this is a failure rather than a fallback.
+func viewIsClosed(kept []*packages.Package, named map[string]bool) error {
+	for _, pkg := range kept {
+		name, isFixture := fixturePackageName(pkg.PkgPath)
+		if !isFixture {
+			continue
+		}
+		for path := range pkg.Imports {
+			imported, importsFixture := fixturePackageName(path)
+			if importsFixture && !named[imported] {
+				return fmt.Errorf("fixture package %s imports %s, which its own fixture set does not name", name, imported)
+			}
+		}
+	}
+	return nil
+}
+
+// load performs the shared load once.
+//
+// A second directory is refused rather than served the first one's packages,
+// and refused whether or not that load succeeded: the union is of one tree,
+// and a request for another is a question this cannot answer.
+func (s *sharedLoad) load(dir string) ([]*packages.Package, error) {
+	s.once.Do(func() {
+		s.dir = dir
+		s.loaded, s.err = goprogram.Load(dir, s.patterns, s.overlay(dir))
+	})
+	if s.dir != dir {
+		return nil, fmt.Errorf("shared load was made at %s and asked for at %s", s.dir, dir)
+	}
+	return s.loaded, s.err
+}
+
+// fixturePackagesIn names the fixture packages an overlay carries: its paths
+// are <root>/<fixtureDir>/<package>/<file>.
+func fixturePackagesIn(dir string, overlay map[string][]byte) map[string]bool {
+	root := filepath.Join(dir, filepath.FromSlash(fixtureDir))
+	named := map[string]bool{}
+	for path := range overlay {
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			continue
+		}
+		if name, _, ok := strings.Cut(filepath.ToSlash(rel), "/"); ok {
+			named[name] = true
+		}
+	}
+	return named
+}
+
+// fixturePackageName reads the fixture package a loaded import path names, and
+// reports whether it is a fixture package at all.
+func fixturePackageName(pkgPath string) (string, bool) {
+	rest, ok := strings.CutPrefix(pkgPath, modulePath+"/"+fixtureDir+"/")
+	if !ok {
+		return "", false
+	}
+	name, _, _ := strings.Cut(rest, "/")
+	return name, true
+}
+
+// loadKey names one load. The overlay is keyed by its contents rather than by
+// its file names alone, so a fixture edited in place, or two fixtures that
+// happen to name their files alike, can never be served each other's program.
+func loadKey(dir string, patterns []string, overlay map[string][]byte) string {
+	sum := sha256.New()
+	fmt.Fprintf(sum, "%s\x00%s\x00", dir, strings.Join(patterns, "\x1f"))
+	names := make([]string, 0, len(overlay))
+	for name := range overlay {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	key := strings.Join(names, "|")
-	if cached, ok := fixtureCache[key]; ok {
-		return cached
+	for _, name := range names {
+		fmt.Fprintf(sum, "%s\x00%d\x00", name, len(overlay[name]))
+		sum.Write(overlay[name])
 	}
-	prog, err := loadProgram(repoRoot(t), fixturePatterns, fixtureOverlay(t, sources))
+	return hex.EncodeToString(sum.Sum(nil))
+}
+
+// loadFixture loads the fixture packages described by sources, with
+// toolutil's own source beside them.
+func loadFixture(t *testing.T, sources map[string]string) *program {
+	t.Helper()
+	prog, err := cachedLoad(repoRoot(t), fixturePatterns, fixtureOverlay(t, sources))
 	if err != nil {
 		t.Fatalf("loadProgram: %v", err)
 	}
-	fixtureCache[key] = prog
 	return prog
 }
 

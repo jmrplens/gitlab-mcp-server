@@ -107,6 +107,36 @@ func TestTierOrderingHelpers(t *testing.T) {
 	}
 }
 
+// TestTierForEnterprise_LegacyBoolean_MapsToUltimateAndFree verifies the bridge
+// from the legacy binary "enterprise" notion to the 3-tier model: true resolves
+// to Ultimate, which is the only tier that admits every Premium and Ultimate
+// action, and false resolves to Free. The round trip through IsEnterprise is
+// asserted beside each mapping because the two functions are inverses on the
+// boolean — a caller that still holds one converts in both directions, and a
+// change to either boundary alone would break that without failing the
+// equality on its own.
+func TestTierForEnterprise_LegacyBoolean_MapsToUltimateAndFree(t *testing.T) {
+	tests := []struct {
+		name       string
+		enterprise bool
+		want       Tier
+	}{
+		{name: "enterprise", enterprise: true, want: Ultimate},
+		{name: "community", enterprise: false, want: Free},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TierForEnterprise(tc.enterprise)
+			if got != tc.want {
+				t.Errorf("TierForEnterprise(%v) = %v, want %v", tc.enterprise, got, tc.want)
+			}
+			if back := got.IsEnterprise(); back != tc.enterprise {
+				t.Errorf("TierForEnterprise(%v).IsEnterprise() = %v, want %v", tc.enterprise, back, tc.enterprise)
+			}
+		})
+	}
+}
+
 // TestTierString_FreeAndUnknown verifies String() maps Free to "free" and
 // coerces unknown tier values to "free" as the safe default branch.
 func TestTierString_FreeAndUnknown(t *testing.T) {

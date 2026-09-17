@@ -379,6 +379,7 @@ func TestAdmit_WarmsEveryCredentialAndReportsTheFirstFailure(t *testing.T) {
 type seriesFixture struct {
 	plan     scenarioPlan
 	sampler  *sampler
+	listener *recordedPprofClient
 	profiler *pprofClient
 	call     toolCall
 	result   SeriesScenario
@@ -389,11 +390,13 @@ type seriesFixture struct {
 // reading, for the duration of one test.
 //
 // What is dropped is the wait, not the reading: the collection is still forced
-// through the real profiling handlers and the heap that comes back is this
-// process's own. The wait exists so a real server's last responses are off the
-// wire before the reading; a fixture whose load is an in-memory call has
-// nothing in flight to wait for, and would otherwise pay half a second per
-// step for it.
+// through the real profiling handlers, and the heap and resident set that come
+// back are a real process's. The wait exists so the last responses of a server
+// under a published run's load are off the wire before the reading, which is
+// about the figure's accuracy; no test here asserts that figure's value, only
+// that it was taken and is positive, and a step of a test's length leaves
+// nearly nothing in flight to wait for. Half a second per step, several steps
+// per test, for a digit no assertion reads.
 func quickSettle(t *testing.T) {
 	t.Helper()
 	previous := settleDelay
@@ -421,8 +424,9 @@ func newSeriesFixture(t *testing.T, steps []int, budget float64) *seriesFixture 
 	}
 	s.start()
 	t.Cleanup(s.stop)
+	listener := newUnsampledPprofClient(t)
 	return &seriesFixture{
-		plan: plan, sampler: s, profiler: newPprofTestClient(t), call: call,
+		plan: plan, sampler: s, listener: listener, profiler: listener.client, call: call,
 		result: SeriesScenario{
 			ID: plan.ID, Transport: plan.Transport, Surface: plan.Surface, Parallel: plan.Parallel,
 			StepSeconds: round(plan.StepDuration.Seconds()), Clients: plan.Steps, BudgetMiB: budget,
@@ -462,8 +466,39 @@ func TestWalkSteps_EveryStepRuns_FillsEachOne(t *testing.T) {
 			assertSeriesStep(t, f.plan, step, f.plan.Steps[i], profiles)
 		})
 	}
+	assertAskedForACPUProfilePerStep(t, f, len(got.Steps))
 	if len(f.conns) != 4 {
 		t.Errorf("%d connections held at the end, want one per credential", len(f.conns))
+	}
+}
+
+// assertAskedForACPUProfilePerStep checks the driver asked the listener for
+// one CPU profile per step, over the window a step of this plan's length
+// gets.
+//
+// The window is asserted rather than waited out. It used to be neither: the
+// sampled handler slept for whatever the driver asked and the step paid for
+// it, so a driver asking for the wrong number of seconds cost a slower test
+// and failed nothing. A phase this short is under the whole-second floor
+// net/http/pprof imposes, so one second is what the plan's own arithmetic
+// has to reach.
+func assertAskedForACPUProfilePerStep(t *testing.T, f *seriesFixture, steps int) {
+	t.Helper()
+	want := "/debug/pprof/profile?seconds=" +
+		strconv.Itoa(max(1, int(f.plan.StepDuration.Seconds()*profileFraction)))
+	var asked []string
+	for _, uri := range f.listener.asked() {
+		if strings.HasPrefix(uri, "/debug/pprof/profile") {
+			asked = append(asked, uri)
+		}
+	}
+	if len(asked) != steps {
+		t.Errorf("the listener answered %d CPU profile requests, want one per step: %v", len(asked), asked)
+	}
+	for _, uri := range asked {
+		if uri != want {
+			t.Errorf("the driver asked for %q, want %q", uri, want)
+		}
 	}
 }
 
@@ -496,8 +531,13 @@ func assertSeriesStep(t *testing.T, plan scenarioPlan, step SeriesStep, wantClie
 	}
 	for _, rel := range []string{step.Profiles.CPU, step.Profiles.Heap} {
 		t.Run(rel, func(t *testing.T) {
-			if _, statErr := os.Stat(filepath.Join(profiles, filepath.FromSlash(rel))); statErr != nil {
-				t.Errorf("profile %s was not written: %v", rel, statErr)
+			data, readErr := os.ReadFile(filepath.Join(profiles, filepath.FromSlash(rel))) //#nosec G304 -- a path this test built under its own temporary directory
+			if readErr != nil {
+				t.Errorf("profile %s was not written: %v", rel, readErr)
+				return
+			}
+			if !isGzip(data) {
+				t.Errorf("profile %s is not a compressed pprof file", rel)
 			}
 		})
 	}
@@ -826,6 +866,7 @@ func TestSlopeLine_NamesWhichGrowthEachFigureIs(t *testing.T) {
 // counts, profiles on disk under the scenario's directory, and the build
 // read off /health.
 func TestRunSeries_Standin_StepsThroughTheCountsAndProfiles(t *testing.T) {
+	quickSettle(t)
 	r := standinRunner(t)
 	profiles := t.TempDir()
 	r.profilesDir = profiles

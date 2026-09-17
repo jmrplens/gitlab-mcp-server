@@ -60,35 +60,73 @@ var interrupted = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
+// Seams over the two things main does that a test cannot follow it into:
+// ending the process, and resolving the record's home inside whichever
+// checkout this is being run from. Both are variables so every dispatch below
+// can be driven without exiting the test binary or writing into the
+// repository the test is running in.
+var (
+	osExit           = os.Exit
+	defaultRecordDir = repositoryRecordDir
+)
+
 func main() {
+	osExit(runMain(os.Args))
+}
+
+// runMain parses the flags, dispatches, and returns the process exit code.
+//
+// It takes its arguments and builds its own flag set rather than reading
+// os.Args and flag.CommandLine, so a test can drive both dispatches and every
+// way the parse ends. ContinueOnError for the same reason: a flag nobody can
+// parse becomes an exit code this function returns rather than an os.Exit
+// inside the flag package that the seam above never sees. By the time Parse
+// returns, the flag set has already written the error and the usage to
+// stderr, and -h is the one parse failure that ends clean, which is what
+// ExitOnError did for both.
+func runMain(args []string) int {
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	var (
-		check  = flag.Bool("check", false, "verify the committed record without Docker and without network, and exit non-zero when it cannot be rested on")
-		dump   = flag.String("dump", "", "build the record from an introspection dump already on disk instead of booting")
-		digest = flag.String("digest", "", "with -dump, the repository digest of the image the dump was taken from")
-		image  = flag.String("image", "gitlab/gitlab-ee:latest", "image to boot; Enterprise, because its entity set is the superset")
-		keep   = flag.Bool("keep", false, "leave the container running afterwards")
-		dir    = flag.String("dir", "", "directory holding the record (default: the repository's docs/development)")
+		check  = fs.Bool("check", false, "verify the committed record without Docker and without network, and exit non-zero when it cannot be rested on")
+		dump   = fs.String("dump", "", "build the record from an introspection dump already on disk instead of booting")
+		digest = fs.String("digest", "", "with -dump, the repository digest of the image the dump was taken from")
+		image  = fs.String("image", "gitlab/gitlab-ee:latest", "image to boot; Enterprise, because its entity set is the superset")
+		keep   = fs.Bool("keep", false, "leave the container running afterwards")
+		dir    = fs.String("dir", "", "directory holding the record (default: the repository's docs/development)")
 	)
-	flag.Parse()
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	recordDir := *dir
 	if recordDir == "" {
-		root := cmdutil.Must(cmdutil.RepositoryRoot("."))
-		recordDir = filepath.Join(root, apilive.DefaultDir)
+		recordDir = defaultRecordDir()
 	}
 
-	// Fatalf and not MustDo: both of these fail on something the person
-	// running them acts on — regenerate the record, or boot a GitLab that
-	// answers — and a stack trace over that message would bury it.
+	// The message alone and not a panic over it: both of these fail on
+	// something the person running them acts on — regenerate the record, or
+	// boot a GitLab that answers — and a stack trace would bury it.
 	if *check {
 		if err := runCheck(recordDir, time.Now()); err != nil {
-			cmdutil.Fatalf("%v", err)
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return 1
 		}
-		return
+		return 0
 	}
 	if err := runGenerate(recordDir, dumpFrom{path: *dump, digest: *digest}, *image, *keep); err != nil {
-		cmdutil.Fatalf("%v", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
 	}
+	return 0
+}
+
+// repositoryRecordDir is where the record lives when -dir names nothing: the
+// docs/development of the checkout this command was run from.
+func repositoryRecordDir() string {
+	return filepath.Join(cmdutil.Must(cmdutil.RepositoryRoot(".")), apilive.DefaultDir)
 }
 
 // runCheck gates the committed record. It reads one file and asks nothing of
@@ -353,10 +391,19 @@ func lookUpDocker() (dockerPath, error) {
 // the program a run executes is the one PATH named when the run began and
 // cannot be swapped underneath it by a directory earlier on that list.
 func (d dockerPath) command(ctx context.Context, args ...string) *exec.Cmd {
-	// #nosec G204 -- the program is the absolute path LookPath resolved, and
-	// every argument is this command's own: a fixed container name, a temp
+	// #nosec G204 G702 -- the program is the absolute path LookPath resolved,
+	// and every argument is this command's own: a fixed container name, a temp
 	// file it just created, and fixed docker subcommands. The one value a
 	// caller supplies is the image, which is what -image is for.
+	//
+	// G702 is the same fact seen by taint analysis: -image really does reach
+	// an argument here, and it always did. It became visible when the flags
+	// moved onto a flag set runMain is handed, because the path from os.Args
+	// is one gosec can follow and the path from a package-level flag.String
+	// was not. There is nothing to escape: the person who passes -image is the
+	// person running the command, and docker is exec'd with an argument
+	// vector, so an image name carrying a space or a semicolon is one argument
+	// docker then refuses.
 	return exec.CommandContext(ctx, string(d), args...)
 }
 

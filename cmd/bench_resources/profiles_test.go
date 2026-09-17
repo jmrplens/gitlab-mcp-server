@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	runtimepprof "runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -39,22 +40,62 @@ type recordedPprofClient struct {
 }
 
 // newRecordedPprofClient serves the profiling handlers from this test process
-// behind a recorder.
+// behind a recorder, the CPU profile sampled over the window the driver asks
+// for as the real listener samples it.
 func newRecordedPprofClient(t *testing.T) *recordedPprofClient {
 	t.Helper()
+	return newPprofListener(t, pprof.Profile)
+}
+
+// newUnsampledPprofClient serves the same handlers with the CPU profile
+// written and closed rather than sampled, for a fixture that takes one per
+// step and asserts where it was written rather than what is in it.
+func newUnsampledPprofClient(t *testing.T) *recordedPprofClient {
+	t.Helper()
+	return newPprofListener(t, unsampledCPUProfile)
+}
+
+// newPprofListener serves the profiling handlers behind a recorder, with the
+// CPU route given, and returns the recorder.
+func newPprofListener(t *testing.T, cpu http.HandlerFunc) *recordedPprofClient {
+	t.Helper()
 	rec := &recordedPprofClient{}
+	record := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			rec.mu.Lock()
+			rec.requests = append(rec.requests, r.URL.RequestURI())
+			rec.mu.Unlock()
+			next(w, r)
+		}
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/debug/pprof/", func(w http.ResponseWriter, r *http.Request) {
-		rec.mu.Lock()
-		rec.requests = append(rec.requests, r.URL.RequestURI())
-		rec.mu.Unlock()
-		pprof.Index(w, r)
-	})
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/", record(pprof.Index))
+	mux.HandleFunc("/debug/pprof/profile", record(cpu))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	rec.client = newPprofClient(srv.URL)
 	return rec
+}
+
+// unsampledCPUProfile answers the CPU route with a profile the runtime writes
+// and closes at once, skipping the sampling window and nothing else.
+//
+// net/http/pprof parses ?seconds= as a whole number of seconds and sleeps for
+// it, so the shortest answer that handler can give is a second, and a fixture
+// whose steady phase is eighty milliseconds long used to pay that second per
+// step for a file it only asserts was written where the driver said it was.
+// Everything either side of the sleep is kept: StartCPUProfile writes the
+// same gzip-compressed pprof file the sampled route writes, and the request
+// is recorded, so the seconds the driver asked for are now asserted rather
+// than merely waited out. What the sampled answer is, and that the driver can
+// read one, stays covered by TestPprofClient_ReadsProfilesAndTheGoroutineTotal.
+func unsampledCPUProfile(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if err := runtimepprof.StartCPUProfile(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	runtimepprof.StopCPUProfile()
 }
 
 // asked lists the request URIs the listener answered, oldest first.

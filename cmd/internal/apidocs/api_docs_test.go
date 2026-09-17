@@ -275,6 +275,49 @@ func TestBackoffDelay(t *testing.T) {
 	}
 }
 
+// TestRequest_Spacing_IsTheOptionTheCallerGave verifies what a successful
+// download waits for afterwards, which is the one thing that keeps a 250-page
+// sweep under GitLab's raw rate limiter and the one thing a caller fetching
+// from an httptest handler in its own process has no use for.
+//
+// A caller that names no spacing gets baseSpacing, so nothing that reaches
+// gitlab.com loses the pause by saying nothing; a caller that asks for none
+// gets a non-positive duration, which sleepCtx returns from at once. The
+// duration is read off the seam rather than measured with a clock: the point
+// is which value the fetcher passes, and a test that measured it would have
+// to spend it.
+func TestRequest_Spacing_IsTheOptionTheCallerGave(t *testing.T) {
+	tests := []struct {
+		name string
+		opt  time.Duration
+		want time.Duration
+	}{
+		{name: "unset keeps the rate-limiter pause", opt: 0, want: baseSpacing},
+		{name: "negative removes it", opt: -1, want: -1},
+		{name: "a caller may shorten it", opt: time.Millisecond, want: time.Millisecond},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, _ := newServer(t, "# doc")
+			var got time.Duration
+			restore := sleepCtx
+			sleepCtx = func(ctx context.Context, d time.Duration) error {
+				got = d
+				return ctx.Err()
+			}
+			t.Cleanup(func() { sleepCtx = restore })
+
+			f := New(t.TempDir(), Options{BaseURL: srv.URL + "/", CacheDir: t.TempDir(), Spacing: tt.opt})
+			if _, err := f.Fetch(t.Context(), "branches"); err != nil {
+				t.Fatalf("Fetch() error = %v, want nil", err)
+			}
+			if got != tt.want {
+				t.Errorf("spacing after a successful fetch = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestSleepCtx_Scenarios_WaitsOrHonorsCancellation verifies the production
 // sleep (the one TestMain replaces for the other tests): a non-positive
 // duration returns at once with the context's state, a short wait elapses,

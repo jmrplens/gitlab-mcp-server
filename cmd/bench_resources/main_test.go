@@ -460,8 +460,20 @@ func standinBinary(t *testing.T) string {
 // quickOptions are the flags of a smoke run against the stand-in: one round, a
 // fast sampler, and a record path of its own so the guard against overwriting
 // the published record lets it through.
+//
+// stepDurationSet goes with the duration beside it, and without it the second
+// was dead: -quick imposes quickStepDuration on a run that did not type
+// -step-duration, so every caller of this fixture measured two seconds a step
+// while reading as though it asked for one. What -quick imposes on its own is
+// asserted by the matrix cases, which measure nothing, so nothing is lost by
+// the fixture stating the phase it wants.
+//
+// A second is the floor rather than a preference: the steady phase runs beside
+// a CPU profile, net/http/pprof parses ?seconds= as a whole number and sleeps
+// for it, so a shorter phase would end and then wait on the profile anyway.
 func quickOptions(t *testing.T, root string) options {
 	t.Helper()
+	quickSettle(t)
 	return options{
 		binary:         standinBinary(t),
 		record:         filepath.Join(root, "record.json"),
@@ -469,12 +481,12 @@ func quickOptions(t *testing.T, root string) options {
 		rounds:         1,
 		sampleInterval: 20 * time.Millisecond,
 		quick:          true,
-		// Two counts and the shortest phase the flag accepts in whole
-		// seconds, so the series costs the smoke run a few seconds.
-		clients:      "1,2",
-		clientsSet:   true,
-		stepDuration: time.Second,
-		profiles:     filepath.Join(root, "profiles"),
+		// Two counts and the shortest phase a profiled step can take.
+		clients:         "1,2",
+		clientsSet:      true,
+		stepDuration:    time.Second,
+		stepDurationSet: true,
+		profiles:        filepath.Join(root, "profiles"),
 	}
 }
 

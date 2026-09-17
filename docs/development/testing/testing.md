@@ -20,26 +20,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,229 |
-| Unit test functions                                   | 15,033 |
+| Total test functions                                  | 16,295 |
+| Unit test functions                                   | 15,099 |
 | E2E test functions                                    |  1,196 |
-| cmd test functions                                    |  2,606 |
-| Test files (internal/)                                |    579 |
+| cmd test functions                                    |  2,654 |
+| Test files (internal/)                                |    580 |
 | Test files (cmd/)                                     |    198 |
 | Test files (test/e2e/)                                |    383 |
-| Tool sub-packages tested                              |    178 |
+| Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     27 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.8% |
-| Overall coverage (`go test ./internal/...`)           |  99.4% |
-| Average package coverage                              |  98.6% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  99.1% |
+| Overall coverage (`go test ./internal/...`)           |  99.6% |
+| Average package coverage                              |  99.2% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,959 | 73.7% |
-| `TestFunc` (no underscore)             |    904 |  5.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,366 | 20.7% |
+| `TestFunc_Scenario` (2-part)           | 11,967 | 73.4% |
+| `TestFunc` (no underscore)             |    904 |  5.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,424 | 21.0% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,943 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,948 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (178) |          9,118 |        380 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |          9,131 |        381 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,196 |        383 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          2,606 |        198 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,229** |  **1,160** |                                                                                                 |
+| cmd packages            |          2,654 |        198 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,295** |  **1,161** |                                                                                                 |
 
 ### Core Packages
 
@@ -64,15 +64,15 @@
 | cmdutil              |         8 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                               |
 | completions          |       107 |    99.5% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                |
 | config               |       109 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                        |
-| edition              |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                           |
+| edition              |         6 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                           |
 | elicitation          |       129 |    98.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                            |
 | freshness            |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                 |
 | gatewaycompat        |        19 |    99.4% | Package gatewaycompat rewrites the human-readable text this server lists — tool, prompt, resource and resource-template descriptions and titles, and the description and title annotations embedded in tool schemas — according to operator-defined substitutions.      |
-| gitlab               |       109 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                 |
+| gitlab               |       110 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                                                                                 |
 | graphqlschema        |        20 |   100.0% | Package graphqlschema holds the pinned GitLab GraphQL schema and validates documents against it.                                                                                                                                                                        |
 | mcpotel              |       107 |   100.0% | Package mcpotel instruments MCP request handling with OpenTelemetry.                                                                                                                                                                                                    |
 | oauth                |        81 |   100.0% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                                                                                 |
-| progress             |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                           |
+| progress             |        20 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                                                                           |
 | prompts              |       295 |    99.9% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                              |
 | resources            |       194 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                     |
 | serverpool           |       124 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                  |
@@ -85,7 +85,7 @@
 | testutil/modelscore  |        93 |    98.8% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                              |
 | testutil/shardio     |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
 | toolutil             |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                           |
-| **Subtotal**         | **2,943** |          |                                                                                                                                                                                                                                                                         |
+| **Subtotal**         | **2,948** |          |                                                                                                                                                                                                                                                                         |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -120,7 +120,7 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 178 tested sub-packages (click to expand)</summary>
+<summary>All 179 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
@@ -286,6 +286,7 @@
 | snippetnotes            |        49 |          2 |   100.0% |         5 |
 | snippets                |       107 |          3 |    99.1% |        15 |
 | snippetstoragemoves     |        42 |          2 |   100.0% |         6 |
+| surfaces                |        13 |          1 |   100.0% |         0 |
 | systemhooks             |        39 |          3 |    99.6% |         8 |
 | tags                    |        79 |          2 |   100.0% |         9 |
 | terraformstates         |        19 |          1 |    98.7% |         6 |
@@ -302,7 +303,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,118** |    **380** |          | **1,187** |
+| **Total**               | **9,131** |    **381** |          | **1,187** |
 
 </details>
 
@@ -325,13 +326,13 @@
 | cmd/audit_discovery_completeness |    92.6% |
 | cmd/audit_doc_coverage           |    91.6% |
 | cmd/audit_doc_tool_names         |    94.2% |
-| cmd/audit_dynamic_aliases        |    77.4% |
+| cmd/audit_dynamic_aliases        |   100.0% |
 | cmd/audit_e2e_coverage           |    94.8% |
-| cmd/audit_edition_tier           |    86.5% |
-| cmd/audit_gateway_chars          |    87.5% |
+| cmd/audit_edition_tier           |    99.6% |
+| cmd/audit_gateway_chars          |   100.0% |
 | cmd/audit_graphql_documents      |    93.5% |
 | cmd/audit_graphql_shapes         |    94.4% |
-| cmd/audit_install_buttons        |    84.2% |
+| cmd/audit_install_buttons        |    98.3% |
 | cmd/audit_md_escaping            |   100.0% |
 | cmd/audit_meta_descriptions      |    96.6% |
 | cmd/audit_metrics                |    97.6% |
@@ -341,13 +342,13 @@
 | cmd/audit_test_goroutines        |    94.6% |
 | cmd/audit_test_names             |    91.1% |
 | cmd/audit_test_subtests          |    99.7% |
-| cmd/audit_tokens                 |    98.0% |
+| cmd/audit_tokens                 |    97.9% |
 | cmd/bench_resources              |   100.0% |
 | cmd/format_md_tables             |    95.8% |
-| cmd/gen_action_catalog_manifest  |    57.9% |
-| cmd/gen_api_live                 |    80.1% |
-| cmd/gen_brand                    |    87.1% |
-| cmd/gen_graphql_schema           |    85.9% |
+| cmd/gen_action_catalog_manifest  |   100.0% |
+| cmd/gen_api_live                 |    98.6% |
+| cmd/gen_brand                    |   100.0% |
+| cmd/gen_graphql_schema           |   100.0% |
 | cmd/gen_icon_webp                |    92.3% |
 | cmd/gen_lhm_manifest             |    90.2% |
 | cmd/gen_llms                     |    98.9% |
@@ -381,7 +382,7 @@
 | cmdutil              |   100.0% |
 | completions          |    99.5% |
 | config               |   100.0% |
-| edition              |    87.0% |
+| edition              |   100.0% |
 | elicitation          |    98.3% |
 | freshness            |   100.0% |
 | gatewaycompat        |    99.4% |
@@ -389,7 +390,7 @@
 | graphqlschema        |   100.0% |
 | mcpotel              |   100.0% |
 | oauth                |   100.0% |
-| progress             |    83.8% |
+| progress             |   100.0% |
 | prompts              |    99.9% |
 | resources            |   100.0% |
 | serverpool           |   100.0% |
@@ -570,6 +571,7 @@
 | snippetnotes            |   100.0% |
 | snippets                |    99.1% |
 | snippetstoragemoves     |   100.0% |
+| surfaces                |   100.0% |
 | systemhooks             |    99.6% |
 | tags                    |   100.0% |
 | terraformstates         |    98.7% |
@@ -589,16 +591,7 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/gen_action_catalog_manifest** (57.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_dynamic_aliases** (77.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_api_live** (80.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **progress** (83.8%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/audit_install_buttons** (84.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_graphql_schema** (85.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_edition_tier** (86.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/gen_brand** (87.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_gateway_chars** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- None.
 
 <!-- END TESTING STATS -->
 

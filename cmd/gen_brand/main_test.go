@@ -247,6 +247,136 @@ func chdirIntoRemovedDir(t *testing.T) {
 	}
 }
 
+// assetsExist reports whether every asset the generator emits is present
+// under root with exactly the bytes the geometry produces.
+func assetsExist(t *testing.T, root string) bool {
+	t.Helper()
+	for _, a := range assets() {
+		got, err := os.ReadFile(filepath.Join(root, a.path))
+		if err != nil || string(got) != a.content {
+			return false
+		}
+	}
+	return true
+}
+
+// TestCLI_Scenarios_ReturnsTheExitCodeAndSaysWhy verifies the command layer
+// main is a shim over: the default run writes every asset, -check verifies
+// without writing, a tree with no go.mod and a tree the write fails in are
+// each reported on stderr and exit 1, and a flag the command does not define
+// exits 2 while -h exits 0.
+func TestCLI_Scenarios_ReturnsTheExitCodeAndSaysWhy(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		prepare  func(t *testing.T) (root string)
+		wantCode int
+		wantErr  string
+		// wantWritten is the state of the tree the run leaves behind:
+		// true when every asset must be on disk, false when none may be.
+		wantWritten bool
+	}{
+		{
+			name:        "default run writes every asset",
+			prepare:     chdirIntoFixtureRepo,
+			wantWritten: true,
+		},
+		{
+			name:    "check on an empty tree reports staleness and writes nothing",
+			args:    []string{"-check"},
+			prepare: chdirIntoFixtureRepo,
+			// The exit code is what a Makefile gate reads, and writing
+			// under -check would make the next check pass vacuously.
+			wantCode: 1,
+			wantErr:  "brand assets are stale",
+		},
+		{
+			name:     "no go.mod above the working directory",
+			prepare:  func(t *testing.T) string { t.Helper(); chdirIntoRootlessDir(t); return "" },
+			wantCode: 1,
+			wantErr:  "no go.mod found above",
+		},
+		{
+			name: "a write that fails is reported",
+			prepare: func(t *testing.T) string {
+				t.Helper()
+				root := chdirIntoFixtureRepo(t)
+				top, _, _ := strings.Cut(assets()[0].path, string(filepath.Separator))
+				if err := os.WriteFile(filepath.Join(root, top), []byte("x"), 0o600); err != nil {
+					t.Fatalf("write blocker: %v", err)
+				}
+				return root
+			},
+			wantCode: 1,
+			wantErr:  "create ",
+		},
+		{
+			name:     "a flag the command does not define",
+			args:     []string{"-nope"},
+			prepare:  chdirIntoFixtureRepo,
+			wantCode: 2,
+			wantErr:  "not defined: -nope",
+		},
+		{
+			name:    "-h prints the usage it accepts",
+			args:    []string{"-h"},
+			prepare: chdirIntoFixtureRepo,
+			wantErr: "-check",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := tt.prepare(t)
+			var stderr bytes.Buffer
+
+			code := cli(tt.args, &stderr)
+
+			if code != tt.wantCode {
+				t.Errorf("cli(%q) = %d, want %d\nstderr: %s", tt.args, code, tt.wantCode, stderr.String())
+			}
+			if tt.wantErr != "" && !strings.Contains(stderr.String(), tt.wantErr) {
+				t.Errorf("cli(%q) stderr = %q, want containing %q", tt.args, stderr.String(), tt.wantErr)
+			}
+			if root == "" {
+				return
+			}
+			if written := assetsExist(t, root); written != tt.wantWritten {
+				t.Errorf("assets present under the root = %t, want %t", written, tt.wantWritten)
+			}
+		})
+	}
+}
+
+// TestMain_CheckFlag_ExitsThroughTheSeam checks the one line main carries, so
+// the command's entry point is exercised rather than assumed. -check is the
+// flag to drive it with: main forwarding os.Args instead of os.Args[1:] would
+// leave the flag set reading the binary name as an operand, the run would
+// write instead of verify, and the exit code would be 0 rather than the 1 an
+// empty tree earns.
+func TestMain_CheckFlag_ExitsThroughTheSeam(t *testing.T) {
+	root := chdirIntoFixtureRepo(t)
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open %s: %v", os.DevNull, err)
+	}
+	defer devNull.Close()
+	originalArgs, originalExit, originalErr := os.Args, exit, os.Stderr
+	t.Cleanup(func() { os.Args, exit, os.Stderr = originalArgs, originalExit, originalErr })
+	code := -1
+	exit = func(got int) { code = got }
+	os.Args = []string{"gen_brand", "-check"}
+	os.Stderr = devNull
+
+	main()
+
+	if code != 1 {
+		t.Errorf("main exited %d, want 1 for a tree with no assets in it", code)
+	}
+	if assetsExist(t, root) {
+		t.Error("main wrote the assets under -check, which must only verify them")
+	}
+}
+
 // TestRepoRoot_Scenarios_WalksUpToGoMod verifies the root lookup returns the
 // nearest ancestor holding go.mod, fails when no ancestor holds one, and
 // fails when the working directory itself cannot be read because it was

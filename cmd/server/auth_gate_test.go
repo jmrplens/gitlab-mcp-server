@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -40,6 +41,24 @@ func gateStubGitLab(t *testing.T, reject bool) string {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// gateStubGitLabByName respells a stub instance's address as a host name.
+//
+// The gate judges an address literal and leaves a name entirely to the dialer,
+// so a name is what a row about that rule has to carry — and a name resolving
+// to the very loopback address the literal rows are refused for states the
+// rule more sharply than a public one would, since a gate that did resolve
+// names would refuse this and admit that. The instance behind it is still the
+// local stub, so the pool entry an admitted row goes on to build costs a round
+// trip on loopback rather than a resolver timeout.
+func gateStubGitLabByName(t *testing.T, stubURL string) string {
+	t.Helper()
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(stubURL, "http://"))
+	if err != nil {
+		t.Fatalf("stub URL %q is not host:port: %v", stubURL, err)
+	}
+	return "http://localhost:" + port
 }
 
 // newGateTestPool builds a pool against a stub instance. The tier is pinned and
@@ -833,10 +852,14 @@ func TestMcpServerGate_WithIdentity_AttachesThePooledUser(t *testing.T) {
 //
 // Which address classes count as private is settled by the predicate's own
 // table in internal/gitlab and is not restated here. A row naming a publicly
-// routable literal would be admitted, and an admitted row goes on to build a
-// pool entry: against a blackholed address that costs ten seconds of dial
-// timeout for an assertion the predicate already makes for nothing.
+// routable literal would be admitted, and every admitted row goes on to build
+// a pool entry against the instance it names: both therefore name the local
+// stub, the hostname row through a name that resolves to it. Naming a host
+// nothing answers on costs the two five-second probes that build the entry —
+// ten seconds for an answer this test never reads.
 func TestMcpServerGate_Resolve_RefusesACallerNamedPrivateInstance(t *testing.T) {
+	stub := gateStubGitLab(t, false)
+
 	tests := []struct {
 		name        string
 		published   []string
@@ -845,19 +868,18 @@ func TestMcpServerGate_Resolve_RefusesACallerNamedPrivateInstance(t *testing.T) 
 	}{
 		{name: "an unpinned deployment refuses a loopback instance", header: "http://127.0.0.1:8080", wantRefused: true},
 		{name: "an unpinned deployment refuses a metadata address", header: "http://169.254.169.254", wantRefused: true},
-		{name: "an unpinned deployment leaves a host name to the dialer", header: "https://gitlab.example.com", wantRefused: false},
+		{name: "an unpinned deployment leaves a host name to the dialer", header: gateStubGitLabByName(t, stub), wantRefused: false},
 		{
 			name:      "a published instance is the operator's own",
-			published: []string{"http://127.0.0.1:8080"}, header: "http://127.0.0.1:8080", wantRefused: false,
+			published: []string{stub}, header: stub, wantRefused: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Retries off: an admitted row goes on to build a pool entry
-			// against an address nothing answers on, and retryablehttp's
-			// linear backoff would spend seconds on a probe whose answer this
-			// test does not read.
+			// Retries off so that a row naming something unanswered is one
+			// failed round trip rather than retryablehttp's linear backoff,
+			// on a probe whose answer this test does not read either way.
 			cfg := &config.Config{GitLabURL: "https://gitlab.example.com", IgnoreScopes: true, TierExplicit: true, DisableRetries: true}
 			pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 				return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil

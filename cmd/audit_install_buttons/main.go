@@ -59,12 +59,16 @@ var scanExtensions = map[string]bool{
 	".md": true, ".mdx": true, ".json": true, ".html": true, ".astro": true,
 }
 
+// osExit is a seam over os.Exit, so a test can observe the status main exits
+// with instead of the test process terminating on it.
+var osExit = os.Exit
+
 func main() {
 	dir := flag.String("dir", ".", "repository root to audit")
 	verbose := flag.Bool("v", false, "list every button that was checked")
 	flag.Parse()
 
-	os.Exit(run(*dir, *verbose, os.Stdout, os.Stderr))
+	osExit(run(*dir, *verbose, os.Stdout, os.Stderr))
 }
 
 // run is main with its streams and its exit status handed to it, so the three

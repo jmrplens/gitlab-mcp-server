@@ -477,8 +477,28 @@ func TestRunProbe_Discovery(t *testing.T) {
 // them: past the image's five-second HEALTHCHECK, which kills the probe and
 // reports the container unhealthy without any verdict of its own. The run
 // carries one deadline, so it answers instead.
+//
+// Both halves of that are checked, and neither of them costs the shipped
+// budget to check. The arithmetic is a comparison of the constants the binary
+// ships: a budget under the HEALTHCHECK, and under what two sequential
+// attempts would spend. That one run really is bounded by a single deadline
+// rather than by each attempt's own ceiling is what the stated budget shows:
+// the run ends inside a budget far shorter than probeTimeout, which no
+// per-attempt ceiling could produce. Watching the real four seconds run out
+// would add nothing to either.
 func TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget(t *testing.T) {
 	t.Parallel()
+
+	// healthcheckTimeout is what the image gives the probe; a run that spends
+	// longer is killed without a verdict.
+	const healthcheckTimeout = 5 * time.Second
+	if probeBudget >= healthcheckTimeout {
+		t.Errorf("probeBudget is %s, which the image's %s HEALTHCHECK would kill", probeBudget, healthcheckTimeout)
+	}
+	if probeBudget >= 2*probeTimeout {
+		t.Errorf("probeBudget is %s, which two sequential attempts at %s each reach on their own: the run bounds nothing",
+			probeBudget, probeTimeout)
+	}
 
 	blocked := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
@@ -488,9 +508,15 @@ func TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget(t *testing.T) {
 	peer := func(pid int32) probePeer {
 		return probePeer{pid: pid, args: []string{"gitlab-mcp-server", "--http", "--http-addr=" + addr}}
 	}
+	// A stated budget stands in for the shipped one. It is an order of
+	// magnitude below probeTimeout, so an implementation that bounded each
+	// attempt and not the run could not finish inside it however many peers
+	// it walked.
+	const budget = 200 * time.Millisecond
 	deps := probeDeps{
 		peers:       func() ([]probePeer, error) { return []probePeer{peer(20), peer(21)}, nil },
 		stdinIsNull: func(int32) (bool, error) { return false, errors.New("not in this test") },
+		budget:      budget,
 	}
 
 	var said bytes.Buffer
@@ -501,8 +527,9 @@ func TestRunProbe_UnansweredPeers_StayInsideTheHealthCheckBudget(t *testing.T) {
 	if code != probeUnhealthy {
 		t.Errorf("runProbe() = %d, want %d: %s", code, probeUnhealthy, said.String())
 	}
-	if elapsed >= 5*time.Second {
-		t.Errorf("two unanswered peers took %s, which the image's five-second HEALTHCHECK would kill", elapsed)
+	if elapsed >= probeTimeout {
+		t.Errorf("two unanswered peers took %s under a stated budget of %s, want the run's own deadline to bound them rather than %s per attempt",
+			elapsed, budget, probeTimeout)
 	}
 }
 

@@ -290,10 +290,19 @@ func TestInstallSlogBridge_RestoresThePreviousLogger(t *testing.T) {
 // real to drain, and this package went from a hundred seconds to a timeout.
 // Nothing had changed in those tests; they had simply been passing an unbounded
 // context to a call that previously had nothing to wait for.
+//
+// The bound is short because no collector in this package is reachable: an
+// endpoint here is a name under a reserved domain or a port nothing listens
+// on, so a pending export cannot succeed however long it is given and the
+// budget only buys retries of a request that will fail again. The tests that
+// have anything pending state OTEL_EXPORTER_OTLP_TIMEOUT=200ms, so this is
+// still more than one whole export attempt. Raise it if a test ever drains
+// into a collector that answers, since then the budget is a flush and not a
+// wait.
 func boundedShutdown(t *testing.T) context.Context {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	t.Cleanup(cancel)
 	return ctx
 }

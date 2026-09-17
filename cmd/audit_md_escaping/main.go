@@ -28,6 +28,17 @@ var exit = os.Exit
 // for real takes a deleted directory.
 var absRoot = filepath.Abs
 
+// loadTree is loadProgram behind a variable, for the third reason this file
+// has one: the package's own tests drive whole runs over fixture trees, and
+// every one of them would otherwise re-type-check the same few packages, which
+// is what the run costs almost all of.
+//
+// What the tests install is a memo in front of the real loader, never a
+// stand-in for it, so a tree is loaded, refused and indexed exactly as it is
+// in production and only the second load of the same tree is spared. Nothing
+// else replaces it.
+var loadTree = loadProgram
+
 // auditRun is one configured run: where to look, what to judge, and what to
 // write.
 type auditRun struct {
@@ -98,7 +109,7 @@ func execute(cfg auditRun, out, errOut io.Writer) int {
 		fmt.Fprintf(errOut, "%s: %v\n", toolName, err)
 		return 2
 	}
-	prog, err := loadProgram(root, cfg.patterns, cfg.overlay)
+	prog, err := loadTree(root, cfg.patterns, cfg.overlay)
 	if err != nil {
 		fmt.Fprintf(errOut, "%s: %v\n", toolName, err)
 		return 2

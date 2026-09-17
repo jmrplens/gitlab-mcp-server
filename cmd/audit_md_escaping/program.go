@@ -57,6 +57,20 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 	if err != nil {
 		return nil, err
 	}
+	return indexProgram(loaded), nil
+}
+
+// indexProgram indexes loaded packages into the program the audit reasons
+// over: every declared function's body, and every call of one.
+//
+// It is named apart from the load because the two scale differently. A load is
+// one `go list` of the module and costs the same whatever it is asked for,
+// while this reads the packages it is handed and nothing else: it records the
+// declarations of those packages and the calls written in them, so indexing a
+// subset of one load gives the program a load of just that subset would have
+// produced. That is what lets the package's own tests type-check every fixture
+// once and still hand each of them the program its own fixture alone makes.
+func indexProgram(loaded []*packages.Package) *program {
 	prog := &program{
 		fset:    loaded[0].Fset,
 		order:   loaded,
@@ -69,7 +83,7 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 	for _, pkg := range prog.order {
 		prog.indexCalls(pkg)
 	}
-	return prog, nil
+	return prog
 }
 
 // indexDecls records every declared function's body.

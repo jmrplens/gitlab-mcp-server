@@ -43,6 +43,7 @@ func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
+		SchemaCacheKey:             IndividualSchemaCacheKey(edition.Ultimate),
 	})
 
 	tools := listToolsFromServer(t, server)
@@ -75,14 +76,19 @@ func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			tier := edition.TierForEnterprise(tc.enterprise)
 			catalog := mustBuildActionCatalog(t, tc.client, ActionCatalogOptions{Enterprise: tc.enterprise, IncludeMCP: true})
 			expectedServer := mcp.NewServer(&mcp.Implementation{Name: "expected", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
-			RegisterIndividualCatalogTools(expectedServer, catalog, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true})
+			// The same schema cache key RegisterAll below passes, since this is
+			// the same tier's catalog: the comparison is over tool names, and
+			// registering the expected surface the way the real one registers
+			// is what the test claims the two are equivalent apart from.
+			RegisterIndividualCatalogTools(expectedServer, catalog, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true, SchemaCacheKey: IndividualSchemaCacheKey(tier)})
 			RegisterMetaStandaloneTools(expectedServer, tc.client)
 			expectedNames := toolNamesFromServer(t, expectedServer)
 
 			catalogServer := mcp.NewServer(&mcp.Implementation{Name: "catalog", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
-			RegisterAll(catalogServer, tc.client, edition.TierForEnterprise(tc.enterprise))
+			RegisterAll(catalogServer, tc.client, tier)
 			catalogNames := toolNamesFromServer(t, catalogServer)
 
 			missing, extra := diffStringSlices(expectedNames, catalogNames)
@@ -1200,8 +1206,8 @@ func TestRegisterIndividualCatalogTools_ReadOnlyRemovesSystemHookTest(t *testing
 		opts         IndividualCatalogRegisterOptions
 		wantRegister bool
 	}{
-		{name: "default mode registers it", opts: IndividualCatalogRegisterOptions{}, wantRegister: true},
-		{name: "read-only mode removes it", opts: IndividualCatalogRegisterOptions{ReadOnlyOnly: true}, wantRegister: false},
+		{name: "default mode registers it", opts: IndividualCatalogRegisterOptions{SchemaCacheKey: IndividualSchemaCacheKey(edition.Ultimate)}, wantRegister: true},
+		{name: "read-only mode removes it", opts: IndividualCatalogRegisterOptions{ReadOnlyOnly: true, SchemaCacheKey: IndividualSchemaCacheKey(edition.Ultimate)}, wantRegister: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

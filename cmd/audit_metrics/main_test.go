@@ -590,7 +590,7 @@ func TestPrintDomainTable_LimitsToTop20AndShowsEllipsis(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printDomainTable(domains)
+		printDomainTable(domains, defaultTopDomains)
 	})
 
 	// First domain alphabetically among highest count should be domain00 (25).
@@ -613,7 +613,7 @@ func TestPrintDomainTable_FewerThan20DomainsPrintsAll(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printDomainTable(domains)
+		printDomainTable(domains, defaultTopDomains)
 	})
 
 	for _, want := range []string{"alpha", "beta", "gamma"} {
@@ -633,7 +633,7 @@ func TestPrintDomainTable_FewerThan20DomainsPrintsAll(t *testing.T) {
 // regardless of map iteration order.
 func TestPrintDomainTable_EqualCounts_SortsByName(t *testing.T) {
 	output := captureStdout(t, func() {
-		printDomainTable(map[string]int{"issue": 2, "project": 2, "branch": 2})
+		printDomainTable(map[string]int{"issue": 2, "project": 2, "branch": 2}, defaultTopDomains)
 	})
 
 	want := "  Domain                    Tools\n" +
@@ -892,7 +892,7 @@ func TestPrintReport_RealMetrics_PrintsEveryCountedRow(t *testing.T) {
 	metrics := collectedMetrics(t)
 
 	output := captureStdout(t, func() {
-		printReport(metrics, newAuditMetricsClient(t))
+		printReport(metrics, newAuditMetricsClient(t), defaultTopDomains)
 	})
 
 	rows := []struct {
@@ -998,7 +998,7 @@ func TestPrintReport_FixtureMetrics_ListsSurfaceDeltas(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printReport(metrics, newAuditMetricsClient(t))
+		printReport(metrics, newAuditMetricsClient(t), defaultTopDomains)
 	})
 
 	rows := []struct {
@@ -1166,6 +1166,12 @@ func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
 	}
 	if !strings.Contains(out, "Tools") {
 		t.Errorf("report does not look like the metrics report:\n%s", out)
+	}
+	// The count run was given has to reach the breakdown. It used to arrive
+	// through a package variable, so nothing here had to pass it and nothing
+	// noticed when the last writer was another test.
+	if !strings.Contains(out, "top 3)") {
+		t.Errorf("report does not carry the -top-domains value run was given:\n%s", out)
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -76,17 +77,42 @@ func parseTierBadge(value string) (tier, bool) {
 	}
 }
 
+// osExit is the process-exit seam. main hands it the code runMain returns, so
+// a test can drive every exit path of this command without ending the test
+// process; nothing else in the program reads it.
+var osExit = os.Exit
+
 func main() {
-	outputPath := flag.String("output", "-", "path to write JSON report, or '-' for stdout")
-	gapsOnly := flag.Bool("gaps-only", false, "only include domains that need tier work")
-	offline := flag.Bool("offline", false, "use only cached docs; do not fetch")
-	refresh := flag.Bool("refresh", false, "force re-fetch docs even when cached and fresh")
-	maxAge := flag.Duration("max-age", apidocs.DefaultMaxAge, "re-download cached docs older than this (default 7 days)")
-	flag.Parse()
+	osExit(runMain(os.Args, os.Stdout, os.Stderr))
+}
+
+// runMain parses the flags, resolves the repository root and the doc fetchers,
+// and dispatches to run, returning the process exit code. It takes its
+// arguments and both streams explicitly, the way run takes its writer, so a
+// test can drive every exit path and read what the command reported.
+func runMain(args []string, stdout, stderr io.Writer) int {
+	// ContinueOnError rather than ExitOnError, so a bad flag is an exit code
+	// this function returns instead of an os.Exit the seam above never sees.
+	// The flag set has printed the error and the usage by the time Parse
+	// returns; -h is the one failure that exits clean, as ExitOnError would.
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	outputPath := fs.String("output", "-", "path to write JSON report, or '-' for stdout")
+	gapsOnly := fs.Bool("gaps-only", false, "only include domains that need tier work")
+	offline := fs.Bool("offline", false, "use only cached docs; do not fetch")
+	refresh := fs.Bool("refresh", false, "force re-fetch docs even when cached and fresh")
+	maxAge := fs.Duration("max-age", apidocs.DefaultMaxAge, "re-download cached docs older than this (default 7 days)")
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fmt.Fprintf(stderr, "find repository root: %v\n", err)
+		return 1
 	}
 
 	// Cancel the doc-fetch sweep on Ctrl+C so a slow refresh aborts promptly.
@@ -96,9 +122,11 @@ func main() {
 	userOpts := opts
 	userOpts.BaseURL = apidocs.DefaultUserDocBaseURL
 	res := newDocResolver(apidocs.New(root, opts), apidocs.New(root, userOpts))
-	if runErr := run(ctx, res, *gapsOnly, *outputPath, os.Stdout); runErr != nil {
-		cmdutil.Fatalf("%v", runErr)
+	if runErr := run(ctx, res, *gapsOnly, *outputPath, stdout); runErr != nil {
+		fmt.Fprintf(stderr, "%v\n", runErr)
+		return 1
 	}
+	return 0
 }
 
 // run builds the report, keeps only the domains that need tier work when
@@ -120,6 +148,11 @@ func run(ctx context.Context, res *docResolver, gapsOnly bool, outputPath string
 		rep.Domains = filtered
 	}
 
+	// No test reaches this failure and none should pretend to: report is
+	// strings, ints, bools, slices of those and one map[string]int, with no
+	// any, no channel, no func, no cycle and no MarshalJSON of its own, so
+	// encoding/json has nothing here it can refuse. The branch stays because
+	// discarding the error would be worse than never running it.
 	data, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
@@ -246,14 +279,23 @@ func (r *docResolver) expectedTierForAction(ctx context.Context, id string, page
 	return pageTier, ""
 }
 
+// buildCatalog is [tools.BuildActionCatalog] behind a seam. The catalog is
+// compiled into this binary, so neither of the two build failures below can
+// happen at run time and neither can an action the catalog left with no owner
+// package. The seam is what lets a test assert what this command reports when
+// it is handed a catalog that is not the compiled one: which of the two builds
+// failed, and that an ownerless action is grouped under its domain rather than
+// under the empty string. Nothing else in the program reads it.
+var buildCatalog = tools.BuildActionCatalog
+
 func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 	// Mechanical current-state: diff the CE and EE catalogs to learn each
 	// action's current binary gate.
-	ceCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
+	ceCatalog, err := buildCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
 	if err != nil {
 		return nil, fmt.Errorf("build CE catalog: %w", err)
 	}
-	eeCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	eeCatalog, err := buildCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {
 		return nil, fmt.Errorf("build EE catalog: %w", err)
 	}

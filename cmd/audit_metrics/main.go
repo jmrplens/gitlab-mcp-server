@@ -33,7 +33,14 @@ const (
 	metricLabelWidth = 48
 )
 
-var topDomains = 20
+// defaultTopDomains is how many domains the breakdown lists when -top-domains
+// says nothing. It is a constant rather than a variable the mode writes: the
+// count used to be a package-level var that run assigned from its options and
+// the two printers read, which made the report a test rendered depend on
+// whichever test had called run last. Under -shuffle=on that is a failure with
+// nothing wrong in it, and under the default order it is a silence: a run test
+// setting 3 or 1 happened to run after the printer tests rather than before.
+const defaultTopDomains = 20
 
 // auditOptions is what the command line selects: which mode to run and where
 // to write. Parsing it is separate from acting on it so the modes are testable.
@@ -47,7 +54,7 @@ type auditOptions struct {
 // main parses flags and hands the work to run, whose exit code it returns.
 func main() {
 	opts := auditOptions{}
-	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by tool count")
+	flag.IntVar(&opts.topDomains, "top-domains", defaultTopDomains, "number of domains to list by tool count")
 	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
 	flag.StringVar(&opts.siteStatsPath, "site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
 	flag.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
@@ -65,7 +72,6 @@ func main() {
 // Counting the surfaces this process just built in memory produces no such
 // failure, so those helpers return their measurement and nothing else.
 func run(opts auditOptions, stdout, stderr io.Writer) int {
-	topDomains = opts.topDomains
 	if opts.topDomains < 0 {
 		fmt.Fprintln(stderr, "-top-domains must be >= 0")
 		return 1
@@ -98,7 +104,7 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	printReport(metrics, client)
+	printReport(metrics, client, opts.topDomains)
 	return 0
 }
 
@@ -214,8 +220,10 @@ func writeJSONSummary(w io.Writer, metrics auditMetrics) error {
 
 // printReport writes the Markdown metrics report to stdout. client is needed
 // only by the schema-mode section, which re-registers the meta surface under
-// each META_PARAM_SCHEMA mode to size its input schemas.
-func printReport(metrics auditMetrics, client *gitlabclient.Client) {
+// each META_PARAM_SCHEMA mode to size its input schemas. topDomains is how many
+// rows the domain breakdown lists, carried down from the flag rather than read
+// off a package variable, so what a report says is decided by its caller alone.
+func printReport(metrics auditMetrics, client *gitlabclient.Client, topDomains int) {
 	resourceCount := metrics.staticResources + metrics.templateResources
 
 	fmt.Println("=" + strings.Repeat("=", 59))
@@ -269,7 +277,7 @@ func printReport(metrics auditMetrics, client *gitlabclient.Client) {
 
 	fmt.Printf("## Catalog Domain Breakdown (GitLab.com enterprise, top %d)\n", topDomains)
 	fmt.Println()
-	printDomainTable(metrics.gitLabComEnterpriseDomains)
+	printDomainTable(metrics.gitLabComEnterpriseDomains, topDomains)
 	fmt.Println()
 
 	printEnterpriseActionSpecAudit(metrics.enterpriseActionAudit)
@@ -613,8 +621,8 @@ func totalInputSchemaBytes(listed []*mcp.Tool) int {
 	return total
 }
 
-// printDomainTable prints the top 20 tool domains sorted by count.
-func printDomainTable(domains map[string]int) {
+// printDomainTable prints the topDomains highest tool domains sorted by count.
+func printDomainTable(domains map[string]int, topDomains int) {
 	type kv struct {
 		key string
 		val int
