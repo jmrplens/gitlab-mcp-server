@@ -86,6 +86,93 @@ func TestSentCheck_FieldsGitLabSendsThatWeDoNotPublish_AreListedWithTheirConditi
 	}
 }
 
+// TestSortUnsurfaced_OrderedByPackageThenTypeThenField verifies the order a
+// reader meets the sent findings in, which is the list the field-by-field
+// review works down.
+//
+// It is the same order the unpublished findings take and for the same reason:
+// everything about one package arrives together, everything about one type of
+// it inside that, and the field decides the rest. The fixture names the three
+// keys to disagree with one another, since a list ordered by any one of them
+// alone would otherwise read as correct.
+func TestSortUnsurfaced_OrderedByPackageThenTypeThenField(t *testing.T) {
+	found := []UnsurfacedField{
+		{Package: "b", Type: "A", Field: "a"},
+		{Package: "a", Type: "Z", Field: "z"},
+		{Package: "a", Type: "Z", Field: "a"},
+		{Package: "a", Type: "A", Field: "z"},
+	}
+
+	sortUnsurfaced(found)
+
+	got := make([]string, 0, len(found))
+	for _, finding := range found {
+		got = append(got, finding.Package+"."+finding.Type+"."+finding.Field)
+	}
+	want := []string{"a.A.z", "a.Z.a", "a.Z.z", "b.A.a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sortUnsurfaced() = %v, want %v", got, want)
+	}
+}
+
+// TestUnsurfacedCounts_AFindingTheRecordCannotSpeakFor_IsInNeitherCount
+// verifies the remainder the summary is read through.
+//
+// The two counts published beside the total are always and when, and the
+// unknown remainder is what is left: a field the record names no component
+// for, or names one it does not hold. Counting an unknown as either would
+// claim the record answered a question it declined, which is the one thing a
+// reader of "sent always" must be able to trust.
+func TestUnsurfacedCounts_AFindingTheRecordCannotSpeakFor_IsInNeitherCount(t *testing.T) {
+	always, when, declared := unsurfacedCounts([]UnsurfacedField{
+		{Field: "a", Sent: sentAlways},
+		{Field: "b", Sent: sentWhen},
+		{Field: "c", Sent: sentUnknown},
+		{Field: "d", Sent: sentUnknown, Category: categoryDocumentedNotSent, Reason: "the endpoint presents another entity"},
+	})
+
+	if always != 1 || when != 1 || declared != 1 {
+		t.Errorf("unsurfacedCounts() = %d always, %d when, %d declared; want 1, 1 and 1", always, when, declared)
+	}
+}
+
+// TestConditionIndexAnnotate_WhatTheRecordCannotAnswer_IsUnknown verifies the
+// three ways the annotation declines, and that each declines rather than
+// guesses.
+//
+// Sent is set to unknown before anything is looked up, so every way out of
+// this leaves the finding saying the record did not answer. That matters most
+// for the nil index: the conditions are read from a record that may not exist,
+// and a finding annotated by no index at all has to say so rather than read as
+// a field GitLab always sends.
+func TestConditionIndexAnnotate_WhatTheRecordCannotAnswer_IsUnknown(t *testing.T) {
+	_, conditions := fixtureRecord(projectOperations())
+	cases := []struct {
+		name    string
+		index   *conditionIndex
+		finding UnsurfacedField
+	}{
+		{name: "no record was read at all", index: nil, finding: UnsurfacedField{Field: "mirror", Entity: "API::Entities::Project"}},
+		{name: "the finding names no component", index: conditions, finding: UnsurfacedField{Field: "mirror"}},
+		{name: "a component the record does not hold", index: conditions, finding: UnsurfacedField{Field: "mirror", Entity: "API::Entities::Nowhere"}},
+		{name: "a field the component does not expose", index: conditions, finding: UnsurfacedField{Field: "invented", Entity: "API::Entities::Project"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			finding := testCase.finding
+
+			testCase.index.annotate(&finding)
+
+			if finding.Sent != sentUnknown {
+				t.Errorf("sent = %q, want %q", finding.Sent, sentUnknown)
+			}
+			if finding.If != "" || finding.Unless != "" || finding.Tier != "" || finding.Edition != "" {
+				t.Errorf("finding = %+v, want no condition read off a record that did not answer", finding)
+			}
+		})
+	}
+}
+
 // TestTypedShapeCheck_FieldsGitLabSendsThatTheTypeDoesNotPublish_AreListed
 // verifies the same finding at type grain, which is the list the review
 // reads: the type, the operations its client-go struct models, per field the

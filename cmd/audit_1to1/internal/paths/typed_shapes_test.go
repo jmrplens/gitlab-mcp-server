@@ -352,10 +352,15 @@ func TestTypedShapeCheck_OneTypeFromSeveralSDKStructs_UnionsTheirOperations(t *t
 			// The same pairing twice: a type built by two converters from one
 			// struct must not have its operations searched, or counted, twice.
 			{Package: "labeldata", MCPType: "Output", SDKType: "Label"},
+			// Two different structs answered from one endpoint, which is what
+			// client-go does wherever a scope has a struct of its own and a
+			// shared route: the endpoint is one response and is counted once.
+			{Package: "labeldata", MCPType: "Output", SDKType: "ProjectLabel"},
 		},
 	}, nil, map[string][]sdkRoute{
-		"Label":      {{Method: "GET", Path: "/projects/:/labels", Many: true}},
-		"GroupLabel": {{Method: "GET", Path: "/groups/:/labels", Many: true}},
+		"Label":        {{Method: "GET", Path: "/projects/:/labels", Many: true}},
+		"GroupLabel":   {{Method: "GET", Path: "/groups/:/labels", Many: true}},
+		"ProjectLabel": {{Method: "GET", Path: "/projects/:/labels", Many: true}},
 	})
 
 	check := typedCheckOf("", map[string]response{
@@ -370,8 +375,8 @@ func TestTypedShapeCheck_OneTypeFromSeveralSDKStructs_UnionsTheirOperations(t *t
 		t.Fatalf("check = %+v, want only the field neither endpoint sends", check)
 	}
 	finding := check.Unpublished[0]
-	if finding.SDKType != "GroupLabel, Label" || finding.Endpoints != 2 {
-		t.Errorf("finding = %+v, want both structs named and both endpoints counted", finding)
+	if finding.SDKType != "GroupLabel, Label, ProjectLabel" || finding.Endpoints != 2 {
+		t.Errorf("finding = %+v, want every struct named and each endpoint counted once", finding)
 	}
 	if finding.Operations[0] != "GET /groups/:/labels (collection)" {
 		t.Errorf("operations = %v, want a collection endpoint said to be one", finding.Operations)

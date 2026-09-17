@@ -1,7 +1,9 @@
 package paths
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -381,6 +383,192 @@ func TestShapeCheck_TwoOperationsShareAShape_UnionTheirResponses(t *testing.T) {
 
 	if len(check.Unpublished) != 1 || check.Unpublished[0].Field != "invented" {
 		t.Errorf("unpublished = %+v, want only the field neither operation declares", check.Unpublished)
+	}
+}
+
+// TestShapeCheck_TheJoinCountsWhatItRead verifies the three figures a reader
+// weighs a finding against, since none of them is implied by the findings
+// themselves.
+//
+// How many REST rows there were says how much of the inventory the comparison
+// could see at all. How often each literal segment stood where an identifier
+// belongs says which fixture value is worth teaching the recorder about, so the
+// most frequent has to come first and two of equal weight have to fall into
+// some fixed order or two runs over one inventory disagree.
+func TestShapeCheck_TheJoinCountsWhatItRead(t *testing.T) {
+	root := recordIn(t, map[string]response{
+		"GET /api/v4/projects/{id}/issues": {Response: []string{"iid"}},
+	})
+	rows := []requestinventory.Row{
+		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/myproject/issues"},
+		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/myproject/issues"},
+		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/zebra/issues"},
+		{Package: "p", Kind: "rest", Method: "GET", Path: "/projects/apple/issues"},
+	}
+
+	check := shapeCheck(root, rows, nil)
+
+	if check.Join.RESTRows != 4 || check.Join.Loose != 4 {
+		t.Errorf("join = %+v, want all four rows counted and matched loosely", check.Join)
+	}
+	got := make([]string, 0, len(check.Untemplated))
+	for _, segment := range check.Untemplated {
+		got = append(got, fmt.Sprintf("%s=%d", segment.Segment, segment.Count))
+	}
+	want := []string{"myproject=2", "apple=1", "zebra=1"}
+	if !slices.Equal(got, want) {
+		t.Errorf("untemplated = %v, want %v: most frequent first, then alphabetical", got, want)
+	}
+}
+
+// TestSortFindings_OrderedByPackageThenTypeThenField verifies the order a
+// reader meets the findings of either grain in.
+//
+// The list is read as work: everything about one package arrives together,
+// everything about one type of it arrives together inside that, and the field
+// decides the rest. Each key is what makes the next one's order meaningful, so
+// the fixture names them to disagree with one another on purpose; a list sorted
+// by any one of the three alone would otherwise read as correct.
+func TestSortFindings_OrderedByPackageThenTypeThenField(t *testing.T) {
+	found := []UnpublishedField{
+		{Package: "b", Type: "A", Field: "a"},
+		{Package: "a", Type: "Z", Field: "z"},
+		{Package: "a", Type: "Z", Field: "a"},
+		{Package: "a", Type: "A", Field: "z"},
+	}
+
+	sortFindings(found)
+
+	got := make([]string, 0, len(found))
+	for _, finding := range found {
+		got = append(got, finding.Package+"."+finding.Type+"."+finding.Field)
+	}
+	want := []string{"a.A.z", "a.Z.a", "a.Z.z", "b.A.a"}
+	if !slices.Equal(got, want) {
+		t.Errorf("sortFindings() = %v, want %v", got, want)
+	}
+}
+
+// The two entities the index fixture below mounts, one narrower than the
+// other, so a merge that took the wrong route's answer is visible.
+const (
+	firstEntity  = "API::Entities::First"
+	secondEntity = "API::Entities::Second"
+)
+
+// mergedRouteIndex is a record where two routes are mounted at one path in
+// each order, and two more share a shape because they differ only in what they
+// call a placeholder. Each pair is one offset route and one keyset route, so
+// the merge has something to merge whichever of them the index met first.
+func mergedRouteIndex() *operationIndex {
+	offsetParams := map[string]apilive.Param{"page": {}, "per_page": {}}
+	keysetParams := map[string]apilive.Param{"per_page": {}, "cursor": {}}
+	return newOperationIndex(apilive.Document{
+		SchemaVersion: apilive.SchemaVersion,
+		Entities: map[string]apilive.Entity{
+			firstEntity:  {Fields: []apilive.Field{{Name: "id"}}},
+			secondEntity: {Fields: []apilive.Field{{Name: "id"}, {Name: "name"}, {Name: "path"}}},
+		},
+		Routes: []apilive.Route{
+			{Method: "GET", Path: apilive.EndpointPrefix + "/things", Entity: firstEntity, Params: keysetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/things", Entity: secondEntity, Params: offsetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/others", Entity: firstEntity, Params: offsetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/others", Entity: secondEntity, Params: keysetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:id/widgets", Entity: firstEntity, Params: keysetParams},
+			{Method: "GET", Path: apilive.EndpointPrefix + "/projects/:name/widgets", Entity: secondEntity, Params: offsetParams},
+		},
+	})
+}
+
+// TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination
+// verifies what the index does with the handful of paths the record mounts
+// twice.
+//
+// The response it answers with is the first route's, because that is what it
+// has always answered with and a reader of a finding needs it not to depend on
+// mount order. Pagination is merged instead, in both directions: "some route
+// here paginates" is the claim a pagination finding rests on, and dropping the
+// second route's params would make it depend on the order the router happened
+// to hold them in. The count of routes folded in is what says the answer is a
+// union at all.
+func TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination(t *testing.T) {
+	index := mergedRouteIndex()
+
+	found, quality, _ := index.lookup("GET", "/things")
+
+	if quality != matchExact {
+		t.Fatalf("lookup quality = %v, want an exact match", quality)
+	}
+	if !slices.Equal(found.Response, []string{"id"}) {
+		t.Errorf("response = %v, want the first route's alone", found.Response)
+	}
+	if !found.Offset || !found.Keyset {
+		t.Errorf("operation = offset %t, keyset %t; want both routes' pagination merged in", found.Offset, found.Keyset)
+	}
+	if found.Routes != 2 {
+		t.Errorf("routes = %d, want the two mounted routes counted", found.Routes)
+	}
+	// The same pair mounted the other way round, which is the half that says
+	// the merge is not reading one fixed position.
+	reversed, _, _ := index.lookup("GET", "/others")
+	if !reversed.Offset || !reversed.Keyset {
+		t.Errorf("operation = offset %t, keyset %t; want the merge to be independent of mount order", reversed.Offset, reversed.Keyset)
+	}
+}
+
+// TestNewOperationIndex_TwoRoutesSharingAShape_UnionTheirKeysAndKeepTheFirstEntity
+// verifies the other way two routes meet: not at one path, but at one shape,
+// because they differ only in what they call a placeholder.
+//
+// Here the keys are unioned rather than taken from the first, since either
+// route may be the one a recorded request really reached. What stays the first
+// route's is the entity: the operation is named for it, and the entity behind
+// each key is the first route that rendered that key, because a later route
+// naming another does not unname it.
+func TestNewOperationIndex_TwoRoutesSharingAShape_UnionTheirKeysAndKeepTheFirstEntity(t *testing.T) {
+	index := mergedRouteIndex()
+
+	// Spelled with a placeholder of ours, so the exact lookup misses and the
+	// shape is what answers.
+	found, quality, _ := index.lookup("GET", "/projects/:project_id/widgets")
+
+	if quality != matchExact {
+		t.Fatalf("lookup quality = %v, want the shape to answer exactly", quality)
+	}
+	if !slices.Equal(found.Response, []string{"id", "name", "path"}) {
+		t.Errorf("response = %v, want both routes' keys", found.Response)
+	}
+	if !found.Offset || !found.Keyset {
+		t.Errorf("operation = offset %t, keyset %t; want both routes' pagination merged in", found.Offset, found.Keyset)
+	}
+	if found.Routes != 2 {
+		t.Errorf("routes = %d, want the two routes of the shape counted", found.Routes)
+	}
+	if found.Entity != firstEntity {
+		t.Errorf("entity = %q, want the first route's %q", found.Entity, firstEntity)
+	}
+	if found.EntityOf["id"] != firstEntity || found.EntityOf["name"] != secondEntity {
+		t.Errorf("entityOf = %v, want each key kept by the first route that rendered it", found.EntityOf)
+	}
+}
+
+// TestOperationIndexLookup_AnEmptyIdentifier_IsNotTemplatedIntoAPlaceholder
+// verifies the one segment the loose lookup refuses to stand in for.
+//
+// A placeholder stands for a value the caller supplied, and no value at all is
+// not one. Accepting an empty segment is how /projects//statistics matched the
+// documented /projects/:id/statistics, which counted the requests this server
+// makes with an empty identifier as endpoints GitLab serves: precisely the
+// class of broken request this dimension exists to notice.
+func TestOperationIndexLookup_AnEmptyIdentifier_IsNotTemplatedIntoAPlaceholder(t *testing.T) {
+	index, _ := fixtureRecord(map[string]response{
+		"GET /api/v4/projects/{id}/statistics": {Response: []string{"commit_count"}},
+	})
+
+	_, quality, literal := index.lookup("GET", "/projects//statistics")
+
+	if quality != matchNone {
+		t.Errorf("lookup matched %v on the literal %q, want no match at all for an empty identifier", quality, literal)
 	}
 }
 

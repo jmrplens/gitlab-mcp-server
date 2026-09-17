@@ -26,6 +26,27 @@ func writePackage(t *testing.T, name, source string) string {
 	return root
 }
 
+// writeToolsPackage puts one source file under internal/tools/<name> of an
+// existing root, for a case that needs more than the one package writePackage
+// makes.
+func writeToolsPackage(t *testing.T, root, name, source string) {
+	t.Helper()
+	dir := filepath.Join(root, toolsDir, name)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	writeSourceFile(t, dir, name+".go", source)
+}
+
+// writeSourceFile puts one file beside the others of a package directory,
+// under whatever name the case is about.
+func writeSourceFile(t *testing.T, dir, name, source string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+}
+
 // TestPublishedTypes_NestedOutputs_AreNotCompared verifies the filter that made
 // this check usable. GitLab's document lists the properties of the object an
 // endpoint returns and not of the objects inside it, so comparing a nested type
@@ -209,6 +230,146 @@ type MergeRequestOutput struct {
 	}
 	if !reflect.DeepEqual(types, want) {
 		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
+// TestPublishedTypes_TwoPackages_AreOrderedByPackageThenType verifies the
+// order the walk publishes its types in.
+//
+// Everything downstream joins on the package and the type name, and two runs
+// over one tree have to produce the same report or a reader comparing them
+// reads a reordering as a change. The listing the walk is built from is one
+// directory at a time, so the package is the key that has to be applied across
+// them and the type name the one that orders within one.
+func TestPublishedTypes_TwoPackages_AreOrderedByPackageThenType(t *testing.T) {
+	root := t.TempDir()
+	writeToolsPackage(t, root, "zulu", "package zulu\n\ntype Output struct {\n\tID int64 `json:\"id\"`\n}\n")
+	writeToolsPackage(t, root, "alpha", "package alpha\n\ntype ZebraOutput struct {\n\tID int64 `json:\"id\"`\n}\n\ntype AppleOutput struct {\n\tID int64 `json:\"id\"`\n}\n")
+
+	types := publishedTypes(root)
+
+	got := make([]string, 0, len(types))
+	for _, published := range types {
+		got = append(got, published.Package+"."+published.Name)
+	}
+	want := []string{
+		"internal/tools/alpha.AppleOutput",
+		"internal/tools/alpha.ZebraOutput",
+		"internal/tools/zulu.Output",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("publishedTypes() = %v, want %v", got, want)
+	}
+}
+
+// TestPublishedTypes_WhatIsNotANonTestGoFile_IsNotRead verifies the file
+// filter, which is the only thing standing between this walk and source it was
+// never meant to publish.
+//
+// A type declared in a test file is nobody's response, and a file carrying Go
+// source under another extension is a template or a backup rather than a file
+// the compiler reads. Both parse perfectly well, so the extension and the
+// _test suffix are what tell them from the source, and a walk that read either
+// would report fields no endpoint could ever send.
+func TestPublishedTypes_WhatIsNotANonTestGoFile_IsNotRead(t *testing.T) {
+	root := writePackage(t, "sample", "package sample\n\ntype Output struct {\n\tID int64 `json:\"id\"`\n}\n")
+	dir := filepath.Join(root, toolsDir, "sample")
+	writeSourceFile(t, dir, "sample_test.go",
+		"package sample\n\ntype FixtureOutput struct {\n\tOnlyInATest string `json:\"only_in_a_test\"`\n}\n")
+	writeSourceFile(t, dir, "template.go.txt",
+		"package sample\n\ntype TemplateOutput struct {\n\tOnlyInATemplate string `json:\"only_in_a_template\"`\n}\n")
+
+	types := publishedTypes(root)
+
+	if len(types) != 1 || types[0].Name != "Output" {
+		t.Errorf("publishedTypes() = %+v, want only the type the compiler reads", types)
+	}
+}
+
+// TestPublishedTypes_AStructPublishingOnlyThroughItsEmbeds_IsStillRead
+// verifies three rules of the promotion that a type with no tagged field of
+// its own puts together.
+//
+// A list envelope built as nothing but its row's embed publishes the row's
+// fields, so a walk that only collected structs with tagged fields would drop
+// it and report the package as publishing nothing. A promoted field whose type
+// belongs to another package resolves to no type of ours and carries none into
+// the type around it. And a field the struct tags itself wins over an embedded
+// name that collides with it, which is encoding/json's own depth rule.
+func TestPublishedTypes_AStructPublishingOnlyThroughItsEmbeds_IsStillRead(t *testing.T) {
+	root := writePackage(t, "sample", `package sample
+
+type RowOutput struct {
+	ID    int64           `+"`json:\"id\"`"+`
+	Extra elsewhere.Thing `+"`json:\"extra\"`"+`
+}
+
+type ListOutput struct {
+	RowOutput
+}
+
+type Grade string
+
+type GradeOutput struct {
+	*Grade
+	Named string `+"`json:\"Grade\"`"+`
+}
+`)
+
+	types := publishedTypes(root)
+
+	want := []publishedType{
+		{Package: "internal/tools/sample", Name: "GradeOutput", Fields: []string{"Grade"}},
+		{Package: "internal/tools/sample", Name: "ListOutput", Fields: []string{"extra", "id"}},
+		{Package: "internal/tools/sample", Name: "RowOutput", Fields: []string{"extra", "id"}},
+	}
+	if !reflect.DeepEqual(types, want) {
+		t.Errorf("publishedTypes() = %+v, want %+v", types, want)
+	}
+}
+
+// TestNamedType_OnlyALocalNameOrASharedShape_IsOneOfOurs verifies the one
+// function that decides whether a field's type is a type this walk can
+// resolve.
+//
+// Anything qualified by another package names no type of ours, and the
+// expression a reader is least likely to expect is a selector whose own left
+// side is a selector: there is no identifier there to compare with the shared
+// package's name, and reading one would be reading a field of nothing.
+func TestNamedType_OnlyALocalNameOrASharedShape_IsOneOfOurs(t *testing.T) {
+	cases := []struct {
+		name string
+		expr ast.Expr
+		want string
+	}{
+		{name: "a local name", expr: &ast.Ident{Name: "RowOutput"}, want: "RowOutput"},
+		{name: "a pointer to a local name", expr: &ast.StarExpr{X: &ast.Ident{Name: "RowOutput"}}, want: "RowOutput"},
+		{name: "a slice of pointers", expr: &ast.ArrayType{Elt: &ast.StarExpr{X: &ast.Ident{Name: "RowOutput"}}}, want: "RowOutput"},
+		{name: "a map's value", expr: &ast.MapType{Key: &ast.Ident{Name: "string"}, Value: &ast.Ident{Name: "RowOutput"}}, want: "RowOutput"},
+		{
+			name: "a shared shape",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "toolutil"}, Sel: &ast.Ident{Name: "NoteOutput"}},
+			want: sharedPrefix + "NoteOutput",
+		},
+		{
+			name: "a type from any other package",
+			expr: &ast.SelectorExpr{X: &ast.Ident{Name: "elsewhere"}, Sel: &ast.Ident{Name: "Thing"}},
+		},
+		{
+			name: "a selector whose left side is itself a selector",
+			expr: &ast.SelectorExpr{
+				X:   &ast.SelectorExpr{X: &ast.Ident{Name: "outer"}, Sel: &ast.Ident{Name: "inner"}},
+				Sel: &ast.Ident{Name: "Thing"},
+			},
+		},
+		{name: "an expression that names no type at all", expr: &ast.InterfaceType{Methods: &ast.FieldList{}}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := namedType(testCase.expr); got != testCase.want {
+				t.Errorf("namedType() = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }
 
@@ -515,6 +676,19 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 			{Name: "RowOutput", Fields: []string{"path"}, Embeds: []string{"CoreOutput"}},
 			{Name: "CoreOutput", Fields: []string{"id"}},
 			{Name: "UserOutput", Fields: []string{"id"}},
+			// The narrow shape of a pair the wrapper happens to name first:
+			// the relation has to be read in both directions, since which of
+			// the two embeds the other is the struct author's choice.
+			{Name: "NarrowOutput", Fields: []string{"id"}},
+			{Name: "WideOutput", Fields: []string{"archived"}, Embeds: []string{"NarrowOutput"}},
+			// A diamond: two chains out of one type meeting again below it,
+			// so a walk that did not remember where it had been would read
+			// the shared tail twice.
+			{Name: "TopOutput", Fields: []string{"t"}, Embeds: []string{"LeftOutput", "RightOutput"}},
+			{Name: "LeftOutput", Fields: []string{"l"}, Embeds: []string{"BaseOutput"}},
+			{Name: "RightOutput", Fields: []string{"r"}, Embeds: []string{"BaseOutput"}},
+			{Name: "BaseOutput", Fields: []string{"b"}},
+			{Name: "StrangerOutput", Fields: []string{"s"}},
 		},
 		alternatives: [][]string{
 			{"Output", "BasicOutput"},
@@ -523,6 +697,8 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 			// A before and an after: one type named twice is two
 			// references, not two shapes.
 			{"UserOutput", "UserOutput"},
+			{"NarrowOutput", "WideOutput"},
+			{"TopOutput", "StrangerOutput"},
 		},
 	}
 	resolveAlternatives(&parsed)
@@ -530,7 +706,9 @@ func TestResolveAlternatives_OnlyShapesOfOneEntityAreTheResponse(t *testing.T) {
 		"Output": true, "BasicOutput": true,
 		"GroupOutput": false, "ProjectObject": false,
 		"DetailOutput": true, "CoreOutput": true, "RowOutput": false,
-		"UserOutput": false,
+		"UserOutput":   false,
+		"NarrowOutput": true, "WideOutput": true,
+		"TopOutput": false, "StrangerOutput": false,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
