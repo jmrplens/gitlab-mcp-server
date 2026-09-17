@@ -214,3 +214,30 @@ func TestPollSpan_WithoutAResourceHookRecordsNoResource(t *testing.T) {
 		}
 	}
 }
+
+// TestResourceAttributes_NoManagerAndNoHook_RecordAndPanicNothing pins both
+// halves of the hook's absence, since either one reached is a crash in a
+// watcher's own goroutine rather than a failed request: nothing above catches
+// a panic there, so a poll that dereferenced a missing hook would take the
+// process down with it.
+//
+// The nil receiver is the far end of the same question. This method is the one
+// thing a poll span asks the manager for, and a manager is a pointer every
+// caller holds; a nil one must answer "nothing to record" rather than fault.
+func TestResourceAttributes_NoManagerAndNoHook_RecordAndPanicNothing(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager *Manager[string]
+	}{
+		{name: "no manager at all", manager: nil},
+		{name: "a manager with no hook", manager: &Manager[string]{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.manager.resourceAttributes("gitlab://project/1"); got != nil {
+				t.Errorf("resourceAttributes() = %v, want nothing recorded", got)
+			}
+		})
+	}
+}

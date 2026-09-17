@@ -230,6 +230,15 @@ func TestClassify_MalformedURI_IsRejected(t *testing.T) {
 		{"group with trailing slash", "gitlab://group/9/"},
 		{"snippet with trailing slash", "gitlab://snippet/5/"},
 		{"missing identifier", "gitlab://project/42/pipeline/"},
+		// A name-addressed resource with nothing where the name goes. The
+		// router expands {label_id} as an RFC 6570 simple string, which
+		// never produces an empty segment, so accepting these would admit
+		// URIs resources/read cannot resolve — the one thing this whitelist
+		// exists to rule out.
+		{"missing label name", "gitlab://project/42/label/"},
+		{"missing branch name", "gitlab://project/42/branch/"},
+		{"missing wiki slug", "gitlab://project/42/wiki/"},
+		{"missing group label name", "gitlab://group/9/label/"},
 		{"unknown trailing segment", "gitlab://project/42/pipeline/99/bogus"},
 		{"extra segment after suffix", "gitlab://project/42/pipeline/99/jobs/1"},
 		{"empty id before suffix", "gitlab://project/42/pipeline//jobs"},

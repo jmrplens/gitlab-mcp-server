@@ -14,6 +14,13 @@ import (
 	"time"
 )
 
+// statusKinds are the kinds that read a "status" field. All three go through
+// one branch, so a test naming only one of them proves nothing about the other
+// two: a kind dropped from that branch would silently start polling at the
+// base interval, which is the one failure this cadence exists to prevent for a
+// running pipeline.
+var statusKinds = []Kind{KindPipeline, KindPipelineLatest, KindJob}
+
 func TestActivityOf_PipelineStatus_MapsToActivity(t *testing.T) {
 	tests := []struct {
 		status string
@@ -41,12 +48,14 @@ func TestActivityOf_PipelineStatus_MapsToActivity(t *testing.T) {
 		{"some_future_status", activitySettled},
 	}
 	for _, tt := range tests {
-		t.Run(tt.status, func(t *testing.T) {
-			content := []byte(`{"id":1,"status":"` + tt.status + `"}`)
-			if got := KindPipeline.activityOf(content); got != tt.want {
-				t.Errorf("KindPipeline.activityOf(%s) = %v, want %v", content, got, tt.want)
-			}
-		})
+		for _, k := range statusKinds {
+			t.Run(k.String()+"/"+tt.status, func(t *testing.T) {
+				content := []byte(`{"id":1,"status":"` + tt.status + `"}`)
+				if got := k.activityOf(content); got != tt.want {
+					t.Errorf("%v.activityOf(%s) = %v, want %v", k, content, got, tt.want)
+				}
+			})
+		}
 	}
 }
 
