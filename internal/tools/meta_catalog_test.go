@@ -12,14 +12,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestRegisterMetaCatalog_NilInputs verifies nil server or catalog inputs are
-// ignored without panicking.
+// TestRegisterMetaCatalog_NilInputs verifies that each of the three nil
+// combinations registers nothing and does not panic.
 //
-// Meta catalog registration is called from configurable startup paths; accepting
-// nil inputs keeps defensive tests and partial setup flows from crashing. The
-// two are passed separately as well as together, because the guard reads them
-// left to right: with a nil server the catalog is never looked at, so a pair of
-// nils says nothing about what a missing catalog alone does.
+// Meta catalog registration is called from configurable startup paths, so a
+// partial setup must not take the process down. Nothing inside the function
+// answers for that: there is no guard in front of its loop, because either nil
+// is already refused one call down and an early return here could therefore
+// not be observed. That refusal is the whole contract, and this is the only
+// thing holding it.
+//
+// The third combination is the one that earns its place, and it is the one
+// this test lacked. A nil server with a real catalog is the only shape that
+// walks the loop at all, so it is the only one that would notice if
+// AddMetaTool ever stopped refusing a nil server; the other two never reach
+// the loop body, because Groups() answers nil for a nil catalog.
 func TestRegisterMetaCatalog_NilInputs(t *testing.T) {
 	RegisterMetaCatalog(nil, nil)
 
@@ -28,6 +35,20 @@ func TestRegisterMetaCatalog_NilInputs(t *testing.T) {
 	if names := toolNamesFromServer(t, server); len(names) != 0 {
 		t.Errorf("registered tools = %v, want none from a missing catalog", names)
 	}
+
+	// A catalog carrying a group, so the loop body runs rather than being
+	// skipped by an empty group list: a nil server has to be refused by
+	// AddMetaTool for this to return at all.
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_nil_server_probe"})
+	group.SetAction(actioncatalog.Action{
+		Name:  "get",
+		Route: toolutil.Route(func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil }),
+	})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	RegisterMetaCatalog(nil, catalog)
 }
 
 // TestRegisterMetaCatalog_GroupFormatterRendersTheResult pins that a group's
