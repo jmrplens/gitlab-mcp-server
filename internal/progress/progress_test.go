@@ -6,6 +6,7 @@ package progress
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,61 @@ import (
 )
 
 const testProgressMessage = "Working..."
+
+// sendFailureMessage is the line [Tracker.Update] writes when the session
+// refuses the notification. It is the only observable effect of that branch,
+// so a test that wants to hold Update to it has to read the log.
+const sendFailureMessage = "failed to send progress notification"
+
+// capturedRecords is an [slog.Handler] that keeps every record it is handed, so
+// a test can assert on a log line without parsing a stream.
+//
+// A handler rather than a text handler over a bytes.Buffer, because
+// slog.SetDefault is process-wide: anything else logging while this one is
+// installed would write into that buffer concurrently, and a bytes.Buffer is
+// not safe for that. The mutex here is, and this package sends its
+// notifications from the server session's own goroutine.
+type capturedRecords struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (c *capturedRecords) Enabled(context.Context, slog.Level) bool { return true }
+
+func (c *capturedRecords) Handle(_ context.Context, record slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, record.Clone())
+	return nil
+}
+
+func (c *capturedRecords) WithAttrs([]slog.Attr) slog.Handler { return c }
+
+func (c *capturedRecords) WithGroup(string) slog.Handler { return c }
+
+// has reports whether any captured record carries the given message.
+func (c *capturedRecords) has(message string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, record := range c.records {
+		if record.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
+// captureLogs installs a recording handler as the default logger for the length
+// of the test, which is where [Tracker.Update] writes.
+func captureLogs(t *testing.T) *capturedRecords {
+	t.Helper()
+
+	captured := &capturedRecords{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(captured))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return captured
+}
 
 // TestFromRequest_Nil verifies that [FromRequest] returns an inactive [Tracker]
 // when given a nil request.
@@ -71,6 +127,19 @@ func TestIsActive_ZeroValue(t *testing.T) {
 	var t0 Tracker
 	if t0.IsActive() {
 		t.Error("zero-value Tracker should be inactive")
+	}
+}
+
+// TestIsActive_SessionWithoutToken_IsInactive holds the second operand of
+// [Tracker.IsActive] on its own. Every other test that reaches an active
+// tracker gets both fields from [FromRequest], which sets them together, so the
+// session half was the only one ever decided: a tracker holding a session and
+// no token was never asked. It must be inactive, because a progress
+// notification is addressed by its token and there is nowhere to send one.
+func TestIsActive_SessionWithoutToken_IsInactive(t *testing.T) {
+	tracker := Tracker{session: &mcp.ServerSession{}}
+	if tracker.IsActive() {
+		t.Error("a Tracker with a session but no progress token has nothing to address a notification to and must be inactive")
 	}
 }
 
@@ -241,6 +310,8 @@ func TestFromRequest_ParamsNoToken(t *testing.T) {
 // but does not panic or propagate it when [ServerSession.NotifyProgress] fails
 // (e.g., because the peer has disconnected).
 func TestUpdate_NotifyProgressError(t *testing.T) {
+	logs := captureLogs(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -286,6 +357,31 @@ func TestUpdate_NotifyProgressError(t *testing.T) {
 	// Update should call NotifyProgress, which fails because the session is
 	// closed. The error should be logged but not panic.
 	tracker.Update(context.Background(), 1, 3, "should fail silently")
+
+	if !logs.has(sendFailureMessage) {
+		t.Errorf("a refused notification logged no %q line; the error was swallowed without a trace", sendFailureMessage)
+	}
+}
+
+// TestUpdate_DeliveredNotification_LogsNoFailure is the other half of
+// [TestUpdate_NotifyProgressError]: a notification the session accepted must
+// leave no failure line behind. Both halves are needed because the branch has
+// no return value and no side effect but that line, so a test that only checks
+// the failing path cannot tell "logs when the send failed" from "logs whenever
+// it sends".
+func TestUpdate_DeliveredNotification_LogsNoFailure(t *testing.T) {
+	logs := captureLogs(t)
+
+	received := collectProgress(t, 1, func(ctx context.Context, tracker Tracker) {
+		tracker.Update(ctx, 1, 3, testProgressMessage)
+	})
+
+	if received[0].Progress != 1 || received[0].Total != 3 {
+		t.Fatalf("received[0] = %v/%v, want 1/3", received[0].Progress, received[0].Total)
+	}
+	if logs.has(sendFailureMessage) {
+		t.Errorf("a notification the client received logged %q", sendFailureMessage)
+	}
 }
 
 // TestFromRequest_WithTokenNoSession verifies that a [Tracker] with a token
@@ -511,6 +607,30 @@ func TestDone_ZeroTotalIsNoop(t *testing.T) {
 	var tracker Tracker
 	tracker.Done(context.Background(), 0, "should-noop")
 	tracker.Done(context.Background(), -1, "should-noop")
+}
+
+// TestDone_ZeroTotalOnAnActiveTracker_SendsNothing puts the guard's boundary to
+// a tracker that can actually send, which an inactive one cannot:
+// [TestDone_ZeroTotalIsNoop] would pass just as happily if `total <= 0` read
+// `total < 0`, because the tracker it uses sends nothing at any total.
+//
+// Zero is the boundary and it belongs on the refusing side: a completion
+// notification of 0 out of 0 says nothing a client can render, and it would
+// claim the token's first value at 0, which every later update then has to
+// exceed. The assertion is on the first notification the client receives rather
+// than on how many arrive, because the transport delivers in send order: were
+// Done(0) to send, its 0/0 would arrive ahead of the 4/4 and take this slot.
+func TestDone_ZeroTotalOnAnActiveTracker_SendsNothing(t *testing.T) {
+	received := collectProgress(t, 1, func(ctx context.Context, tracker Tracker) {
+		tracker.Done(ctx, 0, "zero total")
+		tracker.Done(ctx, 4, "four of four")
+	})
+
+	first := received[0]
+	if first.Progress != 4 || first.Total != 4 || first.Message != "four of four" {
+		t.Errorf("first notification = %v/%v %q, want 4/4 %q: Done with a zero total must send nothing",
+			first.Progress, first.Total, first.Message, "four of four")
+	}
 }
 
 // collectProgress runs report as the body of an MCP tool call over an in-memory
