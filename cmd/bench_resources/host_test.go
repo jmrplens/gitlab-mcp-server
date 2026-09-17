@@ -29,6 +29,11 @@ func TestParseCPUModel_BothSpellings(t *testing.T) {
 			cpuinfo: "processor\t: 0\nBogoMIPS\t: 108.00\nModel\t: Raspberry Pi 5\n",
 			want:    "Raspberry Pi 5",
 		},
+		{
+			name:    "the Processor spelling",
+			cpuinfo: "processor\t: 0\nProcessor\t: ARMv7 Processor rev 4 (v7l)\n",
+			want:    "ARMv7 Processor rev 4 (v7l)",
+		},
 		{name: "no model line", cpuinfo: "processor\t: 0\nflags\t: fpu vme\n", want: ""},
 		{name: "empty", cpuinfo: "", want: ""},
 		{name: "blank value", cpuinfo: "model name\t:   \n", want: ""},
@@ -223,7 +228,9 @@ func TestHostFacts_OtherPlatforms(t *testing.T) {
 // own name, since MemTotal and MemAvailable sit lines apart in the same file
 // and mean different things to the budget.
 func TestParseMeminfoKiB_ReadsTheNamedField(t *testing.T) {
-	meminfo := "MemTotal:       63729784 kB\nMemFree:         1104924 kB\nMemAvailable:   25729000 kB\nBroken: x kB\n"
+	// Truncated: is the one line with a name and no value, which a reader that
+	// only checked the name would index past the end of.
+	meminfo := "MemTotal:       63729784 kB\nMemFree:         1104924 kB\nMemAvailable:   25729000 kB\nBroken: x kB\nTruncated:\n"
 	cases := []struct {
 		field string
 		want  float64
@@ -232,6 +239,7 @@ func TestParseMeminfoKiB_ReadsTheNamedField(t *testing.T) {
 		{field: "MemAvailable:", want: 25729000},
 		{field: "Broken:", want: 0},
 		{field: "Missing:", want: 0},
+		{field: "Truncated:", want: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.field, func(t *testing.T) {
@@ -239,6 +247,52 @@ func TestParseMeminfoKiB_ReadsTheNamedField(t *testing.T) {
 				t.Errorf("parseMeminfoKiB(%s) = %v, want %v", tc.field, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestHostInfo_Describe_NoKernelAtAll_LeavesTheFragmentOut verifies a record
+// whose kernel field was never filled produces a sentence with no kernel
+// fragment, rather than one ending in a dangling word.
+//
+// "unknown" is the probe's own answer and is already left out; the empty
+// string is what a record written by an older build, or by hand, carries, and
+// it has to be left out by the same sentence. Printing it would put "kernel "
+// with nothing after it into the published page.
+func TestHostInfo_Describe_NoKernelAtAll_LeavesTheFragmentOut(t *testing.T) {
+	l := englishLabels()
+	host := HostInfo{OS: "linux", Arch: "amd64", CPUModel: "Test CPU", CPUs: 8, GoVersion: "go1.27.1"}
+
+	got := host.describe(l)
+	if strings.Contains(got, l.HostKernel) {
+		t.Errorf("describe() = %q, want no %q fragment when the kernel was never recorded", got, l.HostKernel)
+	}
+	// The fields that were recorded still have to be there, or "leaves it out"
+	// would be satisfied by a sentence that left everything out.
+	if !strings.Contains(got, "Test CPU") || !strings.Contains(got, "go1.27.1") {
+		t.Errorf("describe() = %q, want the facts the record does carry", got)
+	}
+}
+
+// TestHostFacts_MacOSWithNoSysctl_AdmitsItKnowsNothing verifies the macOS
+// branches report an unknown processor and no memory when sysctl cannot be
+// run, rather than an empty string or a number nothing measured.
+//
+// The sibling test covers a sysctl that answers and one that answers nonsense;
+// this is the third case, a tool that is not there at all, which is what the
+// probe's error return exists for. The distinction matters on the published
+// page: "unknown" is a claim a reader can act on, an empty processor name
+// leaves a gap in the sentence that reads as a rendering fault.
+func TestHostFacts_MacOSWithNoSysctl_AdmitsItKnowsNothing(t *testing.T) {
+	previous := runtimeGOOS
+	t.Cleanup(func() { runtimeGOOS = previous })
+	runtimeGOOS = "darwin"
+	t.Setenv("PATH", t.TempDir())
+
+	if got := cpuModel(); got != "unknown" {
+		t.Errorf("cpuModel = %q with no sysctl to ask, want unknown", got)
+	}
+	if got := totalMemoryGiB(); got != 0 {
+		t.Errorf("totalMemoryGiB = %v with no sysctl to ask, want 0", got)
 	}
 }
 

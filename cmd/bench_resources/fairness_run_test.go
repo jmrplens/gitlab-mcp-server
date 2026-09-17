@@ -345,6 +345,19 @@ func TestFairnessProcess_PublishesProcessorTimePerServedRequestOnly(t *testing.T
 			wantNoteIn: "did not answer a sample",
 		},
 		{
+			// The other end of the same phase, and the one a real run
+			// produces: the first sample answered and the second did not,
+			// because the process it named ended in between. Reading the
+			// missing one as a zero would publish a negative difference as
+			// the processor time the arm cost.
+			name: "a platform that stopped answering",
+			in: processInput{
+				serverStart: ok(1), serverEnd: cpuSample{}, driverStart: ok(0), driverEnd: ok(1),
+				wall: 4 * time.Second, served: 10,
+			},
+			wantNoteIn: "did not answer a sample",
+		},
+		{
 			name: "consumed time that fell between samples",
 			in: processInput{
 				serverStart: ok(3), serverEnd: ok(1), driverStart: ok(1), driverEnd: ok(0),
@@ -744,6 +757,32 @@ func TestRunFairnessArm_MarksAnArmThatFailedAControlIncomparable(t *testing.T) {
 			t.Errorf("verdict = %+v, want %q", verdict, directionNotComparable)
 		}
 	})
+}
+
+// TestRunFairnessArm_AServerThatNamesNoBuild_KeepsTheOneAlreadyRecorded
+// verifies an arm measured against a server whose /health carries no version
+// leaves the build already recorded alone.
+//
+// A fairness run starts a fresh process per arm and per repetition, so this
+// assignment happens several times over one document, and the document names
+// one build. An arm that answered with nothing would blank it, and the
+// published comparison would then say which bound was measured but not what it
+// was measured against.
+func TestRunFairnessArm_AServerThatNamesNoBuild_KeepsTheOneAlreadyRecorded(t *testing.T) {
+	t.Setenv("STANDIN_NO_VERSION", "1")
+	r := standinRunner(t)
+	r.report = progressFunc(false)
+	recorded := ServerInfo{Version: "3.1.0", Commit: "0123456789abcdef"}
+	r.serverInfo = recorded
+	plan := twoPopulationPlan(t)
+	plan.Phase = 100 * time.Millisecond
+
+	if _, err := r.runFairnessArm(t.Context(), plan, armOff); err != nil {
+		t.Fatalf("runFairnessArm: %v", err)
+	}
+	if r.serverInfo != recorded {
+		t.Errorf("serverInfo = %+v, want the build already recorded, %+v", r.serverInfo, recorded)
+	}
 }
 
 // TestRunFairness_RefusesToWriteWhereItWouldOverwriteTheRecord verifies the
