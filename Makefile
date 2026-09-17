@@ -629,9 +629,30 @@ coverage-conditions:
 	cd $(PKG) && go run github.com/rillig/gobco@v1.3.4
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
+# The per-mutant timeout is derived from PKG's own baseline, because gremlins
+# computes it as that baseline times a coefficient and applies no floor. On a
+# fast package that product is smaller than the fixed cost of starting `go
+# test` at all, so every mutant is reported TIMED OUT having never run: measured
+# here, internal/tools/surfaces (0.015s of tests) reported 1 killed and 12 timed
+# out, and the same package under a budget that clears the startup cost reports
+# 13 killed and none timed out. A timeout is not a kill and gremlins leaves it
+# out of the efficacy quotient, so the default flatters exactly the packages it
+# never managed to test, and internal/edition reported 0.00% efficacy over four
+# mutants none of which ever ran.
+#
+# MUTANT_BUDGET is the floor in seconds; the coefficient is whatever reaches it,
+# never below 8 so a slow package still gets a real multiple of its own runtime.
+# A timeout that survives a budget this size is a finding rather than a setting:
+# it is a mutant that made the package pathologically slow, which is what
+# mutating a memo does, and the answer is a test that asserts the memo.
+MUTANT_BUDGET ?= 30
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
-	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 $(GREMLINS_FLAGS) $(PKG)
+	@base=$$(go test -count=1 $(PKG) 2>&1 | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
+	[ -n "$$base" ] || base=0.010; \
+	coeff=$$(awk -v b="$$base" -v f="$(MUTANT_BUDGET)" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
+	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$(MUTANT_BUDGET)s budget"; \
+	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 --timeout-coefficient $$coeff $(GREMLINS_FLAGS) $(PKG)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
