@@ -5,6 +5,8 @@ import (
 	"go/types"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // rawFixture is the fixture the second verdict is tested against: one package
@@ -355,6 +357,42 @@ func TestRawSelector_UntypedField_IsNotAFinding(t *testing.T) {
 
 	if kind != rawNone || why != "" {
 		t.Errorf("rawSelector on an untyped field = %v (%s), want nothing", kind, why)
+	}
+}
+
+// TestUnwrapRendering_CallItCannotResolve_StopsAtTheCall checks where the
+// walk to what a value is stops.
+//
+// It steps through the calls that change a value's text without changing what
+// it is, and it recognizes each of them by what the type checker says the call
+// names. With nothing recorded for the call there is no such recognition to
+// make, and stepping into the operand anyway would answer about the wrong
+// value: the argument of a call that may be doing anything at all.
+func TestUnwrapRendering_CallItCannotResolve_StopsAtTheCall(t *testing.T) {
+	call := &ast.CallExpr{Fun: ast.NewIdent("wrap"), Args: []ast.Expr{ast.NewIdent("v")}}
+
+	got := unwrapRendering(untypedPackage(), call)
+
+	if got != ast.Expr(call) {
+		t.Errorf("unwrapRendering stepped into %s, want the call it could not resolve", types.ExprString(got))
+	}
+}
+
+// TestRawSelector_FieldNamedLikeAnInstantButNotText_IsNotAFinding checks that
+// the rule is about the text GitLab sent rather than about the field's name.
+//
+// The claim it makes is that a string field named like an instant holds RFC
+// 3339 text printed as it arrived; a field of any other shape carries no such
+// text, so the name alone must not make it a timestamp.
+func TestRawSelector_FieldNamedLikeAnInstantButNotText_IsNotAFinding(t *testing.T) {
+	pkg := &packages.Package{TypesInfo: &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}}
+	sel := &ast.SelectorExpr{X: ast.NewIdent("item"), Sel: ast.NewIdent("SeenAt")}
+	pkg.TypesInfo.Types[sel] = types.TypeAndValue{Type: types.NewSlice(types.Typ[types.String])}
+
+	kind, why := rawSelector(pkg, sel)
+
+	if kind != rawNone || why != "" {
+		t.Errorf("rawSelector on a slice named like an instant = %v (%s), want nothing", kind, why)
 	}
 }
 
