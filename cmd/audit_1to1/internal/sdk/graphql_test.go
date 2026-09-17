@@ -33,6 +33,74 @@ func TestCollectGraphQLSites_BodylessDeclaration_IsSkipped(t *testing.T) {
 	}
 }
 
+// graphQLTypedPackage parses src as the single file of a tool package and
+// types every identifier spelled "gql" as the client-go GraphQL interface,
+// which is the value collectGraphQLSites matches on. Building the type
+// information by hand is what lets a case state the exact set of sites it
+// asserts an order over, which a loaded package cannot.
+func graphQLTypedPackage(t *testing.T, fset *token.FileSet, pkgPath, filename, src string, graphQL *types.Named) *packages.Package {
+	t.Helper()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", filename, err)
+	}
+	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+	ast.Inspect(file, func(node ast.Node) bool {
+		if ident, ok := node.(*ast.Ident); ok && ident.Name == "gql" {
+			info.Types[ident] = types.TypeAndValue{Type: graphQL}
+		}
+		return true
+	})
+	return &packages.Package{PkgPath: pkgPath, Fset: fset, Syntax: []*ast.File{file}, TypesInfo: info}
+}
+
+// TestCollectGraphQLSites_Order_SortByPackageThenFunctionThenPosition verifies
+// the three-key order the sites are reported in, which is what makes the
+// operation grouping and the declared table independent of the order the
+// loader hands packages, files and declarations over in.
+//
+// Every key is asserted against a fixture that disagrees with it: the package
+// listed first sorts last, the function declared first sorts last, and the two
+// sites of one function are compared as the strings they are, so line 10
+// precedes line 9. That last one is the order inside a single operation's
+// sites list, which is cosmetic; the order of the operations themselves is
+// not, since it is what the report and its declared decisions are read in.
+func TestCollectGraphQLSites_Order_SortByPackageThenFunctionThenPosition(t *testing.T) {
+	fset := token.NewFileSet()
+	iface := types.NewInterfaceType(nil, nil)
+	iface.Complete()
+	graphQL := types.NewNamed(types.NewTypeName(token.NoPos, nil, "GraphQLInterface", nil), iface, nil)
+
+	beta := graphQLTypedPackage(t, fset, "example.com/x/internal/tools/beta", "/ws/repo/internal/tools/beta/beta.go", `package beta
+
+func Bbb() {
+	_ = gql
+}
+
+func Aaa() {
+	// The two sites below sit on lines 9 and 10.
+	_ = gql
+	_ = gql
+}
+`, graphQL)
+	alpha := graphQLTypedPackage(t, fset, "example.com/x/internal/tools/alpha", "/ws/repo/internal/tools/alpha/alpha.go", `package alpha
+
+func Zzz() {
+	_ = gql
+}
+`, graphQL)
+
+	want := []graphqlSite{
+		{pkg: "alpha", function: "Zzz", position: "internal/tools/alpha/alpha.go:4"},
+		{pkg: "beta", function: "Aaa", position: "internal/tools/beta/beta.go:10"},
+		{pkg: "beta", function: "Aaa", position: "internal/tools/beta/beta.go:9"},
+		{pkg: "beta", function: "Bbb", position: "internal/tools/beta/beta.go:4"},
+	}
+	if got := collectGraphQLSites([]*packages.Package{beta, alpha}, graphQL); !reflect.DeepEqual(got, want) {
+		t.Errorf("collectGraphQLSites = %+v, want %+v", got, want)
+	}
+}
+
 // declFrom parses a snippet and returns its last function declaration, so the
 // naming cases read as the Go they are about even when a receiver type has to
 // be declared first.
@@ -75,6 +143,19 @@ func TestFunctionName_Declarations_NameFunctionsAndMethods(t *testing.T) {
 	}
 }
 
+// TestFunctionName_EmptyReceiverList_NamesTheBareFunction verifies a
+// declaration carrying a receiver list with no field in it is named as a plain
+// function. The parser never produces that shape, so the guard reads as
+// redundant beside the nil check; a hand-built or rewritten AST does produce
+// it, and without the guard the name is not wrong but absent, because indexing
+// the empty list panics and takes the audit down with it.
+func TestFunctionName_EmptyReceiverList_NamesTheBareFunction(t *testing.T) {
+	fn := &ast.FuncDecl{Recv: &ast.FieldList{}, Name: ast.NewIdent("List"), Body: &ast.BlockStmt{}}
+	if got := functionName(fn); got != "List" {
+		t.Errorf("functionName = %q, want List", got)
+	}
+}
+
 // TestReceiverName_Unexpected_FallsBackRatherThanPanics verifies an unforeseen
 // receiver expression yields a placeholder, so a future Go form cannot crash
 // the audit.
@@ -109,6 +190,11 @@ func TestRepoRelativeFile_Separators_TrimTheWorkspacePrefixOnEveryPlatform(t *te
 		{
 			name: "already relative",
 			file: "internal/tools/epics/epics.go",
+			want: "internal/tools/epics/epics.go",
+		},
+		{
+			name: "the path begins at the internal segment",
+			file: "/internal/tools/epics/epics.go",
 			want: "internal/tools/epics/epics.go",
 		},
 		{
