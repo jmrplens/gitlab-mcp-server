@@ -112,7 +112,64 @@ var (
 		"client.address",
 		"client.port",
 	}
+
+	// wantMethodMetricDimensions is what a data point carries for a method that
+	// invokes no tool. The four tool dimensions are absent by construction
+	// rather than by omission: initialize reports capabilities that are settled
+	// before any tool exists, and tools/list enumerates tools without running
+	// one, so neither has an operation, a tool, an action or a domain to name.
+	wantMethodMetricDimensions = []string{
+		"gitlab_mcp.tool_surface",
+		"mcp.method.name",
+		"mcp.protocol.version",
+		"network.transport",
+	}
 )
+
+// toolCallMethod is the one method whose data points carry the tool dimensions.
+const toolCallMethod = "tools/call"
+
+// assertDurationDimensions holds each data point to the set its own method can
+// carry, and fails if none of them is a tool call.
+//
+// The split is the whole point. The instrument records one series per MCP
+// method rather than one per tool call, so the pinned set belongs to a
+// tools/call point and not to every point: initialize reports capabilities and
+// tools/list enumerates them, and neither invokes a tool it could name. Holding
+// all of them to the pinned set asserted something untrue of a correct server,
+// which is what this did until a real collector was first put in front of it.
+func assertDurationDimensions(t *testing.T, points [][]otlpAttr) {
+	t.Helper()
+
+	calls := 0
+	for _, point := range points {
+		method, _ := attr(point, "mcp.method.name")
+		want := wantMethodMetricDimensions
+		if method == toolCallMethod {
+			calls++
+			want = wantDurationMetricDimensions
+		}
+		assertInventory(t, durationMetric+" data point for "+method, keys(point), want)
+	}
+	if calls == 0 {
+		t.Errorf("no %s data point names %s, though the session made five; recorded methods %v",
+			durationMetric, toolCallMethod, methodsOf(points))
+	}
+}
+
+// methodsOf names the methods a set of data points came from, for a failure
+// that has to say what it saw instead of what it wanted.
+func methodsOf(points [][]otlpAttr) []string {
+	seen := make([]string, 0, len(points))
+	for _, point := range points {
+		method, _ := attr(point, "mcp.method.name")
+		if !slices.Contains(seen, method) {
+			seen = append(seen, method)
+		}
+	}
+	slices.Sort(seen)
+	return seen
+}
 
 // TestRealCollector_TheExportedInventoryIsExactlyThis pins what leaves this
 // process, in both directions, as parsed by a real collector.
@@ -132,8 +189,7 @@ func TestRealCollector_TheExportedInventoryIsExactlyThis(t *testing.T) {
 		t.Fatalf("the collector parsed no tools/call span.\nCollector:\n%s\nServer:\n%s", c.containerLogs(t), srv.logs())
 	}
 
-	_, duration, ok := c.awaitMetric(t, exportDeadline, durationMetric)
-	if !ok {
+	if _, _, arrived := c.awaitMetric(t, exportDeadline, durationMetric); !arrived {
 		t.Fatalf("the collector parsed no %s metric.\nCollector:\n%s\nServer:\n%s", durationMetric, c.containerLogs(t), srv.logs())
 	}
 
@@ -142,13 +198,32 @@ func TestRealCollector_TheExportedInventoryIsExactlyThis(t *testing.T) {
 	})
 
 	t.Run("the duration metric carries exactly the pinned dimensions", func(t *testing.T) {
-		points := dataPointAttributes(t, duration)
+		// Waited for by the series rather than by the instrument. The first
+		// export carrying the instrument is the handshake's, so reading that
+		// one asserts about export timing: it reported the tool dimensions
+		// missing from points that are not tool calls at all.
+		_, carrying, found := awaitDurationPoint(t, c, exportDeadline, func(p []otlpAttr) bool {
+			method, _ := attr(p, "mcp.method.name")
+			return method == toolCallMethod
+		})
+		if !found {
+			t.Fatalf("no %s data point names %s, though the session made five.\nCollector:\n%s\nServer:\n%s",
+				durationMetric, toolCallMethod, c.containerLogs(t), srv.logs())
+		}
+
+		points := dataPointAttributes(t, carrying)
 		if len(points) == 0 {
 			t.Fatalf("%s arrived with no data points", durationMetric)
 		}
-		for _, point := range points {
-			assertInventory(t, durationMetric+" data point", keys(point), wantDurationMetricDimensions)
-		}
+
+		// The instrument records one series per MCP method, not one per tool
+		// call, so the pinned set is what a tools/call point carries and not
+		// what every point does. initialize reports capabilities and tools/list
+		// enumerates them: neither invokes a tool, so neither can name one.
+		// Asserting the four tool dimensions on them asserted something untrue
+		// of a correct server, and this subtest did exactly that until a real
+		// collector was first put in front of it.
+		assertDurationDimensions(t, points)
 	})
 
 	t.Run("no unbounded key is a dimension of any metric", func(t *testing.T) {

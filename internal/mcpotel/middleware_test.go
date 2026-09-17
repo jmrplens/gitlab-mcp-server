@@ -1492,3 +1492,100 @@ func TestMiddleware_ASessionIdReachesTheSpanAndNeverTheMetric(t *testing.T) {
 		}
 	}
 }
+
+// TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan
+// covers the first call a process serves.
+//
+// The readiness gate is the innermost middleware, so a request waiting for the
+// tool catalog waits inside its own span and the latency reported is the one
+// the client saw. describe therefore runs above that wait, and for the first
+// call of a process it runs while registration is still building the catalog
+// the identifier resolves against: it can name nothing. The identifier here is
+// that situation exactly, answering only once the handler has run.
+//
+// The two negative cases matter as much as the positive one. A call that still
+// cannot be named must record no action rather than an empty one, since an
+// attribute present and blank is worse than absent for anyone grouping by it;
+// and an identifier that resolves the domain but never the action must not have
+// its domain recorded twice, which on a metric is one key published twice.
+func TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan(t *testing.T) {
+	full := Identity{ActionID: "issue.list", Domain: "issue"}
+
+	tests := map[string]struct {
+		answersLate Identity
+		resolves    bool
+		wantAction  string
+		wantDomain  string
+	}{
+		"the catalog arrives while the call waits": {answersLate: full, resolves: true, wantAction: "issue.list", wantDomain: "issue"},
+		"it still cannot be named":                 {},
+		"only the domain is ever known":            {answersLate: Identity{Domain: "issue"}, resolves: true, wantDomain: "issue"},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ready := false
+			identifier := IdentifierFunc(func(string, any) (Identity, bool) {
+				if !ready {
+					return Identity{}, false
+				}
+				return tc.answersLate, tc.resolves
+			})
+
+			recorder := newRecorder(t)
+			handler := Middleware(Options{Identifier: identifier, Surface: "individual"})(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					// Registration finished while this call was held at the gate.
+					ready = true
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call", callToolRequest("gitlab_issue_list", nil, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+
+			assertSpanNames(t, spans[0], AttrActionID, tc.wantAction)
+			assertSpanNames(t, spans[0], AttrDomain, tc.wantDomain)
+			assertRecordedOnce(t, spans[0], AttrDomain)
+		})
+	}
+}
+
+// assertSpanNames holds one span attribute to a wanted value, where an empty
+// want means the attribute must be absent rather than blank.
+//
+// The distinction is the point: an attribute present and empty is worse than
+// one absent for anyone grouping by it, since it mints a series for "no value"
+// that looks like a value.
+func assertSpanNames(t *testing.T, span sdktrace.ReadOnlySpan, key attribute.Key, want string) {
+	t.Helper()
+
+	got, present := attrOf(span, key)
+	switch {
+	case want == "" && present:
+		t.Errorf("span carries %s = %q, want no such attribute at all", key, got.AsString())
+	case want != "" && !present:
+		t.Errorf("span carries no %s, want %q", key, want)
+	case want != "" && got.AsString() != want:
+		t.Errorf("span %s = %q, want %q", key, got.AsString(), want)
+	}
+}
+
+// assertRecordedOnce fails when a span carries one key twice, which on the
+// metric built from the same list is one dimension published twice.
+func assertRecordedOnce(t *testing.T, span sdktrace.ReadOnlySpan, key attribute.Key) {
+	t.Helper()
+
+	times := 0
+	for _, kv := range span.Attributes() {
+		if kv.Key == key {
+			times++
+		}
+	}
+	if times > 1 {
+		t.Errorf("span carries %s %d times, want at most once", key, times)
+	}
+}
