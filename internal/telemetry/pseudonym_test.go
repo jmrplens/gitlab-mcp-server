@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestResourcePseudonym_DoesNotContainTheURI is the assertion the whole helper
@@ -103,6 +104,68 @@ func TestResourcePseudonym_IsKeyedNotPlain(t *testing.T) {
 
 	if keys.ResourcePseudonym(uri) == hex.EncodeToString(sum[:])[:16] {
 		t.Error("the digest equals an unkeyed hash of the URI, so it is enumerable rather than pseudonymous")
+	}
+}
+
+// TestIdentityPseudonym_AcrossARotation_StillAnswers covers what the digest
+// must keep doing while the key underneath it is being replaced.
+//
+// The rotation branch nils both keys when it cannot read randomness, which is
+// the honest answer to a process that can no longer pseudonymize: emitting
+// nothing beats emitting something reversible. It is also, applied on a
+// rotation that worked, a silent end to identity recording — the caller sees an
+// empty attribute and no error, and a distinct-user count goes to zero looking
+// like a deployment nobody used. Both pseudonyms are asserted because the
+// branch nils them together and one of them would otherwise prove nothing about
+// the other.
+func TestIdentityPseudonym_AcrossARotation_StillAnswers(t *testing.T) {
+	t.Parallel()
+
+	ring, err := NewKeyring("", time.Hour)
+	if err != nil {
+		t.Fatalf("NewKeyring: %v", err)
+	}
+
+	clock := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	ring.now = func() time.Time { return clock }
+	ring.rotatedAt = clock
+
+	before := ring.IdentityPseudonym("42")
+	if before == "" {
+		t.Fatal("a fresh keyring produced no pseudonym")
+	}
+
+	clock = clock.Add(2 * time.Hour)
+
+	identity := ring.IdentityPseudonym("42")
+	if identity == "" {
+		t.Error("the identity pseudonym is empty after a rotation, so identity recording stopped rather than rotated")
+	}
+	if identity == before {
+		t.Errorf("the identity pseudonym %q did not change across the rotation", identity)
+	}
+	if resource := ring.ResourcePseudonym("gitlab://project/42"); resource == "" {
+		t.Error("the resource pseudonym is empty after a rotation, so resource recording stopped rather than rotated")
+	}
+}
+
+// TestKeyring_WithoutDerivedKeys_RecordsNothing covers the last guard before
+// the HMAC, on the one keyring that can reach it: a value whose keys were
+// dropped.
+//
+// Falling back to an unkeyed digest there would look like a pseudonym while
+// being reversible by anyone holding a list of user ids, which is the one
+// outcome this package must never produce.
+func TestKeyring_WithoutDerivedKeys_RecordsNothing(t *testing.T) {
+	t.Parallel()
+
+	var ring Keyring
+
+	if got := ring.IdentityPseudonym("42"); got != "" {
+		t.Errorf("IdentityPseudonym on a keyring holding no keys = %q, want nothing", got)
+	}
+	if got := ring.ResourcePseudonym("gitlab://project/42"); got != "" {
+		t.Errorf("ResourcePseudonym on a keyring holding no keys = %q, want nothing", got)
 	}
 }
 

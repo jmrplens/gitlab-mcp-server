@@ -3,6 +3,7 @@
 package telemetry
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -10,11 +11,20 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/sdk/instrumentation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // TestRedactEndpointUserinfo_CredentialsNeverReachTheSummary covers the one
@@ -190,6 +200,41 @@ func TestValidateTLSMaterial_RefusesWhatWouldSilentlyFallBack(t *testing.T) {
 			env:     map[string]string{"OTEL_EXPORTER_OTLP_LOGS_CERTIFICATE": unreadable},
 			signals: Signals{Traces: true},
 		},
+		{
+			// A complete pair that does not load. Both halves are named, so
+			// nothing here is missing and only the files themselves are wrong;
+			// without this the load error is a branch no row reaches and a pair
+			// of unusable files would be announced as mutual TLS configured.
+			name: "a client pair whose certificate is not a certificate is refused",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE": notPEM,
+				"OTEL_EXPORTER_OTLP_CLIENT_KEY":         keyPath,
+			},
+			signals: AllSignals(),
+			wantErr: "OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE",
+		},
+		{
+			// Two half-pairs of the same kind. The message must name the
+			// signal's own variable rather than the shared one: the signal
+			// prefix is what the exporter reads first, so that is the file the
+			// operator has to pair a key with.
+			name: "a certificate under both prefixes is named by the most specific",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE": certPath,
+				"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE":        certPath,
+			},
+			signals: Signals{Traces: true},
+			wantErr: "OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE is set without its key",
+		},
+		{
+			name: "a key under both prefixes is named by the most specific",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY": keyPath,
+				"OTEL_EXPORTER_OTLP_CLIENT_KEY":        keyPath,
+			},
+			signals: Signals{Traces: true},
+			wantErr: "OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY is set without its certificate",
+		},
 	}
 
 	for _, tt := range tests {
@@ -265,4 +310,197 @@ func writeKeyPair(t *testing.T) (certPath, keyPath string) {
 	write(certPath, "CERTIFICATE", der)
 	write(keyPath, "EC PRIVATE KEY", keyDER)
 	return certPath, keyPath
+}
+
+// collectorProbe is an HTTP/1.1 collector on loopback that records which paths
+// it was asked for.
+//
+// It is what makes the protocol choice observable. The two trace exporters
+// return the same Go type, so nothing about the returned value says which one
+// was built, and the only honest difference is what goes on the wire: the
+// http/protobuf exporter posts to the signal's own path, while the gRPC one
+// opens an HTTP/2 connection whose preface this server never routes to a
+// handler. "The collector was asked for /v1/traces" therefore means
+// http/protobuf and nothing else.
+type collectorProbe struct {
+	mu    sync.Mutex
+	paths map[string]bool
+}
+
+// startCollectorProbe starts the probe and points every OTLP variable at it.
+func startCollectorProbe(t *testing.T) *collectorProbe {
+	t.Helper()
+
+	probe := &collectorProbe{paths: map[string]bool{}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		probe.mu.Lock()
+		probe.paths[r.URL.Path] = true
+		probe.mu.Unlock()
+		// An empty 200 decodes as an empty success response, which is what
+		// keeps the http exporter from retrying and slowing the test down.
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", server.URL)
+	// The trace and metric gRPC exporters do not read the endpoint's scheme, so
+	// without this they would negotiate TLS against a plaintext listener and
+	// fail for the wrong reason.
+	t.Setenv("OTEL_EXPORTER_OTLP_INSECURE", "true")
+	// Milliseconds, and it is what the gRPC leg costs: that exporter retries an
+	// Unavailable with a five-second initial backoff, so against a listener
+	// that will never speak gRPC it spends exactly this budget before giving
+	// up. The http leg needs a thousandth of it for a loopback round trip.
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "500")
+	// A per-signal override in the developer's own environment would otherwise
+	// send the export somewhere this probe cannot see.
+	for _, signal := range []string{"TRACES", "METRICS", "LOGS"} {
+		t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_ENDPOINT", "")
+		t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_INSECURE", "")
+		t.Setenv("OTEL_EXPORTER_OTLP_"+signal+"_TIMEOUT", "")
+	}
+	return probe
+}
+
+func (p *collectorProbe) asked(path string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.paths[path]
+}
+
+// protocolCases are the two answers the protocol argument can carry, and what
+// each of them must put on the wire.
+func protocolCases() []struct {
+	name       string
+	protocol   string
+	wantPosted bool
+} {
+	return []struct {
+		name       string
+		protocol   string
+		wantPosted bool
+	}{
+		{name: "http/protobuf posts to the signal's path", protocol: ProtocolHTTP, wantPosted: true},
+		{name: "grpc speaks gRPC and posts nothing", protocol: ProtocolGRPC, wantPosted: false},
+	}
+}
+
+// exportProbeContext bounds one export attempt, so a gRPC client talking to a
+// listener that cannot answer it gives up rather than holding the test.
+func exportProbeContext(t *testing.T) context.Context {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// TestNewTraceExporter_TheProtocolDecidesWhatTheCollectorIsAsked covers the
+// dispatch every trace export goes through.
+//
+// Both branches return *otlptrace.Exporter, so the value proves nothing and an
+// inverted condition here would be invisible to any test that only checked the
+// call succeeded: the process would announce telemetry enabled, the operator
+// would have configured http/protobuf, and the collector would be receiving
+// gRPC on a port that does not speak it.
+func TestNewTraceExporter_TheProtocolDecidesWhatTheCollectorIsAsked(t *testing.T) {
+	for _, tt := range protocolCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			probe := startCollectorProbe(t)
+			ctx := exportProbeContext(t)
+
+			exporter, err := newTraceExporter(ctx, tt.protocol)
+			if err != nil {
+				t.Fatalf("newTraceExporter(%q): %v", tt.protocol, err)
+			}
+			t.Cleanup(func() { _ = exporter.Shutdown(exportProbeContext(t)) })
+
+			// The error is deliberately not asserted: the gRPC leg is expected
+			// to fail against this listener, and what is being measured is what
+			// the listener saw rather than whether the attempt succeeded.
+			_ = exporter.ExportSpans(ctx, []sdktrace.ReadOnlySpan{endedSpan(t)})
+
+			if got := probe.asked("/v1/traces"); got != tt.wantPosted {
+				t.Errorf("the collector was asked for /v1/traces = %v under protocol %q, want %v",
+					got, tt.protocol, tt.wantPosted)
+			}
+		})
+	}
+}
+
+// TestNewMetricExporter_TheProtocolDecidesWhatTheCollectorIsAsked is the same
+// dispatch for metrics, asserted the same way so the three cannot drift apart.
+func TestNewMetricExporter_TheProtocolDecidesWhatTheCollectorIsAsked(t *testing.T) {
+	for _, tt := range protocolCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			probe := startCollectorProbe(t)
+			ctx := exportProbeContext(t)
+
+			exporter, err := newMetricExporter(ctx, tt.protocol)
+			if err != nil {
+				t.Fatalf("newMetricExporter(%q): %v", tt.protocol, err)
+			}
+			t.Cleanup(func() { _ = exporter.Shutdown(exportProbeContext(t)) })
+
+			_ = exporter.Export(ctx, &metricdata.ResourceMetrics{
+				Resource: resource.Empty(),
+				ScopeMetrics: []metricdata.ScopeMetrics{{
+					Scope: instrumentation.Scope{Name: "telemetry-test"},
+					Metrics: []metricdata.Metrics{{
+						Name: "probe",
+						Data: metricdata.Sum[int64]{
+							Temporality: metricdata.CumulativeTemporality,
+							IsMonotonic: true,
+							DataPoints:  []metricdata.DataPoint[int64]{{Value: 1}},
+						},
+					}},
+				}},
+			})
+
+			if got := probe.asked("/v1/metrics"); got != tt.wantPosted {
+				t.Errorf("the collector was asked for /v1/metrics = %v under protocol %q, want %v",
+					got, tt.protocol, tt.wantPosted)
+			}
+		})
+	}
+}
+
+// TestNewLogExporter_TheProtocolDecidesWhatTheCollectorIsAsked is the same
+// dispatch for log records.
+func TestNewLogExporter_TheProtocolDecidesWhatTheCollectorIsAsked(t *testing.T) {
+	for _, tt := range protocolCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			probe := startCollectorProbe(t)
+			ctx := exportProbeContext(t)
+
+			exporter, err := newLogExporter(ctx, tt.protocol)
+			if err != nil {
+				t.Fatalf("newLogExporter(%q): %v", tt.protocol, err)
+			}
+			t.Cleanup(func() { _ = exporter.Shutdown(exportProbeContext(t)) })
+
+			_ = exporter.Export(ctx, []sdklog.Record{{}})
+
+			if got := probe.asked("/v1/logs"); got != tt.wantPosted {
+				t.Errorf("the collector was asked for /v1/logs = %v under protocol %q, want %v",
+					got, tt.protocol, tt.wantPosted)
+			}
+		})
+	}
+}
+
+// endedSpan produces one finished span for an exporter to carry, since
+// ExportSpans short-circuits on an empty batch and would reach no client at
+// all.
+func endedSpan(t *testing.T) sdktrace.ReadOnlySpan {
+	t.Helper()
+
+	_, span := sdktrace.NewTracerProvider().Tracer("telemetry-test").Start(context.Background(), "probe")
+	span.End()
+
+	readOnly, ok := span.(sdktrace.ReadOnlySpan)
+	if !ok {
+		t.Fatalf("the SDK returned %T, which an exporter cannot carry", span)
+	}
+	return readOnly
 }
