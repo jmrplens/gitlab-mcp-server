@@ -3,6 +3,7 @@
 package serverpool
 
 import (
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -274,5 +275,98 @@ func TestAuthRateLimiter_Cleanup_KeepsTheCapWarningWhileTheTableIsFull(t *testin
 	limiter.mu.Unlock()
 	if !rearmed {
 		t.Error("the at-capacity warning stayed suppressed after the table dropped below the cap")
+	}
+}
+
+// TestAuthRateLimiter_ARecordAtTheWindowEdge_IsStillLive verifies that the
+// window is inclusive at its own boundary: a record whose age is exactly the
+// window has not lapsed, so RecordFailure adds to its count instead of
+// restarting it, and IsBlocked still answers from it instead of deleting it.
+//
+// The two comparisons point opposite ways and only agree because of where each
+// puts the boundary. RecordFailure keeps a record while its age is <= the
+// window; IsBlocked expires one whose age is > it. Move either to the other
+// side and the window becomes two boundaries that nearly coincide: read
+// exclusively in the first, a client sitting at the edge has its count silently
+// restarted and can fail forever without ever being blocked; read inclusively
+// in the second, the block is dropped a tick before the count stops
+// accumulating.
+//
+// The edge is reached through saturating duration arithmetic rather than by
+// waiting for it, because both readers take the clock inside the call and no
+// test can land on an exact nanosecond. A window of the maximum Duration with a
+// record dated at the zero Time is the one pair that meets: Time.Sub returns
+// maxDuration when the real difference overflows a Duration, so
+// time.Since(firstAt) is exactly the window and nothing else in either
+// expression moves. That equality is asserted first, so the day it stops
+// holding this test says so rather than passing vacuously.
+func TestAuthRateLimiter_ARecordAtTheWindowEdge_IsStillLive(t *testing.T) {
+	limiter := NewAuthRateLimiter(2, time.Duration(math.MaxInt64))
+
+	limiter.mu.Lock()
+	limiter.failures["10.0.0.1"] = &failureRecord{count: 2, firstAt: time.Time{}}
+	limiter.mu.Unlock()
+
+	if elapsed := time.Since(time.Time{}); elapsed != limiter.window {
+		t.Fatalf("the window edge was not reached: time.Since(zero time) = %v, window = %v", elapsed, limiter.window)
+	}
+
+	if !limiter.IsBlocked("10.0.0.1") {
+		t.Error("a record exactly at the window edge was read as lapsed: the block ends before the count does")
+	}
+	if got := tableSize(t, limiter); got != 1 {
+		t.Errorf("tracked keys = %d after IsBlocked at the edge, want the record kept", got)
+	}
+
+	limiter.RecordFailure("10.0.0.1")
+
+	limiter.mu.Lock()
+	rec, tracked := limiter.failures["10.0.0.1"]
+	count := 0
+	if tracked {
+		count = rec.count
+	}
+	limiter.mu.Unlock()
+
+	if !tracked {
+		t.Fatal("the record is gone, so nothing says what the failure at the edge was counted into")
+	}
+	if count != 3 {
+		t.Errorf("count = %d after a failure at the window edge, want 3: the record was restarted instead of counted", count)
+	}
+}
+
+// TestAuthRateLimiter_SweepLocked_DropsOnlyWhatIsPastTheWindow verifies that
+// the sweep draws its boundary where the two readers draw theirs: a record
+// exactly the window old is kept, and one a nanosecond older is dropped.
+//
+// Read inclusively here, the sweep would delete a record RecordFailure is still
+// counting into and IsBlocked is still blocking on. It runs on the insert path
+// as well as from Cleanup, so a client at the limit would only have to survive
+// one flood-triggered sweep to have its count forgotten, which is the
+// on-demand unblocking the cap deliberately refuses to offer.
+//
+// Unlike its two callers the sweep is handed the instant it judges against, so
+// its edge needs no saturation: a record dated now.Add(-window) is exactly the
+// window old by the clock this call is using, and Add keeps the monotonic
+// reading that makes the subtraction exact.
+func TestAuthRateLimiter_SweepLocked_DropsOnlyWhatIsPastTheWindow(t *testing.T) {
+	const window = time.Hour
+	limiter := NewAuthRateLimiter(2, window)
+	now := time.Now()
+
+	limiter.mu.Lock()
+	limiter.failures["at-the-edge"] = &failureRecord{count: 2, firstAt: now.Add(-window)}
+	limiter.failures["one-past-it"] = &failureRecord{count: 2, firstAt: now.Add(-window - time.Nanosecond)}
+	limiter.sweepLocked(now)
+	_, edgeKept := limiter.failures["at-the-edge"]
+	_, pastKept := limiter.failures["one-past-it"]
+	limiter.mu.Unlock()
+
+	if !edgeKept {
+		t.Error("a record exactly at the window was swept: the sweep expires a window the other two readers still call live")
+	}
+	if pastKept {
+		t.Error("a record one nanosecond past the window survived the sweep")
 	}
 }
