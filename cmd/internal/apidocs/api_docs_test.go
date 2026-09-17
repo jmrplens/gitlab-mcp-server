@@ -333,6 +333,38 @@ func TestRequest_Spacing_IsTheOptionTheCallerGave(t *testing.T) {
 	}
 }
 
+// TestFetchTuningConstants_ArePausesRatherThanZero states what the fetch
+// tuning constants have to be rather than repeating what they are.
+//
+// Every other assertion about them reads a constant back through the code that
+// uses it: the spacing table above expects baseSpacing, so a baseSpacing of
+// zero moves both sides of the comparison and passes. That is not
+// hypothetical. Mutating 500 * time.Millisecond into 500 / time.Millisecond
+// yields zero, compiles, and survives this whole suite: the pause that keeps a
+// 250-page sweep under GitLab's raw rate limiter disappears, every page is
+// asked for as fast as the network allows, and nothing fails.
+func TestFetchTuningConstants_ArePausesRatherThanZero(t *testing.T) {
+	if baseSpacing <= 0 {
+		t.Errorf("baseSpacing = %v; a non-positive spacing is one sleepCtx returns from at once, so a sweep asks GitLab for every page with no pause between them",
+			baseSpacing)
+	}
+	if baseSpacing > time.Minute {
+		t.Errorf("baseSpacing = %v, want at most a minute: it is paid once per page, so a 250-page sweep pays it 250 times",
+			baseSpacing)
+	}
+	if maxBackoff <= baseSpacing {
+		t.Errorf("maxBackoff = %v, want more than baseSpacing (%v): a ceiling below the ordinary spacing would make retrying the fastest path through this package",
+			maxBackoff, baseSpacing)
+	}
+	if maxAttempts < 2 {
+		t.Errorf("maxAttempts = %d, want at least 2: a single attempt is not a retry", maxAttempts)
+	}
+	if DefaultMaxAge <= 0 {
+		t.Errorf("DefaultMaxAge = %v; a non-positive window makes every cached copy stale on arrival, so the cache never serves anything and every run re-downloads 250 pages",
+			DefaultMaxAge)
+	}
+}
+
 // TestSleepCtx_Scenarios_WaitsOrHonorsCancellation verifies the production
 // sleep (the one TestMain replaces for the other tests): a non-positive
 // duration returns at once with the context's state, a short wait elapses,
