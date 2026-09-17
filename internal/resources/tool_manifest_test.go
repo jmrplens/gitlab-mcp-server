@@ -251,6 +251,108 @@ func TestToolManifest_MetaSurfaceSkipsCatalogActionsMissingFromRoutes(t *testing
 	}
 }
 
+// TestToolManifest_MetaSurfaceWithNoCatalog_StillPublishesItsRoutes verifies
+// that a meta manifest built without a catalog publishes an entry per route
+// instead of refusing or panicking.
+//
+// The catalog is what supplies an entry's domain, title and description, and
+// this is the surface that has to work when it is absent: the manifest still
+// has to tell a client what it can call. Every other meta test passes a
+// catalog, so the branch that survives without one had never been taken —
+// which also means a nil dereference on that path would have shipped.
+func TestToolManifest_MetaSurfaceWithNoCatalog_StillPublishesItsRoutes(t *testing.T) {
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceMeta,
+		Tools:   []*mcp.Tool{{Name: "gitlab_widget", Title: "Widget"}},
+		MetaRoutes: map[string]toolutil.ActionMap{
+			"gitlab_widget": {"archive": toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}}},
+		},
+	})
+
+	detail := readToolDetail(t, session, "gitlab://tools/gitlab_widget.archive")
+	if detail.Kind != toolManifestKindMetaAction || detail.Tool != "gitlab_widget" || detail.Action != "archive" {
+		t.Errorf("detail = %+v, want the route published as a meta action", detail)
+	}
+	if detail.Call.ActionLocation != "action" || detail.Call.ParamsLocation != "params" {
+		t.Errorf("call shape = %+v, want the meta dispatcher's shape", detail.Call)
+	}
+}
+
+// TestToolManifest_MetaSurfaceEntriesCarryTheCatalogsMetadata verifies that a
+// meta entry the catalog knows about is published with the catalog's domain,
+// title and description, not just with the ID its route provides.
+//
+// Why this needs its own test: the route map alone already produces an entry
+// for every action, under the same ID, so a manifest built with the catalog
+// ignored entirely has the same entry count and the same IDs as a correct
+// one. What it loses is everything a model reads to choose between entries —
+// which is the whole reason the manifest consults the catalog at all — and no
+// assertion on counts or IDs can see that loss.
+func TestToolManifest_MetaSurfaceEntriesCarryTheCatalogsMetadata(t *testing.T) {
+	catalog := widgetCatalog(t)
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface:    toolSurfaceMeta,
+		Tools:      []*mcp.Tool{{Name: "gitlab_widget", Title: "Widget"}},
+		Catalog:    catalog,
+		MetaRoutes: catalog.ActionMaps(),
+	})
+
+	detail := readToolDetail(t, session, "gitlab://tools/gitlab_widget.delete")
+	if detail.Domain != "widget" {
+		t.Errorf("domain = %q, want widget from the catalog group", detail.Domain)
+	}
+	if detail.Title != "Delete Widget" {
+		t.Errorf("title = %q, want the catalog's declared title", detail.Title)
+	}
+	if detail.Description != "Delete a widget." {
+		t.Errorf("description = %q, want the catalog's description", detail.Description)
+	}
+}
+
+// TestToolManifest_VisibleTools_AreSortedAndReadTheirAnnotations verifies the
+// two things the visible-tools projection is responsible for: a deterministic
+// order, and hints read from each tool's annotations rather than assumed.
+//
+// The order matters because the manifest is served to clients that diff it and
+// to a freshness gate that compares bytes; a projection that preserved
+// registration order would churn on nothing. The annotations matter because
+// the two hints are read through different shapes — a bool and a pointer —
+// and a tool that sets one and leaves the other unset is the case that tells
+// "GitLab says this is not destructive" from "nobody said".
+func TestToolManifest_VisibleTools_AreSortedAndReadTheirAnnotations(t *testing.T) {
+	destructive := true
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Tools: []*mcp.Tool{
+			{Name: "gitlab_zeta", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}},
+			{Name: "gitlab_alpha", Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive}},
+			{Name: "gitlab_mid"},
+		},
+	})
+
+	manifest := readToolManifest(t, session, "gitlab://tools")
+	names := make([]string, 0, len(manifest.VisibleTools))
+	for _, tool := range manifest.VisibleTools {
+		names = append(names, tool.Name)
+	}
+	if got := strings.Join(names, ","); got != "gitlab_alpha,gitlab_mid,gitlab_zeta" {
+		t.Errorf("visible tools = %q, want them sorted by name whatever order they were registered in", got)
+	}
+
+	byName := make(map[string]ToolSurfaceVisibleTool, len(manifest.VisibleTools))
+	for _, tool := range manifest.VisibleTools {
+		byName[tool.Name] = tool
+	}
+	if tool := byName["gitlab_zeta"]; !tool.ReadOnly || tool.Destructive {
+		t.Errorf("gitlab_zeta = %+v, want read_only with no destructive hint set", tool)
+	}
+	if tool := byName["gitlab_alpha"]; tool.ReadOnly || !tool.Destructive {
+		t.Errorf("gitlab_alpha = %+v, want destructive and not read-only", tool)
+	}
+	if tool := byName["gitlab_mid"]; tool.ReadOnly || tool.Destructive {
+		t.Errorf("gitlab_mid = %+v, want neither hint for a tool carrying no annotations", tool)
+	}
+}
+
 // TestToolManifestHelpers_DefensiveBranches verifies the defensive
 // branches of [actionTitle] (no individual tool title, no tool/action
 // names) and [metaRouteVisible] (nil route map).
@@ -286,6 +388,116 @@ func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
 	// of indexing a non-existent catalog.
 	if index := newSeeAlsoIndex(nil); index != nil {
 		t.Fatalf("newSeeAlsoIndex(nil) = %v, want nil", index)
+	}
+}
+
+// TestActionTitle_NeedsBothNamesOrADeclaredOne states the three answers
+// [actionTitle] can give, because the manifest's Title is what a model reads
+// to tell two entries apart and a half-derived one ("_create", "Gitlab
+// Widget ") is worse than none at all.
+//
+// The declared title winning is the half that had no test: every entry in the
+// fixtures either declared one or derived one, and nothing compared the two,
+// so the precedence could have been inverted and the manifest would still
+// have carried a plausible-looking title for every entry.
+func TestActionTitle_NeedsBothNamesOrADeclaredOne(t *testing.T) {
+	declared := actioncatalog.Action{
+		ToolName:       "gitlab_widget",
+		Name:           "delete",
+		IndividualTool: toolutil.IndividualToolSpec{Title: "Delete Widget"},
+	}
+	if title := actionTitle(declared); title != "Delete Widget" {
+		t.Errorf("actionTitle(declared) = %q, want the declared title to win over the derived one", title)
+	}
+
+	derived := actionTitle(actioncatalog.Action{ToolName: "gitlab_widget", Name: "delete"})
+	lowered := strings.ToLower(derived)
+	if !strings.Contains(lowered, "widget") || !strings.Contains(lowered, "delete") {
+		t.Errorf("actionTitle(undeclared) = %q, want a title derived from both the tool and the action name", derived)
+	}
+
+	// Either name alone is not enough: both halves of the pair are needed
+	// before a title is derived at all.
+	if title := actionTitle(actioncatalog.Action{Name: "create"}); title != "" {
+		t.Errorf("actionTitle(no tool name) = %q, want empty", title)
+	}
+	if title := actionTitle(actioncatalog.Action{ToolName: "gitlab_widget"}); title != "" {
+		t.Errorf("actionTitle(no action name) = %q, want empty", title)
+	}
+}
+
+// TestSeeAlsoIndex_SkipsActionsWithNoIndividualToolName verifies that an
+// action projecting no individual tool is left out of the index rather than
+// stored under the empty name, and that a resolver built on that index says
+// "unknown" for a name it does not hold.
+//
+// Both halves are about the same failure: "See also: " clauses are addressed
+// in individual-tool names, so an action indexed under "" would be the answer
+// to every reference this surface cannot resolve, and the clause it rewrote
+// would point a model at an action it was never asked about.
+func TestSeeAlsoIndex_SkipsActionsWithNoIndividualToolName(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+	group.SetAction(actioncatalog.Action{
+		Name:           "create",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_create"},
+	})
+	group.SetAction(actioncatalog.Action{Name: "delete"})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	index := newSeeAlsoIndex(catalog)
+	if _, indexed := index[""]; indexed {
+		t.Error("newSeeAlsoIndex indexed an action under the empty name; every unresolvable reference would resolve to it")
+	}
+	if len(index) != 1 {
+		t.Errorf("newSeeAlsoIndex() holds %d entries, want only the action that projects an individual tool", len(index))
+	}
+
+	resolve := metaSeeAlso(index, map[string]toolutil.ActionMap{"gitlab_widget": {"create": {}}})
+	if id, ok := resolve("gitlab_widget_create"); !ok || id != "gitlab_widget.create" {
+		t.Errorf("metaSeeAlso(known name) = (%q, %v), want (gitlab_widget.create, true)", id, ok)
+	}
+	if id, ok := resolve("gitlab_widget_delete"); ok {
+		t.Errorf("metaSeeAlso(name the index does not hold) = (%q, true), want unresolved", id)
+	}
+}
+
+// TestParseToolManifestURI_AcceptsOneIDUnderThePrefix pins what the detail
+// template accepts, one shape per row. The handler turns an unparsed URI into
+// a resource-not-found, so every row here is the difference between serving
+// an entry and refusing the read.
+//
+// The rejected shapes are the point: a URI that does not carry the prefix
+// must not be read as an ID (it would be the whole URI), and a slash inside
+// the ID must not be accepted (entry IDs carry none, and the SDK's template
+// matching would already have handed this to another resource).
+func TestParseToolManifestURI_AcceptsOneIDUnderThePrefix(t *testing.T) {
+	cases := []struct {
+		name string
+		uri  string
+		want string
+	}{
+		{name: "a canonical action ID", uri: "gitlab://tools/project.get", want: "project.get"},
+		{name: "an individual tool name", uri: "gitlab://tools/gitlab_project_get", want: "gitlab_project_get"},
+		{name: "case and padding are normalized", uri: "gitlab://tools/  Project.Get  ", want: "project.get"},
+		{name: "another resource's URI is not an ID", uri: "gitlab://project/42/issues", want: ""},
+		// Without the prefix there is no ID, whatever the rest looks like.
+		// A bare word is the one shape that says so on its own: every other
+		// rejected URI here also carries a slash, so it would still be
+		// refused by the rule about slashes even if the prefix were not
+		// required at all.
+		{name: "a bare word carries no prefix and so names no entry", uri: "tools", want: ""},
+		{name: "the prefix alone names no entry", uri: "gitlab://tools/", want: ""},
+		{name: "an ID may not carry a slash", uri: "gitlab://tools/project/get", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseToolManifestURI(tc.uri); got != tc.want {
+				t.Errorf("parseToolManifestURI(%q) = %q, want %q", tc.uri, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -497,6 +709,57 @@ func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T
 				"anyOf":    []any{map[string]any{"required": []any{"project_id", "name"}}},
 			},
 			"project_id", "name",
+		},
+		{
+			// A branch that adds nothing beyond the top level is not an
+			// alternative, and publishing it as an empty group would tell a
+			// client "satisfy at least one of: nothing", which any call
+			// already does.
+			"a branch adding nothing beyond the top level contributes no group",
+			map[string]any{
+				"required": []any{"project_id"},
+				"anyOf": []any{
+					map[string]any{"required": []any{"project_id"}},
+					map[string]any{"required": []any{"name"}},
+				},
+			},
+			"project_id", "name",
+		},
+		{
+			// The SDK types a nullable Go slice as ["null","array"], so the
+			// null half is schema plumbing rather than something a caller
+			// passes; a genuinely multi-typed parameter keeps every type it
+			// declares, joined.
+			"a multi-type parameter drops null and joins what is left",
+			map[string]any{
+				"required": []any{"project_id", "tags"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": []any{"integer", "string"}},
+					"tags":       map[string]any{"type": []any{"null", "array"}},
+				},
+			},
+			"project_id:integer|string,tags:array", "",
+		},
+		{
+			// A type list is JSON, so its entries can be anything; only
+			// non-empty strings name a type, and an entry that is neither
+			// must not reach the manifest as an empty type name.
+			"a type list ignores entries that do not name a type",
+			map[string]any{
+				"required": []any{"value"},
+				"properties": map[string]any{
+					"value": map[string]any{"type": []any{"", 42, "boolean"}},
+				},
+			},
+			"value:boolean", "",
+		},
+		{
+			// The same rule on the requirement list itself: an entry that is
+			// not a name must be dropped rather than published as a
+			// parameter with no name, which a client cannot send.
+			"a branch's requirement list ignores entries that do not name a parameter",
+			map[string]any{"oneOf": []any{map[string]any{"required": []any{"branch", 42, ""}}}},
+			"", "branch",
 		},
 	}
 	for _, tt := range tests {

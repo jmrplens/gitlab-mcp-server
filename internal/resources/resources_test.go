@@ -831,23 +831,35 @@ func TestFileBlobResource_BadURI(t *testing.T) {
 // TestExtractFileBlobURI verifies that [extractFileBlobURI] correctly splits
 // a file blob URI into project_id, ref, and path components, including paths
 // with multiple slashes.
+//
+// Every rejected shape is listed, and each one is listed because it is the
+// only input that can tell one guard from the next: a URI whose project
+// segment is empty is what separates "/file/ must not be at the start" from
+// "/file/ must be present", and a URI whose ref is empty is what separates the
+// three operands of the final guard. The success flag is asserted beside the
+// components because it is what every call site now branches on, and a helper
+// that returned the components without it would be answered by a caller
+// re-deriving the same fact from emptiness — the branch this flag removed.
 func TestExtractFileBlobURI(t *testing.T) {
 	tests := []struct {
 		uri, projectID, ref, path string
+		ok                        bool
 	}{
-		{"gitlab://project/42/file/main/src/main.go", "42", "main", "src/main.go"},
-		{"gitlab://project/group%2Frepo/file/v1.0/README.md", "group%2Frepo", "v1.0", "README.md"},
-		{"gitlab://project/42/file/main/", "", "", ""},
-		{"gitlab://project/42/file/main", "", "", ""},
-		{"gitlab://project/42/commit/abc", "", "", ""},
-		{"", "", "", ""},
+		{"gitlab://project/42/file/main/src/main.go", "42", "main", "src/main.go", true},
+		{"gitlab://project/group%2Frepo/file/v1.0/README.md", "group%2Frepo", "v1.0", "README.md", true},
+		{"gitlab://project/42/file/main/", "", "", "", false},
+		{"gitlab://project/42/file/main", "", "", "", false},
+		{"gitlab://project/42/file//README.md", "", "", "", false},
+		{"gitlab://project//file/main/README.md", "", "", "", false},
+		{"gitlab://project/42/commit/abc", "", "", "", false},
+		{"", "", "", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.uri, func(t *testing.T) {
-			pid, ref, path := extractFileBlobURI(tt.uri)
-			if pid != tt.projectID || ref != tt.ref || path != tt.path {
-				t.Errorf("extractFileBlobURI(%q) = (%q,%q,%q), want (%q,%q,%q)",
-					tt.uri, pid, ref, path, tt.projectID, tt.ref, tt.path)
+			pid, ref, path, ok := extractFileBlobURI(tt.uri)
+			if pid != tt.projectID || ref != tt.ref || path != tt.path || ok != tt.ok {
+				t.Errorf("extractFileBlobURI(%q) = (%q,%q,%q,%v), want (%q,%q,%q,%v)",
+					tt.uri, pid, ref, path, ok, tt.projectID, tt.ref, tt.path, tt.ok)
 			}
 		})
 	}
@@ -1043,19 +1055,32 @@ func TestExtractMiddle(t *testing.T) {
 // TestExtractTwoParts uses table-driven subtests to verify that
 // [extractTwoParts] correctly splits a URI into two dynamic segments
 // around a separator.
+//
+// It also pins the invariant the fifteen call sites rely on: the helper
+// either fills both segments or neither, and says which through ok. Before
+// that flag existed each caller re-tested both segments for emptiness, and
+// the second test was a branch no URI could reach — the shape a mutation
+// survives because nothing can observe it.
 func TestExtractTwoParts(t *testing.T) {
 	tests := []struct {
 		uri, prefix, sep, wantA, wantB string
+		wantOK                         bool
 	}{
-		{"gitlab://project/42/pipeline/100", testURIProjectPrefix, "/pipeline/", "42", "100"},
-		{"gitlab://project/42/mr/5", testURIProjectPrefix, "/mr/", "42", "5"},
-		{"invalid", testURIProjectPrefix, "/pipeline/", "", ""},
+		{"gitlab://project/42/pipeline/100", testURIProjectPrefix, "/pipeline/", "42", "100", true},
+		{"gitlab://project/42/mr/5", testURIProjectPrefix, "/mr/", "42", "5", true},
+		{"invalid", testURIProjectPrefix, "/pipeline/", "", "", false},
+		{"gitlab://project//pipeline/100", testURIProjectPrefix, "/pipeline/", "", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.uri, func(t *testing.T) {
-			a, b := extractTwoParts(tt.uri, tt.prefix, tt.sep)
-			if a != tt.wantA || b != tt.wantB {
-				t.Errorf("extractTwoParts(%q, %q, %q) = (%q, %q), want (%q, %q)", tt.uri, tt.prefix, tt.sep, a, b, tt.wantA, tt.wantB)
+			a, b, ok := extractTwoParts(tt.uri, tt.prefix, tt.sep)
+			if a != tt.wantA || b != tt.wantB || ok != tt.wantOK {
+				t.Errorf("extractTwoParts(%q, %q, %q) = (%q, %q, %v), want (%q, %q, %v)",
+					tt.uri, tt.prefix, tt.sep, a, b, ok, tt.wantA, tt.wantB, tt.wantOK)
+			}
+			if ok == (a == "" && b == "") {
+				t.Errorf("extractTwoParts(%q, %q, %q) = (%q, %q, %v): ok must say exactly whether both segments were filled",
+					tt.uri, tt.prefix, tt.sep, a, b, ok)
 			}
 		})
 	}
@@ -1912,20 +1937,23 @@ func TestExtractMiddle_NoSuffix(t *testing.T) {
 }
 
 // TestExtractTwoParts_MissingSeparator verifies that [extractTwoParts]
-// returns empty strings when the URI does not contain the separator.
+// returns empty strings, and ok false, when the URI does not contain the
+// separator.
 func TestExtractTwoParts_MissingSeparator(t *testing.T) {
-	a, b := extractTwoParts("gitlab://project/42", "gitlab://project/", "/pipeline/")
-	if a != "" || b != "" {
-		t.Errorf("expected empty strings, got %q and %q", a, b)
+	a, b, ok := extractTwoParts("gitlab://project/42", "gitlab://project/", "/pipeline/")
+	if a != "" || b != "" || ok {
+		t.Errorf("expected (%q, %q, false), got (%q, %q, %v)", "", "", a, b, ok)
 	}
 }
 
 // TestExtractTwoParts_EmptySecondPart verifies that [extractTwoParts] returns
-// empty strings when the second segment after the separator is empty.
+// empty strings, and ok false, when the second segment after the separator is
+// empty. The first segment is dropped with it on purpose: callers branch on
+// one flag, so a half-filled result would be a shape they cannot express.
 func TestExtractTwoParts_EmptySecondPart(t *testing.T) {
-	a, b := extractTwoParts("gitlab://project/42/pipeline/", "gitlab://project/", "/pipeline/")
-	if a != "" || b != "" {
-		t.Errorf("expected empty strings, got %q and %q", a, b)
+	a, b, ok := extractTwoParts("gitlab://project/42/pipeline/", "gitlab://project/", "/pipeline/")
+	if a != "" || b != "" || ok {
+		t.Errorf("expected (%q, %q, false), got (%q, %q, %v)", "", "", a, b, ok)
 	}
 }
 
@@ -2901,5 +2929,312 @@ func TestMarshalResourceList_UnmarshalableValue_FailsRatherThanEmitsAnEmptyList(
 	}
 	if result != nil {
 		t.Errorf("marshalResourceList returned %+v alongside its error, want nil", result)
+	}
+}
+
+// Optional-field tests. Each resource below copies a GitLab field into the
+// payload only when GitLab sent one, and until these tests existed the
+// fixtures ran both sides of that guard while asserting neither: the guard
+// could be inverted — publishing nothing for an object that has the field, and
+// dereferencing nothing for one that has not — and every test stayed green.
+// The timestamps in the fixtures deliberately carry a non-UTC offset, so what
+// is asserted is the conversion this package performs rather than an echo of
+// the bytes GitLab sent.
+
+// TestProjectReleasesResource_Timestamps_AreNormalizedOrOmitted verifies that
+// the releases listing publishes created_at and released_at in UTC ISO form
+// when GitLab sends them, and publishes neither when it does not.
+func TestProjectReleasesResource_Timestamps_AreNormalizedOrOmitted(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/releases" {
+			respondJSON(w, http.StatusOK, `[
+				{"tag_name":"v1.0.0","name":"Release 1.0","author":{"username":"alice"},"created_at":"2026-01-01T02:30:00+02:00","released_at":"2026-01-02T23:15:00-01:00"},
+				{"tag_name":"v0.9.0","name":"Release 0.9","author":{"username":"bob"}}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/releases"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var releases []ReleaseResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &releases); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(releases) != 2 {
+		t.Fatalf("expected 2 releases, got %d", len(releases))
+	}
+	if releases[0].CreatedAt != "2026-01-01T00:30:00Z" {
+		t.Errorf("created_at = %q, want %q", releases[0].CreatedAt, "2026-01-01T00:30:00Z")
+	}
+	if releases[0].ReleasedAt != "2026-01-03T00:15:00Z" {
+		t.Errorf("released_at = %q, want %q", releases[0].ReleasedAt, "2026-01-03T00:15:00Z")
+	}
+	if releases[1].CreatedAt != "" || releases[1].ReleasedAt != "" {
+		t.Errorf("release without timestamps = (%q, %q), want both empty", releases[1].CreatedAt, releases[1].ReleasedAt)
+	}
+}
+
+// TestProjectTagsResource_CreatedAt_IsNormalizedOrOmitted verifies that the
+// tags listing publishes a tag's creation instant in UTC ISO form when GitLab
+// sends one, and publishes nothing for a tag that carries none.
+func TestProjectTagsResource_CreatedAt_IsNormalizedOrOmitted(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/repository/tags" {
+			respondJSON(w, http.StatusOK, `[
+				{"name":"v1.0.0","target":"abc123","protected":true,"created_at":"2026-01-01T02:30:00+02:00"},
+				{"name":"v0.9.0","target":"def456","protected":false}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/tags"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var tags []TagResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &tags); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tags))
+	}
+	if tags[0].CreatedAt != "2026-01-01T00:30:00Z" {
+		t.Errorf("created_at = %q, want %q", tags[0].CreatedAt, "2026-01-01T00:30:00Z")
+	}
+	if tags[1].CreatedAt != "" {
+		t.Errorf("tag without a creation instant = %q, want empty", tags[1].CreatedAt)
+	}
+}
+
+// TestCommitResource_OptionalFields_AreNormalizedOrOmitted verifies that the
+// commit resource publishes the authored and committed instants in UTC ISO
+// form and the stats sub-object when GitLab sends them, and omits all three
+// when it does not.
+func TestCommitResource_OptionalFields_AreNormalizedOrOmitted(t *testing.T) {
+	cases := []struct {
+		name              string
+		body              string
+		authored          string
+		committed         string
+		wantStats         bool
+		wantStatsAddition int64
+	}{
+		{
+			name:              "GitLab sent both instants and the stats block",
+			body:              `{"id":"abc123def456","short_id":"abc123","title":"Fix bug","authored_date":"2026-01-01T12:00:00+02:00","committed_date":"2026-01-01T13:00:00+02:00","stats":{"additions":10,"deletions":3,"total":13}}`,
+			authored:          "2026-01-01T10:00:00Z",
+			committed:         "2026-01-01T11:00:00Z",
+			wantStats:         true,
+			wantStatsAddition: 10,
+		},
+		{
+			name: "GitLab sent neither instant nor any stats",
+			body: `{"id":"abc123def456","short_id":"abc123","title":"Fix bug"}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
+					respondJSON(w, http.StatusOK, tc.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/commit/abc123"})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			var c CommitResourceOutput
+			if err = json.Unmarshal([]byte(result.Contents[0].Text), &c); err != nil {
+				t.Fatalf(fmtUnmarshal, err)
+			}
+			if c.AuthoredDate != tc.authored {
+				t.Errorf("authored_date = %q, want %q", c.AuthoredDate, tc.authored)
+			}
+			if c.CommittedDate != tc.committed {
+				t.Errorf("committed_date = %q, want %q", c.CommittedDate, tc.committed)
+			}
+			switch {
+			case tc.wantStats && c.Stats == nil:
+				t.Error("stats were sent by GitLab and are missing from the resource")
+			case tc.wantStats && c.Stats.Additions != tc.wantStatsAddition:
+				t.Errorf("stats.additions = %d, want %d", c.Stats.Additions, tc.wantStatsAddition)
+			case !tc.wantStats && c.Stats != nil:
+				t.Errorf("stats = %+v, want none when GitLab sent none", c.Stats)
+			}
+		})
+	}
+}
+
+// TestMergeRequestNotesResource_OptionalFields_AreNormalizedOrOmitted verifies
+// that a note publishes its author and its two instants when GitLab sends
+// them, and publishes none of the three for a note that carries none.
+func TestMergeRequestNotesResource_OptionalFields_AreNormalizedOrOmitted(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/notes" {
+			respondJSON(w, http.StatusOK, `[
+				{"id":1,"body":"LGTM","author":{"username":"alice"},"created_at":"2026-01-01T02:30:00+02:00","updated_at":"2026-01-01T03:30:00+02:00"},
+				{"id":2,"body":"orphaned"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/notes"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var notes []MRNoteResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &notes); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(notes) != 2 {
+		t.Fatalf("expected 2 notes, got %d", len(notes))
+	}
+	if notes[0].Author != "alice" {
+		t.Errorf(fmtAuthorWant, notes[0].Author, "alice")
+	}
+	if notes[0].CreatedAt != "2026-01-01T00:30:00Z" {
+		t.Errorf("created_at = %q, want %q", notes[0].CreatedAt, "2026-01-01T00:30:00Z")
+	}
+	if notes[0].UpdatedAt != "2026-01-01T01:30:00Z" {
+		t.Errorf("updated_at = %q, want %q", notes[0].UpdatedAt, "2026-01-01T01:30:00Z")
+	}
+	if notes[1].Author != "" || notes[1].CreatedAt != "" || notes[1].UpdatedAt != "" {
+		t.Errorf("note without author or instants = (%q, %q, %q), want all empty",
+			notes[1].Author, notes[1].CreatedAt, notes[1].UpdatedAt)
+	}
+}
+
+// TestMergeRequestDiscussionsResource_OptionalFields_AreNormalizedOrOmitted
+// verifies the same two halves one level down, on the notes nested inside a
+// discussion thread: the discussions handler builds its own note payload and
+// so carries its own copy of the guards the flat notes listing has.
+func TestMergeRequestDiscussionsResource_OptionalFields_AreNormalizedOrOmitted(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/discussions" {
+			respondJSON(w, http.StatusOK, `[{"id":"d1","individual_note":false,"notes":[
+				{"id":11,"body":"please fix","author":{"username":"alice"},"created_at":"2026-01-01T02:30:00+02:00"},
+				{"id":12,"body":"orphaned"}
+			]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var ds []MRDiscussionResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &ds); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(ds) != 1 || len(ds[0].Notes) != 2 {
+		t.Fatalf("expected 1 discussion carrying 2 notes, got %+v", ds)
+	}
+	if ds[0].Notes[0].Author != "alice" {
+		t.Errorf(fmtAuthorWant, ds[0].Notes[0].Author, "alice")
+	}
+	if ds[0].Notes[0].CreatedAt != "2026-01-01T00:30:00Z" {
+		t.Errorf("created_at = %q, want %q", ds[0].Notes[0].CreatedAt, "2026-01-01T00:30:00Z")
+	}
+	if ds[0].Notes[1].Author != "" || ds[0].Notes[1].CreatedAt != "" {
+		t.Errorf("note without author or instant = (%q, %q), want both empty",
+			ds[0].Notes[1].Author, ds[0].Notes[1].CreatedAt)
+	}
+}
+
+// TestIssueResource_NullAssignee_IsDroppedRatherThanDereferenced verifies that
+// a null entry in GitLab's assignees array is skipped. GitLab sends a list of
+// objects and the decoder gives a nil pointer for a null one, so that guard is
+// the only thing between this resource and a panic on an ordinary read.
+func TestIssueResource_NullAssignee_IsDroppedRatherThanDereferenced(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/issues/7" {
+			respondJSON(w, http.StatusOK, `{"id":1,"iid":7,"title":"Bug","state":"opened","author":{"username":"alice"},"assignees":[{"username":"bob"},null,{"username":"carol"}]}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/issue/7"})
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	var issue IssueResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &issue); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	if len(issue.Assignees) != 2 || issue.Assignees[0] != "bob" || issue.Assignees[1] != "carol" {
+		t.Errorf("assignees = %v, want [bob carol] with the null entry dropped", issue.Assignees)
+	}
+}
+
+// TestFileBlobResource_SizeLimit_IsInclusive states which side of
+// [fileBlobMaxBytes] a file of exactly that size falls on: it is served, and
+// only the first byte past the limit is truncated. The sizes are derived from
+// the constant rather than written out, so a limit that moved would move the
+// fixture with it instead of leaving the test asserting a stale number.
+func TestFileBlobResource_SizeLimit_IsInclusive(t *testing.T) {
+	cases := []struct {
+		name          string
+		size          int
+		wantTruncated bool
+		wantContent   string
+	}{
+		{name: "exactly at the limit", size: fileBlobMaxBytes, wantContent: "hello world"},
+		{name: "one byte past the limit", size: fileBlobMaxBytes + 1, wantTruncated: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/api/v4/projects/42/repository/files/") {
+					respondJSON(w, http.StatusOK, fmt.Sprintf(
+						`{"file_name":"main.go","file_path":"src/main.go","size":%d,"encoding":"base64","ref":"main","content":"aGVsbG8gd29ybGQ="}`, tc.size,
+					))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/src/main.go"})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			var f FileBlobResourceOutput
+			if err = json.Unmarshal([]byte(result.Contents[0].Text), &f); err != nil {
+				t.Fatalf(fmtUnmarshal, err)
+			}
+			if f.Truncated != tc.wantTruncated {
+				t.Errorf("size %d: truncated = %v, want %v", tc.size, f.Truncated, tc.wantTruncated)
+			}
+			if f.Content != tc.wantContent {
+				t.Errorf("size %d: content = %q, want %q", tc.size, f.Content, tc.wantContent)
+			}
+		})
+	}
+}
+
+// TestDecodeFileContent_Base64InvalidUTF8_ReadsAsBinary verifies that a
+// payload whose base64 decodes to bytes that are not valid UTF-8 is classified
+// binary even though its file name is textual. The extension check alone
+// cannot answer this: a .md file holding arbitrary bytes would otherwise be
+// spliced into a JSON string this server promises is text.
+func TestDecodeFileContent_Base64InvalidUTF8_ReadsAsBinary(t *testing.T) {
+	// "//4=" decodes to the two bytes 0xff 0xfe, which are not valid UTF-8.
+	f := &gl.File{FileName: "README.md", Encoding: "base64", Content: "//4="}
+	content, category := decodeFileContent(f)
+	if content != "" || category != "binary" {
+		t.Errorf("decodeFileContent(invalid utf-8) = (%q, %q), want (\"\", \"binary\")", content, category)
 	}
 }
