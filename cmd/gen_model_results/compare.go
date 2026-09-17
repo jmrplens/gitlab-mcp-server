@@ -19,10 +19,74 @@
 package main
 
 import (
+	"hash/fnv"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 )
+
+// caseCoverage is which of the corpus a row was measured on.
+//
+// The corpus digest already in the key says what the corpus *is*. It does not
+// say how much of it was asked, and those are different questions: a run
+// narrowed with MODELEVAL_CASES puts a handful of cases and publishes a row
+// whose key is identical to a full run's. Seated in one table under a caption
+// asserting the two agree on everything that matters, a model measured on
+// twelve cases reads beside one measured on 258 as though the comparison were
+// honest, and the only thing distinguishing them is a denominator a reader has
+// to notice on their own.
+//
+// So a row carries the set it covers. Two rows sharing a table must have
+// measured the same cases and not merely the same number of them, which is why
+// the key holds a digest of the identifiers rather than a count; the count is
+// what the caption prints, because a reader wants to know the size and cannot
+// read a hash.
+type caseCoverage struct {
+	// Digest fingerprints the case identifiers behind the row, empty for a row
+	// that records none.
+	Digest string
+	// Cases is how many there are, and Corpus how many the corpus at HEAD has.
+	// Every published row was measured against that corpus: a row whose run
+	// answered an older one is refused by the stale-corpus rule before it can
+	// reach here.
+	Cases  int
+	Corpus int
+}
+
+// coverageOf reads what a row covers.
+func coverageOf(one row) caseCoverage {
+	names := sortedCaseNames(one.Cases)
+	sum := fnv.New64a()
+	for _, name := range names {
+		_, _ = sum.Write([]byte(name))
+		_, _ = sum.Write([]byte{0})
+	}
+	digest := ""
+	if len(names) > 0 {
+		digest = strconv.FormatUint(sum.Sum64(), 16)
+	}
+	return caseCoverage{Digest: digest, Cases: len(names), Corpus: len(modelcorpus.Keys())}
+}
+
+// String says how much of the corpus a row covers, for the caption, and
+// nothing at all for a row that records no cases.
+//
+// Silence rather than a sentence: the caption is a list of things two rows were
+// found to agree on, and "a coverage neither of them recorded" is not an
+// agreement. A row like that is one written before the cases were carried, and
+// saying so in every caption would be noise a reader has to step over.
+func (c caseCoverage) String() string {
+	switch {
+	case c.Cases == 0:
+		return ""
+	case c.Corpus > 0 && c.Cases == c.Corpus:
+		return "the whole corpus (" + strconv.Itoa(c.Cases) + " cases)"
+	default:
+		return strconv.Itoa(c.Cases) + " of " + strconv.Itoa(c.Corpus) + " cases (`" + c.Digest + "`)"
+	}
+}
 
 // vendorKey is what two rows must agree on before they may be read down one
 // table as a comparison between models.
@@ -37,6 +101,7 @@ type vendorKey struct {
 	ContractDigest   string
 	ToolSchemaDigest string
 	Repeat           int
+	Coverage         caseCoverage
 }
 
 // crossVendorKey is the row key with the model taken out: everything else has
@@ -55,6 +120,7 @@ func crossVendorKey(one row) vendorKey {
 		ContractDigest:   one.Key.ContractDigest,
 		ToolSchemaDigest: one.Key.ToolSchemaDigest,
 		Repeat:           one.Key.Repeat,
+		Coverage:         coverageOf(one),
 	}
 }
 
@@ -74,8 +140,11 @@ func (k vendorKey) String() string {
 	if k.SliceSize > 0 {
 		parts = append(parts, "slice of "+strconv.Itoa(k.SliceSize)+" tools")
 	}
+	parts = append(parts, "corpus `"+k.CorpusDigest+"`")
+	if covered := k.Coverage.String(); covered != "" {
+		parts = append(parts, covered)
+	}
 	parts = append(parts,
-		"corpus `"+k.CorpusDigest+"`",
 		"contract `"+k.ContractDigest+"`",
 		"tool schemas `"+k.ToolSchemaDigest+"`",
 		"repeat "+strconv.Itoa(k.Repeat),
@@ -93,6 +162,7 @@ type surfaceKey struct {
 	CorpusDigest   string
 	ContractDigest string
 	Repeat         int
+	Coverage       caseCoverage
 }
 
 // crossSurfaceKey is the row key with the surface and everything the surface
@@ -106,6 +176,7 @@ func crossSurfaceKey(one row) surfaceKey {
 		CorpusDigest:   one.Key.CorpusDigest,
 		ContractDigest: one.Key.ContractDigest,
 		Repeat:         one.Key.Repeat,
+		Coverage:       coverageOf(one),
 	}
 }
 
@@ -153,8 +224,11 @@ func (k surfaceKey) String() string {
 	if k.TierPin != "" {
 		parts = append(parts, "tier pinned to `"+k.TierPin+"`")
 	}
+	parts = append(parts, "corpus `"+k.CorpusDigest+"`")
+	if covered := k.Coverage.String(); covered != "" {
+		parts = append(parts, covered)
+	}
 	parts = append(parts,
-		"corpus `"+k.CorpusDigest+"`",
 		"contract `"+k.ContractDigest+"`",
 		"repeat "+strconv.Itoa(k.Repeat),
 	)

@@ -103,8 +103,11 @@ MODELEVAL_SPEND=yes MODELEVAL_CASES=MS-037 \
 MODELEVAL_MODELS='anthropic:claude-haiku-4-5-20251001' \
 make modeleval-ce
 
-make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce
+make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce
 ```
+
+`-refold` rather than `-record`, because the row this updates already stands:
+the plain fold refuses a key the record holds, and the re-fold merges into it.
 
 ## Publish what a run observed
 
@@ -112,11 +115,40 @@ A run writes observation and scores nothing. The numbers are computed when you
 fold it in:
 
 ```bash
-make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce   # fold in and redraw
-make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce   # re-score under today's rules
-make gen-model-results                                          # redraw from the record alone
-make check-model-results                                        # the offline gate CI runs
+make model-results-record MODELEVAL_SHARDS=dist/modeleval/ce    # fold in and redraw
+make model-results-refold MODELEVAL_SHARDS=dist/modeleval/ce    # merge a re-run in, case by case
+make model-results-dry-run MODELEVAL_SHARDS=dist/modeleval/ce   # rehearse the whole path into dist/
+make gen-model-results                                           # redraw from the record alone
+make check-model-results                                         # the offline gate CI runs
 ```
+
+**A re-fold merges, it does not replace.** The cases the shards measured take
+over their own entries in the row and every other case keeps the figures it
+had, so the re-run above updates MS-037 and leaves the other 257 exactly as
+they stood. Each replacement is named as it happens. This is the whole of why
+`MODELEVAL_CASES` is usable: a row is identified by its key, the set of cases
+behind it is in no part of that key, and until the row carried its cases the
+only two moves were to refuse the update or to replace a row measured over
+every case with one measured over the single case that was re-run.
+
+Each case also records the run, the day and the tree that measured it, because
+a row assembled from two runs has no single provenance and the block at the top
+of it is the last contributor's.
+
+**To see what a report looks like without paying for one**, rehearse it. A fold
+refuses every row the fake would publish, rightly, since the fake answers from
+the corpus's own key; `-dry-run` sets aside that one rule and writes into
+`dist/modeleval/dry-run/`, which Git ignores:
+
+```bash
+MODELEVAL_MODELS=fake:perfect make modeleval-ce
+make model-results-dry-run MODELEVAL_SHARDS=dist/modeleval/ce
+```
+
+What comes out is the record as it would be stored and both pages as they would
+be drawn, each opening with a banner saying the figures are a rehearsal. Nothing
+committed is touched. Every other refusal still runs, so rehearsing a run that
+is stale, filtered or unobserved tells you before a real one costs money.
 
 **Keep the shards.** They are under `dist/modeleval/`, which Git ignores, and
 they are the only thing a corrected scoring rule can be applied to: the

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
@@ -42,17 +43,22 @@ type options struct {
 	// shards names a run's record directory to fold into the committed record.
 	// Empty leaves the record as it stands.
 	shards string
-	// refold drops the rows those shards publish before folding them again,
-	// which is the whole of how a corrected scoring rule reaches a row that is
-	// already published. It is a flag rather than the default because the
-	// figures it replaces are a paid measurement: replacing them without being
-	// asked to is what the duplicate-row rule exists to refuse.
+	// refold merges those shards into the rows they publish again, case by
+	// case, which is the whole of how a corrected scoring rule or a corrected
+	// case reaches a row that is already published. It is a flag rather than
+	// the default because the figures it replaces are a paid measurement:
+	// replacing them without being asked to is what the duplicate-row rule
+	// exists to refuse.
 	refold bool
 	// render redraws the managed blocks of both pages from the record.
 	render bool
 	// check verifies the record and the pages offline instead of writing
 	// anything.
 	check bool
+	// dryRun folds and renders into a throwaway directory instead of the
+	// repository, admitting the fake provider so a rehearsal can be read as a
+	// published page would be. See [prepareDryRun].
+	dryRun bool
 }
 
 // main folds a run in, redraws the pages, or gates both.
@@ -63,9 +69,10 @@ type options struct {
 // the half update-all runs and the half a stack refreshes at its tip.
 func main() {
 	shards := flag.String("shards", "", "fold a model evaluation run's shards from this directory into the committed record")
-	refold := flag.Bool("refold", false, "with -shards: drop the rows those shards publish, naming each, and fold them again from the corpus at HEAD")
+	refold := flag.Bool("refold", false, "with -shards: merge those shards into the rows they publish again, case by case, naming each case replaced")
 	render := flag.Bool("render", false, "redraw the managed blocks of README.md and the results page from the record")
 	check := flag.Bool("check", false, "verify the committed record and the pages drawn from it, writing nothing")
+	dryRun := flag.Bool("dry-run", false, "with -shards: fold and render into "+dryRunRelDir+" instead of the repository, admitting the fake provider so a rehearsal can be read")
 	flag.Parse()
 
 	root, err := cmdutil.RepositoryRoot(".")
@@ -73,18 +80,22 @@ func main() {
 		fmt.Fprintf(os.Stderr, logLead+"find repository root: %v\n", err)
 		os.Exit(exitUsage)
 	}
-	os.Exit(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check}, os.Stdout, os.Stderr))
+	os.Exit(run(root, options{shards: *shards, refold: *refold, render: *render, check: *check, dryRun: *dryRun}, os.Stdout, os.Stderr))
 }
 
 // run is main with its inputs handed to it, so a test can drive every path
 // against a tree of its own.
 func run(root string, opts options, stdout, stderr io.Writer) int {
-	if opts.check && (opts.shards != "" || opts.render || opts.refold) {
-		fmt.Fprintln(stderr, logLead+"-check writes nothing, so it cannot be given -shards, -refold or -render")
+	if opts.check && (opts.shards != "" || opts.render || opts.refold || opts.dryRun) {
+		fmt.Fprintln(stderr, logLead+"-check writes nothing, so it cannot be given -shards, -refold, -render or -dry-run")
+		return exitUsage
+	}
+	if opts.dryRun && opts.shards == "" {
+		fmt.Fprintln(stderr, logLead+"-dry-run rehearses folding a run in, so it needs the -shards of the run to rehearse")
 		return exitUsage
 	}
 	if opts.refold && opts.shards == "" {
-		fmt.Fprintln(stderr, logLead+"-refold drops the rows a run's shards publish, so it needs the -shards those rows would come from")
+		fmt.Fprintln(stderr, logLead+"-refold merges a run's shards into the rows they publish again, so it needs the -shards those rows would come from")
 		return exitUsage
 	}
 	if opts.check {
@@ -105,12 +116,25 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, logPrefix, err)
 		return exitUsage
 	}
+
+	// A rehearsal reads the committed record and the real pages, and writes
+	// neither: from here on, root is a throwaway tree under dist/.
+	written := root
+	if opts.dryRun {
+		scratch, prepErr := prepareDryRun(root, stdout)
+		if prepErr != nil {
+			fmt.Fprintln(stderr, logPrefix, prepErr)
+			return exitUsage
+		}
+		written = scratch
+	}
+
 	if opts.shards != "" {
-		if foldErr := foldInto(&doc, opts.shards, opts.refold, stdout); foldErr != nil {
+		if foldErr := foldInto(&doc, opts.shards, opts.refold, opts.dryRun, stdout); foldErr != nil {
 			fmt.Fprintln(stderr, logPrefix, foldErr)
 			return exitUsage
 		}
-		if writeErr := writeRecord(root, doc); writeErr != nil {
+		if writeErr := writeRecord(written, doc); writeErr != nil {
 			fmt.Fprintln(stderr, logPrefix, writeErr)
 			return exitUsage
 		}
@@ -119,7 +143,7 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 	}
 
 	if opts.render {
-		changed, _, pageErr := applyPages(root, doc.Rows, false)
+		changed, _, pageErr := applyPages(written, doc.Rows, false)
 		if pageErr != nil {
 			fmt.Fprintln(stderr, logPrefix, pageErr)
 			return exitUsage
@@ -129,6 +153,12 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 		}
 		if !committed {
 			fmt.Fprintf(stdout, logLead+"no %s yet, so every block says that nothing is published\n", recordRelPath)
+		}
+	}
+	if opts.dryRun {
+		if markErr := bannerDryRun(written, stdout); markErr != nil {
+			fmt.Fprintln(stderr, logPrefix, markErr)
+			return exitUsage
 		}
 	}
 	for _, orphan := range unpublishedRows(doc.Rows) {
@@ -144,28 +174,37 @@ func runWrite(root string, opts options, stdout, stderr io.Writer) int {
 // survives is not an error: it is what a fake provider run is for, and saying
 // so row by row is more use than a status.
 //
-// With refold set, the rows those same shards publish are dropped from the
-// record first, each one named. That is the whole of the re-scoring path this
-// command offers, and it is deliberately narrow: a published row is the scoring
-// of a run made when it was folded in, nothing re-computes it, and the only way
-// a corrected rule reaches it is this, over the shards that run left behind.
-// Nothing is dropped that the shards do not publish again, so a re-fold cannot
-// quietly empty the record.
-func foldInto(doc *document, dir string, refold bool, stdout io.Writer) error {
+// With refold set, the rows those same shards publish again are merged into
+// **case by case**: the cases the shards measured replace their own entries and
+// every other case keeps the figures it had. That is the whole of the
+// re-scoring path this command offers, and it is deliberately narrow: a
+// published row is the scoring of the runs that were folded into it, nothing
+// re-computes it, and the only way a corrected rule or a corrected case reaches
+// it is this, over the shards those runs left behind.
+//
+// The case is the unit and not the row, which it was until a re-run of one
+// corrected case was found to replace a row measured over every case with a row
+// measured over that one, report success, and leave nothing saying the rest of
+// a paid run had been discarded.
+func foldInto(doc *document, dir string, refold, dryRun bool, stdout io.Writer) error {
 	shards, err := modelrecord.ReadShards(dir)
 	if err != nil {
 		return err
 	}
+	claimed := doc.claims()
 	if refold {
-		if dropErr := dropRefolded(doc, shards, stdout); dropErr != nil {
+		// A re-fold replaces what these shards measured, so the rows they name
+		// stop being claimed by the record and are merged into below instead
+		// of refused as duplicates.
+		if dropErr := unclaimRefolded(shards, claimed); dropErr != nil {
 			return dropErr
 		}
 	}
-	candidates, err := fold(shards, doc.claims())
+	candidates, err := fold(shards, claimed)
 	if err != nil {
 		return err
 	}
-	rows, refusals, err := judge(candidates, modelcorpus.Keys())
+	rows, refusals, err := judge(candidates, modelcorpus.Keys(), dryRun)
 	if err != nil {
 		return err
 	}
@@ -174,42 +213,68 @@ func foldInto(doc *document, dir string, refold bool, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, logLead+"%s: %d candidate row(s), %d published, %d refused by [%s]\n",
 		dir, len(candidates), len(rows), len(refusals), ruleNames())
-	doc.Rows = append(doc.Rows, rows...)
+	mergeRows(doc, rows, stdout)
 	return nil
 }
 
-// dropRefolded removes from the record every row the given shards would publish
-// again, naming each one it drops.
+// unclaimRefolded releases the row keys the given shards publish again, so a
+// re-fold is not refused by the rule that stops a run being folded twice.
 //
 // The keys come from a fold of the shards against nothing, which is the only
 // honest way to say which rows they replace: a row is identified by its key and
-// by nothing else, so the set to drop is exactly the set of keys a fold of these
-// shards produces. A row the shards do not name is left alone, whatever the
-// refusals then make of the candidates: a shard that turns out to be refused
-// drops its published row and adds none, which is a record that has lost a
-// measurement and says so, and is the reason this is a flag a maintainer passes
-// rather than something a fold decides for itself.
-func dropRefolded(doc *document, shards []modelrecord.Shard, stdout io.Writer) error {
+// by nothing else.
+func unclaimRefolded(shards []modelrecord.Shard, claimed map[string]string) error {
 	replacing, err := fold(shards, map[string]string{})
 	if err != nil {
 		return err
 	}
-	dropping := make(map[string]bool, len(replacing))
 	for _, cand := range replacing {
-		dropping[cand.key.String()] = true
+		delete(claimed, cand.key.String())
 	}
+	return nil
+}
 
-	kept := make([]row, 0, len(doc.Rows))
-	for _, one := range doc.Rows {
-		name := one.Key.String()
-		if !dropping[name] {
-			kept = append(kept, one)
+// mergeRows folds new rows into the record, case by case where a row of the
+// same key already stands.
+//
+// This is the whole of what a re-run of one case needs, and the reason it is a
+// merge rather than a replacement is what replacement did: a row measured over
+// every case, re-folded from the shards of a single corrected case, was
+// replaced by a row measured over that one case, and the run that produced the
+// other 257 was gone with nothing saying so. Here the incoming cases replace
+// their own entries, every other case keeps the figures it had, and the three
+// published blocks are re-derived from the union.
+//
+// Each replacement is named, because a maintainer who asked to re-score one
+// case should be told exactly which cases changed hands and not have to diff
+// the record to find out.
+func mergeRows(doc *document, rows []row, stdout io.Writer) {
+	for _, incoming := range rows {
+		name := incoming.Key.String()
+		held := -1
+		for i, standing := range doc.Rows {
+			if standing.Key.String() == name {
+				held = i
+				break
+			}
+		}
+		if held < 0 {
+			doc.Rows = append(doc.Rows, incoming)
 			continue
 		}
-		fmt.Fprintf(stdout, logLead+"dropped the published row %s, which these shards publish again\n", name)
+
+		standing := doc.Rows[held]
+		replaced := replacedCases(standing.Cases, incoming.Cases)
+		kept := len(standing.Cases) - len(replaced)
+		merged := mergeCases(standing.Cases, incoming.Cases)
+
+		incoming.Cases = merged
+		incoming.Counts, incoming.Columns, incoming.Tokens = sumCases(merged)
+		doc.Rows[held] = incoming
+
+		fmt.Fprintf(stdout, logLead+"merged into the published row %s: %d case(s) replaced (%s), %d kept as they stood\n",
+			name, len(replaced), strings.Join(replaced, ", "), kept)
 	}
-	doc.Rows = kept
-	return nil
 }
 
 // runCheck is the offline gate: the record against the rules, and the pages

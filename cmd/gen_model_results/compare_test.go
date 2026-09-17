@@ -288,3 +288,69 @@ func TestRowKey_String_NamesTheOptionalHalvesOnlyWhenTheyExist(t *testing.T) {
 		})
 	}
 }
+
+// withCases returns a copy of a row measured on the named cases, which is what
+// a run narrowed with MODELEVAL_CASES leaves behind.
+func withCases(one row, names ...string) row {
+	one.Cases = make(map[string]caseFigures, len(names))
+	for _, name := range names {
+		one.Cases[name] = caseFigures{Run: "run-1", Date: "2026-09-17", Commit: fixtureCommit}
+	}
+	return one
+}
+
+// TestCrossVendorKey_RowsMeasuredOnDifferentCases_AreNotOneTable is the hole
+// the case-carrying row closed.
+//
+// The corpus digest in the key says what the corpus *is*. It never said how
+// much of it was asked, and those are different questions: a run narrowed with
+// MODELEVAL_CASES produces a row whose key is identical to a full run's, so the
+// two sat in one table under a caption asserting they agree on everything that
+// matters. A model measured on two cases then read beside one measured on
+// twelve as though the comparison were honest, with nothing but a denominator
+// to tell them apart.
+func TestCrossVendorKey_RowsMeasuredOnDifferentCases_AreNotOneTable(t *testing.T) {
+	full := withCases(oneRow(), "MT-002", "MT-003", "MT-008")
+	narrowed := withCases(oneRow(), "MT-002")
+	narrowed.Key.Model = "openai:another-model"
+
+	if crossVendorKey(full) == crossVendorKey(narrowed) {
+		t.Error("a row measured on three cases and one measured on one share a cross-vendor table")
+	}
+
+	// The same cases, differently ordered, are the same measurement.
+	same := withCases(oneRow(), "MT-008", "MT-002", "MT-003")
+	same.Key.Model = "openai:another-model"
+	if crossVendorKey(full) != crossVendorKey(same) {
+		t.Error("two rows measured on the same three cases were split into separate tables")
+	}
+
+	// And the same count of different cases is still a different measurement.
+	other := withCases(oneRow(), "MT-002", "MT-003", "MT-013")
+	other.Key.Model = "openai:another-model"
+	if crossVendorKey(full) == crossVendorKey(other) {
+		t.Error("two rows measured on three cases each, but not the same three, share a table")
+	}
+}
+
+// TestCaseCoverage_SaysHowMuchOfTheCorpusWasAsked checks the sentence a reader
+// gets, including the silence for a row that records no cases: a caption is a
+// list of what two rows agree on, and a coverage neither recorded is not an
+// agreement.
+func TestCaseCoverage_SaysHowMuchOfTheCorpusWasAsked(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		coverage caseCoverage
+		want     string
+	}{
+		{name: "records none", coverage: caseCoverage{}, want: ""},
+		{name: "part of it", coverage: caseCoverage{Digest: "abc", Cases: 12, Corpus: 258}, want: "12 of 258 cases (`abc`)"},
+		{name: "all of it", coverage: caseCoverage{Digest: "abc", Cases: 258, Corpus: 258}, want: "the whole corpus (258 cases)"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.coverage.String(); got != testCase.want {
+				t.Errorf("String() = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}

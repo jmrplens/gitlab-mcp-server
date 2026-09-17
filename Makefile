@@ -20,7 +20,7 @@
 	gen-api-live check-api-live check-meta-descriptions \
 	record-request-inventory gen-request-inventory check-request-inventory audit-request-inventory \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-model-corpus check-model-corpus gen-model-results model-results-record model-results-refold model-results-dry-run check-model-results gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-install-buttons check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi gen-nuget validate-nuget validate-nuget-local publish-nuget-dry publish-nuget publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs check-testing-docs update-all \
 	bench-resources bench-resources-render check-bench-resources bench-fairness \
 	docs-local-go \
        docker-build docker-push docker-run \
@@ -910,6 +910,18 @@ model-results-record:
 model-results-refold:
 	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
 	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -refold -render
+
+## model-results-dry-run: rehearse the whole publishing path into dist/, without
+## touching the committed record or the pages (usage: make model-results-dry-run
+## MODELEVAL_SHARDS=dist/modeleval/ce). It is what makes a fake run readable: a
+## fold refuses every row the fake would publish, rightly, since the fake answers
+## from the corpus's own key, so until this existed the only way to see how a
+## result is stored and how a page is drawn from it was to pay for a real run.
+## Only that one rule is set aside; a stale, filtered or unobserved run is
+## refused here exactly as a real fold would refuse it.
+model-results-dry-run:
+	$(if $(MODELEVAL_SHARDS),,$(error MODELEVAL_SHARDS is unset: name the run's record directory, e.g. make $@ MODELEVAL_SHARDS=dist/modeleval/ce))
+	go run ./cmd/gen_model_results/ -shards $(MODELEVAL_SHARDS) -dry-run -render
 
 ## check-model-results: the offline gate over the committed results record and
 ## the blocks drawn from it. No GitLab, no network and no provider; a tree with

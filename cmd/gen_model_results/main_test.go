@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelrecord"
 )
 
 // newRoot builds a repository root holding the two pages with their markers,
@@ -260,7 +262,7 @@ func TestRun_FoldingTheSameRunTwice_RefusesTheSecond(t *testing.T) {
 // second shard carries different token numbers, which stands in for a scoring
 // change: the row is replaced rather than duplicated, and the figures are the
 // second fold's.
-func TestRun_ARefoldOfARunAlreadyPublished_ReplacesItsRowByName(t *testing.T) {
+func TestRun_ARefoldOfAWholeRun_ReplacesEveryCaseItMeasured(t *testing.T) {
 	root := newRoot(t)
 	if status, _, stderr := drive(t, root, options{shards: writeShard(t, publishableShard())}); status != exitOK {
 		t.Fatalf("the first fold exited %d: %s", status, stderr)
@@ -272,8 +274,11 @@ func TestRun_ARefoldOfARunAlreadyPublished_ReplacesItsRowByName(t *testing.T) {
 	if status != exitOK {
 		t.Fatalf("the re-fold exited %d: %s", status, stderr)
 	}
-	if !strings.Contains(stdout, "dropped the published row") || !strings.Contains(stdout, fixtureModel) {
-		t.Errorf("the re-fold said %q, want the row it replaced named", stdout)
+	if !strings.Contains(stdout, "merged into the published row") || !strings.Contains(stdout, fixtureModel) {
+		t.Errorf("the re-fold said %q, want the row it merged into named", stdout)
+	}
+	if !strings.Contains(stdout, "1 case(s) replaced ("+fixtureCase+")") {
+		t.Errorf("the re-fold said %q, want the case it replaced named", stdout)
 	}
 	if !strings.Contains(stdout, "1 published") {
 		t.Errorf("the re-fold said %q, want the row folded in again", stdout)
@@ -291,10 +296,15 @@ func TestRun_ARefoldOfARunAlreadyPublished_ReplacesItsRowByName(t *testing.T) {
 	}
 }
 
-// TestRun_ARefold_DropsOnlyTheRowsThoseShardsPublish is what keeps the re-fold
-// from being a way to empty the record: a row those shards do not name is left
-// exactly as it stood, whatever else the fold does.
-func TestRun_ARefold_DropsOnlyTheRowsThoseShardsPublish(t *testing.T) {
+// TestRun_ARefold_TouchesOnlyTheRowsThoseShardsPublish is what keeps the
+// re-fold from reaching past what it was given: a row those shards do not name
+// is left exactly as it stood, whatever else the fold does.
+//
+// It is about a row under a *different* key. The row under the *same* key is
+// the one a re-run of a single case produces, and what happens to that one is
+// TestRun_ARefoldOfOneCase_KeepsTheCasesItDidNotMeasure: this test read as the
+// guard against that case for a while and never was.
+func TestRun_ARefold_TouchesOnlyTheRowsThoseShardsPublish(t *testing.T) {
 	root := newRoot(t)
 	other := publishOne(t, publishableShard())
 	other.Key.Model = "openai:another-model"
@@ -628,3 +638,198 @@ func standInGit(t *testing.T, status int) string {
 
 // runtimeIsWindows says whether the stand-in above can be run at all.
 func runtimeIsWindows() bool { return runtime.GOOS == "windows" }
+
+// TestRun_ARefoldOfOneCase_KeepsTheCasesItDidNotMeasure is the case
+// MODELEVAL_CASES exists for, and the one the re-fold got wrong.
+//
+// A row is identified by its key, and the set of cases behind it is in no part
+// of that key. So a re-run of one corrected case produces shards whose key is
+// the row's, and the two paths a maintainer has both fail: a plain fold is
+// refused as a duplicate row, and a re-fold drops the row and replaces it with
+// one covering a single case. The second is the dangerous one, because it is
+// what the documentation tells you to reach for, it reports success, and what
+// it discards is the rest of a paid run.
+//
+// TestRun_ARefold_DropsOnlyTheRowsThoseShardsPublish reads as the guard against
+// exactly this and is not: it proves a row under a *different* key survives.
+// The loss happens under the same key, which is the only shape a re-run of one
+// case can have.
+func TestRun_ARefoldOfOneCase_KeepsTheCasesItDidNotMeasure(t *testing.T) {
+	root := newRoot(t)
+	if status, _, stderr := drive(t, root, options{shards: writeShard(t, twoCaseShard())}); status != exitOK {
+		t.Fatalf("the first fold exited %d: %s", status, stderr)
+	}
+
+	doc, _, err := readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if len(doc.Rows) != 1 || doc.Rows[0].Counts.Attempts != 2 {
+		t.Fatalf("the first fold published %d row(s) of %d attempt(s), want one row of two",
+			len(doc.Rows), doc.Rows[0].Counts.Attempts)
+	}
+
+	// One case is re-run because it was corrected, which is what
+	// MODELEVAL_CASES=MT-003 leaves in the shard directory.
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, oneCaseRerunShard()), refold: true})
+	if status != exitOK {
+		t.Fatalf("the re-fold of one case exited %d: %s\n%s", status, stderr, stdout)
+	}
+
+	doc, _, err = readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if len(doc.Rows) != 1 {
+		t.Fatalf("the record holds %d rows, want the one row updated in place", len(doc.Rows))
+	}
+	if got := doc.Rows[0].Counts.Attempts; got != 2 {
+		t.Errorf("the row now counts %d attempt(s), want 2: re-running one case discarded the measurement of every case it did not re-run", got)
+	}
+}
+
+// TestRun_AMergedRow_SaysWhichRunMeasuredEachCase is the honesty half of the
+// merge.
+//
+// The moment a row can be assembled from two runs, its provenance block stops
+// being one run's: the commit and date at the top are the last contributor's,
+// and a case measured three weeks earlier sits in the same figures. Saying
+// nothing about that would be the same fold this record was rebuilt to stop, so
+// every case carries the run, the day and the tree that measured it, and a
+// reader asking when a case was last put to the model can answer it.
+func TestRun_AMergedRow_SaysWhichRunMeasuredEachCase(t *testing.T) {
+	root := newRoot(t)
+	if status, _, stderr := drive(t, root, options{shards: writeShard(t, twoCaseShard())}); status != exitOK {
+		t.Fatalf("the first fold exited %d: %s", status, stderr)
+	}
+
+	// The re-run of one case happened later, on a different tree.
+	rerun := oneCaseRerunShard()
+	rerun[0].Run.RunID = "run-rerun"
+	rerun[0].Run.Commit = "2222222222222222222222222222222222222222"
+	rerun[0].Run.StartedAt = rerun[0].Run.StartedAt.AddDate(0, 0, 21)
+
+	if status, _, stderr := drive(t, root, options{shards: writeShard(t, rerun), refold: true}); status != exitOK {
+		t.Fatalf("the re-fold exited %d: %s", status, stderr)
+	}
+
+	doc, _, err := readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if len(doc.Rows) != 1 {
+		t.Fatalf("the record holds %d rows, want one", len(doc.Rows))
+	}
+	cases := doc.Rows[0].Cases
+	if len(cases) != 2 {
+		t.Fatalf("the merged row holds %d case(s), want both", len(cases))
+	}
+
+	held, reran := cases[fixtureCase], cases["MT-003"]
+	if held.Run != "run-fixture" {
+		t.Errorf("%s says it was measured by %q, want the run that is still behind it", fixtureCase, held.Run)
+	}
+	if reran.Run != "run-rerun" {
+		t.Errorf("MT-003 says it was measured by %q, want the re-run", reran.Run)
+	}
+	if held.Commit == reran.Commit {
+		t.Errorf("both cases name the tree %q, so the row cannot say one of them was re-measured", held.Commit)
+	}
+	if held.Date == reran.Date {
+		t.Errorf("both cases name the day %q, so the row cannot say when each was last put to the model", held.Date)
+	}
+}
+
+// fakeRunShard is a rehearsal: the corpus key replayed by the fake provider,
+// which is what `MODELEVAL_MODELS=fake:perfect` leaves behind.
+func fakeRunShard() []modelrecord.Record {
+	records := publishableShard()
+	records[0].Run.Providers[0].Name = fakeProvider
+	records[0].Run.Providers[0].Spec = "fake:perfect"
+	records[1].Attempt.Model = "fake:perfect"
+	records[4].Session.ToolSchemaDigests = map[string]string{"fake:perfect": fixtureTools}
+	return records
+}
+
+// TestRun_ADryRun_PublishesTheRehearsalAndTouchesNothingCommitted is the
+// rehearsal a maintainer can read before spending anything.
+//
+// Folding a fake run publishes nothing, and rightly: the fake answers from the
+// corpus's own key, so its figures are a reading of this repository rather than
+// of a model. What that cost was that the only way to see how a result is
+// stored and how a page is drawn from it was to pay for a real run first. A dry
+// run sets that one rule aside and writes where nothing published can be
+// reached, which is the whole of the difference.
+func TestRun_ADryRun_PublishesTheRehearsalAndTouchesNothingCommitted(t *testing.T) {
+	root := newRoot(t)
+	before := map[string][]byte{}
+	for _, path := range pagePaths() {
+		body, err := os.ReadFile(filepath.Join(root, path)) //#nosec G304 -- a path this test just built
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		before[path] = body
+	}
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, fakeRunShard()), render: true, dryRun: true})
+	if status != exitOK {
+		t.Fatalf("the dry run exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "1 published") {
+		t.Errorf("the dry run said %q, want the fake's row published into the rehearsal", stdout)
+	}
+	if !strings.Contains(stdout, dryRunRelDir) {
+		t.Errorf("the dry run said %q, want it to name where it wrote", stdout)
+	}
+
+	// Nothing committed moved: not the pages, and no record beside them.
+	for _, path := range pagePaths() {
+		body, err := os.ReadFile(filepath.Join(root, path)) //#nosec G304 -- a path this test just built
+		if err != nil {
+			t.Fatalf("read %s back: %v", path, err)
+		}
+		if string(body) != string(before[path]) {
+			t.Errorf("the dry run edited the committed %s", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
+		t.Errorf("the dry run wrote the committed record; stat said %v", err)
+	}
+
+	// And the rehearsal is there, carrying the fake's figures and saying so.
+	scratch := filepath.Join(root, dryRunRelDir)
+	if _, err := os.Stat(filepath.Join(scratch, recordRelPath)); err != nil {
+		t.Errorf("the rehearsal has no record: %v", err)
+	}
+	page, err := os.ReadFile(filepath.Join(scratch, pageRelPath)) //#nosec G304 -- a path this command just wrote
+	if err != nil {
+		t.Fatalf("read the rehearsed page: %v", err)
+	}
+	if !strings.HasPrefix(string(page), "> **This is a rehearsal, not a measurement.**") {
+		t.Errorf("the rehearsed page does not open with the banner:\n%.200s", page)
+	}
+	if !strings.Contains(string(page), "fake:perfect") {
+		t.Errorf("the rehearsed page carries no figures from the fake run:\n%s", page)
+	}
+}
+
+// TestRun_ADryRunOfARealRun_StillRefusesWhatARealFoldWould keeps the rehearsal
+// a rehearsal of the real thing: only the fake-provider rule is set aside, so
+// shards a real fold would refuse are refused here too and a maintainer
+// rehearsing a broken run is told before they pay for one.
+func TestRun_ADryRunOfARealRun_StillRefusesWhatARealFoldWould(t *testing.T) {
+	root := newRoot(t)
+	records := publishableShard()
+	records[0].Run.Filter = "TestModelEval/MT-002"
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, records), dryRun: true})
+	if status != exitOK {
+		t.Fatalf("the dry run exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "[filtered-run]") {
+		t.Errorf("the dry run said %q, want the filtered run refused as a real fold would refuse it", stdout)
+	}
+	if !strings.Contains(stdout, "0 published") {
+		t.Errorf("the dry run said %q, want nothing published", stdout)
+	}
+}

@@ -90,6 +90,13 @@ var requiredProvenance = []struct {
 // reader meets them: what the run was, what the session saw, who answered, what
 // the row says about itself, what it was scored against, and what the record
 // already holds.
+// fakeProviderRule names the one rule a dry run sets aside.
+//
+// It is named rather than matched by string at the call site so that renaming
+// the rule cannot silently turn the dry run into a run that publishes a fake
+// into the committed record.
+const fakeProviderRule = "fake-provider"
+
 var rules = []rule{
 	{
 		Name: "filtered-run",
@@ -114,7 +121,7 @@ var rules = []rule{
 		},
 	},
 	{
-		Name: "fake-provider",
+		Name: fakeProviderRule,
 		Why:  "the fake replays the corpus key to prove the pipe, so its figures are a reading of this repository's own answer and not of a model",
 		refuse: func(cand candidate) string {
 			if cand.provider.Name != fakeProvider {
@@ -179,13 +186,16 @@ func missingProvenance(p provenance) string {
 // refused, and going on to say that its corpus has also moved is noise. The
 // order of the table is therefore the order a reader is told about, which is
 // why it runs from what the run was to what the record already holds.
-func judge(candidates []candidate, keys map[string]modelcorpus.Key) ([]row, []refusal, error) {
+// admitFake sets aside the one rule a dry run must: the fake exists to prove
+// the pipe, and a dry run is the pipe being proved. Every other rule still
+// runs, and the committed record is never what a dry run writes.
+func judge(candidates []candidate, keys map[string]modelcorpus.Key, admitFake bool) ([]row, []refusal, error) {
 	var (
 		rows     []row
 		refusals []refusal
 	)
 	for _, cand := range candidates {
-		if found, refused := refuseCandidate(cand); refused {
+		if found, refused := refuseCandidate(cand, admitFake); refused {
 			refusals = append(refusals, found)
 			continue
 		}
@@ -200,8 +210,11 @@ func judge(candidates []candidate, keys map[string]modelcorpus.Key) ([]row, []re
 
 // refuseCandidate asks every rule about one candidate and returns the first
 // refusal.
-func refuseCandidate(cand candidate) (refusal, bool) {
+func refuseCandidate(cand candidate, admitFake bool) (refusal, bool) {
 	for _, one := range rules {
+		if admitFake && one.Name == fakeProviderRule {
+			continue
+		}
 		if reason := one.refuse(cand); reason != "" {
 			return refusal{Key: cand.key.String(), Rule: one.Name, Reason: reason}, true
 		}
@@ -238,7 +251,7 @@ func reviewRows(doc document) []refusal {
 			sessionObserved: 1,
 			claimedBy:       seen[one.Key.String()],
 		}
-		if found, refused := refuseCandidate(cand); refused {
+		if found, refused := refuseCandidate(cand, false); refused {
 			refusals = append(refusals, found)
 		}
 		if _, taken := seen[one.Key.String()]; !taken {

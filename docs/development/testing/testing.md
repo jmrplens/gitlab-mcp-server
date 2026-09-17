@@ -20,16 +20,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,218 |
-| Unit test functions                                   | 15,022 |
+| Total test functions                                  | 16,229 |
+| Unit test functions                                   | 15,033 |
 | E2E test functions                                    |  1,196 |
-| cmd test functions                                    |  2,596 |
+| cmd test functions                                    |  2,606 |
 | Test files (internal/)                                |    579 |
-| Test files (cmd/)                                     |    197 |
+| Test files (cmd/)                                     |    198 |
 | Test files (test/e2e/)                                |    383 |
 | Tool sub-packages tested                              |    178 |
 | Core packages tested                                  |     27 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  98.8% |
 | Overall coverage (`go test ./internal/...`)           |  99.4% |
 | Average package coverage                              |  98.6% |
 
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 11,955 | 73.7% |
+| `TestFunc_Scenario` (2-part)           | 11,959 | 73.7% |
 | `TestFunc` (no underscore)             |    904 |  5.6% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,359 | 20.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,366 | 20.7% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,942 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,943 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (178) |          9,118 |        380 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,196 |        383 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          2,596 |        197 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,218** |  **1,159** |                                                                                                 |
+| cmd packages            |          2,606 |        198 | server entry point and developer command utilities                                              |
+| **Total**               |     **16,229** |  **1,160** |                                                                                                 |
 
 ### Core Packages
 
@@ -82,10 +82,10 @@
 | testutil/e2ecalls    |        14 |   100.0% | Package e2ecalls declares the record the end-to-end suite writes down while it runs, and the coverage audit reads back afterwards: what a test asked the server to do, what the server dispatched, and on which runtime, surface and mode.                              |
 | testutil/modelcorpus |        53 |   100.0% | Package modelcorpus is the model evaluation corpus: for each case, the stimulus a model is given and the key that stimulus is scored against, held apart so that no code which produces a stimulus can read a key.                                                      |
 | testutil/modelrecord |        49 |    95.9% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                             |
-| testutil/modelscore  |        92 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                              |
+| testutil/modelscore  |        93 |    98.8% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                              |
 | testutil/shardio     |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped. |
 | toolutil             |     1,029 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                           |
-| **Subtotal**         | **2,942** |          |                                                                                                                                                                                                                                                                         |
+| **Subtotal**         | **2,943** |          |                                                                                                                                                                                                                                                                         |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -352,7 +352,7 @@
 | cmd/gen_lhm_manifest             |    90.2% |
 | cmd/gen_llms                     |    98.9% |
 | cmd/gen_model_corpus             |    91.0% |
-| cmd/gen_model_results            |    96.0% |
+| cmd/gen_model_results            |    94.2% |
 | cmd/gen_request_inventory        |    90.2% |
 | cmd/gen_stats                    |   100.0% |
 | cmd/gen_testing_docs             |    98.0% |
@@ -399,7 +399,7 @@
 | testutil/e2ecalls    |   100.0% |
 | testutil/modelcorpus |   100.0% |
 | testutil/modelrecord |    95.9% |
-| testutil/modelscore  |   100.0% |
+| testutil/modelscore  |    98.8% |
 | testutil/shardio     |   100.0% |
 | toolutil             |    98.5% |
 

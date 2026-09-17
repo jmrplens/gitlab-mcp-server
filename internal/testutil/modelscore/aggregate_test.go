@@ -1,6 +1,9 @@
 package modelscore
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 // The seven columns, added up from verdicts written here rather than scored, so
 // the arithmetic is held to numbers a reader of this file can check.
@@ -417,5 +420,87 @@ func TestAggregate_TheTwoWaysOfDeclining_AreCountedApart(t *testing.T) {
 	}
 	if got := totals.Reached.String(); got != "2 / 2" {
 		t.Errorf("Reached = %q, want a correctly declined step counted as reached", got)
+	}
+}
+
+// filledTotals returns a Totals whose every field carries a distinct non-zero
+// value, so doubling it tells a field [Sum] adds from one it forgot.
+func filledTotals() Totals {
+	return Totals{
+		Attempts:          11,
+		Skipped:           12,
+		Unobserved:        13,
+		ProviderErrors:    14,
+		HarnessErrors:     15,
+		GitLabRefused:     16,
+		Outcomes:          map[Outcome]int{OutcomeCompleted: 17},
+		Declines:          map[Decline]int{DeclineByText: 18},
+		Confirmations:     map[Confirmation]int{ConfirmationUnaided: 19},
+		Reached:           Ratio{Numerator: 20, Denominator: 21},
+		AcceptedFirstTime: Ratio{Numerator: 22, Denominator: 23},
+		ArgumentFidelity:  Ratio{Numerator: 24, Denominator: 25},
+		Confirmation:      Ratio{Numerator: 26, Denominator: 27},
+		Unaided:           Ratio{Numerator: 28, Denominator: 29},
+		Completion:        Ratio{Numerator: 30, Denominator: 31},
+		Clean:             Ratio{Numerator: 35, Denominator: 36},
+		Overhead:          Overhead{Discovery: 32, InvalidParams: 33, Steps: 34},
+	}
+}
+
+// TestSum_TouchesEveryField holds the sum to the struct.
+//
+// A published row can be assembled from more than one run, and the arithmetic
+// that does it is [Sum]. A field added to Totals and forgotten there
+// would not fail anything: the row would simply publish a figure that counted
+// one run and not the other, which reads as a real measurement and is the
+// class of defect this whole record exists to stop. So every field is walked
+// by reflection rather than by a list somebody has to remember to extend, and
+// a kind this walk cannot check fails rather than passing unseen.
+func TestSum_TouchesEveryField(t *testing.T) {
+	filled := filledTotals()
+	doubled := Sum(filled, filled)
+
+	want := reflect.ValueOf(filled)
+	got := reflect.ValueOf(doubled)
+	for i := range want.NumField() {
+		name := want.Type().Field(i).Name
+		t.Run(name, func(t *testing.T) {
+			assertDoubled(t, name, want.Field(i), got.Field(i))
+		})
+	}
+}
+
+// assertDoubled checks one field, recursing into a nested struct and into the
+// values of a tally, and failing on a kind it does not know how to compare.
+func assertDoubled(t *testing.T, name string, want, got reflect.Value) {
+	t.Helper()
+	switch want.Kind() {
+	case reflect.Int:
+		if want.Int() == 0 {
+			t.Fatalf("%s is zero in the fixture, so doubling it proves nothing; give it a value", name)
+		}
+		if got.Int() != want.Int()*2 {
+			t.Errorf("%s = %d, want %d: Sum does not add this field", name, got.Int(), want.Int()*2)
+		}
+	case reflect.Struct:
+		for i := range want.NumField() {
+			assertDoubled(t, name+"."+want.Type().Field(i).Name, want.Field(i), got.Field(i))
+		}
+	case reflect.Map:
+		if want.Len() == 0 {
+			t.Fatalf("%s is empty in the fixture, so doubling it proves nothing", name)
+		}
+		for _, key := range want.MapKeys() {
+			left, right := want.MapIndex(key), got.MapIndex(key)
+			if !right.IsValid() {
+				t.Errorf("%s[%v] is absent after Sum", name, key)
+				continue
+			}
+			if right.Int() != left.Int()*2 {
+				t.Errorf("%s[%v] = %d, want %d", name, key, right.Int(), left.Int()*2)
+			}
+		}
+	default:
+		t.Fatalf("%s is a %s, which this walk cannot check: teach it, or Sum may be silently dropping the field", name, want.Kind())
 	}
 }

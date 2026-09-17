@@ -152,6 +152,51 @@ type Verdict struct {
 	Verified bool
 }
 
+// Clean reports whether this attempt went right end to end with no help.
+//
+// It is the one figure that answers "does this model just work", and it is a
+// conjunction rather than an average on purpose. The seven published columns
+// measure different things over different denominators, and folding them into a
+// weighted score would need weights nothing here can justify: there is no
+// defensible reason to say argument fidelity is worth twice a confirmation or
+// half of it, so the number would come from whoever chose the weights rather
+// than from the measurement. Every term below is already measured, and an
+// attempt has to satisfy all of them.
+//
+// The terms are: the attempt completed; every non-optional step was reached or
+// correctly declined; every argument the case gives a truth for matched; every
+// destructive step carried its approval; nothing of ours had to refuse it; and
+// what it did to GitLab checked out afterwards.
+//
+// An unobserved step makes the answer false rather than true. A step whose
+// dispatch the server never described cannot be said to have gone right, and
+// the honest reading of "I could not see it" is not "it was fine".
+func (v Verdict) Clean() bool {
+	if v.Outcome != OutcomeCompleted || !v.Unaided || !v.Verified {
+		return false
+	}
+	for _, step := range v.Steps {
+		if step.Optional && !step.Reached {
+			continue
+		}
+		if !step.Observed {
+			return false
+		}
+		if !step.Reached && step.Decline == DeclineNone {
+			return false
+		}
+		if step.Destructive && step.Confirmation != ConfirmationUnaided && step.Confirmation != ConfirmationServerAided {
+			return false
+		}
+		for _, argument := range step.Arguments {
+			if argument.Compared && !argument.Matched {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Score is the whole of this package's contract: one attempt's record and one
 // case's key in, one verdict out.
 //
