@@ -65,10 +65,18 @@ current cost, which is why neither figure is a generated column in
 [Testing Reference](testing.md): a number nobody can afford to regenerate goes
 stale in the file while looking current.
 
+`cmd/server` is absent from the table because it had never been measured: it
+was assumed too slow to attempt. It is not. Measured on a 16-core machine
+sharing the box with another run, its own tests take 30 s and a full gremlins
+pass over its 1194 mutants takes 49 minutes. What makes that affordable is that
+a killed mutant costs only as long as the first test that notices it, not a
+whole suite run: 1194 mutants at 30 s each across four workers would be two and
+a half hours, and the pass takes a third of that.
+
 **gobco cannot analyse a package with build-constrained files at all.** It
 copies every `.go` file into its work directory ignoring `//go:build`, so
 `internal/toolutil` and `cmd/server` both fail with a redeclaration panic
-(`openLeafNoFollow`, `isConnRefused`). Those two are covered by mutation
+(`openLeafNoFollow`, `bindUnixSocket`). Those two are covered by mutation
 testing only.
 
 **A gremlins run reporting TIMED OUT on a fast package has measured nothing.**
@@ -84,6 +92,19 @@ over four mutants none of which ever ran, while `internal/telemetry` hid two
 real survivors behind timeouts and read two better than it was.
 `make coverage-mutants` therefore measures the package first and derives the
 coefficient from it, printing both; `MUTANT_BUDGET` (30 s) is the floor.
+
+**The coefficient is applied to gremlins' own coverage run, not to the baseline
+the target printed.** gremlins multiplies `--timeout-coefficient` by however
+long its own `go test -cover -coverprofile` took, and Go's test cache answers
+that instantly for a package whose files have not changed since it last ran:
+a second invocation on an unchanged tree, or the first after a `--dry-run`,
+which gathers coverage the same way. Measured on `cmd/server`, whose tests take
+44 s, the cached coverage run reported 0.65 s and derived a five-second budget
+from it; the pass reported 0 killed and every mutant timed out, which reads
+exactly like a package nothing tests. `make coverage-mutants` therefore runs
+gremlins under `GOFLAGS=-count=1`, so what it multiplies is always a real
+measurement. `go build` ignores a flag it does not know, so the same setting is
+harmless for the compile around each mutant.
 
 A timeout that survives a budget that size is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of
@@ -109,6 +130,20 @@ should be recorded rather than chased:
 - **A tool artifact.** Mutations inside package-level constant initializers
   and `switch { case … }` expressions are reported as not covered because
   neither carries a statement counter, not because no test reaches them.
+
+**Read the third kind, do not wave it through.** "Reached" is not "asserted",
+and the tool that reports these can tell you neither. Of the 100 not-covered
+mutants `cmd/server` reports, 26 are unkillable for reasons that are not about
+the tests at all — 22 mutate a `+` between string literals into a `-`, which no
+longer compiles, and four sit in Windows-only files or in a `testdata`
+stand-in program the package never links. Of the remaining 74, twelve turned
+out to be genuine gaps: every timeout constant was compared against itself
+(`srv.ReadTimeout != baseHTTPReadTimeout`), so one collapsing to zero moved
+both sides and failed nothing, and every refusal code was read off the wire and
+compared with the same constant that wrote it, so a code that lost its sign
+passed. All twelve were confirmed by hand — apply the mutation, run the whole
+suite, see that nothing fails — and each now has a test that states the
+property the constant has to hold rather than repeating its value.
 
 ## When To Use Each Layer
 

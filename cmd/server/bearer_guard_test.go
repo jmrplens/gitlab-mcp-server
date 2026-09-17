@@ -1236,3 +1236,35 @@ func TestDescribeScopeShortfall_NamesWhatTheTokenHolds(t *testing.T) {
 		})
 	}
 }
+
+// TestRejectedTokenCacheBounds_StillRememberARejectionTheyJustRecorded asserts
+// what the two constants the guard's cache is built from have to make true.
+//
+// Every other test here builds its own cache with its own bounds
+// (newTestGuard passes 16 and a minute), so the pair the process actually
+// wires in registerOAuthMCPHandlers is used by nothing that asserts anything:
+// either of them collapsing to zero or below changes no test, while
+// [oauth.NewRejectedTokens] documents that a non-positive capacity or TTL
+// disables the cache outright. That is the amplification defense gone — every
+// replay of a token GitLab already refused becomes another round trip to
+// GitLab, which is the exact traffic the cache exists to absorb — and it
+// disappears silently, because a disabled cache still answers every call and
+// simply never reports a hit.
+func TestRejectedTokenCacheBounds_StillRememberARejectionTheyJustRecorded(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com"
+
+	cache := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
+	cache.Record(instance, "glpat-refused-by-gitlab")
+
+	if !cache.Contains(instance, "glpat-refused-by-gitlab") {
+		t.Errorf("a rejection recorded a moment ago is already forgotten: "+
+			"rejectedTokenMaxSize=%d and rejectedTokenTTL=%s build a cache that stores nothing, "+
+			"so every replay of a refused token is asked of GitLab again",
+			rejectedTokenMaxSize, rejectedTokenTTL)
+	}
+	if got := cache.Len(); got != 1 {
+		t.Errorf("cache holds %d entries after one rejection, want 1", got)
+	}
+}
