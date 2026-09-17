@@ -1705,3 +1705,59 @@ func assertRedirectTargetSaw(t *testing.T, headers http.Header, header, token st
 		}
 	}
 }
+
+// TestTimeoutConstants_AreProtectionsRatherThanZero pins the two timeouts this
+// package ships, against their own magnitude rather than against themselves.
+//
+// The transport assertions above compare the field with the constant, which is
+// the same value twice: set responseHeaderTimeout to 0 and every one of them
+// still passes, while the server it configures waits forever for headers an
+// unreachable instance never sends. healthTimeout is unpinned the same way.
+// Both were reported by mutation testing as surviving mutants, and that is
+// exactly what the survival meant: a protection nothing holds to being one.
+//
+// The bounds are the reasons, not the numbers. A zero is what the mutation
+// produces and is the absence of the protection. A ceiling is asserted too,
+// because a timeout long enough to outlast a caller's patience protects
+// nobody, and the doc comments already name the order of magnitude each was
+// chosen against: GitLab's own worker timeout for the headers, a startup probe
+// for the health check.
+func TestTimeoutConstants_AreProtectionsRatherThanZero(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		value     time.Duration
+		atLeast   time.Duration
+		atMost    time.Duration
+		disabling string
+	}{
+		{
+			name:      "responseHeaderTimeout",
+			value:     responseHeaderTimeout,
+			atLeast:   10 * time.Second,
+			atMost:    5 * time.Minute,
+			disabling: "the client waits forever for headers a stalled instance never sends",
+		},
+		{
+			name:      "healthTimeout",
+			value:     healthTimeout,
+			atLeast:   time.Second,
+			atMost:    time.Minute,
+			disabling: "the startup health probe never returns and the server never finishes starting",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.value <= 0 {
+				t.Fatalf("%s = %v; a non-positive value disables the timeout entirely, so %s",
+					tc.name, tc.value, tc.disabling)
+			}
+			if tc.value < tc.atLeast {
+				t.Errorf("%s = %v, want at least %v: shorter than the work it is meant to allow",
+					tc.name, tc.value, tc.atLeast)
+			}
+			if tc.value > tc.atMost {
+				t.Errorf("%s = %v, want at most %v: a bound nobody waits for is not a bound",
+					tc.name, tc.value, tc.atMost)
+			}
+		})
+	}
+}

@@ -374,3 +374,23 @@ func TestRetryPolicy_BoundsOneCallsUpstreamWait(t *testing.T) {
 			maxRetries, maxUpstreamRetries)
 	}
 }
+
+// TestRateLimitResetWait_NonPositiveResets_AreRefusedAsPast covers what the
+// deleted guard used to answer, so its removal is held rather than assumed.
+//
+// A RateLimit-Reset of zero or a negative one is a Unix time at or before 1970.
+// There is no separate guard for that any more: the deadline check answers it,
+// because time.Until of a moment decades past is a large negative duration.
+// This asserts the answer rather than the route to it, which is what lets the
+// guard stay deleted.
+func TestRateLimitResetWait_NonPositiveResets_AreRefusedAsPast(t *testing.T) {
+	for _, raw := range []string{"0", "-1", "-1000000"} {
+		t.Run("reset="+raw, func(t *testing.T) {
+			resp := &http.Response{Header: http.Header{}}
+			resp.Header.Set(rateLimitResetHeader, raw)
+			if got := rateLimitResetWait(resp); got != 0 {
+				t.Errorf("rateLimitResetWait(%s) = %v, want 0: a reset at or before 1970 is not a wait", raw, got)
+			}
+		})
+	}
+}
