@@ -237,6 +237,19 @@ func TestSearchIssues(t *testing.T) {
 			t.Errorf("expected 0 values, got %d", len(values))
 		}
 	})
+
+	// The IID filter is applied here rather than by GitLab, so an empty query
+	// has to fall through it: a client that has typed nothing yet must be
+	// offered the open issues, not an empty dropdown.
+	t.Run(subtestEmptyQueryAll, func(t *testing.T) {
+		values, err := searchIssues(context.Background(), client, "42", "")
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if len(values) != 2 {
+			t.Errorf("expected every open issue, got %d: %v", len(values), values)
+		}
+	})
 }
 
 // TestSearchIssues_APIError verifies that [searchIssues] returns an error when
@@ -456,6 +469,23 @@ func TestSearchCommits(t *testing.T) {
 		}
 		if len(values) != 2 {
 			t.Fatalf("expected 2 values matching prefix 'abc', got %d: %v", len(values), values)
+		}
+		if values[0] != "abc123d" {
+			t.Errorf(fmtUnexpectedValue0, values[0])
+		}
+	})
+
+	// A pasted SHA is longer than the seven characters GitLab abbreviates to,
+	// so matching only the abbreviation would drop the commit the caller has
+	// in their clipboard. The value offered stays the short SHA either way,
+	// since that is what the argument takes.
+	t.Run("a prefix longer than the short SHA still finds the commit", func(t *testing.T) {
+		values, err := searchCommits(context.Background(), client, "42", "abc123def4")
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if len(values) != 1 {
+			t.Fatalf("expected 1 value matching the full SHA prefix, got %d: %v", len(values), values)
 		}
 		if values[0] != "abc123d" {
 			t.Errorf(fmtUnexpectedValue0, values[0])
@@ -923,6 +953,120 @@ func TestSearch_PropagatesXTotalHeader(t *testing.T) {
 func TestTotalFromResponse_NilSafe(t *testing.T) {
 	if got := totalFromResponse(nil); got != 0 {
 		t.Errorf("totalFromResponse(nil) = %d, want 0", got)
+	}
+}
+
+// searchParamSeen drives one search against a mock answering body at path and
+// returns the `search` values GitLab was sent, plus whether the parameter was
+// there at all. An absent parameter and an empty one are different requests,
+// so the two are reported apart rather than collapsed into one string.
+func searchParamSeen(t *testing.T, path, body string, search func(*testClientType, string) error, query string) (value string, present bool) {
+	t.Helper()
+	var values []string
+	var reached bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		values, reached = r.URL.Query()["search"], true
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	if err := search(client, query); err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if !reached {
+		t.Fatalf("no request reached %s, so nothing was measured", path)
+	}
+	if len(values) == 0 {
+		return "", false
+	}
+	return values[0], true
+}
+
+// TestSearch_SendsWhatWasTypedAsTheSearchParameter pins the half of the query
+// branch that nothing asserted: that the partial value reaches GitLab.
+//
+// Six of these searches hand the query to GitLab as `search=`, and the tests
+// around them only ever checked that an *empty* query sends no parameter. That
+// pair cannot fail: a search that stopped setting the option altogether still
+// sends no parameter when nothing was typed, and no test read the parameter
+// back in the case that matters. What a caller would get is every project,
+// group, user, branch, tag or label the token can see, in GitLab's own order,
+// with what they typed ignored — an autocomplete that looks alive and narrows
+// nothing.
+//
+// Both states are read off the wire here, so the claim is about the request
+// this server built rather than about the fixture the mock happened to return.
+func TestSearch_SendsWhatWasTypedAsTheSearchParameter(t *testing.T) {
+	cases := []struct {
+		name   string
+		path   string
+		body   string
+		search func(client *testClientType, query string) error
+	}{
+		{
+			name: "projects", path: "/api/v4/projects", body: `[{"id":1,"path_with_namespace":"a/b"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchProjects(context.Background(), c, q)
+				return err
+			},
+		},
+		{
+			name: "groups", path: "/api/v4/groups", body: `[{"id":1,"full_path":"a"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchGroups(context.Background(), c, q)
+				return err
+			},
+		},
+		{
+			name: "users", path: "/api/v4/users", body: `[{"id":1,"username":"alpha"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchUsers(context.Background(), c, q)
+				return err
+			},
+		},
+		{
+			name: "branches", path: pathRepoBranches, body: `[{"name":"alpha"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchBranches(context.Background(), c, "42", q)
+				return err
+			},
+		},
+		{
+			name: "tags", path: pathRepoTags, body: `[{"name":"alpha"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchTags(context.Background(), c, "42", q)
+				return err
+			},
+		},
+		{
+			name: "labels", path: "/api/v4/projects/42/labels", body: `[{"name":"alpha"}]`,
+			search: func(c *testClientType, q string) error {
+				_, _, err := searchLabels(context.Background(), c, "42", q)
+				return err
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Run("what was typed is what GitLab is asked for", func(t *testing.T) {
+				value, present := searchParamSeen(t, testCase.path, testCase.body, testCase.search, "alpha")
+				if !present {
+					t.Fatal("GitLab was sent no search parameter, so it answered with everything the token can see")
+				}
+				if value != "alpha" {
+					t.Errorf("search = %q, want %q", value, "alpha")
+				}
+			})
+
+			t.Run("nothing typed asks for no narrowing", func(t *testing.T) {
+				_, present := searchParamSeen(t, testCase.path, testCase.body, testCase.search, "")
+				if present {
+					t.Error("GitLab was sent a search parameter although nothing was typed")
+				}
+			})
+		})
 	}
 }
 

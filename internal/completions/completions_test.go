@@ -14,6 +14,7 @@ import (
 	"go/token"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -328,9 +329,13 @@ func TestComplete_PromptGroupMilestoneTitle(t *testing.T) {
 }
 
 // TestComplete_PromptMilestoneWithoutScope verifies milestone completion is
-// empty when neither project_id nor group_id is resolved.
+// empty, and asks GitLab nothing, when no scope is resolved.
 func TestComplete_PromptMilestoneWithoutScope(t *testing.T) {
-	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
+	var seen []string
+	h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path)
+		http.NotFound(w, r)
+	})))
 	req := &mcp.CompleteRequest{}
 	req.Params = &mcp.CompleteParams{
 		Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "group_milestone_progress"},
@@ -343,6 +348,107 @@ func TestComplete_PromptMilestoneWithoutScope(t *testing.T) {
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+	}
+	if len(seen) != 0 {
+		t.Errorf("GitLab was asked %v, want nothing asked without a scope", seen)
+	}
+}
+
+// TestCompleteMilestoneArgument_TheScopeIsAnArgumentThatIsThere pins which of
+// the two milestone listings a partially filled prompt reaches.
+//
+// A prompt is completed argument by argument, so the arguments resolved so far
+// routinely carry a key whose value is still the empty string. Reading only
+// whether the key is present picks the project scope from a `project_id` the
+// caller has not typed yet, and builds `/projects//milestones` from it: GitLab
+// answers 404, the dropdown stays empty, and the group milestones that were
+// there all along are never asked for. The value decides, not the key.
+func TestCompleteMilestoneArgument_TheScopeIsAnArgumentThatIsThere(t *testing.T) {
+	cases := []struct {
+		name       string
+		resolved   map[string]string
+		wantValues []string
+		wantPaths  []string
+	}{
+		{
+			name:       "an empty project_id leaves the group to answer",
+			resolved:   map[string]string{"project_id": "", "group_id": "99"},
+			wantValues: []string{"v1.0"},
+			wantPaths:  []string{"/api/v4/groups/99/milestones"},
+		},
+		{
+			name:     "an empty group_id beside it asks nobody",
+			resolved: map[string]string{"project_id": "", "group_id": ""},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var seen []string
+			h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen = append(seen, r.URL.Path)
+				if r.URL.Path == "/api/v4/groups/99/milestones" {
+					testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"v1.0","state":"active"}]`)
+					return
+				}
+				http.NotFound(w, r)
+			})))
+
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "group_milestone_progress"},
+				Argument: mcp.CompleteParamsArgument{Name: "milestone", Value: "v"},
+				Context:  &mcp.CompleteContext{Arguments: testCase.resolved},
+			}
+			result, err := h.Complete(context.Background(), req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+
+			if !slices.Equal(result.Completion.Values, testCase.wantValues) {
+				t.Errorf("values = %v, want %v", result.Completion.Values, testCase.wantValues)
+			}
+			if !slices.Equal(seen, testCase.wantPaths) {
+				t.Errorf("GitLab was asked %v, want %v", seen, testCase.wantPaths)
+			}
+		})
+	}
+}
+
+// TestCompleteWithProjectID_AnEmptyProjectID_ReachesNobody holds the same
+// property for every project-scoped completer, which all share one guard.
+//
+// Merge requests, issues, branches, tags, pipelines, commits, labels and
+// milestone IDs are all dispatched through [Handler.completeWithProjectID], so
+// a project_id that is present and empty would build eight different paths with
+// an empty segment where the project belongs. One guard decides it for all of
+// them, and this is the case that tells it apart from a project_id that is
+// simply absent.
+func TestCompleteWithProjectID_AnEmptyProjectID_ReachesNobody(t *testing.T) {
+	for _, argName := range []string{"merge_request_iid", "issue_iid", "branch", "tag", "pipeline_id", "sha", "label", "milestone_id"} {
+		t.Run(argName, func(t *testing.T) {
+			var seen []string
+			h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen = append(seen, r.URL.Path)
+				http.NotFound(w, r)
+			})))
+
+			req := &mcp.CompleteRequest{}
+			req.Params = &mcp.CompleteParams{
+				Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "a_prompt"},
+				Argument: mcp.CompleteParamsArgument{Name: argName, Value: "x"},
+				Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": ""}},
+			}
+			result, err := h.Complete(context.Background(), req)
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			if len(result.Completion.Values) != 0 {
+				t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+			}
+			if len(seen) != 0 {
+				t.Errorf("GitLab was asked %v, want nothing asked for an empty project_id", seen)
+			}
+		})
 	}
 }
 
@@ -1052,10 +1158,20 @@ func TestComplete_PromptJobID(t *testing.T) {
 }
 
 // TestComplete_PromptJobIDWithoutDependencies verifies that job_id completion
-// returns empty results when project_id or pipeline_id is missing.
+// asks GitLab nothing until both identifiers it needs are resolved and
+// non-empty.
+//
+// The result being empty is the weaker half and cannot carry the test on its
+// own: a completer that went ahead with a missing identifier would request
+// `/projects//pipelines/10/jobs`, be answered 404, and return an empty list
+// too. So the assertion is that no request was made at all, which is the
+// property the guard exists for — an argument still being typed must not turn
+// into a request built from a hole.
+//
+// An identifier resolved to the empty string is the case worth spelling out:
+// it is present in the map, so anything reading only presence sees two
+// identifiers and builds a path with an empty segment in it.
 func TestComplete_PromptJobIDWithoutDependencies(t *testing.T) {
-	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
-
 	tests := []struct {
 		name string
 		args map[string]string
@@ -1064,10 +1180,17 @@ func TestComplete_PromptJobIDWithoutDependencies(t *testing.T) {
 		{"only project_id", map[string]string{"project_id": "42"}},
 		{"only pipeline_id", map[string]string{"pipeline_id": "10"}},
 		{"empty pipeline_id", map[string]string{"project_id": "42", "pipeline_id": ""}},
+		{"empty project_id beside a pipeline", map[string]string{"project_id": "", "pipeline_id": "10"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var seen []string
+			h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen = append(seen, r.URL.Path)
+				http.NotFound(w, r)
+			})))
+
 			req := &mcp.CompleteRequest{}
 			params := &mcp.CompleteParams{
 				Ref:      &mcp.CompleteReference{Type: refPrompt},
@@ -1084,6 +1207,9 @@ func TestComplete_PromptJobIDWithoutDependencies(t *testing.T) {
 			}
 			if len(result.Completion.Values) != 0 {
 				t.Errorf(fmtEmptyValues, len(result.Completion.Values))
+			}
+			if len(seen) != 0 {
+				t.Errorf("GitLab was asked %v, want nothing asked while an identifier is missing", seen)
 			}
 		})
 	}
@@ -1371,6 +1497,63 @@ func TestCompleteBranchOrTag_BothSearchesFail_SerializesAnEmptyArray(t *testing.
 	}
 	if !strings.Contains(string(encoded), `"values":[]`) {
 		t.Errorf("completion result serialized as %s, want it to carry an empty array of values", encoded)
+	}
+}
+
+// TestCompleteBranchOrTag_TotalCountsBothListings pins the arithmetic behind
+// the one completer that merges two sources.
+//
+// The `values` a completion carries are capped at ten, and `total` is what
+// tells a client how much it is not being shown. This completer takes ten from
+// the branches and ten from the tags, so its total has to be both counts added
+// together; any other expression still produces a plausible number and an
+// assertion on the values alone would never notice. Subtracting them, which is
+// the mutation this test exists to fail, reports a project with five branches
+// and three tags as holding two references.
+func TestCompleteBranchOrTag_TotalCountsBothListings(t *testing.T) {
+	h := NewHandler(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathRepoBranches:
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"name":"main"}]`, testutil.PaginationHeaders{Total: "5"})
+		case pathRepoTags:
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"name":"v1.0.0"}]`, testutil.PaginationHeaders{Total: "3"})
+		default:
+			http.NotFound(w, r)
+		}
+	})))
+
+	result, err := h.completeBranchOrTag(context.Background(), "42", "")
+	if err != nil {
+		t.Fatalf(fmtUnexpectedErr, err)
+	}
+	if got, want := result.Completion.Total, 8; got != want {
+		t.Errorf("total = %d, want %d (5 branches and 3 tags)", got, want)
+	}
+	if !result.Completion.HasMore {
+		t.Error("hasMore = false, although GitLab holds six references beyond the two offered")
+	}
+}
+
+// TestToResultWithTotal_ExactlyAtTheCap_IsComplete states that
+// [maxCompletionResults] is a limit rather than a threshold.
+//
+// A list exactly at the cap is the whole list, so nothing is truncated and
+// there is no more to fetch. Off by one here is invisible in the values, which
+// are the same ten either way, and shows only as a `hasMore` a client acts on:
+// it says a dropdown is incomplete when it is complete, which is what makes a
+// client ask for a page that does not exist.
+func TestToResultWithTotal_ExactlyAtTheCap_IsComplete(t *testing.T) {
+	values := make([]string, maxCompletionResults)
+	for i := range values {
+		values[i] = "item" + strconv.Itoa(i)
+	}
+
+	result := toResultWithTotal(values, maxCompletionResults)
+	if len(result.Completion.Values) != maxCompletionResults {
+		t.Errorf("values = %d, want all %d", len(result.Completion.Values), maxCompletionResults)
+	}
+	if result.Completion.HasMore {
+		t.Error("hasMore = true, although every matching value was returned")
 	}
 }
 
