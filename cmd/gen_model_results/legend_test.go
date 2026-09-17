@@ -89,3 +89,27 @@ func TestLegend_SaysItsRowIsInvented(t *testing.T) {
 		t.Errorf("the legend does not carry %q, so its row could be read as a real model", legendModel)
 	}
 }
+
+// TestLegend_ExampleCaption_IsDrawnByTheComparisonRule keeps the page's account
+// of comparability from drifting away from the rule that enforces it.
+//
+// The closing paragraph used to spell the list out by hand, and when case
+// coverage was added to both keys the paragraph went on naming the old five.
+// It now renders a real caption through crossVendorKey, so the two cannot
+// disagree; this test holds that it really is the rendered one and that the
+// dimension the hand-written list lost is in it.
+func TestLegend_ExampleCaption_IsDrawnByTheComparisonRule(t *testing.T) {
+	body := legendBlock()
+	caption := crossVendorKey(legendRow()).String()
+
+	if !strings.Contains(body, caption) {
+		t.Fatalf("the legend does not carry the caption the comparison rule draws:\nwant %q", caption)
+	}
+	if !strings.Contains(caption, "cases") {
+		t.Errorf("the example caption %q names no case coverage, so the example row covers the whole corpus "+
+			"and cannot show a reader what a narrowed run looks like", caption)
+	}
+	if !strings.Contains(body, "tool schemas") {
+		t.Error("the legend's caption carries no tool-schema fingerprint")
+	}
+}

@@ -103,7 +103,12 @@ func runMain(args []string) int {
 
 	recordDir := *dir
 	if recordDir == "" {
-		recordDir = defaultRecordDir()
+		resolved, err := defaultRecordDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return 1
+		}
+		recordDir = resolved
 	}
 
 	// The message alone and not a panic over it: both of these fail on
@@ -125,8 +130,18 @@ func runMain(args []string) int {
 
 // repositoryRecordDir is where the record lives when -dir names nothing: the
 // docs/development of the checkout this command was run from.
-func repositoryRecordDir() string {
-	return filepath.Join(cmdutil.Must(cmdutil.RepositoryRoot(".")), apilive.DefaultDir)
+//
+// It returns the error rather than panicking through cmdutil.Must, because the
+// one way it fails is being run from outside a checkout, which is exactly the
+// class Must's own documentation excludes: whoever ran it acts on it, by
+// passing -dir or by running it from the repository. A panic would answer that
+// with a stack trace and an exit code this command never chose.
+func repositoryRecordDir() (string, error) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		return "", fmt.Errorf("find the checkout holding the record (pass -dir to name it): %w", err)
+	}
+	return filepath.Join(root, apilive.DefaultDir), nil
 }
 
 // runCheck gates the committed record. It reads one file and asks nothing of

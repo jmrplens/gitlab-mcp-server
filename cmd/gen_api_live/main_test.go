@@ -125,6 +125,34 @@ func quietStderr(t *testing.T) {
 	})
 }
 
+// captureStderr redirects os.Stderr into a file for the test and returns what
+// was written to it.
+//
+// A file rather than a pipe, because a pipe's buffer is finite and a writer
+// that fills it blocks until somebody reads: the test would then have to read
+// concurrently with the code it is driving, which is a second thing to get
+// right in every test that only wanted to read a message.
+func captureStderr(t *testing.T) func() string {
+	t.Helper()
+	sink, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatalf("create the stderr sink: %v", err)
+	}
+	previous := os.Stderr
+	os.Stderr = sink
+	t.Cleanup(func() {
+		os.Stderr = previous
+		_ = sink.Close()
+	})
+	return func() string {
+		said, readErr := os.ReadFile(sink.Name())
+		if readErr != nil {
+			t.Fatalf("read the stderr sink: %v", readErr)
+		}
+		return string(said)
+	}
+}
+
 // TestRunGenerate_ADumpOnDisk_BecomesARecordWithProvenance verifies the half of
 // this command that has rules in it, without the half that needs Docker.
 //
@@ -1290,9 +1318,9 @@ func TestRunMain_WithNoDirectory_AsksForTheCheckoutsOwn(t *testing.T) {
 	dir := t.TempDir()
 	writeRecordAt(t, dir, wholeEnough(), today())
 	asked := 0
-	defaultRecordDir = func() string {
+	defaultRecordDir = func() (string, error) {
 		asked++
-		return dir
+		return dir, nil
 	}
 
 	t.Run("with no -dir the checkout's own directory is read", func(t *testing.T) {
@@ -1314,12 +1342,56 @@ func TestRunMain_WithNoDirectory_AsksForTheCheckoutsOwn(t *testing.T) {
 	})
 }
 
+// TestRunMain_WithNoCheckoutToResolve_ReportsAndExitsOne holds the ending a
+// command run from outside a checkout gets.
+//
+// Resolving the record's home is the one thing here that fails on something
+// the person running it acts on, by passing -dir or by running it from the
+// repository, so it is reported and exited on like every other such failure in
+// this command. It used to panic through cmdutil.Must, whose own documentation
+// excludes exactly this class, and a stack trace buries the one sentence that
+// says what to do.
+func TestRunMain_WithNoCheckoutToResolve_ReportsAndExitsOne(t *testing.T) {
+	stderr := captureStderr(t)
+	previous := defaultRecordDir
+	t.Cleanup(func() { defaultRecordDir = previous })
+	defaultRecordDir = func() (string, error) {
+		return "", errors.New("no checkout here")
+	}
+
+	if got := runMain([]string{"gen_api_live", "-check"}); got != 1 {
+		t.Errorf("runMain = %d, want 1", got)
+	}
+	if said := stderr(); !strings.Contains(said, "no checkout here") {
+		t.Errorf("stderr = %q, want it to carry the reason", said)
+	}
+}
+
+// TestRepositoryRecordDir_OutsideACheckout_SaysHowToNameOne verifies the
+// resolver's own failure, which is what the exit above reports: the error
+// names the flag that answers it, since a reader who is outside a checkout
+// cannot act on "go.mod not found" alone.
+func TestRepositoryRecordDir_OutsideACheckout_SaysHowToNameOne(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	got, err := repositoryRecordDir()
+	if err == nil {
+		t.Fatalf("repositoryRecordDir() = %q, want a refusal outside a checkout", got)
+	}
+	if !strings.Contains(err.Error(), "-dir") {
+		t.Errorf("repositoryRecordDir error = %q, want it to name -dir", err)
+	}
+}
+
 // TestRepositoryRecordDir_IsTheCheckoutsDocsDevelopment verifies what -dir
 // defaults to: the record beside the other pinned records of the checkout this
 // command was run from, rather than a path relative to whatever working
 // directory it happened to be started in.
 func TestRepositoryRecordDir_IsTheCheckoutsDocsDevelopment(t *testing.T) {
-	got := repositoryRecordDir()
+	got, err := repositoryRecordDir()
+	if err != nil {
+		t.Fatalf("repositoryRecordDir: %v", err)
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {

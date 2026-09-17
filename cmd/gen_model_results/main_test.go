@@ -833,3 +833,78 @@ func TestRun_ADryRunOfARealRun_StillRefusesWhatARealFoldWould(t *testing.T) {
 		t.Errorf("the dry run said %q, want nothing published", stdout)
 	}
 }
+
+// TestRun_AMergeIntoARowWithNoCases_IsRefused covers the path the per-case
+// merge opened and did not close.
+//
+// Cases is optional, so a row that carries none — one written before the merge
+// existed, or edited by hand — reaches mergeRows like any other. Merging into
+// it takes the union of an empty map and the incoming run's, which is the
+// incoming run's, and the standing row's figures are replaced whole with
+// nothing saying so. That is the defect the merge was built to remove,
+// arriving through the one row shape the merge cannot read.
+func TestRun_AMergeIntoARowWithNoCases_IsRefused(t *testing.T) {
+	root := newRoot(t)
+	standing := publishOne(t, twoCaseShard())
+	standing.Cases = nil
+	commit(t, root, []row{standing})
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, oneCaseRerunShard()), refold: true})
+	if status != exitOK {
+		t.Fatalf("the re-fold exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "refused to merge into the published row") {
+		t.Errorf("the re-fold said %q, want the merge refused", stdout)
+	}
+
+	doc, _, err := readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if len(doc.Rows) != 1 {
+		t.Fatalf("the record holds %d rows, want the standing one kept", len(doc.Rows))
+	}
+	if got := doc.Rows[0].Counts.Attempts; got != standing.Counts.Attempts {
+		t.Errorf("the standing row now counts %d attempts, want its own %d: the refusal did not leave it alone",
+			got, standing.Counts.Attempts)
+	}
+}
+
+// TestRun_AMergeAcrossDifferentConfigurations_IsRefused covers the other half.
+//
+// The row key holds what identifies a measurement, and four things it does not
+// hold describe the configuration the figures were produced under: the GitLab
+// version, the capability surface, the credential's scopes and how many tools
+// the session served. Two runs differing in any of them merge under one key,
+// the combined figures carry cases from both, and the provenance block a page
+// prints is whichever run arrived last.
+func TestRun_AMergeAcrossDifferentConfigurations_IsRefused(t *testing.T) {
+	root := newRoot(t)
+	if status, _, stderr := drive(t, root, options{shards: writeShard(t, twoCaseShard())}); status != exitOK {
+		t.Fatalf("the first fold exited %d: %s", status, stderr)
+	}
+
+	// The instance was upgraded between the two runs.
+	rerun := oneCaseRerunShard()
+	rerun[0].Run.RunID = "run-after-the-upgrade"
+	rerun[0].Run.GitLabVersion = "19.5.0"
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, rerun), refold: true})
+	if status != exitOK {
+		t.Fatalf("the re-fold exited %d: %s", status, stderr)
+	}
+	if !strings.Contains(stdout, "the GitLab version") {
+		t.Errorf("the re-fold said %q, want the disagreement named", stdout)
+	}
+
+	doc, _, err := readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if got := doc.Rows[0].Provenance.GitLabVersion; got != "19.3.0" {
+		t.Errorf("the published row now says GitLab %s, want the version its figures were measured on", got)
+	}
+	if got := len(doc.Rows[0].Cases); got != 2 {
+		t.Errorf("the row holds %d cases, want both of the run it was measured from", got)
+	}
+}
