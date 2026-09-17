@@ -251,8 +251,19 @@ func TestLimitedBody_DeliversUpToTheCeiling(t *testing.T) {
 	}
 }
 
+// errReaderStalled reports that a reader returned no bytes and no error, which
+// io.Reader discourages and which a correct [limitedBody] never does.
+var errReaderStalled = errors.New("reader returned no bytes and no error")
+
 // readInChunks drains r in fixed-size reads and reports how many bytes it
 // delivered before it stopped, plus the error that stopped it.
+//
+// A read that delivers nothing and reports nothing ends the loop with
+// [errReaderStalled] rather than being retried. [limitedBody] hands its inner
+// reader a slice of at least one byte on every call, so it cannot produce that
+// answer; a version that shortened the slice to nothing would, and the loop
+// would spin on it forever, which turns a wrong limiter into a suite that
+// hangs instead of a test that fails.
 func readInChunks(r io.Reader, chunk int) (int, error) {
 	buf := make([]byte, chunk)
 	total := 0
@@ -261,6 +272,9 @@ func readInChunks(r io.Reader, chunk int) (int, error) {
 		total += n
 		if err != nil {
 			return total, err
+		}
+		if n == 0 {
+			return total, errReaderStalled
 		}
 	}
 }
@@ -288,6 +302,85 @@ func TestLimitedBody_StaysFailedAfterOverflow(t *testing.T) {
 		if n != 0 || !errors.Is(err, ErrResponseTooLarge) {
 			t.Errorf("read %d: n=%d err=%v, want 0, ErrResponseTooLarge", attempt, n, err)
 		}
+	}
+}
+
+// offeredSizes records the length of every buffer it is handed and fills it
+// completely, which is what a body with more to give does.
+type offeredSizes struct{ sizes []int }
+
+// Read fills p and records how much room it was given.
+func (r *offeredSizes) Read(p []byte) (int, error) {
+	r.sizes = append(r.sizes, len(p))
+	for i := range p {
+		p[i] = 'x'
+	}
+	return len(p), nil
+}
+
+// Close satisfies io.ReadCloser and does nothing.
+func (r *offeredSizes) Close() error { return nil }
+
+// TestLimitedBody_OffersOneByteBeyondWhatIsLeft verifies the reader asks its
+// inner body for exactly one byte more than the ceiling allows, and refuses
+// the response on that same call.
+//
+// The window is the mechanism the whole limiter rests on, and the two ways of
+// getting it wrong fail in opposite directions. Offering the ceiling exactly
+// can never see a byte past it, so an oversized body is delivered truncated
+// and reported as complete, which is the failure [limitedBody] exists to
+// prevent. Offering less than the ceiling shrinks the window on every call
+// until it reaches zero, and a reader handed an empty slice answers "no bytes,
+// no error" for ever: the caller does not fail, it spins.
+//
+// Both are invisible to a test that only drains the body and checks the error,
+// which is why the size the inner reader was offered is asserted directly.
+func TestLimitedBody_OffersOneByteBeyondWhatIsLeft(t *testing.T) {
+	const remaining = 10
+
+	inner := &offeredSizes{}
+	body := &limitedBody{inner: inner, remaining: remaining}
+
+	n, err := body.Read(make([]byte, 100))
+
+	t.Run("the inner body is offered the ceiling plus one", func(t *testing.T) {
+		if len(inner.sizes) != 1 {
+			t.Fatalf("inner body was read %d times, want once: %v", len(inner.sizes), inner.sizes)
+		}
+		if inner.sizes[0] != remaining+1 {
+			t.Errorf("inner body was offered %d bytes, want %d", inner.sizes[0], remaining+1)
+		}
+	})
+	t.Run("the overflow is reported on that same call", func(t *testing.T) {
+		if !errors.Is(err, ErrResponseTooLarge) {
+			t.Errorf("Read() error = %v, want %v", err, ErrResponseTooLarge)
+		}
+		if n != 0 {
+			t.Errorf("Read() delivered %d bytes alongside the size error, want none", n)
+		}
+	})
+}
+
+// TestLimitedBody_UnderTheCeiling_DeliversWithoutError verifies a read that
+// fits hands back its bytes and no error, which is the case a limiter that
+// compares the wrong way round breaks first.
+//
+// Asserting it here rather than only through a full drain is deliberate: a
+// limiter that refuses every read is caught by the first call, before any
+// retry, decompression or client-go error path has a chance to turn the defect
+// into something slower and less legible.
+func TestLimitedBody_UnderTheCeiling_DeliversWithoutError(t *testing.T) {
+	body := &limitedBody{inner: io.NopCloser(strings.NewReader("hello")), remaining: 100}
+
+	n, err := body.Read(make([]byte, 64))
+	if err != nil {
+		t.Errorf("Read() error = %v, want none for a body well inside the ceiling", err)
+	}
+	if n != len("hello") {
+		t.Errorf("Read() = %d bytes, want %d", n, len("hello"))
+	}
+	if body.remaining != 100-int64(len("hello")) {
+		t.Errorf("remaining = %d, want %d", body.remaining, 100-len("hello"))
 	}
 }
 
