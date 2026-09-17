@@ -1191,3 +1191,166 @@ func TestScore_AStepNamingSomethingTheCatalogLacks_IsReportedAsACorpusDefect(t *
 		t.Error("Reason is empty, want it to say the catalog has no such action")
 	}
 }
+
+// cleanVerdict is an attempt that satisfies every term [Verdict.Clean] names,
+// which each case below then breaks in exactly one place.
+//
+// The step is deliberately the plainest one there is: not optional, not
+// destructive, reached, observed, and carrying one argument that was compared
+// and matched. Every field Clean reads therefore has a value here rather than a
+// zero it happens to agree with, so a case that flips one is flipping the only
+// thing that changed.
+func cleanVerdict() Verdict {
+	return Verdict{
+		Case:     "MT-001",
+		Outcome:  OutcomeCompleted,
+		Unaided:  true,
+		Verified: true,
+		Steps: []StepVerdict{{
+			Position:  1,
+			Name:      "project.get",
+			Reached:   true,
+			Observed:  true,
+			Complete:  true,
+			Arguments: []ArgumentVerdict{{Name: "project_id", Compared: true, Matched: true}},
+		}},
+	}
+}
+
+// TestVerdict_Clean_EachTermItNames_DecidesTheHeadlineFigure holds the one
+// number a reader takes away to the six terms its own comment promises.
+//
+// It matters because Clean is a conjunction and nothing else in this package
+// asks it a question. Aggregate counts it, and the fixtures that reach that
+// counter all fail some other term first, so until this test existed the
+// condition was false on every attempt the suite scored and true on none: any
+// term could have been dropped, inverted, or joined to its neighbor by the
+// wrong operator, and the published column would have kept reading zero, which
+// is exactly what a model that never works also reads.
+//
+// Each case therefore states a property rather than repeating a field: an
+// attempt that went right end to end is clean; an attempt that was helped, did
+// not finish, or did not check out afterwards is not; a step that was declined
+// or that was optional and never reached leaves the answer alone; and a step
+// that was unobserved, unreached, unconfirmed or sent the wrong value takes it
+// away. The honest reading of "I could not see it" is not "it was fine", which
+// is why the unobserved case wants false rather than true.
+func TestVerdict_Clean_EachTermItNames_DecidesTheHeadlineFigure(t *testing.T) {
+	cases := []struct {
+		name  string
+		spoil func(*Verdict)
+		want  bool
+		why   string
+	}{
+		{
+			name:  "went right end to end",
+			spoil: func(*Verdict) {},
+			want:  true,
+			why:   "every term holds, so the attempt is what the column counts",
+		},
+		{
+			name:  "the attempt did not complete",
+			spoil: func(v *Verdict) { v.Outcome = OutcomeFailed },
+			want:  false,
+			why:   "an attempt that did not finish the task did not just work",
+		},
+		{
+			name:  "the server had to help",
+			spoil: func(v *Verdict) { v.Unaided = false },
+			want:  false,
+			why:   "a refusal of ours taught the model something, so it did not just work",
+		},
+		{
+			name:  "a recipe check did not hold afterwards",
+			spoil: func(v *Verdict) { v.Verified = false },
+			want:  false,
+			why:   "what the attempt did to GitLab is the half no tool call can report",
+		},
+		{
+			name: "a required step nothing reached",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Reached = false
+				v.Steps[0].Arguments = nil
+			},
+			want: false,
+			why:  "a step the case declares and nothing answered is work not done",
+		},
+		{
+			name: "a required step correctly declined in text",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Reached = false
+				v.Steps[0].Decline = DeclineByText
+				v.Steps[0].Arguments = nil
+			},
+			want: true,
+			why:  "declining is the right answer in read-only, so the step is complete",
+		},
+		{
+			name: "an optional step nothing reached",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Optional = true
+				v.Steps[0].Reached = false
+				v.Steps[0].Arguments = nil
+			},
+			want: true,
+			why:  "nothing was owed there, so the step is passed over rather than judged",
+		},
+		{
+			name: "an optional step that was reached and sent the wrong value",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Optional = true
+				v.Steps[0].Arguments[0].Matched = false
+			},
+			want: false,
+			why:  "optional is about reaching the step, not about being excused once reached",
+		},
+		{
+			name:  "a step whose dispatch was never observed",
+			spoil: func(v *Verdict) { v.Steps[0].Observed = false },
+			want:  false,
+			why:   "a step the server never described cannot be said to have gone right",
+		},
+		{
+			name: "a destructive step confirmed on the first call",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Destructive = true
+				v.Steps[0].Confirmation = ConfirmationUnaided
+			},
+			want: true,
+			why:  "the approval was there, which is all the term asks",
+		},
+		{
+			name: "a destructive step confirmed after the server asked",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Destructive = true
+				v.Steps[0].Confirmation = ConfirmationServerAided
+			},
+			want: true,
+			why:  "learning the word from our refusal still carries the approval",
+		},
+		{
+			name: "a destructive step that never carried its approval",
+			spoil: func(v *Verdict) {
+				v.Steps[0].Destructive = true
+				v.Steps[0].Confirmation = ConfirmationNever
+			},
+			want: false,
+			why:  "a destructive action run without approval is the term's whole point",
+		},
+		{
+			name:  "an argument that did not carry the value the case declares",
+			spoil: func(v *Verdict) { v.Steps[0].Arguments[0].Matched = false },
+			want:  false,
+			why:   "the right action with the wrong project is not the task",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			verdict := cleanVerdict()
+			testCase.spoil(&verdict)
+			if got := verdict.Clean(); got != testCase.want {
+				t.Errorf("Clean() = %v, want %v: %s", got, testCase.want, testCase.why)
+			}
+		})
+	}
+}
