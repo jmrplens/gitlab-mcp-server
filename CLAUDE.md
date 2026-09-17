@@ -24,7 +24,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v3` v3.0.0        |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 3.0.0                                               |
+| Version       | 3.1.0                                               |
 
 ### Scale
 
