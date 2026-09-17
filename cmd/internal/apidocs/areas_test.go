@@ -17,6 +17,13 @@ import (
 // treePage is the shape one page of the repository tree listing comes back as.
 type treePage []treeEntry
 
+// maxTreeRequests bounds what one Areas call may ask of the fixture. GitLab's
+// own listing is three pages, so a run that gets this far is paginating without
+// a stop condition; answering it with a 404 ends the call at once, because the
+// alternative is a test that hangs until the binary's deadline and reports
+// nothing about why.
+const maxTreeRequests = 20
+
 // newTreeServer serves the given pages of a tree listing, one per ?page=, and
 // counts how many requests reached it. A page number past the end is served as
 // an empty list, which is what the real endpoint does.
@@ -24,7 +31,10 @@ func newTreeServer(t *testing.T, pages []treePage) (*httptest.Server, *int32) {
 	t.Helper()
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&hits, 1)
+		if atomic.AddInt32(&hits, 1) > maxTreeRequests {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		body := treePage{}
 		if page >= 1 && page <= len(pages) {
@@ -110,6 +120,28 @@ func TestAreas_AFullPage_IsFollowedByTheNext(t *testing.T) {
 	}
 	if areas[len(areas)-1] != "last" {
 		t.Errorf("Areas() ended with %q, want the entry from the second page", areas[len(areas)-1])
+	}
+}
+
+// TestAreas_AShortPage_EndsTheListing verifies the other half of the
+// pagination: a page carrying fewer than areasPerPage entries is the last one
+// asked for. The count is the assertion, because the endpoint answers a page
+// past the end with an empty list rather than an error, so a listing that does
+// not stop on a short page returns the same areas and asks GitLab for them
+// forever.
+func TestAreas_AShortPage_EndsTheListing(t *testing.T) {
+	srv, hits := newTreeServer(t, []treePage{{{Path: areasPrefix + "branches.md", Type: "blob"}}})
+	f := newAreasFetcher(t.TempDir(), srv.URL, Options{})
+
+	areas, err := f.Areas(context.Background())
+	if err != nil {
+		t.Fatalf("Areas() error = %v, want nil", err)
+	}
+	if strings.Join(areas, ",") != "branches" {
+		t.Errorf("Areas() = %v, want the one entry the single page carried", areas)
+	}
+	if asked := atomic.LoadInt32(hits); asked != 1 {
+		t.Errorf("Areas() asked for %d page(s), want 1: a page shorter than %d entries is the last one", asked, areasPerPage)
 	}
 }
 
