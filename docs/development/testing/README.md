@@ -83,7 +83,11 @@ it out of the efficacy quotient, so `internal/edition` announced 0.00% efficacy
 over four mutants none of which ever ran, while `internal/telemetry` hid two
 real survivors behind timeouts and read two better than it was.
 `make coverage-mutants` therefore measures the package first and derives the
-coefficient from it, printing both; `MUTANT_BUDGET` (30 s) is the floor.
+coefficient from it, printing both. `MUTANT_BUDGET` (30 s) is the budget, and
+`MUTANT_BUDGET_FLOOR` (10 s) is what it may not go under: raising the budget is
+the caller's business, and lowering it past a few seconds would recreate this
+very defect, so a smaller value is raised to the floor and the run says so
+rather than printing a budget it did not use.
 
 A timeout that survives a budget that size is a finding rather than a setting:
 the mutant made the package pathologically slow instead of wrong. Eight of

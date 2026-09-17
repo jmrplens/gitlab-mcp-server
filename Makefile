@@ -645,13 +645,25 @@ coverage-conditions:
 # A timeout that survives a budget this size is a finding rather than a setting:
 # it is a mutant that made the package pathologically slow, which is what
 # mutating a memo does, and the answer is a test that asserts the memo.
+# MUTANT_BUDGET is a knob and MUTANT_BUDGET_FLOOR is what it may not go under.
+# Raising the budget is the caller's business; lowering it past a few seconds
+# recreates the defect this whole recipe exists to prevent, since the budget
+# would again be smaller than the cost of starting `go test` and every mutant
+# would be reported TIMED OUT having never run. The floor is applied out loud
+# rather than silently: a run told to use one second and given ten should say
+# so, or the printed budget is a second lie on top of the first.
 MUTANT_BUDGET ?= 30
+MUTANT_BUDGET_FLOOR ?= 10
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
-	@base=$$(go test -count=1 $(PKG) 2>&1 | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
+	@budget=$$(awk -v want="$(MUTANT_BUDGET)" -v floor="$(MUTANT_BUDGET_FLOOR)" \
+		'BEGIN{print (want+0 < floor+0) ? floor : want}'); \
+	[ "$$budget" = "$(MUTANT_BUDGET)" ] || \
+		echo "gremlins: MUTANT_BUDGET=$(MUTANT_BUDGET)s is under the $(MUTANT_BUDGET_FLOOR)s floor and would report untested mutants as timeouts; using $${budget}s"; \
+	base=$$(go test -count=1 $(PKG) 2>&1 | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
 	[ -n "$$base" ] || base=0.010; \
-	coeff=$$(awk -v b="$$base" -v f="$(MUTANT_BUDGET)" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
-	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$(MUTANT_BUDGET)s budget"; \
+	coeff=$$(awk -v b="$$base" -v f="$$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
+	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$${budget}s budget"; \
 	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 --timeout-coefficient $$coeff $(GREMLINS_FLAGS) $(PKG)
 
 ## coverage: run tests and generate HTML coverage report
