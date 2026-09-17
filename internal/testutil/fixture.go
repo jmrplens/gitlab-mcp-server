@@ -342,6 +342,11 @@ func OptionalFields(t reflect.Type) []FixtureField {
 }
 
 // collectOptional walks one struct type.
+//
+// It descends into every struct-kinded field, a time.Time included. Excluding
+// the time used to be written out here, and it decided nothing: time.Time
+// exports no field, so the walk into it reports exactly the nothing that not
+// walking into it did, and the clause only looked like a rule.
 func collectOptional(t reflect.Type, path []int, name string, depth int, out *[]FixtureField) {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -369,7 +374,7 @@ func collectOptional(t reflect.Type, path []int, name string, depth int, out *[]
 		for inner.Kind() == reflect.Pointer {
 			inner = inner.Elem()
 		}
-		if inner.Kind() == reflect.Struct && inner != reflect.TypeFor[time.Time]() {
+		if inner.Kind() == reflect.Struct {
 			collectOptional(inner, next, fieldName, depth+1, out)
 		}
 	}

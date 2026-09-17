@@ -49,6 +49,11 @@ func (failingBody) Read([]byte) (int, error) { return 0, errors.New("body is gon
 // Close satisfies io.ReadCloser.
 func (failingBody) Close() error { return nil }
 
+// refusedDocumentEnvelope is the JSON envelope of a document the pinned
+// schema refuses, so a request carrying it is silent only because something
+// kept the gate from reading it.
+const refusedDocumentEnvelope = `{"query":"query($id: VulnerabilityID!) { vulnerability(id: $id) { hasSolutions } }","variables":{"id":"gid://gitlab/Vulnerability/1"}}`
+
 // graphQLRequest builds a POST to the GraphQL endpoint carrying body.
 func graphQLRequest(t *testing.T, body string) *http.Request {
 	t.Helper()
@@ -130,6 +135,29 @@ func TestValidateGraphQLRequest_RequestsThatCarryNoDocument_AreLeftAlone(t *test
 			request: func(t *testing.T) *http.Request {
 				t.Helper()
 				return graphQLRequest(t, `{"variables":{"a":1}}`)
+			},
+		},
+		{
+			// The path is this endpoint's and the body is a document the
+			// schema refuses, so only the method keeps it out. GitLab serves
+			// GraphQL over POST alone, and a test reaching this path any other
+			// way is testing the transport.
+			name: "a GET to this path carrying a document",
+			request: func(t *testing.T) *http.Request {
+				t.Helper()
+				return httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://gitlab.example.com"+graphQLPath, strings.NewReader(refusedDocumentEnvelope))
+			},
+		},
+		{
+			// The envelope does not decode: "variables" is a string where an
+			// object belongs, which encoding/json reports while still filling
+			// the query above it. A body this gate could not read whole is a
+			// body it has no opinion about, however much of it happened to
+			// land in the struct.
+			name: "an envelope whose variables are not an object",
+			request: func(t *testing.T) *http.Request {
+				t.Helper()
+				return graphQLRequest(t, `{"query":"query($id: VulnerabilityID!) { vulnerability(id: $id) { hasSolutions } }","variables":"not-an-object"}`)
 			},
 		},
 	}
@@ -225,6 +253,17 @@ func TestValidateGraphQLRequest_MultipartCarryingNoDocument_IsLeftAlone(t *testi
 			name:        "an operations part that is not the envelope",
 			contentType: `multipart/form-data; boundary="frontier"`,
 			body:        "--frontier\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\nnot json\r\n--frontier--\r\n",
+		},
+		{
+			// A boundary parameter on a media type that is not multipart: the
+			// body really is a multipart one carrying a document the schema
+			// refuses, so the media type is the only thing keeping it out.
+			// Reading the parts of a body whose own content type says it is
+			// not multipart would judge whatever a transport test happened to
+			// send, and a boundary parameter alone does not permit that.
+			name:        "a boundary parameter on a media type that is not multipart",
+			contentType: "application/json; boundary=frontier",
+			body:        "--frontier\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n" + refusedDocumentEnvelope + "\r\n--frontier--\r\n",
 		},
 	}
 	for _, testCase := range cases {
@@ -399,6 +438,14 @@ func TestDocumentLabel_NamesTheOperation(t *testing.T) {
 			name:     "a signature longer than the limit",
 			document: strings.Repeat("q", labelLimit+10),
 			want:     strings.Repeat("q", labelLimit) + "...",
+		},
+		{
+			// The limit is what a line may be, not what it must be under: a
+			// signature of exactly this length is printed whole, and the
+			// ellipsis only ever stands for characters that were dropped.
+			name:     "a signature exactly at the limit",
+			document: strings.Repeat("q", labelLimit),
+			want:     strings.Repeat("q", labelLimit),
 		},
 	}
 	for _, testCase := range cases {
