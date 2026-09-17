@@ -629,9 +629,55 @@ coverage-conditions:
 	cd $(PKG) && go run github.com/rillig/gobco@v1.3.4
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
+# The per-mutant timeout is derived from PKG's own baseline, because gremlins
+# computes it as that baseline times a coefficient and applies no floor. On a
+# fast package that product is smaller than the fixed cost of starting `go
+# test` at all, so every mutant is reported TIMED OUT having never run: measured
+# here, internal/tools/surfaces (0.015s of tests) reported 1 killed and 12 timed
+# out, and the same package under a budget that clears the startup cost reports
+# 13 killed and none timed out. A timeout is not a kill and gremlins leaves it
+# out of the efficacy quotient, so the default flatters exactly the packages it
+# never managed to test, and internal/edition reported 0.00% efficacy over four
+# mutants none of which ever ran.
+#
+# MUTANT_BUDGET is the floor in seconds; the coefficient is whatever reaches it,
+# never below 8 so a slow package still gets a real multiple of its own runtime.
+# A timeout that survives a budget this size is a finding rather than a setting:
+# it is a mutant that made the package pathologically slow, which is what
+# mutating a memo does, and the answer is a test that asserts the memo.
+# A package that does not pass its own tests is refused rather than measured.
+# The pipeline that reads the baseline duration takes its status from the last
+# command in it, so a failing `go test` did not stop the recipe; and a failing
+# run still ends in "FAIL <pkg> 1.234s", which the duration pattern matches, so
+# the baseline was not even empty. Gremlins would then run against a suite that
+# already fails, where every mutant is reported KILLED: a perfect score over a
+# broken package, which is the one reading this recipe exists to prevent.
+#
+# MUTANT_BUDGET is a knob and MUTANT_BUDGET_FLOOR is what it may not go under.
+# Raising the budget is the caller's business; lowering it past a few seconds
+# recreates the defect this whole recipe exists to prevent, since the budget
+# would again be smaller than the cost of starting `go test` and every mutant
+# would be reported TIMED OUT having never run. The floor is applied out loud
+# rather than silently: a run told to use one second and given ten should say
+# so, or the printed budget is a second lie on top of the first.
+MUTANT_BUDGET ?= 30
+MUTANT_BUDGET_FLOOR ?= 10
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
-	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 $(GREMLINS_FLAGS) $(PKG)
+	@budget=$$(awk -v want="$(MUTANT_BUDGET)" -v floor="$(MUTANT_BUDGET_FLOOR)" \
+		'BEGIN{print (want+0 < floor+0) ? floor : want}'); \
+	[ "$$budget" = "$(MUTANT_BUDGET)" ] || \
+		echo "gremlins: MUTANT_BUDGET=$(MUTANT_BUDGET)s is under the $(MUTANT_BUDGET_FLOOR)s floor and would report untested mutants as timeouts; using $${budget}s"; \
+	baseline=$$(go test -count=1 $(PKG) 2>&1) || { \
+		printf '%s\n' "$$baseline" >&2; \
+		echo "gremlins: $(PKG) does not pass its own tests, so every mutant would read as killed; refusing to measure" >&2; \
+		exit 1; \
+	}; \
+	base=$$(printf '%s\n' "$$baseline" | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
+	[ -n "$$base" ] || base=0.010; \
+	coeff=$$(awk -v b="$$base" -v f="$$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
+	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$${budget}s budget"; \
+	go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 --timeout-coefficient $$coeff $(GREMLINS_FLAGS) $(PKG)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
