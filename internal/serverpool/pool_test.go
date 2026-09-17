@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -856,7 +857,17 @@ func TestStartRevalidation_NilContext(t *testing.T) {
 
 // TestStartRevalidation_DisabledWithZeroInterval verifies that
 // StartRevalidation returns immediately when interval is zero.
+//
+// Zero is the documented way to turn the periodic check off, so it has to reach
+// the disabled branch and not the one that builds a ticker from it: time.NewTicker
+// panics on a non-positive interval, and the panic would be raised inside the
+// sweep goroutine where recoverSweep catches it. Nothing would be logged as a
+// failure that a caller could notice, and revalidation would simply never run
+// on a deployment that had not asked for that. The started line is therefore
+// asserted absent as well as the disabled line present: returning quietly is
+// what both branches look like from here.
 func TestStartRevalidation_DisabledWithZeroInterval(t *testing.T) {
+	captured := captureLogs(t)
 	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
 
@@ -864,6 +875,13 @@ func TestStartRevalidation_DisabledWithZeroInterval(t *testing.T) {
 
 	// Should not panic and return immediately
 	pool.StartRevalidation(ctx)
+
+	if _, found := captured.find("server pool: starting token revalidation"); found {
+		t.Error("a zero interval started the revalidation sweeper: zero was read as an interval rather than as disabled")
+	}
+	if _, found := captured.find("server pool: token revalidation disabled"); !found {
+		t.Error(`no "server pool: token revalidation disabled" record was logged`)
+	}
 }
 
 // TestStartRevalidation_CancelledContext verifies that the revalidation
@@ -2337,14 +2355,45 @@ func TestEvictIdle_DisabledKeepsEverything(t *testing.T) {
 // TestStartIdleEviction_DisabledReturnsWithoutGoroutine verifies the start
 // helper is a no-op when the timeout is non-positive, and that a cancelled
 // context stops a running sweeper.
+//
+// Which of the two it did is read from the line it logs, because that is the
+// only thing the call reports: it returns nothing either way, and the sweeper
+// it may or may not have started is a goroutine whose first tick is a minute
+// off. A zero timeout must reach the disabled branch rather than the one that
+// derives a cadence from it, since max(0/4, idleSweepMinInterval) is a perfectly
+// valid minute and the sweeper would run forever over a pool the operator asked
+// never to be swept.
 func TestStartIdleEviction_DisabledReturnsWithoutGoroutine(t *testing.T) {
+	const (
+		disabledMessage = "server pool: idle eviction disabled"
+		startedMessage  = "server pool: starting idle eviction"
+	)
 	cfg := testConfig(stubGitLabBase)
 
-	New(cfg, testFactory(), WithIdleTimeout(0)).StartIdleEviction(t.Context())
+	t.Run("a non-positive timeout disables it", func(t *testing.T) {
+		captured := captureLogs(t)
 
-	ctx, cancel := context.WithCancel(t.Context())
-	New(cfg, testFactory(), WithIdleTimeout(time.Hour)).StartIdleEviction(ctx)
-	cancel()
+		New(cfg, testFactory(), WithIdleTimeout(0)).StartIdleEviction(t.Context())
+
+		if _, found := captured.find(startedMessage); found {
+			t.Error("a zero idle timeout started the sweeper: zero was read as a timeout rather than as disabled")
+		}
+		if _, found := captured.find(disabledMessage); !found {
+			t.Errorf("no %q record was logged", disabledMessage)
+		}
+	})
+
+	t.Run("a positive timeout starts it and a cancelled context stops it", func(t *testing.T) {
+		captured := captureLogs(t)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		New(cfg, testFactory(), WithIdleTimeout(time.Hour)).StartIdleEviction(ctx)
+		cancel()
+
+		if _, found := captured.find(startedMessage); !found {
+			t.Errorf("no %q record was logged for a positive timeout", startedMessage)
+		}
+	})
 }
 
 // TestGetOrCreate_OAuthMode_BuildsBearerClient verifies the pool selects the
@@ -4516,6 +4565,194 @@ func TestEntryConfigLogValues_TolerateAPartiallyBuiltEntry(t *testing.T) {
 			}
 			if gotEnterprise != tt.wantEnterprise {
 				t.Errorf("enterprise = %v, want %v", gotEnterprise, tt.wantEnterprise)
+			}
+		})
+	}
+}
+
+// TestCredentialCeiling_AtItsExactEdge_IsReadAsFreshByEveryReader verifies that
+// the three readers of [ServerPool.maxCredentialAge] agree about the instant
+// the ceiling names.
+//
+// They are written to agree: the fast path calls an entry stale when its check
+// is strictly older than the ceiling, and both [ServerPool.Admitted] and
+// [ServerPool.evictStaleCredential] call it fresh while it is at most that old.
+// Move any one of them across the boundary and the three stop describing one
+// instant: Admitted would report a credential unusable that the very next
+// request is about to serve from cache, which is the answer the per-address
+// authentication budget spends its exemption on, and evictStaleCredential
+// would drop an entry the fast path had not asked it to drop and charge a
+// StaleCredentialEvictions for it.
+//
+// The edge is reached by saturating duration arithmetic rather than by waiting,
+// because all three read the clock inside the call and no test can land on an
+// exact nanosecond. A ceiling of the maximum Duration against a check dated at
+// the zero Time is the one pair that meets: Time.Sub returns maxDuration when
+// the real difference overflows a Duration. The ceiling is written to the field
+// rather than through [WithMaxCredentialAge], which clamps at
+// maxCredentialAgeCeiling; what is under test is where the comparison puts its
+// boundary, not what values the option admits.
+func TestCredentialCeiling_AtItsExactEdge_IsReadAsFreshByEveryReader(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+
+	entry, err := pool.GetOrCreateEntry("glpat-edge", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+	key := sessionKey("glpat-edge", stubGitLabBase)
+
+	pool.mu.Lock()
+	pool.maxCredentialAge = time.Duration(math.MaxInt64)
+	entry.lastValidated = time.Time{}
+	pool.mu.Unlock()
+
+	if elapsed := time.Since(time.Time{}); elapsed != pool.maxCredentialAge {
+		t.Fatalf("the ceiling's edge was not reached: time.Since(zero time) = %v, ceiling = %v", elapsed, pool.maxCredentialAge)
+	}
+
+	if !pool.Admitted("glpat-edge", stubGitLabBase) {
+		t.Error("Admitted refused an entry checked exactly the ceiling ago, which the fast path below still serves from cache")
+	}
+
+	if _, againErr := pool.GetOrCreateEntry("glpat-edge", stubGitLabBase, nil); againErr != nil {
+		t.Fatalf("GetOrCreateEntry() at the ceiling's edge: %v", againErr)
+	}
+	if got := pool.metrics.Hits.Load(); got != 1 {
+		t.Errorf("Hits = %d, want 1: the request at the ceiling's edge did not take the fast path", got)
+	}
+
+	pool.evictStaleCredential(key)
+
+	pool.mu.RLock()
+	_, kept := pool.entries[key]
+	pool.mu.RUnlock()
+	if !kept {
+		t.Error("evictStaleCredential dropped an entry checked exactly the ceiling ago")
+	}
+	if got := pool.Stats().StaleCredentialEvictions; got != 0 {
+		t.Errorf("StaleCredentialEvictions = %d, want 0: an entry at the edge is not stale", got)
+	}
+}
+
+// TestAdmitted_HalfAKey_IsRefusedWhateverThePoolHolds verifies that Admitted
+// refuses an empty token or an empty instance before it looks anything up,
+// rather than relying on the lookup to miss.
+//
+// What the guard is worth is decided by what Admitted is for: it exempts a
+// credential the pool is already serving from the per-address authentication
+// budget, so anything it answers true for costs an attacker nothing to present
+// again. Leaving the refusal to the map means an entry that ever landed under
+// half a key would be handed that exemption, and the key is a hash of the two
+// strings concatenated, so a lookup for an empty token is an ordinary lookup
+// that can perfectly well hit.
+//
+// The entries are seeded under exactly those keys, which no admission path
+// builds — [ServerPool.GetOrCreateEntry] refuses both halves first. That is the
+// point: a guard whose only job is to hold when everything else has failed is
+// tested by making everything else fail.
+func TestAdmitted_HalfAKey_IsRefusedWhateverThePoolHolds(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+
+	seed := func(token, gitlabURL string) {
+		key := sessionKey(token, gitlabURL)
+		pool.entries[key] = &Entry{
+			element:       pool.lru.PushFront(key),
+			lastValidated: time.Now(),
+		}
+	}
+	pool.mu.Lock()
+	seed("", stubGitLabBase)
+	seed("glpat-known", "")
+	pool.mu.Unlock()
+
+	if pool.Admitted("", stubGitLabBase) {
+		t.Error("an empty token was admitted: the pool held an entry under its key and the guard did not refuse first")
+	}
+	if pool.Admitted("glpat-known", "") {
+		t.Error("an empty GitLab URL was admitted: the pool held an entry under its key and the guard did not refuse first")
+	}
+}
+
+// TestAdmitted_WithTheCeilingDisabled_AdmitsHoweverOldTheCheckIs verifies that
+// a pool carrying no credential ceiling admits an entry whatever its last check
+// says, which is the branch that answers for a pool assembled outside [New].
+//
+// The ceiling is a floor under revalidation rather than a second expiry, so
+// "no ceiling" has to mean "never stale". Read as a ceiling of zero instead,
+// every entry is past it the instant it is built — every request would rebuild,
+// every rebuild would re-probe GitLab, and Admitted would exempt nobody. The
+// fast path has the same reading and is pinned by
+// TestGetOrCreateEntry_NoCredentialAgeCeiling_NeverCallsAnEntryStale; this is
+// the other reader of the same field.
+func TestAdmitted_WithTheCeilingDisabled_AdmitsHoweverOldTheCheckIs(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), testFactory())
+
+	entry, err := pool.GetOrCreateEntry("glpat-no-ceiling", stubGitLabBase, nil)
+	if err != nil {
+		t.Fatalf("GetOrCreateEntry(): %v", err)
+	}
+
+	pool.mu.Lock()
+	pool.maxCredentialAge = 0
+	entry.lastValidated = time.Now().Add(-30 * 24 * time.Hour)
+	pool.mu.Unlock()
+
+	if !pool.Admitted("glpat-no-ceiling", stubGitLabBase) {
+		t.Error("an unset ceiling was read as a ceiling of zero: an entry the next request will serve from cache was reported unadmitted")
+	}
+}
+
+// TestInsertEntry_TheCreatedEntryLine_SaysWhetherScopesWereDetected verifies
+// the one field on the created-entry log line that records what the pool
+// learned about the token rather than what it was configured with.
+//
+// Scope detection decides whether the entry is narrowed to read-only, and the
+// narrowing is invisible from outside: a client is simply served a smaller
+// catalog. This line is what tells an operator which of the two happened, so a
+// value that no longer tracks the entry's own TokenScopes would report the
+// opposite of the surface the tenant is being served, in both directions.
+func TestInsertEntry_TheCreatedEntryLine_SaysWhetherScopesWereDetected(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "scopes": []string{"api"}, "active": true})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	tests := []struct {
+		name         string
+		ignoreScopes bool
+		want         bool
+	}{
+		{name: "detection off leaves the entry with no scopes", ignoreScopes: true, want: false},
+		{name: "detection on records what it found", ignoreScopes: false, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			captured := captureLogs(t)
+			cfg := testConfig(srv.URL)
+			cfg.IgnoreScopes = tt.ignoreScopes
+
+			if _, err := New(cfg, testFactory()).GetOrCreate("glpat-scopes", srv.URL); err != nil {
+				t.Fatalf("GetOrCreate(): %v", err)
+			}
+
+			record, found := captured.find("server pool: created new entry")
+			if !found {
+				t.Fatal("no created-entry record was logged")
+			}
+			detected, ok := logAttr(record, "scopes_detected")
+			if !ok {
+				t.Fatal("the created-entry line carries no scopes_detected field")
+			}
+			if detected.Bool() != tt.want {
+				t.Errorf("scopes_detected = %v, want %v", detected.Bool(), tt.want)
 			}
 		})
 	}
