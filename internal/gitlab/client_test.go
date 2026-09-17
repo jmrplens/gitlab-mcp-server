@@ -559,6 +559,53 @@ func TestBuildBaseTransport_DefaultAndTLS(t *testing.T) {
 	}
 }
 
+// TestBaseDialer_RestatesTheDefaultTimeoutsAndCarriesTheGuard pins the three
+// fields the package's own dialer exists for.
+//
+// Both durations restate what net/http's default dialer carries. That reads
+// like redundancy and is not: setting [http.Transport.DialContext] replaces
+// the dialer those defaults belong to, so a dialer that omits them is a
+// transport with no connect deadline and no keep-alive at all, and a GitLab
+// that accepts a connection and never completes the handshake pins a goroutine
+// and a socket for as long as the operating system allows.
+//
+// ControlContext is asserted by what it does rather than by comparing function
+// values, which Go does not allow: a cloud metadata address must be refused
+// before any packet is sent, which is the whole reason the guard is a dialer
+// hook and not a round tripper.
+func TestBaseDialer_RestatesTheDefaultTimeoutsAndCarriesTheGuard(t *testing.T) {
+	d := baseDialer()
+
+	t.Run("connect timeout", func(t *testing.T) {
+		if d.Timeout != 30*time.Second {
+			t.Errorf("Timeout = %v, want %v; replacing DialContext removes net/http's own", d.Timeout, 30*time.Second)
+		}
+	})
+	t.Run("keep alive", func(t *testing.T) {
+		if d.KeepAlive != 30*time.Second {
+			t.Errorf("KeepAlive = %v, want %v; replacing DialContext removes net/http's own", d.KeepAlive, 30*time.Second)
+		}
+	})
+	t.Run("the destination guard runs as ControlContext", func(t *testing.T) {
+		if d.ControlContext == nil {
+			t.Fatal("ControlContext = nil, want the destination guard")
+		}
+		err := d.ControlContext(t.Context(), "tcp", "169.254.169.254:80", nil)
+		if !errors.Is(err, ErrDestinationRefused) {
+			t.Errorf("ControlContext(metadata address) = %v, want %v", err, ErrDestinationRefused)
+		}
+	})
+	t.Run("the transport dials through it", func(t *testing.T) {
+		conn, err := newBaseTransport(nil).DialContext(t.Context(), "tcp", "169.254.169.254:80")
+		if conn != nil {
+			_ = conn.Close()
+		}
+		if !errors.Is(err, ErrDestinationRefused) {
+			t.Errorf("DialContext(metadata address) = %v, want %v", err, ErrDestinationRefused)
+		}
+	})
+}
+
 // TestInitialize_Success verifies that [Client.Initialize] marks the client
 // as initialized and returns the GitLab version when the server responds OK.
 func TestInitialize_Success(t *testing.T) {

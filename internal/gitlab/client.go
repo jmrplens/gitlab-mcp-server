@@ -656,15 +656,30 @@ func newBaseTransport(tlsConfig *tls.Config) *http.Transport {
 		t = &http.Transport{}
 	}
 	t.ResponseHeaderTimeout = responseHeaderTimeout
-	t.DialContext = (&net.Dialer{
-		Timeout:        30 * time.Second,
-		KeepAlive:      30 * time.Second,
-		ControlContext: guardDestination,
-	}).DialContext
+	t.DialContext = baseDialer().DialContext
 	if tlsConfig != nil {
 		t.TLSClientConfig = tlsConfig
 	}
 	return t
+}
+
+// baseDialer is the dialer every transport this package builds dials through.
+//
+// It is a function of its own rather than a literal inside [newBaseTransport]
+// because a dialer reached only as the method value `DialContext` cannot be
+// asked what it was configured with: neither its timeouts nor the hook it
+// carries are readable back through the transport, so nothing could assert
+// either and a mutation of either went unnoticed.
+//
+// The timeouts restate net/http's own defaults deliberately. Setting
+// [http.Transport.DialContext] replaces the dialer that carried them, so
+// leaving them out does not inherit them, it removes them.
+func baseDialer() *net.Dialer {
+	return &net.Dialer{
+		Timeout:        30 * time.Second,
+		KeepAlive:      30 * time.Second,
+		ControlContext: guardDestination,
+	}
 }
 
 // buildBaseTransport returns the base HTTP round tripper with optional TLS

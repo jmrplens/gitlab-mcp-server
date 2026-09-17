@@ -164,6 +164,43 @@ func TestGuardDestination_TierAAppliesWithNoPolicy(t *testing.T) {
 	}
 }
 
+// TestGuardDestination_StampedWithNoPolicy_GetsTierAAndNothingElse covers the
+// half of the unstamped branch the absent-stamp test cannot reach: a request
+// that WAS stamped, by a policy of nil.
+//
+// [destinationTransport.RoundTrip] produces exactly this when the client it
+// wraps carries no policy, and the two halves of the guard's condition must
+// therefore agree: a stamp whose policy is nil is as good as no stamp, because
+// there is nothing to apply tier B with. Reading it the other way round would
+// dereference the nil policy on every such dial.
+//
+// The private address is the assertion that matters. A public one would be
+// allowed by tier B as well, so it could not tell "tier B was skipped" from
+// "tier B ran and permitted it".
+func TestGuardDestination_StampedWithNoPolicy_GetsTierAAndNothingElse(t *testing.T) {
+	tests := []struct {
+		name        string
+		address     string
+		wantRefused bool
+	}{
+		{name: "a private address is allowed, since there is no tier B to apply", address: "10.0.0.1:9"},
+		{name: "loopback likewise", address: "127.0.0.1:9"},
+		{name: "a metadata address is still refused by tier A", address: "169.254.169.254:80", wantRefused: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := withDialTarget(t.Context(), dialTarget{policy: nil})
+
+			err := guardDestination(ctx, "tcp", tt.address, nil)
+
+			if got := errors.Is(err, ErrDestinationRefused); got != tt.wantRefused {
+				t.Fatalf("refused = %v, want %v (err = %v)", got, tt.wantRefused, err)
+			}
+		})
+	}
+}
+
 // TestGuardDestination_NonAddressInputs covers the two inputs that are not a
 // destination: a network this server never dials, and an address string that
 // cannot be classified.

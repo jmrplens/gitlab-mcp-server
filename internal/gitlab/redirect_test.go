@@ -145,6 +145,13 @@ func TestIsDomainOrSubdomain_Boundaries(t *testing.T) {
 		{name: "zone suffixed ipv6 literal", sub: "::1%.gitlab.com", parent: "gitlab.com", want: false},
 		{name: "bare ipv6 literal ending in the parent text", sub: "::1:gitlab.com", parent: "gitlab.com", want: false},
 		{name: "identical ipv6 literal", sub: "::1", parent: "::1", want: true},
+		// An empty parent is a base URL this server could not read a host
+		// out of, and every hostname ends with the empty string. The emptiness
+		// guard is the only thing between that and "matches everything": the
+		// dot-boundary test passes any name written with a trailing dot, and
+		// the suffix test passes them all, so a rooted FQDN reaches the end of
+		// the function and comes back true if the guard is not doing its job.
+		{name: "rooted name against an unreadable parent", sub: "storage.example.net.", parent: "", want: false},
 	}
 
 	for _, tt := range tests {
@@ -248,6 +255,12 @@ func TestCredentialSafeRedirect_RecordsTheHopThatLostTheHeaders(t *testing.T) {
 		{"instance_host", "gitlab.example.com"},
 		{"redirect_host", "storage.example.net"},
 		{"redirect_scheme", "https"},
+		// The hop stays on https, so the downgrade reason must not be the one
+		// reported: an operator told a same-scheme hop downgraded to http
+		// would conclude the log is wrong and stop reading it. The downgrade
+		// wording has its own test below, and the two must not collapse into
+		// one another.
+		{"reason", "host outside the configured instance"},
 	} {
 		t.Run(want.field, func(t *testing.T) {
 			if got, _ := record[want.field].(string); got != want.value {
