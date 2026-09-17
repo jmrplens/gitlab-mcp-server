@@ -1547,31 +1547,45 @@ func TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan(t *t
 				t.Fatalf("recorded %d spans, want 1", len(spans))
 			}
 
-			action, hasAction := attrOf(spans[0], AttrActionID)
-			switch {
-			case tc.wantAction == "" && hasAction:
-				t.Errorf("span carries %s = %q, want no action attribute at all", AttrActionID, action.AsString())
-			case tc.wantAction != "" && action.AsString() != tc.wantAction:
-				t.Errorf("span action = %q, want %q once the identifier could answer", action.AsString(), tc.wantAction)
-			}
-
-			domain, hasDomain := attrOf(spans[0], AttrDomain)
-			switch {
-			case tc.wantDomain == "" && hasDomain:
-				t.Errorf("span carries %s = %q, want no domain attribute at all", AttrDomain, domain.AsString())
-			case tc.wantDomain != "" && domain.AsString() != tc.wantDomain:
-				t.Errorf("span domain = %q, want %q", domain.AsString(), tc.wantDomain)
-			}
-
-			domains := 0
-			for _, kv := range spans[0].Attributes() {
-				if kv.Key == AttrDomain {
-					domains++
-				}
-			}
-			if domains > 1 {
-				t.Errorf("span carries %s %d times; on a metric that is one dimension published twice", AttrDomain, domains)
-			}
+			assertSpanNames(t, spans[0], AttrActionID, tc.wantAction)
+			assertSpanNames(t, spans[0], AttrDomain, tc.wantDomain)
+			assertRecordedOnce(t, spans[0], AttrDomain)
 		})
+	}
+}
+
+// assertSpanNames holds one span attribute to a wanted value, where an empty
+// want means the attribute must be absent rather than blank.
+//
+// The distinction is the point: an attribute present and empty is worse than
+// one absent for anyone grouping by it, since it mints a series for "no value"
+// that looks like a value.
+func assertSpanNames(t *testing.T, span sdktrace.ReadOnlySpan, key attribute.Key, want string) {
+	t.Helper()
+
+	got, present := attrOf(span, key)
+	switch {
+	case want == "" && present:
+		t.Errorf("span carries %s = %q, want no such attribute at all", key, got.AsString())
+	case want != "" && !present:
+		t.Errorf("span carries no %s, want %q", key, want)
+	case want != "" && got.AsString() != want:
+		t.Errorf("span %s = %q, want %q", key, got.AsString(), want)
+	}
+}
+
+// assertRecordedOnce fails when a span carries one key twice, which on the
+// metric built from the same list is one dimension published twice.
+func assertRecordedOnce(t *testing.T, span sdktrace.ReadOnlySpan, key attribute.Key) {
+	t.Helper()
+
+	times := 0
+	for _, kv := range span.Attributes() {
+		if kv.Key == key {
+			times++
+		}
+	}
+	if times > 1 {
+		t.Errorf("span carries %s %d times, want at most once", key, times)
 	}
 }
