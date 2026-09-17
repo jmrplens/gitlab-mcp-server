@@ -89,6 +89,38 @@ func TestRun_SeamFailures_AreReported(t *testing.T) {
 	}
 }
 
+// TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone verifies the
+// verdict the command's exit status is taken from: every counter the summary
+// carries a finding in fails the gate on its own, and the counters that merely
+// describe the tree do not. The five are asserted one at a time because they
+// are read as one conjunction, where a term dropped by an edit is invisible
+// against a summary that has findings in several places at once.
+func TestReportSummaryClean_Counters_EachFindingFailsTheGateAlone(t *testing.T) {
+	cases := []struct {
+		name    string
+		summary reportSummary
+		want    bool
+	}{
+		{
+			name:    "no finding",
+			summary: reportSummary{SDKServices: 120, ServicesCovered: 118, ServicesDeclared: 2, GraphQLOperations: 9, GraphQLAdjudicated: 9, EnumFields: 40},
+			want:    true,
+		},
+		{name: "an undeclared service", summary: reportSummary{ServicesUndeclared: 1}},
+		{name: "an unadjudicated GraphQL operation", summary: reportSummary{GraphQLUnadjudicated: 1}},
+		{name: "an enum value the SDK declares and we do not", summary: reportSummary{EnumMissingValues: 1}},
+		{name: "an enum value we publish and the SDK does not", summary: reportSummary{EnumExtraValues: 1}},
+		{name: "a declaration that no longer describes the code", summary: reportSummary{StaleDeclarations: 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.summary.clean(); got != tc.want {
+				t.Errorf("clean() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestGapsOnlyFilters_MixedStatuses_KeepOnlyTheFindings verifies the two
 // gaps-only filters keep undeclared services and unadjudicated operations
 // and drop everything else, and return an empty (never nil) slice.
