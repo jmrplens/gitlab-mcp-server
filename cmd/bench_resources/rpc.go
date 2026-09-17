@@ -151,6 +151,13 @@ func checkResponse(payload []byte) error {
 	if envelope.Result != nil && envelope.Result.IsError {
 		return &toolResultError{Text: firstResultText(payload)}
 	}
+	// JSON-RPC 2.0 puts exactly one of result and error in every response, so
+	// an envelope carrying neither answered nothing. Reading that as a success
+	// would count a non-answer's timing in the percentiles this command
+	// publishes, which is the one thing a benchmark must not do quietly.
+	if envelope.Result == nil {
+		return errors.New("response carries neither result nor error")
+	}
 	return nil
 }
 
@@ -202,6 +209,26 @@ func newHTTPRPC(endpoint, token string) *httpRPC {
 	}
 }
 
+// headerNameFor returns what the Mcp-Name header carries for a method.
+//
+// The specification names three methods that need it and two body fields it
+// comes from: params.name for tools/call and prompts/get, params.uri for
+// resources/read. Every other method sends no such header, and a value the
+// body does not carry is never invented, since a server that processes the
+// body refuses a request whose header and body disagree.
+func headerNameFor(method string, params map[string]any) string {
+	switch method {
+	case methodToolsCall, methodPromptsGet:
+		name, _ := params["name"].(string)
+		return name
+	case methodResourcesRead:
+		uri, _ := params["uri"].(string)
+		return uri
+	default:
+		return ""
+	}
+}
+
 // call posts one request and reads the answer.
 func (c *httpRPC) call(ctx context.Context, method string, params map[string]any) ([]byte, error) {
 	body, err := requestBody(c.ids.Add(1), method, params)
@@ -218,7 +245,7 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	// Protocol 2026-07-28 makes Mcp-Method required: without it the transport
 	// refuses the POST before any handler runs.
 	req.Header.Set("Mcp-Method", method)
-	if name, ok := params["name"].(string); ok && method == methodToolsCall {
+	if name := headerNameFor(method, params); name != "" {
 		req.Header.Set("Mcp-Name", name)
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
@@ -233,7 +260,13 @@ func (c *httpRPC) call(ctx context.Context, method string, params map[string]any
 	if err != nil {
 		return nil, fmt.Errorf("read %s response: %w", method, err)
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+	// 200 and nothing else. The streamable transport answers 202 to a
+	// notification or a response, with no body, and every call this client
+	// makes carries an id and is therefore a request, which a server answers
+	// with 200 and a body. Accepting 202 here would take whatever arrived
+	// alongside it as an answer and put its timing into a published
+	// percentile.
+	if resp.StatusCode != http.StatusOK {
 		return nil, &httpStatusError{Method: method, Status: resp.StatusCode, Snippet: firstLine(payload)}
 	}
 	message := payload

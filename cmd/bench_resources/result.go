@@ -389,6 +389,12 @@ const (
 	methodResourcesList = "resources/list"
 	methodToolsCall     = "tools/call"
 	methodToolsList     = "tools/list"
+
+	// Not timed here, and named all the same: they are the other two methods
+	// the specification sources an Mcp-Name header for, so the rule that
+	// derives it has somewhere to point.
+	methodPromptsGet    = "prompts/get"
+	methodResourcesRead = "resources/read"
 )
 
 // MethodLatency is the latency distribution of one MCP method over a run:
