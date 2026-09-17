@@ -215,6 +215,11 @@ func TestParseSubstitutions_ExceedsBounds_ReturnsError(t *testing.T) {
 			wantSub: strconv.Itoa(gatewaycompat.MaxSubstitutionBytes),
 		},
 		{
+			name:     "pattern at the limit is accepted",
+			value:    strings.Repeat("y", gatewaycompat.MaxSubstitutionBytes) + "=z",
+			wantSubs: 1,
+		},
+		{
 			name:    "pattern over the limit is refused",
 			value:   strings.Repeat("y", gatewaycompat.MaxSubstitutionBytes+1) + "=z",
 			wantErr: true,
@@ -320,6 +325,79 @@ func TestApply_ExplosiveGrowth_KeepsOriginalText(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestApply_GrowthCeiling_IsTheLargerOfTheFactorAndTheAllowance measures the
+// ceiling Apply actually enforces and states what it has to be: twice the
+// input, or the input plus 512 bytes, whichever is larger.
+//
+// It matters because every other test here exercises growth far below both
+// ceilings or far above both, which pins neither: with the proportional half
+// deleted a title could no longer be rewritten at all, with the flat half
+// deleted a long description would be clamped to a fifth of what it is allowed,
+// and both defects serve plausible text that nothing compares against anything.
+// The two halves are asserted at sizes where each is the binding one, so
+// neither can go missing behind the other.
+//
+// The crossover row is here as evidence rather than as a guard: at 512 bytes
+// the two halves agree exactly, which is why the boundary spelling at that
+// comparison is unobservable and is recorded rather than chased.
+func TestApply_GrowthCeiling_IsTheLargerOfTheFactorAndTheAllowance(t *testing.T) {
+	gatewaycompat.ResetAnnouncementsForTest()
+	t.Cleanup(gatewaycompat.ResetAnnouncementsForTest)
+	captureGatewayLogs(t)
+
+	tests := []struct {
+		name string
+		size int
+		want int
+	}{
+		{name: "a title is bounded by the flat allowance", size: 64, want: 64 + 512},
+		{name: "the two halves agree at the crossover", size: 512, want: 512 * 2},
+		{name: "a long description is bounded by the factor", size: 2048, want: 2048 * 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := servedCeiling(t, tt.size); got != tt.want {
+				t.Errorf("Apply serves at most %d bytes for a %d-byte string, want %d", got, tt.size, tt.want)
+			}
+		})
+	}
+}
+
+// servedCeiling reports the longest rewritten form Apply will serve for a
+// size-byte input, by asking it for one output length after another.
+//
+// The input carries a single marker byte, so a replacement of length k asks for
+// exactly size-1+k bytes of output and the requested length is the only thing
+// that varies. Refusal is monotone in that length, so a binary search finds the
+// last length served — which is the ceiling itself, and so also asserts that a
+// rewrite landing exactly on it is served rather than refused.
+func servedCeiling(t *testing.T, size int) int {
+	t.Helper()
+
+	text := "Z" + strings.Repeat("a", size-1)
+	served := func(total int) bool {
+		subs := []gatewaycompat.Substitution{{Old: "Z", New: strings.Repeat("b", total-size+1)}}
+		return gatewaycompat.Apply(subs, text) != text
+	}
+
+	low, high := size, 8*size+8192
+	if !served(low) {
+		t.Fatalf("Apply refused a rewrite that does not grow a %d-byte string at all", size)
+	}
+	if served(high) {
+		t.Fatalf("Apply served a %d-byte rewrite of a %d-byte string; nothing bounds the growth", high, size)
+	}
+	for low+1 < high {
+		if middle := (low + high) / 2; served(middle) {
+			low = middle
+		} else {
+			high = middle
+		}
+	}
+	return low
 }
 
 // TestFromEnv_ActiveSubstitutions_AnnounceOnce verifies that a rewritten
