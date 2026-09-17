@@ -732,6 +732,80 @@ func TestGateErrorCodes_AllocatedOutsideReservedRange(t *testing.T) {
 	}
 }
 
+// TestRefusalCodes_MirrorTheirStatusAndSitWhereTheSpecificationAllows pins the
+// values of the codes themselves, which nothing else in this package does.
+//
+// Every test that reads a refusal off the wire compares the code it found
+// against the same constant the handler wrote it from, so the two move
+// together and a constant that changed value fails nothing.
+// TestGateErrorCodes_AllocatedOutsideReservedRange is the closest thing to a
+// check on the values, and it asks only whether a code falls inside
+// -32768..-32000 — which a positive number does not, so a code whose sign was
+// lost passes it, and errCodeForbidden is not in its table at all.
+//
+// What these codes have to be is stated above them: one this server allocates
+// mirrors the HTTP status it travels with, multiplied by -100, which is what
+// puts it below the whole reserved range and lets a reader map a code back to
+// a status without a table. Deriving the expected value from the status here
+// rather than repeating the literal is the point: it asserts the convention,
+// so a code that stopped following it is caught even if somebody updated the
+// literal to match.
+func TestRefusalCodes_MirrorTheirStatusAndSitWhereTheSpecificationAllows(t *testing.T) {
+	t.Parallel()
+
+	mirrored := map[string]struct {
+		code   int
+		status int
+	}{
+		"errCodeUnauthorized":        {errCodeUnauthorized, http.StatusUnauthorized},
+		"errCodeForbidden":           {errCodeForbidden, http.StatusForbidden},
+		"errCodeTooManyRequests":     {errCodeTooManyRequests, http.StatusTooManyRequests},
+		"errCodeUpstreamUnavailable": {errCodeUpstreamUnavailable, http.StatusServiceUnavailable},
+	}
+	for name, mapping := range mirrored {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if want := -100 * mapping.status; mapping.code != want {
+				t.Errorf("%s = %d, want %d: a code this server allocates mirrors its HTTP status times -100",
+					name, mapping.code, want)
+			}
+			// Below the range rather than merely outside it. A positive code
+			// is outside too, and is what a lost sign produces.
+			if mapping.code > -32768 {
+				t.Errorf("%s = %d is not below the reserved range -32768..-32000; "+
+					"a code allocated by this server has to sit under the whole of it", name, mapping.code)
+			}
+		})
+	}
+
+	// The one code here the specification defines rather than this server, and
+	// therefore the one that belongs inside the range the specification kept
+	// for itself. Asserting the other direction for it is what keeps the two
+	// conventions from being confused for each other.
+	t.Run("codeUnsupportedProtocolVersion", func(t *testing.T) {
+		t.Parallel()
+
+		if codeUnsupportedProtocolVersion < -32099 || codeUnsupportedProtocolVersion > -32020 {
+			t.Errorf("codeUnsupportedProtocolVersion = %d, want a code in -32099..-32020, "+
+				"the band the JSON-RPC specification reserved for itself and the MCP specification allocated this one from",
+				codeUnsupportedProtocolVersion)
+		}
+	})
+
+	// errCodeInvalidRequest is not this server's to choose at all: it is the
+	// standard JSON-RPC code for a request that is not well formed, and a
+	// client matching on it is matching on the standard.
+	t.Run("errCodeInvalidRequest", func(t *testing.T) {
+		t.Parallel()
+
+		if errCodeInvalidRequest != -32600 {
+			t.Errorf("errCodeInvalidRequest = %d, want the standard JSON-RPC \"Invalid Request\" code -32600",
+				errCodeInvalidRequest)
+		}
+	})
+}
+
 // TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvailable
 // is the end-to-end guard for the reported defect. It exercises the real mux
 // wiring rather than the gate in isolation, because the bug was never in a
