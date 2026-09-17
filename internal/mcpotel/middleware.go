@@ -202,6 +202,12 @@ func Middleware(opts Options) mcp.Middleware {
 			res, err := next(ctx, method, req)
 			result := classify(res, err)
 
+			// First the prediction, which the gate's wait may have made
+			// possible for the first call of the process, then the route
+			// dispatch actually chose. In that order, because the second
+			// replaces the first and never the other way round.
+			call = call.identifiedLate(identifier, span)
+
 			// The route dispatch chose replaces the one predicted from the
 			// arguments, on the span and on the metric alike.
 			call = call.dispatched(holder, identifier, span)
@@ -251,6 +257,13 @@ type call struct {
 
 	spanName   string
 	attributes []attribute.KeyValue
+
+	// pendingTool and pendingArguments hold the tool call the identifier could
+	// not name when the span was described, so [call.identifiedLate] can ask
+	// again once the handler has returned. Empty on every call that was named,
+	// and on everything that is not a tool call.
+	pendingTool      string
+	pendingArguments any
 }
 
 // dispatched returns c with the action a dispatcher reported through
@@ -376,20 +389,81 @@ func describeToolCall(method, toolName string, arguments any, attrs []attribute.
 		AttrGenAIOperationName.String("execute_tool"),
 	)
 
+	// The two are recorded independently, because a call whose action does not
+	// resolve can still name a real domain: a model inventing an action on a
+	// meta tool hit that tool's domain whatever it called the operation.
+	named := false
 	if identity, ok := identifier.Identify(toolName, arguments); ok {
 		if identity.ActionID != "" {
 			attrs = append(attrs, AttrActionID.String(identity.ActionID))
+			named = true
 		}
 		if identity.Domain != "" {
 			attrs = append(attrs, AttrDomain.String(identity.Domain))
 		}
 	}
 
-	return call{
+	described := call{
 		spanName:      method + " " + toolName,
 		attributes:    attrs,
 		callerNameKey: AttrGenAIToolName,
 	}
+	if !named {
+		// Kept so the question can be asked again once the handler returns;
+		// see [call.identifiedLate] for the one reason the answer can change.
+		described.pendingTool, described.pendingArguments = toolName, arguments
+	}
+	return described
+}
+
+// identifiedLate re-asks the identifier for a tool call it could not name when
+// the span was described, and records what it learns on the span and on the
+// metric alike. It returns c unchanged when there was nothing pending or the
+// answer has not changed.
+//
+// It exists because of an ordering that is deliberate and whose cost was not
+// noticed until a real collector was put in front of the server. The readiness
+// gate is installed as the innermost middleware on purpose, so that a request
+// waiting for the catalog waits inside this span rather than outside it, and
+// the latency an operator sees is the one the client saw. The consequence is
+// that describe runs BEFORE that wait: the first tools/call a process serves is
+// described while registration is still building the catalog the identifier
+// resolves against, so nothing could name it and the span said that a tool was
+// called without saying what it did.
+//
+// That is worth repairing rather than accepting, because the action is the
+// whole content of the span on the dynamic surface, where gen_ai.tool.name is
+// gitlab_execute_action for listing issues and for deleting a branch alike, and
+// because the end-to-end coverage audit joins its own record to this attribute:
+// a harness that starts a server per test would lose one action per test.
+//
+// Setting an attribute after Start is sound where adding it at creation is not
+// possible: the sampler has already decided, which is the documented price of
+// resolving anything late, and the same price [call.dispatched] already pays.
+func (c call) identifiedLate(identifier CallIdentifier, span trace.Span) call {
+	if c.pendingTool == "" {
+		return c
+	}
+	identity, ok := identifier.Identify(c.pendingTool, c.pendingArguments)
+	if !ok || identity.ActionID == "" {
+		return c
+	}
+
+	// The domain is added only when describe did not already record one: the
+	// two are resolved independently, so a call that named its domain and not
+	// its action arrives here with the domain already on the span, and adding
+	// it twice would publish one key twice on the metric.
+	late := []attribute.KeyValue{AttrActionID.String(identity.ActionID)}
+	hasDomain := slices.ContainsFunc(c.attributes, func(kv attribute.KeyValue) bool {
+		return kv.Key == AttrDomain
+	})
+	if identity.Domain != "" && !hasDomain {
+		late = append(late, AttrDomain.String(identity.Domain))
+	}
+	c.attributes = append(slices.Clip(c.attributes), late...)
+	c.pendingTool, c.pendingArguments = "", nil
+	span.SetAttributes(late...)
+	return c
 }
 
 // newDurationHistogram builds the convention's server duration instrument.

@@ -464,6 +464,69 @@ const spanKindServer = 2
 // attr returns the string value recorded under a key, and whether the key was
 // present at all. The two are separate answers: an attribute set to the empty
 // string and an attribute nobody set are different defects.
+// awaitDurationPoint waits for a data point of the duration instrument that
+// match accepts, and reports what it read when it gives up.
+//
+// [collector.awaitMetric] answers with the first export carrying the
+// instrument, which is not the same question. A process that has just served
+// one call exports the handshake's series first, so a test that waits for the
+// instrument and then reads whatever that export happened to hold asserts
+// about export timing rather than about the server: it passes alone and fails
+// under load, which is how two assertions here came to be believed.
+// It returns the whole instrument the point was found in as well, because a
+// caller asserting about the inventory has to read the export that carries the
+// series it waited for rather than an earlier one.
+func awaitDurationPoint(t *testing.T, c *collector, within time.Duration, match func([]otlpAttr) bool) (point []otlpAttr, in otlpMetric, ok bool) {
+	t.Helper()
+
+	var seen []string
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		seen = nil
+		for _, candidate := range durationPoints(t, c) {
+			method, _ := attr(candidate.attributes, "mcp.method.name")
+			seen = append(seen, method)
+			if match(candidate.attributes) {
+				return candidate.attributes, candidate.in, true
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Logf("waited %s for a matching %s data point; the methods exported were %v", within, durationMetric, seen)
+	return nil, otlpMetric{}, false
+}
+
+// durationPoint is one data point of the duration instrument and the export it
+// arrived in, which a caller asserting about the whole inventory needs.
+type durationPoint struct {
+	attributes []otlpAttr
+	in         otlpMetric
+}
+
+// durationPoints flattens every duration data point the collector has parsed
+// so far, across every document, resource and scope.
+func durationPoints(t *testing.T, c *collector) []durationPoint {
+	t.Helper()
+
+	var out []durationPoint
+	for _, doc := range documents[metricDocument](t, filepath.Join(c.outDir, metricsFile)) {
+		for _, resourceMetrics := range doc.ResourceMetrics {
+			for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
+				for _, metric := range scopeMetrics.Metrics {
+					if metric.Name != durationMetric {
+						continue
+					}
+					for _, attributes := range dataPointAttributes(t, metric) {
+						out = append(out, durationPoint{attributes: attributes, in: metric})
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
 func attr(attrs []otlpAttr, key string) (value string, present bool) {
 	for _, a := range attrs {
 		if a.Key == key {

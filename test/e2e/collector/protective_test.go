@@ -78,29 +78,20 @@ func TestRealCollector_SafeModeSaysWhyItRefused(t *testing.T) {
 		// safe mode is blocking something somebody needs shows up as a rate,
 		// and a rate cannot be computed from an attribute that only exists on
 		// individual traces, which are sampled.
-		_, duration, found := c.awaitMetric(t, exportDeadline, durationMetric)
+		// Waited for by the attribute rather than by the instrument: the
+		// refusal's own series need not be in the first export that carries
+		// the instrument, and reading that one made this assertion pass alone
+		// and fail under load.
+		point, _, found := awaitDurationPoint(t, c, exportDeadline, func(p []otlpAttr) bool {
+			_, carried := attr(p, "gitlab_mcp.refusal_reason")
+			return carried
+		})
 		if !found {
-			t.Fatalf("%s never arrived.\nCollector:\n%s\nServer:\n%s",
+			t.Fatalf("no data point of %s carries the refusal reason, so a refusal rate cannot be computed.\nCollector:\n%s\nServer:\n%s",
 				durationMetric, c.containerLogs(t), srv.logs())
 		}
-
-		points := dataPointAttributes(t, duration)
-		if len(points) == 0 {
-			t.Fatal("the instrument arrived with no data points")
-		}
-
-		refused := 0
-		for _, point := range points {
-			if value, carried := attr(point, "gitlab_mcp.refusal_reason"); carried {
-				refused++
-				if value != "safe_mode" {
-					t.Errorf("gitlab_mcp.refusal_reason = %q on a data point, want safe_mode", value)
-				}
-			}
-		}
-		if refused == 0 {
-			t.Errorf("no data point of %s carries the refusal reason, so a refusal rate cannot be computed",
-				durationMetric)
+		if value, _ := attr(point, "gitlab_mcp.refusal_reason"); value != "safe_mode" {
+			t.Errorf("gitlab_mcp.refusal_reason = %q on a data point, want safe_mode", value)
 		}
 	})
 }
