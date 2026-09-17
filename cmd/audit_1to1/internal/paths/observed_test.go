@@ -88,6 +88,48 @@ func TestObserved_SilentOwners_AreHeldToADeclaration(t *testing.T) {
 	})
 }
 
+// TestObserved_MoreOwnersNamingNoPackageThanSilentOnes_AreAllReportedAndSorted
+// verifies the owner list when the unmapped half is the larger one.
+//
+// Two things meet here that no other case puts together. Every owner that is no
+// package under internal/tools has to reach the report, however many there are
+// beside the silent ones, since such an owner is a hole nothing could ever have
+// recorded a request for and the gate fails on each. And the two halves are
+// collected in their own orders and merged, so the sort has real work to do:
+// the fixture names its silent package after both unmapped ones, which is the
+// only arrangement in which an unsorted merge is visible.
+func TestObserved_MoreOwnersNamingNoPackageThanSilentOnes_AreAllReportedAndSorted(t *testing.T) {
+	root := t.TempDir()
+	makeToolsPackage(t, root, "issues")
+	makeToolsPackage(t, root, "zulu")
+	withDeclarations(t, map[string]silentOwnerDeclaration{})
+	rows := []requestinventory.Row{{Package: "internal/tools/issues", Kind: requestinventory.KindREST, Path: "/projects/:id/issues"}}
+	actions := []requestinventory.Action{
+		{ID: "issue.list", Owner: "issues"},
+		{ID: "zulu.list", Owner: "zulu"},
+		{ID: "ghost.list", Owner: "beta"},
+		{ID: "phantom.list", Owner: "alpha"},
+	}
+
+	coverage, owners := observed(root, rows, actions)
+
+	if coverage.Silent != 1 || coverage.Unmapped != 2 {
+		t.Fatalf("coverage = %+v, want one silent package and two unmapped owners", coverage)
+	}
+	got := make([]string, 0, len(owners))
+	for _, owner := range owners {
+		got = append(got, owner.Package+" "+owner.Status)
+	}
+	want := []string{
+		"alpha " + statusUnmapped,
+		"beta " + statusUnmapped,
+		"zulu " + statusUndeclared,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("owners = %v, want %v: every owner reported, sorted, with its own status", got, want)
+	}
+}
+
 // TestUndeclaredSilent_CountsPackagesAndActions verifies what the gate fails
 // on: a package with no recording and no declaration, and every action it owns.
 func TestUndeclaredSilent_CountsPackagesAndActions(t *testing.T) {

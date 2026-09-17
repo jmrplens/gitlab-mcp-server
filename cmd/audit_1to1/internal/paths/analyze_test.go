@@ -106,10 +106,10 @@ func TestRun_ACleanTree_PassesTheGateAndCountsWhatItSaw(t *testing.T) {
 	}
 }
 
-// TestRun_TheThreeFindings_FailTheGate verifies what R-PATH gates on, one
+// TestRun_TheFourFindings_FailTheGate verifies what R-PATH gates on, one
 // finding at a time, since a gate that fails for the wrong reason is as bad as
 // one that does not fail.
-func TestRun_TheThreeFindings_FailTheGate(t *testing.T) {
+func TestRun_TheFourFindings_FailTheGate(t *testing.T) {
 	cases := []struct {
 		name     string
 		arrange  func(t *testing.T, root string)
@@ -152,6 +152,23 @@ func TestRun_TheThreeFindings_FailTheGate(t *testing.T) {
 				stubInputs(t, oneRow, []requestinventory.Action{{ID: "issue.list", Owner: "issues"}}, graphqldocs.Result{})
 			},
 			wantJSON: `"stale_declarations": 1`,
+		},
+		{
+			// An owner that names no package under internal/tools is a hole
+			// this gate can never fail on any other way: nothing could have
+			// recorded a request for those actions, so the silence check has
+			// nothing to say about them and no declaration excuses them.
+			name: "an action whose owner names no package",
+			arrange: func(t *testing.T, root string) {
+				t.Helper()
+				makeToolsPackage(t, root, "issues")
+				withDeclarations(t, map[string]silentOwnerDeclaration{})
+				stubInputs(t, oneRow, []requestinventory.Action{
+					{ID: "issue.list", Owner: "issues"},
+					{ID: "ghost.list", Owner: "nowhere"},
+				}, graphqldocs.Result{})
+			},
+			wantJSON: `"actions_unmapped": 1`,
 		},
 	}
 	for _, testCase := range cases {

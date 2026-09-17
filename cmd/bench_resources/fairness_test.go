@@ -128,6 +128,36 @@ func TestClassifyOutcome_KeepsRefusalsApartFromSuccessAndFailure(t *testing.T) {
 			refusals: listing.Refusals, want: outcomeFailed,
 		},
 		{
+			// The bound's shape names a code, so a refusal carried by a tool
+			// result rather than by a JSON-RPC error is not its shape however
+			// familiar the words are. Admitting it would count one bound's
+			// refusals against another and report a bucket that meters
+			// listings as metering calls.
+			name: "the bound's words carried by a result rather than a code are not its refusal", method: methodToolsList,
+			err: fmt.Errorf("tools/list: %w", &toolResultError{
+				Text: toolutil.RateLimitRefusalPrefix + "tools/list; retry after a short backoff",
+			}),
+			refusals: listing.Refusals, want: outcomeFailed,
+		},
+		{
+			// The code alone is not enough either: two bounds share a code in
+			// this server already, and the words are what separate them.
+			name: "the bound's code with another refusal's words is not its refusal", method: methodToolsList,
+			err: fmt.Errorf("tools/list: %w", rpcError{
+				Code: rateLimitCode, Message: "the credential pool is full",
+			}),
+			refusals: listing.Refusals, want: outcomeFailed,
+		},
+		{
+			// A shape that names no method is the one the whitelist uses for a
+			// bound that refuses everything, and it has to match whichever
+			// method carried the refusal rather than none of them.
+			name: "a shape naming no method matches the method that carried it", method: methodResourcesList,
+			err:      fmt.Errorf("resources/list: %w", &toolResultError{Text: "quota reached for this credential"}),
+			refusals: []refusalSpec{{Status: httpOK, TextPrefix: "quota reached"}},
+			want:     outcomeRefused,
+		},
+		{
 			name: "a client that gave up is timed out however it looks", method: methodToolsCall,
 			err:      fmt.Errorf("tools/call: %w", context.DeadlineExceeded),
 			refusals: bucket.Refusals, want: outcomeTimedOut,

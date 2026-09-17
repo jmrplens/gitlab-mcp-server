@@ -200,6 +200,11 @@ func TestMatchesShape_TheToleranceIsOneSided(t *testing.T) {
 		{name: "an angle-bracket placeholder", recorded: "/projects/:id/foo", documented: "/projects/<id>/foo", want: true},
 		{name: "a glob swallowing the rest", recorded: "/packages/:id/files/models/model.bin", documented: "/packages/:id/files/(*path)", want: true},
 		{name: "a glob with nothing left to swallow", recorded: "/packages/:id/files", documented: "/packages/:id/files/(*path)", want: false},
+		{name: "a glob written without its parentheses", recorded: "/packages/:id/files/models/model.bin", documented: "/packages/:id/files/*path", want: true},
+		// An identifier we sent empty is not a value a placeholder stands for.
+		// Letting one match is how the eight requests this server makes with an
+		// empty identifier were read as endpoints GitLab documents.
+		{name: "an empty identifier under a placeholder", recorded: "/projects//statistics", documented: "/projects/:id/statistics", want: false},
 
 		{name: "a different literal", recorded: "/projects/:id/services/slack", documented: "/projects/:id/integrations/:slug", want: false},
 		{name: "one segment too many", recorded: "/projects/:id/issues/:iid", documented: "/projects/:id/issues", want: false},
@@ -278,15 +283,31 @@ func TestRecordedEndpoints_OneEntryPerMethodAndPath(t *testing.T) {
 		{Package: "internal/tools/second", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:id"},
 		{Package: "internal/tools/first", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:id"},
 		{Package: "internal/tools/first", Kind: requestinventory.KindREST, Method: "DELETE", Path: "/projects/:id"},
+		{Package: "internal/tools/first", Kind: requestinventory.KindREST, Method: "PUT", Path: "/projects/:id"},
+		{Package: "internal/tools/first", Kind: requestinventory.KindREST, Method: "POST", Path: "/projects/:id"},
 		{Package: "internal/tools/first", Kind: requestinventory.KindREST, Method: "GET", Path: "/groups/:id"},
 		{Package: "internal/tools/epics", Kind: requestinventory.KindGraphQL, Method: "POST", Path: "/graphql"},
 	})
 
-	if len(endpoints) != 3 {
-		t.Fatalf("recordedEndpoints() = %+v, want three REST endpoints", endpoints)
+	if len(endpoints) != 5 {
+		t.Fatalf("recordedEndpoints() = %+v, want five REST endpoints", endpoints)
 	}
-	if endpoints[0].Path != "/groups/:id" || endpoints[1].Method != http.MethodDelete {
-		t.Errorf("recordedEndpoints() = %+v, want them ordered by path then method", endpoints)
+	// The four methods on one path are what makes the second key visible: the
+	// order has to be the same between two runs of the same inventory, and the
+	// map the fold is built in has no order of its own.
+	order := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		order = append(order, endpoint.Method+" "+endpoint.Path)
+	}
+	want := []string{
+		"GET /groups/:id",
+		http.MethodDelete + " /projects/:id",
+		"GET /projects/:id",
+		http.MethodPost + " /projects/:id",
+		http.MethodPut + " /projects/:id",
+	}
+	if !slices.Equal(order, want) {
+		t.Errorf("recordedEndpoints() = %v, want them ordered by path then method: %v", order, want)
 	}
 	if !slices.Equal(endpoints[2].Packages, []string{"internal/tools/first", "internal/tools/second"}) {
 		t.Errorf("packages = %v, want every package that issues it, sorted", endpoints[2].Packages)

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // fenceFixture is the fixture the fence rule is tested against: one package
@@ -20,8 +22,32 @@ var fenceFixture = map[string]string{
 	"mdfence/mdfence.go":  mdfenceSource,
 	"mdfence/limits.go":   mdfenceLimitsSource,
 	"mdfence/writers.go":  mdfenceWritersSource,
+	"mdfence/branches.go": mdfenceBranchesSource,
 	"mdfencesafe/safe.go": mdfenceSafeSource,
 }
+
+// mdfenceBranchesSource holds the one branching statement whose arms are not
+// blocks of their own: a select, whose clauses sit side by side inside a
+// single block. A fence opened in the first arm is the first arm's, and the
+// second must be judged as though it had never been opened.
+const mdfenceBranchesSource = `package mdfence
+
+import "strings"
+
+// FormatSelected writes a block in one arm of a select and a bare value in
+// the other.
+func FormatSelected(item Item, first, second chan string) string {
+	var b strings.Builder
+	select {
+	case <-first:
+		b.WriteString("` + "```" + `\n")
+		b.WriteString(item.Content)
+	case <-second:
+		b.WriteString(item.Title)
+	}
+	return b.String()
+}
+`
 
 // mdfenceSource holds the shapes that must be reported: a block written from
 // one template, a block written in three writes, a block whose body is written
@@ -308,8 +334,27 @@ var wantFenceFindings = []string{
 	"mdfence fence item.Content",  // the fenced one of two builders
 	"mdfence fence item.Content",  // written through a dereferenced pointer
 	"mdfence fence item.Content",  // a template of its own, to a writer no variable names
+	"mdfence fence item.Content",  // inside the arm of a select that opened the fence
 	"mdfence fence item.Language", // the info string of the opening fence
 	"mdfence fence item.Title",    // written in a loop inside the block
+}
+
+// TestAudit_FenceFixture_ASelectArmDoesNotLeakIntoTheNext checks the one
+// branching statement whose arms share a block.
+//
+// Each clause of a select is entered with the document as it stood before the
+// select and leaves it there, exactly as each arm of a switch does; without
+// that, a fence opened in the first arm would still be open in the second and
+// every value written there would be reported as being inside a block the
+// document never entered.
+func TestAudit_FenceFixture_ASelectArmDoesNotLeakIntoTheNext(t *testing.T) {
+	report := auditFenceFixture(t)
+
+	for _, finding := range append(append([]Finding{}, report.Findings...), report.Unresolved...) {
+		if finding.Func == "FormatSelected" && finding.Expression == "item.Title" {
+			t.Errorf("the second arm of the select was judged inside the first arm's fence: %s", finding.Reason)
+		}
+	}
 }
 
 // TestAudit_FenceFixture_ReportsEveryValueInsideAHandWrittenFence pins what the
@@ -535,6 +580,26 @@ func TestCollectFences_Fixture_RecordsTheCursorEveryWriteStartsFrom(t *testing.T
 	}
 	if len(fences.writes) == 0 {
 		t.Error("no value written with no template was collected as a sink")
+	}
+}
+
+// TestCollectFences_DeclarationWithNoBody_IsWalkedPast checks the guard on a
+// function the source declares and does not write, which is the shape an
+// assembly-implemented function takes.
+//
+// There is no body to walk, so the walk has to step over it rather than open
+// one: its statements are the nil block, and reading them is a dereference
+// rather than a verdict.
+func TestCollectFences_DeclarationWithNoBody_IsWalkedPast(t *testing.T) {
+	pkg := unindexablePackage()
+
+	index := collectFences(&program{order: []*packages.Package{pkg}})
+
+	if len(index.at) != 0 {
+		t.Errorf("collectFences recorded a cursor for %d call(s) in a package that writes nothing", len(index.at))
+	}
+	if len(index.writes) != 0 {
+		t.Errorf("collectFences recorded %d write(s) in a package that writes nothing", len(index.writes))
 	}
 }
 

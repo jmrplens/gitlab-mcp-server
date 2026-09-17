@@ -81,6 +81,46 @@ type fixtureHiddenFieldOutput struct {
 	Skipped  string        `json:"-"`
 }
 
+// FixtureEmbeddedScalar is an exported named string a type embeds. An embed is
+// only promoted when it is a struct: encoding/json writes this one under its
+// own type name, so it is content beside a list rather than something to walk
+// into.
+type FixtureEmbeddedScalar string
+
+// fixtureEmbeddedScalarOutput is a list with one of those beside it, which is
+// therefore not a collection envelope.
+type fixtureEmbeddedScalarOutput struct {
+	FixtureEmbeddedScalar
+	Keys []fixtureItem `json:"keys"`
+}
+
+// fixtureUnexportedScalar is the same thing under an unexported name, which
+// encoding/json writes nowhere at all, so the list is alone after all.
+type fixtureUnexportedScalar string //nolint:unused // present as an embed, whose value nothing reads
+
+type fixtureUnexportedScalarOutput struct {
+	fixtureUnexportedScalar               //nolint:unused // the embed is the subject: it publishes nothing
+	Keys                    []fixtureItem `json:"keys"`
+}
+
+// The six-deep chain below stands at the embed bound: encoding/json promotes
+// the list at the bottom of it into the type at the top, and the walk reads to
+// exactly that level. The seven-deep chain is one past it.
+
+type (
+	fixtureDepth6    struct{ fixtureDepth5 }
+	fixtureDepth5    struct{ fixtureDepth4 }
+	fixtureDepth4    struct{ fixtureDepth3 }
+	fixtureDepth3    struct{ fixtureDepth2 }
+	fixtureDepth2    struct{ fixtureDepth1 }
+	fixtureDepth1    struct{ fixtureDepthBody }
+	fixtureDepthBody struct {
+		Keys []fixtureItem `json:"keys"`
+	}
+)
+
+type fixtureDepth7 struct{ fixtureDepth6 }
+
 // TestInspectOutput_CollectionEnvelope_IsOneListAndNothingElse verifies the one
 // structural decision this rule makes, because everything downstream rests on
 // it: an action reads a collection when its output is a list and its framing,
@@ -136,6 +176,24 @@ func TestInspectOutput_CollectionEnvelope_IsOneListAndNothingElse(t *testing.T) 
 			name:           "a pointer to the envelope reads the same",
 			outputType:     reflect.TypeFor[*fixtureListOutput](),
 			wantCollection: "tokens",
+		},
+		{
+			name:       "an embedded named scalar is content beside the list",
+			outputType: reflect.TypeFor[fixtureEmbeddedScalarOutput](),
+		},
+		{
+			name:           "an embedded unexported scalar reaches no model and is not content",
+			outputType:     reflect.TypeFor[fixtureUnexportedScalarOutput](),
+			wantCollection: "keys",
+		},
+		{
+			name:           "an embed chain as deep as the bound is still read",
+			outputType:     reflect.TypeFor[fixtureDepth6](),
+			wantCollection: "keys",
+		},
+		{
+			name:       "an embed chain past the bound is not read",
+			outputType: reflect.TypeFor[fixtureDepth7](),
 		},
 		{
 			name:       "a route registered with no output type is skipped",
@@ -386,6 +444,85 @@ func TestPaginationCheck_ShapesThatAreNotFindings_AreCountedApart(t *testing.T) 
 			t.Errorf("findings = %+v, want none", check.Unpaginated)
 		}
 	})
+}
+
+// TestRequestPaginates_EitherParameterAlone_SaysTheRequestPages verifies what
+// tells a finding that needs one output field from one that needs an input
+// parameter first.
+//
+// Either name alone is enough, because they are asked about separately: an
+// action offering per_page and no page can already ask for a longer answer,
+// and one offering page and no per_page can already ask for the next of
+// GitLab's own. Demanding both would report an action that pages as one that
+// cannot, which points the fix at the wrong file.
+func TestRequestPaginates_EitherParameterAlone_SaysTheRequestPages(t *testing.T) {
+	schemaWith := func(names ...string) map[string]any {
+		properties := map[string]any{}
+		for _, name := range names {
+			properties[name] = map[string]any{}
+		}
+		return map[string]any{"properties": properties}
+	}
+	cases := []struct {
+		name   string
+		schema map[string]any
+		want   bool
+	}{
+		{name: "page and per_page", schema: schemaWith("id", "page", "per_page"), want: true},
+		{name: "per_page alone", schema: schemaWith("id", "per_page"), want: true},
+		{name: "page alone", schema: schemaWith("id", "page"), want: true},
+		{name: "neither", schema: schemaWith("id", "sort")},
+		{name: "no properties block at all", schema: map[string]any{"type": "object"}},
+		{name: "no schema at all", schema: nil},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := requestPaginates(testCase.schema); got != testCase.want {
+				t.Errorf("requestPaginates() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPaginationCheck_Findings_AreOrderedByPackageThenAction verifies the order
+// a reader meets the findings in.
+//
+// The list is read as work rather than as data, so the two actions of one
+// package have to arrive together and in a fixed order, and the package is what
+// decides first: a reader opening one file wants everything this rule has to
+// say about it before moving on. The fixture names its packages and its actions
+// so the two orders disagree, since a list ordered by either alone would
+// otherwise read as correct.
+func TestPaginationCheck_Findings_AreOrderedByPackageThenAction(t *testing.T) {
+	withPaginationDeclarations(t, nil)
+	operations := map[string]response{
+		"GET /projects/:id/alpha": {Params: []string{"id", "page", "per_page"}},
+		"GET /projects/:id/bravo": {Params: []string{"id", "page", "per_page"}},
+	}
+	rows := []requestinventory.Row{
+		{Package: "internal/tools/alpha", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/alpha"},
+		{Package: "internal/tools/bravo", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects/:project_id/bravo"},
+	}
+	actions := []requestinventory.Action{
+		listAction("zebra.list", "alpha", reflect.TypeFor[fixtureListOutput](), nil),
+		listAction("apple.list", "bravo", reflect.TypeFor[fixtureListOutput](), nil),
+		listAction("alpha.list", "alpha", reflect.TypeFor[fixtureListOutput](), nil),
+	}
+
+	check := paginationCheck(recordIn(t, operations), rows, actions)
+
+	got := make([]string, 0, len(check.Unpaginated))
+	for _, finding := range check.Unpaginated {
+		got = append(got, finding.Package+" "+finding.Action)
+	}
+	want := []string{
+		"internal/tools/alpha alpha.list",
+		"internal/tools/alpha zebra.list",
+		"internal/tools/bravo apple.list",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findings = %v, want %v", got, want)
+	}
 }
 
 // TestPaginationCheck_TheRecordCountsItsOwnRoutes verifies the oracle's size is

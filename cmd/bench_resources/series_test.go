@@ -923,6 +923,32 @@ func assertStandinStep(t *testing.T, step SeriesStep, scenarioID, profiles strin
 	}
 }
 
+// TestRunSeries_AServerThatNamesNoBuild_KeepsTheOneAlreadyRecorded verifies a
+// series against a server whose /health carries no version leaves the build an
+// earlier scenario recorded alone.
+//
+// The record names one build for the whole run, and it is taken from whichever
+// scenario could ask: stdio publishes no health document at all, so the point
+// scenarios fill it and the series that follow them must not empty it again. A
+// record with no build behind its figures is the thing this command exists to
+// prevent, and overwriting a good one with an empty answer produces exactly
+// that while every number still looks measured.
+func TestRunSeries_AServerThatNamesNoBuild_KeepsTheOneAlreadyRecorded(t *testing.T) {
+	quickSettle(t)
+	t.Setenv("STANDIN_NO_VERSION", "1")
+	r := standinRunner(t)
+	recorded := ServerInfo{Version: "3.1.0", Commit: "0123456789abcdef"}
+	r.serverInfo = recorded
+	plan := seriesPlan(surfaceDynamic, 1, matrixSettings{steps: []int{1}, stepDuration: 100 * time.Millisecond})
+
+	if _, err := r.runSeries(t.Context(), plan); err != nil {
+		t.Fatalf("runSeries: %v", err)
+	}
+	if r.serverInfo != recorded {
+		t.Errorf("serverInfo = %+v, want the build already recorded, %+v", r.serverInfo, recorded)
+	}
+}
+
 // TestRunSeries_Refusals covers the ways a series fails before it has
 // anything to publish: a surface with no tool call, a binary that cannot
 // start, and a stand-in that refuses every cold tools/list so that no step

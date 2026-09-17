@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -915,6 +916,393 @@ func TestSpanLimits_BoundAnAttributeValueUnlessTheOperatorChose(t *testing.T) {
 			if limits.AttributeCountLimit != sdktrace.NewSpanLimits().AttributeCountLimit {
 				t.Errorf("AttributeCountLimit = %d, want the SDK's %d: the other limits were replaced rather than kept",
 					limits.AttributeCountLimit, sdktrace.NewSpanLimits().AttributeCountLimit)
+			}
+		})
+	}
+}
+
+// TestProviderAbandon_JoinsAShutdownFailureOntoTheCause covers the half of
+// abandon that reports rather than cleans up.
+//
+// A start that failed on the third signal and then could not stop the first two
+// has two things wrong with it, and the caller logs one line. Returning the
+// cause alone would say the third signal failed and leave the operator with no
+// hint that exporters are still holding connections; the join is what makes the
+// second failure reachable through errors.Is.
+func TestProviderAbandon_JoinsAShutdownFailureOntoTheCause(t *testing.T) {
+	stopErr := errors.New("the trace exporter refused to flush")
+	provider := &Provider{
+		enabled:   true,
+		shutdowns: []func(context.Context) error{func(context.Context) error { return stopErr }},
+	}
+	cause := errors.New("the third signal failed")
+
+	returned := provider.abandon(boundedShutdown(t), cause)
+
+	if !errors.Is(returned, cause) {
+		t.Errorf("abandon returned %v, which does not wrap the cause; the caller would report the wrong reason", returned)
+	}
+	if !errors.Is(returned, stopErr) {
+		t.Errorf("abandon returned %v, which drops the shutdown failure; exporters left running would go unreported", returned)
+	}
+}
+
+// TestProviderShutdown_ReportsEveryExporterThatCouldNotStop pins the promise the
+// doc comment makes: the errors are joined rather than returned on the first
+// failure.
+//
+// Each exporter owns a connection of its own, so the first one that cannot be
+// flushed must not hide the third. A middle exporter that stops cleanly sits
+// between them on purpose: a collector that only recorded failures would pass
+// this with two entries, and one that only recorded successes would return nil
+// and report a clean shutdown of a provider that did not have one.
+func TestProviderShutdown_ReportsEveryExporterThatCouldNotStop(t *testing.T) {
+	first := errors.New("the trace exporter refused to flush")
+	last := errors.New("the log exporter refused to flush")
+	provider := &Provider{
+		enabled: true,
+		shutdowns: []func(context.Context) error{
+			func(context.Context) error { return first },
+			func(context.Context) error { return nil },
+			func(context.Context) error { return last },
+		},
+	}
+
+	err := provider.Shutdown(boundedShutdown(t))
+
+	if err == nil {
+		t.Fatal("Shutdown reported success over two exporters that could not stop")
+	}
+	if !errors.Is(err, first) {
+		t.Errorf("Shutdown returned %v, which does not wrap the first failure", err)
+	}
+	if !errors.Is(err, last) {
+		t.Errorf("Shutdown returned %v, which does not wrap the last failure", err)
+	}
+	if provider.Enabled() {
+		t.Error("the provider still reports itself enabled after a shutdown that reported errors")
+	}
+}
+
+// TestProviderShutdown_TakesTheTighterOfTheTwoBounds covers the arithmetic the
+// flush bound is chosen by, in both directions.
+//
+// The caller's cancellation is detached on purpose, but a deadline the caller
+// chose is a bound to honor: before this, the internal five seconds silently
+// overrode any tighter one, which made cmd/server's own shutdown bound dead
+// code. The other direction matters just as much and is the easier one to break
+// while fixing the first: a caller who allows an hour must not be able to widen
+// the internal bound to an hour, or a collector that has gone away holds the
+// process open for exactly as long as the caller was willing to wait.
+func TestProviderShutdown_TakesTheTighterOfTheTwoBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		caller time.Duration
+		// atMost is what the flush must be given, expressed as an upper bound
+		// so the assertion does not race the clock between the two reads.
+		atMost time.Duration
+	}{
+		{
+			name:   "a caller deadline tighter than the internal one wins",
+			caller: 50 * time.Millisecond,
+			atMost: time.Second,
+		},
+		{
+			name:   "a caller deadline looser than the internal one does not widen it",
+			caller: time.Hour,
+			atMost: shutdownTimeout,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var given time.Duration
+			var sawDeadline bool
+			provider := &Provider{
+				enabled: true,
+				shutdowns: []func(context.Context) error{
+					func(ctx context.Context) error {
+						if deadline, ok := ctx.Deadline(); ok {
+							given, sawDeadline = time.Until(deadline), true
+						}
+						return nil
+					},
+				},
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), tt.caller)
+			defer cancel()
+			if err := provider.Shutdown(ctx); err != nil {
+				t.Fatalf("Shutdown: %v", err)
+			}
+
+			if !sawDeadline {
+				t.Fatal("the flush was given a context with no deadline, so neither bound applies to it")
+			}
+			if given > tt.atMost {
+				t.Errorf("the flush was given %s, want at most %s (caller %s, internal %s)",
+					given, tt.atMost, tt.caller, shutdownTimeout)
+			}
+		})
+	}
+}
+
+// TestProviderShutdown_WithoutACallerDeadline_UsesTheInternalBound is the third
+// case of the same choice, and the one where there is nothing to compare
+// against.
+//
+// A caller that passes context.Background is the ordinary path, and the flush
+// must still be bounded: an exporter blocking on a collector that has gone away
+// is exactly when shutdown is least welcome to hang.
+func TestProviderShutdown_WithoutACallerDeadline_UsesTheInternalBound(t *testing.T) {
+	var given time.Duration
+	var sawDeadline bool
+	provider := &Provider{
+		enabled: true,
+		shutdowns: []func(context.Context) error{
+			func(ctx context.Context) error {
+				if deadline, ok := ctx.Deadline(); ok {
+					given, sawDeadline = time.Until(deadline), true
+				}
+				return nil
+			},
+		},
+	}
+
+	if err := provider.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	if !sawDeadline {
+		t.Fatal("the flush was given no deadline at all, so a stuck exporter would hold the process open")
+	}
+	if given > shutdownTimeout {
+		t.Errorf("the flush was given %s, want at most the internal %s", given, shutdownTimeout)
+	}
+}
+
+// TestAgreedValue_APartialAgreementIsNotAnAgreement covers the rule the summary
+// field rests on.
+//
+// Two signals naming one collector while a third names another has no single
+// answer, and reporting one anyway is how the field came to be wrong in the
+// first place. The count check is therefore not an optimization: a map holding
+// fewer entries than there are enabled signals means at least one signal
+// reported nothing, and an answer drawn from the rest would describe a
+// deployment by a value some of it never used.
+func TestAgreedValue_APartialAgreementIsNotAnAgreement(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		values  map[string]string
+		enabled int
+		want    string
+	}{
+		{
+			name:    "every enabled signal agrees",
+			values:  map[string]string{"traces": "http://c:4318", "metrics": "http://c:4318"},
+			enabled: 2,
+			want:    "http://c:4318",
+		},
+		{
+			name:    "one enabled signal reported nothing",
+			values:  map[string]string{"traces": "http://c:4318"},
+			enabled: 2,
+			want:    "",
+		},
+		{
+			name:    "the enabled signals disagree",
+			values:  map[string]string{"traces": "http://a:4318", "metrics": "http://b:4318"},
+			enabled: 2,
+			want:    "",
+		},
+		{
+			name:    "nothing is enabled at all",
+			values:  map[string]string{},
+			enabled: 0,
+			want:    "",
+		},
+		{
+			name:    "one signal, which agrees with itself",
+			values:  map[string]string{"metrics": "http://c:4318"},
+			enabled: 1,
+			want:    "http://c:4318",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := agreedValue(tt.values, tt.enabled); got != tt.want {
+				t.Errorf("agreedValue(%v, %d) = %q, want %q", tt.values, tt.enabled, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStart_RefusesUnreadableTLSMaterialBeforeBuildingAnything covers the
+// second of the two checks Start runs before an exporter exists.
+//
+// The exporters answer a CA file they cannot read by falling back to the system
+// roots and saying nothing, so a typo in the path produces a process that
+// announces telemetry enabled and exports to a collector it is not
+// authenticating the way the operator asked. Refusing at startup, naming the
+// variable, is the only outcome they can act on; and it has to happen before
+// anything is built, or the refusal leaves exporters running with no owner.
+func TestStart_RefusesUnreadableTLSMaterialBeforeBuildingAnything(t *testing.T) {
+	absent := filepath.Join(t.TempDir(), "absent.pem")
+	t.Setenv("OTEL_EXPORTER_OTLP_CERTIFICATE", absent)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+
+	provider, err := Start(context.Background(), Config{Enabled: true, Signals: AllSignals()})
+
+	if err == nil {
+		t.Fatalf("Start accepted a CA file it cannot read; the exporters would fall back to the system roots and say nothing")
+		return
+	}
+	if !strings.Contains(err.Error(), "OTEL_EXPORTER_OTLP_CERTIFICATE") {
+		t.Errorf("Start refused with %q, want it to name the variable the operator has to fix", err)
+	}
+	if provider.Enabled() {
+		t.Error("the returned provider reports itself enabled after a refused start")
+	}
+	if got := CurrentSnapshot(); got.Enabled {
+		t.Error("a refused start published a snapshot saying telemetry is on")
+	}
+}
+
+// TestNormalizeProtocol_AcceptsTheSpellingsAnOperatorWrites covers the
+// normalization every protocol value passes through, including the two the
+// resolver never hands it.
+//
+// resolveProtocol drops an empty value before it gets here, so "" and the short
+// "http" reach this function only from a caller that passes what it was given
+// verbatim, and both must resolve to the specification's own spelling rather
+// than fall through to the unknown-protocol refusal. The two refusals are
+// asserted beside them because their whole value is the message: http/json is
+// refused for a reason an operator can act on, and it must not be mistaken for
+// a typo.
+func TestNormalizeProtocol_AcceptsTheSpellingsAnOperatorWrites(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr string
+	}{
+		{name: "empty means the default", in: "", want: ProtocolHTTP},
+		{name: "whitespace only means the default", in: "   ", want: ProtocolHTTP},
+		{name: "the short spelling", in: "http", want: ProtocolHTTP},
+		{name: "the specification's own spelling", in: ProtocolHTTP, want: ProtocolHTTP},
+		{name: "case is folded", in: "HTTP/Protobuf", want: ProtocolHTTP},
+		{name: "grpc", in: ProtocolGRPC, want: ProtocolGRPC},
+		{name: "http/json is refused by name", in: "http/json", wantErr: "http/json"},
+		{name: "anything else is unknown", in: "thrift", wantErr: "unknown OTLP protocol"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := normalizeProtocol(tt.in)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("normalizeProtocol(%q) = %q with no error, want a refusal naming %q", tt.in, got, tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("normalizeProtocol(%q) refused with %q, want it to name %q", tt.in, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeProtocol(%q): %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("normalizeProtocol(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSnapshot_ASignalWithNoProtocolContributesNothing covers the guard that
+// keeps an unset value out of the per-signal detail.
+//
+// A signal recorded with an empty protocol would be counted by agreedValue as a
+// signal that reported, so the summary field would be computed from one fewer
+// answer than there are signals and could claim an agreement that was never
+// reached. Omitting the key is what makes "every enabled signal reported one"
+// mean what it says.
+func TestSnapshot_ASignalWithNoProtocolContributesNothing(t *testing.T) {
+	t.Parallel()
+
+	provider := &Provider{
+		enabled:        true,
+		signals:        Signals{Traces: true, Metrics: true},
+		protocol:       ProtocolGRPC,
+		endpoint:       "http://192.0.2.4:4317",
+		metricProtocol: "",
+		metricEndpoint: "",
+	}
+
+	got := provider.Snapshot()
+
+	if _, present := got.SignalProtocols["metrics"]; present {
+		t.Errorf("a signal with no recorded protocol appears in the detail as %q", got.SignalProtocols["metrics"])
+	}
+	if _, present := got.SignalEndpoints["metrics"]; present {
+		t.Errorf("a signal with no recorded endpoint appears in the detail as %q", got.SignalEndpoints["metrics"])
+	}
+	if got.Protocol != "" {
+		t.Errorf("protocol = %q; one of the two enabled signals reported nothing, so there is no process-wide answer", got.Protocol)
+	}
+	if got.Endpoint != "" {
+		t.Errorf("endpoint = %q; one of the two enabled signals reported nothing, so there is no process-wide answer", got.Endpoint)
+	}
+	if got.SignalProtocols["traces"] != ProtocolGRPC {
+		t.Errorf("the signal that did report is missing from the detail: %v", got.SignalProtocols)
+	}
+}
+
+// TestEnvHasServiceName_OnlyTheServiceNameAttributeCounts covers the detector
+// that decides whether this server supplies its own default name.
+//
+// Answering yes to an attribute that is not service.name would leave a
+// deployment named "unknown_service:gitlab-mcp-server" in every backend, which
+// is the SDK's fallback and not a name anybody chose. Answering yes to a
+// service.name written without a value would do the same, since the pair
+// contributes no name at all.
+func TestEnvHasServiceName_OnlyTheServiceNameAttributeCounts(t *testing.T) {
+	tests := []struct {
+		name        string
+		serviceName string
+		attributes  string
+		want        bool
+	}{
+		{name: "nothing names the service", want: false},
+		{name: "OTEL_SERVICE_NAME names it", serviceName: "billing", want: true},
+		{name: "an empty OTEL_SERVICE_NAME counts as unset", serviceName: "   ", want: false},
+		{name: "service.name in the attributes names it", attributes: "service.name=billing", want: true},
+		{name: "service.name among other pairs names it", attributes: "deployment.environment=prod,service.name=billing", want: true},
+		{name: "surrounding whitespace on the key is trimmed", attributes: " service.name =billing", want: true},
+		{name: "another attribute names nothing", attributes: "deployment.environment=prod", want: false},
+		{name: "a key with no value names nothing", attributes: "service.name", want: false},
+		{name: "an empty attributes variable names nothing", attributes: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Both are set on every row, including to empty: an ambient
+			// OTEL_SERVICE_NAME on a developer's machine would otherwise answer
+			// yes to every case and the table would assert nothing.
+			t.Setenv("OTEL_SERVICE_NAME", tt.serviceName)
+			t.Setenv("OTEL_RESOURCE_ATTRIBUTES", tt.attributes)
+
+			if got := envHasServiceName(); got != tt.want {
+				t.Errorf("envHasServiceName() = %v with OTEL_SERVICE_NAME=%q OTEL_RESOURCE_ATTRIBUTES=%q, want %v",
+					got, tt.serviceName, tt.attributes, tt.want)
 			}
 		})
 	}

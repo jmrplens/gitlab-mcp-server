@@ -42,6 +42,12 @@ const (
 	maxBackoff  = 60 * time.Second
 )
 
+// progressf writes the progress lines this package emits. It is indirected for
+// the same reason sleepCtx is: cmdutil.Progressf writes to a writer private to
+// internal/cmdutil, so what a retry says about which attempt comes next is
+// otherwise readable by no test outside that package.
+var progressf = cmdutil.Progressf
+
 // sleepCtx waits for d or until ctx is cancelled, returning ctx.Err() on
 // cancellation. It is indirected so tests can make retries instant.
 var sleepCtx = func(ctx context.Context, d time.Duration) error {
@@ -177,7 +183,7 @@ func (f *Fetcher) Fetch(ctx context.Context, area string) (string, error) {
 			// Otherwise fall back to a stale cached copy rather than failing the
 			// whole audit when the network is flaky and an older doc is on disk.
 			if stale, statErr := os.ReadFile(cachePath); statErr == nil { //#nosec G304 -- cache path is derived, not user input
-				cmdutil.Progressf("apidocs: %v; using stale cached %s", err, area)
+				progressf("apidocs: %v; using stale cached %s", err, area)
 				return string(stale), nil
 			}
 		}
@@ -221,7 +227,7 @@ func (f *Fetcher) download(ctx context.Context, area string) ([]byte, error) {
 // attempts and returns promptly. The label names what is being fetched in the
 // progress and failure lines, since a URL is not what a reader is looking for.
 func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error) {
-	cmdutil.Progressf("apidocs: fetching %s", label)
+	progressf("apidocs: fetching %s", label)
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		body, status, retryAfter, err := fetchOnce(ctx, f.client, url)
@@ -242,7 +248,7 @@ func (f *Fetcher) request(ctx context.Context, label, url string) ([]byte, error
 			break
 		}
 		wait := backoffDelay(attempt, retryAfter)
-		cmdutil.Progressf("apidocs: %s: %v; retry %d/%d in %s", label, lastErr, attempt+1, maxAttempts, wait.Round(time.Millisecond))
+		progressf("apidocs: %s: %v; retry %d/%d in %s", label, lastErr, attempt+1, maxAttempts, wait.Round(time.Millisecond))
 		if sleepErr := sleepCtx(ctx, wait); sleepErr != nil {
 			return nil, fmt.Errorf("apidocs: %s retry aborted: %w", label, errors.Join(lastErr, sleepErr))
 		}

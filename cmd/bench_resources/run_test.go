@@ -7,6 +7,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -642,5 +644,106 @@ func TestRunScenario_FailedCalls_AreNotedRatherThanFatal(t *testing.T) {
 	}
 	if resources, ok := scenario.latency(methodResourcesList); !ok || resources.Count != plan.Clients*plan.Parallel {
 		t.Errorf("resources/list distribution %+v, want unaffected", resources)
+	}
+}
+
+// TestRamp_OneClient_PublishesNoPerClientCost verifies a scenario with a
+// single client reports no per-extra-client figure, rather than one divided by
+// the zero extra clients it had.
+//
+// "What does the next credential cost" is the difference between the first and
+// the last divided by the clients in between, and with one client there are
+// none: the division is zero by zero, which is a NaN, and a NaN written to the
+// record marshals as a value the site's chart code reads as a number. The
+// figure a one-client scenario can honestly publish is nothing at all.
+//
+// The sampler is pointed at no process on purpose. What this asserts is the
+// arithmetic the guard performs, and a real process would put an unrepeatable
+// resident set on both sides of a subtraction that has to be exactly zero.
+func TestRamp_OneClient_PublishesNoPerClientCost(t *testing.T) {
+	r := &runner{progress: progressFunc(false)}
+	s := newSampler(t.Context(), time.Hour, func() []int { return nil })
+	plan := scenarioPlan{
+		ID: "http-dynamic", Transport: transportHTTP, Surface: surfaceDynamic,
+		Clients: 1, Parallel: 1, Rounds: 1,
+	}
+
+	var result Scenario
+	if _, err := r.ramp(t.Context(), &fakeTarget{}, s, plan, &result); err != nil {
+		t.Fatalf("ramp: %v", err)
+	}
+
+	if len(result.Ramp) != 1 || result.Ramp[0].Client != 1 {
+		t.Fatalf("ramp = %+v, want the one credential admitted", result.Ramp)
+	}
+	per := result.Memory.PerExtraClientMiB
+	if math.IsNaN(per) || math.IsInf(per, 0) {
+		t.Fatalf("PerExtraClientMiB = %v, want a number the record can carry", per)
+	}
+	if per != 0 {
+		t.Errorf("PerExtraClientMiB = %v with one client, want 0", per)
+	}
+	if result.Memory.AllClientsMiB != result.Memory.OneClientMiB {
+		t.Errorf("all clients %v against one client %v, want the same reading for the same single client",
+			result.Memory.AllClientsMiB, result.Memory.OneClientMiB)
+	}
+}
+
+// numberedFailureConn fails every call, with a message naming which call it
+// was, so a test can tell the first failure of a method from a later one.
+type numberedFailureConn struct{ calls atomic.Int64 }
+
+func (c *numberedFailureConn) call(context.Context, string, map[string]any) ([]byte, error) {
+	return nil, fmt.Errorf("failure number %d", c.calls.Add(1))
+}
+
+func (c *numberedFailureConn) close() {}
+
+// TestLoad_SeveralRounds_NamesTheFirstFailureNotTheLast verifies the note a
+// method's failures produce carries the first one the load phase saw, across
+// every round rather than within the last of them.
+//
+// The note is the only account of why calls failed, and the first failure is
+// the one that explains the rest: a server that stopped answering fails the
+// same way from then on, and reporting the last one names the aftermath. One
+// client at a parallelism of one, so the order of the calls is the order of
+// the rounds and the expectation is arithmetic rather than a race.
+func TestLoad_SeveralRounds_NamesTheFirstFailureNotTheLast(t *testing.T) {
+	r := &runner{progress: progressFunc(false)}
+	call, err := callFor(surfaceDynamic)
+	if err != nil {
+		t.Fatalf("callFor: %v", err)
+	}
+	conns := []*clientConn{{rpc: &numberedFailureConn{}, label: "client 0"}}
+	plan := scenarioPlan{
+		ID: "http-dynamic", Transport: transportHTTP, Surface: surfaceDynamic,
+		Clients: 1, Parallel: 1, Rounds: 3,
+	}
+
+	var result Scenario
+	notes := r.load(t.Context(), conns, plan, call, &result)
+
+	if len(notes) != 3 {
+		t.Fatalf("notes = %v, want one per method whose calls failed", notes)
+	}
+	// The methods run in order, three calls each, so the first failure of the
+	// first method is call one and of the second is call four.
+	wants := []struct {
+		note  string
+		first string
+		last  string
+	}{
+		{note: notes[0], first: "failure number 1", last: "failure number 3"},
+		{note: notes[1], first: "failure number 4", last: "failure number 6"},
+	}
+	for _, tc := range wants {
+		t.Run(tc.first, func(t *testing.T) {
+			if !strings.Contains(tc.note, tc.first) {
+				t.Errorf("note %q does not name %q", tc.note, tc.first)
+			}
+			if strings.Contains(tc.note, tc.last) {
+				t.Errorf("note %q names %q, which is the last failure rather than the first", tc.note, tc.last)
+			}
+		})
 	}
 }

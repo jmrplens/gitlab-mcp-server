@@ -103,6 +103,64 @@ func TestLoadToolPackages_UntypedPackage_IsLeftOut(t *testing.T) {
 	}
 }
 
+// TestLoadToolPackages_HalfTypedPackage_IsLeftOut verifies the same guard for
+// the two halves of the type information separately. A package carrying one
+// and not the other is as unusable to an analyzer as one carrying neither:
+// the structs pass walks TypesInfo for the object an identifier names, and the
+// actions pass reads Types for the declared scope, so keeping such a package
+// would hand one of them a nil to dereference. The real loader never produces
+// this shape, so it is reached through the loader seam, and each case uses a
+// root of its own because the result is memoized per root.
+func TestLoadToolPackages_HalfTypedPackage_IsLeftOut(t *testing.T) {
+	const typedPath = "example.com/half/internal/tools/typed"
+	typed := func() *packages.Package {
+		return &packages.Package{
+			PkgPath:   typedPath,
+			Types:     types.NewPackage(typedPath, "typed"),
+			TypesInfo: &types.Info{},
+		}
+	}
+	cases := []struct {
+		name string
+		half *packages.Package
+	}{
+		{
+			name: "types_without_types_info",
+			half: &packages.Package{
+				PkgPath: "example.com/half/internal/tools/notypesinfo",
+				Types:   types.NewPackage("example.com/half/internal/tools/notypesinfo", "notypesinfo"),
+			},
+		},
+		{
+			name: "types_info_without_types",
+			half: &packages.Package{
+				PkgPath:   "example.com/half/internal/tools/notypes",
+				TypesInfo: &types.Info{},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := loadPackages
+			t.Cleanup(func() { loadPackages = original })
+			loadPackages = func(*packages.Config, ...string) ([]*packages.Package, error) {
+				return []*packages.Package{tc.half, typed()}, nil
+			}
+
+			pkgs, err := LoadToolPackages(filepath.Join(t.TempDir(), tc.name))
+			if err != nil {
+				t.Fatalf("LoadToolPackages: %v", err)
+			}
+			if len(pkgs) != 1 {
+				t.Fatalf("loaded %d packages, want only the fully typed one", len(pkgs))
+			}
+			if pkgs[0].PkgPath != typedPath {
+				t.Errorf("loaded %q, want %q", pkgs[0].PkgPath, typedPath)
+			}
+		})
+	}
+}
+
 // TestLoadToolPackages_Failures_AbortTheRun verifies both failure classes
 // surface as errors rather than a partial package set: a root the go tool
 // cannot enter, and a tool package that does not type-check.

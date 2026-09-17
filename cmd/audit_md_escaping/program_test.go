@@ -5,6 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"go/ast"
+	"go/token"
+	"go/types"
 	"maps"
 	"os"
 	"path/filepath"
@@ -145,7 +148,7 @@ func loadFor(dir string, patterns []string, overlay map[string][]byte) (*program
 // is how the broken fixture — whose whole point is that the load must fail —
 // stays out of every union.
 var sharedLoads = []*sharedLoad{
-	{patterns: fixturePatterns, sets: []map[string]string{caseFixture, cardFixture, fenceFixture, rawFixture}},
+	{patterns: fixturePatterns, sets: []map[string]string{caseFixture, cardFixture, fenceFixture, rawFixture, edgeFixture}},
 	{patterns: []string{fixturePattern}, sets: []map[string]string{cleanFixture, caseFixture}},
 }
 
@@ -754,6 +757,49 @@ func TestLoadProgram_Fixture_IndexesDeclarationsAndCalls(t *testing.T) {
 	}
 	if !found || !called {
 		t.Errorf("FormatRow not indexed: found=%v called=%v", found, called)
+	}
+}
+
+// unindexablePackage is a package holding the three top-level declarations
+// the indexing walk has to step over: a function declared with no body, the
+// shape an assembly-implemented function takes; a function named with the
+// blank identifier, which the type checker records no object for; and a
+// declaration that is not a function at all.
+//
+// It is built by hand rather than loaded because the first of the three is
+// what a fixture cannot carry: a package whose function has no body does not
+// build, and the loader refuses a package that did not type-check.
+func unindexablePackage() *packages.Package {
+	file := &ast.File{
+		Name: ast.NewIdent("mdstub"),
+		Decls: []ast.Decl{
+			&ast.FuncDecl{Name: ast.NewIdent("assemblyStub"), Type: &ast.FuncType{}},
+			&ast.FuncDecl{Name: ast.NewIdent("_"), Type: &ast.FuncType{}, Body: &ast.BlockStmt{}},
+			&ast.GenDecl{Tok: token.VAR},
+		},
+	}
+	return &packages.Package{
+		PkgPath:   modulePath + "/" + fixtureDir + "/mdstub",
+		Syntax:    []*ast.File{file},
+		TypesInfo: &types.Info{Defs: map[*ast.Ident]types.Object{}, Uses: map[*ast.Ident]types.Object{}},
+	}
+}
+
+// TestIndexDecls_DeclarationsWithNoBodyOrNoObject_AreNotIndexed checks that
+// the declaration index skips what it cannot look inside.
+//
+// Both halves matter for the same reason: every later question the audit asks
+// of a declared function reads its body, so recording one that has none, or
+// one the type checker gave no object to, would put an entry in the index that
+// answers with a nil dereference rather than with a verdict.
+func TestIndexDecls_DeclarationsWithNoBodyOrNoObject_AreNotIndexed(t *testing.T) {
+	pkg := unindexablePackage()
+	prog := &program{decls: map[*types.Func]*funcDecl{}, callers: map[*types.Func][]callSite{}}
+
+	prog.indexDecls(pkg)
+
+	if len(prog.decls) != 0 {
+		t.Errorf("indexDecls recorded %d declaration(s), want none", len(prog.decls))
 	}
 }
 

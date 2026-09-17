@@ -15,11 +15,14 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -626,6 +629,91 @@ func TestStdioTarget_Goroutines_ProcessNeverStarted(t *testing.T) {
 	}
 	if _, err := tgt.goroutines(); err == nil || !strings.Contains(err.Error(), "never started") {
 		t.Errorf("goroutines = %v, want the never-started refusal", err)
+	}
+}
+
+// TestStdioTarget_Processes_SkipsACommandWithNoProcess verifies a recorded
+// command that was never started is left out of the set handed to the sampler,
+// and the ones that did start are still in it.
+//
+// The sampler asks for the process set on every tick and reads /proc for each
+// entry. A nil process there is a nil dereference in the middle of a
+// measurement, on the sampler's own goroutine, which is the one place this
+// command cannot report a failure from.
+func TestStdioTarget_Processes_SkipsACommandWithNoProcess(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skipf("no sleep binary to keep a process alive: %v", err)
+	}
+	started := exec.CommandContext(t.Context(), sleep, "30")
+	if startErr := started.Start(); startErr != nil {
+		t.Fatalf("start sleep: %v", startErr)
+	}
+	t.Cleanup(func() { _ = started.Process.Kill(); _ = started.Wait() })
+
+	tgt := &stdioTarget{cmds: []*exec.Cmd{exec.CommandContext(t.Context(), sleep, "30"), started}}
+
+	procs := tgt.processes()
+	if len(procs) != 1 {
+		t.Fatalf("processes() returned %d entries, want only the command that was started", len(procs))
+	}
+	if procs[0].Pid != started.Process.Pid {
+		t.Errorf("processes() named pid %d, want the started command's %d", procs[0].Pid, started.Process.Pid)
+	}
+}
+
+// TestHTTPTarget_ACommandWithNoProcess_IsNeitherSampledNorSignalled verifies
+// a target holding a command that never produced a process reports no process
+// to the sampler and refuses the traceback dump.
+//
+// start publishes the command only after exec.Cmd.Start has filled its
+// Process in, so this is the state a failed start leaves behind rather than a
+// state the target reaches on its way up. Both readers dereference that
+// process, and both are on the path a scenario takes after a start that did
+// not work out.
+func TestHTTPTarget_ACommandWithNoProcess_IsNeitherSampledNorSignalled(t *testing.T) {
+	tgt := &httpTarget{output: &lockedBuffer{}}
+	tgt.setCommand(exec.CommandContext(t.Context(), "true"), &procWait{})
+
+	if procs := tgt.processes(); procs != nil {
+		t.Errorf("processes() = %v, want nothing for a command with no process", procs)
+	}
+	if _, err := tgt.goroutines(); err == nil || !strings.Contains(err.Error(), "no server process") {
+		t.Errorf("goroutines = %v, want the missing-process refusal", err)
+	}
+}
+
+// TestHTTPTarget_HealthThatCannotBeRead_IsNotHealthy verifies a 200 carrying
+// something other than the health document does not end the wait.
+//
+// A listener answering on the address is not the server: on a lost port it is
+// whatever else took it, and the answer can be a 200 of its own. Reading the
+// document is what tells the two apart, so a body that does not decode has to
+// keep the wait going rather than release it with an empty build, which is
+// what the record would then name as the thing it measured.
+func TestHTTPTarget_HealthThatCannotBeRead_IsNotHealthy(t *testing.T) {
+	var asked atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Add(1)
+		w.Header().Set(headerContentType, mediaJSON)
+		_, _ = io.WriteString(w, "<html>not this server</html>")
+	}))
+	defer server.Close()
+
+	previous := healthWait
+	healthWait = 300 * time.Millisecond
+	t.Cleanup(func() { healthWait = previous })
+
+	tgt := &httpTarget{addr: strings.TrimPrefix(server.URL, "http://"), output: &lockedBuffer{}}
+	info, err := tgt.waitHealthy(t.Context(), nil)
+	if err == nil || !strings.Contains(err.Error(), "never became healthy") {
+		t.Errorf("waitHealthy = %v, want the wait to run out rather than accept the answer", err)
+	}
+	if info != (ServerInfo{}) {
+		t.Errorf("waitHealthy returned %+v, want no build from a document it could not read", info)
+	}
+	if asked.Load() < 2 {
+		t.Errorf("the address was asked %d times, want the wait to have kept polling", asked.Load())
 	}
 }
 

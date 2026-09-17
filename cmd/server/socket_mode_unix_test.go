@@ -908,3 +908,53 @@ func TestNewStagingDir_AnUnnameableDirectory_IsReported(t *testing.T) {
 		t.Fatal("newStagingDir() named a directory without any randomness")
 	}
 }
+
+// TestMaxUnixPathLen_IsTheLongestPathAnAddressCanCarry measures the limit the
+// constant claims instead of restating the expression that computes it.
+//
+// TestBindUnixSocket_RefusesAPathNoAddressCanHold builds its over-long paths
+// out of maxUnixPathLen itself, so a limit that moved would move those paths
+// with it and stay refused: it pins that something is refused, never where the
+// line is. The line is not this package's to choose — it is however many bytes
+// of path the kernel will accept in an address — so the only honest oracle is
+// to bind one and see.
+//
+// Both directions matter and they fail differently. One byte too small and a
+// path a client could have reached is refused at startup for no reason; one
+// byte too large and the check passes an address that cannot be stored, so the
+// socket is bound under its staging name, published, and then found
+// unreachable by its own probe, which reports a confusing failure for a path
+// the operator was never told was too long.
+//
+// Bound directly rather than through bindUnixSocket: that assembles the socket
+// under a staging name one directory deeper, whose path is the longer of the
+// two, so the boundary on the published path cannot be reached through it.
+func TestMaxUnixPathLen_IsTheLongestPathAnAddressCanCarry(t *testing.T) {
+	t.Parallel()
+
+	binds := func(t *testing.T, length int) bool {
+		t.Helper()
+
+		path := filepath.Join(padDirTo(t, length-2), "s")
+		if len(path) != length {
+			t.Fatalf("built a path of %d bytes, want %d", len(path), length)
+		}
+		listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", path)
+		if err != nil {
+			return false
+		}
+		_ = listener.Close()
+		return true
+	}
+
+	if !binds(t, maxUnixPathLen) {
+		t.Errorf("a path of exactly maxUnixPathLen (%d) bytes cannot be bound, "+
+			"so the limit claims room the address does not have and refuses paths a client could reach",
+			maxUnixPathLen)
+	}
+	if binds(t, maxUnixPathLen+1) {
+		t.Errorf("a path of maxUnixPathLen+1 (%d) bytes binds, "+
+			"so the limit lets through an address the kernel cannot hold",
+			maxUnixPathLen+1)
+	}
+}

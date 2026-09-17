@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/types"
 	"strings"
 	"testing"
 
@@ -97,6 +98,188 @@ func TestSinkOf_Fixture_RefusesWhatCarriesNoTemplate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if !refused[name] {
 				t.Errorf("no call of %s was refused, so the refusal path is untested", name)
+			}
+		})
+	}
+}
+
+// edgeSinks indexes the edge fixture's sinks by the formatter they were
+// written in.
+func edgeSinks(t *testing.T) map[string][]sink {
+	t.Helper()
+	prog := loadFixture(t, edgeFixture)
+	byFunc := map[string][]sink{}
+	for _, s := range collectSinks(prog) {
+		if !strings.HasPrefix(s.pkg.PkgPath, modulePath+"/"+fixtureDir) {
+			continue
+		}
+		byFunc[enclosingFunc(s.pkg, s.call.Pos())] = append(byFunc[enclosingFunc(s.pkg, s.call.Pos())], s)
+	}
+	return byFunc
+}
+
+// holeExpressions renders the values one sink interpolates.
+func holeExpressions(s sink) []string {
+	rendered := make([]string, 0, len(s.holes))
+	for _, h := range s.holes {
+		rendered = append(rendered, types.ExprString(h.expr))
+	}
+	return rendered
+}
+
+// TestSinkOf_MoreVerbsThanOperands_SplitsOnlyTheOnesPassed checks that a
+// template declaring a hole the call never fills is split into the holes the
+// call does fill.
+//
+// fmt renders the unfilled one as %!s(MISSING), which carries no value at all,
+// so pairing it with an argument would mean pairing it with whatever sits past
+// the end of the list: the wrong value, or none.
+func TestSinkOf_MoreVerbsThanOperands_SplitsOnlyTheOnesPassed(t *testing.T) {
+	sinks := edgeSinks(t)["TooFewOperands"]
+	if len(sinks) == 0 {
+		t.Fatal("the fixture's short template is not a sink")
+	}
+
+	for _, s := range sinks {
+		if len(s.holes) != 1 {
+			t.Errorf("%s split into %v, want only the hole the call fills", s.callee, holeExpressions(s))
+		}
+	}
+}
+
+// TestSinkOf_CellBuilderWithNoCells_IsNotASink checks the guard on a row
+// builder called with nothing to put in the row.
+//
+// The builders are variadic, so a call with no cells compiles, and without the
+// guard it would be collected as a sink holding no value at all: a row in the
+// report that names nothing and can be neither judged nor fixed.
+func TestSinkOf_CellBuilderWithNoCells_IsNotASink(t *testing.T) {
+	sinks := edgeSinks(t)["Cells"]
+
+	if len(sinks) != 1 {
+		t.Fatalf("Cells produced %d sinks, want only the call that has cells in it", len(sinks))
+	}
+	if got := holeExpressions(sinks[0]); len(got) != 2 {
+		t.Errorf("the row with cells split into %v, want its two cells", got)
+	}
+}
+
+// TestCardCells_RowOfConstants_IsNotACardRow checks what tells a labeled
+// field from a row of fixed text.
+//
+// A card row is a label beside a value, so the second cell has to carry a
+// value; a row whose every cell is constant is layout the formatter wrote and
+// there is nothing for Card to render.
+func TestCardCells_RowOfConstants_IsNotACardRow(t *testing.T) {
+	for _, s := range edgeSinks(t)["Cells"] {
+		for _, h := range s.holes {
+			if h.ctx == ctxCard {
+				t.Errorf("a row of constants was reported as the card row %q", h.text)
+			}
+		}
+	}
+}
+
+// TestCardCells_OutOfScope_ReadsNoRow checks that the file scope decides
+// before the shape does. card.go's own writes are the rows every other
+// formatter is asked to use, so reading them as hand-written rows would report
+// the fix as the defect.
+func TestCardCells_OutOfScope_ReadsNoRow(t *testing.T) {
+	prog := loadFixture(t, cardFixture)
+	pkg := fixturePackage(t, prog, "mdcard")
+	headers := callsNamed(pkg, "MarkdownTableHeader")
+	if len(headers) == 0 {
+		t.Fatal("the fixture calls no MarkdownTableHeader")
+	}
+
+	inScope := 0
+	for _, call := range headers {
+		if _, ok := (sinkFile{pkg: pkg, cards: true}).cardCells(call, "MarkdownTableHeader"); ok {
+			inScope++
+		}
+		if row, ok := (sinkFile{pkg: pkg, cards: false}).cardCells(call, "MarkdownTableHeader"); ok {
+			t.Errorf("a file the rule does not read still reported the card row %q", row.text)
+		}
+	}
+	if inScope == 0 {
+		t.Error("no field-table header was read as a card row in a file the rule does read")
+	}
+}
+
+// TestCardCells_BuilderWithNoCardShape_ReadsNoRow checks that the card shapes
+// are matched by name and that the match is closed.
+//
+// Each cell builder has a shape of its own: a header is a pair of constants
+// naming the columns, a row is a constant label beside a value. A builder
+// neither case names has neither shape, so it must read as no card rather than
+// be measured against the shape of whichever case happens to be last.
+func TestCardCells_BuilderWithNoCardShape_ReadsNoRow(t *testing.T) {
+	prog := loadFixture(t, cardFixture)
+	pkg := fixturePackage(t, prog, "mdcard")
+	rows := callsNamed(pkg, "MarkdownTableRow")
+	if len(rows) == 0 {
+		t.Fatal("the fixture calls no MarkdownTableRow")
+	}
+	in := sinkFile{pkg: pkg, cards: true}
+
+	for _, call := range rows {
+		if len(call.Args) != 2 {
+			continue
+		}
+		if row, ok := in.cardCells(call, "MarkdownTableFooter"); ok {
+			t.Errorf("a builder with no card shape of its own reported the row %q", row.text)
+		}
+	}
+}
+
+// callsNamed collects every call of the named function in a loaded package.
+func callsNamed(pkg *packages.Package, name string) []*ast.CallExpr {
+	var found []*ast.CallExpr
+	for _, file := range pkg.Syntax {
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if callee := calleeOf(pkg, call); callee != nil && callee.Name() == name {
+				found = append(found, call)
+			}
+			return true
+		})
+	}
+	return found
+}
+
+// TestFormatSink_CallsItCannotRead_AreNotSinks checks the two ways a
+// formatting call arrives without a template the audit can read: too few
+// arguments to hold one, and a template the type checker recorded no value
+// for. Either way the holes are unknown, and a sink whose holes are unknown
+// would be judged against a template that is not there.
+func TestFormatSink_CallsItCannotRead_AreNotSinks(t *testing.T) {
+	untyped := untypedPackage()
+	in := sinkFile{pkg: untyped}
+
+	cases := []struct {
+		name string
+		call *ast.CallExpr
+		fn   string
+	}{
+		{
+			name: "fewer arguments than the template position",
+			call: &ast.CallExpr{Args: []ast.Expr{ast.NewIdent("w")}},
+			fn:   "Fprintf",
+		},
+		{
+			name: "a template the type checker recorded nothing for",
+			call: &ast.CallExpr{Args: []ast.Expr{ast.NewIdent("tmpl"), ast.NewIdent("v")}},
+			fn:   "Sprintf",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if s, ok := in.formatSink(tc.call, tc.fn); ok {
+				t.Errorf("formatSink accepted the call, splitting it into %v", holeExpressions(s))
 			}
 		})
 	}

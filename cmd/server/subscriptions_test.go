@@ -3194,3 +3194,25 @@ func TestListenStreams_CloseAll_TellsEveryStreamItIsShutdown(t *testing.T) {
 		})
 	}
 }
+
+// TestCodeServerBusy_SitsInTheImplementationDefinedServerErrorBand states where
+// this code is allocated from, which is the whole of what makes it the right
+// one to send.
+//
+// The refusals it carries — the rate limit, the watcher cap, shutdown — are
+// about the server's state rather than the request, so a client is meant to
+// read them as transient and retry. JSON-RPC reserves -32000..-32099 for
+// exactly that class, implementation-defined server errors, and a client that
+// classifies by band reads anything outside it as a different kind of failure
+// altogether. Nothing else here asserts the value: the wire tests compare what
+// they received against this same constant, so a code that left the band would
+// move both sides of every one of them.
+func TestCodeServerBusy_SitsInTheImplementationDefinedServerErrorBand(t *testing.T) {
+	t.Parallel()
+
+	if codeServerBusy < -32099 || codeServerBusy > -32000 {
+		t.Errorf("codeServerBusy = %d, want a code in -32099..-32000, the band JSON-RPC reserves for "+
+			"implementation-defined server errors; outside it a client cannot read the refusal as transient",
+			codeServerBusy)
+	}
+}

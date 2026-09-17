@@ -234,6 +234,17 @@ func (s *Service) FromATest() (*FromATest, *Response, error) {
 
 func (s *Service) Unclosed() (*Broken, *Response, error {
 `,
+		// Go source under another extension is a template or a backup, and it
+		// parses exactly as well as the source does: the extension is the only
+		// thing saying the compiler never reads it.
+		"generated.go.tmpl": `package gitlab
+
+var routeFromATemplate = route("from_a_template")
+
+func (s *Service) FromATemplate() (*FromATemplate, *Response, error) {
+	return do[*FromATemplate](s.client, withPath(routeFromATemplate))
+}
+`,
 		"notes.md": "not Go at all",
 	})
 	if err := os.Mkdir(filepath.Join(dir, "testing"), 0o750); err != nil {
@@ -245,6 +256,105 @@ func (s *Service) Unclosed() (*Broken, *Response, error {
 	want := map[string][]sdkRoute{"Good": {{Method: "GET", Path: "/good"}}}
 	if !reflect.DeepEqual(routes, want) {
 		t.Errorf("readSDKRoutes() = %+v, want only the one route the source declares", routes)
+	}
+}
+
+// TestReadSDKRoutes_OneEndpointNamedTwice_ContributesOneRoute verifies the
+// shapes a branching service method puts in front of this reader.
+//
+// A method that chooses between two requests names its route twice and may
+// name its verb in a call this cannot read, and the shortest legacy call in
+// client-go passes the verb and the path and nothing else. Each of those has
+// to leave the type with exactly the routes it really reaches: a duplicate
+// would double a finding's evidence, and a two-argument call refused would
+// lose an endpoint silently.
+func TestReadSDKRoutes_OneEndpointNamedTwice_ContributesOneRoute(t *testing.T) {
+	dir := sdkSourceIn(t, map[string]string{
+		"routes.go": `package gitlab
+
+var routeTwice = route("groups/%s/twice")
+`,
+		"methods.go": `package gitlab
+
+import "net/http"
+
+func (s *Service) OptionRouteNamedTwice(cond bool) (*Optioned, *Response, error) {
+	if cond {
+		return do[*Optioned](s.client, withPath(routeTwice, GroupID{gid}))
+	}
+	return do[*Optioned](s.client, withPath(routeTwice, GroupID{gid}))
+}
+
+func (s *Service) LegacyPathNamedTwice(cond bool) (*Legacy, *Response, error) {
+	if cond {
+		req, err := s.client.NewRequest(http.MethodPost, "groups/legacy", nil, options)
+		return nil, nil, err
+	}
+	req, err := s.client.NewRequest(http.MethodPost, "groups/legacy", nil, options)
+	return nil, nil, err
+}
+
+func (s *Service) LegacyWithTheVerbAndThePathAlone() (*Minimal, *Response, error) {
+	req, err := s.client.NewRequest(http.MethodDelete, "groups/minimal")
+	return nil, nil, err
+}
+
+func (s *Service) VerbQualifiedByMoreThanAPackage() (*Qualified, *Response, error) {
+	return do[*Qualified](s.client, withPath(routeTwice, GroupID{gid}), withMethod(rest.http.MethodPut))
+}
+`,
+	})
+
+	routes := readSDKRoutes(dir)
+
+	want := map[string][]sdkRoute{
+		"Optioned": {{Method: "GET", Path: "/groups/:/twice"}},
+		"Legacy":   {{Method: "POST", Path: "/groups/legacy"}},
+		"Minimal":  {{Method: "DELETE", Path: "/groups/minimal"}},
+		// The verb is qualified by a selector rather than by a package name,
+		// so it names no net/http constant and the method sends the GET a
+		// method naming no verb sends.
+		"Qualified": {{Method: "GET", Path: "/groups/:/twice"}},
+	}
+	if !reflect.DeepEqual(routes, want) {
+		t.Errorf("readSDKRoutes() = %+v, want %+v", routes, want)
+	}
+}
+
+// TestReadSDKRoutes_AMethodWithAnEmptyResultList_NamesNoType verifies the
+// third shape a result list can take.
+//
+// A method with no results at all has none to read, and one whose results are
+// written as an empty pair has a list with nothing in it: reading the first
+// element of that would be reading past the end of the slice, so the length is
+// what decides rather than the presence of the list.
+func TestReadSDKRoutes_AMethodWithAnEmptyResultList_NamesNoType(t *testing.T) {
+	dir := sdkSourceIn(t, map[string]string{
+		"routes.go": `package gitlab
+
+var routeThing = route("things")
+`,
+		"methods.go": `package gitlab
+
+func (s *Service) EmptyResultList() () {
+	_ = do[*Thing](s.client, withPath(routeThing))
+}
+
+func (s *Service) NoResultsAtAll() {
+	_ = do[*Thing](s.client, withPath(routeThing))
+}
+
+func (s *Service) Named() (*Thing, *Response, error) {
+	return do[*Thing](s.client, withPath(routeThing))
+}
+`,
+	})
+
+	routes := readSDKRoutes(dir)
+
+	want := map[string][]sdkRoute{"Thing": {{Method: "GET", Path: "/things"}}}
+	if !reflect.DeepEqual(routes, want) {
+		t.Errorf("readSDKRoutes() = %+v, want only the route the method naming a type reaches", routes)
 	}
 }
 

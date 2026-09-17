@@ -290,3 +290,190 @@ func TestSetDiagnosticSinks_AMalformedHeaderVariableIsNotPrinted(t *testing.T) {
 		})
 	}
 }
+
+// TestNewCredentialRedactor_SubstitutesOnlyWhatIsWorthSubstituting covers the
+// floor on what counts as a secret, on both sides of it.
+//
+// The floor exists because a short value is not a credential and substituting
+// one would rewrite unrelated text wherever those characters happened to
+// appear: an operator whose log lines are peppered with "[redacted]" learns
+// nothing from the one that mattered. It is a floor rather than a ceiling, so a
+// value of exactly that length is a secret and is substituted; the row below it
+// is what proves the comparison is not simply being skipped.
+func TestNewCredentialRedactor_SubstitutesOnlyWhatIsWorthSubstituting(t *testing.T) {
+	tests := []struct {
+		name   string
+		secret string
+		want   bool
+	}{
+		{
+			name:   "one character short of the floor is left alone",
+			secret: strings.Repeat("s", minRedactedSecret-1),
+			want:   false,
+		},
+		{
+			name:   "exactly the floor is substituted",
+			secret: strings.Repeat("k", minRedactedSecret),
+			want:   true,
+		},
+		{
+			name:   "a realistic credential is substituted",
+			secret: "glpat-0123456789abcdefghij",
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", tt.secret)
+			// The other two are cleared so a developer's own environment
+			// cannot contribute a pair and answer the question for us.
+			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "")
+			t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "")
+			t.Setenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "")
+
+			line := "the collector refused " + tt.secret + " and closed the stream"
+			got := newCredentialRedactor()(line)
+
+			if tt.want && strings.Contains(got, tt.secret) {
+				t.Errorf("the value was printed verbatim: %s", got)
+			}
+			if !tt.want && got != line {
+				t.Errorf("a value below the %d-character floor was rewritten: %q became %q",
+					minRedactedSecret, line, got)
+			}
+		})
+	}
+}
+
+// TestNewCredentialRedactor_ThePercentDecodedSpellingIsSubstitutedToo covers
+// the second spelling of one secret.
+//
+// The variables use W3C Baggage syntax, so a credential containing a space is
+// written percent-encoded, and the exporter logs whichever form it was holding
+// when it gave up. Offering only the spelling the environment carries leaves
+// the decoded one intact in the line, which is the whole secret in plain text
+// under a different set of bytes.
+func TestNewCredentialRedactor_ThePercentDecodedSpellingIsSubstitutedToo(t *testing.T) {
+	const secret = "SUPERSECRET-COLLECTOR-TOKEN-9f3a"
+
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer%20"+secret)
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_HEADERS", "")
+
+	redact := newCredentialRedactor()
+
+	// The spelling the variable carries: the control, since a redactor that
+	// offered nothing at all would pass the assertion below by doing nothing.
+	escaped := "collector rejected header Bearer%20" + secret
+	if got := redact(escaped); strings.Contains(got, secret) {
+		t.Errorf("the escaped spelling was printed verbatim: %s", got)
+	}
+
+	decoded := "collector rejected header Bearer " + secret
+	if got := redact(decoded); strings.Contains(got, secret) {
+		t.Errorf("the percent-decoded spelling was printed verbatim: %s", got)
+	}
+}
+
+// TestRedactingHandler_AnUnchangedValueKeepsItsType covers the branch that
+// decides whether an attribute is handed back or rebuilt as a string.
+//
+// Rebuilding one that did not change costs its type on the wire: an integer
+// becomes the text of an integer, and a backend that could have aggregated it
+// can no longer. The exception is a value the handler had to render to inspect
+// at all, which is how logr delivers an error, and there the rendered text is
+// what must be written rather than the opaque value behind it.
+func TestRedactingHandler_AnUnchangedValueKeepsItsType(t *testing.T) {
+	var buf bytes.Buffer
+	handler := &redactingHandler{
+		Handler: slog.NewJSONHandler(&buf, nil),
+		redact:  func(text string) string { return strings.ReplaceAll(text, "hunter2", redactedPlaceholder) },
+	}
+
+	slog.New(handler).Info("export failed",
+		slog.Int("attempts", 7),
+		slog.Any("err", errors.New("collector refused the batch")),
+	)
+
+	printed := buf.String()
+
+	if !strings.Contains(printed, `"attempts":7`) {
+		t.Errorf(`the integer attribute did not survive as a number: %s`, printed)
+	}
+	// An error is delivered as an opaque value, so the handler renders it to
+	// inspect it and must write what it rendered. Left alone, encoding/json
+	// marshals the error struct itself and the message is lost entirely.
+	if !strings.Contains(printed, `"err":"collector refused the batch"`) {
+		t.Errorf("the error attribute was not written as its rendered text: %s", printed)
+	}
+}
+
+// TestRedactingHandler_DescendsIntoAGroup covers the recursion that keeps a
+// grouped attribute from being read as one opaque value.
+//
+// logr delivers the exporter's own context as attributes, and the SDK is free
+// to group them. A flat scan would see the group's rendered form, substitute
+// nothing inside it, and hand the collector credential straight to the terminal
+// under a key that looks structured.
+func TestRedactingHandler_DescendsIntoAGroup(t *testing.T) {
+	const secret = "SUPERSECRET-COLLECTOR-TOKEN-9f3a"
+
+	var buf bytes.Buffer
+	handler := &redactingHandler{
+		Handler: slog.NewJSONHandler(&buf, nil),
+		redact:  func(text string) string { return strings.ReplaceAll(text, secret, redactedPlaceholder) },
+	}
+
+	slog.New(handler).Info("export failed",
+		slog.Group("request",
+			slog.String("authorization", "Bearer "+secret),
+			slog.Group("retry", slog.String("last", "Bearer "+secret)),
+		),
+	)
+
+	printed := buf.String()
+	if strings.Contains(printed, secret) {
+		t.Errorf("a credential inside a group reached the terminal: %s", printed)
+	}
+	if !strings.Contains(printed, redactedPlaceholder) {
+		t.Errorf("nothing was substituted, so the group was never descended: %s", printed)
+	}
+}
+
+// TestClampSDKLevel_MapsTheSDKVerbosityScaleOntoLevels pins the mapping at
+// every boundary it has.
+//
+// logr's verbosity counts downward from Info while slog's levels count upward,
+// so the SDK's V(1) arrives as a level just below Info and its V(4) far below
+// Debug. Anything at Info or above is not on that scale at all and passes
+// through unchanged: clamping an Error to Warn would hide an export failure
+// behind a level an operator filters out.
+func TestClampSDKLevel_MapsTheSDKVerbosityScaleOntoLevels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   slog.Level
+		want slog.Level
+	}{
+		{name: "error passes through", in: slog.LevelError, want: slog.LevelError},
+		{name: "warn passes through", in: slog.LevelWarn, want: slog.LevelWarn},
+		{name: "info is the lowest level that passes through", in: slog.LevelInfo, want: slog.LevelInfo},
+		{name: "one below info is the SDK warn channel", in: slog.LevelInfo - 1, want: slog.LevelWarn},
+		{name: "one above debug is still the SDK warn channel", in: slog.LevelDebug + 1, want: slog.LevelWarn},
+		{name: "debug itself is the SDK info channel", in: slog.LevelDebug, want: slog.LevelDebug},
+		{name: "below debug is internal detail", in: slog.LevelDebug - 4, want: slog.LevelDebug},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := clampSDKLevel(tt.in); got != tt.want {
+				t.Errorf("clampSDKLevel(%v) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}

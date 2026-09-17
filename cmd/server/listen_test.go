@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 )
@@ -535,5 +536,33 @@ func TestValidateTLSFiles_ALoadablePairIsAccepted(t *testing.T) {
 	}
 	if loadedCert != "/etc/ssl/mcp.crt" || loadedKey != "/etc/ssl/mcp.key" {
 		t.Errorf("loaded (%q, %q), want the configured pair", loadedCert, loadedKey)
+	}
+}
+
+// TestStaleSocketDialTimeout_BoundsTheProbeRatherThanDisablingIt states the one
+// thing the constant must not become.
+//
+// [net.Dialer] reads a zero Timeout as no timeout at all, so a budget that
+// collapsed to zero would not make the probe quick, it would remove the bound
+// from it: clearStaleSocket runs before the listener is bound, on the startup
+// path, and a path whose peer accepts the connection and then never speaks
+// would hold the process there with nothing to report. No test can catch that
+// by dialing, because a unix connect either completes at once or is refused at
+// once, and neither reaches the timeout — which is exactly why the value is
+// stated here instead.
+//
+// The upper bound is the other half of the same reasoning: the probe asks a
+// local path a question the kernel answers immediately, so a budget measured
+// in seconds would only ever be spent making startup slower.
+func TestStaleSocketDialTimeout_BoundsTheProbeRatherThanDisablingIt(t *testing.T) {
+	t.Parallel()
+
+	if staleSocketDialTimeout <= 0 {
+		t.Errorf("staleSocketDialTimeout = %s: net.Dialer takes a zero Timeout as no timeout, "+
+			"so clearStaleSocket would have no bound at all on the startup path", staleSocketDialTimeout)
+	}
+	if staleSocketDialTimeout > time.Second {
+		t.Errorf("staleSocketDialTimeout = %s: a connect to a local path completes or fails at once, "+
+			"so a budget this large only delays startup", staleSocketDialTimeout)
 	}
 }

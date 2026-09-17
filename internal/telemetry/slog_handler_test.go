@@ -3,6 +3,7 @@ package telemetry
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -871,5 +872,260 @@ func TestSlogHandler_ATruncatedAttributeIsStillValidUTF8(t *testing.T) {
 				t.Errorf("the exported record is not valid UTF-8, so proto.Marshal would refuse the whole batch: %q", exported)
 			}
 		})
+	}
+}
+
+// TestFanOutHandler_Enabled_NeedsBothTheExportFlagAndTheFloor covers the
+// conjunction the export leg is gated on, with each operand false in turn.
+//
+// Either leg is reason enough to say yes, which is what keeps LOG_LEVEL from
+// governing the export. That makes the export leg's own answer the whole of the
+// decision whenever stderr has declined, and both halves of it have to hold: a
+// handler with no collector behind it must not claim a record is wanted, and a
+// record below the export floor must not be claimed either. Getting this wrong
+// in the permissive direction is invisible in a terminal, because Handle gates
+// each leg again and simply writes nothing.
+func TestFanOutHandler_Enabled_NeedsBothTheExportFlagAndTheFloor(t *testing.T) {
+	t.Parallel()
+
+	// A stderr leg that refuses everything, so the answer is the export leg's
+	// alone. Its own contribution is asserted by the last row.
+	silent := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError + 1})
+	chatty := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})
+
+	tests := []struct {
+		name     string
+		stderr   slog.Handler
+		exported bool
+		level    slog.Level
+		want     bool
+	}{
+		{
+			name:     "nothing is exported, so a record at the floor is still unwanted",
+			stderr:   silent,
+			exported: false,
+			level:    slog.LevelInfo,
+			want:     false,
+		},
+		{
+			name:     "exporting, but the record is below the export floor",
+			stderr:   silent,
+			exported: true,
+			level:    slog.LevelDebug,
+			want:     false,
+		},
+		{
+			name:     "exporting and the record is at the floor",
+			stderr:   silent,
+			exported: true,
+			level:    slog.LevelInfo,
+			want:     true,
+		},
+		{
+			name:     "stderr wants it even though the export leg does not",
+			stderr:   chatty,
+			exported: false,
+			level:    slog.LevelDebug,
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := &fanOutHandler{
+				stderr:   tt.stderr,
+				otlp:     slog.NewJSONHandler(io.Discard, nil),
+				otlpMin:  slog.LevelInfo,
+				exported: tt.exported,
+			}
+
+			if got := handler.Enabled(context.Background(), tt.level); got != tt.want {
+				t.Errorf("Enabled(%v) = %v with exported=%v, want %v", tt.level, got, tt.exported, tt.want)
+			}
+		})
+	}
+}
+
+// TestFanOutHandler_Handle_WithNothingExported_WritesOnlyToStderr covers the
+// second place the export flag is consulted, which is the one that decides
+// whether bytes leave the process.
+//
+// Enabled answering yes is not permission to export: a terminal that wants a
+// record says nothing about a collector, and a handler built without one has no
+// collector to write to. The record is at the export floor on purpose, so the
+// level cannot be what withholds it.
+func TestFanOutHandler_Handle_WithNothingExported_WritesOnlyToStderr(t *testing.T) {
+	t.Parallel()
+
+	var stderr, otlp bytes.Buffer
+	handler := &fanOutHandler{
+		stderr:   slog.NewJSONHandler(&stderr, &slog.HandlerOptions{Level: slog.LevelDebug}),
+		otlp:     slog.NewJSONHandler(&otlp, &slog.HandlerOptions{Level: slog.LevelDebug}),
+		otlpMin:  slog.LevelInfo,
+		exported: false,
+	}
+
+	slog.New(handler).Info("tool call served")
+
+	if !strings.Contains(stderr.String(), "tool call served") {
+		t.Errorf("the terminal did not receive the record: %q", stderr.String())
+	}
+	if otlp.Len() != 0 {
+		t.Errorf("a handler built with no collector wrote to the export leg anyway: %q", otlp.String())
+	}
+}
+
+// exactLengthStringer renders a value of a chosen length whose kind is not
+// String, which is what makes the size bound's two sides distinguishable: at
+// the bound the text is identical either way, and only the attribute's kind
+// says whether the original was handed back or rebuilt.
+type exactLengthStringer struct{ text string }
+
+func (s exactLengthStringer) String() string { return s.text }
+
+// TestRedactAttr_AtTheSizeBound_HandsBackTheOriginalValue covers the bound the
+// exported copy of an attribute is measured against.
+//
+// The bound is inclusive: a value of exactly the maximum length fits, and
+// rebuilding it as a string would cost its type on the wire for no reason,
+// which is what the branch's own comment promises. One byte past it, the value
+// is rebuilt and marked, because a value silently cut at a bound reads as the
+// whole value and somebody eventually debugs the difference between a truncated
+// host name and a wrong one.
+func TestRedactAttr_AtTheSizeBound_HandsBackTheOriginalValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		length   int
+		wantKind slog.Kind
+	}{
+		{name: "one byte short of the bound", length: maxExportedAttrValue - 1, wantKind: slog.KindAny},
+		{name: "exactly the bound", length: maxExportedAttrValue, wantKind: slog.KindAny},
+		{name: "one byte past the bound", length: maxExportedAttrValue + 1, wantKind: slog.KindString},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			value := exactLengthStringer{text: strings.Repeat("Q", tt.length)}
+			got := redactAttr(slog.Any("tool", value))
+
+			if got.Value.Kind() != tt.wantKind {
+				t.Errorf("redactAttr on a %d-byte value returned kind %v, want %v",
+					tt.length, got.Value.Kind(), tt.wantKind)
+			}
+			truncated := strings.Contains(got.Value.String(), "[truncated]")
+			if wantTruncated := tt.wantKind == slog.KindString; truncated != wantTruncated {
+				t.Errorf("redactAttr on a %d-byte value: truncated=%v, want %v", tt.length, truncated, wantTruncated)
+			}
+		})
+	}
+}
+
+// TestRedactAttr_DescendsAGroupItIsHandedDirectly covers the recursion at the
+// top of the function.
+//
+// slog.Group is an ordinary value a caller can pass, and a flat scan reads one
+// as a single opaque value: an error or an oversized string inside it would
+// reach the collector untouched. exportAttrs happens to descend groups itself
+// before it ever calls this, so nothing else in the package reaches this
+// branch, and without a test the rule would hold only by that accident.
+func TestRedactAttr_DescendsAGroupItIsHandedDirectly(t *testing.T) {
+	t.Parallel()
+
+	got := redactAttr(slog.Group("request",
+		slog.String("uri", "gitlab://project/82077663"),
+		slog.Int("attempts", 3),
+	))
+
+	if got.Value.Kind() != slog.KindGroup {
+		t.Fatalf("redactAttr flattened the group into kind %v", got.Value.Kind())
+	}
+
+	inner := map[string]slog.Value{}
+	for _, attr := range got.Value.Group() {
+		inner[attr.Key] = attr.Value
+	}
+
+	if uri := inner["uri"].String(); strings.Contains(uri, "82077663") {
+		t.Errorf("the resource id inside the group reached the exported copy: %q", uri)
+	}
+	if attempts := inner["attempts"]; attempts.Kind() != slog.KindInt64 {
+		t.Errorf("the untouched value inside the group became kind %v, want its own", attempts.Kind())
+	}
+}
+
+// TestErrorTypeName_AWrapperWithNothingUnderIt_KeepsItsOwnName covers the end
+// of the unwrap walk.
+//
+// The walk exists because fmt.Errorf produces *fmt.wrapError for every wrapped
+// error in this tree, and classifying every failure as that would be the same
+// as classifying none. A generic wrapper with nothing underneath is where the
+// walk runs out of chain, and the answer has to be that name rather than an
+// empty string: an attribute with no value at all says less than a type nobody
+// can act on.
+func TestErrorTypeName_AWrapperWithNothingUnderIt_KeepsItsOwnName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "a bare errors.New wraps nothing",
+			err:  errors.New("collector refused the batch"),
+			want: "*errors.errorString",
+		},
+		{
+			name: "a wrapper over a bare error stops at the same place",
+			err:  fmt.Errorf("exporting: %w", errors.New("collector refused the batch")),
+			want: "*errors.errorString",
+		},
+		{
+			name: "a wrapper over a typed error reports the type",
+			err:  fmt.Errorf("exporting: %w", &url.Error{Op: "Post", URL: "http://c:4318/v1/traces"}),
+			want: "*url.Error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := errorTypeName(tt.err); got != tt.want {
+				t.Errorf("errorTypeName(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTruncateForExport_AtTheBound_AddsNoMarker covers the same bound one layer
+// down, where the marker rather than the kind is what differs.
+//
+// A value that fits is returned whole. Marking one that was never cut would
+// report a truncation that did not happen, which is worse than saying nothing:
+// the marker is the only signal a reader has that what they are looking at is
+// not the value.
+func TestTruncateForExport_AtTheBound_AddsNoMarker(t *testing.T) {
+	t.Parallel()
+
+	atBound := strings.Repeat("Q", maxExportedAttrValue)
+	if got := truncateForExport(atBound); got != atBound {
+		t.Errorf("a value of exactly the %d-byte bound was rewritten: it ends %q",
+			maxExportedAttrValue, got[max(0, len(got)-24):])
+	}
+
+	past := strings.Repeat("Q", maxExportedAttrValue+1)
+	got := truncateForExport(past)
+	if !strings.HasSuffix(got, "[truncated]") {
+		t.Errorf("a value one byte past the bound carries no marker: it ends %q", got[max(0, len(got)-24):])
+	}
+	if want := maxExportedAttrValue + len("[truncated]"); len(got) != want {
+		t.Errorf("the truncated value is %d bytes, want %d", len(got), want)
 	}
 }

@@ -139,6 +139,71 @@ func TestE2EObservation_ATraceWrittenTwice_IsStillOneDispatch(t *testing.T) {
 	}
 }
 
+// TestFoldDispatchesByTrace_ALineThatIsNotADispatchLine_IsFoldedWithNothing
+// verifies the three things the fold refuses to read, one at a time.
+//
+// The guard is one condition with three operands, and each of them answers a
+// record the reader does not own the shape of: a shard is written by a Docker
+// run of some version of the harness, so a line of another type, a dispatch
+// line whose payload never arrived, and one naming no action are all states
+// this has to pass over rather than trust. The second is the one that costs a
+// panic if the guard is read any other way, since a nil payload is exactly
+// what the third operand would dereference.
+func TestFoldDispatchesByTrace_ALineThatIsNotADispatchLine_IsFoldedWithNothing(t *testing.T) {
+	const trace = "4bf92f3577b34da6a3ce929d0e0e4737"
+	kept := dispatchRecordOf(trace, "issue.list", 1, "")
+	records := []e2ecalls.Record{
+		// A line of another type that still carries a dispatch payload: the
+		// type is what says whether the payload is this line's subject, and a
+		// reader that took the payload's presence for the answer would count
+		// somebody else's call as a dispatch.
+		{Schema: e2ecalls.SchemaVersion, Type: e2ecalls.TypeCall, Dispatch: &e2ecalls.Dispatch{
+			TraceID: "4bf92f3577b34da6a3ce929d0e0e4738", Action: "issue.update", Requests: 3,
+		}},
+		// A dispatch line whose payload is missing, which is the shape that
+		// makes the order of the three operands load-bearing.
+		{Schema: e2ecalls.SchemaVersion, Type: e2ecalls.TypeDispatch},
+		// A dispatch line naming no action: nothing can be said about an
+		// action the line does not name.
+		dispatchRecordOf("4bf92f3577b34da6a3ce929d0e0e4739", "", 2, ""),
+		kept,
+	}
+
+	folded := foldDispatchesByTrace(records)
+
+	if len(folded) != 1 {
+		t.Fatalf("folded %d dispatch(es), want only the one line that is a dispatch of a named action", len(folded))
+	}
+	if folded[0] != kept.Dispatch {
+		t.Errorf("folded = %+v, want the %q line", folded[0], kept.Dispatch.Action)
+	}
+}
+
+// TestFoldDispatchesByTrace_ALaterLineWithNoMoreRequests_DoesNotReplaceTheFirst
+// pins the half of "the highest count wins" that decides a tie.
+//
+// A request count is documented as a floor: a later line replaces an earlier
+// one because it saw more of the trace's client spans, and none of them
+// un-happened. A later line that saw no more of them has therefore learned
+// nothing, so it does not replace what is already folded, and the first line
+// of the trace is what the run is classified from.
+func TestFoldDispatchesByTrace_ALaterLineWithNoMoreRequests_DoesNotReplaceTheFirst(t *testing.T) {
+	const trace = "4bf92f3577b34da6a3ce929d0e0e4740"
+	first := dispatchRecordOf(trace, "issue.list", 2, "")
+	first.Dispatch.Tool = "first"
+	later := dispatchRecordOf(trace, "issue.list", 2, "")
+	later.Dispatch.Tool = "later"
+
+	folded := foldDispatchesByTrace([]e2ecalls.Record{first, later})
+
+	if len(folded) != 1 {
+		t.Fatalf("folded %d dispatch(es), want the one trace", len(folded))
+	}
+	if folded[0].Tool != "first" {
+		t.Errorf("folded tool = %q, want %q: a tie keeps the line already folded", folded[0].Tool, "first")
+	}
+}
+
 // TestE2EObservation_NoDirectory_AsksNothing pins the default every run
 // outside a Docker session takes.
 //

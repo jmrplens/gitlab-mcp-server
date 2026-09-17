@@ -71,6 +71,11 @@ func TestCheckResponse_ClassifiesResults(t *testing.T) {
 		{name: "rpc error", payload: `{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"method not found"}}`, wantErr: true},
 		{name: "tool error", payload: `{"jsonrpc":"2.0","id":1,"result":{"isError":true}}`, wantErr: true},
 		{name: "not json", payload: `<html>`, wantErr: true},
+		// An envelope carrying neither member is a well formed answer that
+		// reports nothing wrong, so it is not a failed measurement: reading
+		// the absent result as a failure would discard every timing taken
+		// against a method whose answer has no body.
+		{name: "neither result nor error", payload: `{"jsonrpc":"2.0","id":1}`, wantErr: false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -203,6 +208,63 @@ func TestHTTPRPC_SendsTheProtocolHeaders(t *testing.T) {
 				t.Errorf("%s = %q, want %q", header, got.Get(header), value)
 			}
 		})
+	}
+}
+
+// TestHTTPRPC_NameHeader_OnlyOnAToolCall verifies the tool name is put in the
+// header for a tools/call and for nothing else, whatever the parameters carry.
+//
+// `name` is not the tools/call parameter alone: a prompts/get names the prompt
+// with it too. Protocol 2026-07-28 makes Mcp-Method required and the transport
+// refuses a POST whose headers and body disagree, so naming a prompt in a
+// header that means "the tool this call runs" would have the request rejected
+// before any handler saw it.
+func TestHTTPRPC_NameHeader_OnlyOnAToolCall(t *testing.T) {
+	var got http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Header().Set(headerContentType, mediaJSON)
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+	}))
+	defer server.Close()
+
+	client := newHTTPRPC(server.URL, "token")
+	defer client.close()
+
+	if _, err := client.call(context.Background(), "prompts/get", map[string]any{"name": "review_mr"}); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if name := got.Get("Mcp-Name"); name != "" {
+		t.Errorf("Mcp-Name = %q on a prompts/get, want no tool named", name)
+	}
+	if method := got.Get("Mcp-Method"); method != "prompts/get" {
+		t.Errorf("Mcp-Method = %q, want prompts/get", method)
+	}
+}
+
+// TestHTTPRPC_AcceptedResponse_IsNotARefusal verifies a 202 is read as an
+// answer rather than as a transport refusal.
+//
+// The streamable transport may acknowledge a request with 202 instead of 200,
+// and treating that as a failure would turn every such call into a failed
+// measurement and drop it out of the percentiles the page publishes.
+func TestHTTPRPC_AcceptedResponse_IsNotARefusal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set(headerContentType, mediaJSON)
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`)
+	}))
+	defer server.Close()
+
+	client := newHTTPRPC(server.URL, "token")
+	defer client.close()
+
+	payload, err := client.call(context.Background(), methodResourcesList, nil)
+	if err != nil {
+		t.Fatalf("a 202 response was reported as a failure: %v", err)
+	}
+	if !bytes.Contains(payload, []byte(`"resources"`)) {
+		t.Errorf("payload = %q, want the body the server sent with its 202", payload)
 	}
 }
 
@@ -339,6 +401,56 @@ func TestStdioRPC_ParallelRequests_AreMatchedByID(t *testing.T) {
 			t.Errorf("id %d was handed to two callers", decoded.ID)
 		}
 		seen[itoa(decoded.ID)] = true
+	}
+}
+
+// TestStdioRPC_ResponseNobodyWaitsFor_IsDropped verifies a response carrying an
+// id no caller is waiting for is discarded, and the caller that does have a
+// request in flight still gets its own answer.
+//
+// A server that answers a request the client gave up on, or repeats one it has
+// already answered, puts a line on the pipe with nobody behind it. Handing it
+// on is not a possibility here, it is a send to a channel that does not exist:
+// the reader would block forever on it and every later response, including the
+// one this caller is waiting for, would stay unread behind it.
+func TestStdioRPC_ResponseNobodyWaitsFor_IsDropped(t *testing.T) {
+	toServer, fromClient := io.Pipe()
+	toClient, fromServer := io.Pipe()
+	defer func() { _ = toServer.Close() }()
+
+	go func() {
+		// Sent before any call, so nothing is registered under this id and
+		// nothing ever will be: the client numbers its own requests from one.
+		_, _ = io.WriteString(fromServer, `{"jsonrpc":"2.0","id":9999,"result":{"stray":true}}`+"\n")
+		var request struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.NewDecoder(toServer).Decode(&request); err != nil {
+			return
+		}
+		_, _ = io.WriteString(fromServer, `{"jsonrpc":"2.0","id":`+itoa(request.ID)+`,"result":{"stray":false}}`+"\n")
+	}()
+
+	client := newStdioRPC(fromClient, toClient)
+	defer client.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	payload, err := client.call(ctx, methodToolsList, nil)
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	var decoded struct {
+		ID     int64 `json:"id"`
+		Result struct {
+			Stray bool `json:"stray"`
+		} `json:"result"`
+	}
+	if unmarshalErr := json.Unmarshal(payload, &decoded); unmarshalErr != nil {
+		t.Fatalf("decoding the response: %v", unmarshalErr)
+	}
+	if decoded.Result.Stray || decoded.ID == 9999 {
+		t.Errorf("the caller was handed the unmatched response %s, want its own answer", payload)
 	}
 }
 

@@ -28,6 +28,10 @@ func TestParseVerbs_Templates_PairsEachVerbWithItsArgument(t *testing.T) {
 		// bracket rather than guessing, which leaves a verb no context judges.
 		{name: "a malformed index stops at the bracket", template: "%[x]s", want: []string{"[@0"}},
 		{name: "a zero index stops there too", template: "%[0]s", want: []string{"[@0"}},
+		{name: "an index with no digits at all", template: "%[-1]s", want: []string{"[@0"}},
+		{name: "a template ending at the bracket", template: "%[", want: []string{"[@0"}},
+		{name: "a template ending inside the index", template: "%[1", want: []string{"[@0"}},
+		{name: "an index the bracket never closes", template: "%[1x]s", want: []string{"[@0"}},
 		{name: "a trailing percent declares nothing", template: "value: %", want: nil},
 		{name: "a truncated verb declares nothing", template: "value: %-", want: nil},
 		{name: "a truncated precision declares nothing", template: "%.", want: nil},

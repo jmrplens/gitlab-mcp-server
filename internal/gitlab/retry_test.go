@@ -165,6 +165,14 @@ func TestRateLimitResetWait_ReadsTheHeader(t *testing.T) {
 		{name: "zero", header: "0", wantZero: true},
 		{name: "negative", header: "-1", wantZero: true},
 		{name: "in the past", header: "1000", wantZero: true},
+		// strconv.ParseInt reports a range error AND hands back MaxInt64,
+		// unlike a syntax error, which hands back zero. A reader that only
+		// looked at the value would therefore accept this as a reset roughly
+		// 292 billion years out, and time.Time.Sub saturates instead of
+		// overflowing, so the wait would come back as the largest Duration
+		// there is and park the calling goroutine for the age of the universe.
+		// The error has to be what decides.
+		{name: "past the int64 range", header: "99999999999999999999", wantZero: true},
 		{name: "in the future", header: unixIn(time.Hour)},
 	}
 

@@ -496,3 +496,109 @@ func TestLogScale_ExtremeInputs_Terminates(t *testing.T) {
 		})
 	}
 }
+
+// TestLinearXTicks_AMultipleCrowdingAnEnd_IsDropped verifies a stride multiple
+// that lands within a label's width of either end is left out, while both ends
+// themselves are kept.
+//
+// The ends are the two counts a reader looks for, so they are never dropped;
+// what has to give is the neighbor, and it has to give at both ends. The
+// extent here is chosen so one multiple crowds each: at 4 to 104 the stride is
+// 5, so 5 sits one unit past the first tick and 100 four units short of the
+// last, and both are nearer than the 34.15 pixels a three-digit label needs.
+// Without the guard the axis prints "4 5" and "100 104" on top of each other,
+// which is the smudge the whole rule exists to prevent.
+func TestLinearXTicks_AMultipleCrowdingAnEnd_IsDropped(t *testing.T) {
+	ticks := linearXTicks(lineExtent{minX: 4, maxX: 104})
+
+	if len(ticks) == 0 {
+		t.Fatal("linearXTicks produced no ticks")
+	}
+	if ticks[0] != 4 || ticks[len(ticks)-1] != 104 {
+		t.Errorf("ticks run %v..%v, want the extent's own ends 4..104", ticks[0], ticks[len(ticks)-1])
+	}
+	cases := []struct {
+		name string
+		tick float64
+		want bool
+	}{
+		{name: "the multiple one unit past the first tick", tick: 5, want: false},
+		{name: "the multiple four units short of the last", tick: 100, want: false},
+		{name: "a multiple clear of the first tick", tick: 10, want: true},
+		{name: "a multiple clear of the last", tick: 95, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := slices.Contains(ticks, tc.tick); got != tc.want {
+				t.Errorf("tick %v present = %v, want %v; the axis is labeled at %v", tc.tick, got, tc.want, ticks)
+			}
+		})
+	}
+}
+
+// TestSeriesColor_AnUngroupedSeries_TakesNoGroupColor verifies the group list a
+// grouped series is colored by counts only the series that name a group.
+//
+// The paired latency figure mixes the two shapes: a solid p50 and a dashed p99
+// share one hue per surface, and any series with no group of its own is
+// colored by position instead. Counting an ungrouped series as a group would
+// shift every later group one color along, so the second group would be
+// painted with the third palette entry and two figures on the same page would
+// disagree about which color a surface is.
+func TestSeriesColor_AnUngroupedSeries_TakesNoGroupColor(t *testing.T) {
+	p := testPalette()
+	spec := lineSpec{Series: []lineSeries{
+		{Label: "ungrouped"},
+		{Label: "a p50", Group: "a"},
+		{Label: "a p99", Group: "a", Dashed: true},
+		{Label: "b p50", Group: "b"},
+	}}
+
+	tests := []struct {
+		name  string
+		index int
+		want  string
+	}{
+		{name: "ungrouped takes its own position", index: 0, want: p.Series[0]},
+		{name: "the first group takes the first color", index: 1, want: p.Series[0]},
+		{name: "its dashed companion shares that color", index: 2, want: p.Series[0]},
+		{name: "the second group takes the second color", index: 3, want: p.Series[1]},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := seriesColor(p, spec, tc.index); got != tc.want {
+				t.Errorf("seriesColor(%d) = %q, want %q", tc.index, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderLines_ASeriesWithNoPoints_CarriesNoEndLabel verifies the value
+// drawn beside a line's last point is only drawn for a line that has one.
+//
+// A filtered record leaves a surface with no ramp at all, and the series is
+// still built so the legend names it. Reading the last point of it would index
+// past the end of an empty slice; skipping the label is what the guard does,
+// and the figure then carries one value rather than two.
+func TestRenderLines_ASeriesWithNoPoints_CarriesNoEndLabel(t *testing.T) {
+	p := testPalette()
+	// endLabelFontSize is used by nothing else in the document, so counting it
+	// counts end labels exactly.
+	marker := fmt.Sprintf(`font-size="%.1f"`, endLabelFontSize)
+
+	both := renderLines(p, lineSpec{Title: "both measured", Series: []lineSeries{
+		{Label: "measured", X: []float64{1, 2}, Y: []float64{10, 20}},
+		{Label: "also measured", X: []float64{1, 2}, Y: []float64{30, 40}},
+	}})
+	if got := strings.Count(both, marker); got != 2 {
+		t.Fatalf("two measured series drew %d end labels, want 2", got)
+	}
+
+	one := renderLines(p, lineSpec{Title: "one unmeasured", Series: []lineSeries{
+		{Label: "measured", X: []float64{1, 2}, Y: []float64{10, 20}},
+		{Label: "unmeasured"},
+	}})
+	if got := strings.Count(one, marker); got != 1 {
+		t.Errorf("a series with no points drew %d end labels, want the one measured series' own", got)
+	}
+}

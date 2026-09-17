@@ -22,6 +22,9 @@ func TestShortPackage_ExtractsDomain(t *testing.T) {
 		"github.com/x/internal/tools/group/sub":                            "group/sub",
 		"flat":                                                             "flat",
 		"a/b/c":                                                            "c",
+		// A separator in the first position still names an element after it,
+		// so the fallback returns "flat" rather than the whole path.
+		"/flat": "flat",
 	}
 	for input, want := range cases {
 		t.Run(input, func(t *testing.T) {
@@ -169,6 +172,39 @@ func TestClientGoServiceInterface_Types_AcceptsOnlyClientGoInterfaces(t *testing
 	}
 }
 
+// TestIsClientGoObject_Declarations_AcceptOnlyTheSDKModule verifies the module
+// test each recorded call site passes through, at the three shapes it has to
+// answer without dereferencing anything: no object at all, an object the
+// universe declares (which belongs to no package), and one declared in another
+// module whose path merely resembles the SDK's.
+func TestIsClientGoObject_Declarations_AcceptOnlyTheSDKModule(t *testing.T) {
+	cases := []struct {
+		name string
+		obj  *types.TypeName
+		want bool
+	}{
+		{name: "nil_object", obj: nil, want: false},
+		{name: "universe_object_has_no_package", obj: types.Universe.Lookup("error").(*types.TypeName), want: false},
+		{
+			name: "foreign_module",
+			obj:  types.NewTypeName(token.NoPos, types.NewPackage("example.com/api/client-go", "gitlab"), "Client", nil),
+			want: false,
+		},
+		{
+			name: "client_go_module",
+			obj:  types.NewTypeName(token.NoPos, clientGoPkg, "Client", nil),
+			want: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsClientGoObject(tc.obj); got != tc.want {
+				t.Errorf("IsClientGoObject = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestServiceName_Interfaces_StripOnlyTheSuffix verifies the bare service name
 // both adjudication tables are keyed on: the ServiceInterface suffix goes, and
 // an interface without it (GraphQLInterface) keeps its whole name.
@@ -282,6 +318,33 @@ func TestClientGoTypes_ImportGraph_FindsTheRootPackage(t *testing.T) {
 		got, err := ClientGoTypes(pkgs)
 		if err != nil || got != root {
 			t.Fatalf("ClientGoTypes = %v, %v; want the root package from the last import", got, err)
+		}
+	})
+
+	// The path test and the Client-struct test are both required, and this is
+	// the import that shows why: another module can declare a Client struct of
+	// its own, and a search that accepted the first import with one would audit
+	// somebody else's surface as if it were the SDK's.
+	t.Run("a_client_struct_outside_client_go_is_not_the_root", func(t *testing.T) {
+		withClient := func(path, name string) *types.Package {
+			pkg := types.NewPackage(path, name)
+			obj := types.NewTypeName(token.NoPos, pkg, clientStructName, nil)
+			types.NewNamed(obj, types.NewStruct(nil, nil), nil)
+			pkg.Scope().Insert(obj)
+			return pkg
+		}
+		lookAlike := withClient("example.com/other/sdk", "sdk")
+		root := withClient(ClientGoPkgPath+"/v2", "gitlab")
+		pkgs := []*packages.Package{
+			{PkgPath: "example.com/x/internal/tools/a", Imports: map[string]*packages.Package{lookAlike.Path(): {PkgPath: lookAlike.Path(), Types: lookAlike}}},
+			{PkgPath: "example.com/x/internal/tools/b", Imports: map[string]*packages.Package{root.Path(): {PkgPath: root.Path(), Types: root}}},
+		}
+		got, err := ClientGoTypes(pkgs)
+		if err != nil {
+			t.Fatalf("ClientGoTypes: %v", err)
+		}
+		if got != root {
+			t.Errorf("ClientGoTypes = %q, want the client-go root %q", got.Path(), root.Path())
 		}
 	})
 }
@@ -404,6 +467,42 @@ func TestCollectServiceUsage_CallSites_RecordMethodsAndPackages(t *testing.T) {
 	}
 	if _, recorded := usage["GraphQLInterface"]; recorded {
 		t.Error("GraphQLInterface recorded although no handler calls it")
+	}
+}
+
+// TestCollectServiceUsage_SecondCallSite_AccumulatesOntoTheSameEntry verifies
+// the property the whole action-coverage scope rests on: a service reached from
+// more than one place keeps one entry, gaining the method and the package of
+// each call rather than being replaced by the last one seen. An entry that were
+// rebuilt per call site would report every service as having exactly one
+// caller and one covered method, which is the shape "uncovered method" is
+// measured against.
+func TestCollectServiceUsage_SecondCallSite_AccumulatesOntoTheSameEntry(t *testing.T) {
+	root := writeModule(t, map[string]string{
+		sdkPath: fixtureSDKSource,
+		"internal/tools/branches/branches.go": "package branches\n\nimport gl \"" + sdkImport + "\"\n\n" +
+			"// List calls one endpoint of the service.\nfunc List(c *gl.Client) error { return c.Branches.ListBranches() }\n",
+		"internal/tools/protectedbranches/protectedbranches.go": "package protectedbranches\n\nimport gl \"" + sdkImport + "\"\n\n" +
+			"// Create calls another endpoint of the same service from another package.\nfunc Create(c *gl.Client) error { return c.Branches.CreateBranch() }\n",
+	})
+	pkgs, err := LoadToolPackages(root)
+	if err != nil {
+		t.Fatalf("LoadToolPackages: %v", err)
+	}
+
+	usage := CollectServiceUsage(pkgs)
+	if len(usage) != 1 {
+		t.Fatalf("recorded %d services, want the one both packages call", len(usage))
+	}
+	use, ok := usage["BranchesServiceInterface"]
+	if !ok {
+		t.Fatalf("Branches not recorded (got %v)", usage)
+	}
+	if got := SortedSet(use.Called); !reflect.DeepEqual(got, []string{"CreateBranch", "ListBranches"}) {
+		t.Errorf("called = %v, want both endpoints", got)
+	}
+	if got := SortedSet(use.Packages); !reflect.DeepEqual(got, []string{"branches", "protectedbranches"}) {
+		t.Errorf("packages = %v, want both callers", got)
 	}
 }
 

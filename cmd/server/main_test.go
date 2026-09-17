@@ -6197,6 +6197,91 @@ func TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault(t *test
 	}
 }
 
+// TestHTTPServerTimeouts_AreDeadlinesRatherThanTheAbsenceOfOne asserts what the
+// three base timeouts mean, which the tests that read them off the built server
+// cannot.
+//
+// Those compare srv.ReadTimeout against baseHTTPReadTimeout and so on: the
+// assertion and the thing asserted are the same constant, so one that collapsed
+// would move both sides and fail nothing. And the direction it would collapse
+// in is the dangerous one, because net/http reads a zero deadline as no
+// deadline at all. A zero WriteTimeout is precisely the slow-write exposure the
+// comment above it names, arrived at silently.
+//
+// The ordering is the part worth stating beyond "positive". Headers are a
+// prefix of the request, and the response is written after the request has been
+// read, so a read-header budget above the read budget, or a read budget above
+// the write budget, describes a request that must finish before its own prefix
+// does.
+func TestHTTPServerTimeouts_AreDeadlinesRatherThanTheAbsenceOfOne(t *testing.T) {
+	t.Parallel()
+
+	if baseHTTPReadHeaderTimeout <= 0 {
+		t.Errorf("baseHTTPReadHeaderTimeout = %s: net/http takes a zero deadline as none, "+
+			"so a peer could hold a connection open sending headers forever", baseHTTPReadHeaderTimeout)
+	}
+	if baseHTTPReadTimeout < baseHTTPReadHeaderTimeout {
+		t.Errorf("baseHTTPReadTimeout = %s is below baseHTTPReadHeaderTimeout = %s: "+
+			"the headers are a prefix of the request, so the whole request cannot be given less time than its prefix",
+			baseHTTPReadTimeout, baseHTTPReadHeaderTimeout)
+	}
+	if baseHTTPWriteTimeout < baseHTTPReadTimeout {
+		t.Errorf("baseHTTPWriteTimeout = %s is below baseHTTPReadTimeout = %s: "+
+			"the response is written after the request has been read, so the write budget cannot be the smaller of the two",
+			baseHTTPWriteTimeout, baseHTTPReadTimeout)
+	}
+}
+
+// TestIdleTimeoutDisabled_OutlastsEveryOtherDeadline pins the one property the
+// sentinel exists for.
+//
+// The operator's way of saying "do not close idle connections" is 0, and
+// net/http answers a zero IdleTimeout by falling back to ReadTimeout — thirty
+// seconds, not never. The sentinel is what beats that fallback, so it has to
+// be a duration nothing in a deployment's life reaches; a sentinel that shrank
+// to zero would restore the very fallback it replaces, and one that shrank to
+// a few days would close connections on a long-lived deployment while every
+// test comparing it against itself stayed green.
+func TestIdleTimeoutDisabled_OutlastsEveryOtherDeadline(t *testing.T) {
+	t.Parallel()
+
+	disabled := effectiveIdleTimeout(0)
+	if disabled <= baseHTTPReadTimeout {
+		t.Errorf("effectiveIdleTimeout(0) = %s, which does not beat the %s ReadTimeout net/http falls back to "+
+			"when IdleTimeout is zero: idle closure is not disabled at all", disabled, baseHTTPReadTimeout)
+	}
+	if year := 365 * 24 * time.Hour; disabled < year {
+		t.Errorf("effectiveIdleTimeout(0) = %s, want at least %s: the sentinel stands for "+
+			"\"never\", and a deployment outlives anything shorter", disabled, year)
+	}
+}
+
+// TestTokenCacheSweepInterval_FloorsTheCadenceAtTheShortestTTL asserts the
+// shape of the cadence rather than either of the two numbers behind it.
+//
+// The sweep runs at a fraction of the cache's TTL so a dead entry does not
+// outlive its usefulness by much, with a floor so the shortest TTL the flag
+// accepts does not turn the sweep into a hot loop over a map every
+// authenticated request reads. Nothing here names tokenCacheSweepMinInterval or
+// tokenCacheSweepDivisor, so a floor that collapsed to zero would leave the
+// function returning a quarter of a minute at the low end with no test the
+// wiser — the floor would still exist and would floor nothing.
+func TestTokenCacheSweepInterval_FloorsTheCadenceAtTheShortestTTL(t *testing.T) {
+	t.Parallel()
+
+	shortest := tokenCacheSweepInterval(config.MinOAuthCacheTTL)
+	if fraction := config.MinOAuthCacheTTL / tokenCacheSweepDivisor; shortest <= fraction {
+		t.Errorf("tokenCacheSweepInterval(%s) = %s, which is no longer than the %s the fraction alone gives: "+
+			"the floor is not binding at the shortest TTL the flag accepts, so it bounds nothing",
+			config.MinOAuthCacheTTL, shortest, fraction)
+	}
+	longest := tokenCacheSweepInterval(config.MaxOAuthCacheTTL)
+	if want := config.MaxOAuthCacheTTL / tokenCacheSweepDivisor; longest != want {
+		t.Errorf("tokenCacheSweepInterval(%s) = %s, want the %s fraction: past the floor the cadence follows the TTL",
+			config.MaxOAuthCacheTTL, longest, want)
+	}
+}
+
 // TestSSEWriteDeadlineMiddleware_PassesThrough verifies that the middleware
 // forwards every request to the wrapped handler — the long-lived SSE streams
 // whose write deadline it clears (the standalone GET and streamed POST responses,

@@ -127,6 +127,40 @@ func TestSDKGraphQLCheck_Refusals_NameAPathAnybodyCanFollow(t *testing.T) {
 	}
 }
 
+// TestSDKGraphQLCheck_APositionTheTrimCannotShorten_IsLeftAsItIs verifies the
+// fallback of that same trim.
+//
+// A path the module directory is no prefix of cannot be made relative to it,
+// and the answer is the position as it came rather than nothing: a long
+// position is more use to a reader than none, and a section that dropped the
+// one thing identifying a document would leave a refusal nobody could locate
+// at all.
+func TestSDKGraphQLCheck_APositionTheTrimCannotShorten_IsLeftAsItIs(t *testing.T) {
+	elsewhere := graphqldocs.Document{
+		Package:  "gitlab.com/gitlab-org/api/client-go/v3",
+		Name:     "listAchievementsQuery",
+		Position: token.Position{Filename: "achievements.go", Line: 10, Column: 2},
+		Text:     "query ListAchievements { nope }",
+	}
+	withSDKSeams(t, foundPairings,
+		func(string) ([]graphqldocs.Document, error) { return []graphqldocs.Document{elsewhere}, nil },
+		func(got []graphqldocs.Document, _ graphqldocs.Options) (graphqldocs.Result, error) {
+			return graphqldocs.Result{
+				Documents: got,
+				Refusals:  []graphqldocs.Refusal{{Document: got[0], Reasons: []string{`Cannot query field "nope"`}}},
+			}, nil
+		})
+
+	check := sdkGraphQLCheck(t.TempDir())
+
+	if len(check.Refusals) != 1 {
+		t.Fatalf("check = %+v, want the one refusal", check)
+	}
+	if got := check.Refusals[0].Position; got != elsewhere.Position.String() {
+		t.Errorf("position = %q, want the position as it came: %q", got, elsewhere.Position.String())
+	}
+}
+
 // TestSDKGraphQLCheck_UnreadableModule_IsANoteAndNotAFailure covers the ways
 // this check declines before it has read anything, all of which are facts about
 // the machine rather than about the server.

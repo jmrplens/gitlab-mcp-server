@@ -670,3 +670,96 @@ func TestLatencySpec_MissingMethod_DrawsZero(t *testing.T) {
 		})
 	}
 }
+
+// TestFigures_HTTPOnlyRecord_OmitsTheTransportItNeverMeasured verifies the
+// sizing figure drops the stdio series when no stdio scenario was measured,
+// which is the other half of the rule its stdio-only sibling covers.
+//
+// Both halves are needed and neither implies the other: the two series are
+// kept by two separate decisions, and a rule written for one transport alone
+// leaves the other drawing a bar of zero mebibytes labeled as a measurement.
+// A run filtered with -scenarios to the HTTP matrix is exactly this record.
+func TestFigures_HTTPOnlyRecord_OmitsTheTransportItNeverMeasured(t *testing.T) {
+	run := sampleRun()
+	var httpOnly []Scenario
+	for _, scenario := range run.Scenarios {
+		if scenario.Transport == transportHTTP {
+			httpOnly = append(httpOnly, scenario)
+		}
+	}
+	run.Scenarios = httpOnly
+	l := englishLabels()
+
+	memory := memorySpec(run, l)
+	if len(memory.Series) != 2 {
+		t.Fatalf("sizing figure has %d series, want the two HTTP ones", len(memory.Series))
+	}
+	for _, series := range memory.Series {
+		if series.Label == l.MemoryStdioOne {
+			t.Errorf("the stdio series %q was drawn from a record with no stdio scenario", series.Label)
+		}
+	}
+	// The HTTP series are still there in full, or "omits stdio" would be
+	// satisfied by a figure that omitted everything.
+	if memory.Series[0].Label != l.MemoryHTTPOne {
+		t.Errorf("first series is %q, want %q", memory.Series[0].Label, l.MemoryHTTPOne)
+	}
+}
+
+// TestPresentSurfaces_ASurfaceOnlyMeasuredWithTelemetry_IsNotDrawn verifies a
+// surface whose only scenario had telemetry on is left out of the figures.
+//
+// Telemetry is a comparison against the baseline, never the baseline itself,
+// so a surface with no telemetry-off scenario has no baseline at all. Admitting
+// it would put a category on every figure that each series then fills with the
+// zero value of a scenario nothing found.
+func TestPresentSurfaces_ASurfaceOnlyMeasuredWithTelemetry_IsNotDrawn(t *testing.T) {
+	run := sampleRun()
+	var kept []Scenario
+	for _, scenario := range run.Scenarios {
+		switch scenario.Surface {
+		case surfaceDynamic:
+			if scenario.Transport == transportHTTP {
+				scenario.Telemetry = true
+				kept = append(kept, scenario)
+			}
+		case surfaceMeta:
+			kept = append(kept, scenario)
+		}
+	}
+	run.Scenarios = kept
+
+	got := presentSurfaces(run)
+	if !reflect.DeepEqual(got, []string{surfaceMeta}) {
+		t.Errorf("presentSurfaces = %v, want only the surface with a telemetry-off scenario", got)
+	}
+}
+
+// TestRampSpec_AScenarioWithNoRampPoints_DrawsNoLine verifies a surface whose
+// HTTP scenario recorded no ramp is left out of the credential figure rather
+// than drawn as a line with no points.
+//
+// A scenario can end up with an empty ramp: one client, a run that failed
+// after the process answered, or a hand-edited record. The figure's X axis is
+// laid out from the points the series carry, so an empty one contributes
+// nothing but a legend entry pointing at nothing.
+func TestRampSpec_AScenarioWithNoRampPoints_DrawsNoLine(t *testing.T) {
+	run := sampleRun()
+	full := len(rampSpec(run, englishLabels()).Series)
+
+	for i := range run.Scenarios {
+		if run.Scenarios[i].Transport == transportHTTP && run.Scenarios[i].Surface == surfaceDynamic {
+			run.Scenarios[i].Ramp = nil
+		}
+	}
+
+	series := rampSpec(run, englishLabels()).Series
+	if len(series) != full-1 {
+		t.Fatalf("ramp figure has %d series, want %d: the surface with no points dropped", len(series), full-1)
+	}
+	for _, line := range series {
+		if line.Label == surfaceDynamic {
+			t.Errorf("%q was drawn although its scenario recorded no ramp point", line.Label)
+		}
+	}
+}

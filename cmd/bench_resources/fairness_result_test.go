@@ -303,6 +303,18 @@ func TestJudgeFairness_RefusesToCompareWhatIsNotOneExperiment(t *testing.T) {
 			wantReason:    "did not run both arms",
 		},
 		{
+			// The other way round, because the check has to look for both arms
+			// rather than for the one it happened to be written against: an
+			// arm can be lost at either end of a repetition, and a repetition
+			// holding only the arm with the bound in force is the worse half
+			// to admit, since every quiet figure in it would be attributed to
+			// the bound with nothing to compare against.
+			name:          "a repetition that ran only the arm with the bound in force",
+			doc:           fairnessDocOf(8, []armFixture{saturated(armOn, 10)}, []armFixture{saturated(armOff, 20), saturated(armOn, 10)}),
+			wantDirection: directionNotComparable,
+			wantReason:    "did not run both arms",
+		},
+		{
 			name: "the arms did not put the same work in front of the server",
 			doc: fairnessDocOf(8,
 				[]armFixture{
@@ -585,6 +597,16 @@ func TestDriverConfound_AnswersOnlyWhenTheHarnessIsTheBetterExplanation(t *testi
 			doc:      fairnessDocOf(8, []armFixture{withProcess(armOff, 5, 2)}),
 			wantSaid: false,
 		},
+		{
+			// The arm that went missing can be either one, and the reading is
+			// a difference between the two: with only the bound-in-force arm
+			// there is nothing to subtract from, and reading the missing arm
+			// as a zero would make the harness look like it handed back every
+			// core it was using.
+			name:     "a repetition missing the arm with the bound off is not read either",
+			doc:      fairnessDocOf(8, []armFixture{withProcess(armOn, 3, 0)}),
+			wantSaid: false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -739,6 +761,29 @@ func TestCompareMethod_FallsBackToP50WhenAP99WouldBeTheMaximum(t *testing.T) {
 	if verdict.Direction != directionBetter {
 		t.Errorf("direction = %q (%s), want %q", verdict.Direction, verdict.Reason, directionBetter)
 	}
+
+	t.Run("one thin arm is enough, whichever arm it is", func(t *testing.T) {
+		// The percentile is chosen once for the pair, so an arm with plenty of
+		// observations does not rescue the one without them: comparing a
+		// measured p99 against a maximum wearing a percentile's name is the
+		// error this fallback exists to avoid, and it is the same error when
+		// only one side is thin.
+		full := func(arm string, p50 float64) armFixture {
+			return armFixture{
+				arm: arm, coresBusy: 6,
+				quiet: []methodFixture{{method: methodToolsCall, intended: 200, served: 200, p50: p50, p99: 999, latenessP99: 0.1}},
+				noisy: []methodFixture{noisyAt(1000, 0)},
+			}
+		}
+		onlyOnIsThin := fairnessDocOf(8,
+			[]armFixture{full(armOff, 20), thin(armOn, 10)},
+			[]armFixture{thin(armOn, 10), full(armOff, 20)})
+
+		if got := compareMethod(onlyOnIsThin, methodToolsCall); got.Metric != metricP50 {
+			t.Errorf("metric = %q with the bound-off arm at 200 served and the bound-on arm at 20, want %q",
+				got.Metric, metricP50)
+		}
+	})
 }
 
 // TestDecide_RefusesToJudgeASingleRepetition verifies the direct guard, which

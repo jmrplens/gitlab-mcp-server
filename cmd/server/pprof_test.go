@@ -290,3 +290,34 @@ func TestRunWithContext_PprofAddr_ServesWhileTheServerRuns(t *testing.T) {
 		t.Error("the profile listener outlived the server")
 	}
 }
+
+// TestStartPprofListener_ArmsAHeaderDeadlineAndNoWriteDeadline pins the two
+// halves of the timeout policy this listener is built with, which the comment
+// above pprofReadHeaderTimeout states and no other test reads.
+//
+// They pull in opposite directions, which is why leaving either unstated is a
+// mistake waiting to be made. The handlers take no credential, so anyone who
+// can reach the address can open a connection and never finish sending its
+// headers; a zero ReadHeaderTimeout is not a short deadline, it is none, and
+// the goroutine is held for as long as the peer likes. And a CPU profile
+// blocks for as many seconds as it was asked for, so a write deadline would
+// cut the response and hand back a truncated profile — which is why this
+// server is the one place in the process that deliberately has no
+// WriteTimeout.
+func TestStartPprofListener_ArmsAHeaderDeadlineAndNoWriteDeadline(t *testing.T) {
+	listener, err := startPprofListener(t.Context(), "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("startPprofListener = %v, want a listener on loopback", err)
+	}
+	t.Cleanup(listener.stop)
+
+	if listener.srv.ReadHeaderTimeout <= 0 {
+		t.Errorf("ReadHeaderTimeout = %s: a zero deadline is no deadline, so a peer that opens a "+
+			"connection and never completes its headers holds a goroutine on a listener that asks for no credential",
+			listener.srv.ReadHeaderTimeout)
+	}
+	if listener.srv.WriteTimeout != 0 {
+		t.Errorf("WriteTimeout = %s, want none: a CPU profile blocks for the duration it was asked for, "+
+			"and a write deadline would return it truncated", listener.srv.WriteTimeout)
+	}
+}

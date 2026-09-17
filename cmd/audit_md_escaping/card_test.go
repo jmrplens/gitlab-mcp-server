@@ -305,6 +305,33 @@ func TestCardRows_Lines_ReadsTheFourShapesAndNothingElse(t *testing.T) {
 	}
 }
 
+// TestCardHeaderCells_CellCounts_OnlyAPairCanBeAHeader checks the guard in
+// front of the two cells the header pattern is built from.
+//
+// A field table has exactly two columns, so anything else is a table of
+// objects rather than a card; the count is also what keeps the two cells from
+// being read out of a slice that does not hold them.
+func TestCardHeaderCells_CellCounts_OnlyAPairCanBeAHeader(t *testing.T) {
+	cases := []struct {
+		name  string
+		cells []string
+		want  bool
+	}{
+		{name: "the header of a field table", cells: []string{"Field", "Value"}, want: true},
+		{name: "one cell", cells: []string{"Field"}, want: false},
+		{name: "no cells at all", cells: nil, want: false},
+		{name: "three cells", cells: []string{"Field", "Value", "Source"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cardHeaderCells(tc.cells); got != tc.want {
+				t.Errorf("cardHeaderCells(%v) = %v, want %v", tc.cells, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCardScoped_Files_LeavesThePromptsAndCardItselfAlone checks the two
 // exclusions the rule carries: a prompt's lists are the prompt's own layout,
 // and card.go writes the rows every other formatter is asked to use.

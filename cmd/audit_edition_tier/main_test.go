@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -108,6 +109,15 @@ GET /groups/:id/epics
 
 // TestClassifyDomain_Buckets verifies the wave classification for the canonical
 // domain shapes: green (free, no work), uniform-ee, and mixed.
+//
+// The last three cases are the ones that separate "uniform" from "mixed" by
+// what the overrides say rather than by whether there are any. A domain whose
+// sections all badge the same tier as its page is still uniform, which is the
+// only shape that tells `len(overrides) == 0 || allOverridesEqualPage` apart
+// from the same expression with the operands joined by `&&`; a page-Free
+// domain whose section badge is also Free stays green; and a page-Premium
+// domain carrying a Free section is mixed, which is the only shape where an
+// override differs from the page without being above it.
 func TestClassifyDomain_Buckets(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -123,6 +133,9 @@ func TestClassifyDomain_Buckets(t *testing.T) {
 		{"green-needs-ungate", domainReport{CurrentEnterprise: 3}, nil, tierFree, true, "green", true},
 		{"uniform-premium", domainReport{}, nil, tierPremium, true, "uniform-ee", true},
 		{"mixed", domainReport{}, []tier{tierUltimate}, tierFree, true, "mixed", true},
+		{"uniform-premium-override-repeats-the-page", domainReport{}, []tier{tierPremium}, tierPremium, true, "uniform-ee", true},
+		{"green-free-override-repeats-the-free-page", domainReport{CurrentEnterprise: 0}, []tier{tierFree}, tierFree, true, "green", false},
+		{"mixed-free-section-under-a-premium-page", domainReport{}, []tier{tierFree}, tierPremium, true, "mixed", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -208,6 +221,10 @@ title: Some API
 
 ## List things
 `
+
+// freeBadgeDoc is the page-Free counterpart of premiumBadgeDoc: one
+// all-tiers badge before any heading and no section overrides.
+const freeBadgeDoc = "{{< details >}}\n\n- Tier: Free, Premium, Ultimate\n\n{{< /details >}}\n\n## List\n"
 
 // TestExpectedTierForAction_DocOverride_GradesAgainstReferencedPage verifies
 // that an action governed by a doc-page override is graded against that page's
@@ -372,6 +389,57 @@ func TestParseDocTiers_UnknownBadge_Ignored(t *testing.T) {
 	}
 }
 
+// TestParseDocTiers_BadgePlacement_DecidesPageDefaultAndOverrides verifies the
+// three placement rules that decide whether a `- Tier:` badge is the page
+// default or an override, each of which is invisible to the shapes above.
+//
+//   - A `### ` subsection heading opens the override region just as `## `
+//     does, so a badge under one is an override and must not become the page
+//     default (GitLab nests per-endpoint details blocks under `### `).
+//   - Only the FIRST pre-heading badge is the page default. A page whose front
+//     matter carries two details blocks keeps the first as its tier and
+//     records the second as an override, rather than letting the last one win.
+//   - A tier badged by two different sections is one distinct override, not
+//     two, because the overrides are a set.
+func TestParseDocTiers_BadgePlacement_DecidesPageDefaultAndOverrides(t *testing.T) {
+	cases := []struct {
+		name          string
+		doc           string
+		wantPage      tier
+		wantOverrides []tier
+	}{
+		{
+			name:          "h3_heading_opens_the_override_region",
+			doc:           "### Delete a protected branch\n\n- Tier: Premium, Ultimate\n",
+			wantPage:      tierFree,
+			wantOverrides: []tier{tierPremium},
+		},
+		{
+			name:          "second_pre_heading_badge_is_an_override_not_the_page",
+			doc:           "- Tier: Free, Premium, Ultimate\n\n- Tier: Ultimate\n\n## List\n",
+			wantPage:      tierFree,
+			wantOverrides: []tier{tierUltimate},
+		},
+		{
+			name:          "one_tier_badged_by_two_sections_is_recorded_once",
+			doc:           "- Tier: Free, Premium, Ultimate\n\n## Create\n\n- Tier: Ultimate\n\n## Delete\n\n- Tier: Ultimate\n",
+			wantPage:      tierFree,
+			wantOverrides: []tier{tierUltimate},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			page, overrides := parseDocTiers(c.doc)
+			if page != c.wantPage {
+				t.Errorf("page tier = %v, want %v", page, c.wantPage)
+			}
+			if !slices.Equal(overrides, c.wantOverrides) {
+				t.Errorf("overrides = %v, want %v", overrides, c.wantOverrides)
+			}
+		})
+	}
+}
+
 // TestPageTier_RepeatedRef_ServedFromMemo verifies the resolver parses each
 // override page once: after the first fetch the page tier is served from the
 // memo even when the cached file disappears, and a failed fetch is memoized
@@ -425,6 +493,74 @@ func TestExpectedTierForAction_PlainAction_UsesPageTier(t *testing.T) {
 	}
 }
 
+// TestBuildDomainReport_ActionsOutOfOrder_AreReportedByAscendingID verifies
+// the domain report orders its actions by canonical ID rather than by the
+// order the catalog walk happened to hand them over. The catalog's own walk is
+// already ordered, so nothing else here would notice the sort being reversed
+// or dropped; a report whose action order tracked the catalog's internal map
+// order would churn on every run and make two reports undiffable.
+func TestBuildDomainReport_ActionsOutOfOrder_AreReportedByAscendingID(t *testing.T) {
+	dir := t.TempDir()
+	seedDoc(t, dir, "branches", freeBadgeDoc)
+	res := newOfflineResolver(t, dir)
+
+	unsorted := []actionDetail{
+		{ID: "branch.unprotect", OwnerPkg: "branches", CurrentGate: "free"},
+		{ID: "branch.create", OwnerPkg: "branches", CurrentGate: "free"},
+		{ID: "branch.protect", OwnerPkg: "branches", CurrentGate: "free"},
+	}
+	dr := buildDomainReport(context.Background(), "branches", unsorted, res)
+
+	got := make([]string, 0, len(dr.ActionDetails))
+	for _, a := range dr.ActionDetails {
+		got = append(got, a.ID)
+	}
+	want := []string{"branch.create", "branch.protect", "branch.unprotect"}
+	if !slices.Equal(got, want) {
+		t.Errorf("action order = %v, want %v", got, want)
+	}
+}
+
+// TestBuildDomainReport_OverridePageAgreeingWithTheOwnerPage_RecordsNoOverrideTier
+// verifies that a doc-page override which grades the SAME tier as the owner
+// page adds nothing to the domain's override tiers. OverrideTiers is the list
+// of per-endpoint tier differences within a domain, so a page that merely
+// repeats the domain tier is not a difference, and recording it would report a
+// split domain that the documentation does not describe.
+//
+// The note still cites the override page, which is what separates "the
+// override was consulted and agreed" from "the override was never consulted".
+func TestBuildDomainReport_OverridePageAgreeingWithTheOwnerPage_RecordsNoOverrideTier(t *testing.T) {
+	dir := t.TempDir()
+	// Both the owner page and the page that documents the webhook family are
+	// Premium, so the override resolves to the tier the domain already has.
+	seedDoc(t, dir, "groups", premiumBadgeDoc)
+	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
+	res := newOfflineResolver(t, dir)
+
+	actions := []actionDetail{
+		{ID: "group.hook_list", OwnerPkg: "groups", CurrentGate: "enterprise", Edition: "premium"},
+	}
+	dr := buildDomainReport(context.Background(), "groups", actions, res)
+
+	if dr.PageTier != "premium" {
+		t.Fatalf("page tier = %q, want premium", dr.PageTier)
+	}
+	if len(dr.OverrideTiers) != 0 {
+		t.Errorf("override tiers = %v, want none: the override page grades the same tier as the owner page", dr.OverrideTiers)
+	}
+	if dr.Classification != "uniform-ee" {
+		t.Errorf("classification = %q, want uniform-ee: a domain whose override agrees with its page is not split", dr.Classification)
+	}
+	hook := findAction(t, dr, "group.hook_list")
+	if hook.Expected != "premium" || !strings.Contains(hook.Note, "doc/api/group_webhooks.md") {
+		t.Errorf("group.hook_list = %+v, want premium graded against doc/api/group_webhooks.md", hook)
+	}
+	if hook.Mismatch {
+		t.Errorf("group.hook_list is a mismatch, want none: Edition premium matches the expected premium")
+	}
+}
+
 // seededResolver seeds the doc pages the report tests grade against and
 // returns an offline resolver over them: branches and groups are page-Free,
 // epics is page-Premium, group_webhooks (the group.hook_* override page) is
@@ -432,10 +568,9 @@ func TestExpectedTierForAction_PlainAction_UsesPageTier(t *testing.T) {
 func seededResolver(t *testing.T) *docResolver {
 	t.Helper()
 	dir := t.TempDir()
-	const freeDoc = "{{< details >}}\n\n- Tier: Free, Premium, Ultimate\n\n{{< /details >}}\n\n## List\n"
 	const ultimateDoc = "{{< details >}}\n\n- Tier: Ultimate\n\n{{< /details >}}\n\n## List\n"
-	seedDoc(t, dir, "branches", freeDoc)
-	seedDoc(t, dir, "groups", freeDoc)
+	seedDoc(t, dir, "branches", freeBadgeDoc)
+	seedDoc(t, dir, "groups", freeBadgeDoc)
 	seedDoc(t, dir, "epics", premiumBadgeDoc)
 	seedDoc(t, dir, "group_webhooks", premiumBadgeDoc)
 	seedDoc(t, dir, "tags", ultimateDoc)

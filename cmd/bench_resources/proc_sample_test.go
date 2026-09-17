@@ -52,6 +52,10 @@ func TestParseProcStatusRSS_Unusable_ReturnsError(t *testing.T) {
 		{name: "empty", status: ""},
 		{name: "no VmRSS", status: "Name:\tserver\nThreads:\t3\n"},
 		{name: "unparseable", status: "VmRSS:\tlots kB\n"},
+		// A truncated read can end the file on the field name, and a reader
+		// that matched the name before counting the fields would index past
+		// the end of the line rather than report a block it cannot use.
+		{name: "VmRSS with nothing after it", status: "Name:\tserver\nVmRSS:\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,7 +186,10 @@ func TestCountGoroutines_Traceback_CountsOnlyGoroutineHeaders(t *testing.T) {
 // traceback counts nothing, which is what makes the caller report the
 // goroutine figure as unavailable instead of publishing a zero.
 func TestCountGoroutines_NoTraceback_ReturnsZero(t *testing.T) {
-	for _, dump := range []string{"", "no traceback here\n", "goroutine dump follows\n"} {
+	// The last one is the header shape with the identifier missing: the prefix
+	// matches and what follows it is a space, so there is no number to read.
+	// Counting it would report a goroutine the traceback never named.
+	for _, dump := range []string{"", "no traceback here\n", "goroutine dump follows\n", "goroutine  [running]:\n"} {
 		t.Run(dump, func(t *testing.T) {
 			if got := countGoroutines(dump); got != 0 {
 				t.Errorf("countGoroutines(%q) = %d, want 0", dump, got)
@@ -497,5 +504,41 @@ func TestSettledRSS_StableProcess_ReturnsAReading(t *testing.T) {
 	// never holds, which would add three seconds to every scenario.
 	if elapsed > 2*time.Second {
 		t.Errorf("settling took %v on a stable process, which is nearly the ceiling", elapsed)
+	}
+}
+
+// TestSettledRSS_TheProcessGoesAway_ReportsNothing verifies a process that
+// disappears while its resident set is settling yields no reading, rather than
+// the last one taken while it was alive.
+//
+// The figure is the idle memory an operator sizes a container from, and a
+// server that exited during the settle is one that measured nothing: the
+// reading taken a moment before it died is not what an empty container costs,
+// it is what a server cost just before it failed. Zero is how this record
+// spells "not measured", and every renderer downstream leaves such a cell out.
+func TestSettledRSS_TheProcessGoesAway_ReportsNothing(t *testing.T) {
+	self := os.Getpid()
+	probe := newSampler(t.Context(), time.Hour, func() []int { return []int{self} })
+	if _, err := probe.current(); err != nil {
+		t.Skipf("this platform does not report process statistics: %v", err)
+	}
+
+	previous := settleCeiling
+	t.Cleanup(func() { settleCeiling = previous })
+	settleCeiling = 300 * time.Millisecond
+
+	// Alive for the first reading only: after that the set is empty, which is
+	// what the sampler sees once a process it was told about has gone.
+	reads := 0
+	vanishing := newSampler(t.Context(), time.Hour, func() []int {
+		reads++
+		if reads == 1 {
+			return []int{self}
+		}
+		return nil
+	})
+
+	if got := settledRSS(vanishing); got != 0 {
+		t.Errorf("settledRSS = %d for a process that went away mid-settle, want 0", got)
 	}
 }

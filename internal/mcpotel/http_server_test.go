@@ -361,6 +361,15 @@ func TestRequestScheme_ReadsTheConnectionAndNotAHeader(t *testing.T) {
 // The prefix is kept because that is what the attribute is for: an operator
 // looking at a misbehaving client wants to see what it sent, and the first few
 // dozen characters answer that as well as a megabyte does.
+//
+// The last two cases pin the bound itself rather than a value far past it: a
+// verb of exactly maxOriginalMethod keeps its final character, and one byte
+// more loses exactly that byte and nothing before it. Neither can distinguish
+// the comparison's `<=` from a `<`, because at the bound the two branches
+// return the same string — method and method[:len(method)] are equal — which is
+// why the mutation survives and is recorded rather than chased. What they do
+// catch is the off-by-one the other direction: a slice taken one short, or a
+// constant moved out from under the truncation.
 func TestServerMiddleware_AnUnrecognizedMethodIsBoundedOnTheSpan(t *testing.T) {
 	const marker = "TAILMARKERZZ"
 
@@ -378,6 +387,16 @@ func TestServerMiddleware_AnUnrecognizedMethodIsBoundedOnTheSpan(t *testing.T) {
 			name:   "an oversized verb keeps its prefix and loses its tail",
 			method: strings.Repeat("Q", 64*1024) + marker,
 			want:   strings.Repeat("Q", maxOriginalMethod),
+		},
+		{
+			name:   "a verb of exactly the bound keeps its last character",
+			method: strings.Repeat("Q", maxOriginalMethod-1) + "E",
+			want:   strings.Repeat("Q", maxOriginalMethod-1) + "E",
+		},
+		{
+			name:   "a verb one character over the bound loses exactly that character",
+			method: strings.Repeat("Q", maxOriginalMethod-1) + "EX",
+			want:   strings.Repeat("Q", maxOriginalMethod-1) + "E",
 		},
 	}
 

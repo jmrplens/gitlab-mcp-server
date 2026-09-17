@@ -47,8 +47,14 @@ const (
 	// refuseEnv names the method the crude bound meters; tools/call when unset,
 	// which is what the shipped limiter meters first.
 	refuseEnv = "STANDIN_REFUSE_METHOD"
-	version   = "standin"
-	commit    = "0123456789abcdef0123456789abcdef01234567"
+	// noVersionEnv makes /health answer with an empty version, which is the
+	// shape of a build that does not name itself: an older server, or one
+	// behind a proxy that rewrote the document. The harness records the build
+	// from whichever scenario could ask, so what it does with an answer that
+	// names none is a branch only a server like this reaches.
+	noVersionEnv = "STANDIN_NO_VERSION"
+	version      = "standin"
+	commit       = "0123456789abcdef0123456789abcdef01234567"
 	// The refusal the real limiter writes, in both of its shapes.
 	refusalPrefix = "rate limit exceeded for "
 	refusalSuffix = "; retry after a short backoff"
@@ -203,10 +209,14 @@ func serveHTTP(addr string) error {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
 	mux := http.NewServeMux()
+	reported := version
+	if _, silent := os.LookupEnv(noVersionEnv); silent {
+		reported = ""
+	}
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"status": "ok", "version": version, "commit": commit,
+			"status": "ok", "version": reported, "commit": commit,
 		})
 	})
 	mux.HandleFunc("POST /mcp", handleMCP)

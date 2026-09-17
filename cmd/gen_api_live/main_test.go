@@ -521,6 +521,36 @@ func TestImageDigest_TakesWhatFollowsTheAt(t *testing.T) {
 	}
 }
 
+// TestWaitDefaults_AsShipped_SleepBetweenAttemptsAndHoldManyOfThem verifies the
+// two values waitForRails runs on when nothing has moved them.
+//
+// Every other case here moves both, because a real one is 20 minutes and 10
+// seconds, so what actually ships is asserted nowhere else. Neither value is
+// reachable by mutation testing either: a package-level var initializer carries
+// no statement counter, so gremlins reports both NOT COVERED and never runs
+// them. Measured by hand, a bootTimeout the tests do not override is caught by
+// four cases; a pollInterval of zero was caught by nothing, and it is the worse
+// of the two — the wait would fork a `docker exec` as fast as the machine
+// allows for the whole twenty minutes, against a container that is still
+// unpacking, which is the one thing this wait exists not to do.
+//
+// The relation is asserted rather than the literals: how long to wait for a
+// GitLab is a judgement that may be revised, and a poll that does not sleep or
+// a deadline that holds one attempt are wrong at any setting.
+func TestWaitDefaults_AsShipped_SleepBetweenAttemptsAndHoldManyOfThem(t *testing.T) {
+	t.Run("the poll sleeps rather than spinning", func(t *testing.T) {
+		if pollInterval <= 0 {
+			t.Errorf("pollInterval = %v, want a positive delay between two attempts", pollInterval)
+		}
+	})
+	t.Run("the deadline holds many polls", func(t *testing.T) {
+		if bootTimeout <= 10*pollInterval {
+			t.Errorf("bootTimeout = %v and pollInterval = %v, want a deadline that outlasts a handful of attempts",
+				bootTimeout, pollInterval)
+		}
+	})
+}
+
 // TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce verifies the readiness
 // check is the runner answering and not the container being up.
 func TestWaitForRails_WhenTheRunnerAnswers_ReturnsAtOnce(t *testing.T) {
@@ -1091,6 +1121,148 @@ esac
 	t.Run("nothing was copied into the container", func(t *testing.T) {
 		if strings.Contains(string(calls), "cp ") {
 			t.Errorf("calls were:\n%s\nwant no copy of a script that was never written", calls)
+		}
+	})
+	t.Run("the container is torn down anyway", func(t *testing.T) {
+		if strings.Count(string(calls), "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed after the failure too", calls)
+		}
+	})
+}
+
+// staleScriptFile is a staged script file that reports a failure where a full
+// or dying filesystem reports one: a write that stopped short, and a close that
+// reports a write the kernel had deferred.
+//
+// It exists because neither can be provoked through a temp directory a test can
+// build — the directory is either there, and every write to a file this small
+// succeeds, or it is not, and the creation fails first, which is the case the
+// test above already drives.
+type staleScriptFile struct {
+	name     string
+	writeErr error
+	closeErr error
+}
+
+func (f staleScriptFile) Name() string { return f.name }
+
+func (f staleScriptFile) WriteString(s string) (int, error) {
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	return len(s), nil
+}
+
+func (f staleScriptFile) Close() error { return f.closeErr }
+
+// stagesInto makes the staging hand back the given file, and puts the real
+// constructor back afterwards so no later case stages against a stand-in.
+func stagesInto(t *testing.T, file scriptFile) {
+	t.Helper()
+	previous := createScriptFile
+	createScriptFile = func() (scriptFile, error) { return file, nil }
+	t.Cleanup(func() { createScriptFile = previous })
+}
+
+// dockerAnsweringReady is a stand-in that logs every call it is given and
+// answers the readiness probe, so a case about staging reaches the staging and
+// what happened around it can be read back.
+func dockerAnsweringReady(t *testing.T) (docker dockerPath, log string) {
+	t.Helper()
+	log = filepath.Join(t.TempDir(), "calls.log")
+	docker = stubDocker(t, `echo "$@" >> `+log+`
+case "$1" in
+  exec) echo `+readyAnswer+` ;;
+  *) exit 0 ;;
+esac
+`)
+	return docker, log
+}
+
+// TestDockerRun_WhenTheStagedScriptCannotBeWritten_NeverTouchesTheContainer
+// verifies that a write which stopped short ends the run: the error names the
+// step and carries the filesystem's own reason, and no copy of a script that
+// was never written reaches the container.
+//
+// The write is the one step between creating the file and copying it in, so
+// without this the guard could be deleted and every test here would still pass
+// while a truncated script ran inside a GitLab and produced a record missing
+// whatever the lost bytes asked for.
+func TestDockerRun_WhenTheStagedScriptCannotBeWritten_NeverTouchesTheContainer(t *testing.T) {
+	docker, log := dockerAnsweringReady(t)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+	shortWrite := errors.New("no space left on device")
+	stagesInto(t, staleScriptFile{name: filepath.Join(t.TempDir(), "introspect.rb"), writeErr: shortWrite})
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a script it could not write")
+	}
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+
+	t.Run("the failure names the step", func(t *testing.T) {
+		if !strings.Contains(err.Error(), "staging the introspection script") {
+			t.Errorf("error = %q, want it to name the step that failed", err)
+		}
+	})
+	t.Run("the filesystem's own reason is carried", func(t *testing.T) {
+		if !errors.Is(err, shortWrite) {
+			t.Errorf("error = %q, want it to wrap %v", err, shortWrite)
+		}
+	})
+	t.Run("nothing was copied into the container", func(t *testing.T) {
+		if strings.Contains(string(calls), "cp ") {
+			t.Errorf("calls were:\n%s\nwant no copy of a script that was never written", calls)
+		}
+	})
+	t.Run("the container is torn down anyway", func(t *testing.T) {
+		if strings.Count(string(calls), "rm -f "+containerName) != 2 {
+			t.Errorf("calls were:\n%s\nwant the container removed after the failure too", calls)
+		}
+	})
+}
+
+// TestDockerRun_WhenTheStagedScriptCannotBeClosed_NeverTouchesTheContainer
+// verifies that a close which reports a failure ends the run the same way.
+//
+// A close is where a filesystem reports a write it had deferred, so a script
+// whose every WriteString returned success can still be incomplete on disk at
+// this point. Copying it in regardless is the one outcome this guard exists to
+// prevent, and the write case above cannot stand in for it: the two read
+// different variables and the close is the later of the two.
+func TestDockerRun_WhenTheStagedScriptCannotBeClosed_NeverTouchesTheContainer(t *testing.T) {
+	docker, log := dockerAnsweringReady(t)
+	t.Setenv("PATH", filepath.Dir(string(docker)))
+	deferredWrite := errors.New("input/output error")
+	stagesInto(t, staleScriptFile{name: filepath.Join(t.TempDir(), "introspect.rb"), closeErr: deferredWrite})
+
+	_, _, err := dockerRun("gitlab/gitlab-ee:latest", false)
+
+	if err == nil {
+		t.Fatal("dockerRun returned no error for a script it could not close")
+	}
+	calls, readErr := os.ReadFile(log)
+	if readErr != nil {
+		t.Fatalf("reading what the stand-in was asked: %v", readErr)
+	}
+
+	t.Run("the failure names the step", func(t *testing.T) {
+		if !strings.Contains(err.Error(), "staging the introspection script") {
+			t.Errorf("error = %q, want it to name the step that failed", err)
+		}
+	})
+	t.Run("the filesystem's own reason is carried", func(t *testing.T) {
+		if !errors.Is(err, deferredWrite) {
+			t.Errorf("error = %q, want it to wrap %v", err, deferredWrite)
+		}
+	})
+	t.Run("nothing was copied into the container", func(t *testing.T) {
+		if strings.Contains(string(calls), "cp ") {
+			t.Errorf("calls were:\n%s\nwant no copy of a script that was never closed", calls)
 		}
 	})
 	t.Run("the container is torn down anyway", func(t *testing.T) {
