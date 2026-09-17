@@ -219,6 +219,70 @@ func TestMiddleware_ErrorPassthrough(t *testing.T) {
 	}
 }
 
+// TestMiddleware_ErrorAlongsideResult_LeavesTheResultUnstamped verifies that a
+// handler answering with an error *and* a result has neither touched: the error
+// reaches the caller and the result carries no hint.
+//
+// This pins the error half of the middleware's `err != nil || res == nil`
+// short-circuit, which TestMiddleware_ErrorPassthrough cannot: that test hands
+// back a nil result, where both halves of the condition agree, so the guard
+// collapsing to `err != nil && res == nil` fails nothing there. What the
+// collapse would cost is the whole failure. A handler that returns a partial
+// result alongside its error would have that error swallowed, the caller
+// answered success, and the partial body stamped fresh for five minutes — a
+// client would then keep serving the wreckage of a failed call from its own
+// cache without ever asking again.
+func TestMiddleware_ErrorAlongsideResult_LeavesTheResultUnstamped(t *testing.T) {
+	wantErr := context.DeadlineExceeded
+	want := &mcp.ListToolsResult{}
+	failing := func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		return want, wantErr
+	}
+	res, err := cachehints.Middleware(cachehints.Options{})(failing)(context.Background(), "tools/list", nil)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+	if res != mcp.Result(want) {
+		t.Fatalf("result = %v, want passthrough of original", res)
+	}
+	if got := want.GetTTLMs(); got != 0 {
+		t.Errorf("TTLMs = %d, want 0: a failed call is not cacheable", got)
+	}
+	if got := want.GetCacheScope(); got != "" {
+		t.Errorf("CacheScope = %q, want empty: a failed call is not cacheable", got)
+	}
+}
+
+// TestMiddleware_MethodOutsidePolicy_LeavesACacheableResultUnstamped verifies
+// that the policy is decided by the method, not by the result type: a result
+// that *could* carry a hint gets none when it arrives from a method the policy
+// says nothing about.
+//
+// The other two passthrough tests both answer with a [mcp.CallToolResult],
+// which embeds no Cacheable at all, so between them they prove only that the
+// type switch in setCacheable ignores what it does not recognize. Neither would
+// notice the method switch growing a `default` arm or an extra case. A window
+// stamped there is a freshness claim nobody decided: the caller is told to stop
+// asking for a body whose staleness this package never reasoned about.
+func TestMiddleware_MethodOutsidePolicy_LeavesACacheableResultUnstamped(t *testing.T) {
+	want := &mcp.ListToolsResult{}
+	res, err := cachehints.Middleware(cachehints.Options{TierPinned: true})(stubHandler(want))(
+		context.Background(), "ping", nil,
+	)
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if res != mcp.Result(want) {
+		t.Fatalf("result = %v, want passthrough of original", res)
+	}
+	if got := want.GetTTLMs(); got != 0 {
+		t.Errorf("TTLMs = %d, want 0: ping is outside the cache policy", got)
+	}
+	if got := want.GetCacheScope(); got != "" {
+		t.Errorf("CacheScope = %q, want empty: ping is outside the cache policy", got)
+	}
+}
+
 // TestMiddleware_ToolManifestRead_TTLFollowsTierSource verifies that reading
 // gitlab://tools and gitlab://tools/{id} gets the tool catalog's window rather
 // than the static one. Both are served from memory, but they describe the
