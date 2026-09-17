@@ -718,6 +718,7 @@ func TestGateErrorCodes_AllocatedOutsideReservedRange(t *testing.T) {
 	for name, code := range map[string]int{
 		"errCodeInvalidRequest":      errCodeInvalidRequest,
 		"errCodeUnauthorized":        errCodeUnauthorized,
+		"errCodeForbidden":           errCodeForbidden,
 		"errCodeTooManyRequests":     errCodeTooManyRequests,
 		"errCodeUpstreamUnavailable": errCodeUpstreamUnavailable,
 	} {
@@ -741,7 +742,7 @@ func TestGateErrorCodes_AllocatedOutsideReservedRange(t *testing.T) {
 // TestGateErrorCodes_AllocatedOutsideReservedRange is the closest thing to a
 // check on the values, and it asks only whether a code falls inside
 // -32768..-32000 — which a positive number does not, so a code whose sign was
-// lost passes it, and errCodeForbidden is not in its table at all.
+// lost passes it.
 //
 // What these codes have to be is stated above them: one this server allocates
 // mirrors the HTTP status it travels with, multiplied by -100, which is what

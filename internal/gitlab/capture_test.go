@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 )
@@ -148,7 +149,11 @@ func TestCaptureTransport_ABodyThatCannotBeRead_IsAnError(t *testing.T) {
 				t.Fatalf("NewRequest unexpected error: %v", err)
 			}
 
-			resp, err := transport.RoundTrip(req)
+			got, returned := roundTripWithin(t, transport, req, roundTripBound)
+			if !returned {
+				return
+			}
+			resp, err := got.resp, got.err
 
 			if resp != nil {
 				if resp.Body != nil {
@@ -163,6 +168,52 @@ func TestCaptureTransport_ABodyThatCannotBeRead_IsAnError(t *testing.T) {
 				t.Errorf("Decode() = %v, want nothing captured from a body that could not be read", decodeErr)
 			}
 		})
+	}
+}
+
+// roundTripBound is how long a capture reading through a four-byte ceiling may
+// take before the test calls it stalled.
+//
+// The work is a handful of in-memory reads, so this is around a million times
+// what it costs and cannot be reached by a loaded machine; it is short all the
+// same, because a bound longer than a mutation run's per-mutant budget turns
+// the hang it was added to name back into a timeout.
+const roundTripBound = 5 * time.Second
+
+// roundTripOutcome is what one RoundTrip answered, carried off the goroutine
+// that ran it so the assertions stay on the test's own.
+type roundTripOutcome struct {
+	resp *http.Response
+	err  error
+}
+
+// roundTripWithin runs one RoundTrip and gives up waiting after d, reporting
+// the stall itself and returning false.
+//
+// The capture reads the body with io.ReadAll, which takes no context and stops
+// only when the reader it was given says something. A limitedBody that ever
+// offers its inner reader a zero-length slice answers "no bytes, no error" for
+// ever, and this is the first test in the package to drain one through the
+// limiter, so without a bound a defect there spends the whole go test timeout
+// before anything is reported and takes every later assertion in the binary
+// down with it unrun, including the one in response_limit_test.go that names
+// the window size and would have said exactly what was wrong. Mutation testing
+// found this the hard way: two mutants of limitedBody.Read are caught by that
+// assertion and were reported TIMED OUT, because the tool never reached it.
+func roundTripWithin(t *testing.T, rt http.RoundTripper, req *http.Request, d time.Duration) (roundTripOutcome, bool) {
+	t.Helper()
+
+	done := make(chan roundTripOutcome, 1)
+	go func() {
+		resp, err := rt.RoundTrip(req) //nolint:bodyclose // handed to the caller over the channel, which closes it; bodyclose cannot follow a response across one
+		done <- roundTripOutcome{resp: resp, err: err}
+	}()
+	select {
+	case got := <-done:
+		return got, true
+	case <-time.After(d):
+		t.Errorf("RoundTrip() had not returned after %v: the capture is spinning on a body it cannot finish reading", d)
+		return roundTripOutcome{}, false
 	}
 }
 

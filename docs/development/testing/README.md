@@ -118,6 +118,22 @@ That the suite tolerates this says the tests benefit from the memo and none of
 them asserts it, which is killed by a test that counts the builds, not by more
 margin.
 
+**A timeout can also be a hang, and a hang hides every assertion behind it.**
+`internal/gitlab` reported two, both in `limitedBody.Read`, and the assertion
+that kills them was already written: `TestLimitedBody_OffersOneByteBeyondWhatIsLeft`
+checks the size the inner reader is offered, and its own comment describes the
+exact failure — a window that shrinks to zero makes a reader answer "no bytes,
+no error" for ever. The tool never reached it. `capture_test.go` sorts before
+`response_limit_test.go`, it is the first test in the package to drain a body
+through the limiter, it drains with `io.ReadAll`, which takes no context, and
+so it spun until the `go test` timeout and took the rest of the binary with it
+unrun. Bounding that one drain — run the round trip on a goroutine, report the
+stall, keep the assertion on the test goroutine — turns both from a ten-minute
+timeout into a 5.3-second kill and costs nothing when the code is right. The
+general shape is worth remembering: a survivor or a timeout is a claim about
+the whole binary, so when the assertion you expected to kill it exists, check
+whether anything earlier in the run stops the binary from getting there.
+
 ### Reading a survivor
 
 Not every survivor is a gap. Three kinds cannot be killed by any test and
@@ -145,8 +161,8 @@ should be recorded rather than chased:
   1901-12-13, so `time.Time.Sub` never reaches the saturation that would pin
   both sides to `math.MaxInt64`), and the wall clock moves between the write
   and the comparison. Killing it would mean indirecting the clock in production
-  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check is the
-  one here.
+  to assert a spelling. `cmd/internal/apidocs`' cache-freshness check and
+  `internal/gitlab`'s initialization cooldown are the two here.
 - **A guard that a second guard makes unobservable.** The negative token
   cache used to check "disabled" in `Lookup` and `Contains` as well as in
   `RecordKind`, the only place an entry is stored, so removing either copy
