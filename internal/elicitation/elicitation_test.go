@@ -8,6 +8,7 @@ package elicitation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"sync/atomic"
@@ -1749,5 +1750,177 @@ func TestConfirm_AcceptWithoutTheAnswer_IsNotADecision(t *testing.T) {
 				t.Error("Confirm() = true for an answer that never said so")
 			}
 		})
+	}
+}
+
+// elicitationID tests.
+
+// uuidV4Problem reports why id is not a version 4 UUID, or "" when it is.
+//
+// It states the shape rather than comparing against a value, because the value
+// is random by construction: what can be asserted is the grammar the revision
+// names, and every part of that grammar is something [newElicitationID] sets
+// on purpose.
+func uuidV4Problem(id string) string {
+	if len(id) != 36 {
+		return fmt.Sprintf("%d characters long, want 36", len(id))
+	}
+	for i, r := range id {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return fmt.Sprintf("missing the hyphen at offset %d", i)
+			}
+		default:
+			if !strings.ContainsRune("0123456789abcdef", r) {
+				return fmt.Sprintf("not lowercase hexadecimal at offset %d", i)
+			}
+		}
+	}
+	if id[14] != '4' {
+		return fmt.Sprintf("version %q, want 4", id[14])
+	}
+	if !strings.ContainsRune("89ab", rune(id[19])) {
+		return fmt.Sprintf("variant nibble %q, want one of 8, 9, a or b", id[19])
+	}
+	return ""
+}
+
+// TestNewElicitationID_IsAUniqueVersion4UUID pins what the generator produces.
+//
+// Nothing read the value it returns. Every URL-mode test drove the request and
+// asserted the outcome, so the generator could have returned the empty string
+// for every call (which is exactly what it does if the error branch guarding
+// crypto/rand is inverted) and the whole suite still passed. The error branch
+// itself is unreachable, since crypto/rand does not fail on a supported
+// platform, so what is asserted is the value that branch is there to protect:
+// a version 4 UUID, different on every call.
+func TestNewElicitationID_IsAUniqueVersion4UUID(t *testing.T) {
+	const runs = 8
+	seen := make(map[string]bool, runs)
+	for i := range runs {
+		id, err := newElicitationID()
+		if err != nil {
+			t.Fatalf("newElicitationID() call %d error = %v", i, err)
+		}
+		if reason := uuidV4Problem(id); reason != "" {
+			t.Errorf("newElicitationID() = %q, which is %s", id, reason)
+		}
+		if seen[id] {
+			t.Errorf("newElicitationID() returned %q twice; the id has to be unique per request", id)
+		}
+		seen[id] = true
+	}
+}
+
+// TestElicitURL_LegacySession_SendsTheGeneratedElicitationID pins that the id
+// reaches the wire on the revision that requires it.
+//
+// "URL mode requests MUST include a unique elicitationId" is a 2025-11-25
+// requirement, and the 2026-07-28 schema removed the field, so the id is
+// generated for a session negotiated below that and for no other. This asserts
+// the first half against a real session: the request the client received
+// carries an id of the right shape, and the second request of the same session
+// carries a different one.
+func TestElicitURL_LegacySession_SendsTheGeneratedElicitationID(t *testing.T) {
+	ctx := context.Background()
+	var received []string
+	_, ss, cleanup := setupElicitURLSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		received = append(received, req.Params.ElicitationID)
+		return &mcp.ElicitResult{Action: "accept"}, nil
+	})
+	defer cleanup()
+
+	c := clientFromSession(ss)
+	for i := range 2 {
+		if err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", "View issue"); err != nil {
+			t.Fatalf("ElicitURL() call %d error = %v", i, err)
+		}
+	}
+
+	if len(received) != 2 {
+		t.Fatalf("the client was sent %d requests, want 2", len(received))
+	}
+	for i, id := range received {
+		if reason := uuidV4Problem(id); reason != "" {
+			t.Errorf("request %d carried elicitationId %q, which is %s", i, id, reason)
+		}
+	}
+	if received[0] == received[1] {
+		t.Errorf("both requests carried elicitationId %q, so it is not unique per request", received[0])
+	}
+}
+
+// TestElicitURL_SessionThatNeverHandshook_ReachesTheSend pins the nil branch of
+// the protocol test.
+//
+// The version is read from the session's InitializeParams, which the SDK leaves
+// nil for a session that never handshook, the shape every stateless HTTP POST
+// has. A nil there means the revision is unknown, and the id is generated,
+// because a request missing a field the client's revision requires is worse
+// than one carrying a field its revision removed. Reading the version without
+// the nil guard dereferences that pointer and takes the process down, so what
+// this asserts is that the call reached the send at all: the error it comes
+// back with belongs to the unconnected session, not to a panic on the way.
+func TestElicitURL_SessionThatNeverHandshook_ReachesTheSend(t *testing.T) {
+	c := Client{session: &mcp.ServerSession{}, caps: urlCapabilities()}
+
+	err := c.ElicitURL(context.Background(), "https://gitlab.example.com", "https://gitlab.example.com/group/project", "Open page")
+
+	if err == nil {
+		t.Fatal("ElicitURL() on a session with no peer returned nil, want the send to fail")
+	}
+	if !strings.Contains(err.Error(), "URL request failed") {
+		t.Errorf("ElicitURL() error = %v, want the failure to come from the send", err)
+	}
+}
+
+// TestIsURLSupported_CapabilitiesWithoutElicitation covers the second half of
+// the URL predicate's guard.
+//
+// [FromRequest] never builds a Client in this state, since it returns the
+// inactive zero value when the declared capabilities carry no elicitation
+// member, so the guard is defensive against a Client assembled some other way.
+// Asserting
+// it keeps the predicate answering "no" rather than dereferencing a nil member
+// if one ever is.
+func TestIsURLSupported_CapabilitiesWithoutElicitation(t *testing.T) {
+	c := Client{session: &mcp.ServerSession{}, caps: &mcp.ClientCapabilities{}}
+	if c.IsURLSupported() {
+		t.Error("IsURLSupported() = true for capabilities that declare no elicitation at all")
+	}
+}
+
+// TestConfirmAction_Cancelled verifies that a dismissed confirmation dialog is
+// reported as a cancellation rather than as a failure.
+//
+// Decline and cancel are two ways a person says no, and [ConfirmAction] folds
+// them into the same answer on purpose: both stop the action and both are a
+// decision the user made, which is what separates them from the fail-closed
+// branch below. Only decline was covered, so the cancel half of that pair was
+// held by nothing.
+func TestConfirmAction_Cancelled(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "cancel"}, nil
+	})
+	defer cleanup()
+
+	req := &mcp.CallToolRequest{}
+	req.Session = ss
+	result := ConfirmAction(ctx, req, "Delete?")
+
+	if result == nil {
+		t.Fatal("ConfirmAction(cancelled) = nil, which would let the destructive action run")
+	}
+	if !result.IsError {
+		t.Error("ConfirmAction(cancelled).IsError = false, want true")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("result content = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(text.Text, "canceled by user") {
+		t.Errorf("result text = %q, want the user's cancellation named", text.Text)
 	}
 }
