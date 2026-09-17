@@ -1492,3 +1492,86 @@ func TestMiddleware_ASessionIdReachesTheSpanAndNeverTheMetric(t *testing.T) {
 		}
 	}
 }
+
+// TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan
+// covers the first call a process serves.
+//
+// The readiness gate is the innermost middleware, so a request waiting for the
+// tool catalog waits inside its own span and the latency reported is the one
+// the client saw. describe therefore runs above that wait, and for the first
+// call of a process it runs while registration is still building the catalog
+// the identifier resolves against: it can name nothing. The identifier here is
+// that situation exactly, answering only once the handler has run.
+//
+// The two negative cases matter as much as the positive one. A call that still
+// cannot be named must record no action rather than an empty one, since an
+// attribute present and blank is worse than absent for anyone grouping by it;
+// and an identifier that resolves the domain but never the action must not have
+// its domain recorded twice, which on a metric is one key published twice.
+func TestMiddleware_AnIdentifierThatCannotAnswerYet_NamesTheActionOnceItCan(t *testing.T) {
+	full := Identity{ActionID: "issue.list", Domain: "issue"}
+
+	tests := map[string]struct {
+		answersLate Identity
+		resolves    bool
+		wantAction  string
+		wantDomain  string
+	}{
+		"the catalog arrives while the call waits": {answersLate: full, resolves: true, wantAction: "issue.list", wantDomain: "issue"},
+		"it still cannot be named":                 {},
+		"only the domain is ever known":            {answersLate: Identity{Domain: "issue"}, resolves: true, wantDomain: "issue"},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ready := false
+			identifier := IdentifierFunc(func(string, any) (Identity, bool) {
+				if !ready {
+					return Identity{}, false
+				}
+				return tc.answersLate, tc.resolves
+			})
+
+			recorder := newRecorder(t)
+			handler := Middleware(Options{Identifier: identifier, Surface: "individual"})(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					// Registration finished while this call was held at the gate.
+					ready = true
+					return &mcp.CallToolResult{}, nil
+				},
+			)
+			_, _ = handler(context.Background(), "tools/call", callToolRequest("gitlab_issue_list", nil, nil))
+
+			spans := recorder.Ended()
+			if len(spans) != 1 {
+				t.Fatalf("recorded %d spans, want 1", len(spans))
+			}
+
+			action, hasAction := attrOf(spans[0], AttrActionID)
+			switch {
+			case tc.wantAction == "" && hasAction:
+				t.Errorf("span carries %s = %q, want no action attribute at all", AttrActionID, action.AsString())
+			case tc.wantAction != "" && action.AsString() != tc.wantAction:
+				t.Errorf("span action = %q, want %q once the identifier could answer", action.AsString(), tc.wantAction)
+			}
+
+			domain, hasDomain := attrOf(spans[0], AttrDomain)
+			switch {
+			case tc.wantDomain == "" && hasDomain:
+				t.Errorf("span carries %s = %q, want no domain attribute at all", AttrDomain, domain.AsString())
+			case tc.wantDomain != "" && domain.AsString() != tc.wantDomain:
+				t.Errorf("span domain = %q, want %q", domain.AsString(), tc.wantDomain)
+			}
+
+			domains := 0
+			for _, kv := range spans[0].Attributes() {
+				if kv.Key == AttrDomain {
+					domains++
+				}
+			}
+			if domains > 1 {
+				t.Errorf("span carries %s %d times; on a metric that is one dimension published twice", AttrDomain, domains)
+			}
+		})
+	}
+}

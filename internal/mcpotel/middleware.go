@@ -445,20 +445,30 @@ func (c call) identifiedLate(identifier CallIdentifier, span trace.Span) call {
 		return c
 	}
 	identity, ok := identifier.Identify(c.pendingTool, c.pendingArguments)
-	if !ok || identity.ActionID == "" {
+	if !ok {
 		return c
 	}
 
-	// The domain is added only when describe did not already record one: the
-	// two are resolved independently, so a call that named its domain and not
-	// its action arrives here with the domain already on the span, and adding
-	// it twice would publish one key twice on the metric.
-	late := []attribute.KeyValue{AttrActionID.String(identity.ActionID)}
+	// Whatever it learned, which is not always an action: a call naming an
+	// operation the catalog does not have still hit a real domain, and on the
+	// first call of a process that domain was as unresolvable as the action.
+	// Recording only the action would drop it.
+	//
+	// The domain is added only when describe did not already record one, since
+	// the two resolve independently and adding it twice would publish one
+	// dimension twice on the metric.
+	var late []attribute.KeyValue
+	if identity.ActionID != "" {
+		late = append(late, AttrActionID.String(identity.ActionID))
+	}
 	hasDomain := slices.ContainsFunc(c.attributes, func(kv attribute.KeyValue) bool {
 		return kv.Key == AttrDomain
 	})
 	if identity.Domain != "" && !hasDomain {
 		late = append(late, AttrDomain.String(identity.Domain))
+	}
+	if len(late) == 0 {
+		return c
 	}
 	c.attributes = append(slices.Clip(c.attributes), late...)
 	c.pendingTool, c.pendingArguments = "", nil
