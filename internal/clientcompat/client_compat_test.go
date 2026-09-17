@@ -9,6 +9,7 @@ package clientcompat_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -471,6 +472,62 @@ func TestMiddleware_NoSession_PassesThrough(t *testing.T) {
 	}
 }
 
+// codexServerSession completes a real initialize handshake with a
+// Codex-identified client and returns the server side of it. It is the only way
+// to hold a *mcp.ServerSession whose InitializeParams name Codex: the profile
+// is read off the session rather than off the request, so a test that needs the
+// sanitizing path armed while calling the middleware directly has to go through
+// a real handshake.
+func codexServerSession(t *testing.T) *mcp.ServerSession {
+	t.Helper()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := newTestServer().Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+	session, err := mcp.NewClient(codexImpl, nil).Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return ss
+}
+
+// TestMiddleware_ResultWithError_ForwardsBothUntouched verifies the
+// pass-through guard is a disjunction and not a conjunction: a handler that
+// returns a result *and* an error has both handed back exactly as they came.
+//
+// Why it matters: the session here really is Codex, so the sanitizing path is
+// armed and only the error suppresses it. Were the guard to demand a nil result
+// as well as an error before passing through, the middleware would drop the
+// error and return a rewritten result — reporting a failed call to the client
+// as a success, which is the one outcome a compatibility shim must never
+// produce. TestMiddleware_ErrorAndNilResultPassThrough covers the two
+// combinations whose result is nil and so cannot see this one.
+func TestMiddleware_ResultWithError_ForwardsBothUntouched(t *testing.T) {
+	req := &mcp.CallToolRequest{Session: codexServerSession(t)}
+	if got := clientcompat.ProfileForRequestForTest(req); got != clientcompat.ProfileCodex {
+		t.Fatalf("profile = %v, want ProfileCodex so the path being suppressed is the sanitizing one", got)
+	}
+
+	result := &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "partial", Annotations: contentAnnotations}},
+	}
+	wantErr := context.DeadlineExceeded
+	handler := clientcompat.Middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		return result, wantErr
+	})
+
+	res, err := handler(context.Background(), "tools/call", req)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v forwarded", err, wantErr)
+	}
+	if res != mcp.Result(result) {
+		t.Error("result was cloned or sanitized; want the handler's own value forwarded untouched")
+	}
+}
+
 // TestProfileFromClientInfo_Branches verifies detection over every input
 // shape, including the defensive nil clientInfo the public API cannot
 // produce through a real session.
@@ -586,5 +643,22 @@ func TestEnabled_EnvKillSwitch(t *testing.T) {
 	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "auto")
 	if !clientcompat.Enabled() {
 		t.Error("Enabled() = false with CLIENT_COMPAT=auto, want true")
+	}
+}
+
+// TestEnabled_RetiredBareSpelling_IsNotRead verifies the kill-switch answers to
+// GITLAB_MCP_CLIENT_COMPAT and to no other spelling: the bare CLIENT_COMPAT
+// this setting also answered to between 2.8.0 and 3.1.0 was removed in 3.1.0.
+//
+// Why it matters: a deployment still setting the old name is told so by
+// config.RetiredEnvUses rather than quietly reconfigured, and that bargain
+// holds only while nothing reads the retired name behind the warning's back. A
+// fallback restored here would turn that warning into a lie in the one
+// direction that matters, since the value it would silently honor is "off".
+func TestEnabled_RetiredBareSpelling_IsNotRead(t *testing.T) {
+	t.Setenv("CLIENT_COMPAT", "off")
+	t.Setenv("GITLAB_MCP_CLIENT_COMPAT", "")
+	if !clientcompat.Enabled() {
+		t.Error("Enabled() = false; the retired bare CLIENT_COMPAT spelling still disables the middleware")
 	}
 }
