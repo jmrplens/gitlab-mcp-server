@@ -1075,9 +1075,11 @@ func TestAuditProjectAccess_EachOptionalSectionAppearsOnlyForWhatItReportsOn(t *
 		})
 
 		for _, unwanted := range []string{"Accounts Needing Attention", "### Blocked Accounts", "### Inactive Accounts", "## Elevated Access"} {
-			if strings.Contains(text, unwanted) {
-				t.Errorf("a project with one ordinary developer wrote %q:\n%s", unwanted, text)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("a project with one ordinary developer wrote %q:\n%s", unwanted, text)
+				}
+			})
 		}
 	})
 
@@ -1230,9 +1232,11 @@ func TestWriteTemplatesAudit_EachSectionFollowsItsOwnKind(t *testing.T) {
 			t.Errorf("expected the warning:\n%s", got)
 		}
 		for _, unwanted := range []string{"### Issue Templates", "### MR Templates"} {
-			if strings.Contains(got, unwanted) {
-				t.Errorf("there is nothing to list, yet %q was written:\n%s", unwanted, got)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("there is nothing to list, yet %q was written:\n%s", unwanted, got)
+				}
+			})
 		}
 	})
 }
@@ -1264,9 +1268,11 @@ func TestWriteFullScorecard_EachRowAnswersItsOwnQuestion(t *testing.T) {
 			"| MR templates | " + toolutil.EmojiCross + " |",
 			"| Webhooks configured | " + toolutil.EmojiCross + " |",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("expected %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("expected %q in:\n%s", want, got)
+				}
+			})
 		}
 	})
 
@@ -1292,9 +1298,11 @@ func TestWriteFullScorecard_EachRowAnswersItsOwnQuestion(t *testing.T) {
 			"| MR templates | " + toolutil.EmojiSuccess + " |",
 			"| Webhooks configured | " + toolutil.EmojiSuccess + " |",
 		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("expected %q in:\n%s", want, got)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(got, want) {
+					t.Errorf("expected %q in:\n%s", want, got)
+				}
+			})
 		}
 	})
 

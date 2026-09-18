@@ -551,9 +551,11 @@ func TestMergeVelocity_NoMergeRequestCarriesBothTimestamps_HasNoTimeToMergeRows(
 		t.Errorf("expected the merged count:\n%s", text)
 	}
 	for _, unwanted := range []string{"Average time-to-merge", "Median time-to-merge"} {
-		if strings.Contains(text, unwanted) {
-			t.Errorf("no merge request carried both timestamps, yet the report wrote %q:\n%s", unwanted, text)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("no merge request carried both timestamps, yet the report wrote %q:\n%s", unwanted, text)
+			}
+		})
 	}
 }
 
@@ -629,9 +631,11 @@ func TestReleaseReadiness_TheBlockerCount_IsTheSumOfWhatBlocks(t *testing.T) {
 			"| Unresolved threads | 4 |",
 			"Not Ready",
 		} {
-			if !strings.Contains(text, want) {
-				t.Errorf("expected %q in:\n%s", want, text)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf("expected %q in:\n%s", want, text)
+				}
+			})
 		}
 	})
 
@@ -722,9 +726,11 @@ func TestReleaseCadence_ASingleRelease_HasNoIntervalRows(t *testing.T) {
 		t.Errorf("expected one release:\n%s", text)
 	}
 	for _, unwanted := range []string{"Average interval", "Median interval"} {
-		if strings.Contains(text, unwanted) {
-			t.Errorf("one release cannot have an interval, yet the report wrote %q:\n%s", unwanted, text)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("one release cannot have an interval, yet the report wrote %q:\n%s", unwanted, text)
+			}
+		})
 	}
 }
 
@@ -750,9 +756,11 @@ func TestWeeklyTeamRecap_ASectionWithNothingInIt_IsNotWritten(t *testing.T) {
 		t.Errorf("expected the summary row:\n%s", text)
 	}
 	for _, unwanted := range []string{"## Merged MRs", "## Open MR Health"} {
-		if strings.Contains(text, unwanted) {
-			t.Errorf("nothing happened this week, yet the recap wrote %q:\n%s", unwanted, text)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("nothing happened this week, yet the recap wrote %q:\n%s", unwanted, text)
+			}
+		})
 	}
 }
 

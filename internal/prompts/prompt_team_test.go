@@ -537,9 +537,11 @@ func TestUserActivityReport_APeriodWithNothingInIt_SaysSoInEachSection(t *testin
 		"No merged MRs in this period.",
 		"No MRs under review.",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("expected %q in:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
 	}
 }
 
@@ -655,9 +657,11 @@ func TestTeamOverview_TheWorkloadTable_CountsEachMembersOwnMergeRequests(t *test
 			t.Errorf("a blocked member is not an active one:\n%s", text)
 		}
 		for _, unwanted := range []string{"@dana", "@carol"} {
-			if strings.Contains(text, unwanted) {
-				t.Errorf("%s is not an active member of the group, yet has a row:\n%s", unwanted, text)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("%s is not an active member of the group, yet has a row:\n%s", unwanted, text)
+				}
+			})
 		}
 	})
 

@@ -623,9 +623,11 @@ func TestProjectActivityReport_AQuietPeriod_WritesNoneOfTheOptionalSections(t *t
 		t.Errorf("expected the summary row:\n%s", text)
 	}
 	for _, unwanted := range []string{"## Event Breakdown", "## Contributors", "## Recently Merged MRs", "## Daily Activity"} {
-		if strings.Contains(text, unwanted) {
-			t.Errorf("nothing happened, yet the report wrote %q:\n%s", unwanted, text)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("nothing happened, yet the report wrote %q:\n%s", unwanted, text)
+			}
+		})
 	}
 }
 
@@ -696,9 +698,11 @@ func TestMRDiscussionHealth_ThreadsAndUnresolvedThreadsAreCountedSeparately(t *t
 		"| !2 | Settled | @bob | 1 | 0 |",
 		"| !3 | Opened by a deleted account | @ | 1 | 0 |",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("expected %q in:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
 	}
 }
 
@@ -771,9 +775,11 @@ func TestUnassignedItems_TheTwoSectionsAppearOnlyForWhatIsActuallyUnassigned(t *
 			t.Errorf("expected the congratulation:\n%s", quiet)
 		}
 		for _, unwanted := range []string{"## Unassigned Merge Requests", "## Unassigned Issues"} {
-			if strings.Contains(quiet, unwanted) {
-				t.Errorf("nothing is unassigned, yet the report wrote %q:\n%s", unwanted, quiet)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(quiet, unwanted) {
+					t.Errorf("nothing is unassigned, yet the report wrote %q:\n%s", unwanted, quiet)
+				}
+			})
 		}
 	})
 }
@@ -879,9 +885,11 @@ func TestStaleItemsReport_EachSectionFollowsItsOwnKind(t *testing.T) {
 			t.Errorf("expected the all-clear sentence:\n%s", quiet)
 		}
 		for _, unwanted := range []string{"## Stale Merge Requests", "## Stale Issues"} {
-			if strings.Contains(quiet, unwanted) {
-				t.Errorf("nothing is stale, yet the report wrote %q:\n%s", unwanted, quiet)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(quiet, unwanted) {
+					t.Errorf("nothing is stale, yet the report wrote %q:\n%s", unwanted, quiet)
+				}
+			})
 		}
 	})
 }

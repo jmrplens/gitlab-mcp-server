@@ -703,9 +703,11 @@ func TestMilestoneProgress_TheProgressBarIsTheClosedShareOfTheMilestone(t *testi
 		"| Merged MRs | 1 |",
 		"| Open MRs | 0 |",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("expected %q in:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
 	}
 }
 
@@ -782,15 +784,11 @@ func TestLabelDistribution_TheOrderTheTotalsAndTheChart(t *testing.T) {
 	})
 
 	t.Run("each row carries its own total", func(t *testing.T) {
-		for _, want := range []string{
+		assertContainsAll(t, text, []string{
 			"| gamma | 2 | 1 | 9 | 12 |",
 			"| alpha | 1 | 9 | 0 | 10 |",
 			"| beta | 6 | 0 | 1 | 7 |",
-		} {
-			if !strings.Contains(text, want) {
-				t.Errorf("expected %q in:\n%s", want, text)
-			}
-		}
+		})
 	})
 
 	t.Run("an unused label is left out of the table", func(t *testing.T) {
@@ -806,11 +804,7 @@ func TestLabelDistribution_TheOrderTheTotalsAndTheChart(t *testing.T) {
 	})
 
 	t.Run("only labels with open issues are charted", func(t *testing.T) {
-		for _, want := range []string{`"gamma" : 2`, `"alpha" : 1`, `"beta" : 6`} {
-			if !strings.Contains(text, want) {
-				t.Errorf("expected %q in the chart:\n%s", want, text)
-			}
-		}
+		assertContainsAll(t, text, []string{`"gamma" : 2`, `"alpha" : 1`, `"beta" : 6`})
 		if strings.Contains(text, `"unused"`) {
 			t.Errorf("a label with no open issues should not be a slice:\n%s", text)
 		}
