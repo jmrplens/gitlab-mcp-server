@@ -10,7 +10,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -2110,5 +2112,340 @@ func TestFileDelete_OptionalFields(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers actually send GitLab
+//
+// The tests above pass an optional input and assert what came back. That is
+// not the same question: a handler that drops the option on the floor still
+// returns whatever the mock was told to answer, so the assertion holds while
+// the request is wrong. Each test below reads the request instead.
+// ---------------------------------------------------------------------------.
+
+// assertQueryParam holds one query parameter of a request the handler built to
+// a value, or, when want is empty, to being absent altogether.
+//
+// Absence is checked with Has rather than Get, because an option set to a
+// pointer-to-empty-string is sent as `name=` and reads back through Get as the
+// empty string — indistinguishable from a parameter that was never sent, which
+// is exactly the confusion an inverted guard produces.
+func assertQueryParam(t *testing.T, q url.Values, name, want string) {
+	t.Helper()
+	switch {
+	case want == "":
+		if q.Has(name) {
+			t.Errorf("query carries %s=%q, want it absent", name, q.Get(name))
+		}
+	case q.Get(name) != want:
+		t.Errorf("%s = %q, want %q", name, q.Get(name), want)
+	}
+}
+
+// TestGet_Ref_ReachesGitLabAsTheRefQueryParameter asserts that the ref a caller
+// names is what Get asks GitLab for, and that omitting it sends no ref at all.
+//
+// This matters because ref is the only thing separating "the file on this
+// branch" from "the file on the default branch": a guard that dropped it would
+// answer every request with the default branch's content, and every assertion
+// about the body would still pass, since a mock answers whatever it was told
+// regardless of the ref it was asked for.
+func TestGet_Ref_ReachesGitLabAsTheRefQueryParameter(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  string
+	}{
+		{name: "ref given", ref: "release-1.0"},
+		{name: "ref omitted", ref: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/repository/files/main.go" {
+					http.NotFound(w, r)
+					return
+				}
+				assertQueryParam(t, r.URL.Query(), "ref", tc.ref)
+				testutil.RespondJSON(w, http.StatusOK, `{
+					"file_name":"main.go","file_path":"main.go","size":13,
+					"encoding":"text","content":"package main\n",
+					"blob_id":"b1","commit_id":"c1","last_commit_id":"c1"
+				}`)
+			}))
+
+			out, err := Get(context.Background(), client, GetInput{
+				ProjectID: "42", FilePath: testFileMainGo, Ref: tc.ref,
+			})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			if out.FileName != testFileMainGo {
+				t.Errorf("FileName = %q, want %q", out.FileName, testFileMainGo)
+			}
+		})
+	}
+}
+
+// TestGetRawFileMetaData_Ref_ReachesGitLabAsTheRefQueryParameter asserts the
+// same property for the raw metadata HEAD request, whose options are built in
+// a closure of its own rather than in the shared metadata helper.
+//
+// The closure is why this needs its own test: GetMetaData and
+// GetRawFileMetaData share everything except the option struct they fill, so
+// the ref guard exists twice and a test of one says nothing about the other.
+func TestGetRawFileMetaData_Ref_ReachesGitLabAsTheRefQueryParameter(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  string
+	}{
+		{name: "ref given", ref: "v3.0.0"},
+		{name: "ref omitted", ref: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodHead || r.URL.Path != "/api/v4/projects/42/repository/files/main.go/raw" {
+					http.NotFound(w, r)
+					return
+				}
+				assertQueryParam(t, r.URL.Query(), "ref", tc.ref)
+				w.Header().Set("X-Gitlab-File-Name", testFileMainGo)
+				w.Header().Set("X-Gitlab-Size", "13")
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			out, err := GetRawFileMetaData(context.Background(), client, RawMetaDataInput{
+				ProjectID: "42", FilePath: testFileMainGo, Ref: tc.ref,
+			})
+			if err != nil {
+				t.Fatalf("GetRawFileMetaData() unexpected error: %v", err)
+			}
+			if out.FileName != testFileMainGo {
+				t.Errorf("FileName = %q, want %q", out.FileName, testFileMainGo)
+			}
+		})
+	}
+}
+
+// TestDelete_OptionalCommitFields_ReachGitLabOnTheRequest asserts that each
+// optional field of a file deletion is sent when the caller supplies it and
+// sent by no other means when they do not.
+//
+// Three of the four change what the commit is or whether it is accepted at
+// all: start_branch decides which branch the deletion is committed on,
+// last_commit_id is the optimistic lock that stops a delete overwriting
+// somebody else's change, and author_name/author_email decide who the commit
+// is attributed to. A dropped last_commit_id is the dangerous one — GitLab
+// then accepts a deletion the caller intended to be refused — and it is
+// invisible to any assertion made on the response, which is `204 No Content`
+// either way.
+func TestDelete_OptionalCommitFields_ReachGitLabOnTheRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		input DeleteInput
+		want  map[string]string
+	}{
+		{
+			name: "all optional fields supplied",
+			input: DeleteInput{
+				ProjectID: "42", FilePath: "old.txt", Branch: "main", CommitMessage: "delete old",
+				StartBranch: "develop", AuthorEmail: "dev@test.com", AuthorName: "Dev", LastCommitID: "abc123",
+			},
+			want: map[string]string{
+				"start_branch": "develop", "author_email": "dev@test.com",
+				"author_name": "Dev", "last_commit_id": "abc123",
+			},
+		},
+		{
+			name: "no optional fields supplied",
+			input: DeleteInput{
+				ProjectID: "42", FilePath: "old.txt", Branch: "main", CommitMessage: "delete old",
+			},
+			want: map[string]string{
+				"start_branch": "", "author_email": "", "author_name": "", "last_commit_id": "",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/projects/42/repository/files/old.txt" {
+					http.NotFound(w, r)
+					return
+				}
+				q := r.URL.Query()
+				assertQueryParam(t, q, "start_branch", tc.want["start_branch"])
+				assertQueryParam(t, q, "author_email", tc.want["author_email"])
+				assertQueryParam(t, q, "author_name", tc.want["author_name"])
+				assertQueryParam(t, q, "last_commit_id", tc.want["last_commit_id"])
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			if err := Delete(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("Delete() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestBlame_ZeroLineRange_SendsNoRangeBounds asserts that an unset line range
+// reaches GitLab as no range at all rather than as line zero.
+//
+// GitLab's blame range is 1-based and refuses zero, so a guard admitting the
+// zero value would turn every whole-file blame — the common call, since both
+// range inputs are optional — into a 400 the caller cannot explain from their
+// own arguments.
+func TestBlame_ZeroLineRange_SendsNoRangeBounds(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/repository/files/main.go/blame" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		assertQueryParam(t, q, "range[start]", "")
+		assertQueryParam(t, q, "range[end]", "")
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"commit":{"id":"abc12345","message":"init","author_name":"A","author_email":"a@t.com"},"lines":["line1"]}
+		]`)
+	}))
+
+	out, err := Blame(context.Background(), client, BlameInput{
+		ProjectID: "42", FilePath: testFileMainGo,
+	})
+	if err != nil {
+		t.Fatalf("Blame() unexpected error: %v", err)
+	}
+	if len(out.Ranges) != 1 {
+		t.Fatalf("len(Ranges) = %d, want 1", len(out.Ranges))
+	}
+}
+
+// TestFileInfo_CommitIdentifiers_ReadBackFromTheMetadataEndpoint asserts that a
+// create and an update both publish the commit identifiers of the commit they
+// produced, read back through the file metadata endpoint.
+//
+// GitLab's create and update responses carry only the path and the branch, so
+// commit_id and last_commit_id exist on these outputs solely because the
+// handler asks a second time. Nothing else here asserts they arrive: every
+// other create and update test runs against a mock whose metadata route is a
+// 404, which the enrichment swallows by design, so the two fields could stop
+// being filled without a single test noticing. last_commit_id is the one a
+// caller then needs to update the file safely.
+func TestFileInfo_CommitIdentifiers_ReadBackFromTheMetadataEndpoint(t *testing.T) {
+	const (
+		wantCommit     = "c0ffee1"
+		wantLastCommit = "c0ffee0"
+		filePath       = "/api/v4/projects/42/repository/files/main.go"
+	)
+
+	handlerFor := func(t *testing.T, writeMethod string, writeStatus int) http.HandlerFunc {
+		t.Helper()
+		return func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == writeMethod && r.URL.Path == filePath:
+				testutil.RespondJSON(w, writeStatus, `{"file_path":"main.go","branch":"main"}`)
+			case r.Method == http.MethodHead && r.URL.Path == filePath:
+				assertQueryParam(t, r.URL.Query(), "ref", "main")
+				w.Header().Set("X-Gitlab-File-Name", testFileMainGo)
+				w.Header().Set("X-Gitlab-Commit-Id", wantCommit)
+				w.Header().Set("X-Gitlab-Last-Commit-Id", wantLastCommit)
+				w.WriteHeader(http.StatusOK)
+			default:
+				http.NotFound(w, r)
+			}
+		}
+	}
+
+	assertCommitIDs := func(t *testing.T, out FileInfoOutput) {
+		t.Helper()
+		if out.FilePath != testFileMainGo || out.Branch != "main" {
+			t.Errorf("output = %+v, want file path %q on branch %q", out, testFileMainGo, "main")
+		}
+		if out.CommitID != wantCommit {
+			t.Errorf("CommitID = %q, want %q", out.CommitID, wantCommit)
+		}
+		if out.LastCommitID != wantLastCommit {
+			t.Errorf("LastCommitID = %q, want %q", out.LastCommitID, wantLastCommit)
+		}
+	}
+
+	t.Run("create", func(t *testing.T) {
+		client := testutil.NewTestClient(t, handlerFor(t, http.MethodPost, http.StatusCreated))
+		out, err := Create(context.Background(), client, CreateInput{
+			ProjectID: "42", FilePath: testFileMainGo, Branch: "main",
+			Content: "package main\n", CommitMessage: "add main",
+		})
+		if err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+		assertCommitIDs(t, out)
+	})
+
+	t.Run("update", func(t *testing.T) {
+		client := testutil.NewTestClient(t, handlerFor(t, http.MethodPut, http.StatusOK))
+		out, err := Update(context.Background(), client, UpdateInput{
+			ProjectID: "42", FilePath: testFileMainGo, Branch: "main",
+			Content: "package main\n\nfunc main() {}\n", CommitMessage: "fill main",
+		})
+		if err != nil {
+			t.Fatalf("Update() unexpected error: %v", err)
+		}
+		assertCommitIDs(t, out)
+	})
+}
+
+// TestEnrichFileInfoOutput_IncompleteIdentifiers_MakeNoMetadataRequest asserts
+// that the enrichment asks GitLab nothing when any of the four values the
+// lookup needs is missing, and returns what it was given.
+//
+// Each of the four guards is a separate reason not to ask, and each is
+// individually unobservable from the returned output alone — an answer with no
+// commit identifiers is what a failed lookup produces too. Counting the
+// requests is what distinguishes "did not ask" from "asked and got nothing",
+// which is the difference between a skipped lookup and a request built from an
+// empty path that GitLab would answer for some other file entirely.
+func TestEnrichFileInfoOutput_IncompleteIdentifiers_MakeNoMetadataRequest(t *testing.T) {
+	cases := []struct {
+		name      string
+		nilClient bool
+		projectID string
+		filePath  string
+		branch    string
+	}{
+		{name: "no client", nilClient: true, projectID: "42", filePath: testFileMainGo, branch: "main"},
+		{name: "no project", projectID: "", filePath: testFileMainGo, branch: "main"},
+		{name: "no file path", projectID: "42", filePath: "", branch: "main"},
+		{name: "no branch", projectID: "42", filePath: testFileMainGo, branch: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.Header().Set("X-Gitlab-Commit-Id", "must-not-be-read")
+				w.Header().Set("X-Gitlab-Last-Commit-Id", "must-not-be-read")
+				w.WriteHeader(http.StatusOK)
+			}))
+			if tc.nilClient {
+				client = nil
+			}
+
+			out := enrichFileInfoOutput(context.Background(), client, tc.projectID, tc.filePath, tc.branch)
+
+			if got := requests.Load(); got != 0 {
+				t.Errorf("metadata requests = %d, want 0", got)
+			}
+			if out.FilePath != tc.filePath || out.Branch != tc.branch {
+				t.Errorf("output = %+v, want file path %q on branch %q", out, tc.filePath, tc.branch)
+			}
+			if out.CommitID != "" || out.LastCommitID != "" {
+				t.Errorf("commit fields = %q/%q, want both empty", out.CommitID, out.LastCommitID)
+			}
+		})
 	}
 }
