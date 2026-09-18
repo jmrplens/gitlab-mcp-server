@@ -4,7 +4,10 @@ package groupwikis
 
 import (
 	"context"
+	"encoding/json"
+	"maps"
 	"net/http"
+	"sync"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -549,6 +552,140 @@ func TestGroupWikis_UnreadableCapturedMetaID(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// writeBody records the JSON object one write handler sent GitLab. The record
+// is taken inside the httptest handler and read back on the test goroutine,
+// which is the contract for an assertion that cannot abort where it is made.
+type writeBody struct {
+	mu     sync.Mutex
+	fields map[string]any
+	err    error
+	seen   bool
+}
+
+// record decodes the request body and keeps it for the test goroutine. A body
+// that does not decode is kept as the error rather than reported here, so the
+// mock still answers and the caller's own assertions run.
+func (b *writeBody) record(r *http.Request) {
+	var fields map[string]any
+	err := json.NewDecoder(r.Body).Decode(&fields)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.fields, b.err, b.seen = fields, err, true
+}
+
+// assertSent compares the whole body with want rather than the keys want names.
+// A field GitLab was never sent is as much a defect as one sent wrongly, and
+// only the whole object says both at once: an optional field whose guard is
+// inverted disappears from the request without changing any field that is
+// there.
+func (b *writeBody) assertSent(t *testing.T, want map[string]any) {
+	t.Helper()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.seen {
+		t.Fatal("no write request reached the mock GitLab")
+	}
+	if b.err != nil {
+		t.Fatalf("decode request body: %v", b.err)
+	}
+	if !maps.Equal(b.fields, want) {
+		t.Errorf("request body = %#v, want %#v", b.fields, want)
+	}
+}
+
+// TestCreate_OptionalFormat_IsSentOnlyWhenNamed pins the body Create builds.
+// The format a caller names must reach GitLab, and a call naming none must send
+// no format key at all, leaving the instance's own markdown default in place.
+// Nothing held the request before, only the response: with the guard inverted,
+// every page would be created with an empty format and the one call that named
+// a format would lose it, and each test still passed.
+func TestCreate_OptionalFormat_IsSentOnlyWhenNamed(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{
+			name:  "the named format is sent",
+			input: CreateInput{GroupID: "mygroup", Title: "Setup", Content: "= Setup", Format: "asciidoc"},
+			want:  map[string]any{"title": "Setup", "content": "= Setup", "format": "asciidoc"},
+		},
+		{
+			name:  "no format named sends no format key",
+			input: CreateInput{GroupID: "mygroup", Title: "Home", Content: "# Welcome"},
+			want:  map[string]any{"title": "Home", "content": "# Welcome"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var body writeBody
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathGroupWikis {
+					http.NotFound(w, r)
+					return
+				}
+				body.record(r)
+				testutil.RespondJSON(w, http.StatusCreated, `{"title":"Setup","slug":"setup","format":"asciidoc"}`)
+			}))
+			if _, err := Create(context.Background(), client, c.input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			body.assertSent(t, c.want)
+		})
+	}
+}
+
+// TestEdit_OnlyTheNamedFieldsAreSent pins the body Edit builds. Every field of
+// an edit is optional and GitLab overwrites whatever the request carries, so a
+// key sent for a field the caller left alone would blank that field on the
+// page: a rename that also emptied the body would be indistinguishable, in the
+// response, from a rename. Only the request says which is which.
+func TestEdit_OnlyTheNamedFieldsAreSent(t *testing.T) {
+	cases := []struct {
+		name  string
+		input EditInput
+		want  map[string]any
+	}{
+		{
+			name:  "a rename sends the title alone",
+			input: EditInput{GroupID: "mygroup", Slug: "home", Title: "Renamed"},
+			want:  map[string]any{"title": "Renamed"},
+		},
+		{
+			name:  "new content sends the content alone",
+			input: EditInput{GroupID: "mygroup", Slug: "home", Content: "# Rewritten"},
+			want:  map[string]any{"content": "# Rewritten"},
+		},
+		{
+			name:  "a format change travels with its content",
+			input: EditInput{GroupID: "mygroup", Slug: "home", Content: "= Rewritten", Format: "asciidoc"},
+			want:  map[string]any{"content": "= Rewritten", "format": "asciidoc"},
+		},
+		{
+			name:  "all three named are all three sent",
+			input: EditInput{GroupID: "mygroup", Slug: "home", Title: "Renamed", Content: "= Rewritten", Format: "asciidoc"},
+			want:  map[string]any{"title": "Renamed", "content": "= Rewritten", "format": "asciidoc"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var body writeBody
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathGroupWikiSlug {
+					http.NotFound(w, r)
+					return
+				}
+				body.record(r)
+				testutil.RespondJSON(w, http.StatusOK, `{"title":"Renamed","slug":"home","format":"asciidoc"}`)
+			}))
+			if _, err := Edit(context.Background(), client, c.input); err != nil {
+				t.Fatalf("Edit() unexpected error: %v", err)
+			}
+			body.assertSent(t, c.want)
+		})
+	}
 }
 
 // TestDelete_CancelledContext verifies the Delete_CancelledContext handler.

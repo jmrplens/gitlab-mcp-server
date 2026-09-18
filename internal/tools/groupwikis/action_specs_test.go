@@ -3,11 +3,22 @@ package groupwikis
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// genericGroupWikiUsage is the placeholder Usage groupWikiOptions produces and
+// decorateGroupWikiMeta is meant to replace. Naming it here is what lets a test
+// assert the decoration ran against the exact value it had to move away from.
+const genericGroupWikiUsage = "Use to execute groupwikis domain action."
+
+// genericGroupWikiRelated returns the placeholder RelatedActions groupWikiOptions
+// produces. It is a function rather than a package-level slice so no test can
+// leave the next one comparing against a mutated copy.
+func genericGroupWikiRelated() []string { return []string{"group.get"} }
 
 const registerWikiJSON = `{
 	"format": "markdown",
@@ -137,19 +148,30 @@ func TestActionSpecs_CallRouteError(t *testing.T) {
 // language aliases, related actions, and the Returns/See also description.
 func assertGroupWikiSpecMetadata(t *testing.T, name string, spec toolutil.ActionSpec) {
 	t.Helper()
-	if spec.Usage == "" || spec.Usage == "Use to execute groupwikis domain action." {
+	meta := groupWikiActionMeta[name]
+	if spec.Usage == "" || spec.Usage == genericGroupWikiUsage {
 		t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
 	}
 	if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
 		t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
+	}
+	if !slices.Equal(spec.Aliases, meta.aliases) {
+		t.Errorf("%s: Aliases = %v, want the entry's %v", name, spec.Aliases, meta.aliases)
 	}
 	for _, alias := range spec.Aliases {
 		if !containsSubstr(alias, "group") {
 			t.Errorf("%s: alias %q is not group-wiki-specific", name, alias)
 		}
 	}
-	if len(spec.RelatedActions) == 0 {
-		t.Errorf("%s: empty RelatedActions", name)
+	// The entry's related actions, not merely a non-empty list: the generic
+	// options already carry one placeholder ("group.get"), so a length check
+	// passes just as well when the decoration never ran and the model is left
+	// with the placeholder as the only action this tool leads to.
+	if !slices.Equal(spec.RelatedActions, meta.related) {
+		t.Errorf("%s: RelatedActions = %v, want the entry's %v", name, spec.RelatedActions, meta.related)
+	}
+	if slices.Equal(spec.RelatedActions, genericGroupWikiRelated()) {
+		t.Errorf("%s: RelatedActions still the generic placeholder: %v", name, spec.RelatedActions)
 	}
 	desc := spec.IndividualTool.Description
 	if !containsSubstr(desc, "Returns:") || !containsSubstr(desc, "See also:") {
@@ -181,11 +203,42 @@ func TestActionSpecs_RichMetadata(t *testing.T) {
 	// decorateGroupWikiMeta must be a no-op for a tool with no metadata entry.
 	opts := groupWikiOptions("gitlab_group_wiki_unknown")
 	decorateGroupWikiMeta(&opts, "gitlab_group_wiki_unknown")
-	if opts.Usage != "Use to execute groupwikis domain action." {
+	if opts.Usage != genericGroupWikiUsage {
 		t.Errorf("unknown tool Usage mutated: %q", opts.Usage)
 	}
 	if opts.IndividualTool.Description != "" {
 		t.Errorf("unknown tool Description mutated: %q", opts.IndividualTool.Description)
+	}
+}
+
+// TestDecorateGroupWikiMeta_EntryFillsNothing_KeepsEveryGenericDefault asserts
+// that decorateGroupWikiMeta replaces exactly the fields its entry fills and
+// leaves the rest as groupWikiOptions produced them. Every entry in the table
+// today fills all four, so each of the four guards is a claim nothing exercises:
+// were one dropped or inverted, an entry added later to override only its usage
+// would silently blank the tool's aliases, and a tool discoverable under no
+// alias is one a model asking in natural language never finds. The entry is
+// inserted into the real map rather than passed to a helper, so what is asserted
+// is the lookup and the decoration a spec actually goes through.
+func TestDecorateGroupWikiMeta_EntryFillsNothing_KeepsEveryGenericDefault(t *testing.T) {
+	const tool = "gitlab_group_wiki_partial"
+	groupWikiActionMeta[tool] = groupWikiActionMetaEntry{}
+	t.Cleanup(func() { delete(groupWikiActionMeta, tool) })
+
+	opts := groupWikiOptions(tool)
+	decorateGroupWikiMeta(&opts, tool)
+
+	if opts.Usage != genericGroupWikiUsage {
+		t.Errorf("Usage = %q, want the generic %q", opts.Usage, genericGroupWikiUsage)
+	}
+	if !slices.Equal(opts.Aliases, []string{tool}) {
+		t.Errorf("Aliases = %#v, want the generic %#v", opts.Aliases, []string{tool})
+	}
+	if !slices.Equal(opts.RelatedActions, genericGroupWikiRelated()) {
+		t.Errorf("RelatedActions = %#v, want the generic %#v", opts.RelatedActions, genericGroupWikiRelated())
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want it left empty", opts.IndividualTool.Description)
 	}
 }
 
