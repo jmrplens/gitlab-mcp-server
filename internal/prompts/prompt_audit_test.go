@@ -3,6 +3,7 @@ package prompts
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -981,6 +982,475 @@ func TestAuditProjectWorkflow_SubResourceAPIErrors_StillRendersReport(t *testing
 	}
 	if !strings.Contains(text, "No templates found") {
 		t.Error("expected no-templates warning when template APIs fail")
+	}
+}
+
+// TestWriteBranchDetail_TheUnprotectLine_AppearsOnlyWhenThereAreGrants
+// verifies the one optional line of a protected branch's detail block.
+//
+// The guard is a `len(...) > 0` whose false side no test ever took, so read as
+// `>= 0` every branch gains an "Unprotect access: No restrictions" line — a
+// sentence that in a branch-protection audit says the opposite of the truth,
+// since GitLab sends no unprotect levels for a branch nobody may unprotect.
+func TestWriteBranchDetail_TheUnprotectLine_AppearsOnlyWhenThereAreGrants(t *testing.T) {
+	var b strings.Builder
+	writeBranchDetail(&b, &gl.ProtectedBranch{Name: "main"}, "main")
+	if strings.Contains(b.String(), "Unprotect access") {
+		t.Errorf("a branch with no unprotect grants wrote an unprotect line:\n%s", b.String())
+	}
+}
+
+// TestAccessLevelIcon_SaysWhichWayTheSettingIsSet replaces a check that only
+// required the icon to be non-empty.
+//
+// Both branches return an emoji, so "not empty" was true whatever the function
+// decided and the `&&` over the two comparisons could be read any way at all.
+// The icon is the whole content of the cell: an audit row that reports a
+// disabled access control as enabled is a finding a reader will not make.
+func TestAccessLevelIcon_SaysWhichWayTheSettingIsSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input gl.AccessControlValue
+		want  string
+	}{
+		{name: "enabled", input: gl.EnabledAccessControl, want: toolutil.EmojiSuccess},
+		{name: "private", input: gl.PrivateAccessControl, want: toolutil.EmojiSuccess},
+		{name: "disabled", input: gl.DisabledAccessControl, want: toolutil.EmojiCross},
+		{name: "unset", input: "", want: toolutil.EmojiCross},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := accessLevelIcon(tt.input); got != tt.want {
+				t.Errorf("accessLevelIcon(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// auditProjectAccessText runs the project-access audit over the members given
+// and returns the message it produced.
+//
+// The handler is called directly because this audit is not one of the two
+// prompts this file registers; it is reached through gitlab_project's own
+// action, and the prompt package only exposes the handler.
+func auditProjectAccessText(t *testing.T, members []*gl.ProjectMember) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"group/my-project"}`)
+	})
+	mux.HandleFunc(routeMembersAll, func(w http.ResponseWriter, _ *http.Request) {
+		data, err := json.Marshal(members)
+		if err != nil {
+			t.Errorf("marshaling the member fixture: %v", err)
+			respondJSON(w, http.StatusInternalServerError, `{}`)
+			return
+		}
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	client := newTestClient(t, mux)
+	result, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	return result.Messages[0].Content.(*mcp.TextContent).Text
+}
+
+// TestAuditProjectAccess_EachOptionalSection_AppearsOnlyForWhatItReportsOn
+// pins the four conditions that decide which sections this audit writes.
+//
+// The attention block, its two sub-sections and the elevated-access block are
+// all `len(...) > 0` comparisons joined by `||`, and every fixture until now
+// satisfied several of them at once. Left as they were, a project whose members
+// are all active and none privileged would publish a warning heading with
+// nothing under it, and one whose only privileged members are maintainers would
+// have the elevated section withheld — or, since the slice under it is sized
+// `len(owners)+len(maintainers)`, read as a difference and refused by the
+// runtime for a negative capacity.
+func TestAuditProjectAccess_EachOptionalSectionAppearsOnlyForWhatItReportsOn(t *testing.T) {
+	t.Run("nothing to report writes neither block", func(t *testing.T) {
+		text := auditProjectAccessText(t, []*gl.ProjectMember{
+			{Username: "dev", Name: "Dev", State: "active", AccessLevel: 30},
+		})
+
+		for _, unwanted := range []string{"Accounts Needing Attention", "### Blocked Accounts", "### Inactive Accounts", "## Elevated Access"} {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("a project with one ordinary developer wrote %q:\n%s", unwanted, text)
+			}
+		}
+	})
+
+	t.Run("a blocked account writes only the blocked sub-section", func(t *testing.T) {
+		text := auditProjectAccessText(t, []*gl.ProjectMember{
+			{Username: "gone", Name: "Gone", State: "blocked", AccessLevel: 30},
+		})
+
+		if !strings.Contains(text, "### Blocked Accounts") {
+			t.Errorf("expected the blocked sub-section:\n%s", text)
+		}
+		if strings.Contains(text, "### Inactive Accounts") {
+			t.Errorf("nobody is merely inactive:\n%s", text)
+		}
+	})
+
+	t.Run("an awaiting account writes only the inactive sub-section", func(t *testing.T) {
+		text := auditProjectAccessText(t, []*gl.ProjectMember{
+			{Username: "pending", Name: "Pending", State: "awaiting", AccessLevel: 30},
+		})
+
+		if !strings.Contains(text, "### Inactive Accounts") {
+			t.Errorf("expected the inactive sub-section:\n%s", text)
+		}
+		if strings.Contains(text, "### Blocked Accounts") {
+			t.Errorf("nobody is blocked:\n%s", text)
+		}
+	})
+
+	t.Run("maintainers alone are elevated access", func(t *testing.T) {
+		text := auditProjectAccessText(t, []*gl.ProjectMember{
+			{Username: "maint", Name: "Maint", State: "active", AccessLevel: 40},
+		})
+
+		if !strings.Contains(text, "## Elevated Access (Owner + Maintainer)") {
+			t.Errorf("a project with a maintainer and no owner still has elevated access:\n%s", text)
+		}
+		if !strings.Contains(text, "| Maintainer | 1 |") {
+			t.Errorf("expected the maintainer count:\n%s", text)
+		}
+	})
+
+	t.Run("owners alone are elevated access", func(t *testing.T) {
+		text := auditProjectAccessText(t, []*gl.ProjectMember{
+			{Username: "owner", Name: "Owner", State: "active", AccessLevel: 50},
+		})
+
+		if !strings.Contains(text, "## Elevated Access (Owner + Maintainer)") {
+			t.Errorf("a project with an owner has elevated access:\n%s", text)
+		}
+	})
+}
+
+// TestWriteLabelsAudit_ALabelWithoutADescription_IsMarkedMissing verifies the
+// per-row description cell of the workflow audit.
+//
+// The cell is an `== ""` choosing between the description and a warning, and
+// nothing asserted either side, so it could be read as `!= ""` and every label
+// that documents itself would be reported as undocumented while the ones that
+// do not would show an empty cell. Labels without descriptions are one of the
+// three gaps this prompt exists to find.
+func TestWriteLabelsAudit_ALabelWithoutADescription_IsMarkedMissing(t *testing.T) {
+	var b strings.Builder
+	writeLabelsAudit(&b, []*gl.Label{
+		{Name: "bug", Color: "#d73a4a", Description: "Something is broken"},
+		{Name: "todo", Color: "#ffffff"},
+	})
+
+	got := b.String()
+	if !strings.Contains(got, "**Total:** 2 | **Without description:** 1") {
+		t.Errorf("expected one label counted as undocumented:\n%s", got)
+	}
+	if !strings.Contains(got, "| bug | #d73a4a | Something is broken |") {
+		t.Errorf("a documented label should show its description:\n%s", got)
+	}
+	if !strings.Contains(got, toolutil.EmojiWarning+" _missing_") {
+		t.Errorf("an undocumented label should be marked missing:\n%s", got)
+	}
+}
+
+// TestWriteMilestonesAudit_TheTotalAndTheActiveTable pins the two things the
+// milestone section decides from the counts it is given.
+//
+// The total adds the active and the closed lists, and the detail table is
+// written only when there are active milestones. No fixture ever passed both
+// lists non-empty, where a sum and a difference agree, and none passed closed
+// milestones alone, where the table heading would stand over nothing.
+func TestWriteMilestonesAudit_TheTotalAndTheActiveTable(t *testing.T) {
+	t.Run("the total counts both lists", func(t *testing.T) {
+		var b strings.Builder
+		writeMilestonesAudit(&b,
+			[]*gl.Milestone{{Title: "v1.0"}, {Title: "v1.1"}},
+			[]*gl.Milestone{{Title: "v0.9"}})
+		got := b.String()
+		if !strings.Contains(got, "**Active:** 2 | **Closed:** 1 | **Total:** 3") {
+			t.Errorf("expected two active and one closed to total three:\n%s", got)
+		}
+	})
+
+	t.Run("closed milestones alone write no active table", func(t *testing.T) {
+		var b strings.Builder
+		writeMilestonesAudit(&b, nil, []*gl.Milestone{{Title: "v0.9"}})
+		got := b.String()
+		if strings.Contains(got, "### Active Milestones") {
+			t.Errorf("there are no active milestones to tabulate:\n%s", got)
+		}
+	})
+}
+
+// TestWriteTemplatesAudit_EachSection_FollowsItsOwnKind pins the three
+// conditions the templates section is made of.
+//
+// The "no templates" warning is an `&&` over both counts and each sub-section a
+// `len(...) > 0`; every fixture had both kinds behave the same way. Read as an
+// `||`, a project with issue templates and no merge-request ones is told it has
+// no templates at all, directly above the list of the ones it has.
+func TestWriteTemplatesAudit_EachSectionFollowsItsOwnKind(t *testing.T) {
+	t.Run("one kind present", func(t *testing.T) {
+		var b strings.Builder
+		writeTemplatesAudit(&b, []*gl.ProjectTemplate{{Name: "Bug Report"}}, nil)
+		got := b.String()
+		if !strings.Contains(got, "### Issue Templates") {
+			t.Errorf("expected the issue template section:\n%s", got)
+		}
+		if strings.Contains(got, "### MR Templates") {
+			t.Errorf("there are no MR templates to list:\n%s", got)
+		}
+		if strings.Contains(got, "No templates found") {
+			t.Errorf("a project with issue templates has templates:\n%s", got)
+		}
+	})
+
+	t.Run("the other kind present", func(t *testing.T) {
+		var b strings.Builder
+		writeTemplatesAudit(&b, nil, []*gl.ProjectTemplate{{Name: "Default"}})
+		got := b.String()
+		if !strings.Contains(got, "### MR Templates") {
+			t.Errorf("expected the MR template section:\n%s", got)
+		}
+		if strings.Contains(got, "### Issue Templates") {
+			t.Errorf("there are no issue templates to list:\n%s", got)
+		}
+	})
+
+	t.Run("neither kind present", func(t *testing.T) {
+		var b strings.Builder
+		writeTemplatesAudit(&b, nil, nil)
+		got := b.String()
+		if !strings.Contains(got, "No templates found") {
+			t.Errorf("expected the warning:\n%s", got)
+		}
+		for _, unwanted := range []string{"### Issue Templates", "### MR Templates"} {
+			if strings.Contains(got, unwanted) {
+				t.Errorf("there is nothing to list, yet %q was written:\n%s", unwanted, got)
+			}
+		}
+	})
+}
+
+// TestWriteFullScorecard_EachRow_AnswersItsOwnQuestion drives every verdict of
+// the quick scorecard from both sides.
+//
+// Six of the nine rows are a `len(...) > 0` handed to [auditVerdict], and every
+// fixture so far gave most of them the same answer, so each could be read as
+// `>= 0` — turning the scorecard of a project with nothing configured into a
+// column of ticks. The push-rule row is the one with structure: a conjunction
+// over the pointer and a disjunction over three settings, where reading the
+// conjunction as a disjunction dereferences a nil push rule and reading either
+// disjunct as a conjunction reports a project that prevents secrets as one with
+// no push rules at all.
+func TestWriteFullScorecard_EachRowAnswersItsOwnQuestion(t *testing.T) {
+	project := &gl.Project{DefaultBranch: "main"}
+
+	t.Run("nothing is configured", func(t *testing.T) {
+		var b strings.Builder
+		writeFullScorecard(&b, scorecardData{project: project})
+		got := b.String()
+		for _, want := range []string{
+			"| Default branch protected | " + toolutil.EmojiCross + " |",
+			"| Push rules configured | " + toolutil.EmojiCross + " |",
+			"| Labels configured | " + toolutil.EmojiCross + " |",
+			"| Active milestones | " + toolutil.EmojiCross + " |",
+			"| Issue templates | " + toolutil.EmojiCross + " |",
+			"| MR templates | " + toolutil.EmojiCross + " |",
+			"| Webhooks configured | " + toolutil.EmojiCross + " |",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("expected %q in:\n%s", want, got)
+			}
+		}
+	})
+
+	t.Run("everything is configured", func(t *testing.T) {
+		var b strings.Builder
+		writeFullScorecard(&b, scorecardData{
+			project:    project,
+			branches:   []*gl.ProtectedBranch{{Name: "main"}},
+			labels:     []*gl.Label{{Name: "bug"}},
+			milestones: []*gl.Milestone{{Title: "v1.0"}},
+			issueTPL:   []*gl.ProjectTemplate{{Name: "Bug Report"}},
+			mrTPL:      []*gl.ProjectTemplate{{Name: "Default"}},
+			webhooks:   []*gl.ProjectHook{{ID: 1}},
+			pushRule:   &gl.ProjectPushRules{CommitMessageRegex: "^(feat|fix):"},
+		})
+		got := b.String()
+		for _, want := range []string{
+			"| Default branch protected | " + toolutil.EmojiSuccess + " |",
+			"| Push rules configured | " + toolutil.EmojiSuccess + " |",
+			"| Labels configured | " + toolutil.EmojiSuccess + " |",
+			"| Active milestones | " + toolutil.EmojiSuccess + " |",
+			"| Issue templates | " + toolutil.EmojiSuccess + " |",
+			"| MR templates | " + toolutil.EmojiSuccess + " |",
+			"| Webhooks configured | " + toolutil.EmojiSuccess + " |",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("expected %q in:\n%s", want, got)
+			}
+		}
+	})
+
+	t.Run("each push rule setting counts on its own", func(t *testing.T) {
+		tests := []struct {
+			name string
+			rule *gl.ProjectPushRules
+			want string
+		}{
+			{name: "no push rule at all", rule: nil, want: toolutil.EmojiCross},
+			{name: "a rule with nothing set", rule: &gl.ProjectPushRules{}, want: toolutil.EmojiCross},
+			{name: "only a commit message regex", rule: &gl.ProjectPushRules{CommitMessageRegex: "^fix"}, want: toolutil.EmojiSuccess},
+			{name: "only secret prevention", rule: &gl.ProjectPushRules{PreventSecrets: true}, want: toolutil.EmojiSuccess},
+			{name: "only the member check", rule: &gl.ProjectPushRules{MemberCheck: true}, want: toolutil.EmojiSuccess},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var b strings.Builder
+				writeFullScorecard(&b, scorecardData{project: project, pushRule: tt.rule})
+				if !strings.Contains(b.String(), "| Push rules configured | "+tt.want+" |") {
+					t.Errorf("expected %q:\n%s", tt.want, b.String())
+				}
+			})
+		}
+	})
+}
+
+// TestWriteFullAccessSection_TheLevelTableAndTheSharingLine_FollowWhatIsThere
+// pins the two conditions this section writes under.
+//
+// The access-level table is an `&&` over the fetch error and the member count,
+// and the sharing line a `len(...) > 0`; neither false side was ever taken. Read
+// as an `||` the table is written for a members call that failed, and read with
+// the counts as `>= 0` a project shared with nobody publishes
+// "**Shared with 0 group(s):**" — a sentence about an absence that reads like a
+// finding.
+func TestWriteFullAccessSection_TheLevelTableAndTheSharingLineFollowWhatIsThere(t *testing.T) {
+	t.Run("no members writes no level table", func(t *testing.T) {
+		var b strings.Builder
+		writeFullAccessSection(&b, nil, nil, nil)
+		got := b.String()
+		if !strings.Contains(got, "**Total members:** 0") {
+			t.Errorf("expected the total line:\n%s", got)
+		}
+		if strings.Contains(got, "| Access Level | Count |") {
+			t.Errorf("there are no members to tabulate:\n%s", got)
+		}
+		if strings.Contains(got, "Shared with") {
+			t.Errorf("the project is shared with nobody:\n%s", got)
+		}
+	})
+
+	t.Run("a refused members call writes no level table", func(t *testing.T) {
+		var b strings.Builder
+		writeFullAccessSection(&b, []*gl.ProjectMember{{AccessLevel: 30}}, nil, errors.New("403 Forbidden"))
+		got := b.String()
+		if !strings.Contains(got, unreadSection) {
+			t.Errorf("expected the section to say it could not be read:\n%s", got)
+		}
+		if strings.Contains(got, "| Access Level | Count |") {
+			t.Errorf("a refused call must not be tabulated:\n%s", got)
+		}
+	})
+
+	t.Run("each level is counted", func(t *testing.T) {
+		var b strings.Builder
+		writeFullAccessSection(&b, []*gl.ProjectMember{
+			{AccessLevel: 30}, {AccessLevel: 30}, {AccessLevel: 40},
+		}, nil, nil)
+		got := b.String()
+		if !strings.Contains(got, "| Developer | 2 |") {
+			t.Errorf("expected two developers:\n%s", got)
+		}
+		if !strings.Contains(got, "| Maintainer | 1 |") {
+			t.Errorf("expected one maintainer:\n%s", got)
+		}
+	})
+}
+
+// TestIsDefaultBranchProtected_ABranchThatIsNotTheDefaultOne_DoesNotCount
+// verifies the comparison behind the scorecard's first row.
+//
+// The walk returns true on the first name that matches the default branch, and
+// no test ever gave it a protected branch with another name, so the comparison
+// could be read as an inequality and a project whose only protected branch is a
+// release branch would be scored as protecting its default. That row is the one
+// this audit leads with.
+func TestIsDefaultBranchProtected_ABranchThatIsNotTheDefaultOne_DoesNotCount(t *testing.T) {
+	branches := []*gl.ProtectedBranch{{Name: "release/1.0"}}
+	if isDefaultBranchProtected(branches, "main") {
+		t.Error("a protected release branch does not protect main")
+	}
+	if !isDefaultBranchProtected(append(branches, &gl.ProtectedBranch{Name: "main"}), "main") {
+		t.Error("main is protected once it is in the list")
+	}
+}
+
+// TestAuditProjectSettings_APushRuleEndpointAnsweringNull_WritesNoSection
+// verifies the nil branch of the push-rule section.
+//
+// GitLab answers 200 with a null body for a project that has no push rules, so
+// the pointer can be nil without the call having failed; the section then
+// writes nothing at all, which is different from both the table and the "may
+// require GitLab Premium" line. Only the error side was ever driven.
+func TestAuditProjectSettings_APushRuleEndpointAnsweringNull_WritesNoSection(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"group/my-project","default_branch":"main"}`)
+	})
+	mux.HandleFunc(routePushRule, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `null`)
+	})
+
+	client := newTestClient(t, mux)
+	result, err := handleAuditProjectSettings(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if strings.Contains(text, "## Push Rules") {
+		t.Errorf("a project with no push rules and no error writes no push-rule section:\n%s", text)
+	}
+}
+
+// TestWriteMilestonesAudit_ADueDateWithNoExpiryFlag_ReadsAsNotExpired verifies
+// the second half of the expiry cell.
+//
+// GitLab omits `expired` on a milestone it has not evaluated, and the cell then
+// falls to "No"; every fixture so far sent the flag, so the nil side of the
+// check was never taken and a missing flag could have been read as expired.
+func TestWriteMilestonesAudit_ADueDateWithNoExpiryFlag_ReadsAsNotExpired(t *testing.T) {
+	due := gl.ISOTime(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
+	var b strings.Builder
+	writeMilestonesAudit(&b, []*gl.Milestone{{Title: "v3.0", DueDate: &due}}, nil)
+
+	if !strings.Contains(b.String(), "| v3.0 | 2026-12-31 | No |") {
+		t.Errorf("a milestone with a due date and no expiry flag is not expired:\n%s", b.String())
+	}
+}
+
+// TestWriteFullWebhooksSection_NoWebhooks_WritesNoTable verifies the table is
+// written only when there is a hook to put in it.
+//
+// The guard is a `len(...) > 0` no test saw false, so read as `>= 0` a project
+// with no webhooks gets a header row and a separator with nothing beneath —
+// a table of nothing in the section whose whole content is the count above it.
+func TestWriteFullWebhooksSection_NoWebhooks_WritesNoTable(t *testing.T) {
+	var b strings.Builder
+	writeFullWebhooksSection(&b, nil, nil)
+	got := b.String()
+	if !strings.Contains(got, "**Configured:** 0") {
+		t.Errorf("expected the count:\n%s", got)
+	}
+	if strings.Contains(got, "| URL | Push |") {
+		t.Errorf("there are no webhooks to tabulate:\n%s", got)
 	}
 }
 

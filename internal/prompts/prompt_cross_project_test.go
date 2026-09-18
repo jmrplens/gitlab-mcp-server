@@ -505,4 +505,72 @@ func TestMyOpenMRs_SameIIDInTwoProjects_CountsThemApart(t *testing.T) {
 	}
 }
 
+// TestMyIssues_TheNoMilestoneCount_IsTheIssuesWithoutOne pins the second
+// counter of the personal issue dashboard.
+//
+// The overdue count beside it is asserted elsewhere; this one is an equality
+// against nil and an increment, and every fixture gave every issue the same
+// answer, so the test could not tell "has no milestone" from "has one" and the
+// counter could as easily count down. A backlog dashboard exists to name what
+// is unplanned.
+func TestMyIssues_TheNoMilestoneCount_IsTheIssuesWithoutOne(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	// The due dates straddle today, so the overdue comparison is driven both
+	// ways in the same run: it used to see only dates in the past, where a
+	// reversed comparison counts every issue as overdue and reads the same.
+	past := time.Now().Add(-48 * time.Hour).Format("2006-01-02")
+	future := time.Now().Add(48 * time.Hour).Format("2006-01-02")
+	mux.HandleFunc(routeGetIssues, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[
+			{"iid":1,"project_id":10,"title":"Planned","references":{"full":"group/proj#1"},"milestone":{"id":5,"title":"v1.0"},"due_date":"`+future+`","created_at":"2026-01-01T00:00:00Z"},
+			{"iid":2,"project_id":10,"title":"Unplanned","references":{"full":"group/proj#2"},"due_date":"`+past+`","created_at":"2026-01-01T00:00:00Z"},
+			{"iid":3,"project_id":10,"title":"Also unplanned","references":{"full":"group/proj#3"},"created_at":"2026-01-01T00:00:00Z"}
+		]`)
+	})
+
+	text := getPromptText(t, mux, "my_issues", nil)
+
+	if !strings.Contains(text, "| Total | 3 |") {
+		t.Errorf("expected three issues:\n%s", text)
+	}
+	if !strings.Contains(text, "| No milestone | 2 |") {
+		t.Errorf("expected the two issues without a milestone to be counted:\n%s", text)
+	}
+	if !strings.Contains(text, "| Overdue | 1 |") {
+		t.Errorf("only the issue whose due date has passed is overdue:\n%s", text)
+	}
+}
+
+// TestMyActivitySummary_APeriodWithNoEvents_HasNoChart verifies that the daily
+// activity chart is written only when there were events to chart.
+//
+// The guard is a `len(events) > 0` no test saw false, so read as `>= 0` a
+// quiet week produces a Mermaid block with an empty axis and an empty bar list
+// — a chart of nothing, inside a fence, which clients render as a broken
+// diagram rather than as the absence it is.
+func TestMyActivitySummary_APeriodWithNoEvents_HasNoChart(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("GET /api/v4/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(routeGetMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "my_activity_summary", map[string]string{"days": "7"})
+
+	if !strings.Contains(text, "No contribution events found in this period.") {
+		t.Errorf("expected the empty-period sentence:\n%s", text)
+	}
+	if strings.Contains(text, "## Daily Activity") {
+		t.Errorf("there were no events, yet a chart section was written:\n%s", text)
+	}
+}
+
 // prompt_analytics.go error branches.

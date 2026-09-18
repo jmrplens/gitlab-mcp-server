@@ -2,6 +2,7 @@
 package prompts
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const (
@@ -558,22 +561,33 @@ func TestIssueAge_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestReadinessLabel covers all three branches of readinessLabel.
+// TestReadinessLabel covers all three branches of readinessLabel, at each
+// threshold and on both sides of it.
+//
+// The label is compared whole rather than by substring: "Ready" is a substring
+// of "Not Ready", so a containment check passes the ready case on the verdict
+// that means the opposite, which is the one reading of this function nobody
+// would want to ship. The two thresholds are taken exactly for the reason every
+// boundary here is: read one step over, five blockers become a refusal and one
+// becomes nothing to report.
 func TestReadinessLabel(t *testing.T) {
 	tests := []struct {
 		name     string
 		blockers int
-		wantSub  string
+		want     string
 	}{
-		{"many_blockers_not_ready", 10, "Not Ready"},
-		{"few_blockers_needs_attention", 3, "Needs Attention"},
-		{"no_blockers_ready", 0, "Ready"},
+		{"many_blockers_not_ready", 10, toolutil.EmojiRed + " Not Ready"},
+		{"six_blockers_not_ready", 6, toolutil.EmojiRed + " Not Ready"},
+		{"exactly_five_blockers_needs_attention", 5, toolutil.EmojiYellow + " Needs Attention"},
+		{"few_blockers_needs_attention", 3, toolutil.EmojiYellow + " Needs Attention"},
+		{"one_blocker_needs_attention", 1, toolutil.EmojiYellow + " Needs Attention"},
+		{"no_blockers_ready", 0, toolutil.EmojiGreen + " Ready"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := readinessLabel(tt.blockers)
-			if !strings.Contains(got, tt.wantSub) {
-				t.Errorf("readinessLabel(%d) = %q, want containing %q", tt.blockers, got, tt.wantSub)
+			if got != tt.want {
+				t.Errorf("readinessLabel(%d) = %q, want %q", tt.blockers, got, tt.want)
 			}
 		})
 	}
@@ -1444,6 +1458,291 @@ func TestDeduplicateMRs_TellsTwoProjectsApart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := len(deduplicateMRs(tt.a, tt.b)); got != tt.wantCount {
 				t.Errorf("deduplicateMRs() returned %d merge request(s), want %d", got, tt.wantCount)
+			}
+		})
+	}
+}
+
+// serverlessRegistrar keeps the handler [addPrompt] wrapped, so a test can call
+// it with no server and no session behind it.
+type serverlessRegistrar struct {
+	handler mcp.PromptHandler
+}
+
+func (r *serverlessRegistrar) AddPrompt(_ *mcp.Prompt, handler mcp.PromptHandler) {
+	r.handler = handler
+}
+
+// TestAddPrompt_TheDescriptionOnTheResult_IsFilledOnlyWhenTheHandlerLeftItEmpty
+// verifies both halves of the description default every prompt goes through.
+//
+// The catalog carries a description for all 37 and prompts/get returned none,
+// so a client that fetched a prompt without listing first had nothing to label
+// it with; that is the filling half. The withholding half matters just as
+// much and is the one nothing held: the condition is an `&&`, and read as an
+// `||` it overwrites whatever a handler chose to say with the registration's
+// own sentence. Neither direction is visible from the served surface today,
+// because no handler sets a description — which is exactly why the rule has to
+// be asserted here rather than through a prompt.
+func TestAddPrompt_TheDescriptionOnTheResult_IsFilledOnlyWhenTheHandlerLeftItEmpty(t *testing.T) {
+	tests := []struct {
+		name          string
+		fromHandler   string
+		wantOnTheWire string
+	}{
+		{name: "an empty description takes the registration's", fromHandler: "", wantOnTheWire: "the registered one"},
+		{name: "a description the handler chose is kept", fromHandler: "the handler's own", wantOnTheWire: "the handler's own"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := &serverlessRegistrar{}
+			addPrompt(reg,
+				&mcp.Prompt{Name: "probe", Description: "the registered one"},
+				func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+					return &mcp.GetPromptResult{Description: tt.fromHandler}, nil
+				})
+			if reg.handler == nil {
+				t.Fatal("addPrompt registered no handler")
+			}
+
+			got, err := reg.handler(t.Context(), &mcp.GetPromptRequest{Params: &mcp.GetPromptParams{}})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Description != tt.wantOnTheWire {
+				t.Errorf("description = %q, want %q", got.Description, tt.wantOnTheWire)
+			}
+		})
+	}
+
+	// A handler that answers with neither a result nor an error is the other
+	// side of the nil check, and the one where filling the description in
+	// would dereference nothing at all.
+	t.Run("a handler that returns no result at all is passed through", func(t *testing.T) {
+		reg := &serverlessRegistrar{}
+		addPrompt(reg,
+			&mcp.Prompt{Name: "probe", Description: "the registered one"},
+			func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+				return nil, nil //nolint:nilnil // the handler shape the nil check exists for
+			})
+		if reg.handler == nil {
+			t.Fatal("addPrompt registered no handler")
+		}
+
+		got, err := reg.handler(t.Context(), &mcp.GetPromptRequest{Params: &mcp.GetPromptParams{}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("result = %+v, want the handler's own nil", got)
+		}
+	})
+}
+
+// TestExtractProjectPath_AReferenceCarryingOnlyTheMarker_FallsBackToTheProjectID
+// verifies that a reference whose separator sits at position zero is treated as
+// carrying no project path at all.
+//
+// Both extractors cut the reference at the last "!" or "#" and keep what is in
+// front of it, and both require that index to be greater than zero. At zero
+// there is nothing in front: keeping `ref[:0]` would put an empty project
+// heading over the rows, and the fallback to "project-N" is the answer that
+// still tells a reader which project the row came from.
+func TestExtractProjectPath_AReferenceCarryingOnlyTheMarker_FallsBackToTheProjectID(t *testing.T) {
+	t.Run("merge request", func(t *testing.T) {
+		mr := &gl.BasicMergeRequest{
+			ProjectID:  7,
+			References: &gl.IssueReferences{Full: "!42"},
+		}
+		if got := extractProjectPath(mr); got != "project-7" {
+			t.Errorf(fmtExtractProjectPath, got, "project-7")
+		}
+	})
+
+	t.Run("issue", func(t *testing.T) {
+		issue := &gl.Issue{
+			ProjectID:  9,
+			References: &gl.IssueReferences{Full: "#42"},
+		}
+		if got := extractIssueProjectPath(issue); got != "project-9" {
+			t.Errorf("extractIssueProjectPath() = %q, want %q", got, "project-9")
+		}
+	})
+
+	// GitLab sends a references object whose fields are empty on an item it
+	// could not name, and the web URL is then the only thing left to read the
+	// project out of.
+	t.Run("an empty reference falls through to the web URL", func(t *testing.T) {
+		mr := &gl.BasicMergeRequest{
+			ProjectID:  7,
+			References: &gl.IssueReferences{},
+			WebURL:     "https://gitlab.example.com/group/project/-/merge_requests/42",
+		}
+		if got := extractProjectPath(mr); got != "group/project" {
+			t.Errorf(fmtExtractProjectPath, got, "group/project")
+		}
+
+		issue := &gl.Issue{
+			ProjectID:  9,
+			References: &gl.IssueReferences{},
+			WebURL:     "https://gitlab.example.com/group/other/-/issues/42",
+		}
+		if got := extractIssueProjectPath(issue); got != "group/other" {
+			t.Errorf("extractIssueProjectPath() = %q, want %q", got, "group/other")
+		}
+	})
+}
+
+// TestProjectPathFromWebURL_AWebURLWithNothingBeforeASeparator_YieldsNoPath
+// verifies that each of the three offsets this parser takes is required to be
+// greater than zero, by feeding it the values where they are exactly zero.
+//
+// A web URL is GitLab-authored data reaching a cross-project prompt's project
+// heading, so what the parser does with a value that is not the shape it
+// expects is part of its contract rather than a curiosity: a scheme with no
+// host and a path with no host both have a separator at offset zero, and
+// accepting either would name the project after whatever followed.
+func TestProjectPathFromWebURL_AWebURLWithNothingBeforeASeparator_YieldsNoPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		webURL string
+		want   string
+	}{
+		{
+			name:   "a scheme separator at the start is not a scheme to strip",
+			webURL: "://gitlab.example.com/group/project/-/merge_requests/1",
+			want:   "/gitlab.example.com/group/project",
+		},
+		{
+			name:   "a leading slash is not a host to strip",
+			webURL: "/group/project/-/merge_requests/1",
+			want:   "/group/project",
+		},
+		{
+			name:   "the ordinary shape still resolves",
+			webURL: "https://gitlab.example.com/group/project/-/merge_requests/1",
+			want:   "group/project",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := projectPathFromWebURL(tt.webURL); got != tt.want {
+				t.Errorf("projectPathFromWebURL(%q) = %q, want %q", tt.webURL, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTruncateRunes_AValueThatIsNotUTF8_IsStillCutRatherThanPanicking verifies
+// that the walk back to a rune boundary stops at the start of the string.
+//
+// The loop steps backwards while the byte it is looking at is a continuation
+// byte, and its `cut > 0` is what stops it at offset zero. A string whose very
+// first byte is a continuation byte is the only value that reaches that stop,
+// and without it the index goes to -1 and the slice expression panics — taking
+// down whichever prompt was shortening a description at the time. GitLab sends
+// UTF-8, so nothing here should ever see one; a truncation helper that panics
+// on bytes it was handed is still a defect, and nothing else can catch it.
+func TestTruncateRunes_AValueThatIsNotUTF8_IsStillCutRatherThanPanicking(t *testing.T) {
+	tests := []struct {
+		name  string
+		in    string
+		limit int
+		want  string
+	}{
+		{name: "every byte is a continuation byte", in: "\x80\x80\x80", limit: 1, want: ""},
+		{name: "the walk back reaches the start of the string", in: "\xa9\xa9\xa9\xa9", limit: 2, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := truncateRunes(tt.in, tt.limit); got != tt.want {
+				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tt.in, tt.limit, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWriteIssueTable_AnIssueWithNoLabels_RendersAHyphen verifies that the
+// labels cell of an issue carrying none says so.
+//
+// The cell is filled from a join over the label names, and the join over an
+// empty list is the empty string: a cell reading "|  |" is a cell a model has
+// to guess about, where "-" is the same word every other absent value in these
+// tables uses. The guard that chooses between them is a `len(...) > 0` nothing
+// held to its boundary.
+func TestWriteIssueTable_AnIssueWithNoLabels_RendersAHyphen(t *testing.T) {
+	created := time.Now().Add(-48 * time.Hour)
+	var b strings.Builder
+	writeIssueTable(&b, []*gl.Issue{
+		{IID: 1, Title: "Unlabeled", CreatedAt: &created},
+		{IID: 2, Title: "Labeled", Labels: gl.Labels{"bug"}, CreatedAt: &created},
+	})
+
+	got := b.String()
+	if !strings.Contains(got, "| #1 | Unlabeled | - |") {
+		t.Errorf("an issue with no labels should render a hyphen, got:\n%s", got)
+	}
+	if !strings.Contains(got, "| #2 | Labeled | bug |") {
+		t.Errorf("an issue with labels should render them, got:\n%s", got)
+	}
+}
+
+// TestFormatAge_AtEachUnitBoundary_TakesTheLargerUnit pins the four thresholds
+// this formatter switches on to the exact day they change.
+//
+// Every one of them is a `<` whose neighbors were only ever tested from well
+// inside their own range, so each could be read as `<=` — one day, one week,
+// one month and one year all reported as the unit below — without a single
+// assertion moving. An age is what a reader uses to decide something is stale,
+// so an off-by-one day at a threshold is the part of it worth pinning.
+func TestFormatAge_AtEachUnitBoundary_TakesTheLargerUnit(t *testing.T) {
+	day := 24 * time.Hour
+	tests := []struct {
+		name     string
+		duration time.Duration
+		want     string
+	}{
+		{name: "just under a day", duration: day - time.Minute, want: "<1d"},
+		{name: "exactly one day", duration: day, want: "1d"},
+		{name: "six days", duration: 6 * day, want: "6d"},
+		{name: "exactly one week", duration: 7 * day, want: "1w"},
+		{name: "twenty-nine days", duration: 29 * day, want: "4w"},
+		{name: "exactly thirty days", duration: 30 * day, want: "1mo"},
+		{name: "three hundred and sixty-four days", duration: 364 * day, want: "12mo"},
+		{name: "exactly a year", duration: 365 * day, want: "1y"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatAge(tt.duration); got != tt.want {
+				t.Errorf("formatAge(%v) = %q, want %q", tt.duration, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMergeDuration_OnlyOneOfTheTwoTimestamps_IsZeroRatherThanADereference
+// verifies that the nil check covers each timestamp on its own.
+//
+// It is an `||` over two pointers, and read as an `&&` a merge request with a
+// creation date and no merge date passes the guard and dereferences the nil
+// one. GitLab sends exactly that for every open merge request, and
+// merge_velocity hands it every merge request it lists.
+func TestMergeDuration_OnlyOneOfTheTwoTimestamps_IsZeroRatherThanADereference(t *testing.T) {
+	created := time.Now().Add(-48 * time.Hour)
+	merged := time.Now()
+	tests := []struct {
+		name string
+		mr   *gl.BasicMergeRequest
+		want time.Duration
+	}{
+		{name: "created but never merged", mr: &gl.BasicMergeRequest{CreatedAt: &created}, want: 0},
+		{name: "merged with no creation date", mr: &gl.BasicMergeRequest{MergedAt: &merged}, want: 0},
+		{name: "neither", mr: &gl.BasicMergeRequest{}, want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mergeDuration(tt.mr); got != tt.want {
+				t.Errorf("mergeDuration() = %v, want %v", got, tt.want)
 			}
 		})
 	}

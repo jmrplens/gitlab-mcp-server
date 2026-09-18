@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -593,6 +594,296 @@ func TestStaleItemsReport_NothingToReport_ClosesWithARuleNotASetextHeading(t *te
 	if !strings.Contains(text, want) {
 		t.Errorf("the closing rule does not follow a blank line:\nwant %q\ngot\n%s", want, text)
 	}
+}
+
+// TestProjectActivityReport_AQuietPeriod_WritesNoneOfTheOptionalSections
+// verifies that each section of the activity report is written only when it has
+// something to report.
+//
+// All three are `len(...) > 0` guards no test ever saw false, so each could be
+// read as `>= 0`: a project with no activity would publish an empty event
+// breakdown, an empty "Recently Merged MRs" heading and a Mermaid chart with no
+// bars. The summary table above them already carries the zeroes, so what these
+// headings add is the impression that something was withheld.
+func TestProjectActivityReport_AQuietPeriod_WritesNoneOfTheOptionalSections(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "project_activity_report", map[string]string{"project_id": "42"})
+
+	if !strings.Contains(text, "| Events | 0 |") {
+		t.Errorf("expected the summary row:\n%s", text)
+	}
+	for _, unwanted := range []string{"## Event Breakdown", "## Contributors", "## Recently Merged MRs", "## Daily Activity"} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("nothing happened, yet the report wrote %q:\n%s", unwanted, text)
+		}
+	}
+}
+
+// TestProjectEventDays_ReadsEachTimestampGitLabSendsAndSkipsWhatItCannot pins
+// what the activity chart does with the string a project event carries.
+//
+// A project event stamps its time as a string rather than as a time, and GitLab
+// has sent both a full instant and a bare date for it. Only the instant was
+// ever tested, so the fallback layout was dead and an event whose stamp parses
+// as neither would have been counted under a day with no name.
+func TestProjectEventDays_ReadsEachTimestampGitLabSendsAndSkipsWhatItCannot(t *testing.T) {
+	days := projectEventDays([]*gl.ProjectEvent{
+		{CreatedAt: "2025-01-02T09:00:00Z"},
+		{CreatedAt: "2025-01-02"},
+		{CreatedAt: "2025-01-03T09:00:00Z"},
+		{CreatedAt: "last Tuesday"},
+		{CreatedAt: ""},
+	})
+
+	if len(days) != 2 {
+		t.Fatalf("grouped into %d day(s), want 2: %+v", len(days), days)
+	}
+	if days[0].date != "2025-01-02" || days[0].count != 2 {
+		t.Errorf("first day = %+v, want two events on 2025-01-02", days[0])
+	}
+	if days[1].date != "2025-01-03" || days[1].count != 1 {
+		t.Errorf("second day = %+v, want one event on 2025-01-03", days[1])
+	}
+}
+
+// TestMRDiscussionHealth_ThreadsAndUnresolvedThreads_AreCountedSeparately pins
+// the two per-merge-request counters and the summary row over them.
+//
+// The thread counter is an increment the existing fixture never drove past one,
+// and the "MRs with unresolved threads" row is a `> 0` on a count that was
+// never zero for one merge request and non-zero for another in the same run, so
+// the summary could count every merge request that has any thread at all. The
+// whole point of the report is to name the ones still waiting on somebody.
+func TestMRDiscussionHealth_ThreadsAndUnresolvedThreadsAreCountedSeparately(t *testing.T) {
+	mux := http.NewServeMux()
+	// The third merge request carries no author, which is what GitLab sends for
+	// one opened by an account since deleted: the author cell is then empty
+	// rather than the handler failing on a nil pointer.
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[
+			{"iid":1,"title":"Still discussed","author":{"username":"alice"}},
+			{"iid":2,"title":"Settled","author":{"username":"bob"}},
+			{"iid":3,"title":"Opened by a deleted account"}
+		]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":"d1","notes":[
+			{"id":1,"resolvable":true,"resolved":false},
+			{"id":2,"resolvable":true,"resolved":true},
+			{"id":3,"resolvable":false,"resolved":false}
+		]}]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/{iid}/discussions", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":"d2","notes":[{"id":4,"resolvable":true,"resolved":true}]}]`)
+	})
+
+	text := getPromptText(t, mux, "mr_discussion_health", map[string]string{"project_id": "42"})
+
+	for _, want := range []string{
+		"| MRs with unresolved threads | 1 |",
+		"| Total unresolved threads | 1 |",
+		"| !1 | Still discussed | @alice | 2 | 1 |",
+		"| !2 | Settled | @bob | 1 | 0 |",
+		"| !3 | Opened by a deleted account | @ | 1 | 0 |",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("expected %q in:\n%s", want, text)
+		}
+	}
+}
+
+// TestUnassignedItems_TheTwoSections_AppearOnlyForWhatIsActuallyUnassigned
+// verifies the three conditions that decide what this report says.
+//
+// Each section is a `len(...) > 0` and the congratulation at the end is an
+// `&&` over both counts; every fixture so far had them agree, so the sections
+// could be written empty and the "All open items have assignees" line could be
+// printed beside a list of unassigned merge requests — which is the one
+// sentence in the report a reader would act on.
+func TestUnassignedItems_TheTwoSectionsAppearOnlyForWhatIsActuallyUnassigned(t *testing.T) {
+	created := time.Now().Add(-24 * time.Hour)
+	unassignedMR := `[{"iid":1,"title":"Nobody owns this","source_branch":"a","target_branch":"main",` +
+		`"author":{"username":"alice"},"created_at":"` + created.UTC().Format(time.RFC3339) + `"}]`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, unassignedMR)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "unassigned_items", map[string]string{"project_id": "42"})
+
+	if !strings.Contains(text, "## Unassigned Merge Requests") {
+		t.Errorf("expected the merge request section:\n%s", text)
+	}
+	if strings.Contains(text, "## Unassigned Issues") {
+		t.Errorf("no issue is unassigned, yet the section was written:\n%s", text)
+	}
+	if strings.Contains(text, "All open items have assignees") {
+		t.Errorf("a merge request is unassigned, yet the report congratulated the project:\n%s", text)
+	}
+
+	t.Run("an unassigned issue and no unassigned MR writes only the issue section", func(t *testing.T) {
+		issuesOnly := http.NewServeMux()
+		issuesOnly.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+		issuesOnly.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[{"iid":5,"title":"Nobody owns this either","created_at":"`+
+				created.UTC().Format(time.RFC3339)+`"}]`)
+		})
+
+		got := getPromptText(t, issuesOnly, "unassigned_items", map[string]string{"project_id": "42"})
+		if !strings.Contains(got, "## Unassigned Issues") {
+			t.Errorf("expected the issue section:\n%s", got)
+		}
+		if strings.Contains(got, "## Unassigned Merge Requests") {
+			t.Errorf("no merge request is unassigned:\n%s", got)
+		}
+		if strings.Contains(got, "All open items have assignees") {
+			t.Errorf("an issue is unassigned, yet the report congratulated the project:\n%s", got)
+		}
+	})
+
+	t.Run("everything assigned writes neither section", func(t *testing.T) {
+		empty := http.NewServeMux()
+		empty.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+		empty.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+
+		quiet := getPromptText(t, empty, "unassigned_items", map[string]string{"project_id": "42"})
+		if !strings.Contains(quiet, "All open items have assignees") {
+			t.Errorf("expected the congratulation:\n%s", quiet)
+		}
+		for _, unwanted := range []string{"## Unassigned Merge Requests", "## Unassigned Issues"} {
+			if strings.Contains(quiet, unwanted) {
+				t.Errorf("nothing is unassigned, yet the report wrote %q:\n%s", unwanted, quiet)
+			}
+		}
+	})
+}
+
+// TestStaleItemsReport_TheStaleWindowAndItsSections pins the date this report
+// asks GitLab for and the two sections it writes from the answer.
+//
+// The cutoff is `AddDate(0, 0, -staleDays)` and reaches GitLab only as a query
+// parameter nothing has read, so without its minus the report asks for items
+// untouched since a date in the future and finds everything stale. The sections
+// and the closing congratulation are the same shape as the unassigned report's
+// and were free in the same way.
+func TestStaleItemsReport_TheStaleWindowAndItsSections(t *testing.T) {
+	updated := time.Now().Add(-40 * 24 * time.Hour)
+	staleMR := `[{"iid":1,"title":"Forgotten","source_branch":"a","target_branch":"main",` +
+		`"author":{"username":"alice"},"created_at":"` + updated.UTC().Format(time.RFC3339) + `"}]`
+
+	var updatedBefore atomic.Value
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
+		updatedBefore.Store(r.URL.Query().Get("updated_before"))
+		respondJSON(w, http.StatusOK, staleMR)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "stale_items_report",
+		map[string]string{"project_id": "42", "stale_days": "14"})
+
+	t.Run("the cutoff is the asked number of days in the past", func(t *testing.T) {
+		raw, _ := updatedBefore.Load().(string)
+		if raw == "" {
+			t.Fatal("the listing carried no updated_before at all")
+		}
+		asked, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			t.Fatalf("updated_before %q does not parse: %v", raw, err)
+		}
+		want := time.Now().UTC().AddDate(0, 0, -14)
+		if asked.After(want.Add(time.Minute)) || asked.Before(want.Add(-time.Minute)) {
+			t.Errorf("updated_before = %s, want about %s (fourteen days ago)", asked.UTC(), want)
+		}
+	})
+
+	t.Run("only the section with something in it is written", func(t *testing.T) {
+		if !strings.Contains(text, "## Stale Merge Requests") {
+			t.Errorf("expected the merge request section:\n%s", text)
+		}
+		if strings.Contains(text, "## Stale Issues") {
+			t.Errorf("no issue is stale, yet the section was written:\n%s", text)
+		}
+		if strings.Contains(text, "No stale items found") {
+			t.Errorf("a merge request is stale, yet the report said there were none:\n%s", text)
+		}
+	})
+}
+
+// TestStaleItemsReport_EachSection_FollowsItsOwnKind verifies that the stale
+// report writes a section only for the kind of item that has one, and keeps its
+// all-clear sentence for the case where neither does.
+//
+// Split from the window test above so each reads as one question; between them
+// they take every side of the two `len(...) > 0` guards and of the `&&` over
+// the two counts, which is what separates "nothing is stale" from "the merge
+// requests are fine and the issues are not".
+func TestStaleItemsReport_EachSectionFollowsItsOwnKind(t *testing.T) {
+	updated := time.Now().Add(-40 * 24 * time.Hour)
+	staleIssue := `[{"iid":6,"title":"Forgotten issue","created_at":"` + updated.UTC().Format(time.RFC3339) + `"}]`
+
+	t.Run("a stale issue and no stale MR writes only the issue section", func(t *testing.T) {
+		issuesOnly := http.NewServeMux()
+		issuesOnly.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+		issuesOnly.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, staleIssue)
+		})
+
+		got := getPromptText(t, issuesOnly, "stale_items_report", map[string]string{"project_id": "42"})
+		if !strings.Contains(got, "## Stale Issues") {
+			t.Errorf("expected the issue section:\n%s", got)
+		}
+		if strings.Contains(got, "## Stale Merge Requests") {
+			t.Errorf("no merge request is stale:\n%s", got)
+		}
+		if strings.Contains(got, "No stale items found") {
+			t.Errorf("an issue is stale, yet the report said there were none:\n%s", got)
+		}
+	})
+
+	t.Run("nothing stale writes neither section", func(t *testing.T) {
+		empty := http.NewServeMux()
+		empty.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+		empty.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `[]`)
+		})
+
+		quiet := getPromptText(t, empty, "stale_items_report", map[string]string{"project_id": "42"})
+		if !strings.Contains(quiet, "No stale items found") {
+			t.Errorf("expected the all-clear sentence:\n%s", quiet)
+		}
+		for _, unwanted := range []string{"## Stale Merge Requests", "## Stale Issues"} {
+			if strings.Contains(quiet, unwanted) {
+				t.Errorf("nothing is stale, yet the report wrote %q:\n%s", unwanted, quiet)
+			}
+		}
+	})
 }
 
 // prompt_milestone_label.go edge branch.
