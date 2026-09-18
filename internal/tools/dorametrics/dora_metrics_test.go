@@ -265,6 +265,38 @@ func TestGetProjectMetrics_BadRequestHint(t *testing.T) {
 	}
 }
 
+// TestGetProjectMetrics_NoEnvironmentTiers_SendsNoTierFilter asserts that a
+// call naming no environment tiers reaches GitLab carrying no
+// environment_tiers parameter at all.
+//
+// It matters because an empty filter is not the same as no filter: GitLab
+// reads environment_tiers as the set of tiers to count, so a request sending
+// the parameter with nothing in it asks for the metrics of no environment.
+// The "passes all optional parameters" case above asserts the parameter is
+// sent when tiers were given, and nothing held the other half, which is the
+// half a default tier slipped into buildOpts would break.
+func TestGetProjectMetrics_NoEnvironmentTiers_SendsNoTierFilter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.RawQuery, "environment_tiers") {
+			t.Errorf("query sent environment_tiers for a call that named none: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"date":"2026-01-15","value":1.5}]`)
+	}))
+
+	out, err := GetProjectMetrics(context.Background(), client, ProjectInput{
+		ProjectID: "42",
+		Metric:    "deployment_frequency",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	// The series proves the handler above ran: without a request there is
+	// nothing for the assertion inside it to have judged.
+	if len(out.Metrics) != 1 {
+		t.Fatalf("got %d metrics, want 1", len(out.Metrics))
+	}
+}
+
 // TestGetGroupMetrics validates the GetGroupMetrics handler across
 // success paths (with and without optional filters), input validation
 // (missing group_id, missing metric), API error responses (404, 500),
