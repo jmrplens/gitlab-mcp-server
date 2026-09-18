@@ -6,6 +6,7 @@ package surfaces
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/elicitationtools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projectdiscovery"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -216,6 +218,48 @@ func assertCatalogGroup(t *testing.T, group actioncatalog.Group, want catalogGro
 	if group.FormatResult == nil {
 		t.Error("FormatResult = nil, want the group's formatter")
 	}
+}
+
+// declaredActionAliases indexes every historical action alias
+// [actioncompat.ActionAliases] declares by the canonical action ID it points
+// at. It is the oracle the projection has to satisfy, and it lives in another
+// package, so an assertion against it cannot be satisfied by the projection
+// moving both sides of the comparison.
+func declaredActionAliases() map[string][]actioncompat.ActionAlias {
+	byCanonical := make(map[string][]actioncompat.ActionAlias)
+	for _, alias := range actioncompat.ActionAliases() {
+		byCanonical[alias.Canonical] = append(byCanonical[alias.Canonical], alias)
+	}
+	return byCanonical
+}
+
+// assertCarriesDeclaredAliases checks that every alias declared for canonicalID
+// is republished in policy, aimed at actionName and carrying the declaration's
+// own terms. It returns how many aliases it checked, so a caller can refuse a
+// run that asserted nothing because the lookup found no declaration at all.
+func assertCarriesDeclaredAliases(t *testing.T, policy toolutil.CompatibilityPolicy, canonicalID, actionName string, declared map[string][]actioncompat.ActionAlias) int {
+	t.Helper()
+	published := make(map[string]toolutil.ActionAliasSpec, len(policy.ActionAliases))
+	for _, alias := range policy.ActionAliases {
+		published[alias.Alias] = alias
+	}
+	want := declared[canonicalID]
+	for _, alias := range want {
+		got, ok := published[alias.Alias]
+		if !ok {
+			t.Errorf("declared alias %q is not republished; %q publishes %v",
+				alias.Alias, canonicalID, slices.Sorted(maps.Keys(published)))
+			continue
+		}
+		if got.Target != actionName {
+			t.Errorf("alias %q targets %q, want the action it was declared for, %q", alias.Alias, got.Target, actionName)
+		}
+		if got.Source != alias.Source || got.Searchable != alias.Searchable || got.Deprecated != alias.Deprecated ||
+			got.RemovalVersion != alias.RemovalVersion || got.Reason != alias.Reason {
+			t.Errorf("alias %q = %+v, want the declaration's own terms %+v", alias.Alias, got, alias)
+		}
+	}
+	return len(want)
 }
 
 // TestStandaloneToolSpecs_ConfiguredClient_PublishesDiscoveryAndInteractiveSurfaces
@@ -706,5 +750,63 @@ func TestReadOnlyGroup_NoActions_ReportsNotReadOnly(t *testing.T) {
 	}
 	if readOnlyGroup([]toolutil.ActionSpec{}) {
 		t.Error("readOnlyGroup(empty) = true, want false")
+	}
+}
+
+// TestStandaloneToolSpecs_EverySurface_RepublishesItsHistoricalActionAliases
+// asserts that each standalone surface carries the historical action aliases
+// declared for its canonical ID, aimed at its own action.
+//
+// Neither projectdiscovery nor elicitationtools declares any compatibility of
+// its own, so every alias these five tools publish arrives through the single
+// [actioncompat.ApplyToActionSpecs] call the projection makes. That call and
+// the field copy carrying its result onto the surface spec were observed by
+// nothing: removing either leaves every other assertion in this file passing
+// while `gitlab_interactive_mr_create` and the six names beside it stop
+// resolving, so a model holding an older ID is told the action does not exist
+// rather than being routed to the one that replaced it.
+func TestStandaloneToolSpecs_EverySurface_RepublishesItsHistoricalActionAliases(t *testing.T) {
+	declared := declaredActionAliases()
+	checked := 0
+
+	for _, spec := range StandaloneToolSpecs(newProjectionClient(t)) {
+		canonicalID := spec.BaseDomain + "." + spec.ActionName
+		t.Run(canonicalID, func(t *testing.T) {
+			checked += assertCarriesDeclaredAliases(t, spec.Compatibility, canonicalID, spec.ActionName, declared)
+		})
+	}
+
+	if checked == 0 {
+		t.Fatal("no standalone surface matched a declared alias, so this test asserted nothing: either the declarations were emptied or the canonical IDs stopped matching")
+	}
+}
+
+// TestAddToolCatalog_ProjectedActions_KeepTheHistoricalActionAliases asserts
+// that those aliases survive the rest of the trip into the catalog, which is
+// where the dynamic surface reads them from.
+//
+// The spec-level assertion above cannot see this half: the projection clones
+// each spec, converts it to an action spec and rebuilds it as a catalog group,
+// and a compatibility policy dropped at any of those steps would leave the
+// surface spec correct and the catalog a caller actually queries without the
+// alias.
+func TestAddToolCatalog_ProjectedActions_KeepTheHistoricalActionAliases(t *testing.T) {
+	catalog, err := AddToolCatalog(nil, StandaloneToolSpecs(newProjectionClient(t)), CatalogOptions{})
+	if err != nil {
+		t.Fatalf("AddToolCatalog() error = %v", err)
+	}
+
+	declared := declaredActionAliases()
+	checked := 0
+
+	for _, action := range catalog.Actions() {
+		canonicalID := string(action.ID)
+		t.Run(canonicalID, func(t *testing.T) {
+			checked += assertCarriesDeclaredAliases(t, action.Compatibility, canonicalID, action.Name, declared)
+		})
+	}
+
+	if checked == 0 {
+		t.Fatal("no projected catalog action matched a declared alias, so this test asserted nothing: either the declarations were emptied or the canonical IDs stopped matching")
 	}
 }
