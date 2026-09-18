@@ -849,6 +849,50 @@ func TestFormatOutputMarkdown_UnknownAccessLevel(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_PendingRequestNamesNoRole verifies that a request
+// GitLab answered without an access_level renders a card that names no role,
+// driven through each of the four handlers whose route can answer with one.
+//
+// The list and request routes render API::Entities::AccessRequester, which
+// says who asked and when and nothing about a role; a level only arrives once
+// the request is approved, from the Member entity the approve routes render.
+// An absent key decodes to zero, and zero is a level [toolutil.AccessLevelDescription]
+// has a name for, so a card that printed it unconditionally would tell a
+// reader the requester holds "No access (0)" when GitLab said nothing of the
+// kind. Nothing held that guard before: every other card test passes a level,
+// so deleting the guard outright left the whole package green.
+func TestFormatOutputMarkdown_PendingRequestNamesNoRole(t *testing.T) {
+	const pending = `{"id":3,"username":"raymond","name":"Raymond Smith","state":"active",` +
+		`"created_at":"2026-06-15T10:30:00Z","requested_at":"2026-06-16T08:00:00Z"}`
+
+	want := "## Access Request #3\n\n" +
+		"- **ID**: 3\n" +
+		"- **Username**: @raymond\n" +
+		"- **Name**: Raymond Smith\n" +
+		"- **State**: active\n" +
+		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
+		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
+		cardHints
+
+	for _, requestCall := range accessRequestCalls {
+		if !requestCall.pending {
+			continue
+		}
+		t.Run(requestCall.name, func(t *testing.T) {
+			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, pending)))
+			if err != nil {
+				t.Fatalf("%s: %v", requestCall.name, err)
+			}
+			if out.AccessLevel != 0 {
+				t.Fatalf("access_level = %d, want the zero a body without the key decodes to", out.AccessLevel)
+			}
+			if got := FormatOutputMarkdown(out); got != want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatListMarkdown — with items, empty list
 // ---------------------------------------------------------------------------.
@@ -1115,25 +1159,32 @@ const minimalAccessRequestJSON = `{"id":1,"username":"alice","public_email":"ali
 	`"requested_at":"2026-06-16T08:00:00Z"}`
 
 // accessRequestCalls are the six handlers that answer with an access request,
-// each returning the one request it published and saying whether its endpoint
-// answers with an array.
+// each returning the one request it published, saying whether its endpoint
+// answers with an array, and whether the request it answers with is still
+// pending.
+//
+// Pending is a property of the route rather than of the body: the list and
+// request routes render API::Entities::AccessRequester, the approve routes
+// render API::Entities::Member, and only the second of those is about a
+// membership that has a role.
 var accessRequestCalls = []struct {
-	name string
-	call func(client *gitlabclient.Client) (Output, error)
-	list bool
+	name    string
+	call    func(client *gitlabclient.Client) (Output, error)
+	list    bool
+	pending bool
 }{
-	{name: "list_project", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "list_project", list: true, pending: true, call: func(client *gitlabclient.Client) (Output, error) {
 		out, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
 		return firstAccessRequest(out, err)
 	}},
-	{name: "list_group", list: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "list_group", list: true, pending: true, call: func(client *gitlabclient.Client) (Output, error) {
 		out, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "5"})
 		return firstAccessRequest(out, err)
 	}},
-	{name: "request_project", call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "request_project", pending: true, call: func(client *gitlabclient.Client) (Output, error) {
 		return RequestProject(context.Background(), client, RequestProjectInput{ProjectID: "10"})
 	}},
-	{name: "request_group", call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "request_group", pending: true, call: func(client *gitlabclient.Client) (Output, error) {
 		return RequestGroup(context.Background(), client, RequestGroupInput{GroupID: "5"})
 	}},
 	{name: "approve_project", call: func(client *gitlabclient.Client) (Output, error) {

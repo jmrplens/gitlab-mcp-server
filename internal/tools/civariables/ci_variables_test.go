@@ -4,9 +4,12 @@
 package civariables
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1190,5 +1193,254 @@ func TestCIVariableDelete_FilterObject(t *testing.T) {
 		Filter:    &Filter{EnvironmentScope: testEnvScope},
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Create / Update — what the request body actually carries
+// ---------------------------------------------------------------------------.
+
+// decodeCIVariableRequestBody returns the JSON object a mutating request
+// carried, or an empty map when it carried no body at all, which is what an
+// update supplying no optional field sends. It reports on the test's behalf
+// with t.Errorf and answers deterministically rather than aborting: it runs on
+// the httptest server's goroutine, where FailNow would kill the handler.
+func decodeCIVariableRequestBody(t *testing.T, w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("read request body: %v", err)
+		http.Error(w, "read request body", http.StatusInternalServerError)
+		return nil, false
+	}
+	body := map[string]any{}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if unmarshalErr := json.Unmarshal(raw, &body); unmarshalErr != nil {
+			t.Errorf("decode request body %q: %v", raw, unmarshalErr)
+			http.Error(w, "decode request body", http.StatusInternalServerError)
+			return nil, false
+		}
+	}
+	return body, true
+}
+
+// assertCIVariableRequestBody holds a recorded request body to exactly the
+// fields want names, with the values it names. Both halves matter: a missing
+// or wrong field means an input the caller gave never reached GitLab, and an
+// extra one means the handler sent a field the caller left unset, which for a
+// CI/CD variable overwrites a live setting with a zero value.
+func assertCIVariableRequestBody(t *testing.T, body, want map[string]any) {
+	t.Helper()
+	for name, wantValue := range want {
+		got, present := body[name]
+		if !present {
+			t.Errorf("request body is missing %q; body = %#v", name, body)
+			continue
+		}
+		if !reflect.DeepEqual(got, wantValue) {
+			t.Errorf("request body %q = %#v, want %#v", name, got, wantValue)
+		}
+	}
+	if len(body) != len(want) {
+		t.Errorf("request body carries %d fields, want exactly %d: %#v", len(body), len(want), body)
+	}
+}
+
+// TestCIVariableCreate_OptionalInputsSupplied_ReachTheRequestBody asserts that
+// every optional Create input is forwarded to GitLab, carrying the value the
+// caller gave rather than merely being present.
+//
+// Why it matters: the mock answers with a fixture of the test's own choosing,
+// so a test that only reads the returned Output proves nothing about what was
+// sent. Each optional field sits behind its own guard, and a guard that stopped
+// forwarding would still create the variable — with GitLab's defaults instead
+// of the caller's masked, protected or raw choice, and with no error to read.
+// The flags are asserted at false on purpose: false is the value a guard keyed
+// on presence rather than on the pointer would silently drop.
+func TestCIVariableCreate_OptionalInputsSupplied_ReachTheRequestBody(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/variables" || r.Method != http.MethodPost {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			return
+		}
+		body, ok := decodeCIVariableRequestBody(t, w, r)
+		if !ok {
+			return
+		}
+		assertCIVariableRequestBody(t, body, map[string]any{
+			"key":               "SECRET_FILE",
+			"value":             "/tmp/secret",
+			"description":       "Secret file for deploy",
+			"variable_type":     "file",
+			"protected":         false,
+			"masked":            false,
+			"masked_and_hidden": false,
+			"raw":               false,
+			"environment_scope": testEnvScope,
+		})
+		testutil.RespondJSON(w, http.StatusCreated, `{"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file","environment_scope":"production"}`)
+	}))
+
+	bFalse := false
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID:        "1",
+		Key:              "SECRET_FILE",
+		Value:            "/tmp/secret",
+		Description:      "Secret file for deploy",
+		VariableType:     "file",
+		Protected:        &bFalse,
+		Masked:           &bFalse,
+		MaskedAndHidden:  &bFalse,
+		Raw:              &bFalse,
+		EnvironmentScope: testEnvScope,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCIVariableCreate_OptionalInputsUnset_AreAbsentFromTheRequestBody asserts
+// that an optional input the caller left unset is omitted from the request
+// rather than sent as its zero value.
+//
+// Why it matters: this is the other side of the same guards, and the side
+// GitLab answers identically. Sending `description: ""` or `variable_type: ""`
+// for a caller who named neither is not an empty gesture — the second is a
+// value GitLab's variable_type enum does not accept, so a guard inverted here
+// turns a valid minimal create into a 400 for every caller.
+func TestCIVariableCreate_OptionalInputsUnset_AreAbsentFromTheRequestBody(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/variables" || r.Method != http.MethodPost {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			return
+		}
+		body, ok := decodeCIVariableRequestBody(t, w, r)
+		if !ok {
+			return
+		}
+		assertCIVariableRequestBody(t, body, map[string]any{
+			"key":   "DB_HOST",
+			"value": "localhost",
+		})
+		testutil.RespondJSON(w, http.StatusCreated, `{"key":"DB_HOST","value":"localhost","variable_type":"env_var","environment_scope":"*"}`)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "1",
+		Key:       "DB_HOST",
+		Value:     "localhost",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCIVariableUpdate_OptionalInputsSupplied_ReachTheRequestBody asserts that
+// every optional Update input is forwarded to GitLab with the caller's value.
+//
+// Why it matters: an update is the operation whose whole purpose is to change
+// one of these fields. A guard that stopped forwarding would answer with
+// GitLab's echo of the untouched variable and report success, so the caller is
+// told the rotation happened while the old value is still live. The flags are
+// asserted at false because unsetting `masked` on a variable that is masked is
+// exactly the update a presence-keyed guard cannot express.
+func TestCIVariableUpdate_OptionalInputsSupplied_ReachTheRequestBody(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/variables/DB_HOST" || r.Method != http.MethodPut {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			return
+		}
+		body, ok := decodeCIVariableRequestBody(t, w, r)
+		if !ok {
+			return
+		}
+		assertCIVariableRequestBody(t, body, map[string]any{
+			"value":         "db.prod",
+			"description":   "Updated",
+			"variable_type": "file",
+			"protected":     false,
+			"masked":        false,
+			"raw":           false,
+			"filter":        map[string]any{"environment_scope": testEnvScope},
+		})
+		testutil.RespondJSON(w, http.StatusOK, `{"key":"DB_HOST","value":"db.prod","variable_type":"file","environment_scope":"production"}`)
+	}))
+
+	bFalse := false
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:        "1",
+		Key:              "DB_HOST",
+		Value:            "db.prod",
+		Description:      "Updated",
+		VariableType:     "file",
+		Protected:        &bFalse,
+		Masked:           &bFalse,
+		Raw:              &bFalse,
+		EnvironmentScope: testEnvScope,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCIVariableUpdate_OptionalInputsUnset_SendNoFieldAtAll asserts that an
+// update naming no optional input sends an empty body.
+//
+// Why it matters: every field of an update is optional, and GitLab applies the
+// ones it receives. A guard inverted here sends `value: ""` for a caller who
+// only wanted to change the environment scope, and the variable's value is
+// erased by an operation that reports success.
+func TestCIVariableUpdate_OptionalInputsUnset_SendNoFieldAtAll(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/variables/DB_HOST" || r.Method != http.MethodPut {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			return
+		}
+		body, ok := decodeCIVariableRequestBody(t, w, r)
+		if !ok {
+			return
+		}
+		assertCIVariableRequestBody(t, body, map[string]any{})
+		testutil.RespondJSON(w, http.StatusOK, `{"key":"DB_HOST","value":"localhost","variable_type":"env_var","environment_scope":"*"}`)
+	}))
+
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "1",
+		Key:       "DB_HOST",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCIVariableGet_EmptyFilterScope_FallsBackToTheFlatShorthand asserts that a
+// nested filter carrying no environment scope leaves the flat shorthand in
+// force instead of overriding it with nothing.
+//
+// Why it matters: the nested object takes precedence over the shorthand, and
+// `filter: {}` is what a client sends when it builds the object before knowing
+// whether it has a scope to put in it. Treating an empty nested scope as an
+// override would widen the request to every scope, and GitLab would answer with
+// whichever instance of the key it picked — a different variable than the
+// caller named, reported as a success.
+func TestCIVariableGet_EmptyFilterScope_FallsBackToTheFlatShorthand(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/10/variables/DB_URL" || r.Method != http.MethodGet {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			return
+		}
+		if got := r.URL.Query().Get("filter[environment_scope]"); got != testEnvScope {
+			t.Errorf("filter[environment_scope] = %q, want %q", got, testEnvScope)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"key":"DB_URL","value":"x","variable_type":"env_var","environment_scope":"production"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		ProjectID:        "10",
+		Key:              "DB_URL",
+		EnvironmentScope: testEnvScope,
+		Filter:           &Filter{},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.EnvironmentScope != testEnvScope {
+		t.Errorf(fmtEnvironmentScope, out.EnvironmentScope, testEnvScope)
 	}
 }

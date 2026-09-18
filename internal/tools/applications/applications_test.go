@@ -225,17 +225,26 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab
+// API answers 404, and that the status hint sends the caller back for the
+// numeric id this action takes. The same list row also carries an
+// application_id, which is the OAuth client string, so a hint naming that field
+// points a model at the wrong column of the row it just read and it retries
+// with a string where an id belongs.
 func TestDelete_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	client := testutil.NewTestClient(t, handler)
 	err := Delete(t.Context(), client, DeleteInput{ID: 999})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "verify application id") {
+		t.Errorf("wrapped error missing 404 status hint %q: %v", "verify application id", err)
+	}
+	if strings.Contains(err.Error(), "application_id") {
+		t.Errorf("404 hint names the application_id column instead of the id parameter: %v", err)
 	}
 }
 
@@ -479,6 +488,67 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	renew := byTool["gitlab_renew_application_secret"]
 	if renew.Usage == "" || len(renew.Aliases) == 0 || renew.ParameterGuidance["id"].SemanticRole == "" || renew.IndividualTool.Description == "" {
 		t.Fatalf("renew metadata incomplete: usage=%q aliases=%d id guidance=%q description=%q", renew.Usage, len(renew.Aliases), renew.ParameterGuidance["id"].SemanticRole, renew.IndividualTool.Description)
+	}
+}
+
+// TestActionSpecs_UnknownAction_KeepsTheSharedMetadataBlock pins what
+// applicationOptionsForAction hands back before its switch tailors anything:
+// the owner package the request inventory joins on, the open-world hint, the
+// domain tags find searches, the related actions, and the alias fallback to the
+// tool's own name. Every one of the four cases overwrites part of that block,
+// so the fall-through is the only place it can be read whole, and it is the
+// shape a fifth action would ship with if someone added it and forgot the case.
+func TestActionSpecs_UnknownAction_KeepsTheSharedMetadataBlock(t *testing.T) {
+	shared := applicationOptionsForAction("application_no_case_matches_this", "gitlab_no_such_application_tool")
+
+	if shared.OwnerPackage != "applications" {
+		t.Errorf("OwnerPackage = %q, want applications", shared.OwnerPackage)
+	}
+	if !shared.OpenWorld {
+		t.Error("OpenWorld = false: every application action reaches the GitLab instance")
+	}
+	if len(shared.Tags) != 2 || shared.Tags[0] != "admin" || shared.Tags[1] != "application" {
+		t.Errorf("Tags = %v, want [admin application]", shared.Tags)
+	}
+	if len(shared.RelatedActions) == 0 {
+		t.Error("RelatedActions is empty: the shared block is what an untailored action offers a model next")
+	}
+	if len(shared.Aliases) != 1 || shared.Aliases[0] != "gitlab_no_such_application_tool" {
+		t.Errorf("Aliases = %v, want the individual tool name alone", shared.Aliases)
+	}
+	if shared.IndividualTool.Name != "gitlab_no_such_application_tool" || shared.IndividualTool.Title == "" {
+		t.Errorf("IndividualTool = %+v, want the passed name and a derived title", shared.IndividualTool)
+	}
+	if shared.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty: a description is a case's business", shared.IndividualTool.Description)
+	}
+}
+
+// TestActionSpecs_EveryPublishedAction_IsDescribedInItsOwnWords holds what the
+// switch in applicationOptionsForAction exists for: every action ActionSpecs
+// publishes has a case of its own and none falls through to the shared block.
+// The per-tool assertions in TestActionSpecs_Metadata cannot see this, because
+// each names a tool it already knows: a fifth action added without a case
+// would ship with the generic usage, no description and no parameter guidance,
+// and every one of those assertions would still pass. The fallback is read back
+// out of the function instead of spelled here, so rewording it cannot quietly
+// make this test vacuous.
+func TestActionSpecs_EveryPublishedAction_IsDescribedInItsOwnWords(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	shared := applicationOptionsForAction("application_no_case_matches_this", "gitlab_no_such_application_tool")
+
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			if spec.Usage == shared.Usage {
+				t.Errorf("Usage = %q, which is the shared fallback: applicationOptionsForAction has no case for %q", spec.Usage, spec.Name)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Error("IndividualTool.Description is empty, which is what an action with no case of its own is left with")
+			}
+			if len(spec.Aliases) == 1 && spec.Aliases[0] == spec.IndividualTool.Name {
+				t.Errorf("Aliases = %v, which is the shared block's fallback to the tool's own name", spec.Aliases)
+			}
+		})
 	}
 }
 

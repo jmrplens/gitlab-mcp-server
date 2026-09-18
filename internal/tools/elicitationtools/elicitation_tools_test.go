@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"unicode/utf8"
@@ -17,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/elicitation"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -27,6 +29,11 @@ const (
 	fmtErrWantErr = "error = %v, want %v"
 	// actionAccept identifies the action accept constant used by this package.
 	actionAccept = "accept"
+	// actionDecline is the elicitation action a person's "no" carries. It is
+	// not the same as "cancel": a decline answers the question and reaches the
+	// wizard as ErrDeclined, which the optional prompts tolerate and the final
+	// confirmation does not.
+	actionDecline = "decline"
 	// keyConfirmed identifies the key confirmed constant used by this package.
 	keyConfirmed = "confirmed"
 	// msgDeleteProject identifies the msg delete project constant used by this package.
@@ -2046,6 +2053,442 @@ func TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed(t *testing.T) {
 			}
 			if !utf8.ValidString(s) {
 				t.Error("the summary is not valid UTF-8; a character was split")
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The consent summary — what a person is shown before anything is created
+// ---------------------------------------------------------------------------.
+
+// consentCapture records the message of every elicitation request a wizard
+// sends, so a test can assert on the dialog a person reads rather than only on
+// the object GitLab returned afterwards.
+//
+// It exists because every wizard test above asserts the created object and
+// nothing else, while three of the four wizards build their summary inline in
+// the handler (only the merge request one goes through buildMRSummary, which
+// has direct tests). Those inline sections could be omitted, inverted or
+// filled with the wrong value and this package would stay green — and the
+// summary is the point of an elicitation flow: it is the last thing shown
+// before something is created in somebody's GitLab.
+//
+// The slice is guarded because the elicitation handler runs on the client
+// session's goroutine, not on the test's.
+type consentCapture struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+// handler wraps stepHandler, replaying the scripted answers unchanged while
+// recording the message each prompt carried.
+func (c *consentCapture) handler(steps []elicitationStep) func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+	replay := stepHandler(steps)
+	return func(ctx context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		c.mu.Lock()
+		c.messages = append(c.messages, req.Params.Message)
+		c.mu.Unlock()
+		return replay(ctx, req)
+	}
+}
+
+// confirmMessage returns the last recorded message, which is the confirmation
+// summary: every wizard asks for consent after all of its other prompts.
+func (c *consentCapture) confirmMessage(t *testing.T) string {
+	t.Helper()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.messages) == 0 {
+		t.Fatal("the wizard sent no elicitation request, so there is no summary to read")
+	}
+	return c.messages[len(c.messages)-1]
+}
+
+// assertSummarySections checks that the summary shows every section in want
+// and none of the sections in notWant.
+//
+// Both halves are needed and neither implies the other: a guard that has lost
+// its condition shows a field nobody filled in, and an inverted one hides a
+// field somebody did.
+func assertSummarySections(t *testing.T, summary string, want, notWant []string) {
+	t.Helper()
+	for _, section := range want {
+		if !strings.Contains(summary, section) {
+			t.Errorf("the summary omits %q, so consent is given for a value the user was never shown:\n%s", section, summary)
+		}
+	}
+	for _, section := range notWant {
+		if strings.Contains(summary, section) {
+			t.Errorf("the summary shows %q for a value the user never gave:\n%s", section, summary)
+		}
+	}
+}
+
+// runIssueConsentFlow drives IssueCreate to its confirmation prompt with the
+// given answers and returns the summary the wizard asked consent with.
+//
+// Each flow ends by declining the confirmation, so no GitLab call is needed
+// and the wizard's refusal path is exercised at the same time: a decline is
+// the second way a person says no and reaches confirmCreation as ErrDeclined
+// rather than ErrCancelled.
+func runIssueConsentFlow(t *testing.T, steps []elicitationStep) string {
+	t.Helper()
+	capture := &consentCapture{}
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitationSession(t, ctx, capture.handler(steps))
+	defer cleanup()
+
+	_, err := IssueCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, IssueInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("IssueCreate() returned no error although the confirmation was declined")
+	}
+	if !errors.Is(err, elicitation.ErrDeclined) {
+		t.Errorf("IssueCreate() error = %v, want one wrapping ErrDeclined", err)
+	}
+	return capture.confirmMessage(t)
+}
+
+// TestIssueCreate_ConsentSummary_ShowsTheAnsweredOptionalFieldsAndOmitsTheRest
+// holds the three optional sections of the issue confirmation dialog to the
+// answers that were actually given.
+//
+// Every one of those guards survived mutation before this existed: the
+// description, labels and confidentiality sections could each be inverted, and
+// the labels guard could be relaxed to include an empty list, without a single
+// assertion in the package failing. The dialog is where a person decides, so
+// a section shown for a value nobody supplied and a section hidden for one
+// they did are the same defect seen from two sides, and both are asserted.
+//
+// The declined case is not a repetition of the empty one. Declining a prompt
+// leaves the optional bool nil where answering "no" leaves it false, and a
+// guard reading the pointer wrongly dereferences nothing in one case and a nil
+// in the other.
+func TestIssueCreate_ConsentSummary_ShowsTheAnsweredOptionalFieldsAndOmitsTheRest(t *testing.T) {
+	tests := []struct {
+		name    string
+		steps   []elicitationStep
+		want    []string
+		notWant []string
+	}{
+		{
+			name: "every optional field answered",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+				{action: actionAccept, content: map[string]any{"description": "A test issue"}},
+				{action: actionAccept, content: map[string]any{"labels": "bug, feature"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}}, // confidential
+				{action: actionDecline},
+			},
+			want: []string{
+				"**Title**:", "`" + testIssueTitle + "`",
+				"**Description**:", "`A test issue`",
+				"**Labels**:", "`bug, feature`",
+				"**Confidential**: Yes",
+			},
+		},
+		{
+			name: "optional fields answered empty",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"labels": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // not confidential
+				{action: actionDecline},
+			},
+			want:    []string{"**Title**:"},
+			notWant: []string{"**Description**", "**Labels**", "**Confidential**"},
+		},
+		{
+			name: "optional prompts declined",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+				{action: actionDecline},
+				{action: actionDecline},
+				{action: actionDecline},
+				{action: actionDecline},
+			},
+			want:    []string{"**Title**:"},
+			notWant: []string{"**Description**", "**Labels**", "**Confidential**"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertSummarySections(t, runIssueConsentFlow(t, tt.steps), tt.want, tt.notWant)
+		})
+	}
+}
+
+// TestIssueCreate_ConsentSummary_ShowsAnExcerptOfALongDescription holds
+// summaryExcerpt to actually cutting, measured in runes.
+//
+// The existing excerpt test asserts that the fence around the value closes,
+// which stays true whether or not anything was trimmed: with the counter
+// walking backwards the limit is never reached, the whole description is
+// escaped in one span, and every assertion still passes. What the excerpt is
+// for is that a consent dialog stays readable, so the property is that the
+// text stops at the limit and the rest does not reach the person at all.
+//
+// Counting runes rather than bytes is asserted through a multi-byte case: a
+// byte-indexed cut at this limit would split a character and put an invalid
+// sequence in the dialog.
+func TestIssueCreate_ConsentSummary_ShowsAnExcerptOfALongDescription(t *testing.T) {
+	const tail = "TAIL-THE-USER-NEVER-SEES"
+
+	tests := []struct {
+		name string
+		char string
+	}{
+		{name: "single-byte characters", char: "a"},
+		{name: "multi-byte characters", char: "ñ"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			head := strings.Repeat(tt.char, summaryExcerptRunes)
+			summary := runIssueConsentFlow(t, []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+				{action: actionAccept, content: map[string]any{"description": head + tail}},
+				{action: actionAccept, content: map[string]any{"labels": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionDecline},
+			})
+
+			if !strings.Contains(summary, head+"...") {
+				t.Errorf("the description was not cut at %d runes and marked as an excerpt:\n%s", summaryExcerptRunes, summary)
+			}
+			if strings.Contains(summary, tail) {
+				t.Errorf("text beyond the excerpt limit reached the consent dialog:\n%s", summary)
+			}
+			if !utf8.ValidString(summary) {
+				t.Error("the summary is not valid UTF-8; a character was split")
+			}
+		})
+	}
+}
+
+// TestReleaseCreate_ConsentSummary_ShowsADescriptionOnlyWhenOneWasGiven holds
+// the one optional section of the release confirmation dialog.
+//
+// Its guard survived mutation: inverted, the dialog hides the release notes a
+// person typed and shows an empty notes field to one who typed none, and every
+// assertion in the package passed either way. The declined case is here rather
+// than in the empty one because declining that prompt is the only path that
+// makes the wizard's ErrDeclined tolerance observable.
+func TestReleaseCreate_ConsentSummary_ShowsADescriptionOnlyWhenOneWasGiven(t *testing.T) {
+	tests := []struct {
+		name        string
+		descStep    elicitationStep
+		want        []string
+		notWant     []string
+		description string
+	}{
+		{
+			name:     "description given",
+			descStep: elicitationStep{action: actionAccept, content: map[string]any{"description": "First release"}},
+			want:     []string{"**Tag**:", "**Name**:", "**Description**:", "`First release`"},
+		},
+		{
+			name:     "description answered empty",
+			descStep: elicitationStep{action: actionAccept, content: map[string]any{"description": ""}},
+			want:     []string{"**Tag**:", "**Name**:"},
+			notWant:  []string{"**Description**"},
+		},
+		{
+			name:     "description prompt declined",
+			descStep: elicitationStep{action: actionDecline},
+			want:     []string{"**Tag**:", "**Name**:"},
+			notWant:  []string{"**Description**"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			capture := &consentCapture{}
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, capture.handler([]elicitationStep{
+				{action: actionAccept, content: map[string]any{"tag_name": testTagV100}},
+				{action: actionAccept, content: map[string]any{"name": testRelease10Name}},
+				tt.descStep,
+				{action: actionDecline},
+			}))
+			defer cleanup()
+
+			_, err := ReleaseCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, ReleaseInput{ProjectID: "42"})
+			if err == nil {
+				t.Fatal("ReleaseCreate() returned no error although the confirmation was declined")
+			}
+			assertSummarySections(t, capture.confirmMessage(t), tt.want, tt.notWant)
+		})
+	}
+}
+
+// TestProjectCreate_ConsentSummary_ShowsTheOptionalSettingsOnlyWhenGiven holds
+// the description, README and default-branch sections of the project
+// confirmation dialog to what was answered.
+//
+// Both optional string guards survived mutation here too. The default branch
+// matters most of the three: the dialog is where a person sees which branch
+// the project will be created with, and inverted, the one they typed is
+// replaced by silence — which reads as GitLab's own default.
+func TestProjectCreate_ConsentSummary_ShowsTheOptionalSettingsOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name    string
+		steps   []elicitationStep
+		want    []string
+		notWant []string
+	}{
+		{
+			name: "every optional setting answered",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": "A new project"}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}}, // README
+				{action: actionAccept, content: map[string]any{"default_branch": "develop"}},
+				{action: actionDecline},
+			},
+			want: []string{
+				"**Name**:", "`" + testNewProjectName + "`",
+				"**Visibility**:", "`private`",
+				"**Description**:", "`A new project`",
+				"**README**: Yes",
+				"**Default Branch**:", "`develop`",
+			},
+		},
+		{
+			name: "optional settings left empty",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": ""}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}}, // no README
+				{action: actionAccept, content: map[string]any{"default_branch": ""}},
+				{action: actionDecline},
+			},
+			want:    []string{"**Name**:", "**Visibility**:"},
+			notWant: []string{"**Description**", "**README**", "**Default Branch**"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			capture := &consentCapture{}
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, capture.handler(tt.steps))
+			defer cleanup()
+
+			_, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, nil, ProjectInput{})
+			if err == nil {
+				t.Fatal("ProjectCreate() returned no error although the confirmation was declined")
+			}
+			assertSummarySections(t, capture.confirmMessage(t), tt.want, tt.notWant)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GitLab refusing the create the user already consented to
+// ---------------------------------------------------------------------------.
+
+// TestInteractiveCreate_GitLabRefusesAfterConsent_TheWizardReturnsTheError
+// holds all four wizards to reporting a create GitLab refused.
+//
+// Every wizard test above lets the create succeed, so each handler's
+// `if err != nil { return created, err }` was reached only on its false side.
+// Inverted, the guard swallows the failure: the wizard completes its progress
+// bar, announces the object as created and returns a nil error with a zero
+// value in it, which is the worst answer available — the model is told the
+// issue exists and will go on to reference it. All four survived mutation
+// before this test, one per wizard.
+func TestInteractiveCreate_GitLabRefusesAfterConsent_TheWizardReturnsTheError(t *testing.T) {
+	tests := []struct {
+		name  string
+		path  string
+		steps []elicitationStep
+		run   func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client) error
+	}{
+		{
+			name: "issue",
+			path: "/api/v4/projects/42/issues",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"title": testIssueTitle}},
+				{action: actionAccept, content: map[string]any{"description": "A test issue"}},
+				{action: actionAccept, content: map[string]any{"labels": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			run: func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client) error {
+				_, err := IssueCreate(ctx, req, client, IssueInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name: "merge request",
+			path: "/api/v4/projects/42/merge_requests",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"source_branch": "feature/x"}},
+				{action: actionAccept, content: map[string]any{"target_branch": "main"}},
+				{action: actionAccept, content: map[string]any{"title": testMRFeatureTitle}},
+				{action: actionAccept, content: map[string]any{"description": "A new feature"}},
+				{action: actionAccept, content: map[string]any{"labels": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			run: func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client) error {
+				_, err := MRCreate(ctx, req, client, MRInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name: "release",
+			path: "/api/v4/projects/42/releases",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"tag_name": testTagV100}},
+				{action: actionAccept, content: map[string]any{"name": testRelease10Name}},
+				{action: actionAccept, content: map[string]any{"description": "First release"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			run: func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client) error {
+				_, err := ReleaseCreate(ctx, req, client, ReleaseInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name: "project",
+			path: "/api/v4/projects",
+			steps: []elicitationStep{
+				{action: actionAccept, content: map[string]any{"name": testNewProjectName}},
+				{action: actionAccept, content: map[string]any{"description": "A new project"}},
+				{action: actionAccept, content: map[string]any{"selection": "private"}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: false}},
+				{action: actionAccept, content: map[string]any{"default_branch": ""}},
+				{action: actionAccept, content: map[string]any{keyConfirmed: true}},
+			},
+			run: func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client) error {
+				_, err := ProjectCreate(ctx, req, client, ProjectInput{})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(tt.path, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"refused by GitLab"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			ctx := context.Background()
+			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(tt.steps))
+			defer cleanup()
+
+			err := tt.run(ctx, &mcp.CallToolRequest{Session: ss}, client)
+			if err == nil {
+				t.Fatal("the wizard reported success although GitLab refused the create")
 			}
 		})
 	}

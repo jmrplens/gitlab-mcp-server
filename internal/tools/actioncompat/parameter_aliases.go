@@ -570,7 +570,7 @@ func normalizeSnippetProjectCreateParams(state *paramNormalization) {
 
 func normalizeReleaseLinkBatchEntries(clone func() map[string]any, params map[string]any, record func(alias, target, reason string)) bool {
 	links, ok := params["links"].([]any)
-	if !ok || len(links) == 0 {
+	if !ok {
 		return false
 	}
 	var updatedLinks []any
@@ -648,7 +648,7 @@ func nonEmptyStringParam(params map[string]any, name string) (string, bool) {
 
 func normalizeSnippetFileNameFields(clone func() map[string]any, params map[string]any) bool {
 	files, ok := params["files"].([]any)
-	if !ok || len(files) == 0 {
+	if !ok {
 		return false
 	}
 	var updatedFiles []any
@@ -681,7 +681,7 @@ func normalizeSnippetFileNameFields(clone func() map[string]any, params map[stri
 
 func stripSnippetCreateFileActions(clone func() map[string]any, params map[string]any) bool {
 	files, ok := params["files"].([]any)
-	if !ok || len(files) == 0 {
+	if !ok {
 		return false
 	}
 	var updatedFiles []any

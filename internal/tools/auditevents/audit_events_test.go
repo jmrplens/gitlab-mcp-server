@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -508,6 +510,32 @@ func TestListInstance_WithPagination(t *testing.T) {
 	}
 	if out.Pagination.Page != 2 {
 		t.Errorf("pagination page = %d, want 2", out.Pagination.Page)
+	}
+}
+
+// TestListInstance_NoPaginationInput_SendsNoPageParams verifies that a call
+// asking for no particular page sends neither page nor per_page, leaving
+// GitLab's own defaults in force.
+//
+// Why it matters: the pagination block is copied into the request only when
+// the caller named a page, and the zero value is what "the caller named none"
+// looks like. Sending page=0 would be this server inventing a page number the
+// caller never asked for, on an endpoint whose first page is 1.
+func TestListInstance_NoPaginationInput_SendsNoPageParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if got := query.Get("page"); got != "" {
+			t.Errorf("request carried page=%q for a call that asked for no page", got)
+		}
+		if got := query.Get("per_page"); got != "" {
+			t.Errorf("request carried per_page=%q for a call that asked for no page", got)
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
+	}))
+
+	if _, err := ListInstance(context.Background(), client, ListInstanceInput{}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
@@ -1020,9 +1048,17 @@ func TestGetInstance_ChangesArray_MapsThrough(t *testing.T) {
 
 // TestGetInstance_ObjectValuedChange_LandsInChangeObject verifies that when the
 // API returns "change" as a JSON object rather than a plain string (e.g.
-// project_group_link_updated), the object is preserved in DetailsOutput.ChangeObject
-// as raw JSON, while the plain-string Change field stays empty (SDK !2949 custom
-// AuditEventDetails.UnmarshalJSON).
+// project_group_link_updated), the object is published as an object a caller
+// can read a field out of, while the plain-string Change field stays empty
+// (SDK !2949 custom AuditEventDetails.UnmarshalJSON).
+//
+// The decoded shape is what is asserted, not merely the presence of the text.
+// The converter's fallback keeps the raw bytes as a string when the decode
+// fails, and a string of JSON marshals back to a document that still contains
+// every word the object did: an assertion that only looked for "group_access"
+// in the re-marshaled value passed whichever branch ran, so the converter
+// could have published `"{\"group_access\":…}"` — a quoted blob no model can
+// index into — and nothing would have failed.
 func TestGetInstance_ObjectValuedChange_LandsInChangeObject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/audit_events/8" {
@@ -1046,12 +1082,19 @@ func TestGetInstance_ObjectValuedChange_LandsInChangeObject(t *testing.T) {
 	if out.Details.ChangeObject == nil {
 		t.Fatal("ChangeObject should hold the object-valued change, got nil")
 	}
-	raw, err := json.Marshal(out.Details.ChangeObject)
-	if err != nil {
-		t.Fatalf("marshal ChangeObject: %v", err)
+	object, ok := out.Details.ChangeObject.(map[string]any)
+	if !ok {
+		t.Fatalf("ChangeObject = %T (%#v), want the decoded object as map[string]any", out.Details.ChangeObject, out.Details.ChangeObject)
 	}
-	if !strings.Contains(string(raw), "group_access") {
-		t.Errorf("ChangeObject missing expected content, got %s", string(raw))
+	access, ok := object["group_access"].(map[string]any)
+	if !ok {
+		t.Fatalf("ChangeObject[group_access] = %T, want a nested object", object["group_access"])
+	}
+	if got, want := access["to"], float64(30); got != want {
+		t.Errorf("ChangeObject[group_access][to] = %v, want %v", got, want)
+	}
+	if got, want := access["from"], float64(10); got != want {
+		t.Errorf("ChangeObject[group_access][from] = %v, want %v", got, want)
 	}
 }
 
@@ -1078,5 +1121,110 @@ func TestFormatMarkdown_RawChangeObject(t *testing.T) {
 
 	if got := FormatMarkdown(e); got != want {
 		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestGetInstance_PlainStringChange_PublishesNoChangeObject verifies that an
+// event whose change is an ordinary string — which is nearly every audit event
+// GitLab records — publishes no change_object at all: the field is absent from
+// the JSON and the card writes no object section.
+//
+// Why it matters: the converter only decodes when the SDK handed it bytes, and
+// the decode's failure branch keeps whatever bytes it was given. Let the empty
+// case through that branch and every event in the instance grows a
+// `"change_object": ""` key and a fenced block holding an empty string — a
+// field a model would read as "this change was recorded as nothing" on an
+// event that simply has no object-valued change.
+func TestGetInstance_PlainStringChange_PublishesNoChangeObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/audit_events/10" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":10,"author_id":10,"entity_id":0,"entity_type":"Group","event_name":"group_settings_updated","event_type":"settings",
+			"details":{"change":"visibility","from":"private","to":"internal"},
+			"created_at":"2026-01-15T10:00:00Z"
+		}`)
+	}))
+
+	out, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Details.Change != "visibility" {
+		t.Errorf("Change = %q, want %q", out.Details.Change, "visibility")
+	}
+	if out.Details.ChangeObject != nil {
+		t.Errorf("ChangeObject = %#v, want nil for a plain-string change", out.Details.ChangeObject)
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal output: %v", err)
+	}
+	if strings.Contains(string(raw), "change_object") {
+		t.Errorf("published change_object for an event that carries none: %s", string(raw))
+	}
+	if strings.Contains(string(raw), `"changes"`) {
+		t.Errorf("published a changes array for an event that carries none: %s", string(raw))
+	}
+	if card := FormatMarkdown(out); strings.Contains(card, "Change (object)") {
+		t.Errorf("card wrote an object section for an event that carries none:\n%s", card)
+	}
+}
+
+// TestFormatMarkdown_UnrenderableChangeObject_OmitsTheSection verifies that a
+// change object the formatter cannot marshal is left out of the card, and that
+// every other row still renders.
+//
+// Why it matters: the formatter is registered by type and is handed whatever
+// an Output holds, and ChangeObject is an open JSON value. What is pinned here
+// is the outcome rather than the mechanism, because two checks currently agree
+// on it — the formatter's own marshal error and Card.Fence declining an empty
+// body — so an edit that keeps only one of them is still correct and an edit
+// that loses both ends the card in a heading with nothing under it.
+func TestFormatMarkdown_UnrenderableChangeObject_OmitsTheSection(t *testing.T) {
+	e := Output{
+		ID:        11,
+		EventName: "project_group_link_updated",
+		Details: DetailsOutput{
+			// A channel is the simplest value encoding/json refuses.
+			ChangeObject: make(chan int),
+		},
+	}
+
+	want := "## Audit Event #11\n\n" +
+		"- **ID**: 11\n" +
+		"- **Event Name**: project_group_link_updated\n" +
+		"- **Entity ID**: 0\n" +
+		"- **Author ID**: 0\n" +
+		eventHints
+
+	if got := FormatMarkdown(e); got != want {
+		t.Errorf("FormatMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestToOutput_UndecodableChangeObject_KeepsTheBytesAsText verifies the
+// converter's documented fallback: bytes that do not decode are published as
+// the text they are rather than dropped, so the audited change is never lost.
+//
+// This is the one assertion here that cannot be driven through a fixture. The
+// SDK only ever fills ChangeObject from a body it has already scanned as JSON,
+// so no response can reach the failure branch; the converter carries it
+// anyway, and a promise nothing exercises is a promise nobody can rely on.
+func TestToOutput_UndecodableChangeObject_KeepsTheBytesAsText(t *testing.T) {
+	truncated := `{"group_access":`
+	event := &gl.AuditEvent{
+		ID:         12,
+		EntityType: "Project",
+		EventName:  "project_group_link_updated",
+		Details:    gl.AuditEventDetails{ChangeObject: json.RawMessage(truncated)},
+	}
+
+	out := toOutput(event)
+
+	if got, ok := out.Details.ChangeObject.(string); !ok || got != truncated {
+		t.Errorf("ChangeObject = %#v, want the raw bytes as the string %q", out.Details.ChangeObject, truncated)
 	}
 }

@@ -5,7 +5,10 @@ package cilint
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -761,5 +764,188 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// lintSpecsByTool returns the CI lint ActionSpecs keyed by the individual tool
+// each projects, so a test can name the action it is asserting about.
+func lintSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"valid":true}`)
+	}))
+	byTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	if byTool["gitlab_ci_lint"].Name != "lint" || byTool["gitlab_ci_lint_project"].Name != "lint_project" {
+		t.Fatalf("ActionSpecs = %v, want gitlab_ci_lint -> lint and gitlab_ci_lint_project -> lint_project", byTool)
+	}
+	return byTool
+}
+
+// assertLintDiscoveryMetadata holds one CI lint spec to the metadata a model
+// needs to pick it: a usage sentence and a description of its own, several
+// natural-language aliases none of which is just the tool's name repeated
+// back, and related actions naming the sibling and the pipeline it leads to.
+func assertLintDiscoveryMetadata(t *testing.T, spec toolutil.ActionSpec, sibling, ownTool string) {
+	t.Helper()
+	if spec.Usage == "" {
+		t.Error("Usage is empty, so discovery has no sentence to tell this action from its sibling")
+	}
+	if spec.IndividualTool.Description == "" {
+		t.Error("IndividualTool.Description is empty")
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("Aliases = %v, want several natural-language phrasings", spec.Aliases)
+	}
+	if slices.Contains(spec.Aliases, ownTool) {
+		t.Errorf("Aliases = %v, want none of them to be the tool name %q repeated back", spec.Aliases, ownTool)
+	}
+	if !slices.Contains(spec.RelatedActions, sibling) {
+		t.Errorf("RelatedActions = %v, want the sibling %q", spec.RelatedActions, sibling)
+	}
+	if !slices.Contains(spec.RelatedActions, actionPipelineCreate) {
+		t.Errorf("RelatedActions = %v, want %q", spec.RelatedActions, actionPipelineCreate)
+	}
+	if !spec.ReadOnly || spec.OwnerPackage != "cilint" {
+		t.Errorf("ReadOnly = %v, OwnerPackage = %q, want true and cilint", spec.ReadOnly, spec.OwnerPackage)
+	}
+}
+
+// TestActionSpecs_EachActionCarriesItsOwnDiscoveryMetadata verifies that each
+// CI lint action publishes the discovery metadata a model reads to choose it,
+// and names its sibling among the actions to reach for next.
+//
+// This is the property that metadata exists to satisfy (1:1 audit R-META): a
+// model choosing between validating YAML the prompt supplied and validating the
+// file a project committed has only the usage sentence, the aliases and the
+// description to tell them apart, so a generic placeholder or an alias that
+// merely repeats the tool's own name leaves it guessing.
+func TestActionSpecs_EachActionCarriesItsOwnDiscoveryMetadata(t *testing.T) {
+	specs := lintSpecsByTool(t)
+
+	for _, tc := range []struct {
+		name    string
+		tool    string
+		sibling string
+	}{
+		{"lint", "gitlab_ci_lint", "template.lint_project"},
+		{"lint_project", "gitlab_ci_lint_project", "template.lint"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertLintDiscoveryMetadata(t, specs[tc.tool], tc.sibling, tc.tool)
+		})
+	}
+}
+
+// TestActionSpecs_TheTwoLintActionsShareNoDiscoveryText verifies that the two
+// CI lint actions have no usage sentence, description or alias in common.
+//
+// Distinctness is the half of R-META that per-action assertions cannot see: two
+// specs can each be complete and still be copies of one another, which is the
+// state a shared placeholder leaves them in. Asserting the two differ rather
+// than asserting today's wording keeps the test about the property.
+func TestActionSpecs_TheTwoLintActionsShareNoDiscoveryText(t *testing.T) {
+	specs := lintSpecsByTool(t)
+	content, project := specs["gitlab_ci_lint"], specs["gitlab_ci_lint_project"]
+
+	if content.Usage == project.Usage {
+		t.Error("both actions share one Usage sentence, so neither says what it is for")
+	}
+	if content.IndividualTool.Description == project.IndividualTool.Description {
+		t.Error("both actions share one Description")
+	}
+	for _, alias := range content.Aliases {
+		if slices.Contains(project.Aliases, alias) {
+			t.Errorf("alias %q is claimed by both actions, so find cannot choose between them", alias)
+		}
+	}
+}
+
+// TestLintContent_OptionalFields_ReachTheRequestBody verifies that each
+// optional field of [ContentInput] reaches the POST body GitLab is sent, and
+// that one the caller left unset is absent from that body rather than sent
+// empty.
+//
+// The three `if` guards in [LintContent] are the whole of that decision, and
+// nothing asserted it: the suite already passed dry_run, include_jobs and ref
+// and then only read the response, so all three guards could be inverted with
+// every test still green — a caller asking for a dry run would get a real
+// pipeline simulation request without one, and include_jobs would silently
+// stop asking for the expansion the output publishes. The absent half is the
+// same property from the other side: `opts.Ref = &input.Ref` on an empty Ref
+// is a non-nil pointer, which serializes as "ref":"" and asks GitLab to
+// resolve includes against a ref with no name instead of against the default.
+func TestLintContent_OptionalFields_ReachTheRequestBody(t *testing.T) {
+	const yaml = "stages:\n  - test"
+
+	for _, tc := range []struct {
+		name  string
+		input ContentInput
+		want  map[string]any
+	}{
+		{
+			name: "every optional field set",
+			input: ContentInput{
+				ProjectID:   "7",
+				Content:     yaml,
+				DryRun:      new(true),
+				IncludeJobs: new(true),
+				Ref:         "main",
+			},
+			want: map[string]any{"content": yaml, "dry_run": true, "include_jobs": true, "ref": "main"},
+		},
+		{
+			name:  "no optional field set",
+			input: ContentInput{ProjectID: "7", Content: yaml},
+			want:  map[string]any{"content": yaml},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/7/ci/lint" {
+					t.Errorf("request = %s %s, want POST /api/v4/projects/7/ci/lint", r.Method, r.URL.Path)
+				}
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"valid":true,"errors":[],"warnings":[],"includes":[]}`)
+			}))
+
+			if _, err := LintContent(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("request body = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_ValidWithErrors_ListsThemAnyway verifies that a
+// result GitLab marked valid while still reporting errors is rendered with
+// those errors, and never with the note that says there is nothing to report.
+//
+// isEmptyResult decides between the two, and every case that reached it with
+// Valid set carried no errors, so its errors operand was never evaluated false.
+// Under that hole a valid result carrying errors would be answered with "The
+// configuration is valid, with no errors, warnings, includes or jobs.", which
+// contradicts the payload and drops it in the same breath — the reader is told
+// the opposite of what GitLab said and is given nothing to check it against.
+func TestFormatOutputMarkdown_ValidWithErrors_ListsThemAnyway(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		Valid:  true,
+		Errors: []string{"jobs:build config contains unknown keys: sript"},
+	})
+
+	want := "## CI Lint: ✅ Valid\n\n" +
+		"### Errors\n\n" +
+		"| Message |\n| --- |\n" +
+		"| jobs:build config contains unknown keys: sript |\n" +
+		lintFixHints
+	if md != want {
+		t.Errorf("FormatOutputMarkdown(valid with errors)\n got %q\nwant %q", md, want)
 	}
 }

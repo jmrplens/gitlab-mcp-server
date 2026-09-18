@@ -1532,6 +1532,28 @@ const deployKeySentJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","can_pu
 const deployKeyWithoutProjectsJSON = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","can_push":true,` +
 	`"last_used_at":"2026-04-07T08:09:10Z","usage_type":"auth"}`
 
+// The identifying values of one deploy key, each chosen so that no other can
+// be mistaken for it: the public key is not either fingerprint, the MD5
+// fingerprint is not the SHA256 one, and the two dates are different instants.
+// A converter reading a sibling field therefore publishes a value these can
+// tell apart from the right one, which a shared placeholder could not.
+const (
+	deployKeyIdentityPublicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIdentityKeyBody identity@example.com"
+	deployKeyIdentityMD5       = "9f:8e:7d:6c:5b:4a:39:28:17:06:f5:e4:d3:c2:b1:a0"
+	deployKeyIdentitySHA256    = "SHA256:IdentityKeyDigestNotTheMD5One"
+	deployKeyIdentityCreated   = "2026-01-02T03:04:05Z"
+	deployKeyIdentityExpires   = "2027-06-07T08:09:10Z"
+)
+
+// deployKeyIdentityJSON is one deploy key as GitLab renders it, carrying every
+// value above under the key GitLab spells it with.
+const deployKeyIdentityJSON = `{"id":77,"title":"identity-key",` +
+	`"key":"` + deployKeyIdentityPublicKey + `",` +
+	`"fingerprint":"` + deployKeyIdentityMD5 + `",` +
+	`"fingerprint_sha256":"` + deployKeyIdentitySHA256 + `",` +
+	`"created_at":"` + deployKeyIdentityCreated + `",` +
+	`"expires_at":"` + deployKeyIdentityExpires + `","can_push":true}`
+
 // deployKeyClient answers every deploy key endpoint with body, which the
 // caller writes as an array for a list handler and as an object for the rest.
 func deployKeyClient(t *testing.T, body string) *gitlabclient.Client {
@@ -1541,14 +1563,22 @@ func deployKeyClient(t *testing.T, body string) *gitlabclient.Client {
 	}))
 }
 
-// deployKeySent is what a handler published of the fields read off the
-// captured answer, normalized so the project-scoped and instance-scoped
-// handlers can be asserted in one table.
+// deployKeySent is what a handler published of one deploy key, normalized so
+// the project-scoped and instance-scoped handlers can be asserted in one
+// table: the fields read off the captured answer, and the identifying values
+// both converters copy out of the SDK's own struct.
 type deployKeySent struct {
-	lastUsedAt string
-	usageType  string
-	write      []ProjectSummary
-	readonly   []ProjectSummary
+	id                int64
+	title             string
+	key               string
+	fingerprint       string
+	fingerprintSHA256 string
+	createdAt         string
+	expiresAt         string
+	lastUsedAt        string
+	usageType         string
+	write             []ProjectSummary
+	readonly          []ProjectSummary
 }
 
 // errNoDeployKey reports a list handler that answered with no key, which would
@@ -1614,23 +1644,37 @@ var deployKeyCalls = []struct {
 	}},
 }
 
-// projectKeySent reads the captured fields off a project deploy key.
+// projectKeySent reads the published fields off a project deploy key.
 func projectKeySent(out Output) deployKeySent {
 	return deployKeySent{
-		lastUsedAt: out.LastUsedAt,
-		usageType:  out.UsageType,
-		write:      out.ProjectsWithWriteAccess,
-		readonly:   out.ProjectsWithReadonlyAccess,
+		id:                out.ID,
+		title:             out.Title,
+		key:               out.Key,
+		fingerprint:       out.Fingerprint,
+		fingerprintSHA256: out.FingerprintSHA256,
+		createdAt:         out.CreatedAt,
+		expiresAt:         out.ExpiresAt,
+		lastUsedAt:        out.LastUsedAt,
+		usageType:         out.UsageType,
+		write:             out.ProjectsWithWriteAccess,
+		readonly:          out.ProjectsWithReadonlyAccess,
 	}
 }
 
 // instanceKeySent reads the same off an instance deploy key.
 func instanceKeySent(out InstanceOutput) deployKeySent {
 	return deployKeySent{
-		lastUsedAt: out.LastUsedAt,
-		usageType:  out.UsageType,
-		write:      out.ProjectsWithWriteAccess,
-		readonly:   out.ProjectsWithReadonlyAccess,
+		id:                out.ID,
+		title:             out.Title,
+		key:               out.Key,
+		fingerprint:       out.Fingerprint,
+		fingerprintSHA256: out.FingerprintSHA256,
+		createdAt:         out.CreatedAt,
+		expiresAt:         out.ExpiresAt,
+		lastUsedAt:        out.LastUsedAt,
+		usageType:         out.UsageType,
+		write:             out.ProjectsWithWriteAccess,
+		readonly:          out.ProjectsWithReadonlyAccess,
 	}
 }
 
@@ -1671,6 +1715,54 @@ func TestDeployKeys_PublishTheFieldsGitLabSendsBesideTheSDKs(t *testing.T) {
 			if len(sent.readonly) != 1 || sent.readonly[0].ID != 12 ||
 				sent.readonly[0].PathWithNamespace != "group/reader" {
 				t.Errorf("projects_with_readonly_access = %+v, want the one project GitLab sent", sent.readonly)
+			}
+		})
+	}
+}
+
+// TestDeployKeys_PublishEachIdentifyingValueUnderItsOwnField verifies that
+// every handler answering with a deploy key publishes the public key, both
+// fingerprints and both dates under the field GitLab sent each one in.
+//
+// It matters because nothing else in this package reads those values off the
+// wire. The captured-fields table above asserts only what the SDK's structs
+// leave out, and the card tests build an output struct by hand, so both
+// converters could copy a sibling field and every test here would still pass:
+// measured by hand, toInstanceOutput could swap the two fingerprints and drop
+// created_at entirely, and both converters could replace the public key with a
+// constant, with the whole suite green. Each of those gives a caller a wrong
+// answer rather than a missing one — a model matching a local public key
+// against a listing finds nothing, and one told an MD5 fingerprint is the
+// SHA256 digest compares it against the wrong thing.
+func TestDeployKeys_PublishEachIdentifyingValueUnderItsOwnField(t *testing.T) {
+	for _, keyCall := range deployKeyCalls {
+		t.Run(keyCall.name, func(t *testing.T) {
+			sent, err := keyCall.call(deployKeyClient(t, deployKeyBodyFor(keyCall.list, deployKeyIdentityJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", keyCall.name, err)
+			}
+			if sent.id != 77 {
+				t.Errorf("id = %d, want 77", sent.id)
+			}
+			if sent.title != "identity-key" {
+				t.Errorf("title = %q, want %q", sent.title, "identity-key")
+			}
+			for _, field := range []struct {
+				name string
+				got  string
+				want string
+			}{
+				{name: "key", got: sent.key, want: deployKeyIdentityPublicKey},
+				{name: "fingerprint", got: sent.fingerprint, want: deployKeyIdentityMD5},
+				{name: "fingerprint_sha256", got: sent.fingerprintSHA256, want: deployKeyIdentitySHA256},
+				{name: "created_at", got: sent.createdAt, want: deployKeyIdentityCreated},
+				{name: "expires_at", got: sent.expiresAt, want: deployKeyIdentityExpires},
+			} {
+				t.Run(field.name, func(t *testing.T) {
+					if field.got != field.want {
+						t.Errorf("%s = %q, want %q", field.name, field.got, field.want)
+					}
+				})
 			}
 		})
 	}

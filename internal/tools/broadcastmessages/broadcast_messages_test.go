@@ -5,9 +5,12 @@ package broadcastmessages
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -850,4 +853,231 @@ func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// The request a handler builds, rather than the fixture that answers it
+// ---------------------------------------------------------------------------.
+
+// TestBroadcastMessages_ZeroID_RefusedBeforeReachingGitLab verifies that each
+// handler taking a message ID refuses a zero one itself, issuing no request at
+// all. The count is the assertion that matters: a guard narrowed to negative ids
+// would send GitLab `/broadcast_messages/0`, and the 404 that comes back is
+// wrapped with a hint that names `id`, so an error-message assertion alone reads
+// identically for a handler that validates and one that does not.
+func TestBroadcastMessages_ZeroID_RefusedBeforeReachingGitLab(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+		call func(*gitlabclient.Client) error
+	}{
+		{name: "get", want: "broadcast_message_get: id is required", call: func(c *gitlabclient.Client) error {
+			_, err := Get(context.Background(), c, GetInput{ID: 0})
+			return err
+		}},
+		{name: "update", want: "broadcast_message_update: id is required", call: func(c *gitlabclient.Client) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 0, Message: testMessage})
+			return err
+		}},
+		{name: "delete", want: "broadcast_message_delete: id is required", call: func(c *gitlabclient.Client) error {
+			return Delete(context.Background(), c, DeleteInput{ID: 0})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int64
+			// The mock answers every route with a valid message, so a handler
+			// that let the zero id through would succeed rather than fail.
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				testutil.RespondJSON(w, http.StatusOK, messageJSON)
+			}))
+
+			err := tt.call(client)
+			if err == nil {
+				t.Fatal("expected an error for a zero id, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want it to contain %q", err, tt.want)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("requests reaching GitLab = %d, want 0", got)
+			}
+		})
+	}
+}
+
+// TestGet_MessageTimes_PublishedAsSentOrNotAtAll verifies what a message's two
+// instants become in the published item: the RFC 3339 text for the instants
+// GitLab sent, and nothing at all when GitLab sent none. client-go models both
+// as pointers, so the guard around each is what stands between an unscheduled
+// message and a nil dereference inside the handler, and until this test existed
+// no message under test had ever arrived without them.
+func TestGet_MessageTimes_PublishedAsSentOrNotAtAll(t *testing.T) {
+	tests := []struct {
+		name         string
+		body         string
+		wantStartsAt string
+		wantEndsAt   string
+	}{
+		{
+			name:         "sent",
+			body:         `{"id":1,"message":"m","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z"}`,
+			wantStartsAt: "2026-01-01T00:00:00Z",
+			wantEndsAt:   "2026-01-02T00:00:00Z",
+		},
+		{name: "null", body: `{"id":1,"message":"m","starts_at":null,"ends_at":null}`},
+		{name: "absent", body: `{"id":1,"message":"m"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathBroadcastMessage1 || r.Method != http.MethodGet {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+
+			out, err := Get(t.Context(), client, GetInput{ID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.Message.StartsAt != tt.wantStartsAt {
+				t.Errorf("starts_at = %q, want %q", out.Message.StartsAt, tt.wantStartsAt)
+			}
+			if out.Message.EndsAt != tt.wantEndsAt {
+				t.Errorf("ends_at = %q, want %q", out.Message.EndsAt, tt.wantEndsAt)
+			}
+		})
+	}
+}
+
+// TestUpdate_OptionalFields_ReachTheRequestBody verifies that every optional
+// field an update names arrives in the PUT body with the value the caller gave.
+// The response fixture cannot show this: an update that dropped every optional
+// field would be answered by the same fixture, so asserting on the message that
+// comes back asserts the fixture rather than the request GitLab was sent.
+func TestUpdate_OptionalFields_ReachTheRequestBody(t *testing.T) {
+	var body []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathBroadcastMessage1 || r.Method != http.MethodPut {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		body = read
+		testutil.RespondJSON(w, http.StatusOK, messageJSON)
+	}))
+
+	dismiss := false
+	if _, err := Update(t.Context(), client, UpdateInput{
+		ID:                 1,
+		Message:            "Updated all",
+		StartsAt:           "2026-06-01T00:00:00Z",
+		EndsAt:             "2026-06-02T00:00:00Z",
+		Font:               "mono",
+		TargetAccessLevels: []int64{40},
+		TargetPath:         "/admin",
+		BroadcastType:      testBannerType,
+		Dismissable:        &dismiss,
+		Theme:              "red",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	var sent map[string]any
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("decode request body %q: %v", body, err)
+	}
+	tests := []struct {
+		field string
+		want  any
+	}{
+		{field: "message", want: "Updated all"},
+		{field: "starts_at", want: "2026-06-01T00:00:00Z"},
+		{field: "ends_at", want: "2026-06-02T00:00:00Z"},
+		{field: "font", want: "mono"},
+		// GitLab reads the levels as numbers, and a JSON number decodes here as
+		// a float64 whatever the Go type that wrote it.
+		{field: "target_access_levels", want: []any{float64(40)}},
+		{field: "target_path", want: "/admin"},
+		{field: "broadcast_type", want: testBannerType},
+		// False rather than true, so that a handler sending the field only when
+		// it is set fails as loudly as one never sending it.
+		{field: "dismissable", want: false},
+		{field: "theme", want: "red"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.field, func(t *testing.T) {
+			got, ok := sent[tt.field]
+			if !ok {
+				t.Fatalf("request body %s carries no %q", body, tt.field)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("%s = %#v, want %#v", tt.field, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBroadcastMessages_NoTargetAccessLevels_SendNoSuchField verifies that a
+// create or an update naming no access levels leaves `target_access_levels` out
+// of the body entirely. GitLab reads an absent field as "leave the audience
+// alone" and an empty array as "show this to everybody", so the difference
+// between the two spellings is who sees the message.
+func TestBroadcastMessages_NoTargetAccessLevels_SendNoSuchField(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(*gitlabclient.Client) error
+	}{
+		{name: "create", method: http.MethodPost, path: pathBroadcastMessages, call: func(c *gitlabclient.Client) error {
+			_, err := Create(context.Background(), c, CreateInput{Message: testMessage})
+			return err
+		}},
+		{name: "update", method: http.MethodPut, path: pathBroadcastMessage1, call: func(c *gitlabclient.Client) error {
+			_, err := Update(context.Background(), c, UpdateInput{ID: 1, Message: testMessage})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path || r.Method != tt.method {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				read, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+					http.Error(w, "read request body", http.StatusInternalServerError)
+					return
+				}
+				body = read
+				testutil.RespondJSON(w, http.StatusOK, messageJSON)
+			}))
+
+			if err := tt.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			var sent map[string]any
+			if err := json.Unmarshal(body, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", body, err)
+			}
+			if got, ok := sent["target_access_levels"]; ok {
+				t.Errorf("request body %s carries target_access_levels = %#v, want the field to be absent", body, got)
+			}
+		})
+	}
 }

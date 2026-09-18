@@ -413,23 +413,36 @@ func UserAchievementReorder(ctx context.Context, client *gitlabclient.Client, in
 // the caller because the caller has no reason to expect a claim this server
 // publishes to need checking.
 //
-// An award GitLab reports no priority for keeps its place, since there is
-// nothing to rank it by, and the sort is stable so those stay in the order
-// they arrived.
+// An award GitLab reports no priority for goes last, since there is nothing to
+// rank it by, and the sort is stable so those stay in the order they arrived.
 func byPriority(awards []UserAchievement) []UserAchievement {
-	slices.SortStableFunc(awards, func(a, b UserAchievement) int {
-		switch {
-		case a.Priority == nil && b.Priority == nil:
-			return 0
-		case a.Priority == nil:
-			return 1
-		case b.Priority == nil:
-			return -1
-		default:
-			return cmp.Compare(*a.Priority, *b.Priority)
-		}
-	})
+	slices.SortStableFunc(awards, comparePriority)
 	return awards
+}
+
+// comparePriority is the order [byPriority] sorts into: by priority ascending,
+// with an award GitLab reports no priority for after every ranked one, and two
+// unranked awards equivalent so the stable sort leaves them as they arrived.
+//
+// It is a named function rather than a literal inside the sort because the
+// contract it owes [slices.SortStableFunc] cannot be observed through the sort
+// at all. Every sort in the standard library asks one question of a
+// comparator, whether the answer is strictly negative, so an arm returning 1
+// where 0 is owed reorders nothing and passes every test written against the
+// sorted list, at any length, insertion path and merge path alike. Asserting
+// this function directly is what states that two unranked awards are equal
+// rather than merely not out of order.
+func comparePriority(a, b UserAchievement) int {
+	switch {
+	case a.Priority == nil && b.Priority == nil:
+		return 0
+	case a.Priority == nil:
+		return 1
+	case b.Priority == nil:
+		return -1
+	default:
+		return cmp.Compare(*a.Priority, *b.Priority)
+	}
 }
 
 // UserList lists the awards one user holds.

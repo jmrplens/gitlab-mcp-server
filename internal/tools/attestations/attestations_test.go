@@ -21,21 +21,32 @@ import (
 // TestToOutput validates the toOutput conversion function.
 // Covers nil input, full fields with all timestamps, and partial fields
 // where optional time pointers are nil.
+//
+// Each case pins the whole Output, and every field of the populated case
+// carries a value no other field carries — three distinct instants included.
+// That is what makes the mapping assertable at all: a fixture that repeats one
+// value cannot tell a correct wire from a crossed one, and this table replaced
+// one that fed the same instant to all three timestamps and only asked that
+// each came out non-empty. Reading UpdatedAt out of a.CreatedAt, or filling
+// SubjectDigest from a.PredicateType, passed that table and passes no test
+// here.
 func TestToOutput(t *testing.T) {
-	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 7, 20, 8, 30, 0, 0, time.UTC)
+	expires := time.Date(2027, 1, 5, 23, 45, 0, 0, time.UTC)
 
 	tests := []struct {
-		name     string
-		input    *gl.Attestation
-		validate func(t *testing.T, got Output)
+		name  string
+		input *gl.Attestation
+		want  Output
 	}{
 		{
-			name:     "nil attestation returns zero output",
-			input:    nil,
-			validate: assertZeroAttestationOutput,
+			name:  "nil attestation returns zero output",
+			input: nil,
+			want:  Output{},
 		},
 		{
-			name: "all fields populated including all timestamps",
+			name: "every field is read from its own source",
 			input: &gl.Attestation{
 				ID:            42,
 				IID:           7,
@@ -46,11 +57,24 @@ func TestToOutput(t *testing.T) {
 				PredicateType: "https://slsa.dev/provenance/v0.2",
 				SubjectDigest: "sha256:deadbeef",
 				DownloadURL:   "https://gitlab.example.com/download/42",
-				CreatedAt:     &now,
-				UpdatedAt:     &now,
-				ExpireAt:      &now,
+				CreatedAt:     &created,
+				UpdatedAt:     &updated,
+				ExpireAt:      &expires,
 			},
-			validate: assertFullAttestationOutput,
+			want: Output{
+				ID:            42,
+				IID:           7,
+				ProjectID:     10,
+				BuildID:       200,
+				Status:        "success",
+				PredicateKind: "slsa_provenance",
+				PredicateType: "https://slsa.dev/provenance/v0.2",
+				SubjectDigest: "sha256:deadbeef",
+				DownloadURL:   "https://gitlab.example.com/download/42",
+				CreatedAt:     "2026-06-15T12:00:00Z",
+				UpdatedAt:     "2026-07-20T08:30:00Z",
+				ExpireAt:      "2027-01-05T23:45:00Z",
+			},
 		},
 		{
 			name: "nil timestamps remain empty strings",
@@ -58,76 +82,19 @@ func TestToOutput(t *testing.T) {
 				ID:     1,
 				Status: "pending",
 			},
-			validate: assertAttestationOutputWithoutTimestamps,
+			want: Output{
+				ID:     1,
+				Status: "pending",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toOutput(tt.input)
-			tt.validate(t, got)
+			if got := toOutput(tt.input); got != tt.want {
+				t.Errorf("toOutput() = %+v, want %+v", got, tt.want)
+			}
 		})
-	}
-}
-
-func assertZeroAttestationOutput(t *testing.T, got Output) {
-	t.Helper()
-	if got.ID != 0 {
-		t.Errorf("ID = %d, want 0", got.ID)
-	}
-	if got.Status != "" {
-		t.Errorf("Status = %q, want empty", got.Status)
-	}
-}
-
-func assertFullAttestationOutput(t *testing.T, got Output) {
-	t.Helper()
-	assertAttestationIDs(t, got)
-	assertAttestationTimestampsPresent(t, got)
-	if got.DownloadURL != "https://gitlab.example.com/download/42" {
-		t.Errorf("DownloadURL = %q, want download URL", got.DownloadURL)
-	}
-}
-
-func assertAttestationIDs(t *testing.T, got Output) {
-	t.Helper()
-	if got.ID != 42 {
-		t.Errorf("ID = %d, want 42", got.ID)
-	}
-	if got.IID != 7 {
-		t.Errorf("IID = %d, want 7", got.IID)
-	}
-	if got.ProjectID != 10 {
-		t.Errorf("ProjectID = %d, want 10", got.ProjectID)
-	}
-	if got.BuildID != 200 {
-		t.Errorf("BuildID = %d, want 200", got.BuildID)
-	}
-}
-
-func assertAttestationTimestampsPresent(t *testing.T, got Output) {
-	t.Helper()
-	if got.CreatedAt == "" {
-		t.Error("CreatedAt should not be empty")
-	}
-	if got.UpdatedAt == "" {
-		t.Error("UpdatedAt should not be empty")
-	}
-	if got.ExpireAt == "" {
-		t.Error("ExpireAt should not be empty")
-	}
-}
-
-func assertAttestationOutputWithoutTimestamps(t *testing.T, got Output) {
-	t.Helper()
-	if got.CreatedAt != "" {
-		t.Errorf("CreatedAt = %q, want empty", got.CreatedAt)
-	}
-	if got.UpdatedAt != "" {
-		t.Errorf("UpdatedAt = %q, want empty", got.UpdatedAt)
-	}
-	if got.ExpireAt != "" {
-		t.Errorf("ExpireAt = %q, want empty", got.ExpireAt)
 	}
 }
 
@@ -393,7 +360,13 @@ func TestList_CancelledContext(t *testing.T) {
 
 // TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
 // The mock GitLab API at /api/v4/projects/10/attestations/sha256:abc123 (GET) responds with HTTP Forbidden.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that the returned error is wrapped and, unlike the
+// missing-project 404 below, carries no hint about the project id.
+//
+// The hint is attached per status, so which statuses receive it is a property
+// worth pinning from both sides: a 403 is the instance refusing a caller whose
+// project it resolved perfectly well, and telling them to verify the project
+// id would send them after the wrong thing.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/attestations/sha256:abc123" {
@@ -409,6 +382,9 @@ func TestList_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 403 response, got nil")
+	}
+	if strings.Contains(err.Error(), "gitlab_project_get") {
+		t.Errorf("403 error carries the 404-only project hint: %v", err)
 	}
 }
 
@@ -436,6 +412,46 @@ func TestList_NotFoundForExistingProject(t *testing.T) {
 	}
 	if len(out.Attestations) != 0 {
 		t.Fatalf("expected empty attestation list, got %d", len(out.Attestations))
+	}
+}
+
+// TestList_NotFoundForMissingProject_ReturnsTheHintedError holds the other
+// side of the 404 fork that TestList_NotFoundForExistingProject opens. There
+// the project reads back, so a 404 from the attestations endpoint means the
+// digest matched nothing and an empty list is the honest answer. Here the
+// project lookup answers 404 too, so the caller either named a project that
+// does not exist or cannot see the one they named, and an empty list would
+// tell them the project is fine and merely unattested.
+//
+// It matters because nothing held that branch before: the guard could be
+// deleted outright — every 404 answered with an empty list — and the whole
+// suite still passed. The assertion is on the hint rather than on the error
+// being non-nil, since the hint is the part that names what to check and it is
+// attached only when the status is 404.
+func TestList_NotFoundForMissingProject_ReturnsTheHintedError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/10/attestations/sha256:abc123", "/api/v4/projects/10":
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:     toolutil.StringOrInt("10"),
+		SubjectDigest: "sha256:abc123",
+	})
+	if err == nil {
+		t.Fatalf("expected an error for a project that does not read back, got %+v", out)
+	}
+	errText := err.Error()
+	for _, want := range []string{"list attestations", "gitlab_project_get", "Ultimate"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Errorf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

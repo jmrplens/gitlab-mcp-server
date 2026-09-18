@@ -339,9 +339,10 @@ func adminOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	decorateAdminMeta(&options, individualTool)
-	if overrides := adminInputSchemaOverrides(individualTool); len(overrides) > 0 {
-		options.InputSchemaOverrides = overrides
-	}
+	// Assigned unconditionally: nothing above sets InputSchemaOverrides, so the
+	// length guard this replaced wrote nil over nil for every action the switch
+	// does not name and could not change an answer either way.
+	options.InputSchemaOverrides = adminInputSchemaOverrides(individualTool)
 	return options
 }
 
@@ -434,6 +435,17 @@ func decorateAdminMeta(options *toolutil.ActionSpecOptions, individualTool strin
 	if !ok {
 		return
 	}
+	applyAdminMeta(options, meta)
+}
+
+// applyAdminMeta copies onto options the fields this entry states, and only
+// those: a field the entry omits keeps whatever the dedicated builder wrote,
+// which is how the three system-hook entries carry aliases and related actions
+// for an action whose description is written by hand. The preservation is the
+// contract rather than an accident of the table as it stands today, so it is
+// asserted directly instead of through the specs, where no entry omits an
+// alias list and nothing would notice a field being overwritten with nothing.
+func applyAdminMeta(options *toolutil.ActionSpecOptions, meta adminActionMetaEntry) {
 	if meta.usage != "" {
 		options.Usage = meta.usage
 	}

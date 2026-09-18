@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -676,6 +677,171 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected non-empty text content in cancellation result")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the switch, the refusal and the confirmation have to hold
+// ---------------------------------------------------------------------------.
+
+// hintMarker is what toolutil.WrapErrWithHint puts in front of a corrective
+// suggestion, and the only thing that distinguishes a hinted error from a
+// plainly wrapped one. Asserting on it rather than on the hint's wording keeps
+// the test about whether the hint was attached at all.
+const hintMarker = "Suggestion: "
+
+// customAttributeRoutedTypes states which resource_type values the four
+// handlers answer, and the collection each one reaches. It is written here
+// rather than read from validResourceTypes precisely so the two can disagree:
+// an advertised value no case arm answers, and a case arm the refusal never
+// names, are both findings in the test below.
+var customAttributeRoutedTypes = map[string]string{
+	testTypeUser:    "/api/v4/users/1/custom_attributes",
+	testTypeGroup:   "/api/v4/groups/1/custom_attributes",
+	testTypeProject: "/api/v4/projects/1/custom_attributes",
+}
+
+// routedTypesHandler serves the collection of every routed resource type and
+// nothing else, so a type the switch sends anywhere but its own collection
+// fails rather than being quietly answered.
+func routedTypesHandler() http.Handler {
+	mux := http.NewServeMux()
+	for _, path := range customAttributeRoutedTypes {
+		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		})
+	}
+	return mux
+}
+
+// statusHandler answers every request with the given status and a body that
+// says nothing about resources or administration, so what the hint assertions
+// read is the handler's own suggestion rather than GitLab's message.
+func statusHandler(status int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, `{"message":"denied"}`)
+	})
+}
+
+// TestResourceTypes_AdvertisedSetIsTheRoutedSet asserts that the values the
+// refusal advertises and the values the handlers actually route are one set:
+// every routed type is named in the refusal, and every advertised type reaches
+// GitLab.
+//
+// Why it matters: that list is the only place a caller is told what to send,
+// and nothing tied it to the switch that answers. Emptying validResourceTypes
+// left every other test in this file green while a model was handed
+// "must be one of: " and no way to recover; adding a value no case arm answers
+// would advertise a type this server refuses.
+func TestResourceTypes_AdvertisedSetIsTheRoutedSet(t *testing.T) {
+	client := testutil.NewTestClient(t, routedTypesHandler())
+
+	_, err := List(t.Context(), client, ListInput{ResourceType: "nonesuch", ResourceID: 1})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	refusal := err.Error()
+
+	for typ := range customAttributeRoutedTypes {
+		t.Run("named/"+typ, func(t *testing.T) {
+			if !strings.Contains(refusal, typ) {
+				t.Errorf("refusal = %q, want it to name the routed resource_type %q", refusal, typ)
+			}
+		})
+	}
+
+	for _, typ := range validResourceTypes {
+		t.Run("routed/"+typ, func(t *testing.T) {
+			if _, ok := customAttributeRoutedTypes[typ]; !ok {
+				t.Fatalf("validResourceTypes advertises %q, which no handler routes", typ)
+			}
+			if _, listErr := List(t.Context(), client, ListInput{ResourceType: typ, ResourceID: 1}); listErr != nil {
+				t.Errorf("List(%q) = %v, want the advertised type to reach its collection", typ, listErr)
+			}
+		})
+	}
+}
+
+// TestHandlers_NotFoundCarriesTheHint_AnotherStatusDoesNot asserts that each of
+// the four handlers attaches its corrective suggestion exactly when GitLab
+// answers 404, and leaves it off another refusal.
+//
+// Why it matters: the hint is what tells a caller which field to check and
+// that this is an administrator's endpoint, and it is attached by naming one
+// status code. Nothing asserted that code, so all four handlers could name a
+// status GitLab never returns here — dropping the hint from every 404 — while
+// every test in this file kept passing on `err != nil` alone.
+func TestHandlers_NotFoundCarriesTheHint_AnotherStatusDoesNot(t *testing.T) {
+	calls := []struct {
+		name string
+		call func(ctx context.Context, client *gitlabclient.Client) error
+	}{
+		{"list", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := List(ctx, client, ListInput{ResourceType: testTypeUser, ResourceID: 1})
+			return err
+		}},
+		{"get", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Get(ctx, client, GetInput{ResourceType: testTypeGroup, ResourceID: 1, Key: testKeyDept})
+			return err
+		}},
+		{"set", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Set(ctx, client, SetInput{ResourceType: testTypeProject, ResourceID: 1, Key: testKeyDept, Value: "eng"})
+			return err
+		}},
+		{"delete", func(ctx context.Context, client *gitlabclient.Client) error {
+			return Delete(ctx, client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+		}},
+	}
+
+	for _, tt := range calls {
+		t.Run(tt.name, func(t *testing.T) {
+			notFound := tt.call(t.Context(), testutil.NewTestClient(t, statusHandler(http.StatusNotFound)))
+			if notFound == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(notFound.Error(), hintMarker) {
+				t.Errorf("404 error = %q, want it to carry a %q hint", notFound.Error(), hintMarker)
+			}
+			if !strings.Contains(notFound.Error(), testResourceID) {
+				t.Errorf("404 error = %q, want the hint to name %s", notFound.Error(), testResourceID)
+			}
+
+			forbidden := tt.call(t.Context(), testutil.NewTestClient(t, statusHandler(http.StatusForbidden)))
+			if forbidden == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if strings.Contains(forbidden.Error(), hintMarker) {
+				t.Errorf("403 error = %q, want no %q: the hint answers a resource that is not there",
+					forbidden.Error(), hintMarker)
+			}
+		})
+	}
+}
+
+// TestDeleteOutput_IsTheConfirmationEveryDestructiveActionGives asserts that
+// the envelope the delete action answers with is the one toolutil.DeleteResult
+// builds for a custom attribute, rather than a sentence of this package's own.
+//
+// Why it matters: the status token and the sentence are the whole of what a
+// model reads to conclude the attribute is gone, and both were literals nothing
+// compared with anything. Blank them and the caller receives a bare success
+// emoji, since the registered formatter renders the message and nothing else,
+// while every test in this file still passes.
+func TestDeleteOutput_IsTheConfirmationEveryDestructiveActionGives(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/users/1/custom_attributes/dept")
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	_, want, _ := toolutil.DeleteResult("custom_attribute")
+	if got.Status != want.Status || got.Message != want.Message {
+		t.Errorf("DeleteOutput = %+v, want the shared confirmation %+v", got, want)
 	}
 }
 

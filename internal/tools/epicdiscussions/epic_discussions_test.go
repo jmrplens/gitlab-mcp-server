@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -14,6 +15,21 @@ import (
 )
 
 const testFullPath = "my-group"
+
+// The refusals toolutil.ErrRequiredInt64 writes, asserted in full rather than
+// by the field name alone.
+//
+// Every handler's API-failure hint also names the field it validates ("verify
+// full_path + iid with gitlab_epic_list", "verify note_id with
+// gitlab_list_epic_discussions"), so a case asserting only "iid" or "note_id"
+// passes whether the guard refused the value or the request went out and came
+// back an error. That is what let a guard reading `input.IID < 0` instead of
+// `<= 0` sit under a green suite: zero reached GitLab and the failure that came
+// back carried the word the assertion was looking for.
+const (
+	wantEpicIIDRequired = "epic_iid is required (must be > 0)"
+	wantNoteIDRequired  = "note_id is required (must be > 0)"
+)
 
 // GraphQL response fixtures.
 const gqlDiscussionsData = `{
@@ -286,6 +302,361 @@ func TestList_ForwardOnlyPaginationDropsPreviousPage(t *testing.T) {
 	}
 }
 
+// TestHandlers_IdentifierAtZero_RefusedWithoutReachingGitLab verifies that
+// every handler taking a positive identifier refuses zero itself, and that
+// nothing leaves for GitLab when it does.
+//
+// Zero is what an omitted JSON field deserializes to, so it is the value a
+// model produces when it forgets epic_iid or note_id, and `<= 0` rather than
+// `< 0` is the whole of what keeps it out. The suite could not tell the two
+// spellings apart before: each case asserted the bare field name, which every
+// handler's API-failure hint carries as well ("verify full_path + iid with
+// gitlab_epic_list"), so a guard that admitted zero still produced an error
+// with the word in it and the case passed for the wrong reason. Asserting that
+// no request was made states what the guard is for, rather than the shape of
+// whatever came back from letting the value through.
+func TestHandlers_IdentifierAtZero_RefusedWithoutReachingGitLab(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+		call func(t *testing.T, handler http.Handler) error
+	}{
+		{
+			name: "list rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := List(t.Context(), testutil.NewTestClient(t, handler),
+					ListInput{FullPath: testFullPath, IID: 0})
+				return err
+			},
+		},
+		{
+			name: "get rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := Get(t.Context(), testutil.NewTestClient(t, handler),
+					GetInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex"})
+				return err
+			},
+		},
+		{
+			name: "create rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := Create(t.Context(), testutil.NewTestClient(t, handler),
+					CreateInput{FullPath: testFullPath, IID: 0, Body: "test"})
+				return err
+			},
+		},
+		{
+			name: "add_note rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := AddNote(t.Context(), testutil.NewTestClient(t, handler),
+					AddNoteInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex", Body: "test"})
+				return err
+			},
+		},
+		{
+			name: "update_note rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := UpdateNote(t.Context(), testutil.NewTestClient(t, handler),
+					UpdateNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100, Body: "test"})
+				return err
+			},
+		},
+		{
+			name: "update_note rejects note_id",
+			want: wantNoteIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				_, err := UpdateNote(t.Context(), testutil.NewTestClient(t, handler),
+					UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0, Body: "test"})
+				return err
+			},
+		},
+		{
+			name: "delete_note rejects epic_iid",
+			want: wantEpicIIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				return DeleteNote(t.Context(), testutil.NewTestClient(t, handler),
+					DeleteNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100})
+			},
+		},
+		{
+			name: "delete_note rejects note_id",
+			want: wantNoteIDRequired,
+			call: func(t *testing.T, handler http.Handler) error {
+				t.Helper()
+				return DeleteNote(t.Context(), testutil.NewTestClient(t, handler),
+					DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var reached atomic.Bool
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached.Store(true)
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+			})
+
+			err := tc.call(t, handler)
+			if err == nil {
+				t.Fatalf("error = nil, want one containing %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want one containing %q", err, tc.want)
+			}
+			if reached.Load() {
+				t.Error("a request reached GitLab; the identifier guard let zero through")
+			}
+		})
+	}
+}
+
+// TestList_NoteTimestamps_ArePublishedAsGitLabSentThem verifies that a note's
+// createdAt reaches created_at, that an updatedAt GitLab sent reaches
+// updated_at, and that a null updatedAt publishes nothing.
+//
+// Both timestamps are optional in the schema and are dereferenced behind a nil
+// check, so inverting either check publishes an empty string for every note
+// that carries the field and dereferences a nil pointer for every note that
+// does not. Nothing asserted created_at at all until this test: it appeared
+// only in Markdown cases that set it on an output literal, which exercises the
+// renderer and never the decode, so the timestamp a caller uses to order a
+// thread could have gone missing with the suite still green.
+func TestList_NoteTimestamps_ArePublishedAsGitLabSentThem(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsData)
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler),
+		ListInput{FullPath: testFullPath, IID: 5})
+	if err != nil {
+		t.Fatalf("List() error = %v, want nil", err)
+	}
+	if len(out.Discussions) != 1 || len(out.Discussions[0].Notes) != 2 {
+		t.Fatalf("List() = %+v, want one discussion carrying two notes", out.Discussions)
+	}
+
+	notes := out.Discussions[0].Notes
+	if notes[0].CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("notes[0].CreatedAt = %q, want the createdAt GitLab sent", notes[0].CreatedAt)
+	}
+	if notes[0].UpdatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("notes[0].UpdatedAt = %q, want the updatedAt GitLab sent", notes[0].UpdatedAt)
+	}
+	if notes[1].CreatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("notes[1].CreatedAt = %q, want its own createdAt rather than its sibling's", notes[1].CreatedAt)
+	}
+	if notes[1].UpdatedAt != "" {
+		t.Errorf("notes[1].UpdatedAt = %q, want nothing for a note GitLab reports no updatedAt for", notes[1].UpdatedAt)
+	}
+}
+
+// TestList_NoteWithoutACreatedAt_PublishesNothingRatherThanFailing verifies
+// that a note GitLab sends with a null createdAt publishes an empty created_at
+// and keeps the rest of the note.
+//
+// createdAt is nullable on the schema even though a real note always carries
+// one, so the nil check is what stands between a null and a panic in a handler
+// serving a whole thread. Every fixture here carried the field, which left the
+// guard evaluated one way only: it could have been dropped entirely and no
+// test would have noticed until an instance sent a note without it.
+func TestList_NoteWithoutACreatedAt_PublishesNothingRatherThanFailing(t *testing.T) {
+	body := strings.Replace(gqlDiscussionsData, `"createdAt": "2026-01-02T00:00:00Z"`, `"createdAt": null`, 1)
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, body)
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler),
+		ListInput{FullPath: testFullPath, IID: 5})
+	if err != nil {
+		t.Fatalf("List() error = %v, want nil", err)
+	}
+	if len(out.Discussions) != 1 || len(out.Discussions[0].Notes) != 2 {
+		t.Fatalf("List() = %+v, want one discussion carrying two notes", out.Discussions)
+	}
+
+	note := out.Discussions[0].Notes[1]
+	if note.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want nothing for a note GitLab sent no createdAt for", note.CreatedAt)
+	}
+	if note.Body != "reply note" || note.Author != "bob" {
+		t.Errorf("note = %+v, want the rest of it published regardless", note)
+	}
+}
+
+// TestList_NoteIDGitLabSpelledUnparseably_KeepsTheRestOfTheThread verifies that
+// a note whose GID this server cannot parse publishes id 0 and keeps its body,
+// author and the notes around it.
+//
+// The parse is read through `err == nil` before the id is assigned, and every
+// fixture handed it a well-formed GID, so the failing side of that check was
+// never taken. What it decides matters more than the id it drops: the
+// alternative to publishing zero would be failing the whole call, which loses
+// every other note in the thread over one identifier GitLab spelled in a way
+// this server did not expect.
+func TestList_NoteIDGitLabSpelledUnparseably_KeepsTheRestOfTheThread(t *testing.T) {
+	body := strings.Replace(gqlDiscussionsData, "gid://gitlab/Note/100", "gid://gitlab/Note/not-a-number", 1)
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, body)
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler),
+		ListInput{FullPath: testFullPath, IID: 5})
+	if err != nil {
+		t.Fatalf("List() error = %v, want nil", err)
+	}
+	if len(out.Discussions) != 1 || len(out.Discussions[0].Notes) != 2 {
+		t.Fatalf("List() = %+v, want one discussion carrying two notes", out.Discussions)
+	}
+
+	notes := out.Discussions[0].Notes
+	if notes[0].ID != 0 {
+		t.Errorf("notes[0].ID = %d, want 0 for a GID that carries no integer", notes[0].ID)
+	}
+	if notes[0].Body != "first note" {
+		t.Errorf("notes[0].Body = %q, want the note published regardless of its id", notes[0].Body)
+	}
+	if notes[1].ID != 101 {
+		t.Errorf("notes[1].ID = %d, want 101; one unparseable id must not cost its siblings", notes[1].ID)
+	}
+}
+
+// TestList_DiscussionID_IsWhatFollowsTheLastSeparator verifies that the
+// discussion id published is the part after the final slash of the GID,
+// whatever the GID looks like on either side of it.
+//
+// The id published here is the one a caller hands straight back to
+// gitlab_get_epic_discussion and gitlab_add_epic_discussion_note, so a
+// separator left on the front of it would be prefixed again into
+// gid://gitlab/Discussion//d1hex and match no thread. The check that decides
+// this reads `idx >= 0`, and the separator-at-the-first-character case is the
+// only one where reading it as `idx > 0` answers differently: everything else
+// either has the separator further along or has none at all.
+func TestList_DiscussionID_IsWhatFollowsTheLastSeparator(t *testing.T) {
+	cases := []struct {
+		name string
+		gid  string
+	}{
+		{name: "a full GitLab GID", gid: "gid://gitlab/Discussion/d1hex"},
+		{name: "a separator at the first character", gid: "/d1hex"},
+		{name: "no separator at all", gid: "d1hex"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := strings.Replace(gqlDiscussionsData, "gid://gitlab/Discussion/d1hex", tc.gid, 1)
+			handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, body)
+			}})
+
+			out, err := List(context.Background(), testutil.NewTestClient(t, handler),
+				ListInput{FullPath: testFullPath, IID: 5})
+			if err != nil {
+				t.Fatalf("List() error = %v, want nil", err)
+			}
+			if len(out.Discussions) != 1 {
+				t.Fatalf("List() = %+v, want one discussion", out.Discussions)
+			}
+			if got := out.Discussions[0].ID; got != "d1hex" {
+				t.Errorf("discussion ID = %q, want d1hex from GID %q", got, tc.gid)
+			}
+		})
+	}
+}
+
+// TestList_NamespaceWithoutAWorkItem_ReportsTheEpicMissing verifies that a
+// namespace GitLab resolved but whose work item is null is reported as an epic
+// that is not there.
+//
+// GitLab answers a group that exists and an IID that does not with a namespace
+// object carrying a null workItem, which is a different body from the null
+// namespace a missing group produces. Only the second was ever driven here, so
+// the work item half of the guard was never evaluated true and could have been
+// dropped without a failing test, leaving a nil dereference on the ordinary
+// case of a caller mistyping an epic number.
+func TestList_NamespaceWithoutAWorkItem_ReportsTheEpicMissing(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, `{"namespace": {"workItem": null}}`)
+	}})
+
+	out, err := List(context.Background(), testutil.NewTestClient(t, handler),
+		ListInput{FullPath: testFullPath, IID: 999})
+	if err == nil {
+		t.Fatalf("List() = %+v, want an error naming the epic", out)
+	}
+	if !strings.Contains(err.Error(), "epic not found") {
+		t.Errorf("List() error = %v, want it to report the epic missing", err)
+	}
+}
+
+// TestGet_NamespaceWithoutAWorkItem_ReportsTheEpicMissing verifies that Get
+// answers a resolved namespace with a null work item the way List does.
+//
+// Get runs the same document through the same envelope and reaches the same
+// pair of nil checks, so the work item half was unevaluated there for the same
+// reason and would fail the same way: a caller who mistyped an epic number
+// would take the process down rather than be told the epic is not there.
+func TestGet_NamespaceWithoutAWorkItem_ReportsTheEpicMissing(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, `{"namespace": {"workItem": null}}`)
+	}})
+
+	out, err := Get(context.Background(), testutil.NewTestClient(t, handler),
+		GetInput{FullPath: testFullPath, IID: 999, DiscussionID: "d1hex"})
+	if err == nil {
+		t.Fatalf("Get() = %+v, want an error naming the epic", out)
+	}
+	if !strings.Contains(err.Error(), "epic not found") {
+		t.Errorf("Get() error = %v, want it to report the epic missing", err)
+	}
+}
+
+// TestCreate_CreatedNoteWithoutItsDiscussion_PublishesTheNoteAndAnEmptyThreadID
+// verifies that a createNote answer omitting the discussion it opened leaves
+// the thread id empty and still publishes the note.
+//
+// The discussion is what makes this handler a thread opener rather than a note
+// adder, and it is the one field only this document selects, so it is read
+// through a nil check before the GID is split. Every fixture carried it, which
+// left the check evaluated one way only: dereferencing a null discussion would
+// panic inside a mutating handler, after GitLab has already written the note,
+// which is the worst moment for this server to stop being able to answer.
+func TestCreate_CreatedNoteWithoutItsDiscussion_PublishesTheNoteAndAnEmptyThreadID(t *testing.T) {
+	body := strings.Replace(gqlCreateNoteData, `"discussion": {"id": "gid://gitlab/Discussion/d2hex"}`, `"discussion": null`, 1)
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"createNote": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, body)
+		},
+	})
+
+	out, err := Create(context.Background(), testutil.NewTestClient(t, handler),
+		CreateInput{FullPath: testFullPath, IID: 5, Body: "new thread"})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+	if out.ID != "" {
+		t.Errorf("Create() ID = %q, want nothing when GitLab named no discussion", out.ID)
+	}
+	if len(out.Notes) != 1 || out.Notes[0].ID != 200 {
+		t.Errorf("Create() Notes = %+v, want the created note published regardless", out.Notes)
+	}
+}
+
 // TestList verifies the List handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -361,13 +732,13 @@ func TestList(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   ListInput{FullPath: testFullPath, IID: 0},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when iid is negative",
 			input:   ListInput{FullPath: testFullPath, IID: -1},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:  "returns error on API server error",
@@ -479,7 +850,7 @@ func TestGet(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   GetInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when discussion_id is empty",
@@ -591,7 +962,7 @@ func TestCreate(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   CreateInput{FullPath: testFullPath, IID: 0, Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when body is empty",
@@ -745,7 +1116,7 @@ func TestAddNote(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   AddNoteInput{FullPath: testFullPath, IID: 0, DiscussionID: "d1hex", Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when discussion_id is empty",
@@ -884,13 +1255,13 @@ func TestUpdateNote(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   UpdateNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100, Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when note_id is zero",
 			input:   UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0, Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "note_id",
+			wantErr: wantNoteIDRequired,
 		},
 		{
 			name:    "returns error when body is empty",
@@ -990,13 +1361,13 @@ func TestDeleteNote(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   DeleteNoteInput{FullPath: testFullPath, IID: 0, NoteID: 100},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when note_id is zero",
 			input:   DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 0},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "note_id",
+			wantErr: wantNoteIDRequired,
 		},
 		{
 			name:  "returns error on GraphQL mutation errors",

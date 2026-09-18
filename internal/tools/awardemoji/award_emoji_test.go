@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -360,6 +362,79 @@ func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
 	}
 }
 
+// TestCreateMRAwardEmoji_DuplicateByMessage_ReturnsTheExistingAward holds the
+// second half of the condition that decides whether a refused create is worth
+// searching for. GitLab reports "Name has already been taken" under more than
+// one status, so the handler asks both whether the status was 404 and whether
+// the message names a duplicate; every other test sends a 404 whose message
+// also names one, which settles the first question and leaves the second
+// answered by nothing. A duplicate reported as a 400 is the case only this
+// test reaches, and the award already on the merge request is what the caller
+// must get back rather than an error about a name it cannot use.
+func TestCreateMRAwardEmoji_DuplicateByMessage_ReturnsTheExistingAward(t *testing.T) {
+	client := testutil.NewTestClient(t, mrAwardEmojiCreateRefusalHandler(t, http.StatusBadRequest,
+		`{"message":"Name has already been taken"}`, 9))
+
+	out, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: testProjectID, IID: 3, Name: "eyes"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 31 {
+		t.Fatalf("award = %+v, want the existing award with ID 31", out)
+	}
+}
+
+// TestCreateMRAwardEmoji_NotFoundWithNoExistingAward_SurfacesTheRefusal holds
+// the other side of the same branch. A 404 is searched because it is how a
+// duplicate arrives, but it is also how a merge request that is not there
+// arrives, and those are told apart by the search finding nothing. When it
+// finds nothing the original refusal has to reach the caller with the hint that
+// names the merge request, because a handler that swallowed it would answer a
+// missing merge request with a silence the model reads as success.
+func TestCreateMRAwardEmoji_NotFoundWithNoExistingAward_SurfacesTheRefusal(t *testing.T) {
+	client := testutil.NewTestClient(t, mrAwardEmojiCreateRefusalHandler(t, http.StatusNotFound,
+		`{"message":"404 Merge Request Not Found"}`, 3))
+
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: testProjectID, IID: 3, Name: "eyes"})
+	if err == nil {
+		t.Fatal("expected the 404 to reach the caller when no award of the current user matches")
+	}
+	assertErrContains(t, err, "verify the merge request exists with gitlab_mr_get")
+}
+
+// mrAwardEmojiCreateRefusalHandler answers a create with the given refusal and
+// then serves the one page of award emoji the handler searches, attributed to
+// awardUserID. Passing the current user's own ID makes the search succeed and
+// any other ID makes it come up empty, which is the only difference between the
+// two cases above. The list is bounded at one request for the reason
+// [boundedMRAwardEmojiListHandler] carries.
+func mrAwardEmojiCreateRefusalHandler(t *testing.T, status int, body string, awardUserID int) http.HandlerFunc {
+	t.Helper()
+	const emojiPath = testPathAPIProjects + testProjectID + "/merge_requests/3/award_emoji"
+	var lists atomic.Int64
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
+		case r.URL.Path != emojiPath:
+			t.Errorf(fmtUnexpPath, r.URL.Path)
+		case r.Method == http.MethodPost:
+			testutil.RespondJSON(w, status, body)
+		case r.Method == http.MethodGet:
+			if n := lists.Add(1); n > 1 {
+				t.Errorf("list requests = %d, want 1", n)
+				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+				return
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK,
+				`[{"id":31,"name":"eyes","user":{"id":`+strconv.Itoa(awardUserID)+`,"username":"someone"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`,
+				testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "100", Total: "1"})
+		default:
+			t.Errorf("method = %s, want POST or GET", r.Method)
+		}
+	}
+}
+
 // Snippet award emoji tests.
 
 // TestListSnippetAwardEmoji_Success verifies that ListSnippetAwardEmoji succeeds when the GitLab API returns a valid response.
@@ -688,6 +763,26 @@ func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	err = DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: -1})
+	assertErrContains(t, err, testFieldAwardID)
+}
+
+// TestMRAwardEmoji_OmittedIdentifiers_AreRefusedBeforeTheRequest states which
+// side of the guard the MR handlers have to refuse on. A model that leaves an
+// identifier out of its arguments does not send a negative number: the field
+// decodes to 0, so a guard written `< 0` admits every omitted identifier and
+// sends GitLab `merge_request_iid=0` or `award_id=0`, turning a missing
+// argument into an instance-side 404 the model reads as "the award is gone".
+// The other MR cases pass -1 and -5, which both guards refuse either way, so
+// zero is the only value that pins the boundary. [testutil.ForbiddenHandler] is
+// the second half of the assertion: it fails the test if any request was made
+// at all, so this says the refusal happened here rather than at GitLab.
+func TestMRAwardEmoji_OmittedIdentifiers_AreRefusedBeforeTheRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
+	assertErrContains(t, err, testFieldMRIID)
+
+	err = DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
 	assertErrContains(t, err, testFieldAwardID)
 }
 
@@ -1574,6 +1669,93 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdownString_HalfAnAwardable_NamesThePartGitLabSent pins the two
+// cards the other formatter tests cannot reach: an award whose awardable GitLab
+// described by type alone, and one it described by ID alone.
+//
+// Both matter because the awardable is the only identifier that leads back to
+// what was reacted to, so a card that drops the half GitLab did send is worse
+// than one that says nothing. The two halves are also what tells the guard
+// apart from a looser one: with both absent the row is omitted and with both
+// present it reads "Issue (ID 42)", and those two agree under either reading of
+// the condition, so only a card carrying exactly one of them can say whether
+// "type and ID are both missing" was asked as "and" or as "or".
+func TestFormatMarkdownString_HalfAnAwardable_NamesThePartGitLabSent(t *testing.T) {
+	tests := []struct {
+		name string
+		out  Output
+		want string
+	}{
+		{
+			name: "type without an ID",
+			out:  Output{Name: testEmojiThumbsup, AwardableType: "Issue"},
+			want: "## Award Emoji :thumbsup: on Issue\n\n" +
+				"- **ID**: 0\n" +
+				"- **Name**: :thumbsup:\n" +
+				"- **Awarded On**: Issue\n" +
+				cardHintsBlock,
+		},
+		{
+			name: "ID without a type",
+			out:  Output{Name: testEmojiThumbsup, AwardableID: 7},
+			want: "## Award Emoji :thumbsup: on 7\n\n" +
+				"- **ID**: 0\n" +
+				"- **Name**: :thumbsup:\n" +
+				"- **Awarded On**: ID 7\n" +
+				cardHintsBlock,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FormatMarkdownString(tc.out); got != tc.want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatMarkdownString_NoName_WritesNeitherHeadingNorRow pins the card of
+// an award GitLab sent no name for. Both places the name is written guard
+// against that, and each guard exists for a different reason: the cell would
+// otherwise read "::", which is not an emoji anybody can look up, and the
+// heading would otherwise read "Award Emoji :: on Issue 42". Nothing until now
+// sent an unnamed award, so both guards were written and neither was asked.
+func TestFormatMarkdownString_NoName_WritesNeitherHeadingNorRow(t *testing.T) {
+	got := FormatMarkdownString(Output{ID: 10, AwardableType: "Issue", AwardableID: 42})
+
+	want := "## Award Emoji on Issue 42\n\n" +
+		"- **ID**: 10\n" +
+		"- **Awarded On**: Issue (ID 42)\n" +
+		cardHintsBlock
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdownString_UserGitLabDidNotSend_KeepsTheCellAndTheFooterBare
+// pins the row of an award whose user GitLab left out, which is what a list
+// carries once the awarding account is gone. Two things have to follow from it
+// and neither was exercised: the user cell is empty rather than a link to
+// nowhere, and the footer drops the instruction to preserve the table's links,
+// because a table with no links in it has none to preserve and the instruction
+// would send the model looking for them.
+func TestFormatListMarkdownString_UserGitLabDidNotSend_KeepsTheCellAndTheFooterBare(t *testing.T) {
+	out := ListOutput{AwardEmoji: []Output{
+		{ID: 12, Name: testEmojiThumbsup, CreatedAt: "2026-01-01T00:00:00Z", AwardableID: 1, AwardableType: "Issue"},
+	}}
+
+	got := FormatListMarkdownString(out)
+
+	want := "## Award Emoji (1)\n\n" +
+		"| ID | Emoji | User | Awarded |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 12 | :thumbsup: |  | 1 Jan 2026 00:00 UTC |\n" +
+		plainListHintsBlock
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestListIssueAwardEmoji_ForwardsListQuery verifies that order_by, sort, and
 // keyset pagination parameters (mirrored from gl.ListAwardEmojiOptions /
 // gl.ListOptions) are forwarded to the underlying list request.
@@ -1773,18 +1955,7 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
 
-	getTools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
-		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
-		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
-		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
-		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
-	}
-	for _, tc := range getTools {
+	for _, tc := range awardEmojiGetToolCases() {
 		t.Run(tc.name+"_404", func(t *testing.T) {
 			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err != nil {
@@ -1796,6 +1967,37 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 			toolResult := toolutil.MarkdownForResult(res)
 			if toolResult == nil || !toolResult.IsError {
 				t.Fatalf("expected MarkdownForResult to return an error CallToolResult for %s", tc.name)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_GetForbidden_StaysAnError holds the limit of what the
+// not-found wrapper is allowed to absorb. A get route answers a 404 with a card
+// saying the award is not there, which is the right answer to that one status
+// and to no other: answering a 403 the same way tells a model the award was
+// removed when what the token actually lacks is permission, and the model's
+// next step is to award it again. The status is therefore part of the
+// condition, not a detail of it, and this test is what says so for every get
+// route at once.
+func TestActionSpecs_GetForbidden_StaysAnError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"403 Forbidden"}`))
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
+
+	for _, tc := range awardEmojiGetToolCases() {
+		t.Run(tc.name+"_403", func(t *testing.T) {
+			res, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) returned %#v and no error, want the 403 to reach the caller", tc.name, res)
+			}
+			if _, ok := res.(awardEmojiNotFoundOutput); ok {
+				t.Fatalf("Route.Handler(%s) answered a 403 with the not-found card", tc.name)
 			}
 		})
 	}
@@ -1860,6 +2062,21 @@ func TestActionSpecs_CreateErrors(t *testing.T) {
 type awardEmojiActionSpecCase struct {
 	name string
 	args map[string]any
+}
+
+// awardEmojiGetToolCases is the one list of get routes and the arguments that
+// reach them, shared by the tests that ask what a get route does with a 404 and
+// with every other refusal. One list, because the two answers are only
+// comparable if both were asked of the same six routes.
+func awardEmojiGetToolCases() []awardEmojiActionSpecCase {
+	return []awardEmojiActionSpecCase{
+		{"gitlab_issue_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_get", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_get", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_get", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+	}
 }
 
 func assertActionSpecMutationErrors(t *testing.T, method string, cases []awardEmojiActionSpecCase) {
@@ -2011,6 +2228,11 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // flag set to false so that the caller can fall back to creating a new
 // emoji. Without these tests the "err != nil" and "resp == nil || resp.NextPage == 0"
 // branches were never reached, keeping the function below full coverage.
+//
+// The last case counts requests as well as reading the answer, because the
+// answer alone cannot tell the two readings of the exit condition apart: a
+// search that never stops returns nothing either, having asked GitLab for page
+// 0 for as long as anyone waits.
 func TestFindExistingMRAwardEmoji_Branches(t *testing.T) {
 	const mrEmojiPath = testPathAPIProjects + testProjectID + "/merge_requests/3/award_emoji"
 
@@ -2042,18 +2264,8 @@ func TestFindExistingMRAwardEmoji_Branches(t *testing.T) {
 			},
 		},
 		{
-			name: "pagination terminates with resp.NextPage == 0",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/api/v4/user":
-					testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
-				case mrEmojiPath:
-					// Single-page response with NextPage=0.
-					testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"name":"other","user":{"id":1,"username":"u"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "100", Total: "1"})
-				default:
-					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
-				}
-			},
+			name:    "a page naming no next page ends the search in one request",
+			handler: boundedMRAwardEmojiListHandler(t, mrEmojiPath),
 		},
 	}
 
@@ -2072,6 +2284,37 @@ func TestFindExistingMRAwardEmoji_Branches(t *testing.T) {
 				t.Fatalf("expected zero-value Output, got %+v", out)
 			}
 		})
+	}
+}
+
+// boundedMRAwardEmojiListHandler answers one page of award emoji that names no
+// next page, and refuses a second list request rather than answering it.
+//
+// The bound is the assertion. A search whose exit condition is read the wrong
+// way sets the page back to 0 and asks again, for ever; an unbounded fixture
+// would keep answering that loop, so the defect would arrive as a suite that
+// never finishes instead of as a test that fails, and a run that never
+// finishes takes every assertion after it down with it. Refusing the second
+// request names the failure in milliseconds and leaves the rest of the binary
+// to run.
+func boundedMRAwardEmojiListHandler(t *testing.T, emojiPath string) http.HandlerFunc {
+	t.Helper()
+	var lists atomic.Int64
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/user":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
+		case emojiPath:
+			if n := lists.Add(1); n > 1 {
+				t.Errorf("list requests = %d, want 1: a page naming no next page did not end the search", n)
+				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+				return
+			}
+			// Single-page response with NextPage=0.
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"name":"other","user":{"id":1,"username":"u"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "100", Total: "1"})
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}
 }
 

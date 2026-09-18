@@ -803,6 +803,25 @@ func TestUserAchievementReorder_Success(t *testing.T) {
 	}
 }
 
+// reorderedAwardNode is one award in the set the reorder mutation answers with,
+// carrying the priority the caller gives as raw JSON so a test can send the
+// `null` GitLab uses for an award it ranks not at all.
+func reorderedAwardNode(id int64, priority string) string {
+	return fmt.Sprintf(`{
+		"id": "gid://gitlab/Achievements::UserAchievement/%d",
+		"achievement": {"id": "gid://gitlab/Achievements::Achievement/1"},
+		"user": {"id": "gid://gitlab/User/2"},
+		"awardedByUser": {"id": "gid://gitlab/User/3"},
+		"revokedByUser": null,
+		"createdAt": "2025-05-25T13:47:41Z",
+		"updatedAt": "2025-05-25T13:47:41Z",
+		"revokedAt": null,
+		"priority": %s,
+		"showOnProfile": true,
+		"awardMessage": null
+	}`, id, priority)
+}
+
 // TestUserAchievementReorder_Answer_IsSortedByPriority verifies the answer
 // comes back in the order ReorderOutput promises, whatever order GitLab sent.
 //
@@ -812,27 +831,11 @@ func TestUserAchievementReorder_Success(t *testing.T) {
 // false for every caller. The award carrying no priority at all goes last,
 // because nothing ranks it.
 func TestUserAchievementReorder_Answer_IsSortedByPriority(t *testing.T) {
-	priorityNode := func(id int64, priority string) string {
-		return fmt.Sprintf(`{
-			"id": "gid://gitlab/Achievements::UserAchievement/%d",
-			"achievement": {"id": "gid://gitlab/Achievements::Achievement/1"},
-			"user": {"id": "gid://gitlab/User/2"},
-			"awardedByUser": {"id": "gid://gitlab/User/3"},
-			"revokedByUser": null,
-			"createdAt": "2025-05-25T13:47:41Z",
-			"updatedAt": "2025-05-25T13:47:41Z",
-			"revokedAt": null,
-			"priority": %s,
-			"showOnProfile": true,
-			"awardMessage": null
-		}`, id, priority)
-	}
-
 	var vars map[string]any
 	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		keyUAReorder: respond(t, `{"data":{"userAchievementPrioritiesUpdate":{"userAchievements":[`+
-			priorityNode(90, "2")+`,`+priorityNode(91, "0")+`,`+
-			priorityNode(92, "null")+`,`+priorityNode(93, "1")+
+			reorderedAwardNode(90, "2")+`,`+reorderedAwardNode(91, "0")+`,`+
+			reorderedAwardNode(92, "null")+`,`+reorderedAwardNode(93, "1")+
 			`],"errors":[]}}}`, &vars),
 	}))
 
@@ -849,6 +852,83 @@ func TestUserAchievementReorder_Answer_IsSortedByPriority(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("reorder answered awards %v, want %v: by priority, with the unranked one last", got, want)
+	}
+}
+
+// TestUserAchievementReorder_Answer_SendsEveryUnrankedAwardToTheBack verifies
+// that awards GitLab reports no priority for all go behind the ranked ones and
+// keep their arrival order among themselves, whichever position they arrived
+// in.
+//
+// This is the same promise as the test above, asked where that one cannot
+// reach. There the single unranked award arrived third of four, so the order
+// it ends in is also an order a comparator that merely left it alone would
+// produce, and the branch deciding what two unranked awards do relative to
+// each other was never evaluated at all: a comparator declaring an unranked
+// award equal to a ranked one, or swapping two unranked ones, answered that
+// fixture correctly. Here both unranked awards arrive first, so an answer that
+// leaves them where they are, or reverses them, is a different list.
+func TestUserAchievementReorder_Answer_SendsEveryUnrankedAwardToTheBack(t *testing.T) {
+	var vars map[string]any
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		keyUAReorder: respond(t, `{"data":{"userAchievementPrioritiesUpdate":{"userAchievements":[`+
+			reorderedAwardNode(94, "null")+`,`+reorderedAwardNode(95, "null")+`,`+
+			reorderedAwardNode(96, "1")+`,`+reorderedAwardNode(97, "0")+
+			`],"errors":[]}}}`, &vars),
+	}))
+
+	out, err := UserAchievementReorder(t.Context(), client,
+		UserAchievementReorderInput{UserAchievementIDs: []int64{97, 96}})
+	if err != nil {
+		t.Fatalf("UserAchievementReorder() error = %v", err)
+	}
+
+	want := []int64{97, 96, 94, 95}
+	got := make([]int64, 0, len(out.UserAchievements))
+	for _, award := range out.UserAchievements {
+		got = append(got, award.ID)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("reorder answered awards %v, want %v: the ranked ones first, the unranked pair last in arrival order", got, want)
+	}
+}
+
+// TestComparePriority_UnrankedAwards_CompareEqualInBothDirections verifies the
+// ordering byPriority sorts with is the ordering slices.SortStableFunc is owed:
+// a ranked award strictly before an unranked one, an unranked award strictly
+// after a ranked one, and two unranked awards equal whichever way round they
+// are asked.
+//
+// The last of those cannot be reached through the sorted list, which is why it
+// is asserted here. Go's sorts ask a comparator one question, whether its
+// answer is strictly negative, so an ordering that called two unranked awards
+// "a after b" instead of "equal" produces the identical list at every length,
+// measured on this comparator up to sixty awards, across the insertion path and
+// the merge path both. It is still a broken ordering: it is not antisymmetric,
+// nothing in the standard library promises to keep asking only that question,
+// and the promise ReorderOutput publishes rests on it.
+func TestComparePriority_UnrankedAwards_CompareEqualInBothDirections(t *testing.T) {
+	ranked := func(p int64) UserAchievement { return UserAchievement{Priority: &p} }
+	unranked := UserAchievement{}
+
+	cases := []struct {
+		name string
+		a, b UserAchievement
+		want int
+	}{
+		{name: "lower priority first", a: ranked(0), b: ranked(1), want: -1},
+		{name: "higher priority last", a: ranked(2), b: ranked(1), want: 1},
+		{name: "same priority is equal", a: ranked(3), b: ranked(3), want: 0},
+		{name: "ranked before unranked", a: ranked(9), b: unranked, want: -1},
+		{name: "unranked after ranked", a: unranked, b: ranked(9), want: 1},
+		{name: "two unranked are equal", a: unranked, b: unranked, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := comparePriority(tc.a, tc.b); got != tc.want {
+				t.Errorf("comparePriority() = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

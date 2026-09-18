@@ -5,8 +5,10 @@ package commits
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -1472,13 +1474,31 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	if out.ShortID != "opt1" {
 		t.Errorf(fmtOutShortIDWant, out.ShortID, "opt1")
 	}
-	for _, want := range []string{"start_branch", "start_sha", "start_project", "author_email", "author_name", "stats", "force", "actions", "previous_path", "encoding", "execute_filemode"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(capturedBody, want) {
-				t.Errorf("request body missing field %q", want)
-			}
+	body := jsonObject(t, capturedBody)
+	for _, tc := range []struct {
+		key  string
+		want any
+	}{
+		{"start_branch", "main"},
+		{"start_sha", testSHA},
+		{"start_project", "grp/src"},
+		{"author_email", "a@t.com"},
+		{"author_name", "Author"},
+		{"stats", true},
+		{"force", true},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			assertSent(t, body, tc.key, tc.want)
 		})
 	}
+	t.Run("execute_filemode", func(t *testing.T) {
+		actions := sentActions(t, body)
+		if len(actions) != 2 {
+			t.Fatalf("len(actions) = %d, want 2", len(actions))
+		}
+		assertSent(t, actions[1], "execute_filemode", true)
+		assertNotSent(t, actions[0], "execute_filemode")
+	})
 }
 
 // TestCommitCreate_EmptyProjectID verifies the CommitCreate_EmptyProjectID handler.
@@ -1789,11 +1809,21 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	if out.CreatedAt == "" {
 		t.Error("CreatedAt is empty")
 	}
-	for _, want := range []string{"ref", "name", "context", "target_url", "description", "coverage", "pipeline_id"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(capturedBody, want) {
-				t.Errorf("request body missing field %q", want)
-			}
+	body := jsonObject(t, capturedBody)
+	for _, tc := range []struct {
+		key  string
+		want any
+	}{
+		{"ref", "main"},
+		{"name", "deploy"},
+		{"context", "ci/deploy"},
+		{"target_url", testCIURL},
+		{"description", "OK"},
+		{"coverage", 95.5},
+		{"pipeline_id", float64(100)},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			assertSent(t, body, tc.key, tc.want)
 		})
 	}
 }
@@ -2993,5 +3023,533 @@ func TestCommitActionSpecs_DiscoveryMetadata(t *testing.T) {
 				t.Errorf("%s has too few aliases: %v", spec.Name, spec.Aliases)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handler puts on the wire
+//
+// The assertions below read the request rather than the fixture. A commit
+// handler decides, field by field, whether an optional value reaches GitLab at
+// all, and a test that only reads the canned response cannot see that decision
+// go wrong: the handler can send an empty `content`, omit the `previous_path` a
+// move needs, or fill `line` with a zero that GitLab reads as a position, and
+// the fixture answers exactly the same either way.
+// ---------------------------------------------------------------------------.
+
+// capturedRequest is what a handler put on the wire: the body it sent and the
+// query it built. The assertions read it on the test goroutine, after the call
+// has returned.
+type capturedRequest struct {
+	body  string
+	query url.Values
+}
+
+// captureSent answers one method and path with status and response, recording
+// the request it was given. Anything else is a 404, so a handler that builds a
+// different path fails the call instead of being answered anyway.
+func captureSent(t *testing.T, method, path string, status int, response string, sent *capturedRequest) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		sent.body, sent.query = string(body), r.URL.Query()
+		testutil.RespondJSON(w, status, response)
+	}
+}
+
+// jsonObject decodes a recorded request body, which every mutating commit
+// handler sends as one JSON object.
+func jsonObject(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("request body is not a JSON object: %v (body: %s)", err, body)
+	}
+	return decoded
+}
+
+// sentActions returns the action objects of a recorded commit-create body, so
+// an assertion can name which action was supposed to carry a field: the four
+// per-action options are independent decisions, and a body-wide search for a
+// field name is answered by whichever action happens to carry it.
+func sentActions(t *testing.T, object map[string]any) []map[string]any {
+	t.Helper()
+	raw, ok := object["actions"].([]any)
+	if !ok {
+		t.Fatalf("request body carries no actions array: %v", object["actions"])
+	}
+	actions := make([]map[string]any, 0, len(raw))
+	for i, entry := range raw {
+		action, isObject := entry.(map[string]any)
+		if !isObject {
+			t.Fatalf("action %d is not an object: %v", i, entry)
+		}
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+// assertSent fails unless the object carries key with exactly want. Comparing
+// the value rather than looking for the field name is the point: a request that
+// names a field and fills it with a zero passes a name check while telling
+// GitLab something the caller never asked for.
+func assertSent(t *testing.T, object map[string]any, key string, want any) {
+	t.Helper()
+	got, ok := object[key]
+	if !ok {
+		t.Errorf("request omits %q, want %v", key, want)
+		return
+	}
+	if got != want {
+		t.Errorf("request sent %q = %v, want %v", key, got, want)
+	}
+}
+
+// assertNotSent fails when the request carries a value for a key the caller
+// left unset. Absent and null are both "unset" because the SDK option structs
+// disagree about which they use: the commit actions omit a nil field and the
+// comment options marshal it as null, and GitLab reads neither as an
+// instruction. A zero is the shape that matters and is neither of those, since
+// GitLab reads `line: 0` as a position on the diff and `dry_run: false` as an
+// explicit no.
+func assertNotSent(t *testing.T, object map[string]any, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if got, ok := object[key]; ok && got != nil {
+			t.Errorf("request carries %q = %v, which the caller left unset", key, got)
+		}
+	}
+}
+
+// TestCommitCreate_ActionOptions_ReachTheActionThatCarriesThem asserts that
+// each per-action option is sent on the action it was given for and on no
+// other. The four are separate decisions in the handler and GitLab acts on
+// each: a move without `previous_path` is refused, a create whose `content` is
+// dropped writes an empty file, an `encoding` sent for content that is not
+// base64 corrupts it, and a `last_commit_id` sent for the wrong action turns
+// off the stale-write check the caller asked for.
+func TestCommitCreate_ActionOptions_ReachTheActionThatCarriesThem(t *testing.T) {
+	var sent capturedRequest
+	client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, pathRepoCommits,
+		http.StatusCreated, `{"id":"a1","short_id":"a1","title":"t"}`, &sent))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID:     "42",
+		Branch:        "feat",
+		CommitMessage: "t",
+		Actions: []Action{
+			{Action: actionCreate, FilePath: testFileMainGo, Content: "package main", LastCommitID: "prev1"},
+			{Action: "move", FilePath: "new.go", PreviousPath: "old.go", Encoding: "base64"},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtCommitCreateErr, err)
+	}
+
+	actions := sentActions(t, jsonObject(t, sent.body))
+	if len(actions) != 2 {
+		t.Fatalf("len(actions) = %d, want 2", len(actions))
+	}
+	t.Run("create carries its content and last commit id", func(t *testing.T) {
+		assertSent(t, actions[0], "content", "package main")
+		assertSent(t, actions[0], "last_commit_id", "prev1")
+		assertNotSent(t, actions[0], "previous_path", "encoding")
+	})
+	t.Run("move carries its previous path and encoding", func(t *testing.T) {
+		assertSent(t, actions[1], "previous_path", "old.go")
+		assertSent(t, actions[1], "encoding", "base64")
+		assertNotSent(t, actions[1], "content", "last_commit_id")
+	})
+}
+
+// TestPostComment_Position_SentOnlyWhenTheCallerGaveOne asserts that the three
+// fields locating a comment on the diff travel together and only when asked
+// for. GitLab distinguishes a comment on the commit from a comment on a line,
+// and a zero `line` is a position rather than an absence: sending one for a
+// commit-level comment attaches the note to the first line of a file the caller
+// never named, and dropping one from an inline comment moves it off the line.
+func TestPostComment_Position_SentOnlyWhenTheCallerGaveOne(t *testing.T) {
+	const commentsPath = "/api/v4/projects/42/repository/commits/abc/comments"
+	const response = `{"note":"n","author":{"username":"dev"}}`
+
+	t.Run("on a line", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, commentsPath, http.StatusCreated, response, &sent))
+
+		_, err := PostComment(context.Background(), client, PostCommentInput{
+			ProjectID: "42", SHA: "abc", Note: "n",
+			Path: testFileMainGo, Line: 10, LineType: "new",
+		})
+		if err != nil {
+			t.Fatalf("PostComment() unexpected error: %v", err)
+		}
+
+		body := jsonObject(t, sent.body)
+		assertSent(t, body, "path", testFileMainGo)
+		assertSent(t, body, "line", float64(10))
+		assertSent(t, body, "line_type", "new")
+	})
+
+	t.Run("on the commit", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, commentsPath, http.StatusCreated, response, &sent))
+
+		_, err := PostComment(context.Background(), client, PostCommentInput{ProjectID: "42", SHA: "abc", Note: "n"})
+		if err != nil {
+			t.Fatalf("PostComment() unexpected error: %v", err)
+		}
+
+		body := jsonObject(t, sent.body)
+		assertSent(t, body, "note", "n")
+		assertNotSent(t, body, "path", "line", "line_type")
+	})
+}
+
+// TestGetStatuses_PipelineIDFilter_SentOnlyWhenTheCallerGaveOne asserts that a
+// pipeline filter the caller did not ask for never reaches the query. GitLab
+// answers `pipeline_id=0` with the statuses of no pipeline, so a filter sent as
+// its zero turns a listing of every status on a commit into an empty page.
+func TestGetStatuses_PipelineIDFilter_SentOnlyWhenTheCallerGaveOne(t *testing.T) {
+	const statusesPath = "/api/v4/projects/42/repository/commits/abc/statuses"
+
+	t.Run("filtered", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodGet, statusesPath, http.StatusOK, `[]`, &sent))
+
+		if _, err := GetStatuses(context.Background(), client, StatusesInput{
+			ProjectID: "42", SHA: "abc", PipelineID: 100,
+		}); err != nil {
+			t.Fatalf("GetStatuses() unexpected error: %v", err)
+		}
+		if got := sent.query.Get("pipeline_id"); got != "100" {
+			t.Errorf("pipeline_id = %q, want %q", got, "100")
+		}
+	})
+
+	t.Run("unfiltered", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodGet, statusesPath, http.StatusOK, `[]`, &sent))
+
+		if _, err := GetStatuses(context.Background(), client, StatusesInput{ProjectID: "42", SHA: "abc"}); err != nil {
+			t.Fatalf("GetStatuses() unexpected error: %v", err)
+		}
+		if sent.query.Has("pipeline_id") {
+			t.Errorf("query carries pipeline_id = %q, which the caller left unset", sent.query.Get("pipeline_id"))
+		}
+	})
+}
+
+// TestSetStatus_ZeroCoverageAndPipelineID_AreOmittedRatherThanSentAsZero
+// asserts that the two numeric options of a commit status are left out when the
+// caller gave neither. Both are values GitLab records: a `coverage` of zero
+// posted beside a passing build publishes "0% covered" on the merge request,
+// and a `pipeline_id` of zero attaches the status to no pipeline.
+func TestSetStatus_ZeroCoverageAndPipelineID_AreOmittedRatherThanSentAsZero(t *testing.T) {
+	var sent capturedRequest
+	client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, "/api/v4/projects/42/statuses/abc",
+		http.StatusCreated, `{"id":3,"sha":"abc","status":"success"}`, &sent))
+
+	if _, err := SetStatus(context.Background(), client, SetStatusInput{
+		ProjectID: "42", SHA: "abc", State: "success", Name: "build",
+	}); err != nil {
+		t.Fatalf("SetStatus() unexpected error: %v", err)
+	}
+
+	body := jsonObject(t, sent.body)
+	assertSent(t, body, "name", "build")
+	assertNotSent(t, body, "coverage", "pipeline_id")
+}
+
+// TestCherryPick_DryRunAndMessage_SentOnlyWhenAskedFor asserts that the two
+// options of a cherry-pick reach GitLab only when the caller gave them. Both
+// change what GitLab does rather than how it answers: the flag decides whether
+// the branch is written to at all, and the message replaces the original
+// commit's, so an empty one sent in its place lands a commit with no subject.
+func TestCherryPick_DryRunAndMessage_SentOnlyWhenAskedFor(t *testing.T) {
+	const cherryPickPath = "/api/v4/projects/42/repository/commits/abc/cherry_pick"
+	const response = `{"id":"cp1","short_id":"cp1","title":"t"}`
+
+	t.Run("rehearsal with a custom message", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, cherryPickPath, http.StatusCreated, response, &sent))
+
+		if _, err := CherryPick(context.Background(), client, CherryPickInput{
+			ProjectID: "42", SHA: "abc", Branch: "main", DryRun: true, Message: "backport: fix",
+		}); err != nil {
+			t.Fatalf("CherryPick() unexpected error: %v", err)
+		}
+		body := jsonObject(t, sent.body)
+		assertSent(t, body, "dry_run", true)
+		assertSent(t, body, "message", "backport: fix")
+	})
+
+	t.Run("for real, keeping the original message", func(t *testing.T) {
+		var sent capturedRequest
+		client := testutil.NewTestClient(t, captureSent(t, http.MethodPost, cherryPickPath, http.StatusCreated, response, &sent))
+
+		if _, err := CherryPick(context.Background(), client, CherryPickInput{
+			ProjectID: "42", SHA: "abc", Branch: "main",
+		}); err != nil {
+			t.Fatalf("CherryPick() unexpected error: %v", err)
+		}
+		body := jsonObject(t, sent.body)
+		assertSent(t, body, "branch", "main")
+		assertNotSent(t, body, "dry_run", "message")
+	})
+}
+
+// TestListMRsByCommit_MergeRequestWithoutAnAuthor_LeavesTheAuthorEmpty pins the
+// handler against a merge request GitLab sent no author for, which it does for
+// one raised by a user since deleted. The guard around the author is the only
+// thing between that response and a nil dereference, and nothing else in the
+// package reads a merge request with no author.
+func TestListMRsByCommit_MergeRequestWithoutAnAuthor_LeavesTheAuthorEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/merge_requests" {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id":1,"iid":1,"title":"Orphan","state":"merged","author":null},
+				{"id":2,"iid":2,"title":"Owned","state":"opened","author":{"username":"dev"}}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListMRsByCommit(context.Background(), client, MRsByCommitInput{ProjectID: "42", SHA: "abc"})
+	if err != nil {
+		t.Fatalf("ListMRsByCommit() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 2 {
+		t.Fatalf("len(MergeRequests) = %d, want 2", len(out.MergeRequests))
+	}
+	if out.MergeRequests[0].Author != "" {
+		t.Errorf("Author = %q, want empty for a merge request GitLab sent no author for", out.MergeRequests[0].Author)
+	}
+	if out.MergeRequests[1].Author != "dev" {
+		t.Errorf(fmtAuthorWant, out.MergeRequests[1].Author, "dev")
+	}
+}
+
+// TestGetComments_AuthorKnownOnlyByEmail_IsStillPublished pins the one shape
+// that decides whether an author object is published at all: a commit comment
+// whose author GitLab identifies by address alone, which is what an unregistered
+// committer looks like. Treating that as an empty author drops the only thing
+// the reader has to go on.
+func TestGetComments_AuthorKnownOnlyByEmail_IsStillPublished(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/comments" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"note":"n","author":{"email":"nobody@example.com"}}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetComments(context.Background(), client, CommentsInput{ProjectID: "42", SHA: "abc"})
+	if err != nil {
+		t.Fatalf("GetComments() unexpected error: %v", err)
+	}
+	if len(out.Comments) != 1 {
+		t.Fatalf("len(Comments) = %d, want 1", len(out.Comments))
+	}
+	author := out.Comments[0].Author
+	if author == nil {
+		t.Fatal("author dropped for a comment GitLab identified by email alone")
+	}
+	if author.Email != "nobody@example.com" {
+		t.Errorf("Email = %q, want %q", author.Email, "nobody@example.com")
+	}
+}
+
+// TestFormatOutputMarkdown_AuthorIdentity pins each of the four shapes a commit
+// author arrives in. A commit records whatever the committer's git configuration
+// held, so either half can be missing, and the card must name what there is
+// rather than write a stray "(...)" or drop the person entirely.
+func TestFormatOutputMarkdown_AuthorIdentity(t *testing.T) {
+	cases := []struct {
+		name  string
+		who   string
+		email string
+		want  string
+	}{
+		{name: "name and address", who: "Alice", email: "a@t.com", want: "\n- **Author**: Alice (a@t.com)\n"},
+		{name: "name alone", who: "Alice", want: "\n- **Author**: Alice\n"},
+		{name: "address alone", email: "a@t.com", want: "\n- **Author**: a@t.com\n"},
+		{name: "neither", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatOutputMarkdown(Output{ShortID: "abc12", AuthorName: tc.who, AuthorEmail: tc.email})
+
+			want := "## Commit abc12\n" + tc.want + commitCardHints
+			if got != want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_PartialPipeline pins the pipeline row where GitLab
+// filled only part of it. The commit's own status and its pipeline's are
+// separate fields and either can be empty, and a pipeline GitLab reported
+// without an id has nothing to link to: each combination has to render the half
+// that exists rather than a glyph with no word or a link to nowhere.
+func TestFormatOutputMarkdown_PartialPipeline(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   string
+		pipeline *LastPipelineOutput
+		want     string
+	}{
+		{
+			name:     "pipeline without a status falls back to the commit's",
+			status:   "success",
+			pipeline: &LastPipelineOutput{ID: 77, WebURL: "https://gitlab.example.com/-/pipelines/77"},
+			want:     "- **Pipeline**: ✅ success [#77](https://gitlab.example.com/-/pipelines/77)\n",
+		},
+		{
+			name:     "pipeline without an id is named but not linked",
+			status:   "",
+			pipeline: &LastPipelineOutput{Status: "failed"},
+			want:     "- **Pipeline**: ❌ failed\n",
+		},
+		{
+			name:     "pipeline with neither status is the link alone",
+			status:   "",
+			pipeline: &LastPipelineOutput{ID: 77, WebURL: "https://gitlab.example.com/-/pipelines/77"},
+			want:     "- **Pipeline**: [#77](https://gitlab.example.com/-/pipelines/77)\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatOutputMarkdown(Output{ShortID: "abc12", Status: tc.status, LastPipeline: tc.pipeline})
+
+			want := "## Commit abc12\n\n" + tc.want + commitCardHints
+			if got != want {
+				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_CommitWithOnlyAnID_IsNotReportedAsNoCommit pins the
+// other side of the dry-run card: the "no commit" note answers a response that
+// carries no commit at all, so a commit GitLab identified by its full SHA alone
+// must still render as one. Reading a commit as absent would tell a caller
+// their cherry-pick committed nothing when it did.
+func TestFormatOutputMarkdown_CommitWithOnlyAnID_IsNotReportedAsNoCommit(t *testing.T) {
+	got := FormatOutputMarkdown(Output{ID: "abc12de34f", Title: "feat: init"})
+
+	if strings.Contains(got, "No Commit Created") {
+		t.Errorf("a commit GitLab identified by id was rendered as no commit:\n%s", got)
+	}
+	if !strings.Contains(got, "- **Title**: feat: init\n") {
+		t.Errorf("card omits the commit's title:\n%s", got)
+	}
+}
+
+// TestFormatDetailMarkdown_NoMessage_WritesNoMessageBlock pins a commit whose
+// message GitLab did not send. The card quotes the message only when it says
+// more than the title, and an empty one must write no block rather than an
+// empty quotation a reader would take for a message that is blank on purpose.
+func TestFormatDetailMarkdown_NoMessage_WritesNoMessageBlock(t *testing.T) {
+	got := FormatDetailMarkdown(DetailOutput{ShortID: "x", Title: "t"})
+
+	want := "## Commit x\n\n" +
+		"- **Title**: t\n" +
+		commitDetailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatCommentMarkdown_AuthorWithoutAUsername_FallsBackToTheirName pins
+// the author row of a comment GitLab sent no handle for. "@" alone names
+// nobody, so the card writes the display name instead; this is the only path
+// through the handle helper that the username does not satisfy.
+func TestFormatCommentMarkdown_AuthorWithoutAUsername_FallsBackToTheirName(t *testing.T) {
+	got := FormatCommentMarkdown(CommentOutput{Author: &BasicUserOutput{Name: "Alice Doe"}, Note: "OK"})
+
+	want := "## Commit Comment\n\n" +
+		"- **Author**: Alice Doe\n" +
+		"- **Note**: OK\n" +
+		commitCommentHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatStatusesMarkdown_StatusWithoutAState_LeavesTheCellEmpty pins a
+// status row GitLab sent no state for. The glyph is chosen from the state, so
+// rendering one anyway would put a verdict in the table that GitLab never gave.
+func TestFormatStatusesMarkdown_StatusWithoutAState_LeavesTheCellEmpty(t *testing.T) {
+	got := FormatStatusesMarkdown(StatusesOutput{
+		Statuses: []StatusOutput{{ID: 1, Name: "build", Ref: "main"}},
+	})
+
+	want := "## Commit Statuses (1)\n\n" +
+		"| ID | Status | Name | Ref | Description |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 |  | build | main |  |\n" +
+		commitStatusesHints
+
+	if got != want {
+		t.Errorf("statuses mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMRsByCommitMarkdown_MergeRequestWithoutAState_LeavesTheCellEmpty
+// pins the state cell of a merge request GitLab sent no state for, for the same
+// reason as the status glyph: the emoji is the state, so writing one without
+// one tells the reader the merge request is in a state nobody reported.
+func TestFormatMRsByCommitMarkdown_MergeRequestWithoutAState_LeavesTheCellEmpty(t *testing.T) {
+	got := FormatMRsByCommitMarkdown(MRsByCommitOutput{
+		MergeRequests: []BasicMROutput{{
+			IID: 1, Title: "Feature", SourceBranch: "feat", TargetBranch: "main", Author: "dev",
+			WebURL: "https://gitlab.example.com/-/merge_requests/1",
+		}},
+	})
+
+	want := "## Merge Requests for Commit (1)\n\n" +
+		"| IID | Title | State | Source -> Target | Author |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| [!1](https://gitlab.example.com/-/merge_requests/1) | Feature |  | feat -> main | dev |\n" +
+		commitMRsHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestCommitOptionsForAction_UnknownAction_KeepsTheSharedDefaults pins what an
+// action name the metadata switch does not know is given. Every one of the
+// fourteen actions has a case today, so the fallthrough is reachable only by a
+// fifteenth added without one: it must still carry the project guidance and the
+// owning package every surface projects from, and say plainly that it has no
+// usage text of its own rather than inheriting the previous action's.
+func TestCommitOptionsForAction_UnknownAction_KeepsTheSharedDefaults(t *testing.T) {
+	options := commitOptionsForAction("commit_not_yet_described", "gitlab_commit_future")
+
+	if options.Usage != "Use to execute a commits domain action." {
+		t.Errorf("Usage = %q, want the shared default", options.Usage)
+	}
+	if options.OwnerPackage != "commits" {
+		t.Errorf("OwnerPackage = %q, want %q", options.OwnerPackage, "commits")
+	}
+	if _, ok := options.ParameterGuidance[argProjectID]; !ok {
+		t.Errorf("ParameterGuidance omits %q: %v", argProjectID, options.ParameterGuidance)
+	}
+	if options.IndividualTool.Name != "gitlab_commit_future" {
+		t.Errorf("IndividualTool.Name = %q, want %q", options.IndividualTool.Name, "gitlab_commit_future")
 	}
 }

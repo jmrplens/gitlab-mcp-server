@@ -4,6 +4,8 @@
 package appearance
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -287,6 +289,126 @@ func TestUpdate_AllFields(t *testing.T) {
 	if out.Appearance.Title != "GitLab CE" {
 		t.Errorf("expected response title, got %q", out.Appearance.Title)
 	}
+}
+
+// TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet verifies that the
+// PUT Update builds carries every field the caller filled in, under the name
+// GitLab spells it and with the value they gave, and names no field they left
+// alone.
+//
+// Why it matters: the copy into the SDK options is eighteen independent
+// guards, and until this test nothing here ever looked at the request. Every
+// other assertion reads the response, which is GitLab's echo of its own state
+// and says nothing about what we asked for. One guard inverted is silent in
+// both directions and damaging in both: a caller who sets `title` sends no
+// title, so GitLab keeps the old one while the tool reports the change
+// applied; and a caller who leaves `favicon` alone sends `favicon: ""`, which
+// clears the instance favicon nobody asked to touch. Every value below is
+// distinct, so a field copied from the wrong input field fails too.
+func TestUpdate_RequestBody_NamesExactlyTheFieldsTheCallerSet(t *testing.T) {
+	enabled := true
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{
+			name: "every field set",
+			input: UpdateInput{
+				Title:                       "New Title",
+				Description:                 "New Desc",
+				PWAName:                     "MyApp",
+				PWAShortName:                "MA",
+				PWADescription:              "Progressive",
+				PWAIcon:                     "/uploads/pwa.png",
+				Logo:                        "/uploads/logo.png",
+				HeaderLogo:                  "/uploads/header.png",
+				Favicon:                     "/uploads/favicon.ico",
+				URL:                         "https://example.com",
+				HeaderMessage:               "Header",
+				FooterMessage:               "Footer",
+				MessageBackgroundColor:      "#000000",
+				MessageFontColor:            "#ffffff",
+				EmailHeaderAndFooterEnabled: &enabled,
+				MemberGuidelines:            "Be kind",
+				NewProjectGuidelines:        "Name it well",
+				ProfileImageGuidelines:      "Use a face",
+			},
+			want: map[string]any{
+				"title":                           "New Title",
+				"description":                     "New Desc",
+				"pwa_name":                        "MyApp",
+				"pwa_short_name":                  "MA",
+				"pwa_description":                 "Progressive",
+				"pwa_icon":                        "/uploads/pwa.png",
+				"logo":                            "/uploads/logo.png",
+				"header_logo":                     "/uploads/header.png",
+				"favicon":                         "/uploads/favicon.ico",
+				"url":                             "https://example.com",
+				"header_message":                  "Header",
+				"footer_message":                  "Footer",
+				"message_background_color":        "#000000",
+				"message_font_color":              "#ffffff",
+				"email_header_and_footer_enabled": true,
+				"member_guidelines":               "Be kind",
+				"new_project_guidelines":          "Name it well",
+				"profile_image_guidelines":        "Use a face",
+			},
+		},
+		{
+			// An appearance field GitLab is not told about keeps its current
+			// value, so "the caller set nothing" has to reach GitLab as an
+			// empty object rather than as eighteen empty strings.
+			name:  "nothing set",
+			input: UpdateInput{},
+			want:  map[string]any{},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var raw []byte
+			var readErr error
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/application/appearance" || r.Method != http.MethodPut {
+					http.NotFound(w, r)
+					return
+				}
+				raw, readErr = io.ReadAll(r.Body)
+				testutil.RespondJSON(w, http.StatusOK, appearanceJSON)
+			}))
+
+			if _, err := Update(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("Update() error: %v", err)
+			}
+			if readErr != nil {
+				t.Fatalf("reading the request body: %v", readErr)
+			}
+
+			got := map[string]any{}
+			if body := strings.TrimSpace(string(raw)); body != "" {
+				if err := json.Unmarshal([]byte(body), &got); err != nil {
+					t.Fatalf("the request body is not a JSON object: %v (%s)", err, body)
+				}
+			}
+			// Marshaled rather than compared as maps so both sides print with
+			// their keys in one order and a difference is readable.
+			if gotJSON, wantJSON := mustJSON(t, got), mustJSON(t, tc.want); gotJSON != wantJSON {
+				t.Errorf("Update() sent\n%s\nwant\n%s", gotJSON, wantJSON)
+			}
+		})
+	}
+}
+
+// mustJSON renders a decoded request body for comparison, with the keys in the
+// one order encoding/json gives a map.
+func mustJSON(t *testing.T, v map[string]any) string {
+	t.Helper()
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Fatalf("marshaling %v: %v", v, err)
+	}
+	return string(b)
 }
 
 // ---------------------------------------------------------------------------

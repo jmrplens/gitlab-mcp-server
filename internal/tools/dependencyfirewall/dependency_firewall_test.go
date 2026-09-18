@@ -18,6 +18,22 @@ import (
 // URL-encoded on the wire; net/http hands the handler the decoded path.
 const evaluatePath = "/api/v4/projects/group/project/dependency_firewall/evaluate"
 
+// TestFeatureFlag_NamesTheFlagGitLabServesTheAPIBehind pins the feature flag's
+// spelling to the literal GitLab uses.
+//
+// The name is the whole value of the 404 guidance: it is what the caller is
+// told to ask an administrator about, and an administrator given a flag that
+// does not exist finds nothing and concludes the endpoint is unavailable. Every
+// other assertion about it reads FeatureFlag and compares it with text the same
+// constant produced, so a typo would move both sides of those comparisons and
+// fail nothing. Nothing else in the Go source holds the spelling either: the
+// documentation mentions it in prose, which no gate compares with this package.
+func TestFeatureFlag_NamesTheFlagGitLabServesTheAPIBehind(t *testing.T) {
+	if FeatureFlag != "dependency_firewall_phase1" {
+		t.Errorf("FeatureFlag = %q, want %q (GitLab 19.4, disabled by default)", FeatureFlag, "dependency_firewall_phase1")
+	}
+}
+
 // TestEvaluatePackage_BlockedOutcome verifies that a blocked verdict is
 // decoded with its reason, and that the request GitLab receives carries the
 // method, path and JSON body the API documents.
@@ -222,6 +238,54 @@ func TestEvaluatePackage_ValidationErrors(t *testing.T) {
 				t.Errorf("EvaluatePackage() error = %q, want it to contain %q", err, tt.wantSub)
 			}
 		})
+	}
+}
+
+// TestEvaluatePackage_CoordinateAtTheDocumentedMaximumIsAccepted verifies that
+// a name and a version of exactly maxCoordinateLength characters are accepted
+// and reach GitLab whole.
+//
+// The bound is documented as "maximum 255 characters", so 255 is the longest
+// value GitLab takes, and the check here exists to name the offending field
+// instead of letting the instance answer 400. A guard that refused the
+// boundary would refuse a coordinate GitLab accepts, and would say so in a
+// message contradicting itself ("must be at most 255 characters, got 255"),
+// which a caller cannot act on. The other tests bound the guard only from
+// above, with maxCoordinateLength+1, so both sides of the comparison move
+// together and the one length that decides between "at most" and "fewer than"
+// was never sent.
+func TestEvaluatePackage_CoordinateAtTheDocumentedMaximumIsAccepted(t *testing.T) {
+	longName := strings.Repeat("a", maxCoordinateLength)
+	longVersion := strings.Repeat("9", maxCoordinateLength)
+
+	var sentName, sentVersion string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var sent map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		sentName, _ = sent["name"].(string)
+		sentVersion, _ = sent["version"].(string)
+		testutil.RespondJSON(w, http.StatusOK, `{"outcome":"allowed","reason":null}`)
+	}))
+
+	out, err := EvaluatePackage(t.Context(), client, EvaluatePackageInput{
+		ProjectID: "group/project",
+		Ecosystem: "npm",
+		Name:      longName,
+		Version:   longVersion,
+	})
+	if err != nil {
+		t.Fatalf("EvaluatePackage() error = %v, want a %d-character coordinate to be accepted", err, maxCoordinateLength)
+	}
+	if out.Outcome != outcomeAllowed {
+		t.Errorf("Outcome = %q, want %q", out.Outcome, outcomeAllowed)
+	}
+	if sentName != longName {
+		t.Errorf("name sent has %d characters, want the %d the caller passed", len(sentName), len(longName))
+	}
+	if sentVersion != longVersion {
+		t.Errorf("version sent has %d characters, want the %d the caller passed", len(sentVersion), len(longVersion))
 	}
 }
 

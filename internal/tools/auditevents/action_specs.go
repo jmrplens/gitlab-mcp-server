@@ -17,6 +17,13 @@ const (
 	actionGetProject   = "audit_event.get_project"
 )
 
+// sharedAuditUsage is the placeholder every audit event spec starts with and
+// that decorateAuditEventMeta is expected to replace. It is named rather than
+// written inline so a test can say "no registered action still carries it",
+// which is the only way a spec whose decoration case was never written shows
+// up as anything other than a working route.
+const sharedAuditUsage = "Use to execute auditevents domain action."
+
 // ActionSpecs returns canonical specs for audit event actions. The
 // instance/group/project list and get routes are projected into the
 // dynamic, meta, individual, and audit surfaces by the action catalog
@@ -43,7 +50,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func auditEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Aliases:        []string{individualTool},
-		Usage:          "Use to execute auditevents domain action.",
+		Usage:          sharedAuditUsage,
 		Tags:           []string{"audit", "event"},
 		OpenWorld:      true,
 		Edition:        "premium",

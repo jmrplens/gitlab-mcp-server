@@ -52,6 +52,17 @@ func decorateCatalogMeta(options *toolutil.ActionSpecOptions, individualTool str
 	if !ok {
 		return
 	}
+	applyCatalogMeta(options, meta)
+}
+
+// applyCatalogMeta copies across only the fields the entry actually carries,
+// so an entry that sets some of them leaves the rest of the generic options
+// standing rather than blanking them. It is separate from
+// [decorateCatalogMeta] because that per-field rule is the whole contract of
+// the entry type and is invisible through [catalogActionMeta], where every
+// entry happens to be complete: a guard that drops out of the tree with no
+// test failing is a guard nothing holds.
+func applyCatalogMeta(options *toolutil.ActionSpecOptions, meta catalogActionMetaEntry) {
 	if meta.usage != "" {
 		options.Usage = meta.usage
 	}

@@ -6,6 +6,7 @@ package bulkimports
 import (
 	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -81,6 +82,93 @@ func TestStartMigration_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// assertEntityFlag fails the test when the migration entity GitLab received
+// does not carry flag with exactly the value the caller asked for.
+func assertEntityFlag(t *testing.T, entity map[string]any, flag string, want bool) {
+	t.Helper()
+	got, ok := entity[flag]
+	if !ok {
+		t.Errorf("%s is missing from the entity sent, want %v", flag, want)
+		return
+	}
+	if got != want {
+		t.Errorf("%s = %v, want %v", flag, got, want)
+	}
+}
+
+// assertEntityFlagAbsent fails the test when a flag the caller left unset was
+// sent anyway, which would decide for them whatever GitLab's own default is.
+func assertEntityFlagAbsent(t *testing.T, entity map[string]any, flag string) {
+	t.Helper()
+	if got, ok := entity[flag]; ok {
+		t.Errorf("%s = %v was sent, want it omitted", flag, got)
+	}
+}
+
+// TestStartMigration_MigrateFlags_ReachTheRequestBody asserts that the optional
+// per-entity flags a caller sets are in the body GitLab receives, with the
+// values they were given, and that an entity setting neither carries neither.
+//
+// Why it matters: both flags are copied under a `!= nil` guard and no other
+// test in this package ever sets one, so the guard could be inverted with no
+// visible effect here: a caller asking to migrate projects would be sent an
+// entity that says nothing, and GitLab's default would silently decide. The
+// two halves are asserted together because dropping a flag that was set and
+// inventing one that was not are different defects, and only the body shows
+// both. `migrate_memberships` is deliberately set to false rather than true:
+// an explicit no is the value most easily lost on the way out, and losing it
+// reads as the caller never having expressed one.
+func TestStartMigration_MigrateFlags_ReachTheRequestBody(t *testing.T) {
+	var seen atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen.Add(1)
+		var body struct {
+			Entities []map[string]any `json:"entities"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "decode body", http.StatusInternalServerError)
+			return
+		}
+		if len(body.Entities) != 2 {
+			t.Errorf("entities sent = %d, want 2", len(body.Entities))
+			http.Error(w, "entities", http.StatusInternalServerError)
+			return
+		}
+		assertEntityFlag(t, body.Entities[0], "migrate_projects", true)
+		assertEntityFlag(t, body.Entities[0], "migrate_memberships", false)
+		assertEntityFlagAbsent(t, body.Entities[1], "migrate_projects")
+		assertEntityFlagAbsent(t, body.Entities[1], "migrate_memberships")
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"status":"created"}`)
+	}))
+
+	migrate, keep := true, false
+	if _, err := StartMigration(t.Context(), client, StartMigrationInput{
+		Configuration: ConfigurationInput{URL: "https://source.gitlab.com", AccessToken: "glpat-test"},
+		Entities: []EntityInput{
+			{
+				SourceType:           "group_entity",
+				SourceFullPath:       "flagged",
+				DestinationSlug:      "flagged",
+				DestinationNamespace: "ns",
+				MigrateProjects:      &migrate,
+				MigrateMemberships:   &keep,
+			},
+			{
+				SourceType:           "group_entity",
+				SourceFullPath:       "bare",
+				DestinationSlug:      "bare",
+				DestinationNamespace: "ns",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("StartMigration: %v", err)
+	}
+	if got := seen.Load(); got != 1 {
+		t.Errorf("requests reaching GitLab = %d, want 1 (the body assertions ran nowhere else)", got)
 	}
 }
 
@@ -344,13 +432,81 @@ func TestGet_OK(t *testing.T) {
 	}
 }
 
-// TestGet_RequiresID verifies the Get_RequiresID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestGet_RequiresID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	if _, err := Get(t.Context(), client, GetInput{}); err == nil {
-		t.Fatal("expected error for missing id")
+// TestBulkImports_RequiredIDOmitted_RefusedWithoutReachingGitLab asserts that
+// every handler guarding a required identifier answers an omitted one with the
+// required-field error, and sends GitLab nothing at all.
+//
+// Why it matters: an omitted id arrives as zero rather than as a negative
+// number, so the guard has to read `<= 0`. Relaxed to `< 0` the zero sails
+// through and the handler asks GitLab for `/bulk_imports/0`, whose 404 reaches
+// the caller as "verify the migration id with gitlab_list_bulk_imports" — a
+// model is told the migration does not exist when what happened is that it
+// never named one, and a request went out that had no business being made.
+// Asserting only that some error came back cannot tell those apart, since both
+// are non-nil; the error's own text and the silence on the wire can.
+func TestBulkImports_RequiredIDOmitted_RefusedWithoutReachingGitLab(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+
+	cases := []struct {
+		name string
+		call func() error
+		want error
+	}{
+		{
+			name: "get without id",
+			call: func() error { _, err := Get(t.Context(), client, GetInput{}); return err },
+			want: toolutil.ErrRequiredInt64("bulk_import_get", "id"),
+		},
+		{
+			name: "cancel without id",
+			call: func() error { _, err := Cancel(t.Context(), client, CancelInput{}); return err },
+			want: toolutil.ErrRequiredInt64("bulk_import_cancel", "id"),
+		},
+		{
+			name: "entity get without bulk import id",
+			call: func() error { _, err := GetEntity(t.Context(), client, GetEntityInput{EntityID: 7}); return err },
+			want: toolutil.ErrRequiredInt64("bulk_import_entity_get", "bulk_import_id"),
+		},
+		{
+			name: "entity get without entity id",
+			call: func() error { _, err := GetEntity(t.Context(), client, GetEntityInput{BulkImportID: 1}); return err },
+			want: toolutil.ErrRequiredInt64("bulk_import_entity_get", "entity_id"),
+		},
+		{
+			name: "entity failures without bulk import id",
+			call: func() error {
+				_, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{EntityID: 7})
+				return err
+			},
+			want: toolutil.ErrRequiredInt64("bulk_import_entity_failures", "bulk_import_id"),
+		},
+		{
+			name: "entity failures without entity id",
+			call: func() error {
+				_, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{BulkImportID: 1})
+				return err
+			},
+			want: toolutil.ErrRequiredInt64("bulk_import_entity_failures", "entity_id"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			before := requests.Load()
+			err := tc.call()
+			if err == nil {
+				t.Fatalf("expected %v, got nil", tc.want)
+			}
+			if err.Error() != tc.want.Error() {
+				t.Errorf("error = %q, want %q", err, tc.want)
+			}
+			if sent := requests.Load() - before; sent != 0 {
+				t.Errorf("%d request(s) reached GitLab, want none", sent)
+			}
+		})
 	}
 }
 
@@ -373,16 +529,6 @@ func TestCancel_OK(t *testing.T) {
 	}
 	if out.ID != 9 || out.Status != "canceled" {
 		t.Errorf("got %+v", out)
-	}
-}
-
-// TestCancel_RequiresID verifies the Cancel_RequiresID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestCancel_RequiresID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	if _, err := Cancel(t.Context(), client, CancelInput{}); err == nil {
-		t.Fatal("expected error for missing id")
 	}
 }
 
@@ -487,19 +633,6 @@ func TestGetEntity_OK(t *testing.T) {
 	}
 	if out.Stats.Milestones.Fetched != 2 {
 		t.Errorf("Stats.Milestones.Fetched = %d, want 2", out.Stats.Milestones.Fetched)
-	}
-}
-
-// TestGetEntity_Validation verifies the GetEntity_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestGetEntity_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	if _, err := GetEntity(t.Context(), client, GetEntityInput{}); err == nil {
-		t.Error("expected error for missing bulk_import_id")
-	}
-	if _, err := GetEntity(t.Context(), client, GetEntityInput{BulkImportID: 1}); err == nil {
-		t.Error("expected error for missing entity_id")
 	}
 }
 

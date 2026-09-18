@@ -4,6 +4,7 @@ package compliancepolicy
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -205,24 +206,60 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_BadRequestHint verifies the Update_BadRequestHint handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdate_BadRequestHint(t *testing.T) {
+// TestUpdate_RejectedNamespace_HintNamesTheTopLevelGroupRule drives both
+// refusals GitLab gives a csp_namespace_id it will not accept — 400 for a
+// malformed one and 422 for one it understands and declines — and asserts each
+// comes back carrying the namespace hint and not the licensing one.
+//
+// Why it matters: the handler reaches that hint through a two-legged condition,
+// and only the 400 leg was ever exercised, so the 422 leg could be deleted
+// without a test noticing. A 422 would then fall through to the status-hint
+// branch and a caller who named a subgroup, a project, or a namespace GitLab
+// has locked since the last update would be told to check the license and the
+// Owner role instead — a correct-looking answer pointing at the wrong problem.
+// Asserting the absence of the licensing wording is what pins which of the two
+// branches produced the message; asserting its presence alone would pass on
+// either.
+func TestUpdate_RejectedNamespace_HintNamesTheTopLevelGroupRule(t *testing.T) {
 	nsID := int64(999)
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"csp_namespace_id is invalid"}`)
-	}))
 
-	_, err := Update(context.Background(), client, UpdateInput{CSPNamespaceID: &nsID})
-	if err == nil {
-		t.Fatal("expected error for invalid csp_namespace_id")
+	// Neither body repeats a word the hint carries, so a match below can only
+	// have come from the hint and never from GitLab's message echoed back.
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{
+			name:   "bad request",
+			status: http.StatusBadRequest,
+			body:   `{"error":"400 Bad request"}`,
+		},
+		{
+			name:   "unprocessable entity",
+			status: http.StatusUnprocessableEntity,
+			body:   `{"message":"namespace is not eligible"}`,
+		},
 	}
-	errText := err.Error()
-	for _, want := range []string{"csp_namespace_id", "top-level group", "lock"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(errText, want) {
-				t.Fatalf("error missing %q: %v", want, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+
+			_, err := Update(context.Background(), client, UpdateInput{CSPNamespaceID: &nsID})
+			if err == nil {
+				t.Fatal("expected error for a csp_namespace_id GitLab refuses")
+			}
+			errText := err.Error()
+			for _, want := range []string{"csp_namespace_id", "top-level group", "lock"} {
+				if !strings.Contains(errText, want) {
+					t.Errorf("error missing %q: %v", want, err)
+				}
+			}
+			if strings.Contains(errText, "Ultimate license") {
+				t.Errorf("a refused namespace was reported as a licensing problem: %v", err)
 			}
 		})
 	}
@@ -299,6 +336,117 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("Aliases for %s are empty", spec.Name)
 		}
 	}
+}
+
+// TestActionSpecs_Metadata_EachSpecDescribesItsOwnAction asserts that each of
+// the two specs carries the discovery metadata of the action it names rather
+// than its sibling's: guidance for exactly the parameters its own input struct
+// accepts, and a description and a related-action list that point at the other
+// action instead of back at itself.
+//
+// Why it matters: both specs come out of one options function that branches on
+// the action name, and everything that branch decides — usage, aliases,
+// parameter guidance, description, related actions — is swapped wholesale if
+// the branch inverts. Both specs stay fully populated afterwards, so every
+// "is it non-empty" assertion still passes while a model is told the read
+// action takes csp_namespace_id and that the update action is for reading.
+// Naming the property each side must hold, rather than repeating the strings
+// the function currently produces, is what makes the swap visible.
+func TestActionSpecs_Metadata_EachSpecDescribesItsOwnAction(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	specByName := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByName[spec.Name] = spec
+	}
+
+	tests := []struct {
+		name string
+		// guidedParams are the json names the action's own input struct
+		// accepts, so guidance for anything else names an argument a caller
+		// cannot send and guidance for none of them leaves the one argument
+		// GitLab requires undescribed.
+		guidedParams []string
+		sibling      string
+	}{
+		{name: "get", guidedParams: nil, sibling: "update"},
+		{name: "update", guidedParams: []string{"csp_namespace_id"}, sibling: "get"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, ok := specByName[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %q", tt.name)
+			}
+			sibling, ok := specByName[tt.sibling]
+			if !ok {
+				t.Fatalf("missing sibling ActionSpec for %q", tt.sibling)
+			}
+
+			assertGuidesExactly(t, spec, tt.guidedParams)
+			assertPointsAtSibling(t, spec, sibling)
+			assertRelatesToSibling(t, spec, tt.name, tt.sibling)
+		})
+	}
+}
+
+// assertGuidesExactly holds a spec's parameter guidance to the parameters its
+// own input struct accepts, and to saying something about each of them.
+func assertGuidesExactly(t *testing.T, spec toolutil.ActionSpec, want []string) {
+	t.Helper()
+
+	if len(spec.ParameterGuidance) != len(want) {
+		t.Errorf("ParameterGuidance keys = %v, want exactly %v", guidanceKeys(spec.ParameterGuidance), want)
+	}
+	for _, param := range want {
+		guidance, guided := spec.ParameterGuidance[param]
+		if !guided {
+			t.Errorf("ParameterGuidance has no entry for %q", param)
+			continue
+		}
+		if guidance.ValueSource == "" || guidance.ExampleBinding == "" {
+			t.Errorf("ParameterGuidance[%q] is present but says nothing: %+v", param, guidance)
+		}
+	}
+}
+
+// assertPointsAtSibling holds a spec's individual-tool description to naming
+// the other action's tool and never its own, which is the cross-reference a
+// model follows when the action it picked is not the one it wanted.
+func assertPointsAtSibling(t *testing.T, spec, sibling toolutil.ActionSpec) {
+	t.Helper()
+
+	got := spec.IndividualTool.Description
+	if !strings.Contains(got, sibling.IndividualTool.Name) {
+		t.Errorf("description does not point at the sibling tool %q: %s", sibling.IndividualTool.Name, got)
+	}
+	if strings.Contains(got, spec.IndividualTool.Name) {
+		t.Errorf("description sends a reader back to this same tool %q: %s", spec.IndividualTool.Name, got)
+	}
+}
+
+// assertRelatesToSibling holds a spec's related actions to naming the other
+// action of the pair and never itself.
+func assertRelatesToSibling(t *testing.T, spec toolutil.ActionSpec, name, sibling string) {
+	t.Helper()
+
+	if want := "compliance_policy." + sibling; !slices.Contains(spec.RelatedActions, want) {
+		t.Errorf("RelatedActions = %v, want it to name %q", spec.RelatedActions, want)
+	}
+	if self := "compliance_policy." + name; slices.Contains(spec.RelatedActions, self) {
+		t.Errorf("RelatedActions names the action itself (%q): %v", self, spec.RelatedActions)
+	}
+}
+
+// guidanceKeys reports a guidance map's keys so a failure can name what was
+// found rather than only how many entries there were.
+func guidanceKeys(m map[string]toolutil.ParameterGuidance) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.

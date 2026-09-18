@@ -301,6 +301,59 @@ func TestCreateExport(t *testing.T) {
 	}
 }
 
+// TestCreateExport_ExportType_ReachesGitLabAsTheCallerSetIt checks which value
+// the export_type input ends up carrying on the wire.
+//
+// client-go fills export_type with "sbom" whenever the option is left nil, so
+// the handler's whole job here is to set the option exactly when the caller
+// named a type and to leave it alone exactly when they did not. Getting that
+// the wrong way round is invisible in the response — GitLab answers with an
+// export either way — and costs the caller either the format they asked for or
+// an empty export_type nobody chose. The assertion is on the request rather
+// than on the output for that reason: the output cannot tell the two apart.
+func TestCreateExport_ExportType_ReachesGitLabAsTheCallerSetIt(t *testing.T) {
+	tests := []struct {
+		name  string
+		input CreateExportInput
+		want  string
+	}{
+		{
+			name:  "the type the caller named is the type sent",
+			input: CreateExportInput{PipelineID: 100, ExportType: "dependency_list"},
+			want:  "dependency_list",
+		},
+		{
+			name:  "naming no type leaves the SDK default in place",
+			input: CreateExportInput{PipelineID: 100},
+			want:  "sbom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request body: %v", err)
+					testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"undecodable body"}`)
+					return
+				}
+				got, ok := body["export_type"]
+				if !ok {
+					t.Errorf("request carries no export_type at all, want %q; body: %v", tt.want, body)
+				} else if s, isString := got.(string); !isString || s != tt.want {
+					t.Errorf("export_type = %v, want %q", got, tt.want)
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"has_finished":false,"self":"https://gitlab.example.com/api/v4/dependency_list_exports/1","download":""}`)
+			}))
+
+			if _, err := CreateExport(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("CreateExport() error: %v", err)
+			}
+		})
+	}
+}
+
 // TestCreateExport_CancelledContext verifies the CreateExport_CancelledContext handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.

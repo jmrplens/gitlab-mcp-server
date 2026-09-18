@@ -150,7 +150,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Applications.DeleteApplication(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete_application", err, http.StatusNotFound, "verify application_id with gitlab_list_applications")
+		// The hint names the numeric id this action takes, not the
+		// application_id the list output also carries: that one is the OAuth
+		// client string, and a model told to "verify application_id" reads it
+		// off the same row and sends a string where an id belongs.
+		return toolutil.WrapErrWithStatusHint("delete_application", err, http.StatusNotFound, "verify application id with gitlab_list_applications")
 	}
 	return nil
 }

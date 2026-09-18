@@ -65,6 +65,36 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestBulkImportOptions_UnrecognisedTool_FallsBackToAGenericUsageAndNoDescription
+// pins what bulkImportOptions does with a tool name its switch has no case for:
+// the shared usage sentence and an empty description.
+//
+// Why it matters: the switch carries no default, so that fallback is the state
+// a tool lands in when a spec is added or renamed in ActionSpecs and the case
+// beside it is not — and it ships a registered tool with nothing for a model to
+// read. TestActionSpecs_Metadata is what forbids that state for every name the
+// package really registers; this is the other half of the pair, naming the
+// state being forbidden, and it is the only thing that ever drives the switch
+// past its last case. The usage is held to being none of the seven real ones
+// rather than to a literal, because what makes the fallback wrong for a
+// registered tool is that it is not that tool's own.
+func TestBulkImportOptions_UnrecognisedTool_FallsBackToAGenericUsageAndNoDescription(t *testing.T) {
+	opts := bulkImportOptions("gitlab_bulk_import_no_such_tool")
+
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want empty for a name the switch does not know", opts.IndividualTool.Description)
+	}
+	if opts.Usage == "" {
+		t.Error("Usage is empty, want the shared fallback sentence")
+	}
+	for _, spec := range bulkImportSpecsByTool(t, http.NewServeMux()) {
+		if spec.Usage == opts.Usage {
+			t.Errorf("%s is registered with the fallback usage %q, so it reached no case of its own",
+				spec.IndividualTool.Name, opts.Usage)
+		}
+	}
+}
+
 // TestActionSpecs_StartMigrationError validates the StartMigrationError route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -224,19 +254,6 @@ func TestListEntityFailures_Success(t *testing.T) {
 	}
 	if len(out.Failures) != 1 || out.Failures[0].Relation != "issues" || out.Failures[0].CreatedAt != "2026-01-01T00:00:00Z" {
 		t.Errorf("unexpected failures payload: %+v", out.Failures)
-	}
-}
-
-// TestListEntityFailures_Validation verifies the ListEntityFailures_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestListEntityFailures_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
-	if _, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{}); err == nil {
-		t.Fatal("expected error for missing bulk_import_id")
-	}
-	if _, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{BulkImportID: 1}); err == nil {
-		t.Fatal("expected error for missing entity_id")
 	}
 }
 
