@@ -205,13 +205,19 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Description = new(input.Description)
 	}
 	if input.Priority != nil {
-		// Zero is the removal the schema promises, and it goes out as an
-		// explicit null: sending the number 0 would set a priority of zero,
-		// which is a priority rather than the absence of one.
-		if *input.Priority > 0 {
+		switch {
+		case *input.Priority > 0:
 			opts.Priority = gl.NewNullableWithValue(*input.Priority)
-		} else {
+		case *input.Priority == 0:
+			// Zero is the removal the schema promises, and it goes out as an
+			// explicit null: sending the number 0 would set a priority of
+			// zero, which is a priority rather than the absence of one.
 			opts.Priority = gl.NewNullNullable[int64]()
+		default:
+			// A negative is neither a priority GitLab accepts nor the removal
+			// zero asks for, and treating it as removal would perform a change
+			// the caller did not ask for on a value they got wrong.
+			return Output{}, errors.New("labelUpdate: priority must be zero or greater. Pass 0 to remove the label's priority, or a positive number to set one")
 		}
 	}
 	if input.Archived != nil {

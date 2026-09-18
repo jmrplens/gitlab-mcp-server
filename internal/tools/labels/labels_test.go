@@ -514,6 +514,35 @@ func TestLabelUpdate_NameBodyField(t *testing.T) {
 // a test reads back would still be a label. The priority case pins the shape the
 // handler really has: a priority of 0 is treated as "unsaid" and never reaches
 // GitLab, so the input's own "0 to remove" cannot work through this path.
+// TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab verifies that
+// a priority below zero is a parameter error rather than a removal.
+//
+// Zero is the removal the schema documents, and the handler sends it as an
+// explicit null. A negative is neither that nor a priority GitLab accepts, and
+// the tempting reading — anything not positive means remove — would perform a
+// change on a value the caller got wrong, silently dropping a priority they
+// never asked to drop. The request count is what the test asserts alongside the
+// message, because a refusal that still reaches GitLab is not a refusal.
+func TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab(t *testing.T) {
+	var requests int
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug"}`)
+	}))
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", LabelID: "bug", Priority: new(int64(-1))})
+
+	if err == nil {
+		t.Fatal("Update() error = nil, want a negative priority refused")
+	}
+	if !strings.Contains(err.Error(), "priority must be zero or greater") {
+		t.Errorf("Update() error = %v, want it to say what a caller may pass", err)
+	}
+	if requests != 0 {
+		t.Errorf("GitLab was asked %d time(s); a refused parameter must not reach it", requests)
+	}
+}
+
 func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 	archived := true
 	cases := []struct {

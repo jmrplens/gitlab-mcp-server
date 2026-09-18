@@ -845,7 +845,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 6\n" +
 				"- **Status**: idle\n" +
 				"- **Target Branch**: main\n" +
-				"- **Merge Request**: !0 - Untracked change\n" +
+				"- **Merge Request**: Untracked change\n" +
 				"- **Duration**: 0s\n" + cardHints,
 		},
 		{

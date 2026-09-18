@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,943 |
-| Unit test functions                                   | 15,746 |
+| Total test functions                                  | 16,944 |
+| Unit test functions                                   | 15,747 |
 | E2E test functions                                    |  1,197 |
 | cmd test functions                                    |  2,763 |
 | Test files (internal/)                                |    582 |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 12,114 | 71.5% |
 | `TestFunc` (no underscore)             |    904 |  5.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,925 | 23.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,926 | 23.2% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,166 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |          9,451 |        383 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |          9,452 |        383 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,197 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,763 |        200 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,943** |  **1,166** |                                                                                                 |
+| **Total**               |     **16,944** |  **1,166** |                                                                                                 |
 
 ### Core Packages
 
@@ -224,7 +224,7 @@
 | jobtokenscope           |        51 |          2 |   100.0% |         8 |
 | keys                    |        26 |          1 |   100.0% |         2 |
 | labeldata               |        11 |          1 |   100.0% |         0 |
-| labels                  |        67 |          1 |   100.0% |         8 |
+| labels                  |        68 |          1 |   100.0% |         8 |
 | license                 |        22 |          2 |   100.0% |         3 |
 | licensetemplates        |        27 |          1 |   100.0% |         2 |
 | markdown                |        10 |          1 |   100.0% |         1 |
@@ -303,7 +303,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,451** |    **383** |          | **1,187** |
+| **Total**               | **9,452** |    **383** |          | **1,187** |
 
 </details>
 
