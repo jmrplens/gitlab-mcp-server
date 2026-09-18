@@ -5,6 +5,7 @@ package grouplabels
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -111,6 +112,14 @@ func TestDecorateGroupLabelMeta_UnknownTool(t *testing.T) {
 // TestGroupLabelActionMeta_AllToolsDecorated verifies every projected group-label
 // tool carries non-generic R-META discovery metadata (Usage, aliases, related,
 // and a "Returns: … See also: …" individual-tool description).
+//
+// The aliases and the related actions are held to the table that decorates them
+// and to the placeholder groupLabelOptions puts there first, because only the
+// second half distinguishes a decoration that ran from one that did not: with
+// its guard inverted the spec keeps the tool's own name as its only alias and
+// the two generic group actions as everything it relates to, which is the text
+// gitlab_find_action searches and the list a model is offered next. Asserting
+// the curated values alone would leave that state passing.
 func TestGroupLabelActionMeta_AllToolsDecorated(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	for _, spec := range ActionSpecs(client) {
@@ -121,5 +130,59 @@ func TestGroupLabelActionMeta_AllToolsDecorated(t *testing.T) {
 		if spec.Usage == "Use to execute grouplabels domain action." {
 			t.Errorf("%s: Usage still generic placeholder", name)
 		}
+		meta, ok := groupLabelActionMeta[name]
+		if !ok {
+			t.Errorf("%s: no discovery metadata entry", name)
+			continue
+		}
+		for _, alias := range meta.aliases {
+			if !slices.Contains(spec.Aliases, alias) {
+				t.Errorf("%s: alias %q missing from spec aliases %v", name, alias, spec.Aliases)
+			}
+		}
+		if slices.Contains(spec.Aliases, name) {
+			t.Errorf("%s: spec still carries the generic tool-name alias, aliases = %v", name, spec.Aliases)
+		}
+		for _, related := range meta.related {
+			if !slices.Contains(spec.RelatedActions, related) {
+				t.Errorf("%s: related action %q missing from %v", name, related, spec.RelatedActions)
+			}
+		}
+		if slices.Contains(spec.RelatedActions, "group.issues") {
+			t.Errorf("%s: spec still carries the generic related placeholder, related = %v", name, spec.RelatedActions)
+		}
+	}
+}
+
+// TestDecorateGroupLabelMeta_PartialEntry_KeepsWhatTheEntryDoesNotCarry verifies
+// each of the four decorations is applied only for a field its entry actually
+// holds. The table is hand-written, so an entry added without aliases, without
+// related actions, without a usage line or without a description must leave the
+// value groupLabelOptions produced rather than replace it with an empty one —
+// and an emptied slice is worse than a generic one, since an action with no
+// alias at all is one gitlab_find_action cannot reach by any name.
+//
+// No entry in the table today omits a field, so this is the only test that can
+// decide the four guards at all: they are otherwise evaluated one way only.
+func TestDecorateGroupLabelMeta_PartialEntry_KeepsWhatTheEntryDoesNotCarry(t *testing.T) {
+	const tool = "gitlab_group_label_partial_entry_probe"
+	groupLabelActionMeta[tool] = groupLabelActionMetaEntry{}
+	t.Cleanup(func() { delete(groupLabelActionMeta, tool) })
+
+	generic := groupLabelOptions(tool)
+	options := groupLabelOptions(tool)
+	decorateGroupLabelMeta(&options, tool)
+
+	if options.Usage != generic.Usage {
+		t.Errorf("Usage = %q, want the generic %q kept", options.Usage, generic.Usage)
+	}
+	if !slices.Equal(options.Aliases, generic.Aliases) {
+		t.Errorf("Aliases = %v, want the generic %v kept", options.Aliases, generic.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, generic.RelatedActions) {
+		t.Errorf("RelatedActions = %v, want the generic %v kept", options.RelatedActions, generic.RelatedActions)
+	}
+	if options.IndividualTool.Description != generic.IndividualTool.Description {
+		t.Errorf("Description = %q, want the generic %q kept", options.IndividualTool.Description, generic.IndividualTool.Description)
 	}
 }
