@@ -400,6 +400,122 @@ func TestApply_MetaSurface_ReachesTheInteractiveFlows(t *testing.T) {
 	})
 }
 
+// TestApply_ExcludeTools_MatchesAWholeNameAndNotAPrefix verifies the word the
+// first step's contract rests on: an entry is matched against a registered
+// name in full, so it removes that one tool and no relative of it.
+//
+// It matters because one configuration is routinely reused across surfaces and
+// tiers, and the names of the three surfaces nest inside one another: an
+// operator who excludes the meta group `gitlab_issue` and points the same file
+// at an individual deployment would, under any prefix or substring rule, lose
+// every `gitlab_issue_*` tool the surface registers instead of nothing. A
+// silent over-removal is the worse half of that, because a model reads
+// tools/list to decide what is possible and cannot tell a withdrawn tool from
+// one that never existed.
+func TestApply_ExcludeTools_MatchesAWholeNameAndNotAPrefix(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	server := newServer()
+	for _, name := range []string{"gitlab_issue", "gitlab_issue_list", "gitlab_issue_note_create"} {
+		addTool(server, name, false)
+	}
+
+	Apply(t.Context(), server, &config.ServerConfig{ExcludeTools: []string{"gitlab_issue"}}, config.ToolSurfaceIndividual, nil)
+
+	if got := listNames(t, server); !slices.Equal(got, []string{"gitlab_issue_list", "gitlab_issue_note_create"}) {
+		t.Errorf("tools/list = %v, want only the exactly named tool removed and every longer name kept", got)
+	}
+	if log := logged.String(); !strings.Contains(log, `"excluded_registered_tools":1`) {
+		t.Errorf("log = %q, want exactly one removal counted", log)
+	}
+}
+
+// TestApply_ExcludeTools_MatchingNothingLeavesEveryToolRegistered verifies the
+// case the startup line was renamed for: a list whose every entry was already
+// applied to the catalog before registration matches no registered name, and
+// the honest outcome is that the pass removes nothing and says zero.
+//
+// It matters because removing nothing is expressed here as handing the SDK an
+// empty list, which is a claim about [mcp.Server.RemoveTools] rather than about
+// this code: an empty removal has to be a no-op. Nothing else in this package
+// asserts that, so the day a dependency bump made zero names mean every name,
+// the deployments this branch exists for — the ones whose exclusions the
+// catalog already handled — would lose their whole tool surface at startup
+// while the log still read zero.
+func TestApply_ExcludeTools_MatchingNothingLeavesEveryToolRegistered(t *testing.T) {
+	logged := testutil.CaptureSlog(t)
+	server := newServer()
+	registered := []string{"gitlab_group", "gitlab_issue", "gitlab_project"}
+	for _, name := range registered {
+		addTool(server, name, false)
+	}
+
+	Apply(t.Context(), server, &config.ServerConfig{ExcludeTools: []string{"gitlab_issue_delete"}}, config.ToolSurfaceMeta, nil)
+
+	if got := listNames(t, server); !slices.Equal(got, registered) {
+		t.Errorf("tools/list = %v, want every tool kept when no registered name matched", got)
+	}
+	if log := logged.String(); !strings.Contains(log, `"excluded_registered_tools":0`) {
+		t.Errorf("log = %q, want the count to report the nothing this pass removed", log)
+	}
+}
+
+// TestApply_ExcludeTools_AppliesUnderReadOnlyAndSafeMode verifies the order the
+// three steps run in, which each of the tests above exercises one step at a
+// time and none of them pins: the exclusions are applied first, so a name the
+// operator removed is gone whichever narrowing mode is also on.
+//
+// Both halves are ways the pass could be reordered and stay green everywhere
+// else. Read-only mode returns as soon as it has removed the writes, so an
+// exclusion step moved below it would never run at all and an excluded *read*
+// would be served. Safe mode does not remove anything, so an exclusion step
+// skipped there would leave the excluded tool listed and answering a preview —
+// which reads as a tool that exists and is merely held back, when the operator
+// asked for it not to exist.
+func TestApply_ExcludeTools_AppliesUnderReadOnlyAndSafeMode(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *config.ServerConfig
+		// excluded is registered and named in cfg.ExcludeTools; readOnly says
+		// how it is annotated, so each mode is given the tool its own step
+		// would otherwise have kept.
+		excluded string
+		readOnly bool
+		want     []string
+	}{
+		{
+			name:     "read-only keeps no excluded read",
+			cfg:      &config.ServerConfig{ReadOnly: true, ExcludeTools: []string{"gitlab_excluded_read"}},
+			excluded: "gitlab_excluded_read",
+			readOnly: true,
+			want:     []string{"gitlab_read"},
+		},
+		{
+			name:     "safe mode previews no excluded write",
+			cfg:      &config.ServerConfig{SafeMode: true, ExcludeTools: []string{"gitlab_excluded_write"}},
+			excluded: "gitlab_excluded_write",
+			readOnly: false,
+			want:     []string{"gitlab_read", "gitlab_write"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newServer()
+			addTool(server, "gitlab_read", true)
+			addTool(server, "gitlab_write", false)
+			excludedCalls := addTool(server, tc.excluded, tc.readOnly)
+
+			Apply(t.Context(), server, tc.cfg, config.ToolSurfaceIndividual, nil)
+
+			if got := listNames(t, server); !slices.Equal(got, tc.want) {
+				t.Errorf("tools/list = %v, want %v: the excluded tool is removed before this mode runs", got, tc.want)
+			}
+			if excludedCalls.Load() != 0 {
+				t.Errorf("the excluded tool's handler ran %d time(s), want never", excludedCalls.Load())
+			}
+		})
+	}
+}
+
 // TestApply_ExcludeTools_PatternsSurviveAsGiven verifies the exclusion list
 // the pass reports is the operator's own list, unsorted and unfiltered, so
 // the startup line can be read back against the configuration that produced
