@@ -160,7 +160,12 @@ func closeWithin(t *testing.T, m *Manager[string]) {
 	select {
 	case <-done:
 	case <-time.After(closeStallBound):
-		t.Errorf("Close did not return within %v: a watcher outlived the manager, "+
+		// Fatal rather than an error, and on the test goroutine, which is
+		// where both callers run this: reporting and returning lets the caller
+		// walk into the next blocking operation — a wg.Wait in one of the race
+		// tests — and hang the binary anyway, which is the failure this bound
+		// exists to convert into a message.
+		t.Fatalf("Close did not return within %v: a watcher outlived the manager, "+
 			"or its lock is still held by a goroutine that will not give it back", closeStallBound)
 	}
 }

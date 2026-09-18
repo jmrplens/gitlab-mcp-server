@@ -569,6 +569,12 @@ func TestProgressWriter_ReportsAtTheIntervalAndOnFailure(t *testing.T) {
 	})
 }
 
+// progressWaitBound is how long progressProbeMessages gives the whole exchange
+// — the tool call and the notifications it produces — before it calls the
+// session stalled. It is enormous for an in-memory transport and deliberately
+// so: the bound names a hang, it does not measure a speed.
+const progressWaitBound = 5 * time.Second
+
 // progressProbeMessages runs fn as the body of a real tool call on an
 // in-memory MCP session that carries a progress token, and returns the
 // messages the client received, once want of them have arrived.
@@ -617,7 +623,15 @@ func progressProbeMessages(t *testing.T, want int, fn func(ctx context.Context, 
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
-	if _, callErr := session.CallTool(t.Context(), &mcp.CallToolParams{
+	// The call is bounded as well as the wait below, and it has to be: the
+	// call completes before the select is even reached, so a stalled tool or a
+	// stalled notification would never meet that timeout and would hang the
+	// binary until the package deadline instead. One bound serves both, so the
+	// two cannot drift apart.
+	callCtx, cancelCall := context.WithTimeout(t.Context(), progressWaitBound)
+	defer cancelCall()
+
+	if _, callErr := session.CallTool(callCtx, &mcp.CallToolParams{
 		Name:      "probe",
 		Arguments: map[string]any{},
 		Meta:      mcp.Meta{"progressToken": "file-utils-probe"},
@@ -627,7 +641,7 @@ func progressProbeMessages(t *testing.T, want int, fn func(ctx context.Context, 
 
 	select {
 	case <-received:
-	case <-time.After(5 * time.Second):
+	case <-time.After(progressWaitBound):
 		mu.Lock()
 		got := slices.Clone(messages)
 		mu.Unlock()

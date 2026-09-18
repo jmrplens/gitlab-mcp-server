@@ -204,7 +204,7 @@ type ReleaseResourceOutput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Author      string `json:"author"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"created_at,omitempty"`
 	ReleasedAt  string `json:"released_at,omitempty"`
 }
 

@@ -2976,6 +2976,21 @@ func TestProjectReleasesResource_Timestamps_AreNormalizedOrOmitted(t *testing.T)
 	if releases[1].CreatedAt != "" || releases[1].ReleasedAt != "" {
 		t.Errorf("release without timestamps = (%q, %q), want both empty", releases[1].CreatedAt, releases[1].ReleasedAt)
 	}
+	// An empty decoded string does not prove the key was left out: a body
+	// carrying `"created_at": ""` decodes to exactly the same thing. What the
+	// output promises is that the key is absent, so the document itself is
+	// what has to answer.
+	var raw []map[string]json.RawMessage
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &raw); err != nil {
+		t.Fatalf(fmtUnmarshal, err)
+	}
+	for _, key := range []string{"created_at", "released_at"} {
+		t.Run("a release with no "+key+" omits the key", func(t *testing.T) {
+			if value, present := raw[1][key]; present {
+				t.Errorf("%s = %s, want the key omitted entirely", key, value)
+			}
+		})
+	}
 }
 
 // TestProjectTagsResource_CreatedAt_IsNormalizedOrOmitted verifies that the
