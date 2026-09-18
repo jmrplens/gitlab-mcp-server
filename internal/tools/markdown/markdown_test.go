@@ -3,7 +3,10 @@
 package markdown
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -51,6 +54,79 @@ func TestRender_WithGFMAndProject(t *testing.T) {
 	}
 	if out.HTML != "<p>Rendered with GFM</p>" {
 		t.Errorf("unexpected HTML: %s", out.HTML)
+	}
+}
+
+// TestRender_RequestBody_CarriesExactlyTheOptionsTheCallerSet pins what the
+// handler puts on the wire for each combination of the two optional inputs:
+// the body carries gfm only when the caller asked for GitLab Flavored
+// Markdown, and project only when the caller named one.
+//
+// The assertion is on the request rather than on the response because the
+// response is the fixture's and says nothing about what was asked. Both
+// options are guards over a field GitLab treats as absent when it is not
+// sent, and both guards are invisible from the answer: with the project
+// guard inverted, a render asking for a project's reference context sends
+// none, so #1 and @user come back as plain text and the caller is told
+// nothing went wrong. Until this test existed the whole suite passed with
+// that guard inverted, because the one test that set Project never looked
+// at what left the process. Asserting the whole decoded body rather than the
+// presence of one key is what makes an option that appears when it should
+// not fail too.
+func TestRender_RequestBody_CarriesExactlyTheOptionsTheCallerSet(t *testing.T) {
+	cases := []struct {
+		name  string
+		input RenderInput
+		want  map[string]any
+	}{
+		{
+			name:  "text alone sends neither option",
+			input: RenderInput{Text: "Hello **world**"},
+			want:  map[string]any{"text": "Hello **world**"},
+		},
+		{
+			name:  "a named project is sent as reference context",
+			input: RenderInput{Text: "See #1", Project: "my-group/my-project"},
+			want:  map[string]any{"text": "See #1", "project": "my-group/my-project"},
+		},
+		{
+			name:  "gfm is sent only when asked for",
+			input: RenderInput{Text: "- [ ] task", GFM: true},
+			want:  map[string]any{"text": "- [ ] task", "gfm": true},
+		},
+		{
+			name:  "both options travel together",
+			input: RenderInput{Text: "See #1", GFM: true, Project: "my-group/my-project"},
+			want:  map[string]any{"text": "See #1", "gfm": true, "project": "my-group/my-project"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				body    []byte
+				bodyErr error
+			)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, bodyErr = io.ReadAll(r.Body)
+				testutil.RespondJSON(w, http.StatusOK, `{"html":"<p>x</p>"}`)
+			}))
+
+			if _, err := Render(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("Render: %v", err)
+			}
+			if bodyErr != nil {
+				t.Fatalf("reading the request body: %v", bodyErr)
+			}
+
+			var got map[string]any
+			if err := json.Unmarshal(body, &got); err != nil {
+				t.Fatalf("the request body is not a JSON object (%v): %s", err, body)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("request body = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
