@@ -4339,7 +4339,10 @@
       "method": "PUT",
       "path": "/projects/:project_id/feature_flags/my-flag",
       "body": [
-        "description"
+        "active",
+        "description",
+        "name",
+        "strategies"
       ]
     },
     {
@@ -4422,6 +4425,14 @@
       "method": "POST",
       "path": "/features/my_flag",
       "body": [
+        "feature_group",
+        "force",
+        "group",
+        "key",
+        "namespace",
+        "project",
+        "repository",
+        "user",
         "value"
       ]
     },
@@ -4637,6 +4648,17 @@
       "path": "/projects/:project_id/repository/files/main.go",
       "query": [
         "ref"
+      ]
+    },
+    {
+      "package": "internal/tools/files",
+      "kind": "rest",
+      "method": "POST",
+      "path": "/projects/:project_id/repository/files/main.go",
+      "body": [
+        "branch",
+        "commit_message",
+        "content"
       ]
     },
     {
@@ -4953,6 +4975,12 @@
       "package": "internal/tools/gitignoretemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/templates/gitignores/Nope"
+    },
+    {
+      "package": "internal/tools/gitignoretemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/templates/gitignores/bad"
     },
     {
@@ -5209,8 +5237,10 @@
       "query": [
         "include_ancestors",
         "order_by",
+        "page",
         "page_token",
         "pagination",
+        "per_page",
         "search",
         "sort",
         "state"
@@ -6906,11 +6936,13 @@
       "method": "PUT",
       "path": "/groups/:group_id/variables/MY_VAR",
       "body": [
+        "description",
         "filter",
         "masked",
         "protected",
         "raw",
-        "value"
+        "value",
+        "variable_type"
       ]
     },
     {
