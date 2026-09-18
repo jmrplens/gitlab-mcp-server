@@ -491,6 +491,70 @@ func TestList_NullOptionalFields(t *testing.T) {
 	}
 }
 
+// TestList_ApprovalRuleType_PublishedAsGitLabSentIt holds an approval rule's
+// type to what the response carried, in both the shapes GitLab may send it in.
+//
+// ApprovalProjectRule.type is nullable in the pinned schema, so the guard
+// around the dereference decides two things at once: a rule GitLab typed has to
+// reach the caller carrying that type, and a rule it left untyped has to reach
+// the caller at all rather than taking the process down on a nil pointer.
+// Nothing asserted either half — every other fixture types every rule, and no
+// assertion read the field back — so the guard could be inverted with the whole
+// suite still green, while a typed rule published no type and an untyped one
+// panicked.
+func TestList_ApprovalRuleType_PublishedAsGitLabSentIt(t *testing.T) {
+	const sentType = "CODE_OWNER"
+
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"branchRules": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"branchRules": {
+						"nodes": [{
+							"name": "main",
+							"isDefault": true,
+							"isProtected": true,
+							"matchingBranchesCount": 1,
+							"createdAt": null,
+							"updatedAt": null,
+							"branchProtection": null,
+							"approvalRules": {"nodes": [
+								{"name": "Owners", "approvalsRequired": 2, "type": "`+sentType+`"},
+								{"name": "Untyped", "approvalsRequired": 1, "type": null}
+							]},
+							"externalStatusChecks": {"nodes": []}
+						}],
+						"pageInfo": {"hasNextPage": false, "endCursor": null}
+					}
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	client.SetEnterprise(true)
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("len(Rules) = %d, want 1", len(out.Rules))
+	}
+	rules := out.Rules[0].ApprovalRules
+	if len(rules) != 2 {
+		t.Fatalf("len(ApprovalRules) = %d, want the typed and the untyped rule both published", len(rules))
+	}
+	if rules[0].Type != sentType {
+		t.Errorf("ApprovalRules[0].Type = %q, want the type GitLab sent (%q)", rules[0].Type, sentType)
+	}
+	if rules[1].Type != "" {
+		t.Errorf("ApprovalRules[1].Type = %q, want empty for a rule GitLab left untyped", rules[1].Type)
+	}
+	if rules[1].Name != "Untyped" || rules[1].ApprovalsRequired != 1 {
+		t.Errorf("ApprovalRules[1] = %+v, want an untyped rule to keep its own name and count", rules[1])
+	}
+}
+
 // Markdown formatter tests.
 
 // branchRuleListHints is the guidance section every branch rule listing
