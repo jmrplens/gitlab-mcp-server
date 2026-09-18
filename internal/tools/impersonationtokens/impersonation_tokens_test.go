@@ -5,10 +5,13 @@ package impersonationtokens
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -843,6 +846,127 @@ func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
 
 	if got != want {
 		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestHandlers_AnIdentifierOfZero_IsRefusedBeforeAnyRequest holds all seven
+// identifier guards to refusing zero here, without spending a request on it.
+// Asserting only that an error came back cannot see this: with the guard
+// loosened to `< 0`, zero flows on to GitLab, which answers 404, and the hint
+// that refusal carries names the very field the local refusal names ("verify
+// token_id with gitlab_list_impersonation_tokens"), so a message assertion
+// passes on either path. What separates them is whether GitLab was asked at
+// all, which is also the behavior that matters: `/users/0/impersonation_tokens`
+// is a round trip that cannot succeed.
+func TestHandlers_AnIdentifierOfZero_IsRefusedBeforeAnyRequest(t *testing.T) {
+	cases := []struct {
+		name  string
+		field string
+		call  func(context.Context, *gitlabclient.Client) error
+	}{
+		{"list rejects user_id", "user_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{UserID: 0})
+			return err
+		}},
+		{"get rejects user_id", "user_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{UserID: 0, TokenID: 1})
+			return err
+		}},
+		{"get rejects token_id", "token_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{UserID: 42, TokenID: 0})
+			return err
+		}},
+		{"create rejects user_id", "user_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{UserID: 0, Name: "tok", Scopes: []string{"api"}})
+			return err
+		}},
+		{"revoke rejects user_id", "user_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Revoke(ctx, c, RevokeInput{UserID: 0, TokenID: 1})
+			return err
+		}},
+		{"revoke rejects token_id", "token_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Revoke(ctx, c, RevokeInput{UserID: 42, TokenID: 0})
+			return err
+		}},
+		{"create_personal_access_token rejects user_id", "user_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreatePAT(ctx, c, CreatePATInput{UserID: 0, Name: "tok", Scopes: []string{"api"}})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var asked atomic.Bool
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				asked.Store(true)
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			}))
+
+			err := tc.call(t.Context(), client)
+			if err == nil {
+				t.Fatalf("expected an error for %s = 0, got nil", tc.field)
+			}
+			if !strings.Contains(err.Error(), tc.field) {
+				t.Errorf("error = %q, want it to name %q", err.Error(), tc.field)
+			}
+			if asked.Load() {
+				t.Errorf("%s = 0 reached GitLab; the handler must refuse it without a request", tc.field)
+			}
+		})
+	}
+}
+
+// TestCreatePAT_Description_ReachesTheBodyOnlyWhenGiven pins which body GitLab
+// is sent. The guard around the optional description decides between a key
+// carrying the caller's text and no key at all, and an inverted guard sends
+// `"description": ""` for every call that named none: GitLab would record an
+// empty description on the token as though the caller had asked for one, and
+// nothing in the response this handler reads back would contradict it.
+func TestCreatePAT_Description_ReachesTheBodyOnlyWhenGiven(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreatePATInput
+		want  any // nil means the key must be absent
+	}{
+		{
+			name:  "a description the caller gave is sent",
+			input: CreatePATInput{UserID: 42, Name: "my-pat", Scopes: []string{"api"}, Description: "for the nightly job"},
+			want:  "for the nightly job",
+		},
+		{
+			name:  "no description leaves the key off entirely",
+			input: CreatePATInput{UserID: 42, Name: "my-pat", Scopes: []string{"api"}},
+			want:  nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+					testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"unreadable request body"}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, patJSON)
+			}))
+
+			if _, err := CreatePAT(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("CreatePAT() unexpected error: %v", err)
+			}
+			got, present := body["description"]
+			if tc.want == nil {
+				if present {
+					t.Errorf("body carries description = %v, want the key to be absent", got)
+				}
+				return
+			}
+			if !present {
+				t.Fatalf("body = %v, want it to carry a description", body)
+			}
+			if got != tc.want {
+				t.Errorf("description = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

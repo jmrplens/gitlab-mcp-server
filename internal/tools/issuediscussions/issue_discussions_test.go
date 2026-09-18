@@ -333,29 +333,44 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 	}
 }
 
-// TestNoteIDRequired_Validation verifies the NoteIDRequired_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestNoteIDRequired_Validation asserts that both handlers taking a note_id
+// name the missing field themselves, for the value an omitted field decodes
+// to (zero) as well as for a negative one, and that neither reaches GitLab:
+// the mock is a [testutil.ForbiddenHandler], so a guard that let either value
+// through would fail the subtest and the no-request assertion alike.
+//
+// Each handler is held at both values because the guard is a boundary, and a
+// test that pins only one side of it leaves the other free to move. An MCP
+// caller who leaves note_id out sends the zero, never a negative, so a guard
+// narrowed to "< 0" would send GitLab a request against note 0 and answer the
+// model with a remote 404 about permissions instead of naming the field it
+// forgot — while a suite checking DeleteNote at -1 alone stayed green.
 func TestNoteIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = testProjectPath
 
+	updateNote := func(noteID int64) error {
+		_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: noteID, Body: "x"})
+		return e
+	}
+	deleteNote := func(noteID int64) error {
+		return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: noteID})
+	}
+
 	tests := []struct {
-		name string
-		fn   func() error
+		name   string
+		fn     func(int64) error
+		noteID int64
 	}{
-		{"UpdateNote", func() error {
-			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 0, Body: "x"})
-			return e
-		}},
-		{"DeleteNote", func() error {
-			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: -1})
-		}},
+		{"UpdateNote_Omitted", updateNote, 0},
+		{"UpdateNote_Negative", updateNote, -1},
+		{"DeleteNote_Omitted", deleteNote, 0},
+		{"DeleteNote_Negative", deleteNote, -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "note_id")
+			assertContains(t, tt.fn(tt.noteID), "note_id")
 		})
 	}
 }

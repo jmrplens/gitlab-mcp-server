@@ -36,8 +36,13 @@ type UpdateInput struct {
 	NewName     string               `json:"new_name,omitempty"    jsonschema:"New label name"`
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
 	Description string               `json:"description,omitempty" jsonschema:"New label description"`
-	Priority    int64                `json:"priority,omitempty"    jsonschema:"New label priority (0 to remove)"`
-	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
+	// A pointer so that "not given" and "given as zero" are different
+	// requests. The schema has always promised that zero removes the priority,
+	// and with a plain int64 that promise could not be kept: encoding/json
+	// omits a zero under omitempty, so the handler could not tell a caller
+	// asking for removal from one saying nothing at all.
+	Priority *int64 `json:"priority,omitempty"    jsonschema:"New label priority, where 0 removes the priority GitLab has"`
+	Archived *bool  `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
 }
 
 // DeleteInput defines parameters for deleting a label.
@@ -199,8 +204,21 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	if input.Priority > 0 {
-		opts.Priority = gl.NewNullableWithValue(input.Priority)
+	if input.Priority != nil {
+		switch {
+		case *input.Priority > 0:
+			opts.Priority = gl.NewNullableWithValue(*input.Priority)
+		case *input.Priority == 0:
+			// Zero is the removal the schema promises, and it goes out as an
+			// explicit null: sending the number 0 would set a priority of
+			// zero, which is a priority rather than the absence of one.
+			opts.Priority = gl.NewNullNullable[int64]()
+		default:
+			// A negative is neither a priority GitLab accepts nor the removal
+			// zero asks for, and treating it as removal would perform a change
+			// the caller did not ask for on a value they got wrong.
+			return Output{}, errors.New("labelUpdate: priority must be zero or greater. Pass 0 to remove the label's priority, or a positive number to set one")
+		}
 	}
 	if input.Archived != nil {
 		opts.Archived = input.Archived

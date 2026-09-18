@@ -18,6 +18,10 @@ const (
 	actionSpecAddProjectJSON = `{"source_project_id": 42, "target_project_id": 99}`
 	actionSpecGroupJSON      = `[{"id": 5, "name": "group-a", "full_path": "group-a", "web_url": "https://gitlab.example.com/groups/group-a"}]`
 	actionSpecAddGroupJSON   = `{"source_project_id": 42, "target_group_id": 5}`
+
+	// genericUsage is the placeholder [jobTokenScopeOptions] hands every
+	// action before decorateJobTokenScopeMeta replaces it.
+	genericUsage = "Use to execute jobtokenscope domain action."
 )
 
 // TestActionSpecs_CallAllRoutes exercises every job token scope tool through its canonical route.
@@ -178,12 +182,45 @@ func TestDecorateJobTokenScopeMeta_UnknownToolNoOp(t *testing.T) {
 	}
 }
 
+// TestDecorateJobTokenScopeMeta_EmptyEntry_LeavesEveryOptionAlone verifies each
+// of the four metadata fields is copied only when the entry supplies it. Every
+// entry in the real table fills all four, so nothing in the package reaches the
+// other side of those guards, and the decorator would read as correct with any
+// of them gone. What they protect is the shape
+// [jobTokenScopeRemoveProjectSpec] already has: options built from
+// [jobTokenScopeOptions] and then filled by hand, which is why that tool is the
+// one deliberately absent from the table. An entry added for it later carrying
+// only a usage would, without these guards, blank its hand-written aliases,
+// related actions and description on the way past.
+func TestDecorateJobTokenScopeMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_job_token_scope_meta_probe"
+	jobTokenScopeActionMeta[probe] = jobTokenScopeActionMetaEntry{}
+	t.Cleanup(func() { delete(jobTokenScopeActionMeta, probe) })
+
+	options := jobTokenScopeOptions(probe)
+	options.RelatedActions = []string{actionJobTokenScopeListInbound}
+	options.IndividualTool.Description = "hand-written description"
+	decorateJobTokenScopeMeta(&options, probe)
+
+	if options.Usage != genericUsage {
+		t.Errorf("Usage = %q, want the base usage left as it was", options.Usage)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != probe {
+		t.Errorf("Aliases = %v, want only the tool name the base options set", options.Aliases)
+	}
+	if len(options.RelatedActions) != 1 || options.RelatedActions[0] != actionJobTokenScopeListInbound {
+		t.Errorf("RelatedActions = %v, want the hand-written entry left as it was", options.RelatedActions)
+	}
+	if options.IndividualTool.Description != "hand-written description" {
+		t.Errorf("Description = %q, want the hand-written one left as it was", options.IndividualTool.Description)
+	}
+}
+
 // TestActionSpecs_DiscoveryMetadataPopulated verifies every projected job token
 // scope tool carries non-generic usage, natural-language aliases, related
 // actions, and a Returns/See also individual-tool description.
 func TestActionSpecs_DiscoveryMetadataPopulated(t *testing.T) {
 	byTool := jobTokenScopeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, jobTokenScopeActionHandler())))
-	const genericUsage = "Use to execute jobtokenscope domain action."
 	for tool, spec := range byTool {
 		if spec.Usage == genericUsage || spec.Usage == "" {
 			t.Errorf("%s: generic or empty usage %q", tool, spec.Usage)

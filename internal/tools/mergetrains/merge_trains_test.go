@@ -793,6 +793,100 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **Merge Request**: !7 - Update docs\n" +
 				"- **Duration**: 0s\n" + cardHints,
 		},
+		{
+			// A car GitLab sent no merge request for has neither an IID nor a
+			// title, and the card must say nothing rather than link "!0" to
+			// nowhere: the row is the reader's way to the merge request, and a
+			// link to a merge request that does not exist is worse than none.
+			name: "car with no merge request writes no merge request row",
+			input: Output{
+				ID:           4,
+				TargetBranch: "main",
+				Status:       "idle",
+			},
+			want: "## Merge Train #4\n\n" +
+				"- **ID**: 4\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: main\n" +
+				"- **Duration**: 0s\n" + cardHints,
+		},
+		{
+			// An IID with no title is a merge request, so the row stays and
+			// carries the reference alone. This is the half of the guard that
+			// separates "GitLab sent no merge request" from "GitLab sent one
+			// whose title this response omits".
+			name: "merge request with an IID and no title renders the bare reference",
+			input: Output{
+				ID:           5,
+				TargetBranch: "main",
+				Status:       "idle",
+				MergeRequest: MergeRequestOutput{IID: 7, WebURL: "https://gitlab.example.com/-/merge_requests/7"},
+			},
+			want: "## Merge Train #5\n\n" +
+				"- **ID**: 5\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: [!7](https://gitlab.example.com/-/merge_requests/7)\n" +
+				"- **Duration**: 0s\n" + cardHints,
+		},
+		{
+			// The row is dropped only when there is nothing at all to show,
+			// which is why the guard reads "no IID and no title" rather than
+			// "no IID": a response that carries a title keeps it, and the
+			// reference renders beside it as GitLab numbered it.
+			name: "merge request with a title and no IID keeps the title",
+			input: Output{
+				ID:           6,
+				TargetBranch: "main",
+				Status:       "idle",
+				MergeRequest: MergeRequestOutput{Title: "Untracked change"},
+			},
+			want: "## Merge Train #6\n\n" +
+				"- **ID**: 6\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: Untracked change\n" +
+				"- **Duration**: 0s\n" + cardHints,
+		},
+		{
+			// A pipeline object carrying no id is no pipeline: the row would
+			// otherwise read "#0" and link to nowhere, which a reader deciding
+			// whether the car can leave the train would follow.
+			name: "pipeline object with no id writes no pipeline row",
+			input: Output{
+				ID:           7,
+				TargetBranch: "main",
+				Status:       "idle",
+				MergeRequest: MergeRequestOutput{IID: 8, Title: "Retry"},
+				Pipeline:     &toolutil.PipelineOutput{Status: "created"},
+			},
+			want: "## Merge Train #7\n\n" +
+				"- **ID**: 7\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: !8 - Retry\n" +
+				"- **Duration**: 0s\n" + cardHints,
+		},
+		{
+			// A pipeline whose status GitLab omitted renders as the link alone,
+			// rather than as a link followed by the glyph for a status nobody
+			// sent.
+			name: "pipeline with no status renders the link alone",
+			input: Output{
+				ID:           8,
+				TargetBranch: "main",
+				Status:       "idle",
+				MergeRequest: MergeRequestOutput{IID: 9, Title: "Ship"},
+				Pipeline:     &toolutil.PipelineOutput{ID: 300, WebURL: "https://gitlab.example.com/-/pipelines/300"},
+			},
+			want: "## Merge Train #8\n\n" +
+				"- **ID**: 8\n" +
+				"- **Status**: idle\n" +
+				"- **Target Branch**: main\n" +
+				"- **Merge Request**: !9 - Ship\n" +
+				"- **Pipeline**: [#300](https://gitlab.example.com/-/pipelines/300)\n" +
+				"- **Duration**: 0s\n" + cardHints,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

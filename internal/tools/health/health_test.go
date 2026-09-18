@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -79,6 +80,41 @@ func TestCheck_Healthy(t *testing.T) {
 	}
 	if out.Error != "" {
 		t.Errorf("Error = %q, want empty", out.Error)
+	}
+}
+
+// TestCheck_SlowVersionCall_ReportsHowLongThatCallTook asserts the reported
+// response time measures the version round trip rather than nothing at all.
+//
+// Every other test holds this field to ">= 0", which the zero value satisfies:
+// the assignment could be dropped, or the clock started after the call it is
+// meant to time, and none of them would fail. An instance that answers slowly
+// is what tells a real measurement from a field nobody fills, and the figure is
+// the only thing in the card a caller reads to decide the instance is slow
+// rather than broken. The bound is one-sided on purpose: how much longer than
+// the delay it takes is the machine's business, not the code's.
+func TestCheck_SlowVersionCall_ReportsHowLongThatCallTook(t *testing.T) {
+	const versionDelay = 50 * time.Millisecond
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathVersion {
+			time.Sleep(versionDelay)
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"u","state":"active"}`)
+	}))
+
+	out, err := Check(context.Background(), client, Input{})
+	if err != nil {
+		t.Fatalf(fmtStatusCheckErr, err)
+	}
+	if out.Status != "healthy" {
+		t.Errorf(fmtStatusWant, out.Status, "healthy")
+	}
+	floor := (versionDelay - 10*time.Millisecond).Milliseconds()
+	if out.ResponseTimeMS < floor {
+		t.Errorf("ResponseTimeMS = %d, want at least %d for a version call that took %s", out.ResponseTimeMS, floor, versionDelay)
 	}
 }
 
@@ -535,6 +571,109 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	healthCheckSpec := healthSpecByName(t, specs, "health_check")
 	if !slices.Contains(healthCheckSpec.Aliases, "connectivity check") {
 		t.Fatalf("health_check Aliases = %v, want connectivity check", healthCheckSpec.Aliases)
+	}
+}
+
+// healthUsage is the one usage line both health actions carry, kept here as the
+// test's own copy so a rewrite of the spec builder cannot move both sides of
+// the comparison at once.
+const healthUsage = "Verify MCP server connectivity to GitLab, authenticated identity, and response health before troubleshooting other tool failures."
+
+// TestActionSpecs_EachAction_PublishesTheSurfaceAModelFindsItBy pins, per
+// action, the metadata a model searches the catalog by.
+//
+// Both actions route to the one Check handler, so this metadata is the only
+// thing that tells them apart: the aliases decide which phrase reaches which
+// action, and the individual-tool projection decides which of the two becomes a
+// tool of its own. That split used to be resolved by a switch on the action
+// name inside the options builder, where one arm's aliases could be handed to
+// the other, or both actions given one tool name, with nothing failing.
+func TestActionSpecs_EachAction_PublishesTheSurfaceAModelFindsItBy(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
+	}))
+	specs := ActionSpecs(client)
+
+	cases := []struct {
+		name       string
+		aliases    []string
+		individual toolutil.IndividualToolSpec
+	}{
+		{
+			name:    "status",
+			aliases: []string{"mcp server status", "gitlab server status", "gitlab connectivity status"},
+			individual: toolutil.IndividualToolSpec{
+				Name:        "gitlab_server_status",
+				Title:       "Server Status",
+				Description: "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.",
+			},
+		},
+		{
+			name: "health_check",
+			aliases: []string{
+				"health check", "server health check", "connectivity check", "gitlab health check",
+				"server diagnostics", "run diagnostics", "diagnostics", "server status check",
+			},
+			// No individual tool: a second tool over the same handler would be
+			// the same call registered twice, under a name one of them would
+			// have to share.
+			individual: toolutil.IndividualToolSpec{},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := healthSpecByName(t, specs, tc.name)
+			if !slices.Equal(spec.Aliases, tc.aliases) {
+				t.Errorf("Aliases = %v, want %v", spec.Aliases, tc.aliases)
+			}
+			if spec.IndividualTool != tc.individual {
+				t.Errorf("IndividualTool = %+v, want %+v", spec.IndividualTool, tc.individual)
+			}
+			if !slices.Equal(spec.Tags, []string{"server", "health", "diagnostics", "connectivity"}) {
+				t.Errorf("Tags = %v, want the four health tags", spec.Tags)
+			}
+			if !slices.Equal(spec.RelatedActions, []string{"admin.metadata_get", "user.me"}) {
+				t.Errorf("RelatedActions = %v, want admin.metadata_get and user.me", spec.RelatedActions)
+			}
+			if spec.Usage != healthUsage {
+				t.Errorf("Usage = %q, want %q", spec.Usage, healthUsage)
+			}
+			if spec.OwnerPackage != "health" {
+				t.Errorf("OwnerPackage = %q, want %q", spec.OwnerPackage, "health")
+			}
+			if !spec.OpenWorld {
+				t.Error("OpenWorld = false, want true: the answer comes from an instance this process does not own")
+			}
+		})
+	}
+}
+
+// TestActionSpecs_BothActions_StayReadOnly asserts that neither health action
+// is classified as a write.
+//
+// Both --read-only and a read_api token narrow the surface per action, so an
+// action misclassified here vanishes from exactly the deployments that most
+// need it: the check is what a caller reaches for when something is already
+// wrong. Nothing else in the package held it, and the whole suite passed with
+// both specs built as mutating creates.
+func TestActionSpecs_BothActions_StayReadOnly(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
+	}))
+
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			if !spec.ReadOnly {
+				t.Error("ReadOnly = false, want true: --read-only would withdraw the tool that diagnoses the failure")
+			}
+			if spec.Destructive {
+				t.Error("Destructive = true, want false: the check writes nothing")
+			}
+			if !spec.Idempotent {
+				t.Error("Idempotent = false, want true: asking twice asks the same question")
+			}
+		})
 	}
 }
 

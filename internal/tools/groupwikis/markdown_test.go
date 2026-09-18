@@ -67,6 +67,26 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				groupWikiCardHints,
 		},
 		{
+			// GitLab need not say what format a page is in, and an empty format
+			// is markdown. Quoting is what the empty case must do: fencing it
+			// would open a block with no info string, and a body that contains
+			// a fence of its own would close it and render the rest as the
+			// response's own Markdown.
+			name: "a page with no format is quoted like markdown",
+			input: Output{
+				Title:   "Notes",
+				Slug:    "notes",
+				Content: "# Heading\n\nbody",
+			},
+			want: "## Wiki: Notes\n\n" +
+				"- **Slug**: notes\n" +
+				"- **Content**:\n" +
+				"  > # Heading\n" +
+				"  >\n" +
+				"  > body\n" +
+				groupWikiCardHints,
+		},
+		{
 			name:  "page read without its content",
 			input: Output{Title: "Empty", Slug: "empty", Format: "markdown"},
 			want: "## Wiki: Empty\n\n" +

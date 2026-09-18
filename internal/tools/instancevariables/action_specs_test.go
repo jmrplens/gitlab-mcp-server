@@ -147,6 +147,61 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestInstanceVariableOptions_UnknownActionKeepsGenericDefaults verifies that an
+// action name none of the switch's cases matches falls through to the shared
+// base rather than to a partly filled spec.
+//
+// It states the half of the contract the switch cannot state itself: the cases
+// only specialize, so what a name it does not know gets is the base and nothing
+// else. Until this existed the last comparison in the switch was never once
+// evaluated false, so a case label that stopped matching would have left its
+// action on these defaults with no test noticing.
+func TestInstanceVariableOptions_UnknownActionKeepsGenericDefaults(t *testing.T) {
+	opts := instanceVariableOptions("nonexistent_action", "gitlab_unknown_instance_variable")
+	if opts.Usage != "Use to execute instancevariables domain action." {
+		t.Errorf("Usage = %q, want the generic default", opts.Usage)
+	}
+	if len(opts.Aliases) != 1 || opts.Aliases[0] != "gitlab_unknown_instance_variable" {
+		t.Errorf("Aliases = %v, want only the individual tool name", opts.Aliases)
+	}
+	if len(opts.RelatedActions) != 0 {
+		t.Errorf("RelatedActions = %v, want none", opts.RelatedActions)
+	}
+	if len(opts.ParameterGuidance) != 0 {
+		t.Errorf("ParameterGuidance = %v, want none", opts.ParameterGuidance)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want empty", opts.IndividualTool.Description)
+	}
+}
+
+// TestInstanceVariableActionSpecs_AllCarryActionSpecificMetadata verifies that
+// none of the five canonical actions is left on those generic defaults.
+//
+// This is the property the unknown-name test above is the counterweight to: a
+// case label that no longer matches its action name is invisible at the call
+// site, and it costs the action its usage text, its natural-language aliases
+// and the "Returns: … See also: …" description every surface lists it by.
+func TestInstanceVariableActionSpecs_AllCarryActionSpecificMetadata(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	if len(specs) != 5 {
+		t.Fatalf("ActionSpecs returned %d specs, want 5", len(specs))
+	}
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if spec.Usage == "Use to execute instancevariables domain action." {
+				t.Errorf("Usage = %q, want action-specific text", spec.Usage)
+			}
+			if len(spec.Aliases) < 2 {
+				t.Errorf("Aliases = %v, want natural-language aliases beside the tool name", spec.Aliases)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Error("IndividualTool.Description is empty, want the action's own description")
+			}
+		})
+	}
+}
+
 func instanceVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

@@ -14,6 +14,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// genericIssueNoteUsage is the placeholder Usage issueNoteOptions starts every
+// action with, before decorateIssueNoteMeta replaces it with the action's own.
+// Both the metadata guard and the unknown-tool test below are about this exact
+// string, so it is named once here rather than spelled in each.
+const genericIssueNoteUsage = "Use to execute issuenotes domain action."
+
 // TestActionSpecs_DiscoveryMetadata guards the 1:1 audit R-META metadata: every
 // issue note action must have a non-generic Usage, natural-language aliases,
 // canonical RelatedActions, parameter guidance, and a "Returns: … See also: …"
@@ -21,7 +27,7 @@ import (
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
 
-	const genericUsage = "Use to execute issuenotes domain action."
+	const genericUsage = genericIssueNoteUsage
 
 	tests := []struct {
 		tool         string
@@ -58,6 +64,40 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestIssueNoteOptions_UnknownTool_KeepsTheGenericDefaults states what a tool
+// name decorateIssueNoteMeta does not name is left with.
+//
+// That switch is keyed on five string literals, and nothing ties them to the
+// names ActionSpecs hands it: renaming a tool in one place and not the other
+// makes its case unreachable, silently. The metadata guard above cannot see
+// that, because it looks the spec up by the same name the switch is keyed on
+// and would simply stop finding the action. What this pins is that the
+// fallthrough leaves the generic placeholder Usage, the bare name as the only
+// alias, and no related actions, guidance or individual-tool description —
+// the shape cmd/audit_discovery_completeness reports as an undecorated action
+// — rather than carrying over whatever the previous case had set.
+func TestIssueNoteOptions_UnknownTool_KeepsTheGenericDefaults(t *testing.T) {
+	const renamed = "gitlab_issue_note_renamed"
+
+	options := issueNoteOptions(renamed)
+
+	if options.Usage != genericIssueNoteUsage {
+		t.Errorf("Usage = %q, want the generic placeholder %q", options.Usage, genericIssueNoteUsage)
+	}
+	if !slices.Equal(options.Aliases, []string{renamed}) {
+		t.Errorf("Aliases = %v, want only %q", options.Aliases, renamed)
+	}
+	if options.RelatedActions != nil {
+		t.Errorf("RelatedActions = %v, want none", options.RelatedActions)
+	}
+	if options.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", options.ParameterGuidance)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty", options.IndividualTool.Description)
 	}
 }
 

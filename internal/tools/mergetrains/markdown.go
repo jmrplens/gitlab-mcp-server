@@ -29,8 +29,13 @@ func userName(u *toolutil.BasicUserOutput) string {
 // the merge request, followed by the title. A car GitLab sent no merge request
 // for renders as nothing rather than as a link to "!0".
 func mergeRequestCell(mr MergeRequestOutput) string {
-	if mr.IID <= 0 && mr.Title == "" {
-		return ""
+	if mr.IID <= 0 {
+		// No IID is no reference. Writing "!0" spells a merge request that
+		// cannot exist and links a reader to nowhere, which is the same reason
+		// pipelineCell below drops its whole cell for an id of zero; the title
+		// is real content, though, so it is kept on its own rather than the
+		// row being dropped with it.
+		return toolutil.EscapeMdTableCell(mr.Title)
 	}
 	link := toolutil.MdTitleLink(fmt.Sprintf("!%d", mr.IID), mr.WebURL)
 	if mr.Title == "" {

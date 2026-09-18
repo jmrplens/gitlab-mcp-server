@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,901 |
-| Unit test functions                                   | 15,704 |
+| Total test functions                                  | 16,944 |
+| Unit test functions                                   | 15,747 |
 | E2E test functions                                    |  1,197 |
 | cmd test functions                                    |  2,763 |
 | Test files (internal/)                                |    582 |
@@ -31,15 +31,15 @@
 | Core packages tested                                  |     27 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.2% |
 | Overall coverage (`go test ./internal/...`)           |  99.7% |
-| Average package coverage                              |  99.3% |
+| Average package coverage                              |  99.4% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,100 | 71.6% |
+| `TestFunc_Scenario` (2-part)           | 12,114 | 71.5% |
 | `TestFunc` (no underscore)             |    904 |  5.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,897 | 23.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  3,926 | 23.2% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,166 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |          9,409 |        383 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |          9,452 |        383 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,197 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,763 |        200 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,901** |  **1,166** |                                                                                                 |
+| **Total**               |     **16,944** |  **1,166** |                                                                                                 |
 
 ### Core Packages
 
@@ -207,31 +207,31 @@
 | groupsshcerts           |        27 |          3 |   100.0% |         3 |
 | groupstoragemoves       |        38 |          2 |   100.0% |         6 |
 | groupvariables          |        58 |          2 |   100.0% |         5 |
-| groupwikis              |        34 |          3 |   100.0% |         5 |
-| health                  |        21 |          1 |   100.0% |         2 |
-| impersonationtokens     |        43 |          2 |   100.0% |         5 |
+| groupwikis              |        37 |          3 |   100.0% |         5 |
+| health                  |        24 |          1 |   100.0% |         2 |
+| impersonationtokens     |        49 |          2 |   100.0% |         5 |
 | importservice           |        34 |          1 |   100.0% |         5 |
-| instancevariables       |        44 |          2 |   100.0% |         5 |
+| instancevariables       |        48 |          2 |   100.0% |         5 |
 | integrations            |        79 |          5 |    99.5% |        12 |
-| invites                 |        49 |          1 |   100.0% |         4 |
+| invites                 |        50 |          1 |   100.0% |         4 |
 | issuediscussions        |        45 |          2 |   100.0% |         6 |
 | issuelinks              |        73 |          4 |    99.4% |         4 |
-| issuenotes              |        49 |          2 |   100.0% |         5 |
+| issuenotes              |        51 |          2 |   100.0% |         5 |
 | issues                  |       241 |          2 |    99.9% |        21 |
-| issuestatistics         |        43 |          1 |   100.0% |         3 |
+| issuestatistics         |        46 |          1 |   100.0% |         3 |
 | iterationdata           |        11 |          1 |   100.0% |         0 |
 | jobs                    |       154 |          4 |    99.9% |        17 |
-| jobtokenscope           |        50 |          2 |   100.0% |         8 |
-| keys                    |        25 |          1 |   100.0% |         2 |
+| jobtokenscope           |        51 |          2 |   100.0% |         8 |
+| keys                    |        26 |          1 |   100.0% |         2 |
 | labeldata               |        11 |          1 |   100.0% |         0 |
-| labels                  |        63 |          1 |   100.0% |         8 |
-| license                 |        21 |          2 |   100.0% |         3 |
-| licensetemplates        |        21 |          1 |   100.0% |         2 |
+| labels                  |        68 |          1 |   100.0% |         8 |
+| license                 |        22 |          2 |   100.0% |         3 |
+| licensetemplates        |        27 |          1 |   100.0% |         2 |
 | markdown                |        10 |          1 |   100.0% |         1 |
 | memberroles             |        53 |          4 |   100.0% |         6 |
-| members                 |        63 |          2 |   100.0% |         6 |
+| members                 |        68 |          2 |   100.0% |         6 |
 | mergerequests           |       263 |          3 |    99.8% |        30 |
-| mergetrains             |        16 |          2 |    98.6% |         4 |
+| mergetrains             |        18 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        71 |          1 |    99.7% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
@@ -303,7 +303,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,409** |    **383** |          | **1,187** |
+| **Total**               | **9,452** |    **383** |          | **1,187** |
 
 </details>
 
@@ -516,7 +516,7 @@
 | memberroles             |   100.0% |
 | members                 |   100.0% |
 | mergerequests           |    99.8% |
-| mergetrains             |    98.6% |
+| mergetrains             |   100.0% |
 | metadata                |   100.0% |
 | milestones              |    99.7% |
 | modelregistry           |   100.0% |

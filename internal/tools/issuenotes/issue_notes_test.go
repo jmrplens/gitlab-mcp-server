@@ -87,6 +87,58 @@ func TestIssueNote_CreateInternal(t *testing.T) {
 	}
 }
 
+// TestCreate_InternalFlag_ReachesTheRequestBody holds what the handler sends
+// GitLab, rather than what the fixture answers back. TestIssueNote_CreateInternal
+// above asserts out.Internal, which is read from a canned response that says
+// internal:true however the request was built, so the guard copying
+// input.Internal onto the options can be inverted and nothing fails — and an
+// inverted guard posts a note the caller asked to keep internal as a public
+// comment on the issue, which cannot be taken back. An explicit false is
+// asserted for the mirror-image reason: it is a pointer to false rather than an
+// absent value, so GitLab must be told false and not left to its own default.
+func TestCreate_InternalFlag_ReachesTheRequestBody(t *testing.T) {
+	tests := []struct {
+		name     string
+		internal *bool
+		fragment string
+		wantIn   bool
+	}{
+		{name: "True", internal: new(true), fragment: `"internal":true`, wantIn: true},
+		{name: "ExplicitFalse", internal: new(false), fragment: `"internal":false`, wantIn: true},
+		{name: "Unset", internal: nil, fragment: "internal", wantIn: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathIssueNotes {
+					http.NotFound(w, r)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read body: %v", err)
+					http.Error(w, "read body", http.StatusInternalServerError)
+					return
+				}
+				if got := strings.Contains(string(body), tt.fragment); got != tt.wantIn {
+					t.Errorf("body = %s, contains %q = %v, want %v", body, tt.fragment, got, tt.wantIn)
+				}
+				testutil.RespondJSON(w, http.StatusCreated, noteJSONInternal)
+			}))
+
+			if _, err := Create(context.Background(), client, CreateInput{
+				ProjectID: testProjectID,
+				IssueIID:  10,
+				Body:      "Internal note",
+				Internal:  tt.internal,
+			}); err != nil {
+				t.Fatalf(fmtIssueNoteCreateErr, err)
+			}
+		})
+	}
+}
+
 // TestIssueNoteCreate_APIError verifies IssueNoteCreate when API error.
 func TestIssueNoteCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -420,30 +472,49 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 
 // TestNoteIDRequired_Validation ensures GetNote, Update, Delete reject
 // zero/negative note_id before making any API call.
+//
+// Each handler is put to both values because zero is the boundary that a
+// caller actually reaches and a negative one is not: note IDs start at 1, so
+// an omitted note_id arrives here as the zero value, and a guard written as
+// "< 0" instead of "<= 0" would let that through to GitLab as a request for
+// note 0 — a 404 the caller has to interpret instead of the parameter name it
+// forgot. Asserting only the negative value leaves that boundary unstated,
+// which is what it was for Update.
 func TestNoteIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
-	tests := []struct {
+	handlers := []struct {
 		name string
-		fn   func() error
+		fn   func(noteID int64) error
 	}{
-		{"GetNote", func() error {
-			_, e := GetNote(ctx, client, GetInput{ProjectID: pid, IssueIID: 10, NoteID: 0})
+		{"GetNote", func(noteID int64) error {
+			_, e := GetNote(ctx, client, GetInput{ProjectID: pid, IssueIID: 10, NoteID: noteID})
 			return e
 		}},
-		{"Update", func() error {
-			_, e := Update(ctx, client, UpdateInput{ProjectID: pid, IssueIID: 10, NoteID: -1, Body: "x"})
+		{"Update", func(noteID int64) error {
+			_, e := Update(ctx, client, UpdateInput{ProjectID: pid, IssueIID: 10, NoteID: noteID, Body: "x"})
 			return e
 		}},
-		{"Delete", func() error { return Delete(ctx, client, DeleteInput{ProjectID: pid, IssueIID: 10, NoteID: 0}) }},
+		{"Delete", func(noteID int64) error {
+			return Delete(ctx, client, DeleteInput{ProjectID: pid, IssueIID: 10, NoteID: noteID})
+		}},
+	}
+	noteIDs := []struct {
+		name string
+		id   int64
+	}{
+		{"Zero", 0},
+		{"Negative", -1},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "note_id")
-		})
+	for _, h := range handlers {
+		for _, n := range noteIDs {
+			t.Run(h.name+"_"+n.name, func(t *testing.T) {
+				assertContains(t, h.fn(n.id), "note_id")
+			})
+		}
 	}
 }
 

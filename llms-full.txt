@@ -20949,7 +20949,7 @@ Update an existing project label (new_name, color, description, priority, archiv
 - `label_id` (string or integer) (required): Label ID or name
 - `name` (string): Label name to update (alternative to label_id for selecting the label by name)
 - `new_name` (string): New label name
-- `priority` (integer): New label priority (0 to remove)
+- `priority` (integer): New label priority, where 0 removes the priority GitLab has
 - `project_id` (string or integer) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

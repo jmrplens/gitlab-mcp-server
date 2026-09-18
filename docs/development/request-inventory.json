@@ -8586,6 +8586,12 @@
       "package": "internal/tools/licensetemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/templates/licenses/nope"
+    },
+    {
+      "package": "internal/tools/licensetemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/templates/licenses/x"
     },
     {

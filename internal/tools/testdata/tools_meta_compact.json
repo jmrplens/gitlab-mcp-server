@@ -37414,7 +37414,10 @@
                   "type": "string"
                 },
                 "priority": {
-                  "type": "integer"
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
                 },
                 "project_id": {
                   "type": [

@@ -45,6 +45,78 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_UsageAndGuidance_DescribeTheirOwnAction holds each license
+// tool to the usage line and the parameter guidance of the action it actually
+// routes, instead of to "not empty".
+//
+// Both are model-facing: the usage line is what a client reads to decide what
+// a tool does, and the guidance is what it reads to decide what to put in it.
+// licenseOptions picks them with one equality test per action over a shared
+// name, so a branch that matches every action but its own publishes a read
+// tool announcing itself as "Delete an installed GitLab license by ID" while
+// the delete tool offers no id at all. Asserting only that Usage is non-empty
+// let exactly that through: the delete branch's condition could be inverted
+// and the whole suite stayed green.
+func TestActionSpecs_UsageAndGuidance_DescribeTheirOwnAction(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := licenseSpecsByTool(t, ActionSpecs(client))
+
+	tests := []struct {
+		tool string
+		// wantUsage is spelled out here rather than read back from the spec,
+		// so the assertion cannot move with the thing under test.
+		wantUsage string
+		// wantGuidance is the complete set of parameters the action offers
+		// guidance for, keyed to the semantic role it gives each one. A tool
+		// that gains a parameter belonging to a sibling action fails here.
+		wantGuidance map[string]string
+	}{
+		{
+			tool:         "gitlab_get_license",
+			wantUsage:    "Get the currently installed GitLab license details.",
+			wantGuidance: map[string]string{},
+		},
+		{
+			tool:         "gitlab_add_license",
+			wantUsage:    "Add or replace the GitLab instance license using the encoded license payload.",
+			wantGuidance: map[string]string{"license": "license_payload"},
+		},
+		{
+			tool:         "gitlab_delete_license",
+			wantUsage:    "Delete an installed GitLab license by ID.",
+			wantGuidance: map[string]string{"id": "license_id"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.Usage != tt.wantUsage {
+				t.Errorf("Usage for %s = %q, want %q", tt.tool, spec.Usage, tt.wantUsage)
+			}
+			if len(spec.ParameterGuidance) != len(tt.wantGuidance) {
+				t.Errorf("ParameterGuidance for %s has %d parameters (%v), want %d (%v)",
+					tt.tool, len(spec.ParameterGuidance), spec.ParameterGuidance, len(tt.wantGuidance), tt.wantGuidance)
+			}
+			for param, wantRole := range tt.wantGuidance {
+				guidance, ok := spec.ParameterGuidance[param]
+				if !ok {
+					t.Errorf("ParameterGuidance for %s is missing %q", tt.tool, param)
+					continue
+				}
+				if guidance.SemanticRole != wantRole {
+					t.Errorf("SemanticRole of %s.%s = %q, want %q", tt.tool, param, guidance.SemanticRole, wantRole)
+				}
+				if guidance.ValueSource == "" || guidance.ExampleBinding == "" {
+					t.Errorf("guidance for %s.%s = %+v, want a value source and an example binding", tt.tool, param, guidance)
+				}
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every license tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()

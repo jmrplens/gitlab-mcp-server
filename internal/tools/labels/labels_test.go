@@ -336,6 +336,67 @@ func TestLabelCreate_ArchivedFlag(t *testing.T) {
 	}
 }
 
+// TestLabelCreate_OptionalFields_ReachTheBodyOnlyWhenSupplied asserts that each
+// optional input of a create is in the request body exactly when the caller
+// supplied it. The guard in front of each one is the whole difference between
+// "the caller said nothing" and "the caller asked for the zero value", and
+// nothing in the response can show which happened: GitLab answers a create with
+// the label it made, so a test reading only the answer passes whatever the
+// handler sent. An empty description sent as a value would be a description, and
+// a priority of 0 sent as a value would pin the label above every prioritized
+// one in the project.
+func TestLabelCreate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
+	archived := true
+	cases := []struct {
+		name     string
+		input    CreateInput
+		contains []string
+		omits    []string
+	}{
+		{
+			name:     "every optional field supplied",
+			input:    CreateInput{ProjectID: "42", Name: "bug", Color: "#d9534f", Description: "Bug report", Priority: 5, Archived: &archived},
+			contains: []string{`"description":"Bug report"`, `"priority":5`, `"archived":true`},
+		},
+		{
+			name:  "no optional field supplied",
+			input: CreateInput{ProjectID: "42", Name: "bug", Color: "#d9534f"},
+			omits: []string{`"description"`, `"priority"`, `"archived"`},
+		},
+		{
+			name:  "priority zero is no priority",
+			input: CreateInput{ProjectID: "42", Name: "bug", Color: "#d9534f", Priority: 0},
+			omits: []string{`"priority"`},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathProjectLabels {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+					http.Error(w, "read request body", http.StatusInternalServerError)
+					return
+				}
+				captured = string(body)
+				testutil.RespondJSON(w, http.StatusCreated, labelJSON)
+			}))
+
+			if _, err := Create(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			assertRequestBodyFields(t, captured, tc.contains, tc.omits)
+		})
+	}
+}
+
 // TestLabelCreate_MissingProject verifies LabelCreate when missing project.
 func TestLabelCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -442,6 +503,130 @@ func TestLabelUpdate_NameBodyField(t *testing.T) {
 	}
 	if !strings.Contains(capturedBody, "\"name\":\"bug\"") {
 		t.Errorf("request body should contain \"name\":\"bug\", got: %s", capturedBody)
+	}
+}
+
+// TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied asserts that an
+// update carries exactly the fields the caller named. It matters more here than
+// on a create, because GitLab applies what an update sends and leaves the rest
+// alone: a guard that let an unsupplied field through would send the Go zero and
+// blank the label's description or rename it to the empty string, and the answer
+// a test reads back would still be a label. The priority case pins the shape the
+// handler really has: a priority of 0 is treated as "unsaid" and never reaches
+// GitLab, so the input's own "0 to remove" cannot work through this path.
+// TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab verifies that
+// a priority below zero is a parameter error rather than a removal.
+//
+// Zero is the removal the schema documents, and the handler sends it as an
+// explicit null. A negative is neither that nor a priority GitLab accepts, and
+// the tempting reading — anything not positive means remove — would perform a
+// change on a value the caller got wrong, silently dropping a priority they
+// never asked to drop. The request count is what the test asserts alongside the
+// message, because a refusal that still reaches GitLab is not a refusal.
+func TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab(t *testing.T) {
+	var requests int
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug"}`)
+	}))
+
+	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "42", LabelID: "bug", Priority: new(int64(-1))})
+
+	if err == nil {
+		t.Fatal("Update() error = nil, want a negative priority refused")
+	}
+	if !strings.Contains(err.Error(), "priority must be zero or greater") {
+		t.Errorf("Update() error = %v, want it to say what a caller may pass", err)
+	}
+	if requests != 0 {
+		t.Errorf("GitLab was asked %d time(s); a refused parameter must not reach it", requests)
+	}
+}
+
+func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
+	archived := true
+	cases := []struct {
+		name     string
+		input    UpdateInput
+		contains []string
+		omits    []string
+	}{
+		{
+			name: "every optional field supplied",
+			input: UpdateInput{
+				ProjectID: "42", LabelID: "bug", Name: "bug", NewName: "defect",
+				Color: "#00FF00", Description: "Bug report", Priority: new(int64(5)), Archived: &archived,
+			},
+			contains: []string{
+				`"name":"bug"`, `"new_name":"defect"`, `"color":"#00FF00"`,
+				`"description":"Bug report"`, `"priority":5`, `"archived":true`,
+			},
+		},
+		{
+			name:     "only the new name supplied",
+			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect"},
+			contains: []string{`"new_name":"defect"`},
+			omits:    []string{`"name"`, `"color"`, `"description"`, `"priority"`, `"archived"`},
+		},
+		{
+			// Zero is the removal the schema promises, and GitLab performs it
+			// on an explicit null rather than on the number 0, which would set
+			// a priority of zero. Omitting the key would leave the priority
+			// the label already has, which is the one thing a caller passing
+			// zero is asking not to happen.
+			name:     "priority zero asks GitLab to remove the priority",
+			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect", Priority: new(int64(0))},
+			contains: []string{`"new_name":"defect"`, `"priority":null`},
+		},
+		{
+			name:     "priority unset leaves the label's own priority alone",
+			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect"},
+			contains: []string{`"new_name":"defect"`},
+			omits:    []string{`"priority"`},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathLabelBug {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read request body: %v", err)
+					http.Error(w, "read request body", http.StatusInternalServerError)
+					return
+				}
+				captured = string(body)
+				testutil.RespondJSON(w, http.StatusOK, labelJSON)
+			}))
+
+			if _, err := Update(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+			assertRequestBodyFields(t, captured, tc.contains, tc.omits)
+		})
+	}
+}
+
+// assertRequestBodyFields holds one captured request body to the JSON fields it
+// must carry and to the ones it must leave out, naming the whole body when it
+// disagrees so the reader sees what was sent rather than which check failed.
+func assertRequestBodyFields(t *testing.T, body string, contains, omits []string) {
+	t.Helper()
+	for _, want := range contains {
+		if !strings.Contains(body, want) {
+			t.Errorf("request body = %s, want it to carry %s", body, want)
+		}
+	}
+	for _, unwanted := range omits {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("request body = %s, want it to leave out %s", body, unwanted)
+		}
 	}
 }
 
@@ -773,7 +958,7 @@ func TestUpdate_WithDescAndPriority(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := Update(context.Background(), client, UpdateInput{
-		ProjectID: "42", LabelID: "bug", Description: "Critical", Priority: 5,
+		ProjectID: "42", LabelID: "bug", Description: "Critical", Priority: new(int64(5)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1296,6 +1481,69 @@ func TestActionSpecs_LabelGetRoute(t *testing.T) {
 	if out.ID != 5 || out.Name != "bug" {
 		t.Fatalf("label output = %#v, want ID 5 name bug", out)
 	}
+}
+
+// TestActionSpecs_LabelGetRoute_ARefusalThatIsNotA404_StaysAnError asserts that
+// only a 404 becomes the structured not-found card and every other refusal is
+// handed back as an error. The two halves of the guard are what separates "this
+// label does not exist" from "you may not read it": a 403 dressed as a not-found
+// card tells a model the label is gone, so it stops asking and reports a clean
+// absence where the real answer is a missing permission or a broken instance.
+func TestActionSpecs_LabelGetRoute_ARefusalThatIsNotA404_StaysAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	byTool := labelSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_label_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "label_id": "bug"})
+	if err == nil {
+		t.Fatalf("Route.Handler() error = nil, result = %#v, want the 403 reported as an error", result)
+	}
+	if _, isNotFound := result.(labelNotFoundOutput); isNotFound {
+		t.Errorf("Route.Handler() result = %#v, want no not-found output for a 403", result)
+	}
+}
+
+// TestLabelOptionsForAction_Metadata_IsPerActionWithASharedFallback asserts the
+// two halves of the metadata switch: every action this package registers leaves
+// it with wording of its own, and a name the switch does not know keeps the
+// shared base. The first is what a model reads to choose an action, so an action
+// added without a case would ship the generic sentence to every client and be
+// invisible in a green suite; the second says what that fallback is, which is
+// the only thing standing behind such an omission.
+func TestLabelOptionsForAction_Metadata_IsPerActionWithASharedFallback(t *testing.T) {
+	const baseUsage = "Use to execute labels domain action."
+
+	t.Run("every registered action is described on its own", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.NewServeMux())
+		for _, spec := range ActionSpecs(client) {
+			if spec.Usage == baseUsage {
+				t.Errorf("%s Usage = the shared base, want wording of its own", spec.Name)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Errorf("%s IndividualTool.Description is empty, want its own description", spec.Name)
+			}
+		}
+	})
+
+	t.Run("an unknown action keeps the shared base", func(t *testing.T) {
+		options := labelOptionsForAction("label_unheard_of", "gitlab_label_unheard_of")
+		if options.Usage != baseUsage {
+			t.Errorf("Usage = %q, want the shared base %q", options.Usage, baseUsage)
+		}
+		if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_label_unheard_of" {
+			t.Errorf("Aliases = %v, want only the individual tool name", options.Aliases)
+		}
+		if options.IndividualTool.Description != "" {
+			t.Errorf("IndividualTool.Description = %q, want none for an action the switch does not know", options.IndividualTool.Description)
+		}
+		if options.ParameterGuidance != nil {
+			t.Errorf("ParameterGuidance = %v, want none for an action the switch does not know", options.ParameterGuidance)
+		}
+		if options.OwnerPackage != "labels" {
+			t.Errorf("OwnerPackage = %q, want labels", options.OwnerPackage)
+		}
+	})
 }
 
 // labelSpecsByTool supports label specs by tool assertions in labels tests.

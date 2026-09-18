@@ -42,18 +42,7 @@ func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if meta, ok := userTokenActionMeta[individualTool]; ok {
-		if meta.usage != "" {
-			options.Usage = meta.usage
-		}
-		if len(meta.aliases) > 0 {
-			options.Aliases = append([]string(nil), meta.aliases...)
-		}
-		if len(meta.related) > 0 {
-			options.RelatedActions = append([]string(nil), meta.related...)
-		}
-		if meta.description != "" {
-			options.IndividualTool.Description = meta.description
-		}
+		applyActionMeta(&options, meta)
 	}
 	if individualTool == "gitlab_list_impersonation_tokens" {
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -61,6 +50,27 @@ func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 		}
 	}
 	return options
+}
+
+// applyActionMeta overwrites the option fields the entry names and leaves the
+// rest as the caller built them. The contract is per field rather than all or
+// nothing: an entry that fills only some of them keeps the generic usage, the
+// tool's own alias and whatever related actions the caller already set, so a
+// half-filled entry degrades to the generic surface instead of publishing an
+// empty one, which is what a blanket assignment would do.
+func applyActionMeta(options *toolutil.ActionSpecOptions, meta userTokenActionMetaEntry) {
+	if meta.usage != "" {
+		options.Usage = meta.usage
+	}
+	if len(meta.aliases) > 0 {
+		options.Aliases = append([]string(nil), meta.aliases...)
+	}
+	if len(meta.related) > 0 {
+		options.RelatedActions = append([]string(nil), meta.related...)
+	}
+	if meta.description != "" {
+		options.IndividualTool.Description = meta.description
+	}
 }
 
 // userTokenActionMetaEntry is the discovery metadata for one user-token action.
