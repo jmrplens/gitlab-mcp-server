@@ -2360,6 +2360,12 @@
       "package": "internal/tools/ciyamltemplates",
       "kind": "rest",
       "method": "GET",
+      "path": "/templates/gitlab_ci_ymls/Nope"
+    },
+    {
+      "package": "internal/tools/ciyamltemplates",
+      "kind": "rest",
+      "method": "GET",
       "path": "/templates/gitlab_ci_ymls/Python"
     },
     {
@@ -3053,6 +3059,12 @@
     {
       "package": "internal/tools/customattributes",
       "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/custom_attributes/dept"
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
       "method": "DELETE",
       "path": "/groups/:group_id/custom_attributes/stale"
     },
@@ -3077,6 +3089,16 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/custom_attributes"
+    },
+    {
+      "package": "internal/tools/customattributes",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/projects/:project_id/custom_attributes/dept",
+      "body": [
+        "key",
+        "value"
+      ]
     },
     {
       "package": "internal/tools/customattributes",
@@ -3557,6 +3579,18 @@
       "kind": "rest",
       "method": "GET",
       "path": "/templates/dockerfiles/Bad"
+    },
+    {
+      "package": "internal/tools/dockerfiletemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/dockerfiles/Go"
+    },
+    {
+      "package": "internal/tools/dockerfiletemplates",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/templates/dockerfiles/Nope"
     },
     {
       "package": "internal/tools/dockerfiletemplates",
