@@ -45,6 +45,54 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
+// TestGet_Size_OnlyAPositiveSizeIsSent asserts what the handler puts on the
+// wire for the optional size, which is the entire content of the `size > 0`
+// guard and which nothing about the returned URL can see: GitLab answers the
+// same avatar whatever we asked for, so every assertion on the output passes
+// with the parameter sent, dropped or invented.
+//
+// Both halves matter to a caller. A size the caller asked for has to arrive, or
+// they are handed GitLab's default avatar under the name of the size they
+// requested; and a size they did not ask for must not be invented, because
+// `size=0` is a request for a zero-pixel avatar rather than the absence the
+// endpoint reads as "your choice". The parameter is a pointer with
+// `url:"size,omitempty"`, and omitempty on a pointer means nil, not zero, so a
+// pointer to 0 is spelled out on the wire.
+func TestGet_Size_OnlyAPositiveSizeIsSent(t *testing.T) {
+	cases := []struct {
+		name string
+		size int64
+		// want is the value the size parameter must carry; empty means the
+		// parameter must not be on the request at all.
+		want string
+	}{
+		{name: "a requested size is sent", size: 128, want: "128"},
+		{name: "one pixel is still a size", size: 1, want: "1"},
+		{name: "an omitted size sends nothing", size: 0, want: ""},
+		{name: "a negative size sends nothing", size: -1, want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				q := r.URL.Query()
+				if got := q.Get("email"); got != "test@example.com" {
+					t.Errorf("email = %q, want %q", got, "test@example.com")
+				}
+				switch {
+				case tc.want == "" && q.Has("size"):
+					t.Errorf("size = %q, want the parameter to be absent", q.Get("size"))
+				case tc.want != "" && q.Get("size") != tc.want:
+					t.Errorf("size = %q, want %q", q.Get("size"), tc.want)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://example.com/avatar.png"}`)
+			}))
+			if _, err := Get(t.Context(), client, GetInput{Email: "test@example.com", Size: tc.size}); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 // assertMarkdown compares a rendered result with the whole document it is
 // meant to be. A substring assertion is what let a card open a table and then
 // write list rows into it in two packages of this tree: every row the test
