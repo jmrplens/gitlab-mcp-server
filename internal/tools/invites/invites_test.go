@@ -1328,3 +1328,107 @@ func TestPendingInvitations_MarkdownLeavesTheTokenOut(t *testing.T) {
 		t.Errorf("markdown carries the invitation token:\n%s", got)
 	}
 }
+
+// TestInvites_Refusal_NamesTheScopeItWasCalledOn verifies that each of the four
+// refusal hints names the identifier its own handler takes and the role GitLab
+// requires at that scope.
+//
+// Both halves are what a caller acts on. The project handlers take no group_id
+// and the group handlers take no project_id, so a hint naming the other one
+// sends a model to a parameter that does not exist on the tool it just called.
+// And the roles genuinely differ: Maintainer is enough to invite into a
+// project, while a group needs Owner, so lending the project wording to the
+// group refusal tells a caller their Maintainer membership should have worked
+// and leaves them retrying a call GitLab will refuse every time.
+//
+// Nothing asserted any of this until now. The suite reached both refusal paths
+// and only checked that some error came back, which is why the two scopes'
+// hints could be swapped, or the whole StatusForbidden branch in runInvitation
+// deleted, with every test still green.
+func TestInvites_Refusal_NamesTheScopeItWasCalledOn(t *testing.T) {
+	cases := []struct {
+		name string
+		// status is the refusal the mock answers with: the one whose branch
+		// carries the hint under test. A list hint is reached through 404 and
+		// an invitation hint through 403.
+		status int
+		call   func(context.Context, *gitlabclient.Client) error
+		// wants and rejects are the scope and role words the hint has to carry
+		// and has to leave out, rather than the sentence it happens to spell.
+		wants   []string
+		rejects []string
+	}{
+		{
+			name:   "project list refusal names project_id and the project role",
+			status: http.StatusNotFound,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListPendingProjectInvitations(ctx, c, ListPendingProjectInvitationsInput{ProjectID: "42"})
+				return err
+			},
+			wants:   []string{"project_id", "Maintainer"},
+			rejects: []string{"group_id"},
+		},
+		{
+			name:   "group list refusal names group_id and demands Owner",
+			status: http.StatusNotFound,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListPendingGroupInvitations(ctx, c, ListPendingGroupInvitationsInput{GroupID: "10"})
+				return err
+			},
+			wants:   []string{"group_id", "Owner"},
+			rejects: []string{"project_id", "Maintainer"},
+		},
+		{
+			name:   "project invitation refusal names the project and its role",
+			status: http.StatusForbidden,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ProjectInvites(ctx, c, ProjectInvitesInput{ProjectID: "42", Email: "a@b.com", AccessLevel: 30})
+				return err
+			},
+			wants:   []string{"project", "Maintainer"},
+			rejects: []string{"group"},
+		},
+		{
+			name:   "group invitation refusal names the group and demands Owner",
+			status: http.StatusForbidden,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := GroupInvites(ctx, c, GroupInvitesInput{GroupID: "10", Email: "a@b.com", AccessLevel: 30})
+				return err
+			},
+			wants:   []string{"group", "Owner"},
+			rejects: []string{"project", "Maintainer"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+			err := tc.call(context.Background(), client)
+			if err == nil {
+				t.Fatalf("expected a refusal from status %d, got nil", tc.status)
+			}
+			// Only the suggestion is this handler's own: the classification
+			// preamble toolutil writes for a 403 mentions both roles whatever
+			// scope was called, so asserting over the whole message would be
+			// asserting about the wrapper instead of about the hint chosen
+			// here. Its absence is itself a failure, since that is what
+			// deleting the branch looks like.
+			const marker = "Suggestion: "
+			_, hint, found := strings.Cut(err.Error(), marker)
+			if !found {
+				t.Fatalf("refusal %q carries no hint", err)
+			}
+			for _, want := range tc.wants {
+				if !strings.Contains(hint, want) {
+					t.Errorf("hint %q does not name %q", hint, want)
+				}
+			}
+			for _, reject := range tc.rejects {
+				if strings.Contains(hint, reject) {
+					t.Errorf("hint %q names %q, which belongs to the other scope", hint, reject)
+				}
+			}
+		})
+	}
+}
