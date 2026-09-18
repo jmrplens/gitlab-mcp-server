@@ -6,6 +6,7 @@ package appstatistics
 import (
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -53,6 +54,85 @@ func TestGet_Error(t *testing.T) {
 	_, err := Get(t.Context(), client, GetInput{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestGet_StringEncodedCounts_EachNameReadsItsOwnValue pins the two properties
+// that make this handler build its own request instead of calling client-go's
+// GetApplicationStatistics.
+//
+// The first is why it exists at all: some GitLab versions answer this endpoint
+// with the counts encoded as JSON strings, and the SDK types every field of
+// ApplicationStatistics as int64, so on such an instance the SDK call fails
+// outright and flexibleStats is the only reason the tool answers anything
+// (docs/development/upstream-bugs.md). Every other fixture in this file sends
+// JSON numbers, which the SDK would have decoded too, so nothing here stopped
+// the workaround being collapsed back to int64 with the suite still green.
+//
+// The second is the mapping. Each of the eleven counts is given a value of its
+// own, so a json tag that stops matching what GitLab spells, or a field reading
+// its neighbour's number, fails here rather than publishing a silent zero that
+// reads as a fact about the instance. Only three of the eleven were asserted
+// anywhere before this.
+func TestGet_StringEncodedCounts_EachNameReadsItsOwnValue(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A read action must reach GitLab as a read: nothing else asserted the
+		// method, so this route could have been sent as a write and passed.
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, "/api/v4/application/statistics")
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"forks": "11", "issues": "22", "merge_requests": "33",
+			"notes": "44", "snippets": "55", "ssh_keys": "66",
+			"milestones": "77", "users": "88", "groups": "99",
+			"projects": "111", "active_users": "122"
+		}`)
+	})
+	out, err := Get(t.Context(), testutil.NewTestClient(t, handler), GetInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := GetOutput{
+		Forks: 11, Issues: 22, MergeRequests: 33, Notes: 44, Snippets: 55,
+		SSHKeys: 66, Milestones: 77, Users: 88, Groups: 99, Projects: 111,
+		ActiveUsers: 122,
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Get() = %+v, want %+v", out, want)
+	}
+}
+
+// TestGet_ErrorStatus_HintsAdministratorAccessOnlyOnForbidden states the branch
+// WrapErrWithStatusHint chooses, which nothing asserted: the two error tests
+// here check only that some error came back, so the status the hint is keyed to
+// could move and the wording could vanish without failing anything.
+//
+// A 403 is what GitLab answers a token that is not an administrator's, and the
+// suggestion is what tells a model to stop retrying and ask for a different
+// credential. Any other status means something else, and carrying that advice
+// there would send the reader after a fix that cannot help.
+func TestGet_ErrorStatus_HintsAdministratorAccessOnlyOnForbidden(t *testing.T) {
+	const adminHint = "application statistics require administrator access"
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{name: "forbidden names the credential", status: http.StatusForbidden, wantHint: true},
+		{name: "bad request says nothing about credentials", status: http.StatusBadRequest, wantHint: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"nope"}`)
+			}))
+			_, err := Get(t.Context(), client, GetInput{})
+			if err == nil {
+				t.Fatalf("status %d: expected an error", tc.status)
+			}
+			if got := strings.Contains(err.Error(), adminHint); got != tc.wantHint {
+				t.Errorf("status %d: error %q mentions %q = %v, want %v", tc.status, err, adminHint, got, tc.wantHint)
+			}
+		})
 	}
 }
 
