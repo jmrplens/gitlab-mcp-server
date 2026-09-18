@@ -100,28 +100,43 @@ func TestDecorateGroupAnalyticsMeta_EntryFillsNothing_LeavesEveryGenericOptionAl
 // non-empty says nothing about whether the sibling cluster was published. A
 // model that found one of the three counts this way finds the other two.
 //
-// It compares the action part of each entry and not the whole ID, because the
-// table spells the siblings with the owner package as prefix
-// (groupanalytics.analytics_mr_count) while the catalog projects these actions
-// under the group domain (group.analytics_mr_count) — a discrepancy this test
-// deliberately neither asserts nor depends on.
+// It compares whole canonical IDs, which is the only comparison worth making.
+// The table used to spell the siblings with the owner package as the prefix,
+// groupanalytics.analytics_mr_count, while these actions are routes on the
+// group catalog group and are projected as group.analytics_mr_count, so every
+// entry named an action that does not exist and a model following one found
+// nothing. Comparing the part after the last dot passes either way, which is
+// how the wrong prefix survived: the ID a caller resolves is the whole string.
 func TestActionSpecs_RelatedActions_NameTheTwoSiblingAnalyticsActions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
+	// The canonical ID of each of the three, taken from the constants
+	// markdown.go declares for exactly this purpose rather than rebuilt here,
+	// so the two places cannot drift apart.
+	canonical := map[string]string{
+		"analytics_issues_count":  actionIssuesCount,
+		"analytics_mr_count":      actionMRCount,
+		"analytics_members_count": actionMembersCount,
+	}
 	specs := ActionSpecs(client)
 	for _, spec := range specs {
 		t.Run(spec.Name, func(t *testing.T) {
 			named := make(map[string]bool, len(spec.RelatedActions))
 			for _, related := range spec.RelatedActions {
-				named[related[strings.LastIndex(related, ".")+1:]] = true
+				named[related] = true
 			}
 			for _, sibling := range specs {
 				if sibling.Name == spec.Name {
 					continue
 				}
-				if !named[sibling.Name] {
-					t.Errorf("RelatedActions %v does not name the sibling %q", spec.RelatedActions, sibling.Name)
+				wanted, known := canonical[sibling.Name]
+				if !known {
+					t.Fatalf("sibling %q has no canonical ID in this test's table; add it beside the constants in markdown.go", sibling.Name)
+				}
+				if !named[wanted] {
+					t.Errorf("RelatedActions %v does not name the sibling by its canonical ID %q; an ID that is not the catalog's resolves to nothing",
+						spec.RelatedActions, wanted)
 				}
 			}
 		})
