@@ -5,13 +5,14 @@ package groupimportexport
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -347,36 +348,94 @@ func TestImportFile_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestImportFile_WithParentID verifies the ImportFile_WithParentID handler.
-// The mock GitLab API at /api/v4/groups/import (POST) returns a representative success body.
-// It asserts the returned output matches the expected fields.
-func TestImportFile_WithParentID(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/groups/import" && r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusAccepted)
+// TestImportFile_ParentID_IsSentOnlyWhenTheCallerNamedOne verifies that the
+// parent group a caller names reaches GitLab in the multipart body, and that a
+// caller who names none has no parent_id sent on their behalf.
+//
+// parent_id is the whole difference between a group imported at the top level
+// and one nested under an existing group, and nothing in the answer says which
+// happened: GitLab acknowledges an import with an empty 202 whatever the
+// archive lands under, and the group itself is built asynchronously afterwards.
+// A handler that dropped the field would therefore report the import started,
+// truthfully, while the caller's group appeared somewhere they never asked for.
+// Asserting the request rather than the result is the only place that shows.
+func TestImportFile_ParentID_IsSentOnlyWhenTheCallerNamedOne(t *testing.T) {
+	parentID := int64(42)
+	tests := []struct {
+		name     string
+		parentID *int64
+		wantSent string
+	}{
+		{name: "a caller naming a parent group has it sent", parentID: &parentID, wantSent: "42"},
+		{name: "a caller naming no parent group has none sent", parentID: nil, wantSent: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var served atomic.Bool
+			client := testutil.NewTestClient(t, importFormHandler(t, &served, tt.wantSent))
+
+			tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
+			if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			out, err := ImportFile(t.Context(), client, ImportFileInput{
+				Name:     importedGroupName,
+				Path:     importedGroupPath,
+				File:     tmpFile,
+				ParentID: tt.parentID,
+			})
+			if err != nil {
+				t.Fatalf("ImportFile() error: %v", err)
+			}
+			if out.Message == "" {
+				t.Error("expected non-empty message")
+			}
+			if !served.Load() {
+				t.Fatal("the import request never reached the mock GitLab, so nothing was asserted")
+			}
+		})
+	}
+}
+
+// The name and path TestImportFile_ParentID_IsSentOnlyWhenTheCallerNamedOne
+// asks for. They differ from each other so that a handler swapping the two
+// multipart fields is visible.
+const (
+	importedGroupName = "child-group"
+	importedGroupPath = "child-path"
+)
+
+// importFormHandler answers the group import endpoint and asserts the multipart
+// body carries what the caller asked for, with wantParentID empty for a caller
+// that named no parent. It records having served the request in served, so a
+// request that never arrived is a failure rather than a silently unasserted
+// pass. Assertions here run on the server's goroutine, so they report with
+// t.Errorf and answer deterministically instead of aborting it.
+func importFormHandler(t *testing.T, served *atomic.Bool, wantParentID string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/import" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, handler)
+		served.Store(true)
+		defer w.WriteHeader(http.StatusAccepted)
 
-	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	parentID := int64(42)
-	out, err := ImportFile(context.Background(), client, ImportFileInput{
-		Name:     "child-group",
-		Path:     "child-group",
-		File:     tmpFile,
-		ParentID: &parentID,
-	})
-	if err != nil {
-		t.Fatalf("ImportFile() error: %v", err)
-	}
-	if out.Message == "" {
-		t.Error("expected non-empty message")
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("parse multipart: %v", err)
+			return
+		}
+		if got := testutil.FormValue(form, "parent_id"); got != wantParentID {
+			t.Errorf("parent_id sent = %q, want %q", got, wantParentID)
+		}
+		if got := testutil.FormValue(form, "name"); got != importedGroupName {
+			t.Errorf("name sent = %q, want %q", got, importedGroupName)
+		}
+		if got := testutil.FormValue(form, "path"); got != importedGroupPath {
+			t.Errorf("path sent = %q, want %q", got, importedGroupPath)
+		}
 	}
 }
 
@@ -448,6 +507,73 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
 			t.Errorf("%s: description must contain Returns: and See also:, got %q", tool, desc)
 		}
+	}
+}
+
+// TestActionSpecs_RelatedActions_NameTheSiblingRoutes verifies that each action
+// publishes the curated related actions from the metadata table rather than the
+// single generic group.get the base options carry.
+//
+// The three routes are one workflow — schedule, download, import — and the
+// cross-references are the only thing that says so to a model reading the
+// catalog. TestActionSpecs_DiscoveryMetadata asks only that the list is not
+// empty, which the generic base already satisfies on its own, so the curated
+// list could be dropped wholesale and every other assertion here would still
+// pass. The expectations are written out rather than read back from
+// groupImportExportActionMeta, because a test sourced from the same table the
+// code reads moves both sides together and proves nothing.
+func TestActionSpecs_RelatedActions_NameTheSiblingRoutes(t *testing.T) {
+	want := map[string][]string{
+		"gitlab_schedule_group_export":  {"group_export_download", "group_import_file", "group.get"},
+		"gitlab_download_group_export":  {"group_export_schedule", "group_import_file", "group.get"},
+		"gitlab_import_group_from_file": {"group_export_schedule", "group_export_download", "group.list"},
+	}
+
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specs := ActionSpecs(client)
+	if len(specs) != len(want) {
+		t.Fatalf("len(ActionSpecs) = %d, want %d", len(specs), len(want))
+	}
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if got := spec.RelatedActions; !slices.Equal(got, want[spec.IndividualTool.Name]) {
+				t.Errorf("RelatedActions = %v, want %v", got, want[spec.IndividualTool.Name])
+			}
+		})
+	}
+}
+
+// TestDecorateGroupImportExportMeta_EmptyEntry_LeavesEveryOptionAlone verifies
+// that each of the four metadata fields is copied only when the entry supplies
+// it.
+//
+// Every entry in the real table fills all four, so nothing else in the package
+// reaches the other side of those four guards, and an action added later with
+// partial metadata would silently lose whatever the generic options already
+// carried: an empty alias list would replace the tool's own name, and an empty
+// usage would leave the action undescribed on every surface.
+func TestDecorateGroupImportExportMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_group_import_export_meta_probe"
+	groupImportExportActionMeta[probe] = groupImportExportActionMetaEntry{}
+	t.Cleanup(func() { delete(groupImportExportActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "generic usage",
+		Aliases:        []string{"generic alias"},
+		RelatedActions: []string{"generic.related"},
+	}
+	options.IndividualTool.Description = "generic description"
+	decorateGroupImportExportMeta(&options, probe)
+
+	if options.Usage != "generic usage" || options.IndividualTool.Description != "generic description" {
+		t.Errorf("usage/description = %q/%q, want the generic ones untouched",
+			options.Usage, options.IndividualTool.Description)
+	}
+	if !slices.Equal(options.Aliases, []string{"generic alias"}) {
+		t.Errorf("Aliases = %v, want the generic one left as it was", options.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, []string{"generic.related"}) {
+		t.Errorf("RelatedActions = %v, want the generic one left as it was", options.RelatedActions)
 	}
 }
 

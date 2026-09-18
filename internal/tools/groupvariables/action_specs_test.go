@@ -164,6 +164,45 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestGroupVariableOptionsForAction_UnknownAction_CarriesNoPerActionGuidance
+// asserts that the per-action discovery metadata comes from the switch over
+// action names and from nowhere else: an action the switch names gets its own
+// description and related actions, and one it does not name keeps the shared
+// identity (owner package, tags, individual tool name) with none of that
+// guidance attached.
+//
+// Why it matters: the function has no default clause, so a sixth action added to
+// ActionSpecs without a case beside it is served silently with the generic usage
+// string. That is the behavior a reader has to know about, and pinning it here
+// is what makes the omission visible as a missing description rather than as
+// another action's text leaking onto the new one.
+func TestGroupVariableOptionsForAction_UnknownAction_CarriesNoPerActionGuidance(t *testing.T) {
+	known := groupVariableOptionsForAction("group_delete", "gitlab_group_variable_delete")
+	if known.IndividualTool.Description == "" {
+		t.Error("group_delete has no individual tool description; the switch no longer names it")
+	}
+	if len(known.RelatedActions) == 0 {
+		t.Error("group_delete names no related actions; the switch no longer names it")
+	}
+
+	unknown := groupVariableOptionsForAction("group_archive", "gitlab_group_variable_archive")
+	if unknown.IndividualTool.Description != "" {
+		t.Errorf("unnamed action description = %q, want empty", unknown.IndividualTool.Description)
+	}
+	if len(unknown.RelatedActions) != 0 {
+		t.Errorf("unnamed action related actions = %v, want none", unknown.RelatedActions)
+	}
+	if unknown.Usage == known.Usage {
+		t.Errorf("unnamed action took group_delete's usage %q", unknown.Usage)
+	}
+	if unknown.IndividualTool.Name != "gitlab_group_variable_archive" {
+		t.Errorf("unnamed action tool name = %q, want gitlab_group_variable_archive", unknown.IndividualTool.Name)
+	}
+	if unknown.OwnerPackage != "groupvariables" {
+		t.Errorf("unnamed action owner package = %q, want groupvariables", unknown.OwnerPackage)
+	}
+}
+
 func groupVariableSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))

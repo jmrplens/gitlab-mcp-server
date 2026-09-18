@@ -185,6 +185,102 @@ func TestGroupProtectedEnvActionMeta(t *testing.T) {
 	}
 }
 
+// TestGroupProtectedEnvSpecs_PublishEachActionsOwnDiscoveryMetadata asserts the
+// projected spec carries the table's own usage, aliases and related actions,
+// entry for entry, rather than the shared defaults the options start with. The
+// check beside this one asks only whether each list is non-empty and
+// group-scoped, and the shared defaults satisfy both: a decorator that stopped
+// copying the related actions would leave all five actions pointing at
+// group.get alone, which is a plausible-looking answer and the reason a model
+// would never find the sibling action it needs next.
+func TestGroupProtectedEnvSpecs_PublishEachActionsOwnDiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(client))
+
+	for tool, meta := range groupProtectedEnvActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("meta tool %q has no projected ActionSpec", tool)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the entry's own %q", spec.Usage, meta.usage)
+			}
+			if !slices.Equal(spec.Aliases, meta.aliases) {
+				t.Errorf("Aliases = %v, want the entry's own %v", spec.Aliases, meta.aliases)
+			}
+			if !slices.Equal(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %v, want the entry's own %v", spec.RelatedActions, meta.related)
+			}
+		})
+	}
+}
+
+// TestDecorateGroupProtectedEnvMeta_PartialEntry_KeepsTheSharedDefaults asserts
+// what each of the decorator's three guards is for: an entry that fills some
+// fields leaves the rest at the shared defaults instead of blanking them. Every
+// entry in the table happens to fill all three today, so the guards are
+// unobservable through the table as it stands, and without this an entry added
+// with only a usage would publish no aliases and no related actions at all --
+// the R-META findings the table exists to answer, reintroduced by an omission
+// rather than by an edit.
+func TestDecorateGroupProtectedEnvMeta_PartialEntry_KeepsTheSharedDefaults(t *testing.T) {
+	const tool = "gitlab_group_protected_environment_list"
+	sharedAliases := []string{tool}
+	sharedRelated := []string{"group.get"}
+
+	tests := []struct {
+		name        string
+		entry       groupProtectedEnvActionMetaEntry
+		wantUsage   string
+		wantAliases []string
+		wantRelated []string
+	}{
+		{
+			name:        "an entry naming only a usage keeps the shared aliases and related actions",
+			entry:       groupProtectedEnvActionMetaEntry{usage: "Only a usage."},
+			wantUsage:   "Only a usage.",
+			wantAliases: sharedAliases,
+			wantRelated: sharedRelated,
+		},
+		{
+			name: "an entry naming no usage keeps the shared sentence while taking its own lists",
+			entry: groupProtectedEnvActionMetaEntry{
+				aliases: []string{"list group deployment gates"},
+				related: []string{actionGroupProtectedEnvGet},
+			},
+			wantAliases: []string{"list group deployment gates"},
+			wantRelated: []string{actionGroupProtectedEnvGet},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := groupProtectedEnvActionMeta[tool]
+			t.Cleanup(func() { groupProtectedEnvActionMeta[tool] = original })
+			groupProtectedEnvActionMeta[tool] = tt.entry
+
+			options := groupProtectedEnvOptions(tool)
+
+			if tt.wantUsage == "" {
+				if !strings.Contains(options.Usage, "Use group protected environment actions") {
+					t.Errorf("Usage = %q, want the shared default sentence", options.Usage)
+				}
+			} else if options.Usage != tt.wantUsage {
+				t.Errorf("Usage = %q, want the entry's own %q", options.Usage, tt.wantUsage)
+			}
+			if !slices.Equal(options.Aliases, tt.wantAliases) {
+				t.Errorf("Aliases = %v, want %v", options.Aliases, tt.wantAliases)
+			}
+			if !slices.Equal(options.RelatedActions, tt.wantRelated) {
+				t.Errorf("RelatedActions = %v, want %v", options.RelatedActions, tt.wantRelated)
+			}
+		})
+	}
+}
+
 // TestDecorateGroupProtectedEnvMeta_UnknownToolNoOp verifies the decorator
 // leaves the shared default Usage, Aliases, and RelatedActions untouched for a
 // tool name absent from the metadata map.

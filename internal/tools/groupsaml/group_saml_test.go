@@ -4,6 +4,7 @@ package groupsaml
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"reflect"
@@ -112,6 +113,37 @@ func TestToSAMLUserOutput_NilOptionals(t *testing.T) {
 	if out.CommitEmail != "" || out.Discord != "" || out.GitHub != "" || out.LocalTime != "" ||
 		out.PreferredLanguage != "" || out.Pronouns != "" || out.WorkInformation != "" {
 		t.Errorf("profile keys = %+v, want every one empty", out)
+	}
+}
+
+// TestToSAMLUserOutput_CreatedByWithoutCreatedAt_KeepsTheCreator verifies a
+// created_by GitLab sent with no created_at still reaches the output, with an
+// empty timestamp beside the creator's identity. That is the shape every real
+// response has: GitLab renders created_by with API::Entities::UserBasic, which
+// exposes id, username, name, state, avatar_url and web_url and no created_at
+// at all, so the nil check in front of the timestamp formatting is on the path
+// production always takes while the only test of created_by supplied a
+// timestamp. Without the check the conversion dereferences nil and the whole
+// page of users is lost to a panic.
+func TestToSAMLUserOutput_CreatedByWithoutCreatedAt_KeepsTheCreator(t *testing.T) {
+	out := toSAMLUserOutput(&gl.User{
+		ID:       7,
+		Username: "jdoe",
+		CreatedBy: &gl.BasicUser{
+			ID: 1, Username: "admin", Name: "Admin", State: "active",
+			AvatarURL: "https://x/admin.png", WebURL: "https://x/admin",
+		},
+	}, toolutil.UserExtra{})
+
+	if out.CreatedBy == nil {
+		t.Fatal("CreatedBy = nil, want the creator GitLab sent")
+	}
+	want := BasicUserOutput{
+		ID: 1, Username: "admin", Name: "Admin", State: "active",
+		AvatarURL: "https://x/admin.png", WebURL: "https://x/admin",
+	}
+	if *out.CreatedBy != want {
+		t.Errorf("CreatedBy = %+v, want %+v", *out.CreatedBy, want)
 	}
 }
 
@@ -638,6 +670,69 @@ func TestAdd_WithOptionalFields(t *testing.T) {
 	}
 	if out.Provider != "okta" {
 		t.Errorf("Provider = %q, want %q", out.Provider, "okta")
+	}
+}
+
+// TestAdd_RequestBody_CarriesOnlyTheFieldsTheCallerNamed holds the request Add
+// builds rather than the reply it is handed: the SAML group name and access
+// level always reach GitLab, and the member role and provider reach it exactly
+// when the caller named one. Every other Add test asserts against the mock's
+// own response, which the handler cannot influence, so the options struct
+// could send the wrong field, send a provider nobody asked for, or drop the
+// one that was asked for, and the link would still come back looking right.
+// The whole body is compared so an absent key and an empty one stay distinct:
+// GitLab reads `"provider":""` as a provider named the empty string, not as a
+// provider left unset.
+func TestAdd_RequestBody_CarriesOnlyTheFieldsTheCallerNamed(t *testing.T) {
+	roleID := int64(99)
+	cases := []struct {
+		name  string
+		input AddInput
+		want  map[string]any
+	}{
+		{
+			name:  "member role and provider named",
+			input: AddInput{GroupID: "mygroup", SAMLGroupName: "saml-admins", AccessLevel: 40, MemberRoleID: &roleID, Provider: "okta"},
+			want: map[string]any{
+				"saml_group_name": "saml-admins",
+				"access_level":    float64(40),
+				"member_role_id":  float64(99),
+				"provider":        "okta",
+			},
+		},
+		{
+			name:  "neither named",
+			input: AddInput{GroupID: "mygroup", SAMLGroupName: "saml-devs", AccessLevel: 30},
+			want: map[string]any{
+				"saml_group_name": "saml-devs",
+				"access_level":    float64(30),
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathGroupSAML {
+					http.NotFound(w, r)
+					return
+				}
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request body: %v", err)
+					http.Error(w, "decode request body", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"name":"whatever-the-mock-says","access_level":0}`)
+			}))
+
+			if _, err := Add(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("Add() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("request body = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

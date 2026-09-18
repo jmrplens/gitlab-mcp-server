@@ -1087,3 +1087,228 @@ func TestDelete_FilterObjectPrecedence(t *testing.T) {
 		t.Fatalf("Delete() unexpected error: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// What the write handlers put on the wire
+// ---------------------------------------------------------------------------.
+
+// assertRequestBodyFields decodes the JSON body GitLab would receive and reports
+// every field whose presence disagrees with the caller's expectation: each name
+// in want must be there with that value, and each name in absent must not be
+// there at all. It returns the decoded body so a caller can go on to inspect a
+// nested object, and nil when the body did not decode.
+//
+// It runs on the httptest server's goroutine, so it reports with t.Errorf and
+// never aborts: a FailNow there would kill that goroutine and leave the handler
+// under test waiting for a response that never comes.
+func assertRequestBodyFields(t *testing.T, r *http.Request, want map[string]any, absent []string) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return nil
+	}
+	for name, value := range want {
+		got, present := body[name]
+		if !present {
+			t.Errorf("request body omits %q, which the input supplied; body = %#v", name, body)
+			continue
+		}
+		if got != value {
+			t.Errorf("request body %q = %#v, want %#v", name, got, value)
+		}
+	}
+	for _, name := range absent {
+		if got, present := body[name]; present {
+			t.Errorf("request body carries %q = %#v, which the input never supplied", name, got)
+		}
+	}
+	return body
+}
+
+// TestCreate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem asserts that every
+// optional field of CreateInput reaches GitLab when the caller set it and is
+// left out of the request when the caller did not.
+//
+// Why it matters: each of those fields is guarded by its own `!= ""` or
+// `!= nil` test, and the response GitLab sends back says nothing about which
+// guard ran. A guard reading the wrong way round is therefore invisible to a
+// test that only checks the output, while it would create every variable with an
+// empty description and drop the description, type, scope and flags a caller
+// actually asked for. The request body is the only place that distinction
+// exists, so this drives the handler and reads what it sent.
+func TestCreate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem(t *testing.T) {
+	yes := true
+	cases := []struct {
+		name   string
+		input  CreateInput
+		want   map[string]any
+		absent []string
+	}{
+		{
+			name: "every optional field supplied",
+			input: CreateInput{
+				GroupID:          "10",
+				Key:              "SECRET_FILE",
+				Value:            "/tmp/secret",
+				Description:      "Secret file for deploy",
+				VariableType:     "file",
+				Protected:        &yes,
+				Masked:           &yes,
+				MaskedAndHidden:  &yes,
+				Raw:              &yes,
+				EnvironmentScope: "production",
+			},
+			want: map[string]any{
+				"key":               "SECRET_FILE",
+				"value":             "/tmp/secret",
+				"description":       "Secret file for deploy",
+				"variable_type":     "file",
+				"protected":         true,
+				"masked":            true,
+				"masked_and_hidden": true,
+				"raw":               true,
+				"environment_scope": "production",
+			},
+		},
+		{
+			name:  "only the required fields supplied",
+			input: CreateInput{GroupID: "10", Key: "SECRET_FILE", Value: "/tmp/secret"},
+			want:  map[string]any{"key": "SECRET_FILE", "value": "/tmp/secret"},
+			absent: []string{
+				"description", "variable_type", "protected", "masked",
+				"masked_and_hidden", "raw", "environment_scope",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathGroupVars {
+					http.NotFound(w, r)
+					return
+				}
+				assertRequestBodyFields(t, r, tc.want, tc.absent)
+				testutil.RespondJSON(w, http.StatusCreated, varJSON)
+			}))
+
+			if _, err := Create(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestUpdate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem asserts the same
+// property for Update, whose every field is optional, and adds the two that are
+// particular to it: the environment scope travels as the nested filter that
+// selects which scoped instance to update, and never as a plain
+// `environment_scope` field, which GitLab would read as a request to move the
+// variable to another scope.
+//
+// Why it matters: an inverted guard here updates the variable a caller named
+// with an empty value, or silently leaves the new value out of the request and
+// reports the unchanged variable back as though it had been written.
+func TestUpdate_OptionalFields_SentOnlyWhenTheCallerSuppliedThem(t *testing.T) {
+	yes := true
+	cases := []struct {
+		name            string
+		input           UpdateInput
+		want            map[string]any
+		absent          []string
+		wantFilterScope string
+	}{
+		{
+			name: "every optional field supplied",
+			input: UpdateInput{
+				GroupID:          "10",
+				Key:              "MY_VAR",
+				Value:            "db.prod",
+				Description:      "Updated",
+				VariableType:     "file",
+				Protected:        &yes,
+				Masked:           &yes,
+				Raw:              &yes,
+				EnvironmentScope: "staging",
+			},
+			want: map[string]any{
+				"value":         "db.prod",
+				"description":   "Updated",
+				"variable_type": "file",
+				"protected":     true,
+				"masked":        true,
+				"raw":           true,
+			},
+			absent:          []string{"environment_scope"},
+			wantFilterScope: "staging",
+		},
+		{
+			name:  "no optional field supplied",
+			input: UpdateInput{GroupID: "10", Key: "MY_VAR"},
+			absent: []string{
+				"value", "description", "variable_type", "protected",
+				"masked", "raw", "environment_scope", "filter",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathVar1 {
+					http.NotFound(w, r)
+					return
+				}
+				body := assertRequestBodyFields(t, r, tc.want, tc.absent)
+				if tc.wantFilterScope != "" {
+					filter, ok := body["filter"].(map[string]any)
+					if !ok || filter["environment_scope"] != tc.wantFilterScope {
+						t.Errorf("request body filter = %#v, want environment_scope %q", body["filter"], tc.wantFilterScope)
+					}
+				}
+				testutil.RespondJSON(w, http.StatusOK, varJSON)
+			}))
+
+			if _, err := Update(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestGet_EmptyFilterObject_FallsBackToTheFlatEnvironmentScope asserts that a
+// filter object carrying no scope does not suppress the flat environment_scope
+// shorthand: resolveScope prefers the nested object only when that object names
+// a scope.
+//
+// Why it matters: `filter` is an optional object in the published schema, so a
+// model that fills it in with an empty value is sending a shape a caller can
+// really produce. If the nested object won on being present rather than on
+// naming a scope, such a request would drop the scope the caller did give and
+// ask GitLab for whichever instance of the key it happens to return first.
+func TestGet_EmptyFilterObject_FallsBackToTheFlatEnvironmentScope(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathVar1 {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.URL.Query().Get("filter[environment_scope]"); got != "production" {
+			t.Errorf("filter[environment_scope] = %q, want production", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, varJSON)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		GroupID:          "10",
+		Key:              "MY_VAR",
+		EnvironmentScope: "production",
+		Filter:           &Filter{},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Key != "MY_VAR" {
+		t.Errorf("Key = %q, want MY_VAR", out.Key)
+	}
+}

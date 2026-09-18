@@ -4,6 +4,7 @@ package groupcredentials
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -260,6 +261,68 @@ func TestDecorateGroupCredentialMeta_UnknownTool(t *testing.T) {
 	}
 	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_unknown_tool" {
 		t.Errorf("Aliases mutated for unknown tool: %v", options.Aliases)
+	}
+}
+
+// TestActionSpecs_RelatedActions_NameTheCredentialSiblings verifies each
+// group-credential action publishes the canonical action IDs a model should
+// reach for next: the other half of the same inventory, the sibling surface,
+// and the group itself.
+//
+// It asserts the whole list rather than that one is present, because the
+// generic options this domain starts from already carry a plausible entry of
+// their own, group.get. A decorator that stopped copying the table would
+// therefore still publish a well-formed one-element list, and every
+// cross-link between the token and SSH-key surfaces would be gone with
+// nothing in the suite the poorer for it.
+func TestActionSpecs_RelatedActions_NameTheCredentialSiblings(t *testing.T) {
+	byTool := groupCredentialSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	tests := []struct {
+		tool    string
+		related []string
+	}{
+		{"gitlab_list_group_personal_access_tokens", []string{"group.credential_revoke_pat", "group.credential_list_ssh_keys", "group.get"}},
+		{"gitlab_list_group_ssh_keys", []string{"group.credential_delete_ssh_key", "group.credential_list_pats", "group.get"}},
+		{"gitlab_revoke_group_personal_access_token", []string{"group.credential_list_pats", "group.get"}},
+		{"gitlab_delete_group_ssh_key", []string{"group.credential_list_ssh_keys", "group.get"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			if got := byTool[tt.tool].RelatedActions; !slices.Equal(got, tt.related) {
+				t.Errorf("RelatedActions = %v, want %v", got, tt.related)
+			}
+		})
+	}
+}
+
+// TestDecorateGroupCredentialMeta_EmptyEntry_LeavesEveryOptionAlone verifies
+// each of the three metadata fields is copied only when the table entry
+// supplies it. Every entry in the real table fills all three, so nothing else
+// reaches the other side of those guards, and an action added later with
+// partial metadata would otherwise lose whatever the generic options already
+// carried: an empty aliases list would replace them with the bare tool name,
+// and an empty related list would replace group.get with nothing at all.
+func TestDecorateGroupCredentialMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_group_credential_meta_probe"
+	groupCredentialActionMeta[probe] = groupCredentialActionMetaEntry{}
+	t.Cleanup(func() { delete(groupCredentialActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "generic usage",
+		Aliases:        []string{"generic alias"},
+		RelatedActions: []string{"generic.related"},
+	}
+	decorateGroupCredentialMeta(&options, probe)
+
+	if options.Usage != "generic usage" {
+		t.Errorf("Usage = %q, want the generic one untouched", options.Usage)
+	}
+	if !slices.Equal(options.Aliases, []string{"generic alias"}) {
+		t.Errorf("Aliases = %v, want the generic ones untouched", options.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, []string{"generic.related"}) {
+		t.Errorf("RelatedActions = %v, want the generic ones untouched", options.RelatedActions)
 	}
 }
 

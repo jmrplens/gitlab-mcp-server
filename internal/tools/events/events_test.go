@@ -1383,3 +1383,132 @@ func TestFormatOrigin_ImportedWithoutASource(t *testing.T) {
 		t.Errorf("imported event without a source:\n got %q\nwant %q", got, want)
 	}
 }
+
+// eventRenderers are the two handlers that answer with events, each paired
+// with the formatter its result reaches a reader through. The tests below go
+// the whole way from the JSON GitLab sends to the line a caller is shown,
+// because every half of an event is optional on the wire and a converter that
+// drops one is invisible to a formatter driven from a struct built by hand.
+var eventRenderers = []struct {
+	name   string
+	render func(t *testing.T, body string) string
+}{
+	{name: "contribution", render: func(t *testing.T, body string) string {
+		t.Helper()
+		out, err := ListCurrentUserContributionEvents(t.Context(), eventsClient(t, body), ListContributionEventsInput{})
+		if err != nil {
+			t.Fatalf("ListCurrentUserContributionEvents: %v", err)
+		}
+		return FormatContributionListMarkdownString(out)
+	}},
+	{name: "project", render: func(t *testing.T, body string) string {
+		t.Helper()
+		out, err := ListProjectEvents(t.Context(), eventsClient(t, body), ListProjectEventsInput{ProjectID: "42"})
+		if err != nil {
+			t.Fatalf("ListProjectEvents: %v", err)
+		}
+		return FormatListMarkdownString(out)
+	}},
+}
+
+// assertEventLine answers both handlers with the one event and holds the whole
+// page each renders to the heading, wantLine and the guidance footer. The page
+// is compared entire so a half GitLab did not send cannot be rendered as an
+// empty fragment that a substring check would read past.
+func assertEventLine(t *testing.T, event, wantLine string) {
+	t.Helper()
+	for _, renderer := range eventRenderers {
+		t.Run(renderer.name, func(t *testing.T) {
+			got := renderer.render(t, `[`+event+`]`)
+			want := "## " + eventListTitle(renderer.name) + " (1)\n\n" + wantLine + "\n" + eventFooter(false)
+			if got != want {
+				t.Errorf("%s event:\n got %q\nwant %q", renderer.name, got, want)
+			}
+		})
+	}
+}
+
+// TestFormatEventListMarkdown_PartialPushData_NamesOnlyWhatGitLabSent
+// verifies each half of a push payload is rendered only when GitLab sent it.
+// None of the four fields is guaranteed: a push that moved a ref without
+// adding commits carries no commit_count and no commit_title, a ref arrives
+// without its ref_type, and an event whose payload holds only the two SHAs
+// carries nothing a reader can be shown. Rendering a half that is not there
+// invents facts — "0 commits" on a push that added none, an empty "()", a
+// trailing space where a ref should be — and every one of those shapes is one
+// operator away from the code as it stands.
+func TestFormatEventListMarkdown_PartialPushData_NamesOnlyWhatGitLabSent(t *testing.T) {
+	const head = `{"id":1,"project_id":42,"action_name":"pushed to",`
+	tests := []struct {
+		name string
+		push string
+		want string
+	}{
+		{
+			name: "a ref and its kind, with no commits",
+			push: `{"ref":"main","ref_type":"branch"}`,
+			want: "- **pushed to** branch `main`",
+		},
+		{
+			name: "a ref whose kind GitLab left out",
+			push: `{"ref":"v1.0","commit_count":1,"commit_title":"Release"}`,
+			want: "- **pushed to** ref `v1.0` (1 commit, latest \"Release\")",
+		},
+		{
+			name: "commits with no ref",
+			push: `{"commit_count":2}`,
+			want: "- **pushed to** (2 commits)",
+		},
+		{
+			name: "a payload holding nothing a reader can see",
+			push: `{"action":"pushed","commit_from":"aaa","commit_to":"bbb"}`,
+			want: "- **pushed to**",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertEventLine(t, head+`"push_data":`+tt.push+`}`, tt.want)
+		})
+	}
+}
+
+// TestFormatEventListMarkdown_ObjectsWithoutAnIID_NameTheKindWithoutAZero
+// verifies an object GitLab named but gave no number for is referred to by its
+// kind alone. GitLab omits target_iid for the targets that have none (a
+// snippet, a wiki page) and noteable_iid for a comment on a commit, and both
+// decode to zero here. "#0" would be a reference a reader can follow to
+// nothing, and printing it is what both guards exist to prevent.
+func TestFormatEventListMarkdown_ObjectsWithoutAnIID_NameTheKindWithoutAZero(t *testing.T) {
+	tests := []struct {
+		name  string
+		event string
+		want  string
+	}{
+		{
+			name:  "a target GitLab named but did not number",
+			event: `{"id":1,"project_id":42,"action_name":"created","target_type":"Snippet","target_title":"deploy.sh"}`,
+			want:  "- **created** deploy.sh (Snippet)",
+		},
+		{
+			name:  "a comment on an object with no IID",
+			event: `{"id":1,"project_id":42,"action_name":"commented on","note":{"id":9,"noteable_type":"Commit"}}`,
+			want:  "- **commented on** on Commit",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertEventLine(t, tt.event, tt.want)
+		})
+	}
+}
+
+// TestFormatEventListMarkdown_WikiPageWithoutATitle_RendersNothing verifies an
+// event about a wiki page GitLab sent no title for says nothing about it
+// rather than announcing an empty pair of quotes. The page arrives from the
+// captured response, where every field is optional, so the title is the one
+// thing the sentence can be built from and its absence has to end the clause.
+func TestFormatEventListMarkdown_WikiPageWithoutATitle_RendersNothing(t *testing.T) {
+	assertEventLine(t,
+		`{"id":1,"project_id":42,"action_name":"created","wiki_page":{"format":"markdown","slug":"home"}}`,
+		"- **created**")
+}

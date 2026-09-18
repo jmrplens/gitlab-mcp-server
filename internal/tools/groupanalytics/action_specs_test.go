@@ -58,6 +58,91 @@ func TestDecorateGroupAnalyticsMeta_UnknownToolIsNoOp(t *testing.T) {
 	}
 }
 
+// TestDecorateGroupAnalyticsMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone
+// verifies each of the four metadata fields is copied only when the entry
+// supplies it. Every entry in the real table fills all four, so nothing else
+// reaches the other side of those four guards, and a group analytics action
+// added with partial metadata would otherwise lose whatever the generic
+// options already carried: an entry naming no aliases would replace the
+// individual-tool name with nothing, leaving the action reachable by its
+// canonical ID alone.
+func TestDecorateGroupAnalyticsMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone(t *testing.T) {
+	const probe = "gitlab_group_analytics_meta_probe"
+	groupAnalyticsActionMeta[probe] = groupAnalyticsActionMetaEntry{}
+	t.Cleanup(func() { delete(groupAnalyticsActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "generic usage",
+		Aliases:        []string{"generic alias"},
+		RelatedActions: []string{"generic.related"},
+	}
+	options.IndividualTool.Description = "generic description"
+	decorateGroupAnalyticsMeta(&options, probe)
+
+	if options.Usage != "generic usage" {
+		t.Errorf("Usage = %q, want the generic one untouched", options.Usage)
+	}
+	if options.IndividualTool.Description != "generic description" {
+		t.Errorf("Description = %q, want the generic one untouched", options.IndividualTool.Description)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "generic alias" {
+		t.Errorf("Aliases = %v, want the generic one left as it was", options.Aliases)
+	}
+	if len(options.RelatedActions) != 1 || options.RelatedActions[0] != "generic.related" {
+		t.Errorf("RelatedActions = %v, want the generic one left as it was", options.RelatedActions)
+	}
+}
+
+// TestActionSpecs_RelatedActions_NameTheTwoSiblingAnalyticsActions verifies each
+// analytics action points discovery at the other two, which is the whole reason
+// the metadata table overrides RelatedActions at all: the generic options carry
+// only the group read, and that is already non-empty, so asserting the list is
+// non-empty says nothing about whether the sibling cluster was published. A
+// model that found one of the three counts this way finds the other two.
+//
+// It compares whole canonical IDs, which is the only comparison worth making.
+// The table used to spell the siblings with the owner package as the prefix,
+// groupanalytics.analytics_mr_count, while these actions are routes on the
+// group catalog group and are projected as group.analytics_mr_count, so every
+// entry named an action that does not exist and a model following one found
+// nothing. Comparing the part after the last dot passes either way, which is
+// how the wrong prefix survived: the ID a caller resolves is the whole string.
+func TestActionSpecs_RelatedActions_NameTheTwoSiblingAnalyticsActions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	// The canonical ID of each of the three, taken from the constants
+	// markdown.go declares for exactly this purpose rather than rebuilt here,
+	// so the two places cannot drift apart.
+	canonical := map[string]string{
+		"analytics_issues_count":  actionIssuesCount,
+		"analytics_mr_count":      actionMRCount,
+		"analytics_members_count": actionMembersCount,
+	}
+	specs := ActionSpecs(client)
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			named := make(map[string]bool, len(spec.RelatedActions))
+			for _, related := range spec.RelatedActions {
+				named[related] = true
+			}
+			for _, sibling := range specs {
+				if sibling.Name == spec.Name {
+					continue
+				}
+				wanted, known := canonical[sibling.Name]
+				if !known {
+					t.Fatalf("sibling %q has no canonical ID in this test's table; add it beside the constants in markdown.go", sibling.Name)
+				}
+				if !named[wanted] {
+					t.Errorf("RelatedActions %v does not name the sibling by its canonical ID %q; an ID that is not the catalog's resolves to nothing",
+						spec.RelatedActions, wanted)
+				}
+			}
+		})
+	}
+}
+
 // TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

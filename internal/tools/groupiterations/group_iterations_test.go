@@ -5,6 +5,7 @@ package groupiterations
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 )
 
 const fmtUnexpErr = "unexpected error: %v"
+
+// catalogGroupPrefix is the catalog group this package's one action is exposed
+// through, as `internal/tools` composes it; the canonical ID a caller executes
+// is this plus the spec's own name.
+const catalogGroupPrefix = "issue."
 
 // TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
@@ -42,6 +48,42 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if _, ok := byTool["gitlab_list_group_iterations"]; !ok {
 		t.Fatal("missing individual tool mapping for gitlab_list_group_iterations")
+	}
+}
+
+// TestIssueActionSpecs_ListHint_NamesTheActionThisPackageRegisters holds the
+// card's group-list hint to the action this package actually registers.
+//
+// The two halves are written apart, the canonical ID in markdown.go and the
+// name in action_specs.go, and the card tests below pin the hint's literal
+// text. So renaming the spec leaves the card telling a model to execute an
+// action the catalog no longer has, with every other test in this file still
+// green. This is the only assertion that joins them.
+func TestIssueActionSpecs_ListHint_NamesTheActionThisPackageRegisters(t *testing.T) {
+	specs := IssueActionSpecs(testutil.NewTestClient(t, http.NewServeMux()))
+	if len(specs) != 1 {
+		t.Fatalf("len(IssueActionSpecs) = %d, want 1", len(specs))
+	}
+	if want := catalogGroupPrefix + specs[0].Name; actionListGroup != want {
+		t.Errorf("group-list hint names %q, but the registered action is %q", actionListGroup, want)
+	}
+}
+
+// TestIssueActionSpecs_Edition_KeepsTheActionBehindPremium holds the tier gate
+// that keeps this action off a Free catalog.
+//
+// Iterations are a Premium feature, and the handler's own 404 hint tells a
+// caller so after the call has already failed. What stops a Free deployment
+// being offered the action in the first place is this one field: emptied, the
+// action is listed to every tier and a model spends a round trip to learn it
+// was never available. Nothing else in this file reads it.
+func TestIssueActionSpecs_Edition_KeepsTheActionBehindPremium(t *testing.T) {
+	specs := IssueActionSpecs(testutil.NewTestClient(t, http.NewServeMux()))
+	if len(specs) != 1 {
+		t.Fatalf("len(IssueActionSpecs) = %d, want 1", len(specs))
+	}
+	if specs[0].Edition != "premium" {
+		t.Errorf("Edition = %q, want %q", specs[0].Edition, "premium")
 	}
 }
 
@@ -179,9 +221,9 @@ func TestList_APIError(t *testing.T) {
 			body:   `{"message":"404 Group Not Found"}`,
 		},
 		{
-			name:   "returns error on 500 internal server error",
-			status: http.StatusForbidden,
-			body:   `{"message":"Internal Server Error"}`,
+			name:   "returns error on 400 bad request",
+			status: http.StatusBadRequest,
+			body:   `{"message":"400 Bad Request"}`,
 		},
 		{
 			name:   "returns error on 403 forbidden",
@@ -201,6 +243,86 @@ func TestList_APIError(t *testing.T) {
 				t.Fatal("expected error from API, got nil")
 			}
 		})
+	}
+}
+
+// TestList_ErrorHint_OnlyA404NamesTheGroupAndTheLicense holds which status the
+// corrective hint is attached to, and what it says.
+//
+// A group iteration list fails two ways that read alike on the wire: the group
+// is not there, and the instance has no Premium license for iterations at all.
+// The 404 branch is the only one that can tell a caller which of the two to
+// check, so a hint moved to another status, or reworded off gitlab_group_get
+// and the license, leaves a model holding GitLab's bare message with nothing
+// to do about it. [TestList_APIError] above cannot see any of this: every case
+// here returns a non-nil error whichever status the hint is bound to.
+func TestList_ErrorHint_OnlyA404NamesTheGroupAndTheLicense(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{name: "404 names the group check and the license", status: http.StatusNotFound, wantHint: true},
+		{name: "403 is left to the generic wrap", status: http.StatusForbidden, wantHint: false},
+		{name: "400 is left to the generic wrap", status: http.StatusBadRequest, wantHint: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+
+			_, err := List(context.Background(), client, ListInput{GroupID: "10"})
+			if err == nil {
+				t.Fatalf("expected an error for status %d, got nil", tt.status)
+			}
+			if !strings.Contains(err.Error(), "gitlab_list_group_iterations") {
+				t.Errorf("error does not name the operation: %v", err)
+			}
+			hinted := strings.Contains(err.Error(), "gitlab_group_get") && strings.Contains(err.Error(), "Premium")
+			if hinted != tt.wantHint {
+				t.Errorf("hint present = %v, want %v; error: %v", hinted, tt.wantHint, err)
+			}
+		})
+	}
+}
+
+// TestList_OffsetPagination_ReachesGitLabAndComesBack holds that a caller's
+// page and per_page leave the process, and that the page GitLab answered with
+// comes back.
+//
+// Every other request test in this file drives the default page, so both
+// parameters could stop being sent and each of those assertions would still
+// pass while a model asking for page 3 silently read page 1 for ever. The
+// response half is asserted against the fixture's own headers rather than
+// against the input, so filling the block from the request instead of the
+// response would fail here too.
+func TestList_OffsetPagination_ReachesGitLabAndComesBack(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/10/iterations")
+		testutil.AssertQueryParam(t, r, "page", "3")
+		testutil.AssertQueryParam(t, r, "per_page", "25")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+			testutil.PaginationHeaders{Page: "3", PerPage: "25", Total: "60", TotalPages: "3", PrevPage: "2"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		GroupID: "10",
+		Page:    3,
+		PerPage: 25,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Pagination.Page != 3 {
+		t.Errorf("pagination page = %d, want 3", out.Pagination.Page)
+	}
+	if out.Pagination.PerPage != 25 {
+		t.Errorf("pagination per_page = %d, want 25", out.Pagination.PerPage)
+	}
+	if out.Pagination.PrevPage != 2 {
+		t.Errorf("pagination prev_page = %d, want 2", out.Pagination.PrevPage)
 	}
 }
 

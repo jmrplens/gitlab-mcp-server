@@ -5,6 +5,8 @@ package featureflags
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -75,5 +77,111 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestFeatureFlagActionSpecs_RelatedActions_NameSiblingFeatureFlagActions
+// verifies that each spec's RelatedActions are the ones its metadata entry
+// names rather than the domain-wide placeholder featureFlagOptions starts
+// every spec with. Asserting only that the field is non-empty cannot tell the
+// two apart, because the placeholder is non-empty too: a decorator that
+// stopped copying the metadata's related actions would leave every feature
+// flag action pointing a model at environment.list and ci_variable.list, and
+// nothing would notice.
+func TestFeatureFlagActionSpecs_RelatedActions_NameSiblingFeatureFlagActions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := featureFlagSpecsByTool(t, ActionSpecs(client))
+	placeholder := featureFlagOptions("gitlab_feature_flag_list").RelatedActions
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if slices.Equal(spec.RelatedActions, placeholder) {
+				t.Errorf("%s: RelatedActions is still the generic placeholder %v", tool, spec.RelatedActions)
+			}
+			named := 0
+			for _, related := range spec.RelatedActions {
+				if strings.HasPrefix(related, "feature_flag.") {
+					named++
+				}
+			}
+			if named == 0 {
+				t.Errorf("%s: RelatedActions names no sibling feature flag action: %v", tool, spec.RelatedActions)
+			}
+		})
+	}
+}
+
+// TestDecorateFeatureFlagMeta_EntryOmittingAField_KeepsTheGenericDefault
+// verifies what the four presence guards in decorateFeatureFlagMeta are for: a
+// metadata entry that fills some fields and not others replaces only the ones
+// it fills. Every entry in the shipped table fills all four, so the guards'
+// false branch is unreachable through ActionSpecs and an entry omitting one
+// has to be installed here to reach it. Without that branch held, a guard
+// could be dropped and a future partial entry would silently blank the
+// generic alias, related actions or description the spec falls back on.
+func TestDecorateFeatureFlagMeta_EntryOmittingAField_KeepsTheGenericDefault(t *testing.T) {
+	const tool = "gitlab_feature_flag_partial"
+
+	// A zero value in a want field means the generic placeholder is expected,
+	// so each case states only what its entry is supposed to replace. Two
+	// cases rather than one because each field's guard has to be seen
+	// declining as well as firing, and an entry that fills a field can never
+	// show the first.
+	tests := []struct {
+		name            string
+		entry           featureFlagActionMetaEntry
+		wantUsage       string
+		wantAliases     []string
+		wantRelated     []string
+		wantDescription string
+	}{
+		{
+			name:      "only the usage is filled",
+			entry:     featureFlagActionMetaEntry{usage: "read the feature flags of one project"},
+			wantUsage: "read the feature flags of one project",
+		},
+		{
+			name:        "only the aliases are filled",
+			entry:       featureFlagActionMetaEntry{aliases: []string{"show me the feature flags"}},
+			wantAliases: []string{"show me the feature flags"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featureFlagActionMeta[tool] = tt.entry
+			t.Cleanup(func() { delete(featureFlagActionMeta, tool) })
+
+			generic := featureFlagOptions(tool)
+			wantUsage, wantAliases := generic.Usage, generic.Aliases
+			wantRelated, wantDescription := generic.RelatedActions, generic.IndividualTool.Description
+			if tt.wantUsage != "" {
+				wantUsage = tt.wantUsage
+			}
+			if tt.wantAliases != nil {
+				wantAliases = tt.wantAliases
+			}
+			if tt.wantRelated != nil {
+				wantRelated = tt.wantRelated
+			}
+			if tt.wantDescription != "" {
+				wantDescription = tt.wantDescription
+			}
+
+			options := featureFlagOptions(tool)
+			decorateFeatureFlagMeta(&options, tool)
+
+			if options.Usage != wantUsage {
+				t.Errorf("Usage = %q, want %q", options.Usage, wantUsage)
+			}
+			if !slices.Equal(options.Aliases, wantAliases) {
+				t.Errorf("Aliases = %v, want %v", options.Aliases, wantAliases)
+			}
+			if !slices.Equal(options.RelatedActions, wantRelated) {
+				t.Errorf("RelatedActions = %v, want %v", options.RelatedActions, wantRelated)
+			}
+			if options.IndividualTool.Description != wantDescription {
+				t.Errorf("Description = %q, want %q", options.IndividualTool.Description, wantDescription)
+			}
+		})
 	}
 }

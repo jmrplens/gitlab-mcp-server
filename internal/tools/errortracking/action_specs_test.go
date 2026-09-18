@@ -146,6 +146,12 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	if out.Message != "Successfully deleted error tracking client key." {
 		t.Fatalf("delete message = %q", out.Message)
 	}
+	// The status is the machine-readable half of the same answer: a caller
+	// reading JSON rather than the rendered card has nothing else to branch on,
+	// and an empty one reads as a delete that did not say whether it worked.
+	if out.Status != "success" {
+		t.Errorf("delete status = %q, want success", out.Status)
+	}
 }
 
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.

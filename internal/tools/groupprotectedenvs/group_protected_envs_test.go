@@ -3,6 +3,8 @@ package groupprotectedenvs
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -28,6 +30,38 @@ const fullEnvJSON = `{
 		{"id":5,"user_id":11,"group_id":21,"access_level":30,"access_level_description":"Developers","required_approvals":1,"group_inheritance_type":0}
 	]
 }`
+
+// captureJSONBody answers a request with status and response, recording the
+// request's own JSON body into body as canonical JSON: decoded and re-encoded,
+// so object keys are sorted and the assertion reads as what GitLab receives
+// rather than as the field order of whichever struct produced it. A malformed
+// body is reported with t.Errorf and answered deterministically, never with
+// t.Fatal, since the handler runs on the httptest server's goroutine.
+func captureJSONBody(t *testing.T, body *string, status int, response string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		var decoded map[string]any
+		if decodeErr := json.Unmarshal(raw, &decoded); decodeErr != nil {
+			t.Errorf("request body %q is not a JSON object: %v", raw, decodeErr)
+			http.Error(w, "request body is not a JSON object", http.StatusInternalServerError)
+			return
+		}
+		canonical, err := json.Marshal(decoded)
+		if err != nil {
+			t.Errorf("re-encode request body %q: %v", raw, err)
+			http.Error(w, "re-encode request body", http.StatusInternalServerError)
+			return
+		}
+		*body = string(canonical)
+		testutil.RespondJSON(w, status, response)
+	}
+}
 
 // --- List tests ---
 
@@ -371,6 +405,108 @@ func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestProtect_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes pins the JSON the
+// handler posts. Every other Protect assertion is about the response the mock
+// was told to send back, so none of them can see the request: a converter that
+// dropped a rule's access level, sent an empty array for a collection the
+// caller left out, or stopped sending the collections at all would change
+// nothing they read. Each of those is a different gate on GitLab's side --
+// access_level is what decides who may deploy, and an empty
+// deploy_access_levels array is not the same request as one omitting the key.
+func TestProtect_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
+	accessLevel30, accessLevel40 := 30, 40
+	deployUserID, ruleUserID := int64(10), int64(11)
+	deployGroupID, ruleGroupID := int64(20), int64(21)
+	inheritedMembers, directMembers := int64(1), int64(0)
+	approvalCount, ruleApprovals := int64(2), int64(1)
+	description := "Developers"
+
+	tests := []struct {
+		name  string
+		input ProtectInput
+		want  string
+	}{
+		{
+			name: "sends every field of a deploy access level and of an approval rule",
+			input: ProtectInput{
+				GroupID: "mygroup",
+				Name:    "production",
+				DeployAccessLevels: []DeployAccessLevelInput{{
+					AccessLevel:          &accessLevel40,
+					UserID:               &deployUserID,
+					GroupID:              &deployGroupID,
+					GroupInheritanceType: &inheritedMembers,
+				}},
+				RequiredApprovalCount: &approvalCount,
+				ApprovalRules: []ApprovalRuleInput{{
+					AccessLevel:            &accessLevel30,
+					UserID:                 &ruleUserID,
+					GroupID:                &ruleGroupID,
+					AccessLevelDescription: &description,
+					RequiredApprovalCount:  &ruleApprovals,
+					GroupInheritanceType:   &directMembers,
+				}},
+			},
+			want: `{"approval_rules":[{"access_level":30,"access_level_description":"Developers",` +
+				`"group_id":21,"group_inheritance_type":0,"required_approvals":1,"user_id":11}],` +
+				`"deploy_access_levels":[{"access_level":40,"group_id":20,"group_inheritance_type":1,"user_id":10}],` +
+				`"name":"production","required_approval_count":2}`,
+		},
+		{
+			name:  "omits a rule collection the caller left empty instead of sending an empty array",
+			input: ProtectInput{GroupID: "mygroup", Name: "staging"},
+			want:  `{"name":"staging"}`,
+		},
+		{
+			name: "omits access_level for a rule that names a user rather than granting a role",
+			input: ProtectInput{
+				GroupID:            "mygroup",
+				Name:               "production",
+				DeployAccessLevels: []DeployAccessLevelInput{{UserID: &deployUserID}},
+				ApprovalRules:      []ApprovalRuleInput{{UserID: &ruleUserID}},
+			},
+			want: `{"approval_rules":[{"user_id":11}],"deploy_access_levels":[{"user_id":10}],"name":"production"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, captureJSONBody(t, &body, http.StatusCreated, fullEnvJSON))
+
+			if _, err := Protect(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Protect() error = %v, want nil", err)
+			}
+			if body != tt.want {
+				t.Errorf("request body =\n%s\nwant\n%s", body, tt.want)
+			}
+		})
+	}
+}
+
+// TestProtect_Refused_CarriesTheTierHintOnEveryValidationStatus asserts the hint
+// on both statuses GitLab refuses an unusable tier with. The handler ORs the
+// two, so one status under test proves only that one arm is wired: with 422
+// alone, an && between them left the hint reachable through the other and
+// nothing failed.
+func TestProtect_Refused_CarriesTheTierHintOnEveryValidationStatus(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"Name must be one of environment tiers"}`)
+			}))
+
+			_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123"})
+			if err == nil {
+				t.Fatalf("Protect() error = nil, want a %d refusal", status)
+			}
+			if !strings.Contains(err.Error(), "valid group protected environment tiers") {
+				t.Errorf("Protect() on %d = %q, want the tier hint", status, err)
+			}
+		})
+	}
+}
+
 // --- Update tests ---
 
 // TestUpdate verifies the Update handler.
@@ -496,6 +632,114 @@ func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes pins the JSON the
+// handler puts, for the same reason its Protect counterpart does, plus one an
+// update has of its own: `name` is the new tier and is sent only when the
+// caller asked for a rename, so a handler that always sent it would rename
+// every environment it was asked to edit to the empty string, and one that
+// never sent it would silently drop the rename. Neither is visible in a
+// response the mock was told to send back.
+func TestUpdate_RequestBody_NamesEveryRuleFieldTheWayGitLabDoes(t *testing.T) {
+	accessLevel30, accessLevel40 := 30, 40
+	deployID, ruleID := int64(1), int64(5)
+	deployUserID, ruleUserID := int64(10), int64(11)
+	deployGroupID, ruleGroupID := int64(20), int64(21)
+	inheritedMembers, directMembers := int64(1), int64(0)
+	approvalCount, ruleApprovals := int64(2), int64(1)
+	description := "Developers"
+	destroy := true
+
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  string
+	}{
+		{
+			name: "sends every field of an updated rule, _destroy and the new tier included",
+			input: UpdateInput{
+				GroupID:     "mygroup",
+				Environment: "production",
+				Name:        "staging",
+				DeployAccessLevels: []UpdateDeployAccessLevelInput{{
+					ID:                   &deployID,
+					AccessLevel:          &accessLevel40,
+					UserID:               &deployUserID,
+					GroupID:              &deployGroupID,
+					GroupInheritanceType: &inheritedMembers,
+					Destroy:              &destroy,
+				}},
+				RequiredApprovalCount: &approvalCount,
+				ApprovalRules: []UpdateApprovalRuleInput{{
+					ID:                     &ruleID,
+					AccessLevel:            &accessLevel30,
+					UserID:                 &ruleUserID,
+					GroupID:                &ruleGroupID,
+					AccessLevelDescription: &description,
+					RequiredApprovalCount:  &ruleApprovals,
+					GroupInheritanceType:   &directMembers,
+					Destroy:                &destroy,
+				}},
+			},
+			want: `{"approval_rules":[{"_destroy":true,"access_level":30,"access_level_description":"Developers",` +
+				`"group_id":21,"group_inheritance_type":0,"id":5,"required_approvals":1,"user_id":11}],` +
+				`"deploy_access_levels":[{"_destroy":true,"access_level":40,"group_id":20,` +
+				`"group_inheritance_type":1,"id":1,"user_id":10}],"name":"staging","required_approval_count":2}`,
+		},
+		{
+			name:  "omits name and both rule collections when the caller only changes the approval count",
+			input: UpdateInput{GroupID: "mygroup", Environment: "production", RequiredApprovalCount: &approvalCount},
+			want:  `{"required_approval_count":2}`,
+		},
+		{
+			name: "omits access_level for a rule that names a user rather than granting a role",
+			input: UpdateInput{
+				GroupID:            "mygroup",
+				Environment:        "production",
+				DeployAccessLevels: []UpdateDeployAccessLevelInput{{UserID: &deployUserID}},
+				ApprovalRules:      []UpdateApprovalRuleInput{{UserID: &ruleUserID}},
+			},
+			want: `{"approval_rules":[{"user_id":11}],"deploy_access_levels":[{"user_id":10}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, captureJSONBody(t, &body, http.StatusOK, fullEnvJSON))
+
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Update() error = %v, want nil", err)
+			}
+			if body != tt.want {
+				t.Errorf("request body =\n%s\nwant\n%s", body, tt.want)
+			}
+		})
+	}
+}
+
+// TestUpdate_Refused_CarriesTheEnvironmentHintOnEveryStatusItAnswersFor asserts
+// the hint on each of the three statuses a wrong tier, a wrong rule entry or an
+// environment that is not protected comes back as. The handler ORs them, so a
+// test covering only the last leaves the first two arms unasserted: an && among
+// them still produces the hint for a 404 and for nothing else.
+func TestUpdate_Refused_CarriesTheEnvironmentHintOnEveryStatusItAnswersFor(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"refused"}`)
+			}))
+
+			_, err := Update(context.Background(), client, UpdateInput{GroupID: "mygroup", Environment: "production"})
+			if err == nil {
+				t.Fatalf("Update() error = nil, want a %d refusal", status)
+			}
+			if !strings.Contains(err.Error(), "partial updates merge with existing rules") {
+				t.Errorf("Update() on %d = %q, want the environment hint", status, err)
+			}
+		})
+	}
+}
+
 // --- Unprotect tests ---
 
 // TestUnprotect verifies the Unprotect handler.
@@ -581,6 +825,31 @@ func TestUnprotect_ServerErrorUsesGenericMessage(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "valid tiers") {
 		t.Fatalf("unexpected tier hint for server error: %v", err)
+	}
+}
+
+// TestUnprotect_Refused_CarriesTheCascadeHintOnBothStatusesItAnswersFor asserts
+// the hint on both statuses an unprotect is refused with. They mean different
+// things to the caller -- 403 is a role or a license the credential lacks, 404
+// is a tier that was never protected -- and the handler ORs them, so a test
+// covering only the second leaves the first arm unasserted: an && between them
+// produces the hint for neither on its own, and the 403 case then reads as a
+// plain server error with no route back to a working call.
+func TestUnprotect_Refused_CarriesTheCascadeHintOnBothStatusesItAnswersFor(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"refused"}`)
+			}))
+
+			err := Unprotect(context.Background(), client, UnprotectInput{GroupID: "mygroup", Environment: "production"})
+			if err == nil {
+				t.Fatalf("Unprotect() error = nil, want a %d refusal", status)
+			}
+			if !strings.Contains(err.Error(), "unprotection cascades and removes restrictions on subgroup projects") {
+				t.Errorf("Unprotect() on %d = %q, want the cascade hint", status, err)
+			}
+		})
 	}
 }
 

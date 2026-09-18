@@ -4,12 +4,14 @@ package grouplabels
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1201,6 +1203,137 @@ func TestActionSpecs_GroupLabelGetRoute(t *testing.T) {
 	}
 	if out.ID != 42 || out.Name != "bug" {
 		t.Fatalf("group label output = %#v, want ID 42 name bug", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What Create and Update put on the wire
+// ---------------------------------------------------------------------------.
+
+// captureLabelRequestBody answers every request with labelJSON and hands back
+// the JSON object the handler sent, so an assertion can be made about the
+// request GitLab receives rather than about the fixture the mock replies with.
+func captureLabelRequestBody(t *testing.T, call func(client *gitlabclient.Client) error) map[string]any {
+	t.Helper()
+
+	var raw []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		raw = body
+		testutil.RespondJSON(w, http.StatusOK, labelJSON)
+	}))
+
+	if err := call(client); err != nil {
+		t.Fatalf("handler returned an unexpected error: %v", err)
+	}
+	sent := map[string]any{}
+	if err := json.Unmarshal(raw, &sent); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", raw, err)
+	}
+	return sent
+}
+
+// assertLabelRequestFields fails when the captured body does not carry every
+// present field with its value, or carries any of the absent keys at all.
+func assertLabelRequestFields(t *testing.T, sent, present map[string]any, absent []string) {
+	t.Helper()
+	for key, want := range present {
+		got, ok := sent[key]
+		if !ok {
+			t.Errorf("request body omits %q; body = %v", key, sent)
+			continue
+		}
+		if got != want {
+			t.Errorf("request body %q = %v, want %v", key, got, want)
+		}
+	}
+	for _, key := range absent {
+		if got, ok := sent[key]; ok {
+			t.Errorf("request body carries %q = %v, want the key omitted; body = %v", key, got, sent)
+		}
+	}
+}
+
+// TestCreate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem asserts what
+// Create puts in the POST body, which no test did: the mock answers the same
+// label whatever it is sent, so every assertion about the response passed with
+// the three optional guards inverted or with their boundary moved.
+//
+// Both directions matter to a caller. A description that never leaves the
+// handler is a label created without one, and a priority sent as 0 where the
+// input asked for none is not the same request: GitLab reads priority 0 as a
+// priority rather than as its absence, so the boundary decides whether an
+// ordinary label is created or one pinned to the top of every list.
+func TestCreate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   CreateInput
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name:    "every optional field set",
+			input:   CreateInput{GroupID: "10", Name: "feature", Color: "#428bca", Description: "Feature request", Priority: 3},
+			present: map[string]any{"name": "feature", "color": "#428bca", "description": "Feature request", "priority": float64(3)},
+		},
+		{
+			name:    "no optional field set",
+			input:   CreateInput{GroupID: "10", Name: "bug", Color: "#d9534f"},
+			present: map[string]any{"name": "bug", "color": "#d9534f"},
+			absent:  []string{"description", "priority", "archived"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := captureLabelRequestBody(t, func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, tc.input)
+				return err
+			})
+			assertLabelRequestFields(t, sent, tc.present, tc.absent)
+		})
+	}
+}
+
+// TestUpdate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem asserts the same
+// of Update, whose whole request is optional fields: with every guard inverted
+// it sends an empty body, which GitLab answers by changing nothing while the
+// handler reports the label it read back as though the edit had been applied.
+func TestUpdate_OptionalFields_AreSentOnlyWhenTheInputCarriesThem(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   UpdateInput
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name: "every optional field set",
+			input: UpdateInput{
+				GroupID: "10", LabelID: "1",
+				NewName: "critical-bug", Color: "#ff0000", Description: "Critical bugs only", Priority: 5,
+			},
+			present: map[string]any{"new_name": "critical-bug", "color": "#ff0000", "description": "Critical bugs only", "priority": float64(5)},
+		},
+		{
+			name:   "no optional field set",
+			input:  UpdateInput{GroupID: "10", LabelID: "1"},
+			absent: []string{"new_name", "color", "description", "priority", "archived"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := captureLabelRequestBody(t, func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, tc.input)
+				return err
+			})
+			assertLabelRequestFields(t, sent, tc.present, tc.absent)
+		})
 	}
 }
 

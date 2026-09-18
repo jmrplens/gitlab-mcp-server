@@ -21,6 +21,15 @@ const scimListHints = "\n---\n💡 **Next steps:**\n" +
 // the external UID as a code span a reader copies back verbatim, the active
 // flag as the emoji rather than as "true", and nothing at all for an identity
 // GitLab never sent.
+//
+// The suppression is conjunctive on purpose, and the last two cases are what
+// hold it there. An identity carrying only one of the two things that name it
+// is still an identity GitLab sent, so the card must show the half that
+// arrived: the guard exists for the zero value toOutput returns for a nil
+// identity, not for a field that happens to be absent. Read as a disjunction
+// it would drop every card whose user_id is zero or whose external UID did
+// not decode, and a reader would be handed an empty document instead of being
+// told what GitLab answered.
 func TestFormatOutputMarkdown(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -42,6 +51,23 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			want: "## SCIM Identity\n\n" +
 				"- **External UID**: `ext-uid-456`\n" +
 				"- **User ID**: 99\n" +
+				"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
+				scimCardHints,
+		},
+		{
+			name:  "external uid without a user id still renders",
+			input: Output{ExternUID: "ext-uid-789", Active: true},
+			want: "## SCIM Identity\n\n" +
+				"- **External UID**: `ext-uid-789`\n" +
+				"- **User ID**: 0\n" +
+				"- **Active**: " + toolutil.BoolEmoji(true) + "\n" +
+				scimCardHints,
+		},
+		{
+			name:  "user id without an external uid still renders",
+			input: Output{UserID: 7},
+			want: "## SCIM Identity\n\n" +
+				"- **User ID**: 7\n" +
 				"- **Active**: " + toolutil.BoolEmoji(false) + "\n" +
 				scimCardHints,
 		},

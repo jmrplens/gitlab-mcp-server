@@ -145,9 +145,27 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
+// samlUsersHeader is the table a page of SAML users opens with.
+const samlUsersHeader = "| ID | Username | Name | State |\n| --- | --- | --- | --- |\n"
+
+// samlUsersHints is the guidance a page of SAML users ends with when no row
+// carried a profile link, so the instruction to preserve links is dropped.
+const samlUsersHints = "\n---\n💡 **Next steps:**\n" +
+	"- These are users provisioned through SAML SSO\n" +
+	"- Use action 'group.saml_link_list' to see the SAML group-to-access-level link mappings\n"
+
 // TestFormatSAMLUsersListMarkdown validates the whole document a page of
 // SAML-provisioned users renders: the heading counting the total GitLab
 // reported rather than the page length, and the guidance last.
+//
+// The two link cases are about the page rather than any one row. The
+// instruction to preserve links is worth reading only where there are links to
+// preserve, so the formatter accumulates over every row: a page is linked if
+// any user carried a web_url, not if the first or the last one did, which is
+// why the linked user sits between two who are not. A page where nobody
+// carried one must not tell a model to keep links a table of plain names does
+// not have. Both shapes are ordinary on this endpoint, since GitLab omits
+// web_url for a user the caller may not see.
 func TestFormatSAMLUsersListMarkdown(t *testing.T) {
 	t.Run("one page of a larger set", func(t *testing.T) {
 		got := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{
@@ -165,6 +183,43 @@ func TestFormatSAMLUsersListMarkdown(t *testing.T) {
 			"- " + toolutil.HintPreserveLinks + "\n" +
 			"- These are users provisioned through SAML SSO\n" +
 			"- Use action 'group.saml_link_list' to see the SAML group-to-access-level link mappings\n"
+		if got != want {
+			t.Errorf("FormatSAMLUsersListMarkdown =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("one user's profile link in the middle keeps the preserve-links hint", func(t *testing.T) {
+		got := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{
+			Users: []SAMLUserOutput{
+				{ID: 1, Username: "anon", Name: "Anon", State: "active"},
+				{ID: 2, Username: "bob", Name: "Bob", State: "active", WebURL: "https://gl/bob"},
+				{ID: 3, Username: "cara", Name: "Cara", State: "blocked"},
+			},
+		})
+		want := "## SAML Users (3)\n\n" + samlUsersHeader +
+			"| 1 | @anon | Anon | active |\n" +
+			"| 2 | [@bob](https://gl/bob) | Bob | active |\n" +
+			"| 3 | @cara | Cara | blocked |\n" +
+			"\n---\n💡 **Next steps:**\n" +
+			"- " + toolutil.HintPreserveLinks + "\n" +
+			"- These are users provisioned through SAML SSO\n" +
+			"- Use action 'group.saml_link_list' to see the SAML group-to-access-level link mappings\n"
+		if got != want {
+			t.Errorf("FormatSAMLUsersListMarkdown =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("no profile link anywhere drops the preserve-links hint", func(t *testing.T) {
+		got := FormatSAMLUsersListMarkdown(SAMLUsersListOutput{
+			Users: []SAMLUserOutput{
+				{ID: 1, Username: "anon", Name: "Anon", State: "active"},
+				{ID: 2, Username: "mute", Name: "Mute", State: "blocked"},
+			},
+		})
+		want := "## SAML Users (2)\n\n" + samlUsersHeader +
+			"| 1 | @anon | Anon | active |\n" +
+			"| 2 | @mute | Mute | blocked |\n" +
+			samlUsersHints
 		if got != want {
 			t.Errorf("FormatSAMLUsersListMarkdown =\n%q\nwant\n%q", got, want)
 		}

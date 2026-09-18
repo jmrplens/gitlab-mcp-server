@@ -78,6 +78,34 @@ func TestFormatListKeysMarkdown(t *testing.T) {
 	})
 }
 
+// TestFormatListKeysMarkdown_PaginatedPage_StatesTheTotalAndThePagePosition
+// verifies that the pagination block reaches both ends of the rendered
+// document: the heading count and summary line above the table, and the page
+// footer below it.
+//
+// Why it matters: every case above renders a single unpaginated page, so the
+// formatter could pass its heading and footer an empty pagination block and
+// stay green — confirmed by doing exactly that and running the suite. A reader
+// would then be told a project publishes the two keys on this page when it
+// publishes three, with nothing on the page saying another page exists. That
+// is the same defect at the rendering end that the handler's pagination block
+// guards at the data end, and a model reads the rendering.
+func TestFormatListKeysMarkdown_PaginatedPage_StatesTheTotalAndThePagePosition(t *testing.T) {
+	assertRendered(t, FormatListKeysMarkdown(ListClientKeysOutput{
+		Keys:       []ClientKeyItem{{ID: 11, Active: true, PublicKey: "pk-first", SentryDsn: "dsn"}},
+		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalItems: 3, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true},
+	}),
+		"## Error Tracking Client Keys (3)\n\n"+
+			"Showing 1 of 3 results (page 2 of 3)\n\n"+
+			"| ID | Active | Public Key |\n"+
+			"| --- | --- | --- |\n"+
+			"| 11 | ✅ | `pk-first` |\n"+
+			"\nPage 2 of 3 | 3 items total | 1 per page\n"+
+			"\n---\n💡 **Next steps:**\n"+
+			"- Use action 'admin.error_tracking_create' to generate another key\n"+
+			"- Use action 'admin.error_tracking_delete' to revoke one by its ID\n")
+}
+
 // TestFormatKeyMarkdown verifies the client key card, with the key and the DSN
 // as code spans because a reader has to copy both verbatim.
 func TestFormatKeyMarkdown(t *testing.T) {

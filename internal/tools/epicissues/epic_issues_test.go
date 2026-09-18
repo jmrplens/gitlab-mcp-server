@@ -8,8 +8,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -17,6 +19,17 @@ import (
 const (
 	testFullPath     = "my-group"
 	testChildProject = "my-group/my-project"
+)
+
+// wantEpicIIDRequired and wantChildIIDRequired are the refusals the handlers
+// owe a caller who sent no IID, quoted far enough to be about the parameter.
+// The bare word "iid" would not be: every GID-resolution hint in this package
+// spells it too ("verify full_path with gitlab_group_get and iid with
+// gitlab_epic_list"), so an IID that slipped past its guard and failed one
+// request later would satisfy an assertion meant for the guard.
+const (
+	wantEpicIIDRequired  = "epic_iid is required (must be > 0)"
+	wantChildIIDRequired = "child_iid is required (must be > 0)"
 )
 
 // --- GraphQL response fixtures ---
@@ -97,6 +110,13 @@ const gqlChildrenEmpty = `{
 }`
 
 const gqlNamespaceNull = `{"namespace": null}`
+
+// gqlWorkItemNull is what GitLab answers when the group resolves but carries no
+// epic with that IID: the namespace is an object and the work item under it is
+// null. It is a different shape from gqlNamespaceNull, and the difference is
+// load-bearing — the second half of the nil guard is the only thing standing
+// between this response and a dereference of a nil work item.
+const gqlWorkItemNull = `{"namespace": {"workItem": null}}`
 
 const gqlWorkItemGIDData = `{
   "namespace": {
@@ -350,22 +370,38 @@ func TestList(t *testing.T) {
 			wantErr: "epic not found",
 		},
 		{
+			// The group resolved and the epic under it did not. Nothing above
+			// the widget loop re-checks the work item, so reaching the loop
+			// with this response dereferences nil and takes the process with
+			// it; the answer owed is the same not-found the null namespace gets.
+			name:  "returns error when the group resolves but the epic does not",
+			input: ListInput{FullPath: testFullPath, IID: 999},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemNull)
+			}}),
+			wantErr: `epic not found in group "my-group" with IID 999`,
+		},
+		{
 			name:    "returns error when full_path is empty",
 			input:   ListInput{IID: 1},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
 			wantErr: "full_path is required",
 		},
 		{
+			// The wanted text is the required-parameter message and not the bare
+			// word "iid", which every GID-resolution hint in this package also
+			// carries: asserted loosely, a zero IID that slipped past the guard
+			// and failed at the transport instead would read as a pass.
 			name:    "returns error when iid is zero",
 			input:   ListInput{FullPath: testFullPath, IID: 0},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when iid is negative",
 			input:   ListInput{FullPath: testFullPath, IID: -1},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:  "returns error on API server error",
@@ -489,6 +525,98 @@ func TestList_SkipsWidgetsWithoutChildren(t *testing.T) {
 	}
 }
 
+// TestList_ChildCarriesWidgetsOtherThanLabels_PublishesOnlyTheLabelWidget
+// verifies that the widgets a child carries which are not the labels widget
+// contribute nothing, while the labels widget among them still arrives.
+//
+// This is the shape of every real answer rather than an edge case: the query
+// selects `... on WorkItemWidgetLabels` alone, so GitLab sends each of a work
+// item's other widgets — assignees, dates, hierarchy — as an empty object,
+// which decodes to a widget whose Labels is nil. Every fixture in this file
+// until now sent the labels widget by itself, so the nil side of that guard
+// was never taken and a guard inverted to `== nil` would publish no labels at
+// all for a response that carries them and dereference the ones that do not.
+func TestList_ChildCarriesWidgetsOtherThanLabels_PublishesOnlyTheLabelWidget(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, `{
+  "namespace": {
+    "workItem": {
+      "widgets": [{
+        "children": {
+          "pageInfo": {"hasNextPage": false, "hasPreviousPage": false},
+          "nodes": [{
+            "id": "gid://gitlab/WorkItem/10",
+            "iid": "10",
+            "title": "Fix login bug",
+            "state": "OPEN",
+            "widgets": [{}, {"labels": {"nodes": [{"title": "bug"}]}}, {}]
+          }]
+        }
+      }]
+    }
+  }
+}`)
+	}}))
+
+	out, err := List(context.Background(), client, ListInput{FullPath: testFullPath, IID: 1})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Issues) != 1 {
+		t.Fatalf("List() issues = %d, want 1", len(out.Issues))
+	}
+	if got := out.Issues[0].Labels; len(got) != 1 || got[0] != "bug" {
+		t.Errorf("Labels = %v, want exactly [bug] from the one labels widget", got)
+	}
+}
+
+// TestList_ChildIIDNotANumber_PublishesTheRowWithZeroIID verifies that a child
+// whose iid does not parse is still published, with the numeric field left at
+// zero rather than the row dropped or the listing failed.
+//
+// GitLab types a work item's iid as an ID, which arrives as a string, so the
+// conversion can fail on any answer that omits it or spells it otherwise. The
+// row is the caller's only way to reach the issue — its id is what assign and
+// remove take — so losing the whole of it over one unreadable field would cost
+// more than the field does.
+func TestList_ChildIIDNotANumber_PublishesTheRowWithZeroIID(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondGraphQL(w, http.StatusOK, `{
+  "namespace": {
+    "workItem": {
+      "widgets": [{
+        "children": {
+          "pageInfo": {"hasNextPage": false, "hasPreviousPage": false},
+          "nodes": [{
+            "id": "gid://gitlab/WorkItem/10",
+            "iid": "",
+            "title": "Fix login bug",
+            "state": "OPEN",
+            "widgets": [{"labels": {"nodes": [{"title": "bug"}]}}]
+          }]
+        }
+      }]
+    }
+  }
+}`)
+	}}))
+
+	out, err := List(context.Background(), client, ListInput{FullPath: testFullPath, IID: 1})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if len(out.Issues) != 1 {
+		t.Fatalf("List() issues = %d, want the row published anyway", len(out.Issues))
+	}
+	got := out.Issues[0]
+	if got.IID != 0 {
+		t.Errorf("IID = %d, want 0 for an iid that does not parse", got.IID)
+	}
+	if got.ID != "gid://gitlab/WorkItem/10" || got.Title != "Fix login bug" || got.State != "opened" {
+		t.Errorf("child issue = %+v, want the rest of the row intact", got)
+	}
+}
+
 // TestAssign verifies the Assign handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -529,13 +657,13 @@ func TestAssign(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   AssignInput{FullPath: testFullPath, ChildProjectPath: testChildProject, ChildIID: 10},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when iid is negative",
 			input:   AssignInput{FullPath: testFullPath, IID: -5, ChildProjectPath: testChildProject, ChildIID: 10},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when child_project_path is empty",
@@ -547,7 +675,7 @@ func TestAssign(t *testing.T) {
 			name:    "returns error when child_iid is zero",
 			input:   AssignInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "child_iid",
+			wantErr: wantChildIIDRequired,
 		},
 		{
 			name:  "returns error when epic GID resolution fails",
@@ -702,13 +830,13 @@ func TestRemove(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   RemoveInput{FullPath: testFullPath, ChildProjectPath: testChildProject, ChildIID: 10},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when iid is negative",
 			input:   RemoveInput{FullPath: testFullPath, IID: -3, ChildProjectPath: testChildProject, ChildIID: 10},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when child_project_path is empty",
@@ -720,7 +848,7 @@ func TestRemove(t *testing.T) {
 			name:    "returns error when child_iid is zero",
 			input:   RemoveInput{FullPath: testFullPath, IID: 1, ChildProjectPath: testChildProject},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "child_iid",
+			wantErr: wantChildIIDRequired,
 		},
 		{
 			name:  "returns error when child GID resolution fails",
@@ -954,7 +1082,7 @@ func TestUpdateOrder(t *testing.T) {
 			name:    "returns error when iid is zero",
 			input:   UpdateInput{FullPath: testFullPath, ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20", RelativePosition: "BEFORE"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
-			wantErr: "iid",
+			wantErr: wantEpicIIDRequired,
 		},
 		{
 			name:    "returns error when child_id is empty",
@@ -1072,6 +1200,89 @@ func TestUpdateOrder_MutationAPIError(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
+// Input guards
+// --------------------------------------------------------------------------
+
+// TestEpicIssueHandlers_ZeroEpicIID_RefusedWithoutReachingGitLab holds all four
+// handlers to refusing an absent epic_iid before they build a request, and to
+// naming the parameter when they do.
+//
+// Both halves matter, and the refusal text alone states neither. A guard
+// written `< 0` rather than `<= 0` lets a zero through, and what follows is
+// not a harmless no-op: List asks GitLab for the hierarchy of the work item
+// with iid "0", and the other three resolve a GID for epic 0 and fail a round
+// trip later carrying a hint that itself contains the word "iid". An assertion
+// on that word would therefore pass on the wrong error entirely. So this
+// counts the requests that reached the instance, which must be none, and
+// quotes the refusal far enough to be about the parameter.
+func TestEpicIssueHandlers_ZeroEpicIID_RefusedWithoutReachingGitLab(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(ctx context.Context, client *gitlabclient.Client) error
+	}{
+		{
+			name: "List",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := List(ctx, client, ListInput{FullPath: testFullPath, IID: 0})
+				return err
+			},
+		},
+		{
+			name: "Assign",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Assign(ctx, client, AssignInput{
+					FullPath: testFullPath, IID: 0,
+					ChildProjectPath: testChildProject, ChildIID: 10,
+				})
+				return err
+			},
+		},
+		{
+			name: "Remove",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Remove(ctx, client, RemoveInput{
+					FullPath: testFullPath, IID: 0,
+					ChildProjectPath: testChildProject, ChildIID: 10,
+				})
+				return err
+			},
+		},
+		{
+			name: "UpdateOrder",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := UpdateOrder(ctx, client, UpdateInput{
+					FullPath: testFullPath, IID: 0,
+					ChildID: "gid://gitlab/WorkItem/10", AdjacentID: "gid://gitlab/WorkItem/20",
+					RelativePosition: "BEFORE",
+				})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The handler counts rather than aborting: it runs on the
+			// httptest server's own goroutine, where FailNow would take the
+			// server down instead of failing the test.
+			var reached atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached.Add(1)
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}))
+
+			err := tt.call(context.Background(), client)
+			if err == nil || !strings.Contains(err.Error(), wantEpicIIDRequired) {
+				t.Errorf("%s() error = %v, want containing %q", tt.name, err, wantEpicIIDRequired)
+			}
+			if got := reached.Load(); got != 0 {
+				t.Errorf("%s() made %d request(s) to GitLab for a zero epic_iid, want none", tt.name, got)
+			}
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 // normalizeState
 // --------------------------------------------------------------------------
 
@@ -1132,6 +1343,28 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| `gid://gitlab/Issue/1` | [#10](https://gitlab.example.com/g/p/-/issues/10) | Fix login bug | 🟢 opened | @alice | bug, critical | 15 Jan 2026 10:00 UTC |\n" +
 				"| `gid://gitlab/Issue/2` | #20 | Add feature | 🔴 closed | @bob |  | 1 Feb 2026 12:00 UTC |\n" +
 				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor1"}, 2) + "\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- " + toolutil.HintPreserveLinks + "\n" +
+				"- Use action 'group.epic_issue_assign' to add an issue to this epic\n" +
+				"- Use action 'group.epic_issue_remove' to unlink an issue from this epic\n",
+		},
+		{
+			// A state the query did not select leaves the cell empty rather
+			// than showing the fallback emoji, which would read as a state
+			// GitLab has and this tree does not recognize instead of as the
+			// absence it is.
+			name: "leaves the state cell empty when there is no state",
+			input: ListOutput{
+				Issues: []ChildOutput{{
+					ID: "gid://gitlab/Issue/3", IID: 30, Title: "No state", State: "",
+					Author: "carol", CreatedAt: "2026-03-01T09:00:00Z",
+				}},
+			},
+			want: "## Epic Issues (1)\n\n" +
+				"| ID | IID | Title | State | Author | Labels | Created |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| `gid://gitlab/Issue/3` | #30 | No state |  | @carol |  | 1 Mar 2026 09:00 UTC |\n" +
+				"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{}, 1) + "\n" +
 				"\n---\n💡 **Next steps:**\n" +
 				"- " + toolutil.HintPreserveLinks + "\n" +
 				"- Use action 'group.epic_issue_assign' to add an issue to this epic\n" +

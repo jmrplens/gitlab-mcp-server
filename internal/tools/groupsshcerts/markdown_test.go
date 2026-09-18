@@ -3,8 +3,16 @@
 package groupsshcerts
 
 import (
+	"strings"
 	"testing"
 )
+
+// keyOfThresholdLength is a CA public key of exactly the length the card still
+// shows whole. Every other key in this file sits well clear of that cut on one
+// side or the other, which leaves the comparison's spelling free: at any of
+// those lengths `>` and `>=` render the same card, and only a key of exactly
+// this length tells them apart.
+const keyOfThresholdLength = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWxyz1234"
 
 // The guidance section each SSH certificate formatter closes with.
 const (
@@ -69,7 +77,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				certCardHints,
 		},
 		{
-			name: "a key at the boundary is not truncated",
+			name: "a key shorter than the cut is not truncated",
 			input: Output{
 				ID:    3,
 				Title: "exact-key",
@@ -79,6 +87,24 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				"- **ID**: 3\n" +
 				"- **Title**: exact-key\n" +
 				"- **Key**: `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7QbpPnVFGkYLlWx`\n" +
+				certCardHints,
+		},
+		{
+			// The one length at which the two spellings of the cut disagree: a
+			// key of exactly the threshold is short enough to show whole, and
+			// truncating it would replace three of its own characters with an
+			// ellipsis while producing a string of the same length, so nothing
+			// but this fixture can tell the two apart.
+			name: "a key of exactly the threshold is shown whole",
+			input: Output{
+				ID:    6,
+				Title: "threshold-key",
+				Key:   keyOfThresholdLength,
+			},
+			want: "## SSH Certificate #6\n\n" +
+				"- **ID**: 6\n" +
+				"- **Title**: threshold-key\n" +
+				"- **Key**: `" + keyOfThresholdLength + "`\n" +
 				certCardHints,
 		},
 		{
@@ -100,6 +126,30 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			assertCertMarkdown(t, FormatOutputMarkdown(tt.input), tt.want)
 		})
+	}
+}
+
+// TestFormatOutputMarkdown_KeyAtTheThreshold_ShownWholeAndCutOneCharacterLonger
+// states where the card stops showing a CA key in full, as the pair of answers
+// the boundary has to give: the threshold-length key is the longest one shown
+// whole, and one character more is cut. Asserting a single length proves only
+// that the cut happens somewhere, which is why the card above could render
+// every one of its keys correctly while the comparison admitted the threshold
+// itself; a reader telling two certificates apart by the head of their keys is
+// then shown an ellipsis where the key ended.
+func TestFormatOutputMarkdown_KeyAtTheThreshold_ShownWholeAndCutOneCharacterLonger(t *testing.T) {
+	whole := FormatOutputMarkdown(Output{ID: 6, Title: "threshold", Key: keyOfThresholdLength})
+	if !strings.Contains(whole, "`"+keyOfThresholdLength+"`") {
+		t.Errorf("a key of %d characters was not shown whole:\n%s", len(keyOfThresholdLength), whole)
+	}
+
+	oneLonger := keyOfThresholdLength + "z"
+	cut := FormatOutputMarkdown(Output{ID: 7, Title: "over-threshold", Key: oneLonger})
+	if strings.Contains(cut, oneLonger) {
+		t.Errorf("a key of %d characters was shown whole, want it cut:\n%s", len(oneLonger), cut)
+	}
+	if !strings.Contains(cut, "...`") {
+		t.Errorf("a cut key does not end in an ellipsis:\n%s", cut)
 	}
 }
 

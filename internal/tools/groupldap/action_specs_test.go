@@ -74,6 +74,46 @@ func TestLDAPMetadata_IndividualToolDescriptions(t *testing.T) {
 	}
 }
 
+// TestGroupLDAPOptions_UnknownIndividualTool_KeepsTheSharedMetadata asserts
+// what a group LDAP action carries before the per-tool switch refines it.
+// Every one of the five arms overwrites the usage, the aliases, the related
+// actions and the description, so the shared base is observable nowhere else,
+// and a sixth action added without an arm of its own inherits exactly this.
+// The licensing gate is the part that matters: an LDAP group link is a
+// Premium feature whether or not anybody has written discovery prose for the
+// action yet, so Edition, OwnerPackage and the tags must not be things the
+// switch supplies.
+func TestGroupLDAPOptions_UnknownIndividualTool_KeepsTheSharedMetadata(t *testing.T) {
+	const unknown = "gitlab_group_ldap_link_rename"
+
+	options := groupLDAPOptions(unknown)
+
+	if options.Edition != "premium" {
+		t.Errorf("Edition = %q, want premium", options.Edition)
+	}
+	if options.OwnerPackage != "groupldap" {
+		t.Errorf("OwnerPackage = %q, want groupldap", options.OwnerPackage)
+	}
+	if !options.OpenWorld {
+		t.Error("OpenWorld = false, want true: an LDAP link names directory state this server does not own")
+	}
+	if !slices.Equal(options.Tags, []string{"group", "ldap"}) {
+		t.Errorf("Tags = %v, want [group ldap]", options.Tags)
+	}
+	if !slices.Equal(options.Aliases, []string{unknown}) {
+		t.Errorf("Aliases = %v, want the tool's own name as the only fallback alias", options.Aliases)
+	}
+	if options.Usage == "" {
+		t.Error("Usage is empty: an action with no arm of its own still has to say what it is for")
+	}
+	if options.IndividualTool.Name != unknown {
+		t.Errorf("IndividualTool.Name = %q, want %q", options.IndividualTool.Name, unknown)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty: the switch is what writes one", options.IndividualTool.Description)
+	}
+}
+
 func aliasHas(aliases []string, sub string) bool {
 	for _, a := range aliases {
 		if strings.Contains(a, sub) {

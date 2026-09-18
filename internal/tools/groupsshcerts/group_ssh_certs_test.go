@@ -141,6 +141,39 @@ func TestList_PaginationParameters(t *testing.T) {
 	}
 }
 
+// TestList_NoPaginationInput_SendsNoPaginationParameters holds that a caller
+// who asked for no particular page is sent to GitLab asking for none.
+// ListGroupSSHCertificates takes no options struct, so this handler renders the
+// query itself and writes each parameter only when the caller gave it a value;
+// were any of those guards to admit a zero, every default list would carry
+// `page=0` and `per_page=0` — a request nobody made, and one GitLab is free to
+// read differently from the bare list this action documents. The values it
+// sends when they are given are held by TestList_PaginationParameters; this is
+// the other half, and nothing else in the suite looks at a query that should be
+// empty.
+func TestList_NoPaginationInput_SendsNoPaginationParameters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/groups/mygroup/ssh_certificates" {
+			http.NotFound(w, r)
+			return
+		}
+		if q := r.URL.Query(); q.Has("page") || q.Has("per_page") || q.Has("pagination") || q.Has("page_token") {
+			t.Errorf("query = %q, want no pagination parameters at all", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"cert-1","key":"ssh-rsa AAAA1","created_at":"2026-01-01T00:00:00Z"}]`)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		GroupID: toolutil.StringOrInt("mygroup"),
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Certificates) != 1 {
+		t.Fatalf("expected 1 certificate, got %d", len(out.Certificates))
+	}
+}
+
 // TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

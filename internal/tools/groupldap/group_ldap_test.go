@@ -3,7 +3,10 @@ package groupldap
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -269,6 +272,75 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+// TestAdd_Selectors_SendOnlyTheOnesTheCallerSet holds the body Add puts on the
+// wire, which is the only place the CN-or-filter choice can be observed: a
+// GitLab LDAP link is defined by a common name or by a filter, each is copied
+// into the request by a guard of its own, and the response a test writes for
+// itself echoes nothing about what was asked for. A guard that stopped copying
+// the selector the caller named would create a link nobody asked for, or have
+// the request refused for naming neither, and the handler would still return
+// the fixture and no error.
+func TestAdd_Selectors_SendOnlyTheOnesTheCallerSet(t *testing.T) {
+	memberRole := int64(42)
+	tests := []struct {
+		name  string
+		input AddInput
+		want  map[string]any
+	}{
+		{
+			name:  "a link defined by a common name sends cn and no filter",
+			input: AddInput{GroupID: "mygroup", CN: "engineers", GroupAccess: 30, Provider: "main"},
+			want: map[string]any{
+				"cn":           "engineers",
+				"group_access": float64(30),
+				"provider":     "main",
+			},
+		},
+		{
+			name:  "a link defined by a filter sends filter and no cn",
+			input: AddInput{GroupID: "mygroup", Filter: "(dept=eng)", GroupAccess: 20, Provider: "secondary"},
+			want: map[string]any{
+				"filter":       "(dept=eng)",
+				"group_access": float64(20),
+				"provider":     "secondary",
+			},
+		},
+		{
+			name: "a caller who names both sends both, with the member role beside them",
+			input: AddInput{
+				GroupID: "mygroup", CN: "admins", Filter: "(dept=eng)",
+				GroupAccess: 50, Provider: "main", MemberRoleID: &memberRole,
+			},
+			want: map[string]any{
+				"cn":             "admins",
+				"filter":         "(dept=eng)",
+				"group_access":   float64(50),
+				"provider":       "main",
+				"member_role_id": float64(42),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					got = map[string]any{"undecodable body": err.Error()}
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"cn":"","filter":"","group_access":0,"provider":""}`)
+			}))
+
+			if _, err := Add(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Add() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestDeleteWithCNOrFilter validates the DeleteWithCNOrFilter handler covering
 // success with various option combinations, validation, and API errors.
 func TestDeleteWithCNOrFilter(t *testing.T) {
@@ -336,6 +408,59 @@ func TestDeleteWithCNOrFilter(t *testing.T) {
 			err := DeleteWithCNOrFilter(context.Background(), client, tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("DeleteWithCNOrFilter() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestDeleteWithCNOrFilter_Selectors_SendOnlyTheOnesTheCallerSet holds the
+// query string the delete builds. GitLab answers this endpoint with 204 and no
+// body, so the handler's own return value is the same whichever link was
+// removed: the three selectors are each copied onto the request by a guard of
+// its own, and a guard that inverted would delete by a selector the caller
+// never named, or ask GitLab to match an empty one, while the test still saw
+// success. Only the request says which link was meant.
+func TestDeleteWithCNOrFilter_Selectors_SendOnlyTheOnesTheCallerSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input DeleteWithCNOrFilterInput
+		want  url.Values
+	}{
+		{
+			name:  "deleting by common name names only the cn",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "engineers"},
+			want:  url.Values{"cn": {"engineers"}},
+		},
+		{
+			name:  "deleting by filter names only the filter",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", Filter: "(dept=eng)"},
+			want:  url.Values{"filter": {"(dept=eng)"}},
+		},
+		{
+			name:  "a provider travels beside the selector it qualifies",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "engineers", Provider: "ldap2"},
+			want:  url.Values{"cn": {"engineers"}, "provider": {"ldap2"}},
+		},
+		{
+			name:  "all three travel when the caller sets all three",
+			input: DeleteWithCNOrFilterInput{GroupID: "mygroup", CN: "engineers", Filter: "(dept=eng)", Provider: "ldap2"},
+			want:  url.Values{"cn": {"engineers"}, "filter": {"(dept=eng)"}, "provider": {"ldap2"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got url.Values
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.URL.Query()
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			if err := DeleteWithCNOrFilter(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("DeleteWithCNOrFilter() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request query = %v, want %v", got, tt.want)
 			}
 		})
 	}

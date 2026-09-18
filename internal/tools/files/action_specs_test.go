@@ -107,6 +107,87 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetFailureOtherThanNotFound_StaysAnError asserts that the
+// file-get route turns a 404 into the not-found card and leaves every other
+// failure an error.
+//
+// The route's wrapper reaches the card only when both halves hold: there was
+// an error, and it was a 404. Without a failure that is not a 404, nothing
+// distinguishes that from "there was an error" — and a wrapper widened to the
+// looser reading would answer a 403 from a token without repository access, or
+// a 500 from an instance in trouble, with "File Not Found", telling the model
+// the file does not exist and sending it off to create one.
+func TestActionSpecs_GetFailureOtherThanNotFound_StaysAnError(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+	}{
+		{name: "forbidden", status: http.StatusForbidden},
+		{name: "server error", status: http.StatusInternalServerError},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"denied"}`)
+			}))
+			byTool := fileSpecsByTool(t, ActionSpecs(client))
+
+			result, err := byTool["gitlab_file_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "file_path": "main.go"})
+			if err == nil {
+				t.Fatalf("Route.Handler(gitlab_file_get) returned %#v, want an error for status %d", result, tc.status)
+			}
+			if _, ok := result.(fileNotFoundOutput); ok {
+				t.Fatalf("Route.Handler(gitlab_file_get) reported the file missing for status %d", tc.status)
+			}
+		})
+	}
+}
+
+// TestFileOptions_DiscoveryMetadata_CoversEveryRegisteredToolAndFallsBack
+// asserts that every individual tool this domain registers carries its own
+// discovery metadata, and that a name the table does not know still yields a
+// usable spec.
+//
+// The two halves are one property seen from both sides. The metadata is keyed
+// by the individual tool name, so renaming a tool in ActionSpecs without
+// renaming its key silently drops that tool's aliases, usage guidance and
+// description — the surface a model searches by — while leaving a spec that
+// registers and runs. The fallback is what makes the loss silent, so it is
+// asserted here beside the guard that would otherwise hide a rename.
+func TestFileOptions_DiscoveryMetadata_CoversEveryRegisteredToolAndFallsBack(t *testing.T) {
+	t.Run("every registered tool", func(t *testing.T) {
+		byTool := fileSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(fileMockHandler))))
+		for toolName := range byTool {
+			t.Run(toolName, func(t *testing.T) {
+				options := fileOptions(toolName)
+				if options.IndividualTool.Description == "" {
+					t.Errorf("%s has no individual-tool description", toolName)
+				}
+				if len(options.Aliases) < 2 {
+					t.Errorf("%s aliases = %v, want the natural-language set rather than the fallback", toolName, options.Aliases)
+				}
+			})
+		}
+	})
+
+	t.Run("tool the metadata table does not know", func(t *testing.T) {
+		options := fileOptions("gitlab_file_not_in_the_table")
+		if options.IndividualTool.Name != "gitlab_file_not_in_the_table" {
+			t.Errorf("IndividualTool.Name = %q, want the name it was given", options.IndividualTool.Name)
+		}
+		if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_file_not_in_the_table" {
+			t.Errorf("Aliases = %v, want just the tool name", options.Aliases)
+		}
+		if options.Usage == "" {
+			t.Error("Usage is empty, want the generic sentence")
+		}
+		if options.IndividualTool.Description != "" {
+			t.Errorf("Description = %q, want empty for a tool the table does not describe", options.IndividualTool.Description)
+		}
+	})
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

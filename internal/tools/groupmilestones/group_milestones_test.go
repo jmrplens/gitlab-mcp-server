@@ -4,11 +4,15 @@ package groupmilestones
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1947,4 +1951,346 @@ func groupMilestoneSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[st
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers send GitLab
+//
+// Every test above reads the response a fixture was told to return, so the
+// optional-field guards each handler builds its request with were exercised and
+// asserted by nothing: inverting one drops the field, GitLab answers with the
+// same milestone the fixture always returns, and the test still passes. These
+// read the request instead.
+// ---------------------------------------------------------------------------.
+
+// decodeGroupMilestoneBody decodes a request body into a map so a test can
+// state which keys a handler sent. It reports rather than aborts, since it runs
+// on the httptest server's goroutine.
+func decodeGroupMilestoneBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("read request body: %v", err)
+		return nil
+	}
+	var body map[string]any
+	if err = json.Unmarshal(raw, &body); err != nil {
+		t.Errorf("decode request body %q: %v", raw, err)
+		return nil
+	}
+	return body
+}
+
+// assertGroupMilestoneBodyKeys fails for each key whose value in the sent body
+// is not the expected one; a nil expectation means the key must be absent,
+// which is what keeps an empty input from being sent as an empty string.
+func assertGroupMilestoneBodyKeys(t *testing.T, body, want map[string]any) {
+	t.Helper()
+	for key, exp := range want {
+		got, present := body[key]
+		if exp == nil {
+			if present {
+				t.Errorf("body[%q] = %v, want the key to be absent", key, got)
+			}
+			continue
+		}
+		if !present {
+			t.Errorf("body[%q] missing, want %v", key, exp)
+			continue
+		}
+		if got != exp {
+			t.Errorf("body[%q] = %v, want %v", key, got, exp)
+		}
+	}
+}
+
+// TestList_IIDs_SendOneParameterPerRequestedMilestone asserts that ListInput's
+// IIDs reach GitLab as the repeated iids[] parameter, and that a call naming
+// none sends the parameter not at all. The filter is the entire point of the
+// field: dropped, GitLab answers with every milestone in the group and nothing
+// in the output says the narrowing was lost.
+func TestList_IIDs_SendOneParameterPerRequestedMilestone(t *testing.T) {
+	cases := []struct {
+		name string
+		iids []int64
+		want []string
+	}{
+		{name: "two named milestones", iids: []int64{4, 9}, want: []string{"4", "9"}},
+		{name: "none named", iids: nil, want: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != pathGroupMilestones {
+					http.NotFound(w, r)
+					return
+				}
+				got = r.URL.Query()["iids[]"]
+				testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+			}))
+
+			if _, err := List(context.Background(), client, ListInput{GroupID: testGroupID, IIDs: tc.iids}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("iids[] = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCreate_Description_ReachesTheRequestBodyOnlyWhenGiven asserts that a
+// description reaches the POST body and that an empty one is left out entirely.
+// Both halves matter: a lost description creates a milestone GitLab will show
+// blank, and a description sent as "" is a value rather than an omission.
+func TestCreate_Description_ReachesTheRequestBodyOnlyWhenGiven(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{
+			name:  "with a description",
+			input: CreateInput{GroupID: testGroupID, Title: testMilestoneTitle, Description: "First release"},
+			want:  map[string]any{"title": testMilestoneTitle, "description": "First release"},
+		},
+		{
+			name:  "without one",
+			input: CreateInput{GroupID: testGroupID, Title: testMilestoneTitle},
+			want:  map[string]any{"title": testMilestoneTitle, "description": nil},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathGroupMilestones {
+					http.NotFound(w, r)
+					return
+				}
+				sent = decodeGroupMilestoneBody(t, r)
+				testutil.RespondJSON(w, http.StatusCreated, milestoneJSON)
+			}))
+
+			if _, err := Create(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertGroupMilestoneBodyKeys(t, sent, tc.want)
+		})
+	}
+}
+
+// TestUpdate_OptionalFields_ReachTheRequestBodyOnlyWhenGiven asserts that the
+// title, description and state_event an update names reach the PUT body, and
+// that an update naming none sends none of them. "Only non-empty fields are
+// applied" is the documented contract of this action, and it is a contract
+// about the request: an update that silently drops state_event leaves the
+// milestone open while answering with the milestone GitLab already had.
+func TestUpdate_OptionalFields_ReachTheRequestBodyOnlyWhenGiven(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{
+			name: "every optional field",
+			input: UpdateInput{
+				GroupID: testGroupID, MilestoneIID: 1,
+				Title: "v1.0-final", Description: "Updated desc", StateEvent: "close",
+			},
+			want: map[string]any{"title": "v1.0-final", "description": "Updated desc", "state_event": "close"},
+		},
+		{
+			name:  "none of them",
+			input: UpdateInput{GroupID: testGroupID, MilestoneIID: 1},
+			want:  map[string]any{"title": nil, "description": nil, "state_event": nil},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones:
+					testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+				case r.Method == http.MethodPut && r.URL.Path == pathMilestone1:
+					sent = decodeGroupMilestoneBody(t, r)
+					testutil.RespondJSON(w, http.StatusOK, milestoneJSON)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+
+			if _, err := Update(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertGroupMilestoneBodyKeys(t, sent, tc.want)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers publish from the fields GitLab may omit
+// ---------------------------------------------------------------------------.
+
+// newGroupMilestoneChildClient answers the IID-to-ID lookup every child list
+// makes and then serves body at the milestone's child path.
+func newGroupMilestoneChildClient(t *testing.T, child, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathGroupMilestones:
+			testutil.RespondJSON(w, http.StatusOK, `[`+milestoneJSON+`]`)
+		case r.Method == http.MethodGet && r.URL.Path == pathMilestone1+"/"+child:
+			testutil.RespondJSONWithPagination(w, http.StatusOK, body,
+				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}
+
+// TestGetIssues_OptionalFields_ArePublishedOrLeftEmpty asserts that an issue's
+// web_url and created_at are copied when GitLab sends them and left empty when
+// it does not. GitLab omits created_at from a confidential issue a token may
+// only count, and the guard around it is what stops that omission becoming a
+// nil dereference; the converse, a link quietly dropped, costs the model the
+// only way it has of naming the issue to a human.
+func TestGetIssues_OptionalFields_ArePublishedOrLeftEmpty(t *testing.T) {
+	cases := []struct {
+		name          string
+		body          string
+		wantWebURL    string
+		wantCreatedAt string
+	}{
+		{
+			name:          "sent",
+			body:          `[{"id":100,"iid":5,"title":"Fix bug","state":"opened","web_url":"https://example.com/issues/5","created_at":"2026-01-10T00:00:00Z"}]`,
+			wantWebURL:    "https://example.com/issues/5",
+			wantCreatedAt: "2026-01-10T00:00:00Z",
+		},
+		{
+			name: "omitted",
+			body: `[{"id":100,"iid":5,"title":"Fix bug","state":"opened"}]`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newGroupMilestoneChildClient(t, "issues", tc.body)
+
+			out, err := GetIssues(context.Background(), client, GetIssuesInput{GroupID: testGroupID, MilestoneIID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.Issues) != 1 {
+				t.Fatalf("len(Issues) = %d, want 1", len(out.Issues))
+			}
+			if out.Issues[0].WebURL != tc.wantWebURL {
+				t.Errorf("WebURL = %q, want %q", out.Issues[0].WebURL, tc.wantWebURL)
+			}
+			if out.Issues[0].CreatedAt != tc.wantCreatedAt {
+				t.Errorf("CreatedAt = %q, want %q", out.Issues[0].CreatedAt, tc.wantCreatedAt)
+			}
+		})
+	}
+}
+
+// TestGetMergeRequests_OptionalFields_ArePublishedOrLeftEmpty asserts the same
+// of a merge request's web_url and created_at. The link is the column the list
+// formatter renders the IID as, so an MR whose URL never reaches the output is
+// one a reader cannot open.
+func TestGetMergeRequests_OptionalFields_ArePublishedOrLeftEmpty(t *testing.T) {
+	cases := []struct {
+		name          string
+		body          string
+		wantWebURL    string
+		wantCreatedAt string
+	}{
+		{
+			name:          "sent",
+			body:          `[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main","web_url":"https://example.com/mr/10","created_at":"2026-02-01T00:00:00Z"}]`,
+			wantWebURL:    "https://example.com/mr/10",
+			wantCreatedAt: "2026-02-01T00:00:00Z",
+		},
+		{
+			name: "omitted",
+			body: `[{"id":200,"iid":10,"title":"Feature MR","state":"merged","source_branch":"feature","target_branch":"main"}]`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newGroupMilestoneChildClient(t, "merge_requests", tc.body)
+
+			out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{GroupID: testGroupID, MilestoneIID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.MergeRequests) != 1 {
+				t.Fatalf("len(MergeRequests) = %d, want 1", len(out.MergeRequests))
+			}
+			if out.MergeRequests[0].WebURL != tc.wantWebURL {
+				t.Errorf("WebURL = %q, want %q", out.MergeRequests[0].WebURL, tc.wantWebURL)
+			}
+			if out.MergeRequests[0].CreatedAt != tc.wantCreatedAt {
+				t.Errorf("CreatedAt = %q, want %q", out.MergeRequests[0].CreatedAt, tc.wantCreatedAt)
+			}
+		})
+	}
+}
+
+// TestGetBurndownChartEvents_NullableFields_ArePublishedOrLeftZero asserts that
+// a burndown event's created_at, weight and action are copied when GitLab sends
+// them and left at zero when it does not. All three are pointers in the SDK
+// struct, so every one of them is a nil dereference away from taking the
+// process down, and a date dropped turns the chart into an unordered list of
+// weights.
+func TestGetBurndownChartEvents_NullableFields_ArePublishedOrLeftZero(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want BurndownChartEventItem
+	}{
+		{
+			name: "sent",
+			body: `[{"created_at":"2026-01-05T00:00:00Z","weight":3,"action":"add"}]`,
+			want: BurndownChartEventItem{CreatedAt: "2026-01-05T00:00:00Z", Weight: 3, Action: testActionAdd},
+		},
+		{
+			name: "all three null",
+			body: `[{"created_at":null,"weight":null,"action":null}]`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newGroupMilestoneChildClient(t, "burndown_events", tc.body)
+
+			out, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{GroupID: testGroupID, MilestoneIID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.Events) != 1 {
+				t.Fatalf("len(Events) = %d, want 1", len(out.Events))
+			}
+			if out.Events[0] != tc.want {
+				t.Errorf("event = %+v, want %+v", out.Events[0], tc.want)
+			}
+		})
+	}
+}
+
+// TestFormatIssuesMarkdown_StateGitLabDidNotSend_RendersAnEmptyCell pins the
+// one branch of stateCell no fixture above reaches. A state glyph is chosen
+// from the state word, so rendering the glyph for an absent state would put a
+// colored circle in the table asserting a state GitLab never reported.
+func TestFormatIssuesMarkdown_StateGitLabDidNotSend_RendersAnEmptyCell(t *testing.T) {
+	md := FormatIssuesMarkdownString(IssuesOutput{
+		Issues:     []IssueItem{{ID: 100, IID: 5, Title: "Fix bug"}},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+	})
+
+	const wantRow = "| #5 | Fix bug |  |  |\n"
+	if !strings.Contains(md, wantRow) {
+		t.Errorf("FormatIssuesMarkdownString()\n got %q\nwant a row %q", md, wantRow)
+	}
 }

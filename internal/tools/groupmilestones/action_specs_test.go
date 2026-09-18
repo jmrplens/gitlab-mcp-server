@@ -5,6 +5,9 @@ package groupmilestones
 import (
 	"context"
 	"net/http"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -25,6 +28,152 @@ func TestDecorateGroupMilestoneMeta_UnknownTool(t *testing.T) {
 	}
 	if options.IndividualTool.Description != before.IndividualTool.Description {
 		t.Errorf("Description mutated for unknown tool: got %q", options.IndividualTool.Description)
+	}
+}
+
+// TestDecorateGroupMilestoneMeta_PartialEntry_KeepsWhatItDoesNotName verifies
+// that an entry filling only one field leaves the rest of the placeholder
+// metadata alone. Each guard in the decorator exists for exactly this: without
+// them a half-written entry would publish an action with no aliases and no
+// related actions at all, which on the dynamic surface is an action a model
+// cannot find by any natural-language phrase. The table is swapped rather than
+// extended because every real entry fills every field, so nothing else in this
+// package can reach the other side of those guards.
+func TestDecorateGroupMilestoneMeta_PartialEntry_KeepsWhatItDoesNotName(t *testing.T) {
+	const (
+		tool      = "gitlab_group_milestone_partial"
+		usageOnly = "only a usage"
+		aliasOnly = "only an alias"
+	)
+	placeholder := groupMilestoneOptions(tool)
+	cases := []struct {
+		name        string
+		entry       groupMilestoneActionMetaEntry
+		wantUsage   string
+		wantAliases []string
+	}{
+		{
+			name:        "names only a usage",
+			entry:       groupMilestoneActionMetaEntry{usage: usageOnly},
+			wantUsage:   usageOnly,
+			wantAliases: placeholder.Aliases,
+		},
+		{
+			name:        "names only aliases",
+			entry:       groupMilestoneActionMetaEntry{aliases: []string{aliasOnly}},
+			wantUsage:   placeholder.Usage,
+			wantAliases: []string{aliasOnly},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := groupMilestoneActionMeta
+			t.Cleanup(func() { groupMilestoneActionMeta = original })
+			groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{tool: tc.entry}
+
+			options := groupMilestoneOptions(tool)
+			decorateGroupMilestoneMeta(&options, tool)
+
+			if options.Usage != tc.wantUsage {
+				t.Errorf("Usage = %q, want %q", options.Usage, tc.wantUsage)
+			}
+			if !slices.Equal(options.Aliases, tc.wantAliases) {
+				t.Errorf("Aliases = %v, want %v", options.Aliases, tc.wantAliases)
+			}
+			// Neither case names these, so all three stay the placeholder's.
+			if !slices.Equal(options.RelatedActions, placeholder.RelatedActions) {
+				t.Errorf("RelatedActions = %v, want the placeholder %v", options.RelatedActions, placeholder.RelatedActions)
+			}
+			if options.IndividualTool.Description != placeholder.IndividualTool.Description {
+				t.Errorf("Description = %q, want the placeholder %q", options.IndividualTool.Description, placeholder.IndividualTool.Description)
+			}
+			if len(options.InputSchemaOverrides) != len(placeholder.InputSchemaOverrides) {
+				t.Errorf("InputSchemaOverrides = %v, want the placeholder %v", options.InputSchemaOverrides, placeholder.InputSchemaOverrides)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_DiscoveryMetadata_IsTheEntryRatherThanThePlaceholder verifies
+// that the usage, aliases, related actions and individual-tool description each
+// spec carries are the ones its entry names, and never the generic placeholder
+// groupMilestoneOptions starts every action from. This is what R-META asks of
+// the package, and nothing asserted it: the decorator could stop copying any of
+// the four and every other test here would still pass, while the dynamic
+// surface would advertise eight actions that all say "Use to execute
+// groupmilestones domain action" and answer to no phrase but their own name.
+func TestActionSpecs_DiscoveryMetadata_IsTheEntryRatherThanThePlaceholder(t *testing.T) {
+	byTool := groupMilestoneSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NotFoundHandler())))
+
+	for tool, meta := range groupMilestoneActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("no spec registers the individual tool %s", tool)
+			}
+			placeholder := groupMilestoneOptions(tool)
+			assertGroupMilestoneMeta(t, spec, meta, placeholder)
+		})
+	}
+}
+
+// assertGroupMilestoneMeta holds one spec to its entry, and to being unlike the
+// placeholder. Both halves are asserted: equality alone would pass if the
+// entry itself were emptied, and difference alone would pass on any other text.
+func assertGroupMilestoneMeta(t *testing.T, spec toolutil.ActionSpec, meta groupMilestoneActionMetaEntry, placeholder toolutil.ActionSpecOptions) {
+	t.Helper()
+	if spec.Usage != meta.usage || spec.Usage == placeholder.Usage {
+		t.Errorf("Usage = %q, want the entry's %q and not the placeholder", spec.Usage, meta.usage)
+	}
+	// Compared case-insensitively because the catalog lowercases every alias on
+	// the way in (toolutil.normalizeActionSpecStrings), so "list group
+	// milestone MRs" is served as "list group milestone mrs"; what this asserts
+	// is that the phrases are the entry's, not how they are spelled once the
+	// matcher has them.
+	if !slices.EqualFunc(spec.Aliases, meta.aliases, strings.EqualFold) || slices.Equal(spec.Aliases, placeholder.Aliases) {
+		t.Errorf("Aliases = %v, want the entry's %v and not the placeholder", spec.Aliases, meta.aliases)
+	}
+	if !slices.Equal(spec.RelatedActions, meta.related) || slices.Equal(spec.RelatedActions, placeholder.RelatedActions) {
+		t.Errorf("RelatedActions = %v, want the entry's %v and not the placeholder", spec.RelatedActions, meta.related)
+	}
+	if spec.IndividualTool.Description != meta.description || spec.IndividualTool.Description == "" {
+		t.Errorf("Description = %q, want the entry's %q", spec.IndividualTool.Description, meta.description)
+	}
+}
+
+// TestActionSpecs_InputSchemaOverrides_PublishTheTwoStateVocabularies verifies
+// that the two actions taking a state word publish it as an enum, and that no
+// other action publishes an override. The enum is the whole of what a model is
+// told about those parameters: unpublished, `state_event` invites "closed",
+// which GitLab refuses, and the only actions that would ever have said so are
+// these two.
+func TestActionSpecs_InputSchemaOverrides_PublishTheTwoStateVocabularies(t *testing.T) {
+	byTool := groupMilestoneSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NotFoundHandler())))
+	want := map[string]toolutil.InputSchemaOverride{
+		"gitlab_group_milestone_list":   toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "closed"}}),
+		"gitlab_group_milestone_update": toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
+	}
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			expected, constrained := want[tool]
+			if !constrained {
+				if len(spec.InputSchemaOverrides) != 0 {
+					t.Errorf("InputSchemaOverrides = %v, want none", spec.InputSchemaOverrides)
+				}
+				return
+			}
+			if len(spec.InputSchemaOverrides) != 1 {
+				t.Fatalf("InputSchemaOverrides = %v, want exactly %v", spec.InputSchemaOverrides, expected)
+			}
+			got := spec.InputSchemaOverrides[0]
+			if got.PropertyPath != expected.PropertyPath {
+				t.Errorf("PropertyPath = %q, want %q", got.PropertyPath, expected.PropertyPath)
+			}
+			if !reflect.DeepEqual(got.Values, expected.Values) {
+				t.Errorf("Values = %v, want %v", got.Values, expected.Values)
+			}
+		})
 	}
 }
 

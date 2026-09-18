@@ -4,6 +4,9 @@
 package grouprelationsexport
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -118,6 +121,99 @@ func TestScheduleExport_WithBatched(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+}
+
+// TestScheduleExport_Batched_ReachesGitLabAsTheCallerSetIt verifies the
+// optional batched flag is forwarded in the request GitLab receives when the
+// caller supplies one, with the value they gave, and is absent from that
+// request when they supply none.
+//
+// Why it matters: batched is a pointer, so "not asked for" and "asked for
+// false" are two different exports, and one `!= nil` is what tells them apart.
+// Inverted, that guard drops the flag of every caller who set one and forwards
+// the nil of every caller who did not, and GitLab then exports in whichever
+// mode it defaults to. Nothing this side of the wire can see it: the call still
+// returns 202 and the tool still reports the export scheduled. The assertion is
+// therefore on the body GitLab is sent, which is the only place the difference
+// exists. TestScheduleExport_WithBatched above drives the same field and
+// asserts only that the call succeeded, which it does either way.
+func TestScheduleExport_Batched_ReachesGitLabAsTheCallerSetIt(t *testing.T) {
+	ptr := func(v bool) *bool { return &v }
+	for _, tc := range []struct {
+		name  string
+		input *bool
+		want  any // nil means the key must not be in the request at all
+	}{
+		{name: "omitted", input: nil, want: nil},
+		{name: "batched", input: ptr(true), want: true},
+		{name: "explicitly_not_batched", input: ptr(false), want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assertBatchedSent(t, scheduleExportRequestBody(t, tc.input), tc.want)
+		})
+	}
+}
+
+// scheduleExportRequestBody schedules an export for group 10 against a mock
+// GitLab and returns the body that request carried. The read happens on the
+// server goroutine and the assertions on the test one, which is why the body
+// is returned rather than judged where it is read.
+func scheduleExportRequestBody(t *testing.T, batched *bool) []byte {
+	t.Helper()
+	var body []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/export_relations" {
+			http.NotFound(w, r)
+			return
+		}
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading the request body: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		body = read
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	if err := ScheduleExport(t.Context(), client, ScheduleExportInput{GroupID: "10", Batched: batched}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	return body
+}
+
+// assertBatchedSent holds the request body to the batched flag the caller
+// asked for, where a want of nil means the key must not appear at all.
+func assertBatchedSent(t *testing.T, body []byte, want any) {
+	t.Helper()
+	got, ok := decodeScheduleExportBody(t, body)["batched"]
+	if want == nil {
+		if ok {
+			t.Errorf("request carries batched=%v, want the key absent when the caller set no flag: %s", got, body)
+		}
+		return
+	}
+	if !ok {
+		t.Fatalf("request carries no batched key, want %v: %s", want, body)
+	}
+	if got != want {
+		t.Errorf("batched = %v, want %v", got, want)
+	}
+}
+
+// decodeScheduleExportBody reads the JSON object a schedule request carried.
+// An empty body is an object with no members rather than a failure: an options
+// struct whose every field is omitted may be sent as no body at all, and that
+// is one of the states the caller above is asserting about.
+func decodeScheduleExportBody(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	if len(bytes.TrimSpace(body)) == 0 {
+		return map[string]any{}
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("request body is not a JSON object (%v): %s", err, body)
+	}
+	return sent
 }
 
 // TestScheduleExport_EmptyGroupID verifies the ScheduleExport_EmptyGroupID handler.
