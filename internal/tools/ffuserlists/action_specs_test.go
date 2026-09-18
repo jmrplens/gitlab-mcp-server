@@ -83,6 +83,47 @@ func TestActionSpecs_UserListIIDGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_UserListIIDGuidance_WarnsOnlyDeleteAboutTheFlagItself
+// verifies that the confusion separating a user list from the feature flag it
+// serves is attached to the delete action, to no other action, and that it
+// names the canonical action to use instead.
+//
+// It matters in both directions. That sentence is the only thing between a
+// model asked to "delete the flag" and a destructive call on the wrong object,
+// so it has to be on the one action that destroys something; and repeating it
+// on the read and update actions, where nothing is destroyed, is how a reader
+// learns to skip the guidance. The sibling test above asserts the two
+// confusions every one of the three shares, which a warning carried by the
+// wrong action leaves untouched.
+func TestActionSpecs_UserListIIDGuidance_WarnsOnlyDeleteAboutTheFlagItself(t *testing.T) {
+	byTool := userListSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	const flagWarning = "NOT the feature flag itself"
+	testCases := []struct {
+		name string
+		tool string
+		want bool
+	}{
+		{name: "delete", tool: "gitlab_ff_user_list_delete", want: true},
+		{name: "get", tool: "gitlab_ff_user_list_get", want: false},
+		{name: "update", tool: "gitlab_ff_user_list_update", want: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			confusions := byTool[testCase.tool].ParameterGuidance["user_list_iid"].CommonConfusions
+			if got := containsText(confusions, flagWarning); got != testCase.want {
+				t.Errorf("%s user_list_iid carries %q = %v, want %v (confusions: %v)",
+					testCase.tool, flagWarning, got, testCase.want, confusions)
+			}
+			if testCase.want && !containsText(confusions, "feature_flags.feature_flag_delete") {
+				t.Errorf("%s user_list_iid confusions = %v, want the canonical flag-delete action named as the alternative",
+					testCase.tool, confusions)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
 // The test exercises the DELETE path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.

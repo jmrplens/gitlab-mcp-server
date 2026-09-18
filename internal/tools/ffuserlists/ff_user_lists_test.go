@@ -472,8 +472,65 @@ func TestDeleteUserList_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatUserListMarkdown — with CreatedAt / UpdatedAt
+// Converter — the timestamps GitLab may omit
 // ---------------------------------------------------------------------------.
+
+// TestGetUserList_Timestamps_PublishedOnlyWhenGitLabSendsThem verifies that
+// created_at and updated_at reach the output as the instants GitLab dated them,
+// and that a list carrying neither publishes neither while still publishing the
+// rest of itself.
+//
+// Both halves matter because the SDK models the two as pointers and the
+// converter guards each with a nil check. Read the wrong way round, that guard
+// drops the dates from every response that has them — the dates a caller sorts
+// rollout cohorts by, and the only evidence that an update landed — and
+// dereferences nil on the first response that does not. Nothing else in the
+// package can notice: the SDK parses the key or leaves the pointer nil without
+// complaint either way.
+func TestGetUserList_Timestamps_PublishedOnlyWhenGitLabSendsThem(t *testing.T) {
+	testCases := []struct {
+		name          string
+		body          string
+		wantCreatedAt string
+		wantUpdatedAt string
+	}{
+		{
+			name: "sent",
+			body: `{"id":1,"iid":10,"project_id":42,"name":"dated","user_xids":"u1",` +
+				`"created_at":"2026-03-04T05:06:07Z","updated_at":"2026-08-09T10:11:12Z"}`,
+			wantCreatedAt: "2026-03-04T05:06:07Z",
+			wantUpdatedAt: "2026-08-09T10:11:12Z",
+		},
+		{
+			name: "omitted",
+			body: `{"id":1,"iid":10,"project_id":42,"name":"dated","user_xids":"u1"}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, testCase.body)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			out, err := GetUserList(context.Background(), client, GetInput{ProjectID: "42", IID: 10})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.CreatedAt != testCase.wantCreatedAt {
+				t.Errorf("created_at = %q, want %q", out.CreatedAt, testCase.wantCreatedAt)
+			}
+			if out.UpdatedAt != testCase.wantUpdatedAt {
+				t.Errorf("updated_at = %q, want %q", out.UpdatedAt, testCase.wantUpdatedAt)
+			}
+			if out.Name != "dated" {
+				t.Errorf("name = %q, want the rest of the list published either way", out.Name)
+			}
+		})
+	}
+}
 
 // TestUserLists_UnreadableCapturedPath verifies that every feature flag user
 // list handler returns an error rather than a half-filled list when GitLab
