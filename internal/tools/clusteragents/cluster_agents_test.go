@@ -5,6 +5,7 @@ package clusteragents
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -405,6 +406,59 @@ func TestCreateAgentToken_WithDescription(t *testing.T) {
 	}
 	if out.Description != "A token with desc" {
 		t.Errorf("expected description, got %q", out.Description)
+	}
+}
+
+// TestCreateAgentToken_Description_IsSentOnlyWhenTheCallerGaveOne asserts what
+// GitLab is sent, not what the fixture echoes back. The handler puts the
+// description on the options only when the caller supplied one, and the
+// response body here is written by the test, so a test that reads the
+// description off the output passes whatever the request carried: the handler
+// could drop the field, or send an empty one over a description the caller
+// typed, and nothing would fail. That matters because a token's value is
+// returned once and never again, so the description is the only thing left to
+// tell two live tokens apart, and an empty one sent deliberately is not the
+// same as no description at all — GitLab stores what it is sent.
+func TestCreateAgentToken_Description_IsSentOnlyWhenTheCallerGaveOne(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		wantSent    bool
+	}{
+		{name: "given", description: "issued for the staging cluster", wantSent: true},
+		{name: "omitted", description: "", wantSent: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Errorf("expected POST, got %s", r.Method)
+					http.NotFound(w, r)
+					return
+				}
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+				}
+				got, sent := body["description"]
+				switch {
+				case sent != tc.wantSent:
+					t.Errorf("description present in the request = %t, want %t (body %v)", sent, tc.wantSent, body)
+				case sent && got != tc.description:
+					t.Errorf("description sent as %v, want %q", got, tc.description)
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"tok","agent_id":5,"status":"active"}`)
+			}))
+			_, err := CreateAgentToken(t.Context(), client, CreateAgentTokenInput{
+				ProjectID:   "1",
+				AgentID:     5,
+				Name:        "tok",
+				Description: tc.description,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
 	}
 }
 
