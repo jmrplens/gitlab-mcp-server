@@ -265,6 +265,17 @@ func TestFormatReorderOutputMarkdown(t *testing.T) {
 // TestFormatUniqueUsersMarkdown verifies distinct holders render as linked
 // profiles, that a user without a web URL degrades to a plain handle, and that
 // a nil entry is skipped rather than counted in the heading.
+//
+// Two of the subtests are about the preserve-links hint rather than the table.
+// That hint asks the reading model to keep the `[text](url)` cells intact, and
+// it is written only when some cell really carried one, so a page whose rows
+// are all plain handles must not ask for it: a hint that names something not
+// in the document teaches the model to invent links for later answers. The
+// guard writing it reads both halves of what a link needs, the web URL and the
+// username, because a recipient GitLab sends a profile URL for but no handle
+// renders as a dash and carries no link either. Until these cases existed
+// every recipient in the suite had both halves populated, so the guard could
+// have read either one alone, or the wrong one, and rendered the same page.
 func TestFormatUniqueUsersMarkdown(t *testing.T) {
 	t.Run("with users", func(t *testing.T) {
 		assertRendered(t, FormatUniqueUsersMarkdown(UniqueUsersOutput{
@@ -282,6 +293,38 @@ func TestFormatUniqueUsersMarkdown(t *testing.T) {
 				"\nShowing 2 items | no more pages\n"+
 				"\n---\n💡 **Next steps:**\n"+
 				"- "+toolutil.HintPreserveLinks+"\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
+	})
+	t.Run("no row carries a link", func(t *testing.T) {
+		assertRendered(t, FormatUniqueUsersMarkdown(UniqueUsersOutput{
+			Users: []*toolutil.BasicUserOutput{
+				{ID: 4, Username: "hubot", Name: "Hubot", State: "active"},
+				{ID: 5, Username: "ashgrey", Name: "Ash Grey", State: "active"},
+			},
+		}),
+			"## Achievement Recipients (2)\n\n"+
+				"| ID | Username | Name | State |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| 4 | @hubot | Hubot | active |\n"+
+				"| 5 | @ashgrey | Ash Grey | active |\n"+
+				"\nShowing 2 items | no more pages\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
+				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
+	})
+	t.Run("recipient without a username", func(t *testing.T) {
+		assertRendered(t, FormatUniqueUsersMarkdown(UniqueUsersOutput{
+			Users: []*toolutil.BasicUserOutput{
+				{ID: 6, Name: "Ghost", State: "blocked", WebURL: "https://example.com/ghost"},
+			},
+		}),
+			"## Achievement Recipients (1)\n\n"+
+				"| ID | Username | Name | State |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| 6 | - | Ghost | blocked |\n"+
+				"\nShowing 1 items | no more pages\n"+
+				"\n---\n💡 **Next steps:**\n"+
 				"- Use action 'achievement.recipients' to see who holds this achievement\n"+
 				"- Pass the `end_cursor` above as `after` to fetch the next page\n")
 	})
