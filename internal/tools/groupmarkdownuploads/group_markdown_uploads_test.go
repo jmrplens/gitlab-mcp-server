@@ -5,11 +5,14 @@ package groupmarkdownuploads
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -483,6 +486,177 @@ func TestUploadedByLabel(t *testing.T) {
 			if got := uploadedByLabel(tc.in); got != tc.want {
 				t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
 			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What a caller is handed: the timestamp form, and the empty list
+// ---------------------------------------------------------------------------.
+
+// TestList_CreatedAt_IsTheWireFormTheDisplayHelperReads verifies that the
+// timestamp List publishes names the instant GitLab sent, in the RFC 3339 form
+// [toolutil.FormatTime] can parse, and that an upload GitLab dated nowhere
+// carries an empty string rather than the year one.
+//
+// Why it matters: the conversion in List exists because the handler once
+// published time.Time.String(), "2026-01-02 03:04:05 +0000 UTC", which no
+// display helper parses, so the Created column printed the raw text.
+// Everything else in this file fed a created_at and then asserted on the
+// filename, and the formatter's own test hand-writes an RFC 3339 string into
+// the struct, so the handler could publish any form at all and the package
+// would stay green. Both halves are stated here: what the field holds, and
+// that the helper the table calls can read it back.
+func TestList_CreatedAt_IsTheWireFormTheDisplayHelperReads(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-02T03:04:05Z"},
+			{"id":2,"size":16,"filename":"undated.bin"}
+		]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Uploads) != 2 {
+		t.Fatalf("expected 2 uploads, got %d", len(out.Uploads))
+	}
+
+	published := out.Uploads[0].CreatedAt
+	got, err := time.Parse(time.RFC3339, published)
+	if err != nil {
+		t.Fatalf("created_at %q is not the RFC 3339 wire form: %v", published, err)
+	}
+	if want := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC); !got.Equal(want) {
+		t.Errorf("created_at names %s, want the instant GitLab sent, %s", got, want)
+	}
+	// FormatTime hands back its own argument when it cannot parse it, so a
+	// rendering that differs from the stored value is the proof that the
+	// display helper read the timestamp rather than gave up on it.
+	if display := toolutil.FormatTime(published); display == published {
+		t.Errorf("FormatTime(%q) returned it unchanged, so the Created column shows the wire form", published)
+	}
+	if undated := out.Uploads[1].CreatedAt; undated != "" {
+		t.Errorf("created_at of an upload GitLab dated nowhere = %q, want empty", undated)
+	}
+}
+
+// TestList_NoUploads_PublishesAnEmptyArray verifies that a group with no
+// uploads is answered with an empty JSON array rather than a null.
+//
+// Why it matters: uploads carries no omitempty, so whatever slice List builds
+// is what the client decodes. Building it with var instead of make publishes
+// "uploads":null, which a model has to special-case before it can iterate, and
+// no length assertion can see the difference: len(nil) is 0 as well. The
+// assertion is therefore on the encoded document, which is what a caller gets.
+func TestList_NoUploads_PublishesAnEmptyArray(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{GroupID: "5"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal output: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"uploads":[]`) {
+		t.Errorf("an empty group encodes to %s, want an empty uploads array", encoded)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The hint each handler attaches to the status it names
+// ---------------------------------------------------------------------------.
+
+// statusHandler answers every request with code and a GitLab-shaped body, so a
+// handler's own status branch is what the test is choosing.
+func statusHandler(code int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, code, `{"message":"nope"}`)
+	})
+}
+
+// TestHandlers_NotFound_CarryTheRouteThatRecovers verifies that each handler's
+// 404 reaches the caller as a hinted error naming the action to recover
+// through, and that a status the handler did not name carries no suggestion at
+// all.
+//
+// Why it matters: all three handlers route their failures through
+// toolutil.WrapErrWithStatusHint, which attaches the hint only when the status
+// matches the one that handler named and otherwise wraps without one. Naming
+// the wrong status, or passing an empty hint, still returns an error, so every
+// "expected error, got nil" assertion in this file goes on passing while a
+// model is handed a refusal with nothing to do about it. The assertion is on
+// the recovery route the hint names, not on its wording, so rephrasing a hint
+// does not fail the test and dropping it does.
+func TestHandlers_NotFound_CarryTheRouteThatRecovers(t *testing.T) {
+	cases := []struct {
+		name string
+		// recovery is the tool or argument the hint must point the caller at.
+		recovery string
+		call     func(t *testing.T, code int) error
+	}{
+		{
+			name:     "list",
+			recovery: "gitlab_group_get",
+			call: func(t *testing.T, code int) error {
+				t.Helper()
+				_, err := List(t.Context(), testutil.NewTestClient(t, statusHandler(code)), ListInput{GroupID: "5"})
+				return err
+			},
+		},
+		{
+			name:     "delete_by_id",
+			recovery: "gitlab_list_group_markdown_uploads",
+			call: func(t *testing.T, code int) error {
+				t.Helper()
+				return DeleteByID(t.Context(), testutil.NewTestClient(t, statusHandler(code)),
+					DeleteByIDInput{GroupID: "5", UploadID: 7})
+			},
+		},
+		{
+			name:     "delete_by_secret",
+			recovery: "secret",
+			call: func(t *testing.T, code int) error {
+				t.Helper()
+				return DeleteBySecretAndFilename(t.Context(), testutil.NewTestClient(t, statusHandler(code)),
+					DeleteBySecretAndFilenameInput{GroupID: "5", Secret: "abc123", Filename: testFilename})
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("not_found_suggests_the_recovery", func(t *testing.T) {
+				err := tc.call(t, http.StatusNotFound)
+				if err == nil {
+					t.Fatal(errExpectedErr)
+				}
+				if !strings.Contains(err.Error(), "Suggestion: ") {
+					t.Errorf("404 error %q carries no suggestion", err.Error())
+				}
+				if !strings.Contains(err.Error(), tc.recovery) {
+					t.Errorf("404 error %q does not name %q as the way back", err.Error(), tc.recovery)
+				}
+			})
+			t.Run("other_status_is_left_unhinted", func(t *testing.T) {
+				err := tc.call(t, http.StatusForbidden)
+				if err == nil {
+					t.Fatal(errExpectedErr)
+				}
+				if strings.Contains(err.Error(), "Suggestion: ") {
+					t.Errorf("403 error %q carries the 404 hint, which advises about a group that does exist", err.Error())
+				}
+			})
 		})
 	}
 }
