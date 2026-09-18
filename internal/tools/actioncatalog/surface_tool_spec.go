@@ -13,9 +13,22 @@ import (
 // SurfaceToolSpec is the canonical metadata contract for visible MCP tools that
 // are not ordinary GitLab API meta-tool groups.
 type SurfaceToolSpec struct {
-	Name                   string
-	Title                  string
-	Description            string
+	Name  string
+	Title string
+	// Description is this one action's own description, the text the
+	// individual surface serves for it.
+	Description string
+	// GroupDescription is what the group tool this action belongs to says
+	// about itself, which is not the same sentence and must not be derived
+	// from one action's.
+	//
+	// It is carried on every spec of the group and read from whichever one
+	// happens to be seen first, because a group is assembled from its actions
+	// and has no record of its own. Before this field existed, the group's
+	// description was taken from that first action instead: `gitlab_interactive`
+	// introduced itself with 1650 characters about creating an issue, while
+	// also creating merge requests, projects and releases.
+	GroupDescription       string
 	GroupToolName          string
 	BaseDomain             string
 	ActionName             string
@@ -104,6 +117,7 @@ func CloneSurfaceToolSpec(spec SurfaceToolSpec) SurfaceToolSpec {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Title = strings.TrimSpace(spec.Title)
 	spec.Description = strings.TrimSpace(spec.Description)
+	spec.GroupDescription = strings.TrimSpace(spec.GroupDescription)
 	spec.GroupToolName = strings.TrimSpace(spec.GroupToolName)
 	spec.BaseDomain = strings.TrimSpace(spec.BaseDomain)
 	spec.ActionName = strings.TrimSpace(spec.ActionName)
