@@ -5,6 +5,9 @@ package instancevariables
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -22,6 +25,53 @@ const (
 	// varJSON identifies the var JSON constant used by this package.
 	varJSON = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"raw":false,"description":"Test var"}`
 )
+
+// decodeVariableRequest reads the JSON object a handler sent GitLab, so a test
+// can assert what the create and update handlers put on the wire rather than
+// what the mock was told to answer. An empty body decodes to an empty object:
+// an options struct with every field nil is exactly the "names nothing" case
+// the omission tests are about, and a read of it must not be reported as a
+// malformed request.
+//
+// It reports with t.Errorf and answers deterministically because it runs on the
+// httptest server's goroutine, where FailNow would abort the wrong goroutine
+// and leave the client waiting on a response nobody writes. The bool says
+// whether the caller may carry on.
+func decodeVariableRequest(t *testing.T, w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		t.Errorf("decode request body: %v", err)
+		http.Error(w, "decode request body", http.StatusInternalServerError)
+		return nil, false
+	}
+	return body, true
+}
+
+// wantRequestField reports when the body a handler sent GitLab does not carry
+// key with the expected value, which is what a guard dropping a field the
+// caller filled looks like from the far side of the wire.
+func wantRequestField(t *testing.T, body map[string]any, key string, want any) {
+	t.Helper()
+	got, ok := body[key]
+	if !ok {
+		t.Errorf("request body has no %q, want %#v", key, want)
+		return
+	}
+	if got != want {
+		t.Errorf("request body %q = %#v, want %#v", key, got, want)
+	}
+}
+
+// wantRequestFieldAbsent reports when the body carries a key the caller never
+// filled. GitLab applies what an update names and leaves the rest alone, so a
+// key sent with its zero value overwrites a setting nobody asked to change.
+func wantRequestFieldAbsent(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	if got, ok := body[key]; ok {
+		t.Errorf("request body carries %q = %#v, want it absent", key, got)
+	}
+}
 
 // ---------- List ----------.
 
@@ -550,12 +600,29 @@ func TestInstanceVariableCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableCreate_AllOptionalFields verifies the InstanceVariableCreate_AllOptionalFields handler.
-// The mock GitLab API at /api/v4/admin/ci/variables (POST) responds with HTTP Created.
-// It asserts the returned output matches the expected fields.
-func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
+// TestInstanceVariableCreate_AllOptionalFields_ReachTheRequestBody verifies that
+// every optional field a caller filled is in the body Create sends GitLab.
+//
+// Asserting only the response proves nothing about the request: the mock writes
+// the canned JSON whatever arrives, so any of the five guards that copy an
+// optional field onto the options struct could be inverted and drop the field
+// on the floor with every assertion still passing. A create that silently
+// discards variable_type stores an env_var where the caller asked for a file,
+// and one that discards masked writes the secret into every job log.
+func TestInstanceVariableCreate_AllOptionalFields_ReachTheRequestBody(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables" && r.Method == http.MethodPost {
+			body, ok := decodeVariableRequest(t, w, r)
+			if !ok {
+				return
+			}
+			wantRequestField(t, body, "key", "SECRET_FILE")
+			wantRequestField(t, body, "value", "/tmp/secret")
+			wantRequestField(t, body, "description", "Secret file for deploy")
+			wantRequestField(t, body, "variable_type", "file")
+			wantRequestField(t, body, "protected", true)
+			wantRequestField(t, body, "masked", true)
+			wantRequestField(t, body, "raw", true)
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"key":"SECRET_FILE","value":"/tmp/secret","variable_type":"file",
 				"protected":true,"masked":true,"raw":true,"description":"Secret file for deploy"
@@ -589,6 +656,48 @@ func TestInstanceVariableCreate_AllOptionalFields(t *testing.T) {
 	}
 	if out.Description != "Secret file for deploy" {
 		t.Errorf("Description = %q, want %q", out.Description, "Secret file for deploy")
+	}
+}
+
+// TestInstanceVariableCreate_UnsetOptionalFields_AreAbsentFromTheRequestBody
+// verifies that a create naming only key and value sends GitLab only those two.
+//
+// This is the other half of the same guards, and the half that decides what
+// GitLab stores. The SDK's options carry each field as a pointer, and
+// `omitempty` drops only a nil one, so a pointer to the empty string still
+// reaches the wire: a guard inverted here would send `"variable_type": ""` and
+// `"description": ""` for fields the caller never named, in place of leaving
+// the keys out. The defaults the caller is relying on are GitLab's, and GitLab
+// applies them to a key the body does not carry.
+func TestInstanceVariableCreate_UnsetOptionalFields_AreAbsentFromTheRequestBody(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/admin/ci/variables" && r.Method == http.MethodPost {
+			body, ok := decodeVariableRequest(t, w, r)
+			if !ok {
+				return
+			}
+			wantRequestField(t, body, "key", "PLAIN")
+			wantRequestField(t, body, "value", "plain-value")
+			wantRequestFieldAbsent(t, body, "description")
+			wantRequestFieldAbsent(t, body, "variable_type")
+			wantRequestFieldAbsent(t, body, "protected")
+			wantRequestFieldAbsent(t, body, "masked")
+			wantRequestFieldAbsent(t, body, "raw")
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"key":"PLAIN","value":"plain-value","variable_type":"env_var",
+				"protected":false,"masked":false,"raw":false,"description":""
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Key: "PLAIN", Value: "plain-value"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Key != "PLAIN" {
+		t.Errorf("Key = %q, want %q", out.Key, "PLAIN")
 	}
 }
 
@@ -637,12 +746,26 @@ func TestInstanceVariableUpdate_NotFound(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableUpdate_AllOptionalFields verifies the InstanceVariableUpdate_AllOptionalFields handler.
-// The mock GitLab API at /api/v4/admin/ci/variables/DB_HOST (PUT) responds with HTTP OK.
-// It asserts the returned output matches the expected fields.
-func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
+// TestInstanceVariableUpdate_AllOptionalFields_ReachTheRequestBody verifies that
+// every field a caller filled is in the body Update sends GitLab.
+//
+// GitLab's update endpoint applies what the body names and leaves the rest of
+// the variable alone, so a guard that drops a filled field turns an update into
+// a no-op that still answers 200 and still renders as a success. The response
+// the mock writes cannot show that, since it is the same JSON either way.
+func TestInstanceVariableUpdate_AllOptionalFields_ReachTheRequestBody(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/admin/ci/variables/DB_HOST" && r.Method == http.MethodPut {
+			body, ok := decodeVariableRequest(t, w, r)
+			if !ok {
+				return
+			}
+			wantRequestField(t, body, "value", "db.prod")
+			wantRequestField(t, body, "description", "Updated")
+			wantRequestField(t, body, "variable_type", "file")
+			wantRequestField(t, body, "protected", true)
+			wantRequestField(t, body, "masked", true)
+			wantRequestField(t, body, "raw", true)
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"key":"DB_HOST","value":"db.prod","variable_type":"file",
 				"protected":true,"masked":true,"raw":true,"description":"Updated"
@@ -670,6 +793,43 @@ func TestInstanceVariableUpdate_AllOptionalFields(t *testing.T) {
 	}
 	if out.Description != "Updated" {
 		t.Errorf("Description = %q, want %q", out.Description, "Updated")
+	}
+}
+
+// TestInstanceVariableUpdate_UnsetOptionalFields_AreAbsentFromTheRequestBody
+// verifies that an update naming only the key sends GitLab an empty body.
+//
+// This is the costliest of the eleven guards to get wrong. An update applies
+// what the body names, so `if input.Value != ""` inverted sends
+// `"value": ""` for a caller who named no value, and a caller updating only
+// the description would blank the secret the variable holds while GitLab
+// answers 200 and the card renders a success. Nothing about the response says
+// so, which is why the assertion has to be on the request.
+func TestInstanceVariableUpdate_UnsetOptionalFields_AreAbsentFromTheRequestBody(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathVar1 && r.Method == http.MethodPut {
+			body, ok := decodeVariableRequest(t, w, r)
+			if !ok {
+				return
+			}
+			wantRequestFieldAbsent(t, body, "value")
+			wantRequestFieldAbsent(t, body, "description")
+			wantRequestFieldAbsent(t, body, "variable_type")
+			wantRequestFieldAbsent(t, body, "protected")
+			wantRequestFieldAbsent(t, body, "masked")
+			wantRequestFieldAbsent(t, body, "raw")
+			testutil.RespondJSON(w, http.StatusOK, varJSON)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Key != "MY_VAR" {
+		t.Errorf("Key = %q, want %q", out.Key, "MY_VAR")
 	}
 }
 
