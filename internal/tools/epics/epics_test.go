@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1297,6 +1298,65 @@ func assertUpdateWidgets(t *testing.T, input map[string]any) {
 			t.Errorf("milestoneId = %v, want gid://gitlab/Milestone/77", got)
 		}
 	})
+	assertUpdateWidgetPayloads(t, input)
+}
+
+// assertUpdateWidgetPayloads checks the values inside the widgets an update
+// fills, not only that the widget keys are there.
+//
+// Presence is not evidence for any of these, which is what makes the check
+// worth its own helper. client-go builds startAndDueDateWidget when *either*
+// date parses and labelsWidget when *either* label list is non-empty, so one
+// half of each pair could stop reaching GitLab with the key still present and
+// the update would silently drop it; and the hierarchy widget carrying the new
+// parent had no assertion at all, so a reparenting update could have sent
+// nothing. Each id is asserted in the global form GitLab coerces, since a bare
+// number is refused by the mutation rather than by the handler.
+func assertUpdateWidgetPayloads(t *testing.T, input map[string]any) {
+	t.Helper()
+	scalars := []struct {
+		name   string
+		widget string
+		key    string
+		want   any
+	}{
+		{"parent id is a global id", "hierarchyWidget", "parentId", "gid://gitlab/WorkItem/42"},
+		{"start date reaches the wire", "startAndDueDateWidget", "startDate", "2026-02-01"},
+		{"due date reaches the wire", "startAndDueDateWidget", "dueDate", "2026-04-30"},
+	}
+	for _, tc := range scalars {
+		t.Run(tc.name, func(t *testing.T) {
+			widget, isObject := input[tc.widget].(map[string]any)
+			if !isObject {
+				t.Errorf("input[%q] is not an object: %v", tc.widget, input[tc.widget])
+				return
+			}
+			if got := widget[tc.key]; got != tc.want {
+				t.Errorf("%s.%s = %v, want %v", tc.widget, tc.key, got, tc.want)
+			}
+		})
+	}
+	lists := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{"added labels are global ids", "addLabelIds", "gid://gitlab/Label/100"},
+		{"removed labels are global ids", "removeLabelIds", "gid://gitlab/Label/200"},
+	}
+	for _, tc := range lists {
+		t.Run(tc.name, func(t *testing.T) {
+			widget, isObject := input["labelsWidget"].(map[string]any)
+			if !isObject {
+				t.Errorf("labelsWidget is not an object: %v", input["labelsWidget"])
+				return
+			}
+			ids, isList := widget[tc.key].([]any)
+			if !isList || len(ids) != 1 || ids[0] != tc.want {
+				t.Errorf("labelsWidget.%s = %v, want [%s]", tc.key, widget[tc.key], tc.want)
+			}
+		})
+	}
 }
 
 // TestUpdate_WithAllOptions verifies that Update handles all optional fields
@@ -2223,4 +2283,143 @@ func TestRawListEpics_UnescapablePath_FailsBeforeTheRequest(t *testing.T) {
 	if err == nil || epics != nil || resp != nil {
 		t.Fatalf("rawListEpics = %v/%v/%v, want only an error", epics, resp, err)
 	}
+}
+
+// TestList_RESTPath_FirstBoundsThePageSize verifies that first decides the REST
+// page size only while it names a page the Work Items query would also accept,
+// and that the default of twenty stands for every other value.
+//
+// first is a cursor parameter, and the REST path spends it as per_page, so the
+// bound is the only thing standing between a caller's number and GitLab: zero
+// and a negative ask for a page GitLab cannot serve, and a number above
+// GraphQLMaxFirst asks the two APIs for different page sizes under one
+// parameter. None of that is visible in the response, so the evidence is the
+// query the handler built, which is what this reads.
+func TestList_RESTPath_FirstBoundsThePageSize(t *testing.T) {
+	const defaultPerPage = "20"
+	cases := []struct {
+		name        string
+		first       int
+		wantPerPage string
+	}{
+		{"inside the range", 10, "10"},
+		{"at the upper bound", toolutil.GraphQLMaxFirst, strconv.Itoa(toolutil.GraphQLMaxFirst)},
+		{"above the upper bound", toolutil.GraphQLMaxFirst + 1, defaultPerPage},
+		{"zero", 0, defaultPerPage},
+		{"negative", -1, defaultPerPage},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.URL.Query().Get("per_page"); got != tc.wantPerPage {
+					t.Errorf("per_page = %q, want %q", got, tc.wantPerPage)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			first := tc.first
+			if _, err := List(t.Context(), client, ListInput{FullPath: testFullPath, First: &first}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestUpdate_WithoutATitle_SendsNoTitle verifies that an update naming only a
+// state event leaves title out of the mutation input entirely.
+//
+// Every field of an update is optional and GitLab applies the ones it is sent,
+// so a handler that always filled title would rename every epic it closed to
+// the empty string. The input the mutation carries is the only place that
+// decision is visible.
+func TestUpdate_WithoutATitle_SendsNoTitle(t *testing.T) {
+	call := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call++
+		if call == 1 {
+			testutil.RespondJSON(w, http.StatusOK, deleteGIDResponseJSON)
+			return
+		}
+		vars, err := testutil.ParseGraphQLVariables(r)
+		if err != nil {
+			t.Errorf("ParseGraphQLVariables: %v", err)
+			http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+			return
+		}
+		input, isObject := vars["input"].(map[string]any)
+		if !isObject {
+			t.Error("GraphQL variables missing 'input' object")
+			http.Error(w, "GraphQL variables missing 'input' object", http.StatusInternalServerError)
+			return
+		}
+		if _, sent := input["title"]; sent {
+			t.Errorf("update carries a title nobody asked for: %v", input["title"])
+		}
+		testutil.RespondJSON(w, http.StatusOK, updateResponseJSON)
+	}))
+	if _, err := Update(t.Context(), client, UpdateInput{
+		FullPath: testFullPath, IID: 1, StateEvent: "CLOSE",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestEpicLabels_UnmarshalJSON_SkipsANullDetail verifies that a null element in
+// the detailed labels array contributes no name rather than an empty one.
+//
+// The names list is what every card and table row shows, so a null arriving
+// among the details would otherwise render as a blank label the caller cannot
+// act on. The array mixes a null with an object because a labels array of
+// nulls alone still decodes as names.
+func TestEpicLabels_UnmarshalJSON_SkipsANullDetail(t *testing.T) {
+	var labels epicLabels
+	if err := labels.UnmarshalJSON([]byte(`[null, {"id": 1, "name": "planning"}]`)); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(labels.Names) != 1 || labels.Names[0] != "planning" {
+		t.Errorf("Names = %v, want [planning]", labels.Names)
+	}
+	if len(labels.Details) != 2 {
+		t.Errorf("len(Details) = %d, want 2, the array as GitLab sent it", len(labels.Details))
+	}
+}
+
+// TestFormatOutputMarkdown_AssigneesWithoutAName_AreLeftOut verifies that
+// neither a null assignee nor one carrying no username reaches the handle row.
+//
+// Both shapes arrive: the Work Items query answers a null node for an assignee
+// the caller may not see, and a user the response only partially fills has no
+// username. Rendering either would put a bare "@" in the row, which reads as a
+// handle a model may then try to look up.
+func TestFormatOutputMarkdown_AssigneesWithoutAName_AreLeftOut(t *testing.T) {
+	out := Output{IID: 1, Title: "Q1", State: "opened", Assignees: []*BasicUserOutput{
+		nil, {Username: ""}, {Username: "bob"},
+	}}
+	const want = "- **Assignees**: @bob\n"
+	if got := FormatOutputMarkdown(out); !strings.Contains(got, want) {
+		t.Errorf("FormatOutputMarkdown() = %q, want a row %q", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_StateRow_FollowsWhatGitLabSent verifies the state
+// cell for the two spellings the emoji table has no entry for: none at all, and
+// one neither API documents.
+//
+// A state GitLab did not send must show no row rather than a lone emoji with
+// nothing beside it, and a state outside the vocabulary must be shown as it
+// arrived: normalizing it to "opened" would tell a model an epic is open on the
+// strength of a word this package does not know.
+func TestFormatOutputMarkdown_StateRow_FollowsWhatGitLabSent(t *testing.T) {
+	t.Run("no state at all", func(t *testing.T) {
+		got := FormatOutputMarkdown(Output{IID: 1, Title: "Q1"})
+		if strings.Contains(got, "**State**") {
+			t.Errorf("FormatOutputMarkdown() = %q, want no state row", got)
+		}
+	})
+	t.Run("a state neither API spells", func(t *testing.T) {
+		got := FormatOutputMarkdown(Output{IID: 1, Title: "Q1", State: "archived"})
+		want := "- **State**: " + toolutil.EmojiQuestion + " archived\n"
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatOutputMarkdown() = %q, want a row %q", got, want)
+		}
+	})
 }

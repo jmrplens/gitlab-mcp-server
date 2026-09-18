@@ -255,6 +255,50 @@ func TestActionSpecs_PublishedVocabularies(t *testing.T) {
 	}
 }
 
+// TestEpicOptions_EveryTool_CarriesItsOwnDiscoveryMetadata verifies that each
+// epic tool leaves decorateEpicMeta with usage, aliases and an individual-tool
+// description of its own, and that a name the decorator does not know keeps the
+// generic defaults instead of another tool's.
+//
+// The decorator is one switch over tool names, so an epic action added without
+// a case of its own would fall through to the defaults and be published with
+// the placeholder usage every domain shares, which is exactly what discovery
+// cannot work from. Asserting the fallback separately is what makes the first
+// half mean something: without it, a switch that matched everything would pass.
+func TestEpicOptions_EveryTool_CarriesItsOwnDiscoveryMetadata(t *testing.T) {
+	const genericUsage = "Use to execute epics domain action."
+	tools := []string{
+		"gitlab_epic_list", "gitlab_epic_get", "gitlab_epic_get_links",
+		"gitlab_epic_create", "gitlab_epic_update", "gitlab_epic_delete",
+	}
+	for _, tool := range tools {
+		t.Run(tool, func(t *testing.T) {
+			opts := epicOptions(tool)
+			if opts.Usage == genericUsage {
+				t.Errorf("%s kept the generic usage", tool)
+			}
+			if opts.IndividualTool.Description == "" {
+				t.Errorf("%s publishes no individual-tool description", tool)
+			}
+			if len(opts.Aliases) < 2 {
+				t.Errorf("%s aliases = %v, want its own beside the tool name", tool, opts.Aliases)
+			}
+		})
+	}
+	t.Run("a name the decorator does not know", func(t *testing.T) {
+		opts := epicOptions("gitlab_epic_archive")
+		if opts.Usage != genericUsage {
+			t.Errorf("usage = %q, want the generic default", opts.Usage)
+		}
+		if opts.IndividualTool.Description != "" {
+			t.Errorf("description = %q, want none", opts.IndividualTool.Description)
+		}
+		if len(opts.Aliases) != 1 || opts.Aliases[0] != "gitlab_epic_archive" {
+			t.Errorf("aliases = %v, want only the tool name", opts.Aliases)
+		}
+	})
+}
+
 // epicSchemaValue reads one key of one property out of a built input schema. A
 // property path ending in "." reads the array's items instead of the array.
 func epicSchemaValue(t *testing.T, schema map[string]any, propertyPath, key string) any {
