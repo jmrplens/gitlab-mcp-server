@@ -14,6 +14,7 @@ package testutil
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -25,6 +26,17 @@ import (
 // legacyProtocolVersion is the newest MCP protocol version that still allows
 // server-initiated elicitation requests during a tool call.
 const legacyProtocolVersion = "2025-11-25"
+
+// handshakeTimeout bounds the wait for the initialize response.
+//
+// Every connection this drives is in the same process, so the exchange is a
+// pair of channel sends and the bound is never approached. What it is for is
+// the case where the other end was never connected at all: the read then
+// blocks for ever, and a helper that blocks for ever inside a test does not
+// fail that test, it stops the whole binary and takes every assertion after it
+// unrun. Reporting a handshake that did not happen is worth ten seconds of
+// waiting on the one run where it happens.
+const handshakeTimeout = 10 * time.Second
 
 // LegacyClientOptions configures the fake legacy client's advertised
 // capabilities.
@@ -138,6 +150,40 @@ func connectLegacyElicitationClient(ctx context.Context, t legacyReporter, serve
 func legacyHandshake(ctx context.Context, t legacyReporter, conn mcp.Connection, handler ElicitHandlerFunc, opts LegacyClientOptions) bool {
 	t.Helper()
 
+	// The exchange runs on a goroutine of its own and the report stays here.
+	//
+	// Both halves of that are deliberate. The connection cannot be hurried by
+	// a context: the in-memory transport is a pipe, and a pipe blocks until
+	// the other end moves whatever deadline the caller carries, so an exchange
+	// with an end that was never connected blocks for ever. Waiting on the
+	// goroutine instead turns that into one line. And the reporting stays on
+	// the caller's goroutine because [testing.T.Fatalf] off it aborts the
+	// wrong goroutine and leaves the test hanging or passing, which is the
+	// contract in .github/instructions/test-goroutines.instructions.md.
+	//
+	// A goroutine left behind by an exchange that never finishes is the price,
+	// and it is the right one: it ends with the process, while the blocked
+	// read it replaces ended the whole binary with every assertion after it
+	// unrun.
+	done := make(chan error, 1)
+	go func() { done <- exchangeLegacyInitialize(ctx, conn, handler, opts) }()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(handshakeTimeout):
+		err = fmt.Errorf("the initialize exchange did not finish within %s", handshakeTimeout)
+	}
+	if err != nil {
+		t.Fatalf("legacy client: %v", err)
+		return false
+	}
+	return true
+}
+
+// exchangeLegacyInitialize performs the initialize exchange, naming the step
+// that failed. It reports nothing itself: it runs off the test goroutine.
+func exchangeLegacyInitialize(ctx context.Context, conn mcp.Connection, handler ElicitHandlerFunc, opts LegacyClientOptions) error {
 	capabilities := map[string]any{
 		"elicitation": elicitationCapability(opts),
 		"roots":       map[string]any{"listChanged": true},
@@ -148,27 +194,22 @@ func legacyHandshake(ctx context.Context, t legacyReporter, conn mcp.Connection,
 		"clientInfo":      map[string]any{"name": "legacy-test-client", "version": "1.0.0"},
 	})
 	if err != nil {
-		t.Fatalf("legacy client: marshal initialize params: %v", err)
-		return false
+		return fmt.Errorf("marshal initialize params: %w", err)
 	}
 	initID, err := makeRequestID("legacy-init")
 	if err != nil {
-		t.Fatalf("legacy client: make id: %v", err)
-		return false
+		return fmt.Errorf("make id: %w", err)
 	}
 	if writeErr := conn.Write(ctx, &jsonrpc.Request{ID: initID, Method: "initialize", Params: initParams}); writeErr != nil {
-		t.Fatalf("legacy client: write initialize: %v", writeErr)
-		return false
+		return fmt.Errorf("write initialize: %w", writeErr)
 	}
 	if handshakeErr := awaitLegacyInitializeResponse(ctx, conn, handler); handshakeErr != nil {
-		t.Fatalf("legacy client: %v", handshakeErr)
-		return false
+		return handshakeErr
 	}
 	if notifyErr := conn.Write(ctx, &jsonrpc.Request{Method: "notifications/initialized", Params: json.RawMessage("{}")}); notifyErr != nil {
-		t.Fatalf("legacy client: write initialized notification: %v", notifyErr)
-		return false
+		return fmt.Errorf("write initialized notification: %w", notifyErr)
 	}
-	return true
+	return nil
 }
 
 // awaitServeExit waits for the serve goroutine to return, reporting the wait
@@ -194,11 +235,21 @@ func elicitationCapability(opts LegacyClientOptions) map[string]any {
 
 // awaitLegacyInitializeResponse reads messages until the initialize response
 // arrives, servicing any interleaved server-initiated requests.
+//
+// A read that yields neither a message nor an error ends the wait. Nothing a
+// real connection does produces that, which is exactly why it is worth
+// answering: this loop only ever leaves through a message it recognizes or an
+// error, so a connection answering nothing spins it at full speed for the rest
+// of the run, and a test binary that never finishes reports no assertion at
+// all rather than the one that was wrong.
 func awaitLegacyInitializeResponse(ctx context.Context, conn mcp.Connection, handler ElicitHandlerFunc) error {
 	for {
 		msg, err := conn.Read(ctx)
 		if err != nil {
 			return fmt.Errorf("read during handshake: %w", err)
+		}
+		if msg == nil {
+			return errors.New("read during handshake: the connection answered no message and no error")
 		}
 		switch m := msg.(type) {
 		case *jsonrpc.Response:

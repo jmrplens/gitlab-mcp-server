@@ -497,6 +497,35 @@ func TestRead_NamesTheLineTheBadRecordIsOn(t *testing.T) {
 	}
 }
 
+// TestRead_RefusesALineCarryingASecondValue verifies that a line holding two
+// JSON values is reported rather than half read.
+//
+// The reader decodes with a json.Decoder, and a Decoder stops at the end of the
+// first value and says nothing about what follows it: json.Unmarshal refuses
+// trailing content and this does not, which is why the reader asks for the next
+// token and requires the end of the input. Without that, the second record on
+// such a line would be dropped in silence, and a dropped line reads exactly like
+// a call the model never made, which is the one thing a record of what a model
+// did has to be believed about. A shard is machine-written, so a doubled line
+// means a writer that lost a newline, and every line after it is suspect.
+func TestRead_RefusesALineCarryingASecondValue(t *testing.T) {
+	dir := t.TempDir()
+	verify := `{"schema":1,"type":"verify","verify":{"attempt":"a1","name":"n","passed":true}}`
+	writeShard(t, dir, "modeleval-doubled.jsonl", verify+" "+verify)
+
+	records, err := Read(dir)
+
+	if err == nil {
+		t.Fatalf("Read = %d record(s), want an error for a line carrying two values", len(records))
+	}
+	if !strings.Contains(err.Error(), "more than one JSON value on the line") {
+		t.Errorf("Read error = %v, want it to say the line carries more than one value", err)
+	}
+	if !strings.Contains(err.Error(), "modeleval-doubled.jsonl") {
+		t.Errorf("Read error = %v, want it to name the shard", err)
+	}
+}
+
 // TestShardPattern_MatchesWhatTheWriterNames verifies that the pattern a reader
 // is told to look for is the one a writer's own file name satisfies, and that
 // isShard agrees with filepath.Match on it.

@@ -151,6 +151,17 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	return promptResult(b.String()), nil
 }
 
+// labelUsage is how often a label is in use: its open and closed issues and its
+// open merge requests together.
+//
+// Written once because three readers have to agree on it — the ordering of the
+// table, each row's own total and, through the rows, the footer — and they used
+// to spell the same sum out separately. Three copies of one expression are
+// three chances for the order of the table to stop matching the numbers in it.
+func labelUsage(l *gl.Label) int64 {
+	return l.OpenIssuesCount + l.ClosedIssuesCount + l.OpenMergeRequestsCount
+}
+
 // registerLabelDistributionPrompt registers the label_distribution prompt.
 func registerLabelDistributionPrompt(server promptAdder, client *gitlabclient.Client) {
 	addPrompt(server, &mcp.Prompt{
@@ -190,16 +201,14 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 
 	// Sort labels by total usage (open+closed issues + open MRs) descending
 	sort.Slice(labels, func(i, j int) bool {
-		totalI := labels[i].OpenIssuesCount + labels[i].ClosedIssuesCount + labels[i].OpenMergeRequestsCount
-		totalJ := labels[j].OpenIssuesCount + labels[j].ClosedIssuesCount + labels[j].OpenMergeRequestsCount
-		return totalI > totalJ
+		return labelUsage(labels[i]) > labelUsage(labels[j])
 	})
 
 	b.WriteString("| Label | Open Issues | Closed Issues | Open MRs | Total |\n")
 	b.WriteString("|-------|-------------|---------------|----------|-------|\n")
 	var totalOpen, totalClosed, totalMRs int64
 	for _, l := range labels {
-		total := l.OpenIssuesCount + l.ClosedIssuesCount + l.OpenMergeRequestsCount
+		total := labelUsage(l)
 		if total == 0 {
 			continue // skip unused labels
 		}
@@ -354,7 +363,9 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	fmt.Fprintf(&b, "| **Total** | **%d** | **+%d** | **-%d** |\n", totalCommits, totalAdditions, totalDeletions)
 	b.WriteString("\n")
 
-	// Pie chart for commits
+	// Pie chart for commits. No `len(pieEntries) > 0` guard: the empty list
+	// returned above this point, so every contributor reaching here produces an
+	// entry and the guard could never be false.
 	var pieEntries []string
 	for _, c := range contributors {
 		if len(pieEntries) >= 8 {
@@ -362,15 +373,13 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 		}
 		pieEntries = append(pieEntries, fmt.Sprintf("    %s : %d", mermaidQuoted(c.Name), c.Commits))
 	}
-	if len(pieEntries) > 0 {
-		writeMermaidChart(&b, func(chart *strings.Builder) {
-			chart.WriteString("pie title Commits by Contributor\n")
-			for _, line := range pieEntries {
-				chart.WriteString(line + "\n")
-			}
-		})
-		b.WriteString("\n")
-	}
+	writeMermaidChart(&b, func(chart *strings.Builder) {
+		chart.WriteString("pie title Commits by Contributor\n")
+		for _, line := range pieEntries {
+			chart.WriteString(line + "\n")
+		}
+	})
+	b.WriteString("\n")
 
 	writeClosingRule(&b, "Please analyze contributor distribution, identify key contributors, and note any bus factor risks.")
 

@@ -224,6 +224,37 @@ func TestNoteOutputFromGitLab_FieldMapping(t *testing.T) {
 	}
 }
 
+// TestNoteOutput_UsernameAccessors_AnswerForAbsentUsers verifies the two nil
+// guards every note formatter leans on: a note whose author or resolver
+// object is absent answers with an empty username instead of dereferencing
+// nothing.
+//
+// Both objects really are optional on the wire. A system note carries no
+// author, and a note nobody has resolved carries no resolver, so these are
+// what every markdown formatter in the note domains calls on the row it is
+// about to render — the guard was copied into each of them until it moved
+// here, and a panic in it takes down the tool call rather than one row.
+func TestNoteOutput_UsernameAccessors_AnswerForAbsentUsers(t *testing.T) {
+	named := NoteOutput{
+		Author:     &NoteUserOutput{Username: "alice"},
+		ResolvedBy: &NoteUserOutput{Username: "bob"},
+	}
+	if got := named.AuthorUsername(); got != "alice" {
+		t.Errorf("AuthorUsername() = %q, want alice", got)
+	}
+	if got := named.ResolvedByUsername(); got != "bob" {
+		t.Errorf("ResolvedByUsername() = %q, want bob", got)
+	}
+
+	var absent NoteOutput
+	if got := absent.AuthorUsername(); got != "" {
+		t.Errorf("AuthorUsername() with no author = %q, want the empty string", got)
+	}
+	if got := absent.ResolvedByUsername(); got != "" {
+		t.Errorf("ResolvedByUsername() with no resolver = %q, want the empty string", got)
+	}
+}
+
 // TestDiscussionThreadNoteOutputFromGitLab_FieldMapping verifies the thread
 // note converter reads what client-go decoded: the scalars, the timestamps
 // and the two users.

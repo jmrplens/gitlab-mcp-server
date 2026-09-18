@@ -469,6 +469,73 @@ func TestAwaitServeExit_GoroutineThatNeverEnds_IsReported(t *testing.T) {
 	}
 }
 
+// TestLegacyClientWaits_AreLongEnoughToOutlastALoadedMachine states what the
+// two waits have to be rather than repeating what they are.
+//
+// Neither production value is read by an assertion anywhere else: the one test
+// that drives the serve-exit expiry replaces it with a millisecond first, and
+// every connection this package drives answers its handshake at once, so both
+// constants collapsing to zero would move nothing. What that would do is turn
+// a clean shutdown and a perfectly ordinary handshake into failures on any
+// machine where a goroutine is not scheduled in the instant it is awaited,
+// which is every loaded CI runner. A second is the floor for each: the work
+// being waited for is a channel send inside this process, so a wait shorter
+// than that measures the scheduler rather than the code.
+func TestLegacyClientWaits_AreLongEnoughToOutlastALoadedMachine(t *testing.T) {
+	cases := []struct {
+		name string
+		wait time.Duration
+	}{
+		{name: "the serve goroutine's exit", wait: serveExitTimeout},
+		{name: "the initialize response", wait: handshakeTimeout},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wait < time.Second {
+				t.Errorf("the wait is %v, want at least a second: a shorter one reports work that is merely unscheduled", tc.wait)
+			}
+		})
+	}
+}
+
+// TestAwaitLegacyInitializeResponse_AConnectionThatAnswersNothing_IsReported
+// verifies the one way this wait can end that is neither a message nor an
+// error.
+//
+// No real connection does it, and that is the point: the loop leaves only
+// through a message it recognizes or a read error, so a connection answering
+// neither spins it at full speed until the whole test binary is killed by its
+// own timeout, reporting nothing about whatever was actually wrong. The
+// mutation round found it exactly that way, as four separate handshake
+// failures that each read as a twenty-three minute timeout instead of the
+// assertion they were meant to fail.
+func TestAwaitLegacyInitializeResponse_AConnectionThatAnswersNothing_IsReported(t *testing.T) {
+	err := awaitLegacyInitializeResponse(t.Context(), &silentConn{}, acceptingHandler)
+
+	if err == nil || !strings.Contains(err.Error(), "answered no message and no error") {
+		t.Errorf("err = %v, want the connection that answered nothing", err)
+	}
+}
+
+// silentConn answers every read with neither a message nor an error, which is
+// the one shape [awaitLegacyInitializeResponse] cannot make progress on.
+type silentConn struct{}
+
+// Read answers nothing at all: no message and no error, which is the pair a
+// real connection never returns and the one the wait cannot make progress on.
+//
+//nolint:nilnil // The pair is the fixture; a sentinel error would be the case the wait already handles.
+func (*silentConn) Read(context.Context) (jsonrpc.Message, error) { return nil, nil }
+
+// Write accepts anything.
+func (*silentConn) Write(context.Context, jsonrpc.Message) error { return nil }
+
+// Close satisfies [mcp.Connection].
+func (*silentConn) Close() error { return nil }
+
+// SessionID satisfies [mcp.Connection].
+func (*silentConn) SessionID() string { return "silent" }
+
 // TestConnectLegacyElicitationClient_Cleanup_JoinsTheServeGoroutine verifies
 // the whole assembly on the fake connection: the handshake completes, the serve
 // goroutine starts, and the cleanup closes the connection and waits for it,

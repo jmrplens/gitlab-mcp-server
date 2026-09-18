@@ -163,6 +163,24 @@ func TestEmbedResourceJSON_DisabledIsNoOp(t *testing.T) {
 	}
 }
 
+// TestEmbedResourceJSON_EmptyURIIsNoOp verifies that the JSON helper embeds
+// nothing when the caller has no URI to point at, the same answer
+// [EmbedResource] gives. It matters that the JSON form is asserted on its own
+// terms: the decision is taken once, in EmbedResource, and this is what says
+// the helper still reaches it rather than appending a block addressed to
+// nothing.
+func TestEmbedResourceJSON_EmptyURIIsNoOp(t *testing.T) {
+	resetEmbedToggle(t)
+	EnableEmbeddedResources(true)
+
+	result := &mcp.CallToolResult{}
+	EmbedResourceJSON(result, "", map[string]any{"iid": 2})
+
+	if len(result.Content) != 0 {
+		t.Errorf("expected no content for empty URI, got %d blocks", len(result.Content))
+	}
+}
+
 // TestEmbedResourceJSON_MarshalErrorIsSilent verifies that [EmbedResourceJSON]
 // silently skips values that cannot be marshaled to JSON. The test uses a
 // channel value and expects no embedded resource to be appended.

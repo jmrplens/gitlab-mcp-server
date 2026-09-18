@@ -224,7 +224,12 @@ func searchCommits(ctx context.Context, client *gitlabclient.Client, projectID, 
 	values := make([]string, 0, len(commits))
 	for _, c := range commits {
 		entry := formatCommitEntry(c.ShortID, c.Title)
-		if query == "" || strings.HasPrefix(strings.ToLower(c.ShortID), strings.ToLower(query)) || strings.HasPrefix(strings.ToLower(c.ID), strings.ToLower(query)) {
+		// The full SHA decides on its own. GitLab's short_id is an abbreviation
+		// of id, so every prefix that matches the short SHA matches the full
+		// one too, and a second test against the abbreviation could not change
+		// an answer; the full one additionally matches a query longer than the
+		// abbreviation, which is what somebody pasting a whole SHA types.
+		if query == "" || strings.HasPrefix(strings.ToLower(c.ID), strings.ToLower(query)) {
 			values = append(values, entry)
 		}
 	}

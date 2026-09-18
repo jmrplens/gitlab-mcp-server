@@ -1437,6 +1437,50 @@ func TestNewVerificationClient_BoundsEveryExchange(t *testing.T) {
 	}
 }
 
+// TestNewGitLabVerifier_IdentityBodyPastTheBound_IsNotAnIdentity verifies that
+// a reply to "who is this caller" is refused once it runs past
+// [verificationBodyLimit], rather than being read into memory and believed.
+//
+// The bound is on the authentication path, which runs before any other check,
+// so the instance answering has not been trusted with anything yet. What it
+// costs to leave unasserted is not a wrong identity but the memory: an
+// instance that answers with a body without end, or a compressed one that
+// expands into gigabytes, is held by nothing else here. Removing the
+// [io.LimitReader] entirely, or raising the limit, is invisible to every other
+// test in this file, because they all serve small bodies and assert the
+// identity that comes back.
+//
+// The body is sized by a literal rather than by the constant on purpose. A
+// test that padded to verificationBodyLimit+1 would grow with the constant and
+// keep passing however large it became, which is the shape of an assertion
+// that holds a value against itself and therefore holds nothing. Sized
+// absolutely, this fails the moment the limit is raised past 64 KiB or
+// dropped, and says so.
+func TestNewGitLabVerifier_IdentityBodyPastTheBound_IsNotAnIdentity(t *testing.T) {
+	t.Parallel()
+
+	// Valid JSON that would decode into a usable user if it were read whole:
+	// the padding sits in a string field before the closing brace, so a read
+	// that stops at the bound ends inside the string and cannot parse.
+	body := `{"id":7,"username":"root","note":"` + strings.Repeat("x", 64*1024+4096) + `"}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// The client stops reading at the bound and closes, so this write
+		// reports a broken pipe rather than completing. That is the behavior
+		// under test, not a failure, and the handler runs off the test
+		// goroutine, so it reports nothing either way.
+		w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+	info, err := verifier(context.Background(), "token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
+	if err == nil {
+		t.Fatalf("a %d-byte identity reply was accepted, want it refused: got %+v", len(body), info)
+	}
+}
+
 // TestEffectiveCacheTTL_NeverOutlivesTheToken covers how long an identity may
 // be answered from memory.
 //

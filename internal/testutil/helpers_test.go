@@ -261,6 +261,30 @@ func TestRespondJSONWithPagination_PartialHeaders(t *testing.T) {
 	}
 }
 
+// TestRespondJSONWithPagination_NoHeadersAtAll verifies the other end of the
+// same contract: a zero [PaginationHeaders] sets none of the headers.
+//
+// The two that a partial response always carries, X-Page and X-Per-Page, are
+// the two whose absence nothing else here ever asks for, and a response that
+// leaked an empty X-Page would be read by a client as page zero rather than as
+// an endpoint that does not page.
+func TestRespondJSONWithPagination_NoHeadersAtAll(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	RespondJSONWithPagination(w, http.StatusOK, `[]`, PaginationHeaders{})
+
+	for _, header := range []string{"X-Page", "X-Per-Page", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Prev-Page"} {
+		t.Run(header, func(t *testing.T) {
+			if _, ok := w.Header()[header]; ok {
+				t.Errorf("header %s is present, want it omitted for an endpoint that does not page", header)
+			}
+		})
+	}
+	if got := w.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}
+
 // TestForbiddenHandler_NoCallsPasses verifies the zero-request path: arming
 // the handler without driving any request must leave the test green when the
 // cleanup assertion runs.

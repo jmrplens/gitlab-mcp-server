@@ -62,8 +62,15 @@ func EmbedResource(result *mcp.CallToolResult, uri, mimeType, text string) {
 // type application/json. Marshaling errors are dropped silently — the tool
 // result is still returned with text and StructuredContent so the LLM has a
 // usable response.
+//
+// A nil result and an empty URI are decided by [EmbedResource], which is the
+// one place a block is appended and already refuses both; repeating the two
+// checks here only meant that no test could tell either copy from the other.
+// The toggle is checked here as well, and that one earns its place: it is what
+// keeps a deployment with embedded resources off from marshaling every entity
+// it is never going to embed.
 func EmbedResourceJSON(result *mcp.CallToolResult, uri string, value any) {
-	if result == nil || uri == "" || !embeddedResourcesEnabled.Load() {
+	if !embeddedResourcesEnabled.Load() {
 		return
 	}
 	data, err := json.Marshal(value)

@@ -1178,3 +1178,172 @@ func TestFlow_MRTR_ClientWithoutFormMode_IsNotAsked(t *testing.T) {
 		t.Errorf("result = %q, want the form request refused before it was queued", got)
 	}
 }
+
+// TestFlowFromRequest_RequestWithoutASession_IsInactive covers the second half
+// of the guard at the top of the constructor.
+//
+// A request with no session belongs to no peer, so there is nobody to ask and
+// nothing to decode: the flow reports itself unsupported and its callers return
+// ErrElicitationNotSupported rather than reaching for a nil session. The nil
+// request was covered and this shape was not, which left the two halves of one
+// guard asserted unequally.
+func TestFlowFromRequest_RequestWithoutASession_IsInactive(t *testing.T) {
+	f, err := FlowFromRequest(&mcp.CallToolRequest{})
+	if err != nil {
+		t.Fatalf("FlowFromRequest(no session) error = %v, want a quiet inactive flow", err)
+	}
+	if f.IsSupported() {
+		t.Error("IsSupported() = true for a request with no session")
+	}
+	if f.UsesMultiRoundTrip() {
+		t.Error("UsesMultiRoundTrip() = true for a request with no session")
+	}
+	if _, confirmErr := f.Confirm(context.Background(), "q", "Sure?"); !errors.Is(confirmErr, ErrElicitationNotSupported) {
+		t.Errorf("Confirm() error = %v, want ErrElicitationNotSupported", confirmErr)
+	}
+}
+
+// TestFlow_QueuesEveryUnansweredExchangeOfOneRound pins that a second question
+// joins the first rather than replacing it.
+//
+// One handler run reaches every prompt whose answer it already has and queues
+// every one it does not, so a multi-question wizard asks all of its remaining
+// questions in one round trip instead of one per round. Each prompt returns
+// ErrInputPending, and a handler that stops at the first never queues a second,
+// so only the first insertion into the pending map was ever exercised.
+func TestFlow_QueuesEveryUnansweredExchangeOfOneRound(t *testing.T) {
+	ctx := context.Background()
+	f := newMRTRFlow(nil)
+
+	if _, err := f.PromptText(ctx, "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
+	}
+	if _, err := f.Confirm(ctx, "confirm", "Proceed?"); !errors.Is(err, ErrInputPending) {
+		t.Fatalf("Confirm() error = %v, want ErrInputPending", err)
+	}
+
+	result := f.InputRequiredResult()
+	if len(result.InputRequests) != 2 {
+		t.Fatalf("InputRequiredResult() carries %d input requests, want both of them", len(result.InputRequests))
+	}
+	title, ok := result.InputRequests["title"].(*mcp.ElicitParams)
+	if !ok {
+		t.Fatalf("InputRequests[title] = %T, want *mcp.ElicitParams", result.InputRequests["title"])
+	}
+	if title.Message != "Enter a title" {
+		t.Errorf("the first request's message = %q, want it kept when the second was queued", title.Message)
+	}
+	confirm, ok := result.InputRequests["confirm"].(*mcp.ElicitParams)
+	if !ok {
+		t.Fatalf("InputRequests[confirm] = %T, want *mcp.ElicitParams", result.InputRequests["confirm"])
+	}
+	if confirm.Message != "Proceed?" {
+		t.Errorf("the second request's message = %q, want the caller's message", confirm.Message)
+	}
+}
+
+// TestFlow_ElicitURL_JoinsAFormExchangeAlreadyQueued pins the same property for
+// the url-mode path, which keeps its own copy of the queueing code.
+//
+// The two paths build the pending map separately, the form path through
+// exchange and url mode inline (a url request carries no schema), so the
+// map either one creates has to be the map the other adds to. A second
+// allocation there would drop whichever request was queued first, and the round
+// trip would lose a question the user had not been asked yet.
+func TestFlow_ElicitURL_JoinsAFormExchangeAlreadyQueued(t *testing.T) {
+	ctx := context.Background()
+	f := urlFlow(t, nil)
+
+	if _, err := f.PromptText(ctx, "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
+	}
+	if err := f.ElicitURL(ctx, "page", elicitURLBase, elicitURLTarget, "Open the issue"); !errors.Is(err, ErrInputPending) {
+		t.Fatalf("ElicitURL() error = %v, want ErrInputPending", err)
+	}
+
+	if len(f.pending) != 2 {
+		t.Fatalf("%d requests were queued, want the form request and the url request together", len(f.pending))
+	}
+	if _, ok := f.pending["title"].(*mcp.ElicitParams); !ok {
+		t.Error("the form request queued first is gone after the url request was queued")
+	}
+	page, ok := f.pending["page"].(*mcp.ElicitParams)
+	if !ok {
+		t.Fatalf("pending[page] = %T, want *mcp.ElicitParams", f.pending["page"])
+	}
+	if page.Mode != "url" {
+		t.Errorf("queued Mode = %q, want %q", page.Mode, "url")
+	}
+}
+
+// TestFlow_Confirm_AnswerWithoutTheBoolean_IsNotADecision carries the
+// synchronous path's rule onto the multi round-trip one.
+//
+// An accept whose content does not carry `confirmed` is a client that did not
+// answer the question, not a user who said no, and both paths have to report it
+// the same way: a model told "the user cancelled" stops and says so to the
+// user, which would attribute a refusal to somebody who never made one. The
+// [Client] path was held to this and the [Flow] path was not, so the two could
+// have drifted apart on exactly the answer that matters.
+func TestFlow_Confirm_AnswerWithoutTheBoolean_IsNotADecision(t *testing.T) {
+	tests := []struct {
+		name    string
+		content map[string]any
+	}{
+		{name: "the field is missing", content: map[string]any{}},
+		{name: "no content at all", content: nil},
+		{name: "the field is not a boolean", content: map[string]any{"confirmed": "yes"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMRTRFlow(map[string]answerRecord{"q": {Action: "accept", Content: tt.content}})
+
+			confirmed, err := f.Confirm(context.Background(), "q", "Sure?")
+
+			if !errors.Is(err, ErrMalformedAnswer) {
+				t.Errorf("Confirm() error = %v, want ErrMalformedAnswer", err)
+			}
+			if confirmed {
+				t.Error("Confirm() = true for an answer that never said so")
+			}
+		})
+	}
+}
+
+// TestFlow_InputRequiredResult_AnswerItCannotEncode_IsAnErrorResult covers what
+// the result becomes when the accumulated answers will not encode.
+//
+// The answers reaching this in the server come from a client's JSON, so they
+// always encode again and the branch never fires there. What it guards is the
+// alternative: handing the client a result whose state silently carried none of
+// the answers already given, which would re-ask every question on the next
+// round and never converge. Reporting it as an error result stops the call
+// instead, which is the honest outcome.
+func TestFlow_InputRequiredResult_AnswerItCannotEncode_IsAnErrorResult(t *testing.T) {
+	f := newMRTRFlow(map[string]answerRecord{
+		"answered": {Action: "accept", Content: map[string]any{"handle": make(chan int)}},
+	})
+	if _, err := f.PromptText(context.Background(), "title", "Enter a title", "title"); !errors.Is(err, ErrInputPending) {
+		t.Fatalf("PromptText() error = %v, want ErrInputPending", err)
+	}
+
+	result := f.InputRequiredResult()
+
+	if !result.IsError {
+		t.Fatal("InputRequiredResult().IsError = false, want the encoding failure reported")
+	}
+	if result.RequestState != "" {
+		t.Errorf("InputRequiredResult().RequestState = %q, want no state at all", result.RequestState)
+	}
+	if len(result.InputRequests) != 0 {
+		t.Error("InputRequiredResult() still queued input requests it has no state to carry answers for")
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("result content = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(text.Text, "failed to encode request state") {
+		t.Errorf("result text = %q, want it to name the encoding failure", text.Text)
+	}
+}

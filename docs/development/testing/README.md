@@ -201,6 +201,22 @@ comparison moving together. The fix is the one `cmd/server`'s timeouts got — a
 test that states what the constant has to be — and the general rule is that a
 constant asserted only through the code that reads it is asserted by nothing.
 
+### A test that reads `os.Stdout` or `os.Stderr` reads a different file under CI
+
+CI runs the unit suite through `go test -json`, and in that mode the `testing`
+package replaces `os.Stdout` and `os.Stderr` so it can attribute each line of
+output to the test that wrote it. A value read inside a test is therefore a
+different `*os.File` than the one a package bound at init, and an assertion
+comparing the two passes under a plain `go test` and fails on all three
+platforms in CI — the worst shape an assertion can have, because the local run
+says nothing is wrong.
+
+Capture both sides at the same moment instead: a package-level `var` in the
+test file holds the shipped writer, and a second one holds `os.Stderr` taken
+right beside it. `internal/cmdutil`'s `initialStderr` is the worked example,
+and the test that needed it still fails when the package is pointed at
+`os.Stdout`, which is the property it exists to hold.
+
 ## When To Use Each Layer
 
 Use unit tests for implementation changes and regression coverage. Use E2E

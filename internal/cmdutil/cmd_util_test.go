@@ -2,13 +2,36 @@ package cmdutil
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 type fatalExit struct{}
+
+// The three package-level hooks as the package shipped them, captured here
+// rather than read inside a test because every test below swaps one for a
+// buffer or a stub before asserting. Go initializes a variable after the ones
+// its expression reads, so these hold the shipped values whatever order the
+// tests run in, and a test that forgot to restore cannot make them lie.
+var (
+	initialFatalWriter    = fatalStderr
+	initialProgressWriter = progressStderr
+	initialExitProcess    = exitProcess
+
+	// os.Stderr is captured here as well, and it has to be. Under
+	// `go test -json`, which is what the runner CI uses, the testing package
+	// replaces os.Stdout and os.Stderr so it can attribute output to the test
+	// that wrote it, so the value read inside a test is a different *os.File
+	// than the one this package bound at init. Comparing a captured writer
+	// against a freshly read os.Stderr therefore passes under a plain
+	// `go test` and fails under CI, which is the worst shape an assertion can
+	// have. Both sides are taken at the same moment instead.
+	initialStderr io.Writer = os.Stderr
+)
 
 // TestRepositoryRoot_FindsModuleRoot verifies RepositoryRoot walks from a
 // nested directory to the nearest parent containing go.mod.
@@ -28,6 +51,43 @@ func TestRepositoryRoot_FindsModuleRoot(t *testing.T) {
 	}
 	if got != root {
 		t.Fatalf("RepositoryRoot() = %q, want %q", got, root)
+	}
+}
+
+// TestRepositoryRoot_NestedModules_StopsAtTheNearestOne verifies that the walk
+// returns the first go.mod above start rather than the last.
+//
+// Every other RepositoryRoot test here plants exactly one go.mod, so "walks
+// upward until it finds the module root" and "walks upward to the outermost
+// module root" are the same answer to all of them, and the walk can be changed
+// from one to the other with the whole suite staying green. The tree this
+// package serves does contain nested modules — cmd/audit_e2e_coverage plants
+// one under testdata — and a command run inside one that resolved to the
+// repository root instead would read and write its artifacts in the wrong
+// module entirely.
+func TestRepositoryRoot_NestedModules_StopsAtTheNearestOne(t *testing.T) {
+	outer := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outer, "go.mod"), []byte("module example\n"), 0o600); err != nil {
+		t.Fatalf("write outer go.mod: %v", err)
+	}
+	inner := filepath.Join(outer, "testdata", "planted")
+	if err := os.MkdirAll(inner, 0o750); err != nil {
+		t.Fatalf("mkdir inner: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(inner, "go.mod"), []byte("module example/planted\n"), 0o600); err != nil {
+		t.Fatalf("write inner go.mod: %v", err)
+	}
+	nested := filepath.Join(inner, "cmd")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+
+	got, err := RepositoryRoot(nested)
+	if err != nil {
+		t.Fatalf("RepositoryRoot() error = %v", err)
+	}
+	if got != inner {
+		t.Fatalf("RepositoryRoot() = %q, want the nearest module %q, not the outer one %q", got, inner, outer)
 	}
 }
 
@@ -127,6 +187,51 @@ func TestRepositoryRoot_AbsError_RemovedCwd(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "go.mod not found") {
 		t.Fatalf("RepositoryRoot() error = %q, want Abs error, not NotFound", err)
+	}
+}
+
+// TestDiagnosticWriters_AsShipped_AreStderrAndNotStdout verifies that both
+// diagnostic writers start out on stderr.
+//
+// Nothing else in this file can tell the two streams apart: every test that
+// exercises Fatalf or Progressf replaces the writer with a buffer first, so the
+// stream the package actually ships with is never read. Pointing both at
+// os.Stdout leaves this package, and the tree, entirely green — while
+// cmd/audit_tokens, which writes its Markdown report to os.Stdout and calls
+// Progressf four times during the same run, would interleave progress lines
+// into the report a reader or a --check comparison consumes. That is precisely
+// the pollution Progressf's doc comment promises never to cause, and it is a
+// promise no assertion held.
+func TestDiagnosticWriters_AsShipped_AreStderrAndNotStdout(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		writer io.Writer
+	}{
+		{name: "Fatalf writes its diagnostic to stderr", writer: initialFatalWriter},
+		{name: "Progressf writes its progress line to stderr", writer: initialProgressWriter},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.writer != initialStderr {
+				t.Errorf("writer = %v, want the process stderr this package bound at init; a command's generated stdout must not carry these lines", tc.writer)
+			}
+		})
+	}
+}
+
+// TestFatalf_AsShipped_EndsTheProcess verifies that the exit hook Fatalf calls
+// is the real os.Exit.
+//
+// TestFatalf_WritesMessageAndExits substitutes its own recorder for that hook,
+// which is what lets it observe the status code, and in doing so it proves only
+// that Fatalf calls whatever the variable holds. A hook left pointing at a
+// no-op would keep every test in this package passing while Fatalf returned to
+// its caller, and the six commands that end on it would carry on past the
+// failure they had just reported. Function values are not comparable in Go, so
+// the identity is asserted through the code pointer.
+func TestFatalf_AsShipped_EndsTheProcess(t *testing.T) {
+	got := reflect.ValueOf(initialExitProcess).Pointer()
+	if want := reflect.ValueOf(os.Exit).Pointer(); got != want {
+		t.Error("exitProcess is not os.Exit; Fatalf would return to its caller instead of ending the process")
 	}
 }
 

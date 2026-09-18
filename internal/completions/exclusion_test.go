@@ -142,6 +142,7 @@ func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.
 		name      string
 		exclude   []string
 		argName   string
+		resolved  map[string]string
 		wantPaths []string
 		noPaths   []string
 	}{
@@ -157,6 +158,25 @@ func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.
 			name: "both excluded", exclude: []string{actionBranchList, actionTagList}, argName: "from",
 			noPaths: []string{"/repository/branches", "/repository/tags"},
 		},
+		// The milestone halves are chosen by scope rather than merged, so an
+		// excluded project listing answers empty where it applies instead of
+		// falling through to the group's: falling through would serve data from
+		// a listing the operator did not ask about, on an argument whose own
+		// listing they removed.
+		{
+			name: "project milestones excluded under a project scope", exclude: []string{actionMilestoneList}, argName: "milestone",
+			resolved: map[string]string{"project_id": "group/project", "group_id": "acme"},
+			noPaths:  []string{"/milestones"},
+		},
+		{
+			name: "group milestones excluded under a group scope", exclude: []string{actionGroupMilestoneLst}, argName: "milestone",
+			resolved: map[string]string{"group_id": "acme"},
+			noPaths:  []string{"/milestones"},
+		},
+		{
+			name: "group milestones excluded leaves the project's alone", exclude: []string{actionGroupMilestoneLst}, argName: "milestone",
+			resolved: map[string]string{"project_id": "group/project"}, wantPaths: []string{"/milestones"},
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -168,11 +188,15 @@ func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.
 			h.PublishPrompts([]string{"a_prompt"})
 			h.PublishExcludedActions(testCase.exclude)
 
+			resolved := testCase.resolved
+			if resolved == nil {
+				resolved = map[string]string{"project_id": "group/project"}
+			}
 			req := &mcp.CompleteRequest{}
 			req.Params = &mcp.CompleteParams{
 				Ref:      &mcp.CompleteReference{Type: refPrompt, Name: "a_prompt"},
 				Argument: mcp.CompleteParamsArgument{Name: testCase.argName, Value: "m"},
-				Context:  &mcp.CompleteContext{Arguments: map[string]string{"project_id": "group/project"}},
+				Context:  &mcp.CompleteContext{Arguments: resolved},
 			}
 			if _, err := h.Complete(context.Background(), req); err != nil {
 				t.Fatalf(fmtUnexpectedErr, err)
@@ -190,6 +214,37 @@ func TestComplete_PartlyExcludedArgument_KeepsTheHalfTheOperatorLeft(t *testing.
 			}
 		})
 	}
+}
+
+// TestWithholds_AnArgumentWithNoBackingAction_IsNeverWithheld pins the
+// difference between "every backing action was excluded" and "there are no
+// backing actions".
+//
+// [Handler.withholds] answers a variadic list, and the dispatch spreads a table
+// lookup into it, so an argument the table does not name arrives as no actions
+// at all. Read as "all of them are excluded" — which is what a loop over an
+// empty list concludes on its own, since it finds no action still allowed — the
+// answer would be to withhold an argument no operator ever asked about, and a
+// completer would go silent because of an exclusion naming something else
+// entirely.
+//
+// The contrast case is what stops this passing on a guard that withholds
+// nothing at all.
+func TestWithholds_AnArgumentWithNoBackingAction_IsNeverWithheld(t *testing.T) {
+	h := NewHandler(testutil.NewTestClient(t, http.NotFoundHandler()))
+	h.PublishExcludedActions([]string{actionProjectList, actionGroupList})
+
+	t.Run("no backing action is not every backing action", func(t *testing.T) {
+		if h.withholds() {
+			t.Error("an argument nothing backs was withheld, so an unrelated exclusion silenced it")
+		}
+	})
+
+	t.Run("a backing action that was excluded still withholds", func(t *testing.T) {
+		if !h.withholds(actionProjectList) {
+			t.Error("an excluded action did not withhold, so the guard above proves nothing")
+		}
+	})
 }
 
 // pathHasSuffix reports whether a request path ends in the given segment.

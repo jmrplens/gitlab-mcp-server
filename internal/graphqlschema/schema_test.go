@@ -523,3 +523,31 @@ func TestEnumWalker_AnUnknownTypeName_IsLeftAlone(t *testing.T) {
 		t.Errorf("walk() reported %v for a type the schema does not define, want nothing", walker.reasons)
 	}
 }
+
+// TestEnumWalker_APositionWithNoDeclaredType_IsLeftAlone verifies the other
+// half of the walk's entry guard: a position whose declared type is absent is
+// abandoned rather than dereferenced.
+//
+// Like the unknown-type case above it is unreachable through [Validate], since
+// a parsed variable definition, a list's element type and an input object's
+// field definition all carry a type, and the guard is there for the day one of
+// those invariants slips. It is asserted rather than trusted because the two
+// halves of the guard cover for each other under every test that passes both a
+// value and a type: read as "and" instead of "or", the walk validates every
+// document in this file exactly as it does now, because a nil value bails out
+// at the type assertion further down anyway. Only a position with no type
+// tells the two apart, and there the difference is between returning and a nil
+// dereference that would end the test binary where it stood.
+func TestEnumWalker_APositionWithNoDeclaredType_IsLeftAlone(t *testing.T) {
+	schema, err := Schema()
+	if err != nil {
+		t.Fatalf("Schema() error = %v", err)
+	}
+	walker := enumWalker{schema: schema}
+
+	walker.walk(nil, "critical", "$probe")
+
+	if len(walker.reasons) != 0 {
+		t.Errorf("walk() reported %v for a position with no declared type, want nothing", walker.reasons)
+	}
+}

@@ -15,14 +15,15 @@ import (
 // the read-only semantics; mutating groups use [toolutil.AddMetaTool].
 // Nil server or catalog inputs are accepted as no-ops.
 func RegisterMetaCatalog(server *mcp.Server, catalog *actioncatalog.Catalog) {
-	// The early return states the contract rather than enforcing it: the loop
-	// below is already a no-op for either nil, because AddMetaTool and
-	// AddReadOnlyMetaTool both refuse a nil server and Groups() answers nil for
-	// a nil catalog. Its sibling in RegisterIndividualCatalogTools is not in
-	// that position, since mcp.AddTool dereferences the server it is given.
-	if server == nil || catalog == nil {
-		return
-	}
+	// There is deliberately no nil guard in front of this loop. Either nil is
+	// already a no-op one call down — Groups() answers nil for a nil catalog,
+	// and AddMetaTool and AddReadOnlyMetaTool both refuse a nil server — so an
+	// early return here decided nothing any caller could observe, which is a
+	// branch no test can hold to its meaning. The contract is stated by
+	// [TestRegisterMetaCatalog_NilInputs] instead, over all three nil
+	// combinations, so the day one of those refusals goes away it fails there
+	// rather than passing here. Its sibling in RegisterIndividualCatalogTools
+	// keeps its guard, since mcp.AddTool dereferences the server it is given.
 	for _, group := range catalog.Groups() {
 		formatResult := group.FormatResult
 		if formatResult == nil {

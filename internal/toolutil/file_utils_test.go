@@ -16,7 +16,11 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -561,6 +565,180 @@ func TestProgressWriter_ReportsAtTheIntervalAndOnFailure(t *testing.T) {
 		}
 		if len(failures) != 1 {
 			t.Errorf("reports on a failed write = %v, want one flush", failures)
+		}
+	})
+}
+
+// progressWaitBound is how long progressProbeMessages gives the whole exchange
+// — the tool call and the notifications it produces — before it calls the
+// session stalled. It is enormous for an in-memory transport and deliberately
+// so: the bound names a hang, it does not measure a speed.
+const progressWaitBound = 5 * time.Second
+
+// progressProbeMessages runs fn as the body of a real tool call on an
+// in-memory MCP session that carries a progress token, and returns the
+// messages the client received, once want of them have arrived.
+//
+// It exists because the two schedule tests above replace onProgress with a
+// sink of their own, which is right for measuring when a report fires and
+// leaves the callback the constructor builds — the one that decides what each
+// report says — driven by nothing: an inactive tracker returns from its first
+// line. Only a live session makes those decisions observable.
+func progressProbeMessages(t *testing.T, want int, fn func(ctx context.Context, tracker progress.Tracker)) []string {
+	t.Helper()
+
+	var mu sync.Mutex
+	var messages []string
+	received := make(chan struct{})
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "progress-probe-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "probe", Description: "copies bytes under a progress tracker"},
+		func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			tracker := progress.FromRequest(req)
+			if !tracker.IsActive() {
+				t.Errorf("tracker inactive inside the tool call: the probe would measure nothing")
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "inactive"}}}, nil, nil
+			}
+			fn(ctx, tracker)
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+		})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "progress-probe-client", Version: "1.0.0"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			mu.Lock()
+			defer mu.Unlock()
+			messages = append(messages, req.Params.Message)
+			if len(messages) == want {
+				close(received)
+			}
+		},
+	})
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	// The call is bounded as well as the wait below, and it has to be: the
+	// call completes before the select is even reached, so a stalled tool or a
+	// stalled notification would never meet that timeout and would hang the
+	// binary until the package deadline instead. One bound serves both, so the
+	// two cannot drift apart.
+	callCtx, cancelCall := context.WithTimeout(t.Context(), progressWaitBound)
+	defer cancelCall()
+
+	if _, callErr := session.CallTool(callCtx, &mcp.CallToolParams{
+		Name:      "probe",
+		Arguments: map[string]any{},
+		Meta:      mcp.Meta{"progressToken": "file-utils-probe"},
+	}); callErr != nil {
+		t.Fatalf("CallTool: %v", callErr)
+	}
+
+	select {
+	case <-received:
+	case <-time.After(progressWaitBound):
+		mu.Lock()
+		got := slices.Clone(messages)
+		mu.Unlock()
+		t.Fatalf("waited for %d progress notifications, got %d: %q", want, len(got), got)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	return slices.Clone(messages)
+}
+
+// TestProgressReader_ActiveTracker_ClaimsTheHandoverOnlyOnAKnownTotalReached
+// verifies what an upload frame says, which is the half the schedule tests
+// cannot see. Two things have to hold and both were stated only by the code
+// that does them: the handover line ("uploading to GitLab", the moment after
+// which the transfer itself reports nothing) is written when the read has
+// reached the total, and it is never written when there is no total to reach,
+// because a source of unknown size gives no moment to name.
+func TestProgressReader_ActiveTracker_ClaimsTheHandoverOnlyOnAKnownTotalReached(t *testing.T) {
+	const size = int64(64 * 1024) // one whole report interval, so a frame fires
+
+	t.Run("the read reaches a known total", func(t *testing.T) {
+		messages := progressProbeMessages(t, 1, func(ctx context.Context, tracker progress.Tracker) {
+			pr := NewProgressReader(ctx, bytes.NewReader(bytes.Repeat([]byte("x"), int(size))), size, tracker)
+			if _, err := io.Copy(io.Discard, pr); err != nil {
+				t.Errorf("copy: %v", err)
+			}
+		})
+		want := "Read 65536 bytes, uploading to GitLab"
+		if messages[0] != want {
+			t.Errorf("frame at the total = %q, want %q", messages[0], want)
+		}
+	})
+
+	t.Run("the read stops short of a known total", func(t *testing.T) {
+		messages := progressProbeMessages(t, 1, func(ctx context.Context, tracker progress.Tracker) {
+			pr := NewProgressReader(ctx, bytes.NewReader(bytes.Repeat([]byte("x"), int(size))), size*2, tracker)
+			if _, err := io.Copy(io.Discard, pr); err != nil {
+				t.Errorf("copy: %v", err)
+			}
+		})
+		want := "Read 65536 / 131072 bytes, preparing the upload"
+		if messages[0] != want {
+			t.Errorf("frame below the total = %q, want %q", messages[0], want)
+		}
+	})
+
+	t.Run("the source has no total", func(t *testing.T) {
+		messages := progressProbeMessages(t, 1, func(ctx context.Context, tracker progress.Tracker) {
+			pr := NewProgressReader(ctx, bytes.NewReader(bytes.Repeat([]byte("x"), int(size))), 0, tracker)
+			if _, err := io.Copy(io.Discard, pr); err != nil {
+				t.Errorf("copy: %v", err)
+			}
+		})
+		if strings.Contains(messages[0], "uploading to GitLab") {
+			t.Errorf("frame with no total = %q, want no claim that the read reached one", messages[0])
+		}
+		if !strings.Contains(messages[0], "preparing the upload") {
+			t.Errorf("frame with no total = %q, want the preparing wording", messages[0])
+		}
+	})
+}
+
+// TestProgressWriter_ActiveTracker_NamesTheTotalOnlyWhenThereIsOne verifies
+// the download frame the constructor's callback writes: a known size is shown
+// as "N / M bytes", and a stream whose size GitLab did not send is shown as
+// "N bytes" alone. The second is the one that matters in practice — a package
+// download surfaces no content length, and every frame of one used to read
+// "Downloaded 65536 / 0 bytes".
+func TestProgressWriter_ActiveTracker_NamesTheTotalOnlyWhenThereIsOne(t *testing.T) {
+	const chunk = 64 * 1024 // one whole report interval, so a frame fires
+
+	t.Run("a known total", func(t *testing.T) {
+		messages := progressProbeMessages(t, 1, func(ctx context.Context, tracker progress.Tracker) {
+			var sink bytes.Buffer
+			pw := NewProgressWriter(ctx, &sink, 100000, tracker)
+			if _, err := pw.Write(bytes.Repeat([]byte("x"), chunk)); err != nil {
+				t.Errorf("write: %v", err)
+			}
+		})
+		want := "Downloaded 65536 / 100000 bytes"
+		if messages[0] != want {
+			t.Errorf("frame with a total = %q, want %q", messages[0], want)
+		}
+	})
+
+	t.Run("no total", func(t *testing.T) {
+		messages := progressProbeMessages(t, 1, func(ctx context.Context, tracker progress.Tracker) {
+			var sink bytes.Buffer
+			pw := NewProgressWriter(ctx, &sink, 0, tracker)
+			if _, err := pw.Write(bytes.Repeat([]byte("x"), chunk)); err != nil {
+				t.Errorf("write: %v", err)
+			}
+		})
+		want := "Downloaded 65536 bytes"
+		if messages[0] != want {
+			t.Errorf("frame with no total = %q, want %q", messages[0], want)
 		}
 	})
 }

@@ -204,7 +204,7 @@ type ReleaseResourceOutput struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Author      string `json:"author"`
-	CreatedAt   string `json:"created_at"`
+	CreatedAt   string `json:"created_at,omitempty"`
 	ReleasedAt  string `json:"released_at,omitempty"`
 }
 
@@ -718,8 +718,8 @@ func registerPipelineJobsResource(server registrar, base *gitlabclient.Client) {
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
 		uri := strings.TrimSuffix(req.Params.URI, "/jobs")
-		projectID, pipelineIDStr := extractTwoParts(uri, uriProjectPrefix, "/pipeline/")
-		if projectID == "" || pipelineIDStr == "" {
+		projectID, pipelineIDStr, ok := extractTwoParts(uri, uriProjectPrefix, "/pipeline/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		pipelineID, err := strconv.ParseInt(pipelineIDStr, 10, 64)
@@ -839,8 +839,8 @@ func registerMergeRequestResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, mrIIDStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/mr/")
-		if projectID == "" || mrIIDStr == "" {
+		projectID, mrIIDStr, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/mr/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		mrIID, err := strconv.ParseInt(mrIIDStr, 10, 64)
@@ -1175,8 +1175,8 @@ func registerCommitResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconCommit,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, sha := extractTwoParts(req.Params.URI, uriProjectPrefix, "/commit/")
-		if projectID == "" || sha == "" {
+		projectID, sha, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/commit/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		c, _, err := client.GL().Commits.GetCommit(projectID, sha, nil, gl.WithContext(ctx))
@@ -1226,8 +1226,8 @@ func registerFileBlobResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconFile,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, ref, filePath := extractFileBlobURI(req.Params.URI)
-		if projectID == "" || ref == "" || filePath == "" {
+		projectID, ref, filePath, ok := extractFileBlobURI(req.Params.URI)
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		opts := &gl.GetFileOptions{Ref: &ref}
@@ -1271,8 +1271,8 @@ func registerWikiResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconWiki,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, slug := extractTwoParts(req.Params.URI, uriProjectPrefix, "/wiki/")
-		if projectID == "" || slug == "" {
+		projectID, slug, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/wiki/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		w, _, err := client.GL().Wikis.GetWikiPage(projectID, slug, &gl.GetWikiPageOptions{}, gl.WithContext(ctx))
@@ -1405,8 +1405,8 @@ func registerReleaseResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, tagName := extractTwoParts(req.Params.URI, uriProjectPrefix, "/release/")
-		if projectID == "" || tagName == "" {
+		projectID, tagName, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/release/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		r, _, err := client.GL().Releases.GetRelease(projectID, tagName, gl.WithContext(ctx))
@@ -1443,8 +1443,8 @@ func registerBranchResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, branch := extractTwoParts(req.Params.URI, uriProjectPrefix, "/branch/")
-		if projectID == "" || branch == "" {
+		projectID, branch, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/branch/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		b, _, err := client.GL().Branches.GetBranch(projectID, branch, gl.WithContext(ctx))
@@ -1521,8 +1521,8 @@ func registerLabelResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, labelID := extractTwoParts(req.Params.URI, uriProjectPrefix, "/label/")
-		if projectID == "" || labelID == "" {
+		projectID, labelID, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/label/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		l, _, err := client.GL().Labels.GetLabel(projectID, labelID, gl.WithContext(ctx))
@@ -1550,8 +1550,8 @@ func registerMilestoneResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		projectID, iidStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/milestone/")
-		if projectID == "" || iidStr == "" {
+		projectID, iidStr, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, "/milestone/")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		iid, err := strconv.ParseInt(iidStr, 10, 64)
@@ -1584,30 +1584,32 @@ func registerMilestoneResource(server registrar, base *gitlabclient.Client) {
 
 // extractFileBlobURI splits a "gitlab://project/{id}/file/{ref}/{path}"
 // URI into its three components. The path component may contain slashes.
-// Returns empty strings if the URI does not match the expected layout.
+// ok is false, and all three components are empty, when the URI does not
+// match the expected layout — like [extractTwoParts], it never fills some
+// of them and leaves the rest empty, so one flag decides the call site.
 //
 // Limitation: when the ref itself contains a slash (e.g. "feature/new-ui"),
 // the URI is ambiguous because both segments use "/" as a separator. This
 // helper assumes refs are slash-free. Callers that need to address files
 // on branches with slashes should URL-encode the ref before constructing
 // the URI.
-func extractFileBlobURI(uri string) (projectID, ref, filePath string) {
+func extractFileBlobURI(uri string) (projectID, ref, filePath string, ok bool) {
 	rest := extractSuffix(uri, uriProjectPrefix)
 	if rest == "" {
-		return "", "", ""
+		return "", "", "", false
 	}
 	idx := strings.Index(rest, "/file/")
 	if idx <= 0 {
-		return "", "", ""
+		return "", "", "", false
 	}
 	projectID = rest[:idx]
 	tail := rest[idx+len("/file/"):]
-	var ok bool
-	ref, filePath, ok = strings.Cut(tail, "/")
-	if !ok || ref == "" || filePath == "" {
-		return "", "", ""
+	var cut bool
+	ref, filePath, cut = strings.Cut(tail, "/")
+	if !cut || ref == "" || filePath == "" {
+		return "", "", "", false
 	}
-	return projectID, ref, filePath
+	return projectID, ref, filePath, true
 }
 
 // decodeFileContent decodes the contents of a [gl.File] returned by the
@@ -1687,18 +1689,23 @@ func extractMiddle(uri, prefix, suffix string) string {
 
 // extractTwoParts splits a URI into two dynamic segments around
 // separator. Both segments must be non-empty for the split to succeed;
-// the empty string is returned for both when the URI does not match
+// ok is false, and both segments are empty, when the URI does not match
 // the expected layout.
-func extractTwoParts(uri, prefix, separator string) (first, second string) {
+//
+// The success flag is what callers branch on. It is not decoration: this
+// helper never returns one segment filled and the other empty, so a call
+// site that tested both would be testing the same fact twice, and the
+// second test would be a branch no input can reach.
+func extractTwoParts(uri, prefix, separator string) (first, second string, ok bool) {
 	rest := extractSuffix(uri, prefix)
 	if rest == "" {
-		return "", ""
+		return "", "", false
 	}
 	parts := strings.SplitN(rest, separator, 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", ""
+		return "", "", false
 	}
-	return parts[0], parts[1]
+	return parts[0], parts[1], true
 }
 
 // extractMRSubcollection splits a "gitlab://project/{id}/mr/{iid}/{listSuffix}"
@@ -1711,8 +1718,8 @@ func extractTwoParts(uri, prefix, separator string) (first, second string) {
 // this shape is prone to, and there is nothing left here for them to disagree
 // about.
 func extractMRSubcollection(uri, listSuffix string) (projectID string, mrIID int64, ok bool) {
-	projectID, iidStr := extractTwoParts(strings.TrimSuffix(uri, listSuffix), uriProjectPrefix, "/mr/")
-	if projectID == "" || iidStr == "" {
+	projectID, iidStr, split := extractTwoParts(strings.TrimSuffix(uri, listSuffix), uriProjectPrefix, "/mr/")
+	if !split {
 		return "", 0, false
 	}
 	iid, err := strconv.ParseInt(iidStr, 10, 64)
@@ -1727,8 +1734,8 @@ func extractMRSubcollection(uri, listSuffix string) (projectID string, mrIID int
 // GitLab API call. The supplied separator and operation label are used
 // to build the resource-not-found and error responses.
 func readProjectIntResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, int64) (O, error)) (*mcp.ReadResourceResult, error) {
-	projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
-	if projectID == "" || idStr == "" {
+	projectID, idStr, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
+	if !ok {
 		return nil, mcp.ResourceNotFoundError(req.Params.URI)
 	}
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -1748,8 +1755,8 @@ func readProjectIntResource[O any](_ context.Context, req *mcp.ReadResourceReque
 // string for the second segment (e.g. branch name, tag name, feature
 // flag name).
 func readProjectNamedResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, string) (O, error)) (*mcp.ReadResourceResult, error) {
-	projectID, name := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
-	if projectID == "" || name == "" {
+	projectID, name, ok := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
+	if !ok {
 		return nil, mcp.ResourceNotFoundError(req.Params.URI)
 	}
 	out, err := read(projectID, name)
@@ -1888,7 +1895,7 @@ func pipelineToResourceOutput(p *gl.Pipeline) PipelineResourceOutput {
 // URI into its (group_id, value) components. The kind argument is
 // interpolated into the separator so the helper is reusable across
 // group milestone, label, and similar lookups.
-func extractGroupTwoParts(uri, kind string) (groupID, value string) {
+func extractGroupTwoParts(uri, kind string) (groupID, value string, ok bool) {
 	return extractTwoParts(uri, uriGroupPrefix, "/"+kind+"/")
 }
 
@@ -2144,8 +2151,8 @@ func registerGroupMilestoneResource(server registrar, base *gitlabclient.Client)
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		groupID, iidStr := extractGroupTwoParts(req.Params.URI, "milestone")
-		if groupID == "" || iidStr == "" {
+		groupID, iidStr, ok := extractGroupTwoParts(req.Params.URI, "milestone")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		iid, err := strconv.ParseInt(iidStr, 10, 64)
@@ -2190,8 +2197,8 @@ func registerGroupLabelResource(server registrar, base *gitlabclient.Client) {
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		client := base.For(ctx)
-		groupID, labelID := extractGroupTwoParts(req.Params.URI, "label")
-		if groupID == "" || labelID == "" {
+		groupID, labelID, ok := extractGroupTwoParts(req.Params.URI, "label")
+		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		l, _, err := client.GL().GroupLabels.GetGroupLabel(groupID, labelID, gl.WithContext(ctx))

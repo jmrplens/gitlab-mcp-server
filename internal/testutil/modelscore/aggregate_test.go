@@ -22,7 +22,11 @@ func TestRatio_PrintsBothNumbersAndADashForNothing(t *testing.T) {
 		{name: "some of many", ratio: Ratio{Numerator: 3, Denominator: 4}, text: "3 / 4", rate: 0.75, known: true},
 		{name: "none of many", ratio: Ratio{Denominator: 4}, text: "0 / 4", known: true},
 		{name: "all of many", ratio: Ratio{Numerator: 4, Denominator: 4}, text: "4 / 4", rate: 1, known: true},
-		{name: "nothing at all", ratio: Ratio{}, text: emptyColumn},
+		// The dash is spelled out rather than read from emptyColumn: a test
+		// that compares the constant with itself moves both sides together, so
+		// the column collapsing to the empty string would pass here and print a
+		// blank cell that reads as a missing value rather than an empty one.
+		{name: "nothing at all", ratio: Ratio{}, text: "-"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -278,6 +282,29 @@ func TestAggregate_OnlyACompletedAttempt_CountsInTheCompletionColumn(t *testing.
 	}
 }
 
+// TestAggregate_TheCleanColumn_CountsTheAttemptsThatNeededNoHelp holds the
+// headline column to both of its numbers.
+//
+// Every other fixture in this file fails some term of [Verdict.Clean] on
+// purpose — the completed one misses an argument so the fidelity column has
+// something to divide — so the column could be read as one attempt in three
+// only by a test that supplies an attempt which went right end to end. Without
+// one the numerator is never reached at all, and a column that reads zero over
+// a real denominator is indistinguishable from a model that never works, which
+// is the reading this whole record exists to make impossible.
+func TestAggregate_TheCleanColumn_CountsTheAttemptsThatNeededNoHelp(t *testing.T) {
+	totals := Aggregate([]Verdict{
+		cleanVerdict(),
+		completedVerdict(),
+		failedVerdict(),
+		{Case: "MT-003", Outcome: OutcomeSkipped},
+	})
+
+	if got := totals.Clean.String(); got != "1 / 3" {
+		t.Errorf("Clean = %q, want the one attempt of the three that ran which needed no help", got)
+	}
+}
+
 // apartVerdict is an attempt that ended in a way that is not the model's, with
 // a step of its own so that the steps-go-with-it half of the rule is measured
 // rather than implied.
@@ -503,4 +530,53 @@ func assertDoubled(t *testing.T, name string, want, got reflect.Value) {
 	default:
 		t.Fatalf("%s is a %s, which this walk cannot check: teach it, or Sum may be silently dropping the field", name, want.Kind())
 	}
+}
+
+// TestSum_ARowWithNothingToAdd_KeepsTheOtherRowsTalliesAndInventsNoMap covers
+// the two sides [TestSum_TouchesEveryField] cannot reach.
+//
+// That test doubles one filled row, so every tally it adds has the same keys on
+// both sides and neither is ever empty. The two readings a published row
+// actually needs are the ones it never makes: a run that recorded no decline at
+// all is summed into one that did, and the assembly of a row starts from a
+// zero Totals whose tallies are nil. Getting the first wrong drops a whole
+// run's counts in silence, which reads as a real measurement; getting the
+// second wrong hands [Aggregate]'s readers an empty map where they expect nil,
+// which is the distinction between "nothing was declined" and "this row does
+// not report declines".
+func TestSum_ARowWithNothingToAdd_KeepsTheOtherRowsTalliesAndInventsNoMap(t *testing.T) {
+	filled := filledTotals()
+
+	t.Run("an empty row before a filled one keeps the filled one's counts", func(t *testing.T) {
+		sum := Sum(Totals{}, filled)
+		if got := sum.Declines[DeclineByText]; got != filled.Declines[DeclineByText] {
+			t.Errorf("Declines[%s] = %d, want %d: summing an empty row erased the other one",
+				DeclineByText, got, filled.Declines[DeclineByText])
+		}
+	})
+
+	t.Run("a filled row before an empty one keeps its own counts", func(t *testing.T) {
+		sum := Sum(filled, Totals{})
+		if got := sum.Confirmations[ConfirmationUnaided]; got != filled.Confirmations[ConfirmationUnaided] {
+			t.Errorf("Confirmations[%s] = %d, want %d: summing an empty row erased the other one",
+				ConfirmationUnaided, got, filled.Confirmations[ConfirmationUnaided])
+		}
+	})
+
+	t.Run("two rows with nothing to add report nothing rather than an empty map", func(t *testing.T) {
+		sum := Sum(Totals{}, Totals{})
+		tallies := map[string]bool{
+			"Outcomes":      sum.Outcomes != nil,
+			"Declines":      sum.Declines != nil,
+			"Confirmations": sum.Confirmations != nil,
+		}
+		for name, allocated := range tallies {
+			t.Run(name, func(t *testing.T) {
+				if allocated {
+					t.Errorf("%s is a map, want nil: a tally nothing filled is what Aggregate's "+
+						"readers expect to find absent", name)
+				}
+			})
+		}
+	})
 }

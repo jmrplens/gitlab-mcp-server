@@ -510,4 +510,290 @@ func TestWriteReviewerWorkloadChart_NoActiveReviewers_WritesNothing(t *testing.T
 	}
 }
 
+// TestUserActivityReport_APeriodWithNothingInIt_SaysSoInEachSection verifies
+// that both merge-request sections state their emptiness rather than writing a
+// heading with nothing under it.
+//
+// Each is an `if len(...) == 0` whose empty side no test ever took, so reading
+// either as its own negation leaves the heading standing over nothing at all —
+// which, in a report a manager reads to judge somebody's week, is the one
+// outcome that must not be ambiguous.
+func TestUserActivityReport_APeriodWithNothingInIt_SaysSoInEachSection(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, aliceLookupJSON)
+	})
+	mux.HandleFunc("GET /api/v4/users/{user}/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "user_activity_report", map[string]string{"username": "alice"})
+
+	for _, want := range []string{
+		"No contribution events found in this period.",
+		"No merged MRs in this period.",
+		"No MRs under review.",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("expected %q in:\n%s", want, text)
+			}
+		})
+	}
+}
+
+// TestUserActivityReport_TheChartAxis_SeparatesItsDays verifies the x axis of
+// the daily events chart is a comma-separated list.
+//
+// The bar list beside it is asserted elsewhere and the axis was not, so the
+// separator on this loop alone could go: Mermaid is given two dates written
+// together and draws no chart, while the report still carries its heading and
+// its fence.
+func TestUserActivityReport_TheChartAxis_SeparatesItsDays(t *testing.T) {
+	older := time.Now().Add(-48 * time.Hour)
+	newer := time.Now().Add(-24 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, aliceLookupJSON)
+	})
+	mux.HandleFunc("GET /api/v4/users/{user}/events", func(w http.ResponseWriter, _ *http.Request) {
+		events := []*gl.ContributionEvent{
+			{ActionName: actionPushedTo, CreatedAt: &older},
+			{ActionName: "opened", CreatedAt: &newer},
+		}
+		data, _ := json.Marshal(events)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+	mux.HandleFunc("GET /api/v4/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "user_activity_report", map[string]string{"username": "alice"})
+
+	want := "x-axis [" + older.Format("2006-01-02") + ", " + newer.Format("2006-01-02") + "]"
+	if !strings.Contains(text, want) {
+		t.Errorf("expected %q in:\n%s", want, text)
+	}
+}
+
+// TestTeamOverview_TheWorkloadTable_CountsEachMembersOwnMergeRequests pins
+// every per-member counter the dashboard publishes.
+//
+// Each is an increment under a membership lookup, and the fixture that covered
+// them gave each member one of everything, where an increment and a decrement
+// differ only in sign. A merge request with no author is included because
+// GitLab sends one for a deleted account, and the guard that skips it is the
+// difference between a row being wrong and the prompt failing outright.
+func TestTeamOverview_TheWorkloadTable_CountsEachMembersOwnMergeRequests(t *testing.T) {
+	created := time.Now().Add(-2 * 24 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/{group}/members", func(w http.ResponseWriter, _ *http.Request) {
+		// dana is blocked, so nothing about her should be seeded; carol is not
+		// a member at all, and the merge requests below are authored and
+		// reviewed by her, which is the lookup miss both counters guard.
+		members := []*gl.GroupMember{
+			{ID: 1, Username: "alice", Name: "Alice A", State: "active"},
+			{ID: 2, Username: "bob", Name: "Bob B", State: "active"},
+			{ID: 3, Username: "dana", Name: "Dana D", State: "blocked"},
+		}
+		data, _ := json.Marshal(members)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+	mux.HandleFunc("GET /api/v4/groups/{group}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") == "merged" {
+			mrs := []*gl.BasicMergeRequest{{
+				IID: 9, Title: "Merged by bob", ProjectID: 10, SourceBranch: "m", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created,
+				References: &gl.IssueReferences{Full: "group/proj!9"},
+			}}
+			data, _ := json.Marshal(mrs)
+			respondJSON(w, http.StatusOK, string(data))
+			return
+		}
+		mrs := []*gl.BasicMergeRequest{
+			{
+				IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
+				Reviewers:  []*gl.BasicUser{{Username: "bob"}},
+				References: &gl.IssueReferences{Full: "group/proj!1"},
+			},
+			{
+				IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
+				Reviewers:  []*gl.BasicUser{{Username: "bob"}},
+				References: &gl.IssueReferences{Full: "group/proj!2"},
+			},
+			{
+				IID: 3, Title: "Authored by a deleted account", ProjectID: 10, SourceBranch: "c", TargetBranch: "main",
+				CreatedAt: &created, References: &gl.IssueReferences{Full: "group/proj!3"},
+			},
+			{
+				IID: 4, Title: "Authored and reviewed outside the group", ProjectID: 10, SourceBranch: "d", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "carol"}, CreatedAt: &created,
+				Reviewers:  []*gl.BasicUser{{Username: "carol"}},
+				References: &gl.IssueReferences{Full: "group/proj!4"},
+			},
+		}
+		data, _ := json.Marshal(mrs)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "team_overview", map[string]string{"group_id": "mygroup"})
+
+	t.Run("each member's counts are their own", func(t *testing.T) {
+		if !strings.Contains(text, "| @alice | Alice A | 2 | 0 | 0 |") {
+			t.Errorf("alice authored two open MRs and nothing else:\n%s", text)
+		}
+		if !strings.Contains(text, "| @bob | Bob B | 0 | 1 | 2 |") {
+			t.Errorf("bob merged one and is reviewing two:\n%s", text)
+		}
+	})
+
+	t.Run("only active members are rows", func(t *testing.T) {
+		if !strings.Contains(text, "| Active members | 2 |") {
+			t.Errorf("a blocked member is not an active one:\n%s", text)
+		}
+		for _, unwanted := range []string{"@dana", "@carol"} {
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("%s is not an active member of the group, yet has a row:\n%s", unwanted, text)
+				}
+			})
+		}
+	})
+
+	t.Run("a member with no open MRs is not a slice of the pie", func(t *testing.T) {
+		if !strings.Contains(text, `"alice" : 2`) {
+			t.Errorf("expected alice's two open MRs in the chart:\n%s", text)
+		}
+		if strings.Contains(text, `"bob" :`) {
+			t.Errorf("bob has no open MRs and should not be charted:\n%s", text)
+		}
+	})
+}
+
+// reviewerWorkloadFixture answers the two listings reviewer_workload makes.
+//
+// alice is an active member who reviews nothing, dave is a blocked member, the
+// second merge request carries no creation date (which is what GitLab sends for
+// one whose source branch has gone), and the third is older than the first, so
+// the walk that keeps the oldest pending review has to replace what it holds
+// rather than only ever keeping the first thing it saw.
+func reviewerWorkloadFixture(t *testing.T, created time.Time) http.Handler {
+	t.Helper()
+	older := created.Add(-48 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/{group}/members", func(w http.ResponseWriter, _ *http.Request) {
+		members := []*gl.GroupMember{
+			{ID: 1, Username: "alice", Name: "Alice A", State: "active"},
+			{ID: 2, Username: "bob", Name: "Bob B", State: "active"},
+			{ID: 3, Username: "dave", Name: "Dave D", State: "blocked"},
+		}
+		data, _ := json.Marshal(members)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+	mux.HandleFunc("GET /api/v4/groups/{group}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		mrs := []*gl.BasicMergeRequest{
+			{
+				IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
+				Reviewers:  []*gl.BasicUser{{Username: "bob"}, {Username: "carol"}},
+				References: &gl.IssueReferences{Full: "group/proj!1"},
+			},
+			{
+				IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
+				Author:     &gl.BasicUser{Username: "alice"},
+				Reviewers:  []*gl.BasicUser{{Username: "bob"}},
+				References: &gl.IssueReferences{Full: "group/proj!2"},
+			},
+			{
+				IID: 3, Title: "MR3", ProjectID: 10, SourceBranch: "c", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &older,
+				Reviewers:  []*gl.BasicUser{{Username: "bob"}, {Username: "carol"}},
+				References: &gl.IssueReferences{Full: "group/proj!3"},
+			},
+		}
+		data, _ := json.Marshal(mrs)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+	return mux
+}
+
+// TestReviewerWorkload_WhoIsListed_ChartedAndAveraged pins the four decisions
+// this report makes about a group's members.
+//
+// Who is seeded (active members, so a reviewer with nothing to do still shows
+// as available), who is charted (only somebody actually reviewing), what the
+// average divides by, and which merge request counts as the oldest pending one
+// — the last of which walks over a creation date that may be absent, where the
+// guard is an `&&` over a pointer and reading it as an `||` dereferences nil.
+func TestReviewerWorkload_WhoIsListedChartedAndAveraged(t *testing.T) {
+	created := time.Now().Add(-4 * 24 * time.Hour)
+	text := getPromptText(t, reviewerWorkloadFixture(t, created), "reviewer_workload",
+		map[string]string{"group_id": "mygroup"})
+
+	t.Run("an active member with nothing to review is still listed", func(t *testing.T) {
+		if !strings.Contains(text, "| @alice | Alice A | 0 | - |") {
+			t.Errorf("expected alice listed with no reviews:\n%s", text)
+		}
+	})
+	t.Run("a blocked member is not listed at all", func(t *testing.T) {
+		if strings.Contains(text, "@dave") {
+			t.Errorf("a blocked member should not be seeded as a reviewer:\n%s", text)
+		}
+	})
+	t.Run("the average divides by the reviewers who have work", func(t *testing.T) {
+		if !strings.Contains(text, "| Total review assignments | 5 |") {
+			t.Errorf("expected five review assignments:\n%s", text)
+		}
+		if !strings.Contains(text, "| Active reviewers | 2 |") {
+			t.Errorf("expected two active reviewers:\n%s", text)
+		}
+		if !strings.Contains(text, "| Avg reviews/reviewer | 2.5 |") {
+			t.Errorf("expected five assignments over two reviewers to read as 2.5:\n%s", text)
+		}
+	})
+	t.Run("the oldest pending review is the oldest dated one", func(t *testing.T) {
+		if !strings.Contains(text, "| @bob | Bob B | 3 | 6d |") {
+			t.Errorf("expected bob's oldest pending review to be six days old:\n%s", text)
+		}
+	})
+	t.Run("only reviewers with work are charted", func(t *testing.T) {
+		if !strings.Contains(text, `"bob" : 3`) {
+			t.Errorf("expected bob in the distribution chart:\n%s", text)
+		}
+		if strings.Contains(text, `"alice" :`) {
+			t.Errorf("alice reviews nothing and should not be charted:\n%s", text)
+		}
+	})
+}
+
+// TestReviewerWorkload_NobodyIsReviewingAnything_HasNoAverageRow verifies that
+// the average row is written only when there is something to divide by.
+//
+// The guard is an `activeReviewers > 0` no test saw false through the prompt,
+// so read as `>= 0` the row appears as "NaN" — a value a model has no way to
+// interpret, in the row that is supposed to say how loaded the team is.
+func TestReviewerWorkload_NobodyIsReviewingAnything_HasNoAverageRow(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/{group}/members", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":1,"username":"alice","name":"Alice A","state":"active"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/{group}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "reviewer_workload", map[string]string{"group_id": "mygroup"})
+
+	if !strings.Contains(text, "| Active reviewers | 0 |") {
+		t.Errorf("expected no active reviewers:\n%s", text)
+	}
+	if strings.Contains(text, "Avg reviews/reviewer") {
+		t.Errorf("there is nothing to average, yet the row was written:\n%s", text)
+	}
+}
+
 // prompt_audit.go error branches.

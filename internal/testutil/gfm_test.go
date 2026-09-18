@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -62,6 +63,16 @@ func TestScanGFM_Tables_ReadsTheBoundariesARendererApplies(t *testing.T) {
 		{name: "cells composed in one hole", md: "| Setting | Value | Locked | Inherited From |\n| --- | --- | --- | --- |\n| Allow | yes | no | - |\n"},
 		{name: "alignment delimiters", md: "| A | B |\n|---:|------|\n| 1 | 2 |\n"},
 		{name: "a table ended by a heading", md: "| A |\n| --- |\n| 1 |\n## Next\n"},
+		// The other three blocks that end a table where a heading does, and
+		// the two that let one open after them. Each is a line the renderer
+		// treats as a block of its own, so a row written beside it is not a
+		// row, and the scan has to agree with that in both directions.
+		{name: "a table ended by a rule", md: "| A |\n| --- |\n| 1 |\n---\n"},
+		{name: "a table ended by a fence", md: "| A |\n| --- |\n| 1 |\n```\nx\n```\n"},
+		{name: "a table ended by a quote", md: "| A |\n| --- |\n| 1 |\n> q\n"},
+		{name: "a table opened under a rule", md: "---\n| A |\n| --- |\n| 1 |\n"},
+		{name: "a table opened after a fence", md: "```\nx\n```\n| A |\n| --- |\n| 1 |\n"},
+		{name: "a pipe line outside a table that closes no row", md: "| A | B\n"},
 		{name: "a lone pipe is no delimiter", md: "| A |\n|\n", want: []string{"T4", "T4"}},
 		{name: "a second pipe line that is not a delimiter", md: "| A |\n| x |\n", want: []string{"T4", "T4"}},
 		{name: "nothing at all", md: ""},
@@ -95,11 +106,24 @@ func TestScanGFM_Blocks_ReadsTheSeparationRules(t *testing.T) {
 		{name: "a footer continuing the last bullet", md: "- a\n- b\nPage 1 of 2 | 3 items total | 20 per page\n", want: []string{"B2"}},
 		{name: "bullet-less labels in one paragraph", md: "**Action:** x\n**Target:** y\n", want: []string{"B3"}},
 		{name: "bullet-less labels with the colon outside", md: "**Action**: x\n**Target**: y\n", want: []string{"B3"}},
+		// Three label lines are two run-ons and one rule: what a reader is
+		// handed names each rule the document hit, once, rather than one entry
+		// per line that hit it.
+		{name: "three bullet-less labels name the rule once", md: "**A:** x\n**B:** y\n**C:** z\n", want: []string{"B3"}},
+		// A label line under ordinary prose is not a run-on of labels: the
+		// rule reads both lines, so the one above has to be a label too or
+		// every sentence followed by a bold field would be reported.
+		{name: "a label line under a plain one", md: "a sentence\n**A:** x\n"},
 		{name: "a rule after a blank line", md: "Done\n\n---\n" + GFMHintsHeading + "\n- x\n"},
 		{name: "a quoted continuation", md: "- a\n  > quoted continuation\n"},
 		{name: "an indented continuation", md: "- a\n  more of a\n"},
 		{name: "a nested item", md: "- a\n  - b\n"},
 		{name: "labels as list rows", md: "- **Action**: x\n- **Target**: y\n"},
+		// Two ordinary prose lines are one paragraph and that is what they are
+		// for, so the run-on rule has to read the labels as well as the kinds:
+		// reporting every second text line would condemn every wrapped
+		// sentence this server writes.
+		{name: "two plain paragraph lines", md: "first line\nsecond line\n"},
 		{name: "one bold summary then a blank line", md: "**2 LDAP link(s)**\n\n| A |\n| --- |\n"},
 		{name: "a heading after a bullet", md: "- a\n## Next\n"},
 	}
@@ -289,6 +313,10 @@ func TestScanGFM_Bare_ElidesTheCodeSpansAndKeepsTheQuotes(t *testing.T) {
 		{name: "a double-backtick span closes", md: "- ``<a>`` <b>\n", want: "- " + gfmCodeSpanPlaceholder + " <b>"},
 		{name: "a span cannot cross a cell", md: "| `a | <b>` |\n| --- | --- |\n", want: "| `a | <b>` |"},
 		{name: "a span inside one cell is elided", md: "| `<a>` | x |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " | x |"},
+		// An escaped pipe is content of its cell, so the row is tokenized
+		// around it and the span beside it still closes. Splitting on it would
+		// cut the cell in two and leave a span open across the halves.
+		{name: "an escaped pipe does not split a cell", md: "| `<a>` \\| y | z |\n| --- | --- |\n", want: "| " + gfmCodeSpanPlaceholder + " \\| y | z |"},
 		{name: "a tag before a span stays", md: "- <a> `x`\n", want: "- <a> " + gfmCodeSpanPlaceholder},
 		{name: "a quote line is carried", md: "> <a href=\"http://x\">\n", want: "> <a href=\"http://x\">"},
 	}
@@ -331,6 +359,11 @@ func TestScanGFM_Bare_SkipsAFenceAndCarriesWhatContentDrops(t *testing.T) {
 // TestGFMCells_Lines_SplitsTheWayGFMDoes pins the cell split: the outer
 // pipes dropped, a backslash-escaped pipe kept, a code-span pipe split, the
 // entity left alone.
+//
+// The cell count is asserted beside the contents, because joining cannot tell
+// no cells from one empty cell, and that is exactly the difference the two
+// outer-pipe trims turn on: each drops an empty cell only when the line really
+// opens or closes with a pipe, so a line with neither must come back whole.
 func TestGFMCells_Lines_SplitsTheWayGFMDoes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -339,6 +372,8 @@ func TestGFMCells_Lines_SplitsTheWayGFMDoes(t *testing.T) {
 	}{
 		{name: "a row", line: "| a | b |", want: []string{"a", "b"}},
 		{name: "no outer pipes", line: "a | b", want: []string{"a", "b"}},
+		{name: "a line with no pipe at all", line: "abc", want: []string{"abc"}},
+		{name: "an empty line is one empty cell", line: "", want: []string{""}},
 		{name: "an escaped pipe", line: `| a \| b | c |`, want: []string{`a \| b`, "c"}},
 		{name: "a code-span pipe splits", line: "| `x|y` | 2 |", want: []string{"`x", "y`", "2"}},
 		{name: "the entity does not split", line: "| a &#124; b | 2 |", want: []string{"a &#124; b", "2"}},
@@ -349,8 +384,9 @@ func TestGFMCells_Lines_SplitsTheWayGFMDoes(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := GFMCells(tc.line); strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
-				t.Errorf("GFMCells(%q) = %q, want %q", tc.line, got, tc.want)
+			got := GFMCells(tc.line)
+			if len(got) != len(tc.want) || strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
+				t.Errorf("GFMCells(%q) = %#v, want %#v", tc.line, got, tc.want)
 			}
 		})
 	}
@@ -394,5 +430,165 @@ func TestScanGFM_FencedContent_IsNotStructure(t *testing.T) {
 	}
 	if len(doc.Findings) != 0 {
 		t.Errorf("fenced content produced findings: %+v", doc.Findings)
+	}
+}
+
+// TestScanGFM_ADocumentEndingOnItsLastLine_IsReadWithoutRunningOff covers the
+// documents whose last line carries structure, which is every render that does
+// not end in a newline.
+//
+// Both walks that read a line beside the one they are on stop one line early
+// on purpose: the table walk looks at the line after a pipe line to see
+// whether it is a delimiter, and the guidance walk reads the bullets under a
+// heading. A render ending on a pipe row or on a bullet is what puts the last
+// line in front of each of them, and nothing else does: every other document
+// here ends with a newline, so the split leaves a blank line for them to stop
+// on and the bound is never reached.
+func TestScanGFM_ADocumentEndingOnItsLastLine_IsReadWithoutRunningOff(t *testing.T) {
+	t.Run("a pipe row with nothing after it", func(t *testing.T) {
+		doc := ScanGFM("| A |")
+
+		if got := strings.Join(doc.Rules(), " "); got != "T4" {
+			t.Errorf("rules = %q, want T4 for a row no table owns", got)
+		}
+		if len(doc.Tables) != 0 {
+			t.Errorf("tables = %+v, want none: a header needs a delimiter under it", doc.Tables)
+		}
+	})
+
+	t.Run("a table whose last row ends the document", func(t *testing.T) {
+		doc := ScanGFM("| A |\n| --- |\n| 1 |")
+
+		if len(doc.Tables) != 1 || doc.Rows != 1 {
+			t.Errorf("tables = %+v, rows = %d, want one table with one row", doc.Tables, doc.Rows)
+		}
+		if len(doc.Findings) != 0 {
+			t.Errorf("a well-formed table ending the document produced findings: %+v", doc.Findings)
+		}
+	})
+
+	t.Run("a guidance bullet with nothing after it", func(t *testing.T) {
+		doc := ScanGFM(GFMHintsHeading + "\n- one")
+
+		if len(doc.Hints) != 1 {
+			t.Fatalf("found %d guidance section(s), want 1: %+v", len(doc.Hints), doc.Hints)
+		}
+		if got := strings.Join(doc.Hints[0].Bullets, "|"); got != "one" {
+			t.Errorf("bullets = %q, want one", got)
+		}
+	})
+}
+
+// TestScanGFM_TwoTablesSeparatedByOneBlankLine_AreBothRead pins where the
+// table walk resumes after a table, and where each table's delimiter sits.
+//
+// A card followed by a list is two tables with one blank line between them,
+// which is the tightest spacing the formatters write. The walk resumes on the
+// line the body stopped at rather than past it, so that blank line is still
+// examined; resuming one line later would step over the second header and
+// report all three of its lines as rows no table owns. The delimiter index is
+// asserted beside it because nothing else reads that field, and a table whose
+// delimiter does not sit under its header describes no table at all.
+func TestScanGFM_TwoTablesSeparatedByOneBlankLine_AreBothRead(t *testing.T) {
+	doc := ScanGFM("| A |\n| --- |\n| 1 |\n\n| B |\n| --- |\n| 2 |\n")
+
+	if len(doc.Tables) != 2 {
+		t.Fatalf("found %d table(s), want 2: %+v (findings %+v)", len(doc.Tables), doc.Tables, doc.Findings)
+	}
+	for i, table := range doc.Tables {
+		t.Run("table "+strconv.Itoa(i+1), func(t *testing.T) {
+			if table.Delimiter != table.Header+1 {
+				t.Errorf("delimiter at line %d, want the line under the header at %d", table.Delimiter, table.Header)
+			}
+			if len(table.Rows) != 1 {
+				t.Errorf("rows = %v, want one", table.Rows)
+			}
+		})
+	}
+	if len(doc.Findings) != 0 {
+		t.Errorf("two well-formed tables produced findings: %+v", doc.Findings)
+	}
+}
+
+// TestScanGFM_ADelimiterUnderAParagraph_OpensNoTable checks the half of the
+// table condition that reads the header itself.
+//
+// GFM opens a table on a pipe line followed by a delimiter row, and a
+// paragraph line is not a pipe line however well-formed the row under it is.
+// Reading only the second line would turn any prose line above a delimiter
+// into a header and report the cell counts of a table the client never sees.
+func TestScanGFM_ADelimiterUnderAParagraph_OpensNoTable(t *testing.T) {
+	doc := ScanGFM("Done\n| --- | --- |\n")
+
+	if len(doc.Tables) != 0 {
+		t.Errorf("tables = %+v, want none: the line above the delimiter is prose", doc.Tables)
+	}
+	if got := strings.Join(doc.Rules(), " "); got != "T4" {
+		t.Errorf("rules = %q, want T4 for the delimiter row rendering as text", got)
+	}
+}
+
+// TestScanGFM_ThreeSpacesOfIndentation_StillOpensTheBlock checks the
+// indentation CommonMark allows in front of a block, at the last column that
+// is still indentation rather than code.
+//
+// Three spaces open a quote or a row and four make an indented code block, so
+// the boundary decides two different things about the same line: a row one
+// space further in stops being part of a table, and a quote one space further
+// in stops being a quote and becomes content the structure rules read. Both
+// are silent failures — the scan reports nothing either way — which is why
+// each is asserted on what the scan built rather than on what it found.
+func TestScanGFM_ThreeSpacesOfIndentation_StillOpensTheBlock(t *testing.T) {
+	t.Run("a table indented to the last allowed column", func(t *testing.T) {
+		doc := ScanGFM("   | A |\n   | --- |\n   | 1 |\n")
+
+		if len(doc.Tables) != 1 || doc.Rows != 1 {
+			t.Errorf("tables = %+v, rows = %d, want one table with one row", doc.Tables, doc.Rows)
+		}
+		if len(doc.Findings) != 0 {
+			t.Errorf("an indented table produced findings: %+v", doc.Findings)
+		}
+	})
+
+	t.Run("a table indented one column too far", func(t *testing.T) {
+		doc := ScanGFM("    | A |\n    | --- |\n    | 1 |\n")
+
+		if len(doc.Tables) != 0 {
+			t.Errorf("tables = %+v, want none: four spaces open a code block", doc.Tables)
+		}
+	})
+
+	t.Run("a quote indented one column too far", func(t *testing.T) {
+		doc := ScanGFM("    > quoted [q](https://gitlab.example/q)\n")
+
+		if len(doc.Links) != 1 {
+			t.Errorf("links = %v, want the one on a line that is content rather than a quote", doc.Links)
+		}
+	})
+
+	t.Run("a quote indented to the last allowed column", func(t *testing.T) {
+		doc := ScanGFM("   > quoted [q](https://attacker.invalid/q)\n")
+
+		if len(doc.Links) != 0 {
+			t.Errorf("links = %v, want none: a quoted destination is not the server's", doc.Links)
+		}
+		if got := strings.Join(doc.Content, "|"); strings.Contains(got, "quoted") {
+			t.Errorf("content = %q, want the quote line left out of it", got)
+		}
+	})
+}
+
+// TestScanGFM_Links_EveryLinkOnALineIsRead checks that a line carrying more
+// than one link reports all of them.
+//
+// A list row that names an object and its author carries two destinations, and
+// the hostile comparison holds the destinations constant: reading only the
+// first would let a value change every link after it on its own line without
+// the comparison noticing.
+func TestScanGFM_Links_EveryLinkOnALineIsRead(t *testing.T) {
+	doc := ScanGFM("- [a](https://gitlab.example/a) by [b](https://gitlab.example/b)\n")
+
+	if got := strings.Join(doc.Links, "|"); got != "https://gitlab.example/a|https://gitlab.example/b" {
+		t.Errorf("links = %q, want both destinations on the line", got)
 	}
 }

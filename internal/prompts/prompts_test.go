@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -2707,6 +2709,905 @@ func TestSummarizeOpenMRs_LongDescription_IsCutOnARuneBoundary(t *testing.T) {
 	}
 	if strings.Contains(text, "�") {
 		t.Errorf("the message carries a replacement character, so a rune was split:\n%s", text)
+	}
+
+	// The cut is a `>` against the budget, so a description of exactly the
+	// budget must arrive whole: read as `>=` it loses its last character to an
+	// ellipsis for no reason, on every description that happens to land on the
+	// number.
+	t.Run("a description of exactly the budget is not cut", func(t *testing.T) {
+		exact := strings.Repeat("c", descriptionExcerptBytes)
+		exactMux := http.NewServeMux()
+		exactMux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+			mrs := []*gl.BasicMergeRequest{{
+				IID:         2,
+				Title:       "Exactly the budget",
+				Description: exact,
+				CreatedAt:   timePtr(t, created),
+			}}
+			data, err := json.Marshal(mrs)
+			if err != nil {
+				t.Errorf("marshaling the merge request fixture: %v", err)
+				respondNotFound(w)
+				return
+			}
+			respondJSON(w, http.StatusOK, string(data))
+		})
+
+		got := getPromptText(t, exactMux, "summarize_open_mrs", map[string]string{"project_id": "42"})
+		if !strings.Contains(got, "- **Description**: "+exact+"\n") {
+			t.Errorf("a description of exactly %d bytes was cut:\n%s", descriptionExcerptBytes, got)
+		}
+	})
+}
+
+// placeholderForArgument returns a value a required prompt argument accepts, so
+// a test can fill every argument but the one it is withholding.
+func placeholderForArgument(name string) string {
+	if name == argMRIID {
+		return "1"
+	}
+	return "42"
+}
+
+// requiredPromptArguments names the arguments a listed prompt declares required.
+func requiredPromptArguments(p *mcp.Prompt) []string {
+	var required []string
+	for _, a := range p.Arguments {
+		if a.Required {
+			required = append(required, a.Name)
+		}
+	}
+	return required
+}
+
+// argumentsExcept fills every name but the one withheld with a placeholder.
+func argumentsExcept(required []string, withheld string) map[string]string {
+	args := make(map[string]string, len(required))
+	for _, name := range required {
+		if name != withheld {
+			args[name] = placeholderForArgument(name)
+		}
+	}
+	return args
+}
+
+// assertRefusedAsInvalidParams requires the error to carry -32602.
+func assertRefusedAsInvalidParams(t *testing.T, withheld string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("withholding %q produced no error", withheld)
+	}
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) {
+		t.Fatalf("error does not carry a JSON-RPC code: %v", err)
+	}
+	if rpcErr.Code != jsonrpc.CodeInvalidParams {
+		t.Errorf("code = %d, want %d (invalid params) for missing %q: %v",
+			rpcErr.Code, jsonrpc.CodeInvalidParams, withheld, err)
+	}
+}
+
+// TestEveryPromptWithSeveralRequiredArguments_RefusesWhenAnyOneIsMissing walks
+// the registered catalog and withholds each required argument in turn, with
+// every other one supplied.
+//
+// The sibling gate omits them all at once, which is the case the specification
+// names and is also the one case that cannot tell an `||` from an `&&`: with
+// nothing supplied both readings refuse. Read as an `&&`, a prompt given a
+// merge request IID and no project builds a request against the empty project
+// path and asks GitLab about it, so what the caller is told stops being
+// "you left out project_id" and becomes whatever that instance answers. Zero
+// requests is therefore part of the assertion rather than a nicety.
+func TestEveryPromptWithSeveralRequiredArguments_RefusesWhenAnyOneIsMissing(t *testing.T) {
+	var requests atomic.Int64
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		respondNotFound(w)
+	})
+	session := newMCPSession(t, handler)
+
+	listed, err := session.ListPrompts(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+
+	var checked int
+	for _, p := range listed.Prompts {
+		required := requiredPromptArguments(p)
+		if len(required) < 2 {
+			continue
+		}
+		checked++
+
+		for _, withheld := range required {
+			t.Run(p.Name+"/without_"+withheld, func(t *testing.T) {
+				before := requests.Load()
+				_, getErr := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
+					Name:      p.Name,
+					Arguments: argumentsExcept(required, withheld),
+				})
+				assertRefusedAsInvalidParams(t, withheld, getErr)
+				if got := requests.Load() - before; got != 0 {
+					t.Errorf("withholding %q still made %d GitLab request(s)", withheld, got)
+				}
+			})
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("no prompt declared two required arguments, so this gate asserted nothing")
+	}
+}
+
+// TestSummarizePipelineStatus_AnOutcomeWithNoJobs_HasNoSectionAtAll verifies
+// that each of the three job groups is written only when it holds something.
+//
+// Every one of them is guarded by a `len(...) > 0` that no test ever saw false,
+// so all three could be read as `>= 0` and the summary of a green pipeline
+// would carry "## Failed Jobs (0)" — a heading that reads, to a model deciding
+// whether to investigate, exactly like a pipeline with failures it has not been
+// shown.
+func TestSummarizePipelineStatus_AnOutcomeWithNoJobs_HasNoSectionAtAll(t *testing.T) {
+	tests := []struct {
+		name    string
+		jobs    string
+		present string
+		absent  []string
+	}{
+		{
+			name:    "every job passed",
+			jobs:    `[{"name":"build","stage":"build","status":"success"}]`,
+			present: "## Passed Jobs (1)",
+			absent:  []string{"Failed Jobs", "Other Jobs"},
+		},
+		{
+			name:    "every job failed",
+			jobs:    `[{"name":"build","stage":"build","status":"failed"}]`,
+			present: "## Failed Jobs (1)",
+			absent:  []string{"Passed Jobs", "Other Jobs"},
+		},
+		{
+			name:    "every job is still running",
+			jobs:    `[{"name":"build","stage":"build","status":"running"}]`,
+			present: "## Other Jobs (1)",
+			absent:  []string{"Failed Jobs", "Passed Jobs"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/projects/{project}/pipelines/latest", func(w http.ResponseWriter, _ *http.Request) {
+				respondJSON(w, http.StatusOK, `{"id":7,"status":"success","ref":"main","sha":"abcdef1234"}`)
+			})
+			mux.HandleFunc("GET /api/v4/projects/{project}/pipelines/{pipeline}/jobs", func(w http.ResponseWriter, _ *http.Request) {
+				respondJSON(w, http.StatusOK, tt.jobs)
+			})
+
+			text := getPromptText(t, mux, "summarize_pipeline_status", map[string]string{"project_id": "42"})
+			if !strings.Contains(text, tt.present) {
+				t.Errorf("expected %q in:\n%s", tt.present, text)
+			}
+			for _, unwanted := range tt.absent {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("a group with no jobs wrote %q:\n%s", unwanted, text)
+				}
+			}
+		})
+	}
+}
+
+// TestFetchMergedMRsForRange_TheWindow_ReachesADayEitherSideOfTheCommits pins
+// both ends of the range this lookup asks GitLab for and then filters by.
+//
+// The commits give the range and a day is added at each end on purpose, because
+// a merge request is updated and merged around its commits rather than between
+// them. Neither offset was ever asserted: the lower one is only visible in the
+// `updated_after` the request carries, and the upper one only in which merge
+// requests survive the filter, so both could lose their sign or their unit and
+// the release notes would silently drop entries.
+func TestFetchMergedMRsForRange_TheWindow_ReachesADayEitherSideOfTheCommits(t *testing.T) {
+	earliest := time.Date(2025, 3, 10, 12, 0, 0, 0, time.UTC)
+	latest := time.Date(2025, 3, 15, 12, 0, 0, 0, time.UTC)
+
+	middle := time.Date(2025, 3, 12, 12, 0, 0, 0, time.UTC)
+
+	var updatedAfter atomic.Value
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		updatedAfter.Store(r.URL.Query().Get("updated_after"))
+		respondJSON(w, http.StatusOK, `[
+			{"iid":1,"title":"Merged twelve hours after the last commit","merged_at":"2025-03-16T00:00:00Z"},
+			{"iid":2,"title":"Merged a day and a half after the last commit","merged_at":"2025-03-17T00:00:00Z"},
+			{"iid":3,"title":"Never merged"}
+		]`)
+	}))
+
+	// The commits are deliberately out of order, so that each end of the range
+	// is both widened and left alone by a later commit: the walk keeps the
+	// earliest and the latest with two comparisons, and a list already sorted
+	// only ever takes one side of each.
+	got := fetchMergedMRsForRange(t.Context(), client, "42", []*gl.Commit{
+		{ID: "mid", CommittedDate: &middle},
+		{ID: "abc", CommittedDate: &earliest},
+		{ID: "def", CommittedDate: &latest},
+	})
+
+	t.Run("the request reaches back a day before the earliest commit", func(t *testing.T) {
+		raw, _ := updatedAfter.Load().(string)
+		if raw == "" {
+			t.Fatal("the request carried no updated_after at all")
+		}
+		asked, parseErr := time.Parse(time.RFC3339, raw)
+		if parseErr != nil {
+			t.Fatalf("updated_after %q does not parse: %v", raw, parseErr)
+		}
+		want := earliest.Add(-24 * time.Hour)
+		if !asked.Equal(want) {
+			t.Errorf("updated_after = %s, want %s (a day before the earliest commit)", asked.UTC(), want)
+		}
+	})
+
+	t.Run("the filter reaches a day past the latest commit", func(t *testing.T) {
+		if len(got) != 1 {
+			t.Fatalf("kept %d merge request(s), want 1", len(got))
+		}
+		if got[0].IID != 1 {
+			t.Errorf("kept !%d, want !1 (the one merged inside the day after the last commit)", got[0].IID)
+		}
+	})
+}
+
+// TestMRPrompts_AMergeRequestIIDThatIsNotANumber_IsRefusedBeforeAnyRequest
+// verifies that the shared MR prologue parses the IID before it builds a path.
+//
+// Every prompt that names a merge request turns the argument into an integer,
+// and the error branch of that parse was only ever driven through one of them.
+// The value goes straight into the request path, so an unparsed one reaches
+// GitLab as a URL segment and comes back as whatever that instance says about
+// it rather than as "this is not a merge request number".
+func TestMRPrompts_AMergeRequestIIDThatIsNotANumber_IsRefusedBeforeAnyRequest(t *testing.T) {
+	for _, prompt := range []string{"summarize_mr_changes", "review_mr", "mr_risk_assessment", "suggest_mr_reviewers"} {
+		t.Run(prompt, func(t *testing.T) {
+			getPromptExpectErrorWithoutAPICall(t, prompt,
+				map[string]string{"project_id": "42", "merge_request_iid": "not-a-number"})
+		})
+	}
+}
+
+// TestWriteReleaseNotesMRs_LabelsAndExcerpts_AppearOnlyWhenThereIsSomethingToShow
+// pins the two conditions in a release-notes entry that decide whether
+// punctuation the server writes appears at all.
+//
+// The bracket pair around the labels is the server's own, so a merge request
+// with none used to be able to render " []" — a token a reader has to work out
+// is not a label. The excerpt's cut is the other: it is a `>` against the byte
+// budget, so a description of exactly the budget must come through whole rather
+// than losing its last character to an ellipsis.
+func TestWriteReleaseNotesMRs_LabelsAndExcerptsAppearOnlyWhenThereIsSomethingToShow(t *testing.T) {
+	exact := strings.Repeat("a", descriptionExcerptBytes)
+	var b strings.Builder
+	writeReleaseNotesMRs(&b, []*gl.BasicMergeRequest{
+		{IID: 1, Title: "No labels", Author: &gl.BasicUser{Username: "alice"}},
+		{IID: 2, Title: "Labeled", Author: &gl.BasicUser{Username: "bob"}, Labels: gl.Labels{"bug"}},
+		{IID: 3, Title: "Exactly the budget", Author: &gl.BasicUser{Username: "carol"}, Description: exact},
+		{IID: 4, Title: "One byte over", Author: &gl.BasicUser{Username: "dave"}, Description: exact + "b"},
+	})
+	got := b.String()
+
+	t.Run("an MR with no labels writes no brackets", func(t *testing.T) {
+		if strings.Contains(got, "[]") {
+			t.Errorf("an MR with no labels rendered an empty bracket pair:\n%s", got)
+		}
+	})
+	t.Run("an MR with labels writes them inside brackets", func(t *testing.T) {
+		if !strings.Contains(got, "(@bob) [bug]") {
+			t.Errorf("expected the labels in brackets:\n%s", got)
+		}
+	})
+	t.Run("a description exactly the budget is not cut", func(t *testing.T) {
+		if !strings.Contains(got, "  > "+exact+"\n") {
+			t.Errorf("a description of exactly %d bytes was cut:\n%s", descriptionExcerptBytes, got)
+		}
+	})
+	t.Run("a description one byte over is cut", func(t *testing.T) {
+		if !strings.Contains(got, "  > "+exact+"...\n") {
+			t.Errorf("a description of %d bytes was not cut:\n%s", descriptionExcerptBytes+1, got)
+		}
+	})
+}
+
+// TestWriteReleaseNotesStats_CountsOneContributorPerEmail verifies that the
+// contributor count is a count of distinct authors and that a commit carrying
+// no author email is not one of them.
+//
+// The set is keyed on the email and the guard around it is an `!= ""`, so
+// reading it as `== ""` collapses every named author into a single unnamed
+// entry: a release built by six people reports one contributor, which is a
+// figure somebody puts in an announcement.
+func TestWriteReleaseNotesStats_CountsOneContributorPerEmail(t *testing.T) {
+	var b strings.Builder
+	writeReleaseNotesStats(&b, &gl.Compare{
+		Commits: []*gl.Commit{
+			{ID: "a", AuthorEmail: "alice@example.com"},
+			{ID: "b", AuthorEmail: "alice@example.com"},
+			{ID: "c", AuthorEmail: "bob@example.com"},
+			{ID: "d"},
+		},
+	})
+
+	got := b.String()
+	if !strings.Contains(got, "- **Contributors**: 2\n") {
+		t.Errorf("expected two distinct contributors:\n%s", got)
+	}
+	if !strings.Contains(got, "- **Commits**: 4\n") {
+		t.Errorf("expected four commits:\n%s", got)
+	}
+}
+
+// capturedLogs collects every record the package logs while a test runs.
+//
+// Several of these handlers answer a refused listing by rendering it as a zero
+// and saying so in the log, which makes the log line the only observable
+// difference between "GitLab said none" and "nobody got to ask". A test that
+// never reads it cannot tell the guard around that line from its own negation,
+// and a report that warns about every listing that worked is as useless as one
+// that stays silent about the listings that did not.
+type capturedLogs struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (c *capturedLogs) Enabled(context.Context, slog.Level) bool { return true }
+
+func (c *capturedLogs) Handle(_ context.Context, rec slog.Record) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.messages = append(c.messages, rec.Message)
+	return nil
+}
+
+func (c *capturedLogs) WithAttrs([]slog.Attr) slog.Handler { return c }
+
+func (c *capturedLogs) WithGroup(string) slog.Handler { return c }
+
+// complaints returns the messages that report something could not be read.
+func (c *capturedLogs) complaints() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []string
+	for _, m := range c.messages {
+		if strings.Contains(m, "failed") || strings.Contains(m, "not available") || strings.Contains(m, "skipping") {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// captureLogs redirects the default logger for the duration of the test.
+func captureLogs(t *testing.T) *capturedLogs {
+	t.Helper()
+	c := &capturedLogs{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(c))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return c
+}
+
+// TestWarnFetch_RecordsARefusedListingAndNothingElse pins the one line that
+// tells an operator a zero in a report means "nobody answered".
+//
+// Every report prompt hands its listing errors here unguarded, so the nil case
+// is the common one and has to stay silent: read as its own negation, this
+// function warns about each listing that worked and says nothing about the one
+// that did not, which inverts the only signal the log carries.
+func TestWarnFetch_RecordsARefusedListingAndNothingElse(t *testing.T) {
+	t.Run("a listing that worked is not reported", func(t *testing.T) {
+		logs := captureLogs(t)
+		warnFetch(t.Context(), "open issues", nil)
+		if got := logs.complaints(); len(got) != 0 {
+			t.Errorf("a successful listing logged %v", got)
+		}
+	})
+
+	t.Run("a listing that was refused is reported", func(t *testing.T) {
+		logs := captureLogs(t)
+		warnFetch(t.Context(), "open issues", errors.New("403 Forbidden"))
+		got := logs.complaints()
+		if len(got) != 1 {
+			t.Fatalf("a refused listing logged %v, want exactly one message", got)
+		}
+		if !strings.Contains(got[0], "open issues") {
+			t.Errorf("the message does not name the listing: %q", got[0])
+		}
+	})
+}
+
+// TestPromptsThatRenderWhatTheyCanFetch_LogNothingWhenEveryCallSucceeds walks
+// the prompts that answer a refused listing with a zero and requires each to
+// stay silent when nothing was refused.
+//
+// Each of these handlers guards its log line with an `if err != nil`, and the
+// existing tests only ever drive the failing side. The negation is therefore
+// free: the report renders identically, and the one place an operator could
+// learn that a zero is not a zero starts reporting the calls that worked.
+func TestPromptsThatRenderWhatTheyCanFetch_LogNothingWhenEveryCallSucceeds(t *testing.T) {
+	tests := []struct {
+		name   string
+		prompt string
+		args   map[string]string
+	}{
+		{name: "my_open_mrs", prompt: "my_open_mrs", args: nil},
+		{name: "my_activity_summary", prompt: "my_activity_summary", args: map[string]string{"days": "7"}},
+		{name: "weekly_team_recap", prompt: "weekly_team_recap", args: map[string]string{"group_id": "9"}},
+		{name: "project_activity_report", prompt: "project_activity_report", args: map[string]string{"project_id": "42"}},
+		{name: "audit_project_workflow", prompt: "audit_project_workflow", args: map[string]string{"project_id": "42"}},
+		{name: "audit_project_full", prompt: "audit_project_full", args: map[string]string{"project_id": "42"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := captureLogs(t)
+			getPromptText(t, everythingAnswersHandler(), tt.prompt, tt.args)
+			if got := logs.complaints(); len(got) != 0 {
+				t.Errorf("%s logged %v although every call succeeded", tt.prompt, got)
+			}
+		})
+	}
+}
+
+// everythingAnswersHandler answers any GitLab request with a plausible empty
+// success: a list for a collection, an object otherwise.
+func everythingAnswersHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/user"):
+			_, _ = w.Write([]byte(`{"id":1,"username":"tester"}`))
+		case strings.HasSuffix(r.URL.Path, "/push_rule"):
+			_, _ = w.Write([]byte(`{"id":1,"prevent_secrets":true}`))
+		case strings.HasSuffix(r.URL.Path, "s"),
+			strings.HasSuffix(r.URL.Path, "/members/all"),
+			strings.Contains(r.URL.Path, "/events"):
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			_, _ = w.Write([]byte(`{"id":42,"path_with_namespace":"group/project","default_branch":"main"}`))
+		}
+	})
+}
+
+// TestSummarizeOpenMRsAndHealthCheck_TheAgeOfAnMR_IsCountedInDays pins the two
+// places a merge request's age is computed from its creation date.
+//
+// Both divide the elapsed hours by 24 and print the result with no unit beside
+// the number, so the arithmetic is the whole meaning of the figure: read as a
+// multiplication a three-day-old merge request is 1728 days old, and both
+// prompts' closing instructions ask the model to flag anything older than a
+// week.
+func TestSummarizeOpenMRsAndHealthCheck_TheAgeOfAnMR_IsCountedInDays(t *testing.T) {
+	created := time.Now().Add(-3*24*time.Hour - time.Hour)
+	mrs := `[{"iid":1,"title":"Three days old","source_branch":"a","target_branch":"main",` +
+		`"author":{"username":"alice"},"created_at":"` + created.UTC().Format(time.RFC3339) + `"}]`
+
+	t.Run("summarize_open_mrs", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, mrs)
+		})
+		text := getPromptText(t, mux, "summarize_open_mrs", map[string]string{"project_id": "42"})
+		if !strings.Contains(text, "**Age**: 3 days") {
+			t.Errorf("expected an age of 3 days:\n%s", text)
+		}
+	})
+
+	t.Run("project_health_check", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"group/project"}`)
+		})
+		mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+			respondJSON(w, http.StatusOK, mrs)
+		})
+		text := getPromptText(t, mux, "project_health_check", map[string]string{"project_id": "42"})
+		if !strings.Contains(text, "3d old") {
+			t.Errorf("expected an age of 3d:\n%s", text)
+		}
+	})
+}
+
+// TestCountBranchStats_CountsMergedAndStaleBranchesSeparately pins every
+// decision the branch hygiene line of project_health_check is made of.
+//
+// The line reads "N total, N merged, N stale (>30 days)" and nothing but the
+// totals was ever asserted, so each counter could be decremented, the age could
+// be multiplied by a day instead of divided by one, and the nil check on the
+// commit date could be inverted into a dereference — all without a test
+// noticing. A branch carrying a commit with no date is what GitLab sends for a
+// branch whose tip it could not resolve, and it must be counted as neither
+// rather than crash the prompt.
+func TestCountBranchStats_CountsMergedAndStaleBranchesSeparately(t *testing.T) {
+	old := time.Now().Add(-40 * 24 * time.Hour)
+	recent := time.Now().Add(-3 * 24 * time.Hour)
+
+	merged, stale := countBranchStats([]*gl.Branch{
+		{Name: "merged-branch", Merged: true, Commit: &gl.Commit{CommittedDate: &recent}},
+		{Name: "stale-branch", Commit: &gl.Commit{CommittedDate: &old}},
+		{Name: "fresh-branch", Commit: &gl.Commit{CommittedDate: &recent}},
+		{Name: "no-commit-date", Commit: &gl.Commit{}},
+		{Name: "no-commit"},
+	})
+
+	if merged != 1 {
+		t.Errorf("merged = %d, want 1", merged)
+	}
+	if stale != 1 {
+		t.Errorf("stale = %d, want 1 (only the branch untouched for forty days)", stale)
+	}
+}
+
+// TestDailyStandup_TheContributionWindow_IsTheDayBefore pins the one interval
+// this prompt is named for.
+//
+// "the last 24 hours" is the prompt's own description and the only thing that
+// makes the report a standup rather than a history; the window is built by
+// subtracting a day from now and reaches GitLab as a query parameter no
+// assertion has ever read, so its sign and its unit were both free.
+func TestDailyStandup_TheContributionWindow_IsTheDayBefore(t *testing.T) {
+	var after atomic.Value
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"id":1,"username":"tester"}`)
+	})
+	mux.HandleFunc("GET /api/v4/events", func(w http.ResponseWriter, r *http.Request) {
+		after.Store(r.URL.Query().Get("after"))
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	getPromptText(t, mux, "daily_standup", map[string]string{"project_id": "42"})
+
+	raw, _ := after.Load().(string)
+	want := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	if raw != want {
+		t.Errorf("the events request asked for after=%q, want %q (yesterday)", raw, want)
+	}
+}
+
+// TestCountEventTypes_CountsEveryEventUnderItsAction verifies the breakdown
+// table of the activity prompts counts up rather than down.
+//
+// Three prompts publish this map as an "Action | Count" table, and every test
+// that reads one uses a single event per action, where an increment and a
+// decrement differ only in sign and the row still exists.
+func TestCountEventTypes_CountsEveryEventUnderItsAction(t *testing.T) {
+	counts := countEventTypes([]*gl.ContributionEvent{
+		{ActionName: actionPushedTo},
+		{ActionName: actionPushedTo},
+		{ActionName: "opened"},
+	})
+
+	if counts[actionPushedTo] != 2 {
+		t.Errorf("counts[%q] = %d, want 2", actionPushedTo, counts[actionPushedTo])
+	}
+	if counts["opened"] != 1 {
+		t.Errorf("counts[\"opened\"] = %d, want 1", counts["opened"])
+	}
+}
+
+// TestWriteDailyActivity_SeveralDays_AreSeparatedInsideTheChart verifies that
+// the Mermaid axis and bar lists are comma-separated.
+//
+// Both loops write their separator under an `if i > 0`, and every test that
+// reached them used a single day, where the separator is never written and the
+// guard is never false. Two days running together produce `["01-01""01-02"]`,
+// which is not a chart Mermaid draws at all.
+func TestWriteDailyActivity_SeveralDays_AreSeparatedInsideTheChart(t *testing.T) {
+	var b strings.Builder
+	writeDailyActivity(&b, "tester", []dayActivity{
+		{date: "2025-01-01", count: 1},
+		{date: "2025-01-02", count: 4},
+	})
+
+	got := b.String()
+	if !strings.Contains(got, `x-axis ["2025-01-01", "2025-01-02"]`) {
+		t.Errorf("the x axis is not comma-separated:\n%s", got)
+	}
+	if !strings.Contains(got, "bar [1, 4]") {
+		t.Errorf("the bar list is not comma-separated:\n%s", got)
+	}
+}
+
+// TestComputeDiffMetrics_CountsEachKindOfChangedFile pins the three per-file
+// counters the risk assessment is built from.
+//
+// Only the new-file counter was ever asserted with a value, so a deleted file
+// and a sensitive one could each be counted downwards and the assessment would
+// report "-1 sensitive files touched" without a test objecting. The sensitive
+// count is the one the prompt asks a model to weigh most heavily.
+func TestComputeDiffMetrics_CountsEachKindOfChangedFile(t *testing.T) {
+	m := computeDiffMetrics([]*gl.MergeRequestDiff{
+		{NewPath: "internal/config/auth.go", Diff: "@@\n+a\n-b\n"},
+		{NewPath: "removed.go", OldPath: "removed.go", DeletedFile: true},
+		{NewPath: "added.go", NewFile: true},
+	})
+
+	if m.newFiles != 1 {
+		t.Errorf("newFiles = %d, want 1", m.newFiles)
+	}
+	if m.deletedFiles != 1 {
+		t.Errorf("deletedFiles = %d, want 1", m.deletedFiles)
+	}
+	if m.sensitiveFiles != 1 {
+		t.Errorf("sensitiveFiles = %d, want 1 (the auth file)", m.sensitiveFiles)
+	}
+}
+
+// TestCountDiffLines_CountsChangedLinesAndNotTheFileHeaders pins what a "+"
+// and a "-" at the start of a diff line mean.
+//
+// A unified diff opens with "--- a/path" and "+++ b/path", which begin with the
+// same characters as the lines that were removed and added; the guards that
+// keep them out are two `&&` pairs nothing has ever driven past, so reading
+// either as an `||` counts every context line as a change. The figures reach a
+// model as "Lines added" and "Lines removed" on the review and risk prompts.
+func TestCountDiffLines_CountsChangedLinesAndNotTheFileHeaders(t *testing.T) {
+	diff := "--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,4 @@\n context\n-gone\n+new\n+also new\n"
+
+	additions, deletions := countDiffLines(diff)
+	if additions != 2 {
+		t.Errorf("additions = %d, want 2 (the +++ header is not an addition)", additions)
+	}
+	if deletions != 1 {
+		t.Errorf("deletions = %d, want 1 (the --- header is not a deletion)", deletions)
+	}
+}
+
+// TestIsTestPathAndIsDocPath_EachAlternativeDecidesOnItsOwn drives every
+// spelling these two classifiers accept.
+//
+// Both are a chain of `||` where only the first alternative was ever true in a
+// test, so the rest were dead weight no assertion covered and the first could
+// be read as an `&&` — under which a plain "CHANGELOG.md" stops being
+// documentation and joins the business-logic group the review prompt asks to be
+// read first.
+func TestIsTestPathAndIsDocPath_EachAlternativeDecidesOnItsOwn(t *testing.T) {
+	t.Run("test paths", func(t *testing.T) {
+		tests := []struct {
+			path string
+			want bool
+		}{
+			{path: "internal/tools/branches_test.go", want: true},
+			{path: "src/test/java/Foo.java", want: true},
+			{path: "app/tests/helper.rb", want: true},
+			{path: "spec/models/user_spec.rb", want: true},
+			{path: "src/__tests__/App.tsx", want: true},
+			{path: "internal/tools/branches.go", want: false},
+			{path: "latest.go", want: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.path, func(t *testing.T) {
+				if got := isTestPath(tt.path); got != tt.want {
+					t.Errorf("isTestPath(%q) = %v, want %v", tt.path, got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("doc paths", func(t *testing.T) {
+		tests := []struct {
+			path string
+			want bool
+		}{
+			{path: "CHANGELOG.md", want: true},
+			{path: "README", want: true},
+			{path: "docs/guide.adoc", want: true},
+			{path: "doc/api.adoc", want: true},
+			{path: "notes.txt", want: true},
+			{path: "index.rst", want: true},
+			{path: "internal/tools/branches.go", want: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.path, func(t *testing.T) {
+				if got := isDocPath(tt.path); got != tt.want {
+					t.Errorf("isDocPath(%q) = %v, want %v", tt.path, got, tt.want)
+				}
+			})
+		}
+	})
+}
+
+// TestUserPrompts_ADaysArgumentOfZero_IsRefusedBeforeAnyRequest verifies that
+// both look-back prompts require a strictly positive number of days.
+//
+// The check is `err != nil || parsed <= 0`, and every existing test drives it
+// with a value that fails both halves at once ("abc" parses to zero with an
+// error, "-5" without a backend that answers), so the `||` and the boundary
+// were both free. Zero is the value that separates them: read as an `&&`, or
+// with the boundary read as `< 0`, it is accepted, and the window then starts
+// at this instant and the report covers nothing at all while still calling
+// itself "last 0 days".
+func TestUserPrompts_ADaysArgumentOfZero_IsRefusedBeforeAnyRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		prompt string
+		args   map[string]string
+	}{
+		{name: "team_member_workload with zero", prompt: "team_member_workload", args: map[string]string{"project_id": "42", "username": "alice", "days": "0"}},
+		{name: "team_member_workload with a negative", prompt: "team_member_workload", args: map[string]string{"project_id": "42", "username": "alice", "days": "-3"}},
+		{name: "user_stats with zero", prompt: "user_stats", args: map[string]string{"project_id": "42", "days": "0"}},
+		{name: "user_stats with a negative", prompt: "user_stats", args: map[string]string{"project_id": "42", "days": "-3"}},
+		{name: "user_stats with something that is not a number", prompt: "user_stats", args: map[string]string{"project_id": "42", "days": "a fortnight"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			getPromptExpectErrorWithoutAPICall(t, tt.prompt, tt.args)
+		})
+	}
+}
+
+// userStatsFixture answers the nine listings user_stats makes with a distinct
+// count each, so a sum and a difference cannot be mistaken for one another.
+func userStatsFixture(t *testing.T, capturedCreatedAfter *atomic.Value) http.Handler {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":50,"username":"alice"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/users/{user}/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("created_after") != "" && capturedCreatedAfter != nil {
+			capturedCreatedAfter.Store(q.Get("created_after"))
+		}
+		switch {
+		case q.Get("author_username") == "":
+			respondJSON(w, http.StatusOK, `[]`)
+		case q.Get("state") == "opened":
+			respondJSON(w, http.StatusOK, `[{"iid":1,"title":"Open"}]`)
+		case q.Get("state") == "merged":
+			respondJSON(w, http.StatusOK, `[{"iid":2,"title":"Merged"},{"iid":3,"title":"Merged too"}]`)
+		default:
+			respondJSON(w, http.StatusOK, `[{"iid":4},{"iid":5},{"iid":6}]`)
+		}
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		switch {
+		case q.Get("author_username") == "":
+			respondJSON(w, http.StatusOK, `[]`)
+		case q.Get("state") == "opened":
+			respondJSON(w, http.StatusOK, `[{"iid":1,"title":"Open issue"}]`)
+		default:
+			respondJSON(w, http.StatusOK, `[{"iid":2},{"iid":3},{"iid":4},{"iid":5}]`)
+		}
+	})
+	return mux
+}
+
+// TestUserStats_TheOverallTotals_AreTheSumOfTheRowsAbove pins the two figures
+// the summary table adds up.
+//
+// Each is three or two counts joined by `+`, and every fixture until now gave
+// the same count to every listing, where a sum and a difference agree often
+// enough to look right. The rows themselves are asserted elsewhere; what is
+// asserted here is that the total is their sum, which is the figure a reader
+// takes away from the report.
+func TestUserStats_TheOverallTotals_AreTheSumOfTheRowsAbove(t *testing.T) {
+	text := getPromptText(t, userStatsFixture(t, nil), "user_stats",
+		map[string]string{"project_id": "42", "username": "alice", "days": "30"})
+
+	if !strings.Contains(text, "| Total MRs (authored) | 6 |") {
+		t.Errorf("expected 1 open + 2 merged + 3 closed = 6 authored MRs:\n%s", text)
+	}
+	if !strings.Contains(text, "| Total issues (authored) | 5 |") {
+		t.Errorf("expected 1 open + 4 closed = 5 authored issues:\n%s", text)
+	}
+}
+
+// TestUserStats_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo pins the date
+// the period the report names is actually asked for.
+//
+// The window is `AddDate(0, 0, -days)` and reaches GitLab only as a query
+// parameter, so its sign was never observed: read without the minus, a report
+// headed "last 5 days" asks for merge requests created after a date five days
+// in the future and reports every count as zero.
+func TestUserStats_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *testing.T) {
+	var createdAfter atomic.Value
+	getPromptText(t, userStatsFixture(t, &createdAfter), "user_stats",
+		map[string]string{"project_id": "42", "username": "alice", "days": "5"})
+
+	raw, _ := createdAfter.Load().(string)
+	if raw == "" {
+		t.Fatal("no listing carried a created_after at all")
+	}
+	asked, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t.Fatalf("created_after %q does not parse: %v", raw, err)
+	}
+	want := time.Now().AddDate(0, 0, -5)
+	if asked.After(want.Add(time.Minute)) || asked.Before(want.Add(-time.Minute)) {
+		t.Errorf("created_after = %s, want about %s (five days ago)", asked.UTC(), want.UTC())
+	}
+}
+
+// TestTeamMemberWorkload_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo pins
+// the period this report says it covers.
+//
+// It is a second `AddDate(0, 0, -days)`, in a second handler, reaching GitLab
+// as a `created_after` nothing read: without its minus the recently-merged
+// section asks for merge requests created after a date in the future and
+// reports a productive fortnight as an empty one.
+func TestTeamMemberWorkload_TheLookBackWindow_StartsTheAskedNumberOfDaysAgo(t *testing.T) {
+	var createdAfter atomic.Value
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":50,"username":"alice"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/users/{user}/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
+		if after := r.URL.Query().Get("created_after"); after != "" {
+			createdAfter.Store(after)
+		}
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	getPromptText(t, mux, "team_member_workload",
+		map[string]string{"project_id": "42", "username": "alice", "days": "9"})
+
+	raw, _ := createdAfter.Load().(string)
+	if raw == "" {
+		t.Fatal("no listing carried a created_after at all")
+	}
+	asked, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t.Fatalf("created_after %q does not parse: %v", raw, err)
+	}
+	want := time.Now().AddDate(0, 0, -9)
+	if asked.After(want.Add(time.Minute)) || asked.Before(want.Add(-time.Minute)) {
+		t.Errorf("created_after = %s, want about %s (nine days ago)", asked.UTC(), want.UTC())
+	}
+}
+
+// TestTeamMemberWorkload_AnIssuesAgeInDays_IsCountedFromItsCreationDate pins
+// the arithmetic behind "opened N days ago".
+//
+// The elapsed time is divided by a day and printed with no unit beside the
+// number, so a multiplication in its place reads as an issue opened four
+// hundred thousand days ago and the section is what a manager uses to decide
+// something has been sitting too long.
+func TestTeamMemberWorkload_AnIssuesAgeInDays_IsCountedFromItsCreationDate(t *testing.T) {
+	created := time.Now().Add(-5*24*time.Hour - time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":50,"username":"alice"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/users/{user}/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/issues", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("author_username") == "" {
+			respondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		respondJSON(w, http.StatusOK, `[{"iid":7,"title":"Old issue","created_at":"`+
+			created.UTC().Format(time.RFC3339)+`"}]`)
+	})
+
+	text := getPromptText(t, mux, "team_member_workload",
+		map[string]string{"project_id": "42", "username": "alice", "days": "30"})
+
+	if !strings.Contains(text, "(opened 5 days ago)") {
+		t.Errorf("expected an issue opened 5 days ago:\n%s", text)
 	}
 }
 

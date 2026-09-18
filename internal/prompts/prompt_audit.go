@@ -782,16 +782,17 @@ func writeFullLabelsSection(b *strings.Builder, labels []*gl.Label, fetchErr err
 		return
 	}
 	fmt.Fprintf(b, "**Total:** %d\n", len(labels))
-	if len(labels) > 0 {
-		noDesc := 0
-		for _, l := range labels {
-			if l.Description == "" {
-				noDesc++
-			}
+	// No `len(labels) > 0` around this: an empty list counts nothing and the
+	// `noDesc > 0` below already withholds the line, so the outer guard decided
+	// nothing a reader or a test could observe.
+	noDesc := 0
+	for _, l := range labels {
+		if l.Description == "" {
+			noDesc++
 		}
-		if noDesc > 0 {
-			fmt.Fprintf(b, toolutil.EmojiWarning+" **%d label(s) without description**\n", noDesc)
-		}
+	}
+	if noDesc > 0 {
+		fmt.Fprintf(b, toolutil.EmojiWarning+" **%d label(s) without description**\n", noDesc)
 	}
 	b.WriteString("\n")
 }

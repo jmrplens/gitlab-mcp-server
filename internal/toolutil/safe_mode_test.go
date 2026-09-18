@@ -98,6 +98,84 @@ func TestFormatSafeModePreviewMarkdown_WholeOutput_AndRoundTrip(t *testing.T) {
 	}
 }
 
+// TestParseSafeModePreview_BothRowsDecideTogether verifies that a text is read
+// back as a preview only when the status row says blocked *and* the mode row
+// says safe, either one alone being an ordinary card that happens to share a
+// row with one.
+//
+// Both halves are load-bearing for what reads previews. An evaluator counts a
+// refused destructive call by parsing this card, so a card that says blocked
+// for another reason — a protected branch, a failed policy — must not be
+// counted as safe mode having intercepted anything, and a card whose mode row
+// alone survived a truncation must not either.
+func TestParseSafeModePreview_BothRowsDecideTogether(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{
+			name: "both rows",
+			text: "- **Status**: blocked\n- **Mode**: safe\n- **Tool**: `issue.create`\n",
+			want: true,
+		},
+		{
+			name: "blocked for another reason",
+			text: "- **Status**: blocked\n- **Mode**: protected\n- **Tool**: `issue.create`\n",
+			want: false,
+		},
+		{
+			name: "the mode row alone",
+			text: "- **Status**: opened\n- **Mode**: safe\n- **Tool**: `issue.create`\n",
+			want: false,
+		},
+		{
+			name: "the status row alone",
+			text: "- **Status**: blocked\n- **Tool**: `issue.create`\n",
+			want: false,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if _, got := ParseSafeModePreview(testCase.text); got != testCase.want {
+				t.Errorf("ParseSafeModePreview(%q) = %v, want %v", testCase.text, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestParseSafeModePreview_NoArguments_StaysSerializable verifies that a
+// preview card written without a Parameters section reads back with no params
+// payload at all, rather than with an empty one.
+//
+// The difference is invisible until the preview is serialized, which is
+// exactly what happens to it: the field is a json.RawMessage with no
+// omitempty, so an absent payload has to be nil to render as null. An empty
+// non-nil payload is not a document, and marshaling the preview then fails
+// with "unexpected end of JSON input" — a safe-mode interception surfacing as
+// a serialization error is the one reading that tells a model to retry.
+func TestParseSafeModePreview_NoArguments_StaysSerializable(t *testing.T) {
+	t.Parallel()
+
+	card := FormatSafeModePreviewMarkdown(SafeModePreview{Status: "blocked", Mode: "safe", Tool: "gitlab_issue_create"})
+	parsed, ok := ParseSafeModePreview(card)
+	if !ok {
+		t.Fatalf("ParseSafeModePreview(%q) did not read its own card back", card)
+	}
+
+	encoded, err := json.Marshal(parsed)
+	if err != nil {
+		t.Fatalf("json.Marshal(preview with no arguments): %v", err)
+	}
+	if !strings.Contains(string(encoded), `"params":null`) {
+		t.Errorf("preview with no arguments = %s, want a null params payload", encoded)
+	}
+}
+
 // TestFormatSafeModePreviewMarkdown_HostileHint_StaysOneBullet verifies whole
 // output for a preview whose hint carries Markdown of its own: the guidance
 // section keeps its one bullet, and ParseSafeModePreview still reads the

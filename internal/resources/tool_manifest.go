@@ -849,9 +849,12 @@ func dedupeDynamicStrings(values []string) []string {
 		return nil
 	}
 	out := values[:0]
+	// last starts empty and every empty value is skipped above it, so the
+	// first value can never equal last: an "is this the first iteration"
+	// guard here would be a branch no input can take.
 	var last string
-	for index, value := range values {
-		if value == "" || (index > 0 && value == last) {
+	for _, value := range values {
+		if value == "" || value == last {
 			continue
 		}
 		out = append(out, value)

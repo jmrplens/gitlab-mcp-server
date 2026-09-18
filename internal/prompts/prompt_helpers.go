@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -199,10 +200,13 @@ func extractIssueProjectPath(issue *gl.Issue) string {
 
 // projectPathFromWebURL extracts the project path from a GitLab web URL
 // (e.g. "https://gitlab.example.com/group/project/-/merge_requests/42" → "group/project").
+//
+// There is no early return for a URL that is empty or carries no "/-/": the
+// `dashIdx > 0` below decides exactly that and returns exactly the same empty
+// string, so the guard that used to stand here could be inverted, negated or
+// deleted without changing one answer. A check no test can observe is a check
+// a reader has to verify by hand for no benefit.
 func projectPathFromWebURL(webURL string) string {
-	if webURL == "" || !strings.Contains(webURL, "/-/") {
-		return ""
-	}
 	path := webURL
 	if schemeEnd := strings.Index(path, "://"); schemeEnd > 0 {
 		path = path[schemeEnd+3:]
@@ -237,19 +241,18 @@ func groupIssuesByProject(issues []*gl.Issue) map[string][]*gl.Issue {
 }
 
 // sortedKeys returns the map keys sorted alphabetically.
+//
+// [slices.Sort] rather than a comparison written here: the hand-rolled
+// selection sort this replaced compared two keys of one map, which are distinct
+// by construction, so its `>` could never meet its own boundary and no test
+// could ever tell it from `>=`. A sort nobody can hold to its spelling is a
+// sort worth borrowing from the standard library.
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
-	// Simple sort
-	for i := 0; i < len(keys); i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[i] > keys[j] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	slices.Sort(keys)
 	return keys
 }
 
@@ -525,17 +528,16 @@ func medianDuration(durations []time.Duration) time.Duration {
 	if n == 0 {
 		return 0
 	}
-	// Copy to avoid mutating caller's slice
+	// Copy to avoid mutating caller's slice.
+	//
+	// Sorted with [slices.Sort] for the reason [sortedKeys] gives, plus one of
+	// its own: a median is the same value whichever way the slice is ordered
+	// (the two middle elements of an even count are the same pair reversed), so
+	// the comparison written here could be inverted without changing a single
+	// answer this function has ever returned.
 	sorted := make([]time.Duration, n)
 	copy(sorted, durations)
-	// Simple sort
-	for i := range sorted {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i] > sorted[j] {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
+	slices.Sort(sorted)
 	if n%2 == 0 {
 		return (sorted[n/2-1] + sorted[n/2]) / 2
 	}

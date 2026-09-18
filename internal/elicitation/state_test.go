@@ -455,3 +455,147 @@ func TestCanonicalizeNumbers_LeavesNonNumericScalarsAlone(t *testing.T) {
 		}
 	})
 }
+
+// TestCanonicalizeNumbers_ANumberItCannotParseKeepsItsText covers the fallback
+// the doc comment promises.
+//
+// JSON's grammar admits no number big.Rat refuses, so this is only reachable
+// for arguments that were going to fail their schema check anyway. What matters
+// is what happens then: the text is kept, still marked as a number, so the
+// digest still distinguishes those arguments from any other. Dropping the value
+// instead would make two different malformed argument sets hash alike, which is
+// the collision the whole marker scheme exists to prevent.
+func TestCanonicalizeNumbers_ANumberItCannotParseKeepsItsText(t *testing.T) {
+	t.Parallel()
+
+	got := canonicalizeNumbers(json.Number("not-a-number"))
+	if got != numberMarker+"not-a-number" {
+		t.Errorf("canonicalizeNumbers(unparseable) = %v, want its text kept behind the number marker", got)
+	}
+	if other := canonicalizeNumbers(json.Number("also-not-one")); got == other {
+		t.Error("two different unparseable numbers canonicalized alike, so they would share a digest")
+	}
+}
+
+// TestStateTTL_IsLongEnoughToAnswerAndShortEnoughToBoundReplay states what the
+// constant has to be, rather than what it currently is.
+//
+// The TTL is read only by encodeState and checked only by decodeState, so every
+// assertion about it elsewhere compares a value this constant produced against
+// the same constant: collapsing it to zero moves both sides together and the
+// comparisons still agree. The two bounds are the reasons the constant exists:
+// a person answering a handful of prompts must not have the state expire under
+// them, and a captured state must not stay replayable for a working day.
+func TestStateTTL_IsLongEnoughToAnswerAndShortEnoughToBoundReplay(t *testing.T) {
+	t.Parallel()
+
+	if stateTTL < time.Minute {
+		t.Errorf("stateTTL = %v, too short for a person to answer a prompt", stateTTL)
+	}
+	if stateTTL > time.Hour {
+		t.Errorf("stateTTL = %v, too long a window for a captured state to stay replayable", stateTTL)
+	}
+}
+
+// TestDecodeState_ExpiresAtTheSecondItNames pins which side of the expiry
+// instant the state is still usable on.
+//
+// The claim `exp` makes is that the state stops being usable at that second,
+// not during it: a state whose stated expiry is now is expired. Only a state
+// well past its expiry and one well inside it were covered, so the comparison
+// could have been relaxed to admit its own expiry second and nothing would have
+// failed. Expiry yields no answers and no error on purpose, because the flow
+// simply asks its questions again, so the difference between the two sides is
+// the answers that come back, which is what is asserted here.
+func TestDecodeState_ExpiresAtTheSecondItNames(t *testing.T) {
+	t.Parallel()
+
+	const digest = "one-call"
+	issuedAt := time.Now()
+	issued, err := encodeState(map[string]answerRecord{"q": {Action: "accept"}}, digest, issuedAt)
+	if err != nil {
+		t.Fatalf("encodeState: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		readAt      time.Time
+		wantAnswers int
+	}{
+		{name: "a second before the stated expiry", readAt: issuedAt.Add(stateTTL - time.Second), wantAnswers: 1},
+		{name: "at the stated expiry", readAt: issuedAt.Add(stateTTL)},
+		{name: "a second after the stated expiry", readAt: issuedAt.Add(stateTTL + time.Second)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			answers, decodeErr := decodeState(issued, digest, tt.readAt)
+			if decodeErr != nil {
+				t.Fatalf("decodeState: %v, want expiry reported as no answers rather than as an error", decodeErr)
+			}
+			if answers == nil {
+				t.Fatal("decodeState returned a nil map; no answers is a result, not an absence")
+			}
+			if len(answers) != tt.wantAnswers {
+				t.Errorf("decodeState returned %d answers, want %d", len(answers), tt.wantAnswers)
+			}
+		})
+	}
+}
+
+// TestRequestDigest_MalformedArgumentsHashAsThemselves covers the branch taken
+// when there is nothing to canonicalize.
+//
+// Arguments that are not JSON at all cannot be normalized, and the call is
+// going to fail its schema check regardless. The digest still has to be a
+// function of them, though: hashing every unreadable argument set alike would
+// give one digest to every malformed call, and a state issued for one would
+// then be accepted on another.
+func TestRequestDigest_MalformedArgumentsHashAsThemselves(t *testing.T) {
+	t.Parallel()
+
+	const tool = "gitlab_interactive_issue_create"
+	first := requestDigest(tool, json.RawMessage(`{"project":`))
+	again := requestDigest(tool, json.RawMessage(`{"project":`))
+	other := requestDigest(tool, json.RawMessage(`{"group":`))
+
+	if first != again {
+		t.Errorf("the same unreadable arguments hashed to %q and %q", first, again)
+	}
+	if first == other {
+		t.Errorf("two different unreadable argument sets both hashed to %q", first)
+	}
+	if first == requestDigest("gitlab_interactive_mr_create", json.RawMessage(`{"project":`)) {
+		t.Error("unreadable arguments hashed alike across two different tools")
+	}
+}
+
+// TestEncodeState_AnswerItCannotEncode_IsReported covers the error return of
+// the encoder.
+//
+// Answers reaching this in the server are decoded from a client's JSON, so they
+// are always encodable again and the branch never fires there. What it guards
+// is the alternative: returning a state that silently lost the answers it was
+// supposed to carry, which the flow would read back as a user who had answered
+// nothing and would re-ask questions already answered.
+func TestEncodeState_AnswerItCannotEncode_IsReported(t *testing.T) {
+	t.Parallel()
+
+	answers := map[string]answerRecord{
+		"q": {Action: "accept", Content: map[string]any{"handle": make(chan int)}},
+	}
+
+	state, err := encodeState(answers, "one-call", time.Now())
+
+	if err == nil {
+		t.Fatalf("encodeState() error = nil and state = %q, want the failure reported", state)
+	}
+	if state != "" {
+		t.Errorf("encodeState() = %q on failure, want no state at all", state)
+	}
+	if !strings.Contains(err.Error(), "failed to encode request state") {
+		t.Errorf("encodeState() error = %v, want it to name the encoding failure", err)
+	}
+}

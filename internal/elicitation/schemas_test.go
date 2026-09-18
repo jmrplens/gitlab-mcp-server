@@ -255,3 +255,222 @@ func TestNumberSchema_BoundsAndParse(t *testing.T) {
 		t.Errorf("parseNumberContent(in range) = (%g, %v), want (4.5, nil)", got, err)
 	}
 }
+
+// TestSelectMultiSchema_AdvertisesOnlyTheBoundsItWasGiven pins which
+// cardinality keys the schema carries.
+//
+// Zero means "no bound" for both, so a zero must leave its key out rather than
+// advertise a bound of zero: `maxItems: 0` would tell a client that no
+// selection is allowed at all, and `minItems: 0` is noise a model pays tokens
+// to read. Nothing asserted the resulting schema, so both keys could have
+// appeared unconditionally, or stopped appearing altogether, without a test
+// noticing.
+func TestSelectMultiSchema_AdvertisesOnlyTheBoundsItWasGiven(t *testing.T) {
+	tests := []struct {
+		name     string
+		minItems int
+		maxItems int
+		wantMin  any
+		wantMax  any
+	}{
+		{name: "no bounds at all", minItems: 0, maxItems: 0},
+		{name: "a lower bound only", minItems: 2, wantMin: 2},
+		{name: "an upper bound only", maxItems: 3, wantMax: 3},
+		{name: "both bounds", minItems: 1, maxItems: 4, wantMin: 1, wantMax: 4},
+		{name: "a negative bound is no bound", minItems: -1, maxItems: -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := selectMultiSchema("Pick some", []string{"a", "b"}, tt.minItems, tt.maxItems)
+			props, ok := schema["properties"].(map[string]any)
+			if !ok {
+				t.Fatal("selectMultiSchema has no properties object")
+			}
+			array, ok := props["selections"].(map[string]any)
+			if !ok {
+				t.Fatal("selectMultiSchema has no 'selections' property")
+			}
+			if got := array["minItems"]; got != tt.wantMin {
+				t.Errorf("minItems = %v, want %v", got, tt.wantMin)
+			}
+			if got := array["maxItems"]; got != tt.wantMax {
+				t.Errorf("maxItems = %v, want %v", got, tt.wantMax)
+			}
+		})
+	}
+}
+
+// TestParseSelectMultiContent_BoundsAreInclusive pins that the cardinality
+// bounds admit their own endpoints.
+//
+// The bounds the schema advertises are `minItems` and `maxItems`, which JSON
+// Schema defines inclusively, so an answer with exactly as many selections as
+// the maximum allows is a valid answer and must not be refused. The lower
+// endpoint was already held; the upper one was not, so a check that rejected
+// the very count it advertises would have passed.
+func TestParseSelectMultiContent_BoundsAreInclusive(t *testing.T) {
+	options := []string{"a", "b", "c"}
+
+	tests := []struct {
+		name     string
+		values   []any
+		minItems int
+		maxItems int
+		wantLen  int
+		wantErr  string
+	}{
+		{name: "exactly the minimum", values: []any{"a", "b"}, minItems: 2, maxItems: 3, wantLen: 2},
+		{name: "exactly the maximum", values: []any{"a", "b", "c"}, minItems: 1, maxItems: 3, wantLen: 3},
+		{name: "one under the minimum", values: []any{"a"}, minItems: 2, maxItems: 3, wantErr: "want at least 2"},
+		{name: "one over the maximum", values: []any{"a", "b", "c"}, minItems: 1, maxItems: 2, wantErr: "want at most 2"},
+		{name: "unbounded accepts an empty answer", values: []any{}, wantLen: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSelectMultiContent(map[string]any{"selections": tt.values}, options, tt.minItems, tt.maxItems)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parseSelectMultiContent() error = %v, want one naming %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSelectMultiContent() error = %v, want the answer accepted", err)
+			}
+			if len(got) != tt.wantLen {
+				t.Errorf("parseSelectMultiContent() returned %d selections, want %d", len(got), tt.wantLen)
+			}
+		})
+	}
+}
+
+// TestParseSelectOneIntContent_ClassifiesWhatIsNotAnInteger pins which refusal
+// a float that is not an integer earns.
+//
+// The two refusals say different things to a model: "is not an integer" means
+// the answer was the wrong kind of number and a whole number would do, while
+// "overflows int" means the value itself is out of range. An infinity is the
+// first: it is not a whole number, and telling a model it is too large invites
+// a retry with a smaller one, which will be refused for the same reason. The
+// classification held only for a non-integral finite value, so the guard that
+// catches the infinities could have been folded into the range check below it
+// without a test noticing.
+func TestParseSelectOneIntContent_ClassifiesWhatIsNotAnInteger(t *testing.T) {
+	options := []int{1, 2, 3}
+
+	tests := []struct {
+		name  string
+		value float64
+	}{
+		{name: "not a number", value: math.NaN()},
+		{name: "positive infinity", value: math.Inf(1)},
+		{name: "negative infinity", value: math.Inf(-1)},
+		{name: "a finite fraction", value: 1.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": tt.value}, options)
+			if err == nil {
+				t.Fatal("parseSelectOneIntContent() error = nil, want the value refused")
+			}
+			if !strings.Contains(err.Error(), "is not an integer") {
+				t.Errorf("parseSelectOneIntContent() error = %v, want it reported as not an integer", err)
+			}
+		})
+	}
+}
+
+// TestParseSelectOneIntContent_HoldsTheIntegerRange pins the two float64
+// comparisons that decide whether a conversion to int is defined.
+//
+// The bounds are spelled asymmetrically on purpose: math.MinInt is -2^63 and is
+// exactly representable as a float64, so `<` admits it, while math.MaxInt is
+// 2^63-1 and rounds up to 2^63 as a float64, so `>=` is what rejects the value
+// that is one too large. Nothing exercised either endpoint: the mutants that
+// died there were killed by ordinary in-range values, so both comparisons could
+// have been relaxed by one and the conversion would have been reached with a
+// value Go leaves implementation-defined.
+func TestParseSelectOneIntContent_HoldsTheIntegerRange(t *testing.T) {
+	options := []int{math.MinInt, math.MaxInt, 0, 7}
+
+	tests := []struct {
+		name    string
+		value   float64
+		want    int
+		wantErr bool
+	}{
+		{name: "the smallest int is representable and accepted", value: float64(math.MinInt), want: math.MinInt},
+		{name: "one below the smallest int overflows", value: float64(math.MinInt) * 2, wantErr: true},
+		{name: "the float that rounds past the largest int overflows", value: float64(math.MaxInt), wantErr: true},
+		{name: "an ordinary value is unaffected", value: 7, want: 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSelectOneIntContent(map[string]any{"selection": tt.value}, options)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseSelectOneIntContent(%g) error = nil, want the value refused as out of range", tt.value)
+				}
+				if !strings.Contains(err.Error(), "overflows int") {
+					t.Errorf("parseSelectOneIntContent(%g) error = %v, want it reported as an overflow", tt.value, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseSelectOneIntContent(%g) error = %v, want it accepted", tt.value, err)
+			}
+			if got != tt.want {
+				t.Errorf("parseSelectOneIntContent(%g) = %d, want %d", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseNumberContent_BoundsAreInclusiveAndInfinityIsNoBound pins both ends
+// of the numeric range check.
+//
+// The schema advertises `minimum` and `maximum`, which JSON Schema defines
+// inclusively, so a value sitting exactly on a bound is inside the range the
+// client was shown. Only values strictly inside and strictly outside were
+// covered, so either comparison could have been tightened by one and refused
+// the endpoint it advertises. The infinite bounds are the other half of the
+// same contract: they mean the schema carried no bound at all, so no value can
+// be outside one.
+func TestParseNumberContent_BoundsAreInclusiveAndInfinityIsNoBound(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   float64
+		minVal  float64
+		maxVal  float64
+		wantErr string
+	}{
+		{name: "exactly the minimum", value: 0, minVal: 0, maxVal: 5},
+		{name: "exactly the maximum", value: 5, minVal: 0, maxVal: 5},
+		{name: "just under the minimum", value: -0.5, minVal: 0, maxVal: 5, wantErr: "below the minimum"},
+		{name: "just over the maximum", value: 5.5, minVal: 0, maxVal: 5, wantErr: "above the maximum"},
+		{name: "an unbounded schema admits a huge value", value: 1e300, minVal: math.Inf(-1), maxVal: math.Inf(1)},
+		{name: "an unbounded schema admits a tiny value", value: -1e300, minVal: math.Inf(-1), maxVal: math.Inf(1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseNumberContent(map[string]any{"v": tt.value}, "v", tt.minVal, tt.maxVal)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parseNumberContent(%g) error = %v, want one naming %q", tt.value, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseNumberContent(%g) error = %v, want it accepted", tt.value, err)
+			}
+			if got != tt.value {
+				t.Errorf("parseNumberContent(%g) = %g, want the value back unchanged", tt.value, got)
+			}
+		})
+	}
+}

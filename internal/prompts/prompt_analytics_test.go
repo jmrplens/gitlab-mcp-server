@@ -497,4 +497,271 @@ func TestWeeklyTeamRecap_OpenMRConflicts_ReportsConflictCount(t *testing.T) {
 	}
 }
 
+// TestMergeVelocity_TheMergeRate_IsMergesPerWeekOverThePeriodAsked pins the one
+// derived figure this prompt exists to publish.
+//
+// The rate is a count divided by the days asked and multiplied by seven, and
+// nothing ever read the number: every assertion stopped at "MRs/week" being
+// present. Each of those two operators could be the other and the row would
+// still be there, reporting a team that merges once a fortnight as one that
+// merges four hundred times a week.
+func TestMergeVelocity_TheMergeRate_IsMergesPerWeekOverThePeriodAsked(t *testing.T) {
+	created := time.Now().Add(-10 * 24 * time.Hour)
+	merged := time.Now().Add(-2 * 24 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+		mrs := []*gl.BasicMergeRequest{
+			{IID: 1, Title: "A", SourceBranch: "a", TargetBranch: "main", Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, MergedAt: &merged},
+			{IID: 2, Title: "B", SourceBranch: "b", TargetBranch: "main", Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, MergedAt: &merged},
+		}
+		data, _ := json.Marshal(mrs)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "merge_velocity",
+		map[string]string{"project_id": testAnalyticsProjectPath, "days": "28"})
+
+	if !strings.Contains(text, "| Merge rate | 0.5 MRs/week |") {
+		t.Errorf("expected 2 merges over 28 days to read as 0.5 MRs/week:\n%s", text)
+	}
+}
+
+// TestMergeVelocity_NoMergeRequestCarriesBothTimestamps_HasNoTimeToMergeRows
+// verifies that the two duration rows appear only when a duration was measured.
+//
+// A merge request with no merged_at gives a zero duration, and both the filter
+// that drops it and the guard around the rows are `> 0` comparisons nothing
+// held to their boundary. Either read as `>=` puts "Average time-to-merge | -"
+// in the report, which is a measurement of nothing presented as a measurement.
+func TestMergeVelocity_NoMergeRequestCarriesBothTimestamps_HasNoTimeToMergeRows(t *testing.T) {
+	created := time.Now().Add(-10 * 24 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+		mrs := []*gl.BasicMergeRequest{
+			{IID: 1, Title: "A", SourceBranch: "a", TargetBranch: "main", Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created},
+		}
+		data, _ := json.Marshal(mrs)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "merge_velocity",
+		map[string]string{"project_id": testAnalyticsProjectPath, "days": "30"})
+
+	if !strings.Contains(text, "| MRs merged | 1 |") {
+		t.Errorf("expected the merged count:\n%s", text)
+	}
+	for _, unwanted := range []string{"Average time-to-merge", "Median time-to-merge"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("no merge request carried both timestamps, yet the report wrote %q:\n%s", unwanted, text)
+			}
+		})
+	}
+}
+
+// TestWriteDailyMergeChart_CountsPerDayAndSeparatesThem pins the two things
+// the daily chart is made of.
+//
+// Each day's tally is an increment nothing ever read with more than one merge
+// on a day, and both list separators sit under an `if i > 0` that a single-day
+// fixture never reaches. Between them a chart could count downwards and run its
+// entries together, which Mermaid does not draw at all.
+func TestWriteDailyMergeChart_CountsPerDayAndSeparatesThem(t *testing.T) {
+	first := time.Date(2025, 1, 1, 9, 0, 0, 0, time.UTC)
+	firstAgain := time.Date(2025, 1, 1, 17, 0, 0, 0, time.UTC)
+	second := time.Date(2025, 1, 2, 9, 0, 0, 0, time.UTC)
+
+	var b strings.Builder
+	writeDailyMergeChart(&b, []*gl.BasicMergeRequest{
+		{IID: 1, MergedAt: &first},
+		{IID: 2, MergedAt: &firstAgain},
+		{IID: 3, MergedAt: &second},
+	})
+
+	got := b.String()
+	if !strings.Contains(got, "x-axis [01-01, 01-02]") {
+		t.Errorf("the x axis is not two comma-separated days:\n%s", got)
+	}
+	if !strings.Contains(got, "bar [2, 1]") {
+		t.Errorf("the bars are not the per-day counts:\n%s", got)
+	}
+}
+
+// releaseReadinessFixture answers the merge-request and discussion listings
+// release_readiness makes, with the notes given for the first merge request.
+func releaseReadinessFixture(mrs, notesForMR1 string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, mrs)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/1/discussions", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":"d1","notes":`+notesForMR1+`}]`)
+	})
+	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests/{iid}/discussions", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	return mux
+}
+
+// TestReleaseReadiness_TheBlockerCount_IsTheSumOfWhatBlocks pins the arithmetic
+// behind the go/no-go word at the top of this report.
+//
+// Drafts, conflicts and unresolved threads are added together and the sum picks
+// one of three labels. Every fixture until now left at least one of the three
+// at zero, where a sum and a difference agree, so a release with six blockers
+// could report itself ready. The threshold is pinned too: at exactly five the
+// label is the middle one, which is the boundary the `> 5` sits on.
+func TestReleaseReadiness_TheBlockerCount_IsTheSumOfWhatBlocks(t *testing.T) {
+	fourUnresolved := `[{"id":1,"resolvable":true,"resolved":false},` +
+		`{"id":2,"resolvable":true,"resolved":false},` +
+		`{"id":3,"resolvable":true,"resolved":false},` +
+		`{"id":4,"resolvable":true,"resolved":false},` +
+		`{"id":5,"resolvable":true,"resolved":true},` +
+		`{"id":6,"resolvable":false,"resolved":false}]`
+
+	t.Run("six blockers are not ready", func(t *testing.T) {
+		mrs := `[{"iid":1,"project_id":42,"title":"Draft MR","source_branch":"a","target_branch":"main","draft":true},` +
+			`{"iid":2,"project_id":42,"title":"Conflicted MR","source_branch":"b","target_branch":"main","has_conflicts":true}]`
+		text := getPromptText(t, releaseReadinessFixture(mrs, fourUnresolved), "release_readiness",
+			map[string]string{"project_id": "42"})
+
+		for _, want := range []string{
+			"| Drafts | 1 |",
+			"| With conflicts | 1 |",
+			"| Unresolved threads | 4 |",
+			"Not Ready",
+		} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf("expected %q in:\n%s", want, text)
+				}
+			})
+		}
+	})
+
+	t.Run("exactly five blockers need attention", func(t *testing.T) {
+		mrs := `[{"iid":1,"project_id":42,"title":"Draft MR","source_branch":"a","target_branch":"main","draft":true}]`
+		text := getPromptText(t, releaseReadinessFixture(mrs, fourUnresolved), "release_readiness",
+			map[string]string{"project_id": "42"})
+
+		if !strings.Contains(text, "Needs Attention") {
+			t.Errorf("five blockers should need attention rather than be refused outright:\n%s", text)
+		}
+		if strings.Contains(text, "Not Ready") {
+			t.Errorf("five blockers is below the not-ready threshold:\n%s", text)
+		}
+	})
+}
+
+// TestFilterRecentReleases_ARleaseOutsideTheWindow_IsLeftOut verifies that both
+// halves of the recency filter are required.
+//
+// It is a nil check and a date comparison joined by `&&`, and every fixture so
+// far satisfied both: read as an `||` a release from two years ago joins the
+// cadence figures, and one with no date at all is dereferenced.
+func TestFilterRecentReleases_ARleaseOutsideTheWindow_IsLeftOut(t *testing.T) {
+	since := time.Now().Add(-30 * 24 * time.Hour)
+	recent := time.Now().Add(-2 * 24 * time.Hour)
+	ancient := time.Now().Add(-400 * 24 * time.Hour)
+
+	filtered := filterRecentReleases([]*gl.Release{
+		{TagName: "v2", ReleasedAt: &recent},
+		{TagName: "v1", ReleasedAt: &ancient},
+		{TagName: "undated"},
+	}, since)
+
+	if len(filtered) != 1 {
+		t.Fatalf("kept %d release(s), want 1", len(filtered))
+	}
+	if filtered[0].TagName != "v2" {
+		t.Errorf("kept %q, want the release inside the window", filtered[0].TagName)
+	}
+}
+
+// TestWriteReleaseHistoryTable_TheGapBetweenReleases_IsCountedInDays pins the
+// "Days Since Previous" column.
+//
+// It is an elapsed time divided by a day, printed with the unit only in the
+// column heading, so the arithmetic carries the whole meaning: a cadence of
+// three days reads as seventy-two if the division becomes a multiplication, and
+// the prompt asks the model to compare the figure with a team's goals.
+func TestWriteReleaseHistoryTable_TheGapBetweenReleases_IsCountedInDays(t *testing.T) {
+	first := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	second := time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC)
+	var releases []*gl.Release
+	releases = append(releases,
+		&gl.Release{TagName: "v1.0.0", ReleasedAt: &first},
+		&gl.Release{TagName: "v1.1.0", ReleasedAt: &second})
+
+	var b strings.Builder
+	writeReleaseHistoryTable(&b, releases)
+
+	got := b.String()
+	if !strings.Contains(got, "| v1.0.0 | v1.0.0 | 2025-01-01 | - |") {
+		t.Errorf("the first release has no previous one:\n%s", got)
+	}
+	if !strings.Contains(got, "| v1.1.0 | v1.1.0 | 2025-01-04 | 3 |") {
+		t.Errorf("expected three days between the releases:\n%s", got)
+	}
+}
+
+// TestReleaseCadence_ASingleRelease_HasNoIntervalRows verifies that the two
+// interval rows appear only when there were two releases to measure between.
+//
+// The guard is a `len(...) > 0` nothing ever saw false, so read as `>= 0` a
+// project with one release publishes "Average interval | -", which is a cadence
+// figure for a project that has no cadence yet.
+func TestReleaseCadence_ASingleRelease_HasNoIntervalRows(t *testing.T) {
+	released := time.Now().Add(-2 * 24 * time.Hour)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/{project}/releases", func(w http.ResponseWriter, _ *http.Request) {
+		releases := []*gl.Release{{TagName: "v1.0.0", ReleasedAt: &released}}
+		data, _ := json.Marshal(releases)
+		respondJSON(w, http.StatusOK, string(data))
+	})
+
+	text := getPromptText(t, mux, "release_cadence", map[string]string{"project_id": "42"})
+
+	if !strings.Contains(text, "| Total releases | 1 |") {
+		t.Errorf("expected one release:\n%s", text)
+	}
+	for _, unwanted := range []string{"Average interval", "Median interval"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("one release cannot have an interval, yet the report wrote %q:\n%s", unwanted, text)
+			}
+		})
+	}
+}
+
+// TestWeeklyTeamRecap_ASectionWithNothingInIt_IsNotWritten verifies that the
+// two optional sections of the recap appear only when they hold something.
+//
+// Both are `len(...) > 0` guards no test saw false, so either read as `>= 0`
+// puts an empty "## Merged MRs" or an "## Open MR Health" table of zeroes into
+// a recap for a week where nothing happened — which is precisely the week where
+// the reader needs the summary to say so plainly.
+func TestWeeklyTeamRecap_ASectionWithNothingInIt_IsNotWritten(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/{group}/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/{group}/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "weekly_team_recap", map[string]string{"group_id": "g1"})
+
+	if !strings.Contains(text, "| MRs merged | 0 |") {
+		t.Errorf("expected the summary row:\n%s", text)
+	}
+	for _, unwanted := range []string{"## Merged MRs", "## Open MR Health"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("nothing happened this week, yet the recap wrote %q:\n%s", unwanted, text)
+			}
+		})
+	}
+}
+
 // prompt_project_reports.go error branches.

@@ -114,13 +114,67 @@ func quietOptions(o Options) Options {
 	return o
 }
 
+// debugLogger collects everything the manager writes, down to DEBUG.
+//
+// Some of what this package decides is only ever visible as a log line — a
+// stop that names how many watches went, a notification that was dropped —
+// and a line that lies about either is what an operator debugging a silent
+// subscription reads. Those tests capture the output rather than discarding
+// it, so the claim can be asserted instead of assumed.
+func debugLogger(w io.Writer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
 // newTestManager wires a manager onto fresh fakes.
 func newTestManager(t *testing.T, o Options) (*Manager[string], *fakeReader, *fakeNotifier) {
 	t.Helper()
 	r, n := newFakeReader(), &fakeNotifier{}
 	m := New[string](r, n, quietOptions(o))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 	return m, r, n
+}
+
+// closeStallBound is how long a Close may take before a test calls it a
+// stall. A correct one returns in microseconds — it cancels, and the watchers
+// it cancelled are reading from a fake — so this is four orders of magnitude
+// of margin and costs nothing when the code is right.
+const closeStallBound = 5 * time.Second
+
+// closeWithin runs Close on a goroutine and reports a stall instead of waiting
+// for it, keeping the assertion on the test goroutine.
+//
+// Close waits for every watcher it cancelled, so anything that leaves one
+// running — a stop path that forgets to cancel, or a panic that left the
+// manager's mutex held — blocks it for ever. Without a bound that is not a
+// failed test but a hung binary, and a hung binary takes every test after it
+// down unrun: measured here, a stop path that skipped its cancel swallowed the
+// rest of the suite and reported nothing at all about the watcher, while the
+// same change with this bound in place names the three tests that notice.
+func closeWithin(t *testing.T, m *Manager[string]) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		m.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(closeStallBound):
+		// Fatal rather than an error, and on the test goroutine, which is
+		// where both callers run this: reporting and returning lets the caller
+		// walk into the next blocking operation — a wg.Wait in one of the race
+		// tests — and hang the binary anyway, which is the failure this bound
+		// exists to convert into a message.
+		t.Fatalf("Close did not return within %v: a watcher outlived the manager, "+
+			"or its lock is still held by a goroutine that will not give it back", closeStallBound)
+	}
+}
+
+// closeOnCleanup registers the bounded Close every test manager is torn down
+// with.
+func closeOnCleanup(t *testing.T, m *Manager[string]) {
+	t.Helper()
+	t.Cleanup(func() { closeWithin(t, m) })
 }
 
 // subA and subB stand in for two MCP sessions. Identity is what the manager
@@ -131,6 +185,63 @@ const (
 )
 
 const testURI = "gitlab://project/42/pipeline/99"
+
+// TestDefaults_AreTheFiguresTheRateBudgetWasComputedFrom pins the numbers the
+// cadence was derived from, rather than comparing each against itself.
+//
+// Every other assertion about an interval reads it back through the same
+// constant that set it, so a constant collapsing to zero moves both sides and
+// fails nothing. The figures matter on their own terms: ten watchers at the
+// five-second floor already consume the whole 120-requests-a-minute budget of
+// a throttled self-managed instance, and a zero anywhere in this block turns
+// polling into a hot loop against GitLab.
+//
+// It runs first in this file on purpose. A default that collapses to zero
+// makes every watcher poll without waiting, which under a fake clock is a
+// goroutine that never blocks and a test that never returns — so an assertion
+// placed after the first watcher test would never be reached to report it.
+func TestDefaults_AreTheFiguresTheRateBudgetWasComputedFrom(t *testing.T) {
+	tests := []struct {
+		name string
+		got  time.Duration
+		want time.Duration
+	}{
+		{"base interval", DefaultBaseInterval, 15 * time.Second},
+		{"busy floor", DefaultMinInterval, 5 * time.Second},
+		{"lease", DefaultLease, 30 * time.Minute},
+		{"demoted cadence", DefaultSlowInterval, 10 * time.Minute},
+		{"absolute lifetime", DefaultMaxLifetime, 24 * time.Hour},
+		{"first rate-limit back-off", rateLimitBackoff, 30 * time.Second},
+		{"rate-limit back-off ceiling", maxRateLimitBackoff, 5 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+
+	if DefaultMaxWatchers != 10 {
+		t.Errorf("DefaultMaxWatchers = %d, want 10", DefaultMaxWatchers)
+	}
+	if jitterFraction != 0.2 {
+		t.Errorf("jitterFraction = %v, want 0.2", jitterFraction)
+	}
+
+	// The same figures reached through the zero value, which is what a
+	// manager built with no options actually runs with.
+	o := Options{}.withDefaults()
+	if o.BaseInterval != 15*time.Second || o.MinInterval != 5*time.Second {
+		t.Errorf("withDefaults intervals = %v/%v, want 15s/5s", o.BaseInterval, o.MinInterval)
+	}
+	if o.Lease != 30*time.Minute || o.SlowInterval != 10*time.Minute {
+		t.Errorf("withDefaults lease/slow = %v/%v, want 30m/10m", o.Lease, o.SlowInterval)
+	}
+	if o.MaxLifetime != 24*time.Hour || o.MaxWatchers != 10 {
+		t.Errorf("withDefaults lifetime/cap = %v/%d, want 24h/10", o.MaxLifetime, o.MaxWatchers)
+	}
+}
 
 func TestSubscribe_UnsubscribableURI_IsRejectedWithoutReading(t *testing.T) {
 	m, r, _ := newTestManager(t, Options{})
@@ -263,7 +374,7 @@ func TestSubscribe_CancelledDuplicate_LeavesTheHeldSubscriptionAlone(t *testing.
 		BaseInterval: time.Millisecond,
 		MinInterval:  time.Millisecond,
 	}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	var wg sync.WaitGroup
 	var founderErr error
@@ -348,6 +459,76 @@ func TestUnsubscribeAll_SubscriberLeaves_StopsOnlyItsWatchers(t *testing.T) {
 	}
 	if m.Len() != 2 {
 		t.Errorf("Len() = %d, want 2 — the shared and the other session's watches must survive", m.Len())
+	}
+}
+
+// TestUnsubscribeAll_SubscriberHoldingNothing_StopsNothingAndSaysNothing
+// covers the session that closes without ever having subscribed, which every
+// client that only calls tools does.
+//
+// Nothing may be stopped, and nothing may be said: the line this path writes
+// names how many watches a departing session took with it, so writing it for
+// a session that held none puts "stopping its watchers watchers=0" in the log
+// of every disconnect on the server. An operator reading that count cannot
+// then tell a session that really dropped its watches from one that never had
+// any.
+func TestUnsubscribeAll_SubscriberHoldingNothing_StopsNothingAndSaysNothing(t *testing.T) {
+	logs := &lockedBuffer{}
+	m := New[string](newFakeReader(), &fakeNotifier{}, Options{Logger: debugLogger(logs)})
+	closeOnCleanup(t, m)
+
+	if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	if stopped := m.UnsubscribeAll(subB); stopped != 0 {
+		t.Errorf("UnsubscribeAll(a session holding nothing) = %d, want 0", stopped)
+	}
+	if m.Len() != 1 {
+		t.Errorf("Len() = %d, want the other session's watch left alone", m.Len())
+	}
+	if strings.Contains(logs.String(), "stopping its watchers") {
+		t.Errorf("a session that held no watch was logged as having stopped some: %s", logs.String())
+	}
+
+	// And the same line must appear when one really did stop, or the count
+	// above is only silent because nothing ever writes it.
+	if stopped := m.UnsubscribeAll(subA); stopped != 1 {
+		t.Errorf("UnsubscribeAll(the holder) = %d, want 1", stopped)
+	}
+	if !strings.Contains(logs.String(), "stopping its watchers") {
+		t.Errorf("a session that took its watch with it left no trace: %s", logs.String())
+	}
+}
+
+// TestUnsubscribeAll_DuringTheFirstRead_DropsTheWatcherThatHasNoCancelYet
+// covers the session that disconnects while its own subscribe is still
+// reading, which is a client that gave up on a slow instance.
+//
+// A watcher is in the registry before its first read returns and only gets
+// its cancel function afterwards, so this path reaches one there is nothing
+// to cancel. It must drop it rather than skip it: the launch that follows
+// finds its own entry gone and abandons itself, and anything left in the map
+// would be a watcher no later Unsubscribe could reach.
+func TestUnsubscribeAll_DuringTheFirstRead_DropsTheWatcherThatHasNoCancelYet(t *testing.T) {
+	g := newGatedReader()
+	m := New[string](g, &fakeNotifier{}, quietOptions(Options{}))
+	closeOnCleanup(t, m)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_ = m.Subscribe(context.Background(), subA, testURI)
+	})
+
+	<-g.entered // the first read is in flight, so the watcher has no cancel yet
+	if stopped := m.UnsubscribeAll(subA); stopped != 1 {
+		t.Errorf("UnsubscribeAll() = %d during the first read, want the watcher counted as stopped", stopped)
+	}
+	close(g.release)
+	wg.Wait()
+
+	if m.Len() != 0 {
+		t.Errorf("Len() = %d, want the withdrawn watcher gone rather than launched behind the withdrawal", m.Len())
 	}
 }
 
@@ -742,7 +923,7 @@ func TestOnStop_UnaskedEndings_AreReported(t *testing.T) {
 			stops := newStopRecord()
 			r, n := newFakeReader(), &fakeNotifier{}
 			m := New[string](r, n, quietOptions(Options{OnStop: stops.record}))
-			t.Cleanup(m.Close)
+			closeOnCleanup(t, m)
 
 			if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
 				t.Fatalf("Subscribe: %v", err)
@@ -765,7 +946,7 @@ func TestOnStop_UnaskedEndings_AreReported(t *testing.T) {
 			opts.OnStop = stops.record
 			r, n := newFakeReader(), &fakeNotifier{}
 			m := New[string](r, n, quietOptions(opts))
-			t.Cleanup(m.Close)
+			closeOnCleanup(t, m)
 
 			if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
 				t.Fatalf("Subscribe: %v", err)
@@ -787,7 +968,7 @@ func TestOnStop_UnaskedEndings_AreReported(t *testing.T) {
 			opts.OnStop = stops.record
 			r, n := newFakeReader(), &fakeNotifier{}
 			m := New[string](r, n, quietOptions(opts))
-			t.Cleanup(m.Close)
+			closeOnCleanup(t, m)
 			ctx := context.Background()
 
 			evicted := "gitlab://project/42/pipeline/1"
@@ -819,7 +1000,7 @@ func TestOnStop_ClientAskedForIt_IsSilent(t *testing.T) {
 		stops := newStopRecord()
 		r, n := newFakeReader(), &fakeNotifier{}
 		m := New[string](r, n, quietOptions(Options{OnStop: stops.record}))
-		t.Cleanup(m.Close)
+		closeOnCleanup(t, m)
 		ctx := context.Background()
 
 		if err := m.Subscribe(ctx, subA, testURI); err != nil {
@@ -843,7 +1024,7 @@ func TestOnStop_ClientAskedForIt_IsSilent(t *testing.T) {
 		if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
 			t.Fatalf("Subscribe: %v", err)
 		}
-		m.Close()
+		closeWithin(t, m)
 
 		if stops.len() != 0 {
 			t.Errorf("stop reasons = %d after Close, want 0 — nobody is left to tell", stops.len())
@@ -874,7 +1055,7 @@ func TestClose_RacesSubscribe_NeverOrphansAWatcher(t *testing.T) {
 		wg.Go(func() {
 			_ = m.Subscribe(context.Background(), subA, testURI)
 		})
-		m.Close()
+		closeWithin(t, m)
 		wg.Wait()
 
 		// Close has returned: however the race fell, nothing may read
@@ -974,7 +1155,7 @@ func TestSubscribe_AllSubscribersWithdrawMidRead_AbandonsTheLaunch(t *testing.T)
 		BaseInterval: time.Millisecond,
 		MinInterval:  time.Millisecond,
 	}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	var wg sync.WaitGroup
 	var subErr error
@@ -1015,7 +1196,7 @@ func TestSubscribe_JoinerContextCancelled_ReleasesItsHold(t *testing.T) {
 		BaseInterval: time.Millisecond,
 		MinInterval:  time.Millisecond,
 	}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -1152,6 +1333,52 @@ func TestRenew_DemotedWatcher_ResumesFullSpeed(t *testing.T) {
 		if after := r.readCount(testURI); after-demoted < 2 {
 			t.Errorf("reads grew by %d in three minutes after renewal, want full-speed polling back",
 				after-demoted)
+		}
+	})
+}
+
+// TestRenew_ActiveWatch_PushesTheDeadlineOutWithoutReviving covers the common
+// renewal: the watch was never demoted, so there is nothing to revive and the
+// only thing that may change is when it would slow down.
+//
+// This is the half that decides whether a transport can hold a subscription
+// open at all. Renewing something already at full speed has no visible effect
+// at the moment of the call, so a renewal that quietly did nothing would look
+// exactly like this one until the original deadline arrived and the watch
+// slowed down anyway, with the client having done everything asked of it.
+func TestRenew_ActiveWatch_PushesTheDeadlineOutWithoutReviving(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			lease = 10 * time.Minute
+			slow  = time.Hour
+		)
+		m, _, _ := newTestManager(t, leaseOptions(lease, slow))
+		if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+
+		time.Sleep(8 * time.Minute)
+		synctest.Wait()
+		if !m.Renew(testURI) {
+			t.Fatal("Renew() = false on a watched URI")
+		}
+		if got := m.DemotedCount(); got != 0 {
+			t.Fatalf("DemotedCount() = %d before the lease ran out, want 0", got)
+		}
+
+		// Past the original deadline, inside the renewed one.
+		time.Sleep(4 * time.Minute)
+		synctest.Wait()
+		if got := m.DemotedCount(); got != 0 {
+			t.Errorf("DemotedCount() = %d twelve minutes into a ten-minute lease renewed at eight; "+
+				"the renewal did not move the deadline", got)
+		}
+
+		// Past the renewed deadline.
+		time.Sleep(8 * time.Minute)
+		synctest.Wait()
+		if got := m.DemotedCount(); got != 1 {
+			t.Errorf("DemotedCount() = %d twenty minutes in, want the watch demoted once its renewed lease ran out too", got)
 		}
 	})
 }
@@ -1363,8 +1590,9 @@ func TestSubscribe_AtCapacity_AllActive_IsStillRejected(t *testing.T) {
 func TestNotifierFailure_AdvancesBaseline(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		r, n := newFakeReader(), &fakeNotifier{err: errors.New("session gone")}
-		m := New[string](r, n, quietOptions(Options{}))
-		t.Cleanup(m.Close)
+		logs := &lockedBuffer{}
+		m := New[string](r, n, Options{Logger: debugLogger(logs)})
+		closeOnCleanup(t, m)
 
 		r.set(testURI, `{"id":99,"status":"running"}`)
 		if err := m.Subscribe(context.Background(), subA, testURI); err != nil {
@@ -1379,6 +1607,13 @@ func TestNotifierFailure_AdvancesBaseline(t *testing.T) {
 
 		if got := n.count(); got != 1 {
 			t.Errorf("notification attempts = %d, want exactly 1 — a failed delivery must not be retried forever", got)
+		}
+		// Advancing the baseline is what makes the loss permanent: the change
+		// is never offered again. The log line is therefore the only record
+		// that a subscriber was told nothing, and a delivery that failed
+		// silently is indistinguishable from a resource that never changed.
+		if !strings.Contains(logs.String(), "resource updated notification failed") {
+			t.Errorf("a dropped notification left no trace: %s", logs.String())
 		}
 	})
 }
@@ -1402,7 +1637,7 @@ func TestClose_StopsEveryWatcher(t *testing.T) {
 			}
 		}
 
-		m.Close()
+		closeWithin(t, m)
 		if m.Len() != 0 {
 			t.Fatalf("Len() = %d after Close, want 0", m.Len())
 		}
@@ -1420,8 +1655,8 @@ func TestClose_IsIdempotentAndRefusesLaterSubscribes(t *testing.T) {
 	r, n := newFakeReader(), &fakeNotifier{}
 	m := New[string](r, n, quietOptions(Options{}))
 
-	m.Close()
-	m.Close() // must not panic or block
+	closeWithin(t, m)
+	closeWithin(t, m) // must not panic or block
 
 	if err := m.Subscribe(context.Background(), subA, testURI); !errors.Is(err, ErrClosed) {
 		t.Errorf("Subscribe after Close = %v, want ErrClosed", err)
@@ -1498,7 +1733,7 @@ func TestJitter_StaysPositiveAndNear(t *testing.T) {
 // refusals escalate but never exceed the ceiling.
 func TestRecordRateLimit_BackoffGrowsAndIsCapped(t *testing.T) {
 	m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	first := m.recordRateLimit()
 	second := m.recordRateLimit()
@@ -1607,7 +1842,7 @@ func TestSubscribe_ClosedDuringInitialRead_LeavesNoWatcher(t *testing.T) {
 // notification to a subscriber that already left.
 func TestUpdateDigest_AfterWatcherRemoved_DoesNotNotify(t *testing.T) {
 	m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	orphan := &watcher[string]{uri: testURI, kind: KindPipeline}
 	if m.updateDigest(orphan, sha256.Sum256([]byte(`{"changed":true}`))) {
@@ -1624,8 +1859,9 @@ func TestUpdateDigest_AfterWatcherRemoved_DoesNotNotify(t *testing.T) {
 func TestPoll_ContextCancelledMidRead_DoesNotRetire(t *testing.T) {
 	r := newFakeReader()
 	r.fail(testURI, errors.New("context canceled"))
-	m := New[string](r, &fakeNotifier{}, quietOptions(Options{}))
-	t.Cleanup(m.Close)
+	logs := &lockedBuffer{}
+	m := New[string](r, &fakeNotifier{}, Options{Logger: debugLogger(logs)})
+	closeOnCleanup(t, m)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -1636,6 +1872,67 @@ func TestPoll_ContextCancelledMidRead_DoesNotRetire(t *testing.T) {
 	}
 	if next <= 0 {
 		t.Errorf("poll() next = %v, want a positive interval", next)
+	}
+	// The cancellation is the lease ending or the manager closing, which the
+	// loop is about to report with the cause it actually knows. Logging it
+	// here as a read that failed and will be retried says two untrue things
+	// about a watcher that is already unwinding, once per stopped watch.
+	if strings.Contains(logs.String(), "watcher read failed") {
+		t.Errorf("a read cancelled by the watch itself was logged as a transient failure: %s", logs.String())
+	}
+}
+
+// TestPoll_TransientError_IsLoggedAndRetried is the other half of the
+// cancellation rule above: a read that failed while the watch is still wanted
+// is the one case an operator has to be able to see.
+//
+// A 500, a network blip or a decode failure costs latency and nothing else,
+// so it leaves no other trace anywhere — not a stop reason, not a
+// notification, not a changed cadence. If this line goes missing, a
+// subscription failing every poll looks exactly like one whose resource never
+// changes.
+func TestPoll_TransientError_IsLoggedAndRetried(t *testing.T) {
+	r := newFakeReader()
+	r.fail(testURI, errors.New("500 Internal Server Error"))
+	logs := &lockedBuffer{}
+	m := New[string](r, &fakeNotifier{}, Options{Logger: debugLogger(logs)})
+	closeOnCleanup(t, m)
+
+	next, stopReason := m.poll(context.Background(), &watcher[string]{uri: testURI, kind: KindPipeline})
+	if stopReason != nil {
+		t.Errorf("poll() asked to stop with %v on a transient failure; polling is the floor, so one lost read costs latency, not the subscription", stopReason)
+	}
+	if next != DefaultBaseInterval {
+		t.Errorf("poll() next = %v after a transient failure, want the base interval %v", next, DefaultBaseInterval)
+	}
+	if !strings.Contains(logs.String(), "watcher read failed") {
+		t.Errorf("a failed read left no trace at all: %s", logs.String())
+	}
+}
+
+// TestJitter_SpreadsOnBothSidesOfTheValue verifies the jitter actually
+// spreads, and spreads in both directions.
+//
+// Staying inside ±20% is not the property: a jitter that always shortened the
+// wait, or that rounded to no change at all, would pass that bound and defeat
+// the whole point. Watchers refused together resume together, so a one-sided
+// or absent spread walks the whole fleet straight back into the same limit —
+// and the closer the samples sit to the value, the more exactly in lockstep
+// they return.
+func TestJitter_SpreadsOnBothSidesOfTheValue(t *testing.T) {
+	const d = time.Minute
+	var above, below int
+	for range 500 {
+		switch got := jitter(d); {
+		case got > d:
+			above++
+		case got < d:
+			below++
+		}
+	}
+	if above == 0 || below == 0 {
+		t.Errorf("over 500 samples jitter(%v) landed above the value %d times and below it %d times; "+
+			"a spread that only moves one way leaves the fleet resuming together", d, above, below)
 	}
 }
 
@@ -1661,7 +1958,7 @@ func TestJitter_DegenerateDuration_StaysPositive(t *testing.T) {
 // seconds forever instead of doubling.
 func TestClearRateLimit_DuringActivePause_IsIgnored(t *testing.T) {
 	m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	first := m.recordRateLimit()
 	if first <= 0 {
@@ -1685,7 +1982,7 @@ func TestClearRateLimit_DuringActivePause_IsIgnored(t *testing.T) {
 func TestClearRateLimit_AfterPauseExpires_Resets(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		m := New[string](newFakeReader(), &fakeNotifier{}, quietOptions(Options{}))
-		t.Cleanup(m.Close)
+		closeOnCleanup(t, m)
 
 		m.recordRateLimit()
 		m.recordRateLimit() // escalate, so a failed reset would be visible
@@ -1795,7 +2092,7 @@ func newSharedManager(t *testing.T, gate *WatcherGate, o Options) (*Manager[stri
 	}
 	r, n := newFakeReader(), &fakeNotifier{}
 	m := New[string](r, n, o)
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 	return m, r
 }
 
@@ -2101,7 +2398,7 @@ func TestWatcherGate_EveryRemovalPathReturnsItsSlot(t *testing.T) {
 			drive: func(t *testing.T, m *Manager[string], _ *fakeReader) {
 				t.Helper()
 				subscribeAll(t, m, subA, gatedURIs[0], gatedURIs[1])
-				m.Close()
+				closeWithin(t, m)
 			},
 		},
 	}
@@ -2150,7 +2447,7 @@ func TestWatcherGate_AWithdrawalMidRead_ReturnsTheSlotExactlyOnce(t *testing.T) 
 		MinInterval:    time.Millisecond,
 		SharedWatchers: gate,
 	}))
-	t.Cleanup(m.Close)
+	closeOnCleanup(t, m)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

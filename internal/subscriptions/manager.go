@@ -851,10 +851,17 @@ func (m *Manager[S]) snapshot(w *watcher[S]) Update {
 
 // applyLease demotes a watcher whose lease has run out, and reports how long
 // it should actually wait before its next read.
+//
+// There is deliberately no guard here against an unset leaseAt. A watcher
+// reaches this only from its own poll loop, which start launches after setting
+// the deadline, and [Options.withDefaults] leaves no lease at zero for that
+// deadline to be computed from. A check for it would be one no test could ever
+// take both ways, which is a line that looks like it defends something and
+// defends nothing.
 func (m *Manager[S]) applyLease(w *watcher[S], next time.Duration) time.Duration {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !w.demoted && !w.leaseAt.IsZero() && !time.Now().Before(w.leaseAt) {
+	if !w.demoted && !time.Now().Before(w.leaseAt) {
 		w.demoted = true
 		m.opts.Logger.Info("subscription lease expired, slowing to a background poll",
 			"uri", w.uri, "kind", w.kind.String(), "interval", m.opts.SlowInterval)

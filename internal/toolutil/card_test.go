@@ -53,6 +53,12 @@ func TestNewCard_SmallCard_WholeOutput(t *testing.T) {
 // separates itself from whatever the caller wrote, exactly as a later row
 // would, so a heading the caller ended with one newline still gets its blank
 // line and an empty builder gets nothing in front of the first row.
+//
+// The one-character case is what pins the sentinel a fresh card starts with:
+// the card separates when the builder's length differs from its own mark, so
+// the mark before its first write has to be a length no builder can ever
+// have. A sentinel of 1 reads as "the card wrote that byte" and swallows the
+// blank line after a caller who happened to write exactly one character.
 func TestNewCard_EmptyHeading_ContinuesUnderTheCallersHeading(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -63,6 +69,7 @@ func TestNewCard_EmptyHeading_ContinuesUnderTheCallersHeading(t *testing.T) {
 		{name: "heading ending in one newline", written: "## Runner\n", want: "## Runner\n\n- **ID**: 1\n"},
 		{name: "heading ending in a blank line", written: "## Runner\n\n", want: "## Runner\n\n- **ID**: 1\n"},
 		{name: "text ending mid-line", written: "Some prose", want: "Some prose\n\n- **ID**: 1\n"},
+		{name: "one character ending mid-line", written: "x", want: "x\n\n- **ID**: 1\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
