@@ -85,9 +85,10 @@ func groupStorageMoveCreateSpec(name string, route toolutil.ActionRoute, individ
 }
 
 func groupStorageMoveOptions(individualTool string, meta groupStorageMoveMeta) toolutil.ActionSpecOptions {
-	aliases := make([]string, 0, len(meta.aliases)+1)
-	aliases = append(aliases, individualTool)
-	aliases = append(aliases, meta.aliases...)
+	// The individual tool name leads the action's natural-language aliases, so
+	// discovery matches the canonical tool name and the group storage move
+	// phrasing alike.
+	aliases := append([]string{individualTool}, meta.aliases...)
 	return toolutil.ActionSpecOptions{
 		Aliases:        aliases,
 		Usage:          meta.usage,

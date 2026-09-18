@@ -5,6 +5,7 @@ package groupstoragemoves
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -836,5 +837,110 @@ func TestRetrieveForGroup_KeysetAndSort(t *testing.T) {
 	}
 	if len(out.Moves) != 1 {
 		t.Fatalf("expected 1 move, got %d", len(out.Moves))
+	}
+}
+
+// TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains verifies,
+// for every handler here, that its corrective hint reaches the caller at the
+// HTTP status that handler classifies, and at no other status.
+//
+// Both halves matter because these six endpoints are admin, Premium/Ultimate,
+// self-managed surfaces that refuse with a bare 403, 404 or 400 and no body:
+// the hint is the only thing that tells a model whether it lacked admin, lacked
+// the license, or named an id that does not exist. The status each hint is
+// written for was asserted nowhere — three of the six handlers were never even
+// driven at their own status, since the error tests answer 403 to handlers that
+// classify 404 and 400 — so a hint attached to a status GitLab never sends for
+// that call would have failed nothing while silently going missing in
+// production. The negative half is what keeps the hint from being handed out
+// for an unrelated failure, which would send a caller hunting for a license
+// when GitLab simply fell over.
+func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(*gitlabclient.Client) error
+	}{
+		{
+			name:   "retrieve_all",
+			status: http.StatusForbidden,
+			hint:   "requires administrator access + Premium/Ultimate; self-managed only; group wiki storage moves between Gitaly nodes",
+			call: func(c *gitlabclient.Client) error {
+				_, err := RetrieveAll(context.Background(), c, ListInput{})
+				return err
+			},
+		},
+		{
+			name:   "retrieve_for_group",
+			status: http.StatusNotFound,
+			hint:   "requires admin + Premium/Ultimate; verify group_id (numeric) exists; only storage moves for the given group are returned",
+			call: func(c *gitlabclient.Client) error {
+				_, err := RetrieveForGroup(context.Background(), c, ListForGroupInput{GroupID: 10})
+				return err
+			},
+		},
+		{
+			name:   "get",
+			status: http.StatusNotFound,
+			hint:   "requires admin + Premium/Ultimate; verify id with gitlab_retrieve_all_group_storage_moves",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Get(context.Background(), c, IDInput{ID: 1})
+				return err
+			},
+		},
+		{
+			name:   "get_for_group",
+			status: http.StatusNotFound,
+			hint:   "requires admin + Premium/Ultimate; verify group_id + id combination with gitlab_get_group_storage_move_for_group",
+			call: func(c *gitlabclient.Client) error {
+				_, err := GetForGroup(context.Background(), c, GroupMoveInput{GroupID: 10, ID: 1})
+				return err
+			},
+		},
+		{
+			name:   "schedule",
+			status: http.StatusBadRequest,
+			hint:   "requires admin + Premium/Ultimate; destination_storage_name must reference an existing Gitaly shard; cannot move to the same shard",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Schedule(context.Background(), c, ScheduleInput{GroupID: 10})
+				return err
+			},
+		},
+		{
+			name:   "schedule_all",
+			status: http.StatusBadRequest,
+			hint:   "requires admin + Premium/Ultimate; source_storage_name and destination_storage_name must reference configured Gitaly shards; bulk operation. May schedule many concurrent moves",
+			call: func(c *gitlabclient.Client) error {
+				_, err := ScheduleAll(context.Background(), c, ScheduleAllInput{})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			refusing := func(status int) *gitlabclient.Client {
+				return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(status)
+				}))
+			}
+
+			err := tc.call(refusing(tc.status))
+			if err == nil {
+				t.Fatalf("expected an error for status %d", tc.status)
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("status %d does not reach the caller with this action's guidance\n got: %v\nwant it to contain: %q", tc.status, err, tc.hint)
+			}
+
+			err = tc.call(refusing(http.StatusInternalServerError))
+			if err == nil {
+				t.Fatal("expected an error for status 500")
+			}
+			if strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("the status-%d guidance is offered for a 500 too, which advises about a refusal that did not happen: %v", tc.status, err)
+			}
+		})
 	}
 }
