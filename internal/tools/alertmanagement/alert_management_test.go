@@ -5,9 +5,11 @@ package alertmanagement
 
 import (
 	"encoding/base64"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -298,6 +300,179 @@ func TestUploadMetricImage_InvalidBase64(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid base64, got nil")
 	}
+}
+
+// TestMetricImages_IdentifierAtZero_RefusedBeforeAnyRequest verifies that a
+// required identifier left at zero is refused by the handler itself, naming the
+// tool and the parameter, and that nothing reaches GitLab.
+//
+// Zero is not an arbitrary value: it is what a missing required integer
+// deserializes to, so it is exactly the shape a model produces when it omits
+// alert_iid or image_id. The guards exist to answer that with the parameter's
+// name rather than with whatever GitLab says about alert 0. The other tests in
+// this file assert only that some error came back, which a request that reached
+// GitLab and failed satisfies just as well — so the mock here answers every
+// route successfully, and the test asserts both that the call failed and that
+// the request counter never moved. Without both halves, widening a guard from
+// `<= 0` to `< 0` passes unnoticed while every caller who omits the field is
+// told the alert does not exist.
+func TestMetricImages_IdentifierAtZero_RefusedBeforeAnyRequest(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		switch r.Method {
+		case http.MethodGet:
+			testutil.RespondJSON(w, http.StatusOK, `[`+covImageJSON+`]`)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, covImageJSON)
+		}
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("image-data"))
+
+	cases := []struct {
+		name  string
+		op    string
+		field string
+		call  func() error
+	}{
+		{
+			name: "list without alert_iid", op: "gitlab_list_alert_metric_images", field: "alert_iid",
+			call: func() error {
+				_, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{ProjectID: "1"})
+				return err
+			},
+		},
+		{
+			name: "upload without alert_iid", op: "gitlab_upload_alert_metric_image", field: "alert_iid",
+			call: func() error {
+				_, err := UploadMetricImage(t.Context(), client, UploadMetricImageInput{
+					ProjectID: "1", ContentBase64: content, Filename: testFilename,
+				})
+				return err
+			},
+		},
+		{
+			name: "update without alert_iid", op: "gitlab_update_alert_metric_image", field: "alert_iid",
+			call: func() error {
+				_, err := UpdateMetricImage(t.Context(), client, UpdateMetricImageInput{ProjectID: "1", ImageID: 10})
+				return err
+			},
+		},
+		{
+			name: "update without image_id", op: "gitlab_update_alert_metric_image", field: "image_id",
+			call: func() error {
+				_, err := UpdateMetricImage(t.Context(), client, UpdateMetricImageInput{ProjectID: "1", AlertIID: 5})
+				return err
+			},
+		},
+		{
+			name: "delete without alert_iid", op: "gitlab_delete_alert_metric_image", field: "alert_iid",
+			call: func() error {
+				return DeleteMetricImage(t.Context(), client, DeleteMetricImageInput{ProjectID: "1", ImageID: 10})
+			},
+		},
+		{
+			name: "delete without image_id", op: "gitlab_delete_alert_metric_image", field: "image_id",
+			call: func() error {
+				return DeleteMetricImage(t.Context(), client, DeleteMetricImageInput{ProjectID: "1", AlertIID: 5})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			before := requests.Load()
+			err := tc.call()
+			if err == nil {
+				t.Fatalf("%s with %s at zero returned no error, want a refusal", tc.op, tc.field)
+			}
+			if sent := requests.Load() - before; sent != 0 {
+				t.Errorf("requests reaching GitLab = %d, want 0: %s at zero must be refused before a request is built", sent, tc.field)
+			}
+			if !strings.Contains(err.Error(), tc.op) {
+				t.Errorf("error = %q, want it to name the tool %q", err, tc.op)
+			}
+			if !strings.Contains(err.Error(), tc.field) {
+				t.Errorf("error = %q, want it to name the missing parameter %q", err, tc.field)
+			}
+		})
+	}
+}
+
+// TestUploadMetricImage_CaptionAndLink_SentAsMultipartFields verifies that the
+// caption and link a caller supplies travel to GitLab as the url_text and url
+// fields of the multipart upload, beside the image itself, and that neither
+// field is invented when the caller supplies nothing.
+//
+// The success tests above read their assertions out of the mock's own response
+// body, so they move both sides of the comparison: an upload that silently
+// dropped the caption would still echo back whatever fixture the mock holds.
+// This one reads the request instead, which is the only place the caller's
+// intent can be observed.
+func TestUploadMetricImage_CaptionAndLink_SentAsMultipartFields(t *testing.T) {
+	content := base64.StdEncoding.EncodeToString([]byte("image-data"))
+
+	t.Run("what the caller supplied", func(t *testing.T) {
+		link := "https://example.com/img.png"
+		caption := "CPU saturation"
+		form := uploadedMultipartForm(t, UploadMetricImageInput{
+			ProjectID: "1", AlertIID: 5, ContentBase64: content, Filename: testFilename,
+			URL: &link, URLText: &caption,
+		})
+		if got := testutil.FormValue(form, "url"); got != link {
+			t.Errorf("multipart url = %q, want %q", got, link)
+		}
+		if got := testutil.FormValue(form, "url_text"); got != caption {
+			t.Errorf("multipart url_text = %q, want %q", got, caption)
+		}
+		file, header, err := testutil.FormFile(form, "file")
+		if err != nil {
+			t.Fatalf("multipart file part: %v", err)
+		}
+		defer func() { _ = file.Close() }()
+		if header.Filename != testFilename {
+			t.Errorf("multipart filename = %q, want %q", header.Filename, testFilename)
+		}
+	})
+
+	t.Run("nothing the caller withheld", func(t *testing.T) {
+		form := uploadedMultipartForm(t, UploadMetricImageInput{
+			ProjectID: "1", AlertIID: 5, ContentBase64: content, Filename: testFilename,
+		})
+		if values, ok := form.Value["url"]; ok {
+			t.Errorf("multipart carried url = %q, want the field omitted", values)
+		}
+		if values, ok := form.Value["url_text"]; ok {
+			t.Errorf("multipart carried url_text = %q, want the field omitted", values)
+		}
+	})
+}
+
+// uploadedMultipartForm drives one upload against a mock that parses the
+// multipart body and returns the form the request carried, so a test can assert
+// what GitLab was sent rather than what the mock answered.
+func uploadedMultipartForm(t *testing.T, input UploadMetricImageInput) *multipart.Form {
+	t.Helper()
+	var form *multipart.Form
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		parsed, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("ReadMultipartForm: %v", err)
+			http.Error(w, "parse multipart form", http.StatusBadRequest)
+			return
+		}
+		form = parsed
+		testutil.RespondJSON(w, http.StatusCreated, covImageJSON)
+	}))
+	if _, err := UploadMetricImage(t.Context(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if form == nil {
+		t.Fatal("no multipart request reached the mock")
+	}
+	return form
 }
 
 // TestDeleteMetricImage_MissingAlertIID verifies that DeleteMetricImage_MissingAlertIID returns a wrapped error when the GitLab API responds with an error status.

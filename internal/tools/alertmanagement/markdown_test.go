@@ -56,6 +56,26 @@ func TestFormatListMarkdown(t *testing.T) {
 				"- "+toolutil.HintPreserveLinks+"\n"+
 				"- Use action 'admin.alert_metric_image_upload' to add another metric image to the alert\n")
 	})
+	t.Run("no image carries a link", func(t *testing.T) {
+		// Every other case here renders images GitLab gave a URL, so the flag
+		// that decides whether the footer asks the model to preserve links was
+		// only ever true. A page of uploads with no metric link must leave the
+		// cell empty and must not ask a model to preserve links that are not
+		// there.
+		assertRendered(t, FormatListMarkdown(ListMetricImagesOutput{
+			Images: []MetricImageItem{{
+				ID:       3,
+				Filename: "third.png",
+				FilePath: "/uploads/-/system/alert_metric_image/file/3/third.png",
+			}},
+		}),
+			"## Alert Metric Images (1)\n\n"+
+				"| ID | Filename | File Path | Metric Link |\n"+
+				"| --- | --- | --- | --- |\n"+
+				"| 3 | third.png | /uploads/-/system/alert_metric_image/file/3/third.png |  |\n"+
+				"\n---\n💡 **Next steps:**\n"+
+				"- Use action 'admin.alert_metric_image_upload' to add another metric image to the alert\n")
+	})
 	t.Run("empty", func(t *testing.T) {
 		assertRendered(t, FormatListMarkdown(ListMetricImagesOutput{}), "No metric images found.\n")
 	})
