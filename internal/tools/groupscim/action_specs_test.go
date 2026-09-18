@@ -209,6 +209,53 @@ func naturalLanguageAliases(t *testing.T, spec toolutil.ActionSpec, seen map[str
 	return count
 }
 
+// TestGroupSCIMOptions_NameOutsideTheMetadataTable_KeepsTheDeclaredDefaults
+// verifies that an action name groupSCIMActionMeta has no entry for keeps the
+// options declared above the lookup instead of being overwritten with a zero
+// entry, and that everything the table is the only source of stays empty.
+//
+// It matters because TestActionSpecs_Metadata reads an empty or generic Usage
+// as the failure it is, and that reading only works while the lookup leaves
+// the generic Usage in place: drop the comma-ok guard and an uncovered name
+// reaches the catalog with no Usage at all, which the audit would report as a
+// missing field rather than as the missing table row it really is. Asserting
+// the covered and the uncovered name against each other, rather than against
+// the prose either one carries, is what keeps this from passing when the
+// table's text is edited.
+func TestGroupSCIMOptions_NameOutsideTheMetadataTable_KeepsTheDeclaredDefaults(t *testing.T) {
+	const tool = "gitlab_list_group_scim_identities"
+	covered := groupSCIMOptions("list", tool)
+	uncovered := groupSCIMOptions("no_such_action", tool)
+
+	if uncovered.Usage == "" {
+		t.Error("an uncovered action name lost its Usage: the lookup overwrote the declared default")
+	}
+	if uncovered.Usage == covered.Usage {
+		t.Errorf("an uncovered action name took the Usage the table holds for list: %q", uncovered.Usage)
+	}
+	if len(uncovered.RelatedActions) != 0 {
+		t.Errorf("RelatedActions = %v, want none: the metadata table is their only source", uncovered.RelatedActions)
+	}
+	if uncovered.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty: the metadata table is its only source", uncovered.IndividualTool.Description)
+	}
+	if len(uncovered.Aliases) != 1 || uncovered.Aliases[0] != tool {
+		t.Errorf("Aliases = %v, want only the individual tool name %q", uncovered.Aliases, tool)
+	}
+	if len(covered.Aliases) <= len(uncovered.Aliases) {
+		t.Errorf("a covered name carried %d aliases and an uncovered one %d: the table contributed none",
+			len(covered.Aliases), len(uncovered.Aliases))
+	}
+	if uncovered.IndividualTool.Title != covered.IndividualTool.Title {
+		t.Errorf("Title = %q, want %q: the title is derived from the tool name, not from the table",
+			uncovered.IndividualTool.Title, covered.IndividualTool.Title)
+	}
+	if uncovered.OwnerPackage != covered.OwnerPackage || uncovered.Edition != covered.Edition {
+		t.Errorf("owner/edition = %q/%q, want %q/%q: neither comes from the table",
+			uncovered.OwnerPackage, uncovered.Edition, covered.OwnerPackage, covered.Edition)
+	}
+}
+
 func groupSCIMSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byTool := make(map[string]toolutil.ActionSpec, len(specs))
