@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -401,6 +404,15 @@ func TestGet_ByFullPath(t *testing.T) {
 	if goVersion.Default != "1.22" {
 		t.Errorf("Inputs[0].Default = %q, want 1.22", goVersion.Default)
 	}
+	// The description and the type are what tell a model how to fill an
+	// input; both are nullable in the schema and so pass through a guard of
+	// their own, which nothing held until this asserted them.
+	if goVersion.Description != "Go version to use" {
+		t.Errorf("Inputs[0].Description = %q, want Go version to use", goVersion.Description)
+	}
+	if goVersion.Type != "string" {
+		t.Errorf("Inputs[0].Type = %q, want string", goVersion.Type)
+	}
 
 	binaryName := r.Components[0].Inputs[1]
 	if !binaryName.Required {
@@ -524,6 +536,135 @@ func TestGet_PartialSemverStaysEmpty(t *testing.T) {
 	}
 }
 
+// catalogResourceWithSemver renders a one-version catalog resource whose
+// version carries the given semver JSON and nothing else optional.
+func catalogResourceWithSemver(semver string) string {
+	return `{
+		"id": "gid://gitlab/Ci::CatalogResource/9",
+		"name": "partial",
+		"fullPath": "g/partial",
+		"webPath": "/explore/catalog/g/partial",
+		"starCount": 0,
+		"last30DayUsageCount": 0,
+		"archived": false,
+		"topics": [],
+		"verificationLevel": null,
+		"visibilityLevel": null,
+		"latestReleasedAt": null,
+		"versions": {"nodes": [
+			{"name": "v1", "releasedAt": null, "createdAt": null, "semver": ` + semver +
+		`, "path": null, "readmeHtml": null, "components": null}
+		]}
+	}`
+}
+
+// TestGet_SemverMissingAnyOneComponent_StaysEmpty verifies that a version is
+// given a semver string only when the schema sent all three of major, minor
+// and patch, whichever one is missing.
+//
+// All three are nullable in CiCatalogResourceVersionSemver, so the guard is a
+// four-way conjunction, and a conjunction is only held by a case that fails at
+// each of its operands: the suite had one case, missing minor and patch
+// together, which leaves every operand after the first free to be read as an
+// alternative. Read that way the handler dereferences the very pointer that is
+// nil, so the failure is a panic in a tool call rather than a wrong string.
+func TestGet_SemverMissingAnyOneComponent_StaysEmpty(t *testing.T) {
+	tests := []struct {
+		name   string
+		semver string
+	}{
+		{"no semver object at all", `null`},
+		{"major only", `{"major": 1, "minor": null, "patch": null}`},
+		{"patch missing", `{"major": 1, "minor": 2, "patch": null}`},
+		{"minor missing", `{"major": 1, "minor": null, "patch": 3}`},
+		{"major missing", `{"major": null, "minor": 2, "patch": 3}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK,
+						`{"ciCatalogResource": `+catalogResourceWithSemver(tt.semver)+`}`)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			out, err := Get(context.Background(), client, GetInput{FullPath: "g/partial"})
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if got := out.Resource.Versions[0].Semver; got != "" {
+				t.Errorf("Semver = %q, want empty when a component is missing", got)
+			}
+		})
+	}
+}
+
+// TestGet_ComponentInput_NullOptionalsStayEmpty verifies that an input whose
+// description, type and default the schema sent as null reaches the caller as
+// empty strings.
+//
+// Every fixture here had described and typed inputs, so the three guards that
+// read those pointers were only ever seen from their true side. Read from the
+// other side each is a nil dereference inside a tool call, and the response a
+// model is shown to decide how to fill an input is exactly where a nullable
+// field is likeliest: a component may declare an input with no description and
+// no declared type at all.
+func TestGet_ComponentInput_NullOptionalsStayEmpty(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResource": {
+					"id": "gid://gitlab/Ci::CatalogResource/11",
+					"name": "bare",
+					"fullPath": "g/bare",
+					"webPath": "/explore/catalog/g/bare",
+					"starCount": 0,
+					"last30DayUsageCount": 0,
+					"archived": false,
+					"topics": [],
+					"verificationLevel": null,
+					"visibilityLevel": null,
+					"latestReleasedAt": null,
+					"versions": {"nodes": [
+						{
+							"name": "1.0.0",
+							"releasedAt": null,
+							"createdAt": null,
+							"semver": null,
+							"path": null,
+							"readmeHtml": null,
+							"components": {"nodes": [
+								{"name": "deploy", "description": null, "includePath": "g/bare/deploy@1.0.0", "inputs": [
+									{"name": "target", "description": null, "type": null, "required": true, "default": null}
+								]}
+							]}
+						}
+					]}
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Get(context.Background(), client, GetInput{FullPath: "g/bare"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if len(out.Resource.Components) != 1 || len(out.Resource.Components[0].Inputs) != 1 {
+		t.Fatalf("expected one component with one input, got %+v", out.Resource.Components)
+	}
+	component := out.Resource.Components[0]
+	if component.Description != "" {
+		t.Errorf("Components[0].Description = %q, want empty", component.Description)
+	}
+	input := component.Inputs[0]
+	if input.Name != "target" || !input.Required {
+		t.Errorf("input = %+v, want the required input named target", input)
+	}
+	if input.Description != "" || input.Type != "" || input.Default != "" {
+		t.Errorf("input optionals = %+v, want all three empty", input)
+	}
+}
+
 // TestGet_ByID verifies the Get_ByID handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -635,6 +776,45 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
+// TestGet_NotFound_NamesWhateverTheCallerLookedItUpBy verifies that the
+// not-found message quotes the identifier the caller actually sent, whichever
+// of the two arguments that was.
+//
+// Get accepts exactly one of id and full_path, and the message is built from
+// whichever is non-empty. Nothing held that choice: the suite only ever looked
+// a missing resource up by path, so the branch that falls back to full_path
+// could have been reading either field and no test would notice. A message
+// naming "" — or naming a path the caller never sent — is the one line a model
+// has to work out whether it mistyped the identifier or the resource is a
+// draft.
+func TestGet_NotFound_NamesWhateverTheCallerLookedItUpBy(t *testing.T) {
+	tests := []struct {
+		name  string
+		input GetInput
+		want  string
+	}{
+		{"by full path", GetInput{FullPath: "nonexistent/project"}, "nonexistent/project"},
+		{"by id", GetInput{ID: "gid://gitlab/Ci::CatalogResource/404"}, "gid://gitlab/Ci::CatalogResource/404"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := graphqlMux(map[string]http.HandlerFunc{
+				"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"ciCatalogResource": null}`)
+				},
+			})
+			client := testutil.NewTestClient(t, handler)
+			_, err := Get(context.Background(), client, tt.input)
+			if err == nil {
+				t.Fatal("expected error for null resource")
+			}
+			if !strings.Contains(err.Error(), strconv.Quote(tt.want)) {
+				t.Errorf("error = %q, want it to name %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
 // TestGet_NullOptionalFields verifies the Get_NullOptionalFields handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -694,6 +874,11 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 
 // TestFormatListMarkdown_WithItems verifies that formatting catalog resources
 // produces a Markdown table with name, version, star count, and description.
+//
+// The second row is archived, which matters beyond covering a branch: the
+// catalog lists retired component projects beside maintained ones, and the
+// marker in the name cell is the only thing in the whole row that tells them
+// apart, so a model choosing a component to include has nothing else to go on.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Resources: []ResourceItem{
@@ -706,17 +891,28 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 				LatestVersionName:   "2.1.0",
 				LatestReleasedAt:    "2026-06-15T10:30:00Z",
 			},
+			{
+				Name:                "old-pipeline",
+				FullPath:            "g/old-pipeline",
+				WebPath:             "/explore/catalog/g/old-pipeline",
+				StarCount:           3,
+				Last30DayUsageCount: 0,
+				LatestVersionName:   "1.0.0",
+				LatestReleasedAt:    "2024-01-02T09:00:00Z",
+				Archived:            true,
+			},
 		},
 	})
 	// The name is not linked: GitLab answers with webPath, a path relative to
 	// the instance root, and a link built from it resolved against whatever
 	// base the reading client happened to have. The full path the get action
 	// takes is shown instead.
-	want := "## CI/CD Catalog Resources (1)\n\n" +
+	want := "## CI/CD Catalog Resources (2)\n\n" +
 		"| Name | Path | Description | Stars | Usage (30d) | Verification | Latest Version | Released |\n" +
 		"| --- | --- | --- | --- | --- | --- | --- | --- |\n" +
 		"| go-pipeline | `g/go-pipeline` |  | 42 | 5 |  | 2.1.0 | 15 Jun 2026 10:30 UTC |\n" +
-		"\nShowing 1 items | no more pages\n" +
+		"| old-pipeline " + toolutil.EmojiArchived + " | `g/old-pipeline` |  | 3 | 0 |  | 1.0.0 | 2 Jan 2024 09:00 UTC |\n" +
+		"\nShowing 2 items | no more pages\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'ci_catalog.get' to see one resource with its components and inputs\n" +
 		"- Use action 'template.lint' to check a configuration that includes one\n"
@@ -797,6 +993,10 @@ func TestTruncateRunes(t *testing.T) {
 		{"long", "hello world this is long", 10, "hello w..."},
 		{"multibyte cut on a rune boundary", "añadir un paso de compilación", 10, "añadir ..."},
 		{"maxRunes below the ellipsis", "hello", 2, "he"},
+		// At exactly the ellipsis width the cell must still say something
+		// about the description. Widening the guard to maxRunes < 3 would
+		// answer "..." here, which is three characters of nothing.
+		{"maxRunes exactly the ellipsis width", "hello", 3, "hel"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1066,4 +1266,166 @@ func TestDecorateCatalogMeta_UnknownTool(t *testing.T) {
 		options.IndividualTool.Description != "untouched" {
 		t.Fatalf("decorateCatalogMeta mutated options for unknown tool: %+v", options)
 	}
+}
+
+// TestApplyCatalogMeta_EntrySetsOneField_LeavesTheRestStanding verifies that
+// each field of a metadata entry is copied across on its own: an entry that
+// carries a usage sentence and nothing else must not blank the generic
+// aliases, related actions, description or schema overrides on the way past.
+//
+// Every entry in catalogActionMeta happens to be complete, so nothing in the
+// suite ever reaches those guards from their empty side, and all four could be
+// widened to copy unconditionally without a test noticing — which would clear
+// the generic aliases and related actions of any future partial entry, and
+// take the catalog's scope and sort enums with them.
+func TestApplyCatalogMeta_EntrySetsOneField_LeavesTheRestStanding(t *testing.T) {
+	generic := func() toolutil.ActionSpecOptions {
+		return toolutil.ActionSpecOptions{
+			Usage:                "generic usage",
+			Aliases:              []string{"generic alias"},
+			RelatedActions:       []string{"generic.related"},
+			InputSchemaOverrides: []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("scope", "GENERIC")},
+			IndividualTool:       toolutil.IndividualToolSpec{Description: "generic description"},
+		}
+	}
+
+	t.Run("an empty entry changes nothing", func(t *testing.T) {
+		options := generic()
+		applyCatalogMeta(&options, catalogActionMetaEntry{})
+		if diff := describeMetaDifference(generic(), options); diff != "" {
+			t.Errorf("empty entry changed the options: %s", diff)
+		}
+	})
+
+	tests := []struct {
+		name  string
+		entry catalogActionMetaEntry
+		field string
+	}{
+		{"usage only", catalogActionMetaEntry{usage: "specific"}, "Usage"},
+		{"aliases only", catalogActionMetaEntry{aliases: []string{"specific"}}, "Aliases"},
+		{"related only", catalogActionMetaEntry{related: []string{"specific.related"}}, "RelatedActions"},
+		{"description only", catalogActionMetaEntry{description: "specific"}, "IndividualTool.Description"},
+		{
+			"overrides only",
+			catalogActionMetaEntry{overrides: []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("sort", "SPECIFIC")}},
+			"InputSchemaOverrides",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			options := generic()
+			applyCatalogMeta(&options, tt.entry)
+			diff := describeMetaDifference(generic(), options)
+			if diff == "" {
+				t.Fatalf("entry setting %s changed nothing", tt.field)
+			}
+			if diff != tt.field {
+				t.Errorf("entry setting %s changed %s instead", tt.field, diff)
+			}
+		})
+	}
+}
+
+// describeMetaDifference names the single discovery-metadata field on which
+// want and got differ, or "" when they agree. It reports more than one name
+// joined by "+" so a test asserting that exactly one field moved can say which
+// others came with it.
+func describeMetaDifference(want, got toolutil.ActionSpecOptions) string {
+	var changed []string
+	if want.Usage != got.Usage {
+		changed = append(changed, "Usage")
+	}
+	if !slices.Equal(want.Aliases, got.Aliases) {
+		changed = append(changed, "Aliases")
+	}
+	if !slices.Equal(want.RelatedActions, got.RelatedActions) {
+		changed = append(changed, "RelatedActions")
+	}
+	if !reflect.DeepEqual(want.InputSchemaOverrides, got.InputSchemaOverrides) {
+		changed = append(changed, "InputSchemaOverrides")
+	}
+	if want.IndividualTool.Description != got.IndividualTool.Description {
+		changed = append(changed, "IndividualTool.Description")
+	}
+	return strings.Join(changed, "+")
+}
+
+// TestActionSpecs_RelatedActionsAreTheCanonicalCatalogIDs verifies that each
+// catalog tool points at the catalog actions a model would go to next, rather
+// than at the generic set the spec builder starts from.
+//
+// The generic RelatedActions are non-empty, so the only assertion the suite
+// made of them — that there are some — passed just as well when the
+// action-specific ones were dropped on the floor. What the R-META metadata is
+// for is that list_catalog_resources leads to get_catalog_resource and back
+// again; a tool related to "template.lint, pipeline.create, project.get" like
+// every other tool in the domain says nothing.
+func TestActionSpecs_RelatedActionsAreTheCanonicalCatalogIDs(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{}))
+	specByTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{"gitlab_list_catalog_resources", []string{actionCatalogGet, actionTemplateLint, "pipeline.create"}},
+		{"gitlab_get_catalog_resource", []string{actionCatalogList, actionTemplateLint, "project.get"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec, ok := specByTool[tt.name]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tt.name)
+			}
+			if !slices.Equal(spec.RelatedActions, tt.want) {
+				t.Errorf("RelatedActions = %v, want %v", spec.RelatedActions, tt.want)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_ListCarriesTheCatalogEnums verifies that the list action
+// publishes the CiCatalogResourceScope and CiCatalogResourceSort values as its
+// scope and sort enums, and that the get action publishes no override at all.
+//
+// This is the one piece of metadata in the package whose absence breaks calls
+// rather than discovery: without the override the canonical REST "sort" enum
+// (asc, desc) is injected instead, and the server then refuses every value
+// GitLab actually accepts. Nothing asserted the overrides, so the guard that
+// applies them could be inverted and the suite stayed green.
+func TestActionSpecs_ListCarriesTheCatalogEnums(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{}))
+	specByTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	t.Run("list publishes both catalog enums", func(t *testing.T) {
+		spec := specByTool["gitlab_list_catalog_resources"]
+		want := []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("scope", catalogScopeValues...),
+			toolutil.SchemaEnumOverride("sort", catalogSortValues...),
+		}
+		if !reflect.DeepEqual(spec.InputSchemaOverrides, want) {
+			t.Errorf("InputSchemaOverrides = %+v, want %+v", spec.InputSchemaOverrides, want)
+		}
+		// The values themselves are the GraphQL enum members, upper case and
+		// underscored, not the asc/desc pair the REST sort enum carries.
+		if !slices.Contains(catalogSortValues, "NAME_ASC") || slices.Contains(catalogSortValues, "asc") {
+			t.Errorf("catalogSortValues = %v, want the CiCatalogResourceSort members", catalogSortValues)
+		}
+		if !slices.Equal(catalogScopeValues, []string{"ALL", "NAMESPACES"}) {
+			t.Errorf("catalogScopeValues = %v, want [ALL NAMESPACES]", catalogScopeValues)
+		}
+	})
+
+	t.Run("get publishes none", func(t *testing.T) {
+		if got := specByTool["gitlab_get_catalog_resource"].InputSchemaOverrides; len(got) != 0 {
+			t.Errorf("InputSchemaOverrides = %+v, want none", got)
+		}
+	})
 }
