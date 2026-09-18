@@ -6,7 +6,9 @@ package gitignoretemplates
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -357,4 +359,209 @@ func gitignoreTemplateSpecsByTool(specs []toolutil.ActionSpec) map[string]toolut
 		specByTool[spec.IndividualTool.Name] = spec
 	}
 	return specByTool
+}
+
+// ---------------------------------------------------------------------------
+// What a caller is handed: the fields, the page, the hint
+// ---------------------------------------------------------------------------.
+
+// TestList_DistinctKeyAndName_MapsEachToItsOwnField asserts that List copies
+// GitLab's key into Key and its name into Name, against a fixture whose two
+// columns differ on every row. Every other fixture here spells a template "Go"
+// in both columns, which asserts the mapping against itself: exchanging the two
+// assignments moves both sides together and fails nothing, while a caller would
+// be handed "Go" as the key of the template GitLab files under "Global/Go" and
+// the get that follows would 404.
+func TestList_DistinctKeyAndName_MapsEachToItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Global/Go","name":"Go"},{"key":"Node","name":"Node.js"}]`)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []TemplateListItem{{Key: "Global/Go", Name: "Go"}, {Key: "Node", Name: "Node.js"}}
+	if !slices.Equal(out.Templates, want) {
+		t.Errorf("Templates = %+v, want %+v", out.Templates, want)
+	}
+}
+
+// TestList_PaginatedResponse_PublishesTheHeadersGitLabSent asserts that the
+// pagination block List returns is filled from the response GitLab answered
+// with, down to the derived has_more. The list is the only way a caller learns
+// which keys exist, so a block that is dropped or filled from nowhere hands a
+// model reading page two of three a complete-looking answer and no way to ask
+// for the rest; nothing else in this package reads the block at all.
+func TestList_PaginatedResponse_PublishesTheHeadersGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"key":"Node","name":"Node.js"}]`, testutil.PaginationHeaders{
+			Page: "2", PerPage: "5", Total: "11", TotalPages: "3", NextPage: "3", PrevPage: "1",
+		})
+	}))
+
+	out, err := List(t.Context(), client, ListInput{Page: 2, PerPage: 5})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := toolutil.PaginationOutput{
+		Page: 2, PerPage: 5, TotalItems: 11, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true,
+	}
+	if out.Pagination != want {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// TestGet_TemplateBody_ReachesTheCallerWithItsName asserts that Get carries
+// both halves of GitLab's answer. The body is the whole point of the action —
+// a caller asks for a template in order to write it into .gitignore — and it
+// was the one field no test read through the handler: Get could return the
+// name alone, or an empty body, and every assertion in this file still passed.
+func TestGet_TemplateBody_ReachesTheCallerWithItsName(t *testing.T) {
+	const body = "*.exe\n*.test\nvendor/\n"
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitignores/Go")
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"Go","content":"*.exe\n*.test\nvendor/\n"}`)
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{Key: "Go"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Name != "Go" {
+		t.Errorf("Name = %q, want Go", out.Name)
+	}
+	if out.Content != body {
+		t.Errorf("Content = %q, want %q", out.Content, body)
+	}
+}
+
+// TestList_ErrorStatuses_SuggestTheTokenScopeOnlyOnForbidden asserts that the
+// read_api suggestion is attached to the status it is about and to no other.
+// The existing error tests only check that some error came back, so the status
+// this handler classifies on was asserted nowhere: pointed at any other code,
+// a 403 would lose the one hint that tells a caller their token is too narrow,
+// and a 404 would gain advice that has nothing to do with what happened.
+func TestList_ErrorStatuses_SuggestTheTokenScopeOnlyOnForbidden(t *testing.T) {
+	const scopeHint = "Suggestion: verify your token has read_api scope"
+
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"forbidden_suggests_the_scope", http.StatusForbidden, true},
+		{"not_found_suggests_nothing_about_scope", http.StatusNotFound, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+
+			_, err := List(t.Context(), client, ListInput{})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if got := strings.Contains(err.Error(), scopeHint); got != tc.wantHint {
+				t.Errorf("scope hint present = %v, want %v; error: %v", got, tc.wantHint, err)
+			}
+		})
+	}
+}
+
+// TestGet_ErrorStatuses_SuggestTheListActionOnlyOnNotFound asserts the same
+// property for the get handler: a key GitLab does not know is answered with
+// the action that lists the keys, and a refusal for any other reason is not.
+// A model handed "verify name with gitlab_list_gitignore_templates" after a
+// 403 would go looking for a spelling mistake instead of at its credential.
+func TestGet_ErrorStatuses_SuggestTheListActionOnlyOnNotFound(t *testing.T) {
+	const listHint = "Suggestion: verify name with gitlab_list_gitignore_templates"
+
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"not_found_suggests_the_list_action", http.StatusNotFound, true},
+		{"forbidden_suggests_nothing_about_the_name", http.StatusForbidden, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+
+			_, err := Get(t.Context(), client, GetInput{Key: "Nope"})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if got := strings.Contains(err.Error(), listHint); got != tc.wantHint {
+				t.Errorf("list hint present = %v, want %v; error: %v", got, tc.wantHint, err)
+			}
+		})
+	}
+}
+
+// TestGet_EmptyKey_RefusesBeforeAskingGitLab asserts that a get with no key is
+// refused here, naming the action that lists the keys, and that no request
+// leaves for GitLab. Both halves matter and neither was held: without the
+// guard the call goes out as a request for the collection itself, so what a
+// model gets back is whatever that URL happens to answer rather than the one
+// message that tells it how to find a key.
+func TestGet_EmptyKey_RefusesBeforeAskingGitLab(t *testing.T) {
+	var requests atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"Go","content":"*.exe"}`)
+	}))
+
+	_, err := Get(t.Context(), client, GetInput{Key: ""})
+	if err == nil {
+		t.Fatal("expected an error for an empty key")
+	}
+	if got := requests.Load(); got != 0 {
+		t.Errorf("requests reaching GitLab = %d, want 0", got)
+	}
+	if !strings.Contains(err.Error(), "list action") {
+		t.Errorf("error should point at the list action, got %v", err)
+	}
+}
+
+// TestFormatGetMarkdown_NamesTheTemplateInItsHeading asserts the rendered card
+// names the template above its body and fences the body as gitignore. The
+// heading is the only place the name appears, and the older assertion read the
+// body alone, so a formatter that headed every card with its own content
+// rendered a card a reader cannot attribute to any template.
+func TestFormatGetMarkdown_NamesTheTemplateInItsHeading(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{Name: "Go", Content: "*.exe"})
+
+	if !strings.Contains(md, "## Gitignore Template: Go") {
+		t.Errorf("heading should name the template, got %q", md)
+	}
+	if !strings.Contains(md, "```gitignore\n*.exe\n```") {
+		t.Errorf("body should be fenced as gitignore, got %q", md)
+	}
+}
+
+// TestFormatListMarkdown_PaginatedOutput_RendersThePageFooter asserts the list
+// card carries the page the output block describes, and each template in its
+// own column. The handler filling that block is worth nothing if the formatter
+// then renders the card without it: the Markdown view is what a model reads,
+// so a footer dropped there hides the further pages just as completely as a
+// block never filled.
+func TestFormatListMarkdown_PaginatedOutput_RendersThePageFooter(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Templates: []TemplateListItem{{Key: "Node", Name: "Node.js"}},
+		Pagination: toolutil.PaginationOutput{
+			Page: 2, PerPage: 5, TotalItems: 11, TotalPages: 3, NextPage: 3, HasMore: true,
+		},
+	})
+
+	if !strings.Contains(md, "Page 2 of 3") {
+		t.Errorf("footer should name the page, got %q", md)
+	}
+	if !strings.Contains(md, "| Node | Node.js |") {
+		t.Errorf("row should carry the key then the name, got %q", md)
+	}
 }
