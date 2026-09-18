@@ -523,6 +523,43 @@ func TestDecorateKeyMeta_UnknownTool(t *testing.T) {
 	}
 }
 
+// TestDecorateKeyMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone verifies
+// each of the four metadata fields is copied only when the entry supplies it.
+// Both entries in the real table fill all four, so nothing else reaches the
+// other side of those four guards, and a key lookup added with partial
+// metadata would silently lose whatever the generic options already carried:
+// an entry naming no aliases would replace the individual tool name with
+// nothing, leaving the action reachable by its canonical ID alone, and one
+// naming no related actions would take the per-user SSH-key surface off the
+// only two tools that resolve a bare key to its owner.
+func TestDecorateKeyMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone(t *testing.T) {
+	const probe = "gitlab_key_meta_probe"
+	keyActionMeta[probe] = keyActionMetaEntry{}
+	t.Cleanup(func() { delete(keyActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:          "Use to execute keys domain action.",
+		Aliases:        []string{probe},
+		RelatedActions: []string{"user.ssh_keys"},
+	}
+	options.IndividualTool.Description = "generic description"
+
+	decorateKeyMeta(&options, probe)
+
+	if options.Usage != "Use to execute keys domain action." {
+		t.Errorf("Usage = %q, want the generic one untouched", options.Usage)
+	}
+	if options.IndividualTool.Description != "generic description" {
+		t.Errorf("Description = %q, want the generic one untouched", options.IndividualTool.Description)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != probe {
+		t.Errorf("Aliases = %v, want the generic one left as it was", options.Aliases)
+	}
+	if len(options.RelatedActions) != 1 || options.RelatedActions[0] != "user.ssh_keys" {
+		t.Errorf("RelatedActions = %v, want the generic one left as it was", options.RelatedActions)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
