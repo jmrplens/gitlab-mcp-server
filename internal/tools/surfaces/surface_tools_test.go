@@ -766,19 +766,54 @@ func TestReadOnlyGroup_NoActions_ReportsNotReadOnly(t *testing.T) {
 // resolving, so a model holding an older ID is told the action does not exist
 // rather than being routed to the one that replaced it.
 func TestStandaloneToolSpecs_EverySurface_RepublishesItsHistoricalActionAliases(t *testing.T) {
-	declared := declaredActionAliases()
-	checked := 0
-
+	// Driven from the declarations rather than from what the projection
+	// produced, because the produced side is what a rename breaks: iterating it
+	// lets a canonical ID that stopped being published go unmentioned, while
+	// the other six keep any count of checked aliases above zero and the test
+	// passes reporting nothing.
+	byCanonical := make(map[string]actioncatalog.SurfaceToolSpec)
+	domains := make(map[string]bool)
 	for _, spec := range StandaloneToolSpecs(newProjectionClient(t)) {
-		canonicalID := spec.BaseDomain + "." + spec.ActionName
+		byCanonical[spec.BaseDomain+"."+spec.ActionName] = spec
+		domains[spec.BaseDomain] = true
+	}
+
+	declared := declaredActionAliases()
+	wanted := declaredIDsForDomains(t, declared, domains)
+	for _, canonicalID := range wanted {
 		t.Run(canonicalID, func(t *testing.T) {
-			checked += assertCarriesDeclaredAliases(t, spec.Compatibility, canonicalID, spec.ActionName, declared)
+			spec, published := byCanonical[canonicalID]
+			if !published {
+				t.Fatalf("no standalone surface publishes %q, which aliases are declared for; it was renamed or dropped, and a model holding an older ID is now told the action does not exist",
+					canonicalID)
+			}
+			assertCarriesDeclaredAliases(t, spec.Compatibility, canonicalID, spec.ActionName, declared)
 		})
 	}
+}
 
-	if checked == 0 {
-		t.Fatal("no standalone surface matched a declared alias, so this test asserted nothing: either the declarations were emptied or the canonical IDs stopped matching")
+// declaredIDsForDomains returns the canonical IDs declared for the given base
+// domains, sorted, and fails the test if there are none.
+//
+// The declarations cover the whole tree, and these tests are about the handful
+// of standalone surfaces, so the set has to be narrowed by domain rather than
+// by what the projection produced: narrowing by the produced side is what lets
+// a renamed action go unnoticed, since the survivors keep any count above zero.
+func declaredIDsForDomains(t *testing.T, declared map[string][]actioncompat.ActionAlias, domains map[string]bool) []string {
+	t.Helper()
+	var ids []string
+	for canonicalID := range declared {
+		domain, _, found := strings.Cut(canonicalID, ".")
+		if found && domains[domain] {
+			ids = append(ids, canonicalID)
+		}
 	}
+	if len(ids) == 0 {
+		t.Fatalf("no alias is declared for any of the standalone domains %v, so this test would assert nothing",
+			slices.Sorted(maps.Keys(domains)))
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // TestAddToolCatalog_ProjectedActions_KeepTheHistoricalActionAliases asserts
@@ -796,17 +831,25 @@ func TestAddToolCatalog_ProjectedActions_KeepTheHistoricalActionAliases(t *testi
 		t.Fatalf("AddToolCatalog() error = %v", err)
 	}
 
-	declared := declaredActionAliases()
-	checked := 0
-
+	// Driven from the declarations, for the reason given on the test above.
+	byCanonical := make(map[string]actioncatalog.Action)
+	domains := make(map[string]bool)
 	for _, action := range catalog.Actions() {
-		canonicalID := string(action.ID)
-		t.Run(canonicalID, func(t *testing.T) {
-			checked += assertCarriesDeclaredAliases(t, action.Compatibility, canonicalID, action.Name, declared)
-		})
+		byCanonical[string(action.ID)] = action
+	}
+	for _, spec := range StandaloneToolSpecs(newProjectionClient(t)) {
+		domains[spec.BaseDomain] = true
 	}
 
-	if checked == 0 {
-		t.Fatal("no projected catalog action matched a declared alias, so this test asserted nothing: either the declarations were emptied or the canonical IDs stopped matching")
+	declared := declaredActionAliases()
+	for _, canonicalID := range declaredIDsForDomains(t, declared, domains) {
+		t.Run(canonicalID, func(t *testing.T) {
+			action, projected := byCanonical[canonicalID]
+			if !projected {
+				t.Fatalf("the catalog holds no action %q, which aliases are declared for; the dynamic surface a caller queries cannot resolve them",
+					canonicalID)
+			}
+			assertCarriesDeclaredAliases(t, action.Compatibility, canonicalID, action.Name, declared)
+		})
 	}
 }

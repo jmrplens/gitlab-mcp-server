@@ -2355,12 +2355,30 @@ func TestPersonalList_InvalidDateFilter(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // createBody is what a mock reads out of a create request so a test can say
-// whether an optional field was sent at all. The fields are pointers because
-// "absent" and "sent as the zero value" are different requests: GitLab reads
-// access_level 0 as a role it is being asked to grant, not as "unspecified".
-type createBody struct {
-	Description *string `json:"description"`
-	AccessLevel *int    `json:"access_level"`
+// whether an optional field was sent at all.
+//
+// The keys are kept raw rather than decoded into pointers, and that is the
+// whole point of the type: encoding/json gives a pointer field nil both for a
+// key that was absent and for one sent as null, so `{"description":null}`
+// satisfies an assertion meant to state that the handler sent no description.
+// The property under test is the presence of the key, so the key is what the
+// test reads. "Absent" and "sent as the zero value" are different requests too:
+// GitLab reads access_level 0 as a role it is being asked to grant, not as
+// "unspecified".
+type createBody map[string]json.RawMessage
+
+// value decodes one key into v, and reports whether the key was there at all.
+func (b createBody) value(t *testing.T, key string, v any) bool {
+	t.Helper()
+	raw, present := b[key]
+	if !present {
+		return false
+	}
+	if err := json.Unmarshal(raw, v); err != nil {
+		t.Errorf("%s = %s, which does not decode: %v", key, raw, err)
+		return false
+	}
+	return true
 }
 
 // assertOptionalCreateFields states the property both create handlers share:
@@ -2369,25 +2387,24 @@ type createBody struct {
 func assertOptionalCreateFields(t *testing.T, body createBody, sent bool, wantDesc string, wantLevel int) {
 	t.Helper()
 	if !sent {
-		if body.Description != nil {
-			t.Errorf("description sent as %q, want the key absent", *body.Description)
-		}
-		if body.AccessLevel != nil {
-			t.Errorf("access_level sent as %d, want the key absent", *body.AccessLevel)
+		for _, key := range []string{"description", "access_level"} {
+			if raw, present := body[key]; present {
+				t.Errorf("%s sent as %s, want the key absent entirely", key, raw)
+			}
 		}
 		return
 	}
-	switch {
-	case body.Description == nil:
+	var gotDesc string
+	if !body.value(t, "description", &gotDesc) {
 		t.Errorf("description key absent, want %q", wantDesc)
-	case *body.Description != wantDesc:
-		t.Errorf("description = %q, want %q", *body.Description, wantDesc)
+	} else if gotDesc != wantDesc {
+		t.Errorf("description = %q, want %q", gotDesc, wantDesc)
 	}
-	switch {
-	case body.AccessLevel == nil:
+	var gotLevel int
+	if !body.value(t, "access_level", &gotLevel) {
 		t.Errorf("access_level key absent, want %d", wantLevel)
-	case *body.AccessLevel != wantLevel:
-		t.Errorf("access_level = %d, want %d", *body.AccessLevel, wantLevel)
+	} else if gotLevel != wantLevel {
+		t.Errorf("access_level = %d, want %d", gotLevel, wantLevel)
 	}
 }
 
