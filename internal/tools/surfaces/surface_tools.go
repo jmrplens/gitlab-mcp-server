@@ -108,7 +108,7 @@ func ToolGroupSpecs(specs []actioncatalog.SurfaceToolSpec) []actioncatalog.Catal
 				CapabilityRequirements: spec.CapabilityRequirements,
 				FormatResult:           spec.FormatResult,
 				OwnerPackage:           spec.OwnerPackage,
-				Description:            spec.Description,
+				Description:            spec.GroupDescription,
 			}
 		}
 		group.actions = append(group.actions, actionSpec)
@@ -144,9 +144,16 @@ func surfaceToolSpecsFromActions(opts surfaceToolGroupOptions, specs []toolutil.
 	out := make([]actioncatalog.SurfaceToolSpec, 0, len(specs))
 	for _, spec := range specs {
 		out = append(out, actioncatalog.SurfaceToolSpec{
-			Name:                   spec.IndividualTool.Name,
-			Title:                  spec.IndividualTool.Title,
+			Name:  spec.IndividualTool.Name,
+			Title: spec.IndividualTool.Title,
+			// The action's own description, and separately the group's, which
+			// every spec of the group carries because the group is assembled
+			// from its actions and has no record of its own. Taking the
+			// group's from the first action's, which is what happened until
+			// GroupDescription existed, made a dispatcher introduce itself as
+			// whichever action was registered first.
 			Description:            spec.IndividualTool.Description,
+			GroupDescription:       opts.Description,
 			GroupToolName:          opts.GroupToolName,
 			BaseDomain:             opts.BaseDomain,
 			ActionName:             spec.Name,

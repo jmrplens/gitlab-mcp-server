@@ -622,6 +622,49 @@ func TestToolGroupSpecs_NoSpecs_ReturnsNoGroups(t *testing.T) {
 //
 // It also asserts the read-only verdict per group, which is what --read-only
 // filters on: a group is read-only only when every action in it is.
+// TestStandaloneToolSpecs_EachGroup_IntroducesItselfAndNotItsFirstAction
+// verifies that a group tool's description is the one written for the group.
+//
+// A group is assembled from its actions and keeps no record of its own, so
+// ToolGroupSpecs builds its options from whichever spec it sees first. Until
+// SurfaceToolSpec carried GroupDescription, what it took from that spec was the
+// action's description, and the two are not the same sentence: gitlab_interactive
+// introduced itself with 1650 characters about creating an issue while also
+// creating merge requests, projects and releases, and a model reading tools/list
+// was told the dispatcher does one of the four things it does.
+//
+// The assertion is that the group's text is the group's, and separately that it
+// is not any action's, because a group whose first action happened to carry the
+// right sentence would satisfy the first half alone.
+func TestStandaloneToolSpecs_EachGroup_IntroducesItselfAndNotItsFirstAction(t *testing.T) {
+	groups := ToolGroupSpecs(StandaloneToolSpecs(newProjectionClient(t)))
+
+	want := map[string]string{
+		"gitlab_discover_project": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; use only for complete git remote URLs from .git/config or git remote -v.",
+		"gitlab_interactive":      "Guided interactive creation flows for issues, merge requests, projects, and releases. Mutating; use only when the task explicitly asks for a guided flow.",
+	}
+	for _, group := range groups {
+		t.Run(group.ToolName, func(t *testing.T) {
+			wanted, named := want[group.ToolName]
+			if !named {
+				t.Fatalf("group %q is not in this test's table; add what it should say about itself", group.ToolName)
+			}
+			if group.Description != wanted {
+				t.Errorf("group description = %q,\nwant %q", group.Description, wanted)
+			}
+			for _, action := range group.Actions {
+				if action.IndividualTool.Description == group.Description {
+					t.Errorf("group %q describes itself with action %q's own description; the group's sentence is not any one action's",
+						group.ToolName, action.Name)
+				}
+			}
+		})
+	}
+	if len(groups) != len(want) {
+		t.Errorf("ToolGroupSpecs() published %d groups, want %d", len(groups), len(want))
+	}
+}
+
 func TestToolGroupSpecs_SeveralGroups_SortsByToolNameAndKeepsTheFirstMetadata(t *testing.T) {
 	definer := testSurfaceSpec("gitlab_alpha", "alpha", "gitlab_alpha_one", "one")
 	sibling := testSurfaceSpec("gitlab_alpha", "alpha", "gitlab_alpha_two", "two")
