@@ -1053,3 +1053,199 @@ func TestUpdateFeatureFlag_InvalidStrategyCombinationsRejected(t *testing.T) {
 		})
 	}
 }
+
+// captureFeatureFlagBody answers one feature flag request with resp and hands
+// back the body the handler put on the wire. Every assertion below is about
+// the request rather than the response, because the response is the mock's own
+// fixture: a handler that dropped a field, or invented one, returns exactly
+// the same output either way.
+func captureFeatureFlagBody(t *testing.T, status int, resp string, got *string) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
+		}
+		*got = string(body)
+		testutil.RespondJSON(w, status, resp)
+	})
+}
+
+// assertFeatureFlagBody holds one captured request body to the fragments it
+// must carry and the ones it must not.
+func assertFeatureFlagBody(t *testing.T, body string, want, absent []string) {
+	t.Helper()
+	for _, fragment := range want {
+		if !strings.Contains(body, fragment) {
+			t.Errorf("request body missing %s: %s", fragment, body)
+		}
+	}
+	for _, fragment := range absent {
+		if strings.Contains(body, fragment) {
+			t.Errorf("request body carries %s the caller never asked for: %s", fragment, body)
+		}
+	}
+}
+
+// TestCreateFeatureFlag_OptionalFields_TravelAsGiven verifies that each
+// optional create field reaches GitLab exactly when the caller supplied it.
+// Every one of those fields sits behind a presence guard, and nothing else in
+// this package reads the create body, so each guard could be inverted — a
+// description sent only when none was given, an `active` dropped whenever it
+// was set — and the handler would still return the fixture the mock answers
+// with. The absent cases are the other half of the same property: an empty
+// `strategies` or `scopes` array is not the same request as one that names
+// neither, since GitLab reads an array that is present as the full replacement
+// set.
+func TestCreateFeatureFlag_OptionalFields_TravelAsGiven(t *testing.T) {
+	active := true
+	tests := []struct {
+		name   string
+		input  CreateInput
+		want   []string
+		absent []string
+	}{
+		{
+			name: "description version and active",
+			input: CreateInput{
+				ProjectID:   "1",
+				Name:        "my-flag",
+				Description: "Test feature flag",
+				Version:     "new_version_flag",
+				Active:      &active,
+			},
+			want: []string{`"description":"Test feature flag"`, `"version":"new_version_flag"`, `"active":true`},
+		},
+		{
+			name:   "no optional field is invented",
+			input:  CreateInput{ProjectID: "1", Name: "my-flag"},
+			want:   []string{`"name":"my-flag"`},
+			absent: []string{`"description"`, `"version"`, `"active"`, `"strategies"`},
+		},
+		{
+			name: "a strategy scope travels",
+			input: CreateInput{ProjectID: "1", Name: "my-flag", Strategies: []CreateStrategyInput{
+				{Name: "default", Scopes: []CreateScopeInput{{EnvironmentScope: "production"}}},
+			}},
+			want: []string{`"environment_scope":"production"`},
+		},
+		{
+			name: "a strategy without scopes sends no scopes array",
+			input: CreateInput{ProjectID: "1", Name: "my-flag", Strategies: []CreateStrategyInput{
+				{Name: "default"},
+			}},
+			want:   []string{`"name":"default"`},
+			absent: []string{`"scopes"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody string
+			client := testutil.NewTestClient(t, captureFeatureFlagBody(t, http.StatusCreated, featureFlagJSON, &gotBody))
+			if _, err := CreateFeatureFlag(t.Context(), client, tt.input); err != nil {
+				t.Fatalf("CreateFeatureFlag() error = %v", err)
+			}
+			assertFeatureFlagBody(t, gotBody, tt.want, tt.absent)
+		})
+	}
+}
+
+// TestUpdateFeatureFlag_OptionalFields_TravelAsGiven asks the same question of
+// the update body. It matters more here than on create: an update replaces
+// what it names, so a `strategies` array that appears because the caller named
+// none would ask GitLab to remove every strategy the flag has, and an `active`
+// that vanishes because the caller did set it leaves the flag switched the way
+// it was.
+func TestUpdateFeatureFlag_OptionalFields_TravelAsGiven(t *testing.T) {
+	inactive := false
+	tests := []struct {
+		name   string
+		input  UpdateInput
+		want   []string
+		absent []string
+	}{
+		{
+			name: "description and active",
+			input: UpdateInput{
+				ProjectID:   "1",
+				Name:        "my-flag",
+				Description: "updated desc",
+				Active:      &inactive,
+			},
+			want: []string{`"description":"updated desc"`, `"active":false`},
+		},
+		{
+			name:   "no optional field is invented",
+			input:  UpdateInput{ProjectID: "1", Name: "my-flag", NewName: "renamed"},
+			want:   []string{`"name":"renamed"`},
+			absent: []string{`"description"`, `"active"`, `"strategies"`},
+		},
+		{
+			name: "a strategy without scopes sends no scopes array",
+			input: UpdateInput{ProjectID: "1", Name: "my-flag", Strategies: []UpdateStrategyInput{
+				{ID: 7, Name: "default"},
+			}},
+			want:   []string{`"id":7`, `"name":"default"`},
+			absent: []string{`"scopes"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody string
+			client := testutil.NewTestClient(t, captureFeatureFlagBody(t, http.StatusOK, featureFlagJSON, &gotBody))
+			if _, err := UpdateFeatureFlag(t.Context(), client, tt.input); err != nil {
+				t.Fatalf("UpdateFeatureFlag() error = %v", err)
+			}
+			assertFeatureFlagBody(t, gotBody, tt.want, tt.absent)
+		})
+	}
+}
+
+// TestUpdateFeatureFlag_ExplicitDestroyFalse_IsNotARemoval verifies that
+// `_destroy: false` is read as "keep this" rather than as a removal. Neither
+// the strategy nor the scope here carries an id, so were the flag read as a
+// removal both would be refused for not naming what they remove — which is
+// what makes this the sharp test of the two `*Destroy` dereferences, the only
+// place either is ever evaluated false.
+func TestUpdateFeatureFlag_ExplicitDestroyFalse_IsNotARemoval(t *testing.T) {
+	keep := false
+	var gotBody string
+	client := testutil.NewTestClient(t, captureFeatureFlagBody(t, http.StatusOK, featureFlagJSON, &gotBody))
+
+	if _, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+		ProjectID: "1",
+		Name:      "my-flag",
+		Strategies: []UpdateStrategyInput{{
+			Name:    "default",
+			Destroy: &keep,
+			Scopes:  []UpdateScopeInput{{EnvironmentScope: "staging", Destroy: &keep}},
+		}},
+	}); err != nil {
+		t.Fatalf("UpdateFeatureFlag() rejected an explicit _destroy:false: %v", err)
+	}
+	assertFeatureFlagBody(t, gotBody, []string{`"name":"default"`, `"environment_scope":"staging"`}, nil)
+}
+
+// TestUpdateFeatureFlag_ScopeAddressedByIDAlone_IsAccepted verifies that a
+// scope naming only its id is a valid entry. GitLab addresses an existing
+// scope that way when the strategy around it is being rewritten, so refusing
+// it would make the caller re-state an environment name it never meant to
+// change — and the empty name must not be serialized in its place.
+func TestUpdateFeatureFlag_ScopeAddressedByIDAlone_IsAccepted(t *testing.T) {
+	scopeID := int64(40)
+	var gotBody string
+	client := testutil.NewTestClient(t, captureFeatureFlagBody(t, http.StatusOK, featureFlagJSON, &gotBody))
+
+	if _, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+		ProjectID: "1",
+		Name:      "my-flag",
+		Strategies: []UpdateStrategyInput{
+			{ID: 7, Name: "default", Scopes: []UpdateScopeInput{{ID: &scopeID}}},
+		},
+	}); err != nil {
+		t.Fatalf("UpdateFeatureFlag() rejected a scope addressed by id alone: %v", err)
+	}
+	assertFeatureFlagBody(t, gotBody, []string{`"id":40`}, []string{`"environment_scope"`})
+}
