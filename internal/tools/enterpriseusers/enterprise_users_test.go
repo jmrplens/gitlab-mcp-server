@@ -205,6 +205,50 @@ func TestList_BlockedFilter(t *testing.T) {
 	}
 }
 
+// TestList_AFlagFilterExplicitlyFalse_IsNotSentAtAll verifies that active or
+// blocked given as false leaves its parameter off the request entirely.
+//
+// Both are presence-only filters on GitLab's side, so the question a caller
+// asks with false is "do not narrow by this", and the only two answers the
+// wire can carry are the filter and no filter. A handler that stopped reading
+// the pointer it holds — testing only that one was supplied — would turn that
+// question into its opposite and send the filter on, hiding from the caller
+// exactly the users they declined to exclude. Nothing else here asserts it:
+// every other filter test supplies true, so both guards were decided one way
+// only and a version of them that ignores the value passes the whole suite.
+func TestList_AFlagFilterExplicitlyFalse_IsNotSentAtAll(t *testing.T) {
+	no := false
+	for _, tc := range []struct {
+		name  string
+		in    ListInput
+		param string
+	}{
+		{name: "active", in: ListInput{GroupID: toolutil.StringOrInt("42"), Active: &no}, param: "active"},
+		{name: "blocked", in: ListInput{GroupID: toolutil.StringOrInt("42"), Blocked: &no}, param: "blocked"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/groups/42/enterprise_users" {
+					http.NotFound(w, r)
+					return
+				}
+				if _, sent := r.URL.Query()[tc.param]; sent {
+					t.Errorf("query = %q, want no %q parameter", r.URL.RawQuery, tc.param)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"alice"}]`)
+			}))
+
+			out, err := List(context.Background(), client, tc.in)
+			if err != nil {
+				t.Fatalf("List() error: %v", err)
+			}
+			if len(out.Users) != 1 {
+				t.Fatalf("got %d users, want the one the endpoint answered with", len(out.Users))
+			}
+		})
+	}
+}
+
 // TestList_ValidDateFilters verifies the List_ValidDateFilters handler.
 // The mock GitLab API at /api/v4/groups/42/enterprise_users (GET) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
@@ -826,5 +870,23 @@ func TestList_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{GroupID: toolutil.StringOrInt("42")})
 	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
 		t.Errorf("List() error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestGet_ACapturedFieldTheTypeCannotHold_IsReported is the single-user half of
+// the assertion above, and it was the half nothing held: every Get test fed the
+// capture a body it could read, so the branch that reports a capture Get cannot
+// decode had never been taken and deleting it left the suite green. What that
+// costs is a user published as if GitLab had sent none of the seven profile
+// keys, which reads as an empty profile rather than as a response we failed to
+// read — the same silence ADR-0021 exists to refuse.
+func TestGet_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"alice","followers":"not-a-number"}`)
+	}))
+
+	_, err := Get(context.Background(), client, GetInput{GroupID: toolutil.StringOrInt("42"), UserID: 10})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("Get() error = %v, want the capture's decode failure", err)
 	}
 }
