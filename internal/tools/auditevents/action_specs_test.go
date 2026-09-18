@@ -34,6 +34,95 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata verifies that every spec ActionSpecs
+// returns carries metadata of its own: usage that replaced the shared
+// placeholder, an individual-tool description, aliases beyond the tool name,
+// and related actions naming other audit_event actions.
+//
+// Why it matters: the per-action metadata is filled by a switch over the
+// individual tool name, with no default arm. A seventh action added without a
+// case compiles, registers, and ships with "Use to execute auditevents domain
+// action." and an empty description — which is what a model reads to decide
+// the tool exists at all. Nothing else in the package notices that, since the
+// route still answers.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+
+	seenUsage := make(map[string]string, len(specs))
+	seenDescription := make(map[string]string, len(specs))
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			assertSpecDecorated(t, spec)
+			if other, dup := seenUsage[spec.Usage]; dup {
+				t.Errorf("Usage is identical to %s: one case of the switch fills two actions", other)
+			}
+			seenUsage[spec.Usage] = spec.IndividualTool.Name
+			if other, dup := seenDescription[spec.IndividualTool.Description]; dup {
+				t.Errorf("IndividualTool.Description is identical to %s", other)
+			}
+			seenDescription[spec.IndividualTool.Description] = spec.IndividualTool.Name
+		})
+	}
+}
+
+// assertSpecDecorated holds one spec to the metadata its decoration case is
+// there to add, and says for each field what a model loses without it.
+func assertSpecDecorated(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == sharedAuditUsage {
+		t.Errorf("Usage is the shared placeholder %q: this action was never decorated", sharedAuditUsage)
+	}
+	if spec.IndividualTool.Description == "" {
+		t.Error("IndividualTool.Description is empty: the individual surface would list the tool with no description")
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Error("RelatedActions is empty: discovery cannot walk from this action to its siblings")
+	}
+	for _, related := range spec.RelatedActions {
+		if !strings.HasPrefix(related, "audit_event.") {
+			t.Errorf("RelatedActions holds %q, want a canonical audit_event.<action> ID", related)
+		}
+		if related == "audit_event."+spec.Name {
+			t.Errorf("RelatedActions names the action itself (%q)", related)
+		}
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("Aliases = %v, want the natural-language phrases the decoration adds", spec.Aliases)
+	}
+}
+
+// TestDecorateAuditEventMeta_UnknownTool_KeepsTheSharedDefaults pins what the
+// undecorated case looks like: a name the switch does not list keeps the
+// shared read-only options untouched rather than picking up whichever action's
+// metadata was written last.
+//
+// It is the other half of TestActionSpecs_DiscoveryMetadata: that test detects
+// a forgotten case, and this one says what a forgotten case ships, so the
+// detection is read as a real difference rather than as a missing default arm
+// nobody ever exercised.
+func TestDecorateAuditEventMeta_UnknownTool_KeepsTheSharedDefaults(t *testing.T) {
+	options := toolutil.ActionSpecOptions{
+		Usage:          sharedAuditUsage,
+		Aliases:        []string{"gitlab_list_instance_audit_runs"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_list_instance_audit_runs"},
+	}
+
+	decorateAuditEventMeta(&options, "gitlab_list_instance_audit_runs")
+
+	if options.Usage != sharedAuditUsage {
+		t.Errorf("Usage = %q, want the shared default for a tool the switch does not list", options.Usage)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty", options.IndividualTool.Description)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions = %v, want none", options.RelatedActions)
+	}
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.
