@@ -81,6 +81,29 @@ func TestPoll_TerminalFailureAllowed(t *testing.T) {
 	}
 }
 
+// TestPoll_TerminalCanceledFailsWhenFailOnErrorIsOn verifies that a canceled
+// terminal status, and not only a failed one, is reported as an error under the
+// default fail_on_error.
+//
+// The two statuses share one branch, and a suite that only ever drove "failed"
+// through it leaves "canceled" asserted by nothing: the arm could be dropped and
+// a canceled pipeline would come back as a wait that succeeded, which is the one
+// answer a caller must not get about a job that never ran.
+func TestPoll_TerminalCanceledFailsWhenFailOnErrorIsOn(t *testing.T) {
+	opts, _ := pollOptions("canceled")
+
+	result, err := Poll(context.Background(), opts)
+	if err == nil {
+		t.Fatal("Poll() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "terminal canceled") {
+		t.Fatalf("error = %q, want terminal canceled", err.Error())
+	}
+	if result.FinalStatus != "canceled" || result.Item.Status != "canceled" {
+		t.Fatalf("result = %#v, want canceled partial result", result)
+	}
+}
+
 // TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError verifies failed
 // terminal states do not panic when the optional failure callback is omitted.
 func TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError(t *testing.T) {
@@ -264,6 +287,84 @@ func TestPoll_CallbackDeadlineExceededBeforeTimeoutReturnsError(t *testing.T) {
 	}
 
 	result, err := Poll(context.Background(), opts)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Poll() error = %v, want context.DeadlineExceeded", err)
+	}
+	if result != (Result[pollItem]{}) {
+		t.Fatalf("result = %#v, want zero result", result)
+	}
+}
+
+// TestPoll_PollErrorAfterTheDeadlineIsReturnedNotReportedAsTimedOut verifies
+// that an error the poller raises for its own reasons is returned even when the
+// wait deadline passed while that call was in flight.
+//
+// Only this wait's own deadline may become a timed-out result. A slow call that
+// comes back with a 502 after the deadline still has to surface: reported as a
+// timeout it would tell the caller the resource is merely still running, when
+// what happened is that GitLab refused. The three conditions in
+// pollReachedDeadline are an AND for exactly this reason, and the clock being
+// past the deadline is on its own no reason to swallow an error.
+func TestPoll_PollErrorAfterTheDeadlineIsReturnedNotReportedAsTimedOut(t *testing.T) {
+	wantErr := errors.New("502 bad gateway")
+	opts, _ := pollOptions("running")
+	opts.IntervalSeconds = 60
+	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return 5 * time.Millisecond
+		}
+		return time.Hour
+	}
+	opts.Poll = func(ctx context.Context) (pollItem, error) {
+		<-ctx.Done() // outlive the wait deadline, then fail for another reason
+		return pollItem{}, wantErr
+	}
+
+	result, err := Poll(context.Background(), opts)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Poll() error = %v, want %v", err, wantErr)
+	}
+	if result != (Result[pollItem]{}) {
+		t.Fatalf("result = %#v, want zero result", result)
+	}
+}
+
+// TestPoll_DeadlineErrorAfterCallerCancellationIsNotAWaitTimeout verifies that a
+// context.DeadlineExceeded raised once the caller has already given up is
+// returned as the error it is, rather than converted into a timed-out result.
+//
+// A timed-out result is a positive claim: this wait ran its full course and the
+// resource had not finished. With the caller gone, the deadline the poller
+// reports may well be somebody else's, and the wall clock having passed our own
+// deadline too is not enough to claim it. This is the leg of pollReachedDeadline
+// the suite never drove the false way, so the cancellation check could be
+// removed and nothing would notice.
+func TestPoll_DeadlineErrorAfterCallerCancellationIsNotAWaitTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	opts, _ := pollOptions("running")
+	opts.IntervalSeconds = 60
+	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return 5 * time.Millisecond
+		}
+		return time.Hour
+	}
+	opts.Poll = func(pollCtx context.Context) (pollItem, error) {
+		deadline, ok := pollCtx.Deadline()
+		if !ok {
+			t.Errorf("poll context carries no deadline, want the wait deadline")
+			return pollItem{}, context.DeadlineExceeded
+		}
+		cancel()
+		// Put the wall clock past the wait deadline as well, so the only
+		// condition still deciding the answer is the caller's cancellation.
+		time.Sleep(time.Until(deadline) + time.Millisecond)
+		return pollItem{}, context.DeadlineExceeded
+	}
+
+	result, err := Poll(ctx, opts)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Poll() error = %v, want context.DeadlineExceeded", err)
 	}
