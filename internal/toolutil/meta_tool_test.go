@@ -18,6 +18,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
@@ -1919,7 +1920,7 @@ func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
 	}
 
 	description := got + "Manage GitLab CI job token scope."
-	if stripped := StripMetaToolDescriptionPrefix(description); stripped != "Manage GitLab CI job token scope." {
+	if stripped := strippedWithin(t, description); stripped != "Manage GitLab CI job token scope." {
 		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want base description", stripped)
 	}
 }
@@ -1946,8 +1947,33 @@ func TestMetaToolDescriptionPrefix_IncludesActionGuidance(t *testing.T) {
 	}
 
 	description := got + "Manage GitLab instance administration."
-	if stripped := StripMetaToolDescriptionPrefix(description); stripped != "Manage GitLab instance administration." {
+	if stripped := strippedWithin(t, description); stripped != "Manage GitLab instance administration." {
 		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want base description", stripped)
+	}
+}
+
+// strippedWithin returns StripMetaToolDescriptionPrefix(description), failing
+// the test rather than waiting for ever when the scan does not come back.
+//
+// Every description carrying a guidance section is stripped through here. The
+// scan walks that section's bullets with an index it advances itself, and the
+// loop above re-reads the line the index lands on, so a step in the wrong
+// direction is not a wrong answer but no answer at all: the two hand the same
+// line back and forth, and nothing that renders a tool description or a
+// documentation summary ever returns. Unbounded, that ends the whole binary
+// at its own timeout under whichever test was running; bounded, it is this
+// call that fails, with the reason on it.
+func strippedWithin(t *testing.T, description string) string {
+	t.Helper()
+
+	stripped := make(chan string, 1)
+	go func() { stripped <- StripMetaToolDescriptionPrefix(description) }()
+	select {
+	case got := <-stripped:
+		return got
+	case <-time.After(10 * time.Second):
+		t.Fatal("StripMetaToolDescriptionPrefix() did not return in 10s: the scan over the guidance section is not advancing")
+		return ""
 	}
 }
 
@@ -4368,6 +4394,55 @@ func TestCoerceSchemaParamValue_ValueAlreadyMatchesDeclaredType_Unchanged(t *tes
 			}
 			if got != testCase.want {
 				t.Errorf("coerceSchemaParamValue(%v) = %v, want %v", testCase.value, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestValueMatchesDeclaredType_EachScalarKind pins the rule the coercion above
+// consults, which the coercion itself cannot show: whichever way this answers
+// for a number, the branch below returns the value unchanged, so every case
+// here is invisible from outside and the rule was asserted by nothing.
+//
+// The rule is JSON Schema's, not ours. An integer satisfies a property typed
+// "number" as well as one typed "integer", and either alone is enough, so a
+// per_page declared only as "number" must not be read as a value that needs
+// repairing. A float satisfies "integer" only when it carries a whole number,
+// which is the shape every integer takes once encoding/json has decoded it,
+// and a fraction has to fail that test rather than pass it: this is the one
+// place that decides whether 7.5 may stand in for an integer.
+func TestValueMatchesDeclaredType_EachScalarKind(t *testing.T) {
+	integer := map[string]any{"type": "integer"}
+	number := map[string]any{"type": "number"}
+	text := map[string]any{"type": "string"}
+
+	cases := []struct {
+		name     string
+		value    any
+		property map[string]any
+		want     bool
+	}{
+		{"a string against a string property", "42", text, true},
+		{"a string against an integer property", "42", integer, false},
+		{"a bool against a boolean property", true, map[string]any{"type": "boolean"}, true},
+		{"a bool against a string property", true, text, false},
+		{"an int against an integer property", 7, integer, true},
+		{"an int against a number property", 7, number, true},
+		{"an int against a string property", 7, text, false},
+		{"a whole float64 against a number property", float64(7), number, true},
+		{"a whole float64 against an integer property", float64(7), integer, true},
+		{"a fractional float64 against an integer property", float64(7.5), integer, false},
+		{"a whole float32 against an integer property", float32(7), integer, true},
+		{"a fractional float32 against an integer property", float32(7.5), integer, false},
+		{"an object is left to the branch that understands it", map[string]any{}, map[string]any{"type": "object"}, false},
+		{"a property that declares no type matches nothing", "42", map[string]any{}, false},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := valueMatchesDeclaredType(testCase.value, testCase.property); got != testCase.want {
+				t.Errorf("valueMatchesDeclaredType(%#v, %v) = %v, want %v",
+					testCase.value, testCase.property, got, testCase.want)
 			}
 		})
 	}

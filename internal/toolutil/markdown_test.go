@@ -80,8 +80,18 @@ func TestFormatPagination_Cases_WritesWhatIsKnown(t *testing.T) {
 	}{
 		{name: "offset pagination with a total", p: PaginationOutput{Page: 2, TotalPages: 5, TotalItems: 100, PerPage: 20}, want: "Page 2 of 5 | 100 items total | 20 per page"},
 		{name: "keyset pagination with a next page", p: PaginationOutput{Page: 1, PerPage: 20, NextPage: 2, HasMore: true}, want: "Page 1 | 20 per page | more pages available"},
+		// The two halves of "another page exists" are separate pieces of
+		// evidence and either alone is enough: a handler that set only the
+		// flag, or only the next page number, must still say so. Asserting
+		// them together let the two collapse into one.
+		{name: "keyset pagination whose only evidence is the flag", p: PaginationOutput{Page: 1, PerPage: 20, HasMore: true}, want: "Page 1 | 20 per page | more pages available"},
+		{name: "keyset pagination whose only evidence is the next page", p: PaginationOutput{Page: 1, PerPage: 20, NextPage: 2}, want: "Page 1 | 20 per page | more pages available"},
 		{name: "keyset pagination on the last page", p: PaginationOutput{Page: 3, PerPage: 20}, want: "Page 3 | 20 per page | no more pages"},
 		{name: "a page count without a total", p: PaginationOutput{Page: 1, TotalPages: 2, PerPage: 2}, want: "Page 1 of 2 | 2 per page"},
+		// A page count with no page number is the shape that produced "Page 0
+		// of 5": the totals are GitLab's, the page number is not there, and a
+		// footer that invents a zeroth page reads as a real position.
+		{name: "totals without a page number", p: PaginationOutput{TotalPages: 5, TotalItems: 100, PerPage: 20}, want: "100 items total | 20 per page"},
 		{name: "nothing known", p: PaginationOutput{}, want: ""},
 	}
 	for _, tc := range cases {
@@ -138,6 +148,12 @@ func TestWriteListHeading_Cases_CountsWhatTheResponseVouchesFor(t *testing.T) {
 	}{
 		{name: "total sent", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, TotalItems: 45, TotalPages: 3}, want: "## Issues (45)\n\nShowing 2 of 45 results (page 1 of 3)\n\n"},
 		{name: "no total but a next page", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, NextPage: 2, HasMore: true}, want: "## Issues (2 shown, more available)\n\n"},
+		// Either piece of evidence is enough on its own, and an empty page is
+		// never "0 shown, more available": a count of nothing followed by a
+		// promise of more is the heading of a list that has nothing to show.
+		{name: "no total and only the flag", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, HasMore: true}, want: "## Issues (2 shown, more available)\n\n"},
+		{name: "no total and only the next page", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, NextPage: 2}, want: "## Issues (2 shown, more available)\n\n"},
+		{name: "an empty page with more to come", shown: 0, p: PaginationOutput{Page: 1, PerPage: 2, NextPage: 2, HasMore: true}, want: "## Issues (0)\n\n"},
 		{name: "no total on the last page", shown: 2, p: PaginationOutput{Page: 3, PerPage: 2}, want: "## Issues (2)\n\n"},
 		{name: "no pagination at all", shown: 3, p: PaginationOutput{}, want: "## Issues (3)\n\n"},
 		{name: "a page count without a total", shown: 2, p: PaginationOutput{Page: 1, PerPage: 2, TotalPages: 2}, want: "## Issues (2)\n\nShowing 2 results (page 1 of 2)\n\n"},

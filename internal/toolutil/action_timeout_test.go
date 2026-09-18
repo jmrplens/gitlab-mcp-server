@@ -52,6 +52,12 @@ func TestWrapAction_DeadlineEndsAHandlerThatNeverReturns(t *testing.T) {
 
 // TestWrapActionWithRequest_DeadlineApplies verifies the request-aware wrapper
 // runs under the same bound.
+//
+// The receive is bounded because the handler is what sends: a wrapper that
+// returns before calling it leaves this test waiting on a channel nothing
+// will ever write to, and the whole binary stops at its own timeout naming
+// whichever test happened to be running. The deadline turns that into this
+// test failing, with the reason on it.
 func TestWrapActionWithRequest_DeadlineApplies(t *testing.T) {
 	withActionTimeout(t, 30*time.Millisecond)
 
@@ -64,8 +70,13 @@ func TestWrapActionWithRequest_DeadlineApplies(t *testing.T) {
 	if _, err := fn(context.Background(), nil); err != nil {
 		t.Fatalf("WrapActionWithRequest: %v", err)
 	}
-	if !<-deadlineSeen {
-		t.Error("the handler ran without a deadline while one was configured")
+	select {
+	case seen := <-deadlineSeen:
+		if !seen {
+			t.Error("the handler ran without a deadline while one was configured")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wrapper returned without ever running the handler")
 	}
 }
 
@@ -100,6 +111,10 @@ func TestWrapVoidAction_DeadlineEndsAHandlerThatNeverReturns(t *testing.T) {
 
 // TestWrapVoidActionWithRequest_DeadlineApplies covers the fourth wrapper, so
 // that all four routes an action can be registered through carry the bound.
+//
+// The receive is bounded for the reason the test above states: the handler is
+// the only sender, so a wrapper that never calls it would hang the binary
+// instead of failing this test.
 func TestWrapVoidActionWithRequest_DeadlineApplies(t *testing.T) {
 	withActionTimeout(t, 30*time.Millisecond)
 
@@ -112,8 +127,13 @@ func TestWrapVoidActionWithRequest_DeadlineApplies(t *testing.T) {
 	if _, err := fn(context.Background(), nil); err != nil {
 		t.Fatalf("WrapVoidActionWithRequest: %v", err)
 	}
-	if !<-deadlineSeen {
-		t.Error("the handler ran without a deadline while one was configured")
+	select {
+	case seen := <-deadlineSeen:
+		if !seen {
+			t.Error("the handler ran without a deadline while one was configured")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wrapper returned without ever running the handler")
 	}
 }
 

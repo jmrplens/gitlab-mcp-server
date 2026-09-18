@@ -146,6 +146,11 @@ func TestFormatLabelMarkdown_CountersRenderWhenOnlyOneIsSet(t *testing.T) {
 // byte: the heading with GitLab's total, the table with the scope column,
 // the footer, and the caller's hint without a link hint, since labels carry
 // no link.
+//
+// The archived row is in the table because GitLab archives a label rather
+// than deleting it: it keeps coming back in every list and stays on the
+// issues that carry it, so a row that reads exactly like a live one tells a
+// model to keep using a label nobody may apply any more.
 func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
 	type labelOutput struct {
 		Name                   string
@@ -154,23 +159,26 @@ func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
 		ClosedIssuesCount      int64
 		OpenMergeRequestsCount int64
 		IsProjectLabel         bool
+		Archived               bool
 	}
 	got := FormatLabelListMarkdownFunc([]labelOutput{
 		{Name: "bug|fix", Color: "#ff0000", OpenIssuesCount: 3, ClosedIssuesCount: 2, OpenMergeRequestsCount: 1, IsProjectLabel: true},
 		{Name: "inherited", Color: "#00ff00"},
-	}, PaginationOutput{Page: 1, PerPage: 20, TotalItems: 2, TotalPages: 1}, LabelMarkdownOptions{
+		{Name: "retired", Color: "#0000ff", IsProjectLabel: true, Archived: true},
+	}, PaginationOutput{Page: 1, PerPage: 20, TotalItems: 3, TotalPages: 1}, LabelMarkdownOptions{
 		ListTitle: "Labels",
 		ListHints: []string{HintPreserveLinks, "Use action 'label_get'"},
 	}, func(label labelOutput) LabelMarkdown {
-		return LabelMarkdown{Name: label.Name, Color: label.Color, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: label.IsProjectLabel}
+		return LabelMarkdown{Name: label.Name, Color: label.Color, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, IsProjectLabel: label.IsProjectLabel, Archived: label.Archived}
 	})
 
-	want := "## Labels (2)\n\n" +
+	want := "## Labels (3)\n\n" +
 		"| Name | Color | Scope | Open Issues | Closed Issues | Open MRs |\n" +
 		"| --- | --- | --- | --- | --- | --- |\n" +
 		"| bug&#124;fix | #ff0000 | project | 3 | 2 | 1 |\n" +
 		"| inherited | #00ff00 | group | 0 | 0 | 0 |\n" +
-		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		"| " + EmojiArchived + " retired | #0000ff | project | 0 | 0 | 0 |\n" +
+		"\nPage 1 of 1 | 3 items total | 20 per page\n" +
 		hintsSection("Use action 'label_get'")
 	if got != want {
 		t.Errorf("label list:\n got %q\nwant %q", got, want)

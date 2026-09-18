@@ -122,6 +122,15 @@ func TestRedactURLToOrigin_CallbackURL_KeepsOnlyTheOrigin(t *testing.T) {
 			want: RedactedPlaceholder,
 		},
 		{
+			// Text that url.Parse refuses outright, which is a different
+			// answer from text it parses into nothing usable: the parser
+			// returns no URL at all, so every field read after it would be
+			// read off a nil pointer. Every other case here parses.
+			name: "a url the parser refuses",
+			raw:  "http://exa\x7fmple.com/hook",
+			want: RedactedPlaceholder,
+		},
+		{
 			name: "scheme without host",
 			raw:  "mailto:ops@example.com",
 			want: RedactedPlaceholder,

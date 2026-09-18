@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestOnceMap_BuildsOncePerKeyAndServesTheResult verifies the memo itself: a
@@ -94,11 +95,38 @@ func TestOnceMap_PanickingBuildLeavesTheKeyUnbuilt(t *testing.T) {
 	if value, ok := cache.Peek("key"); ok || value != "" {
 		t.Errorf("Peek() after a panicking build = %q, %t; want the key unbuilt", value, ok)
 	}
-	if got := cache.Load("key", func() string { return "rebuilt" }); got != "rebuilt" {
+	if got := loadWithin(t, &cache, "key", func() string { return "rebuilt" }); got != "rebuilt" {
 		t.Errorf("Load() after a panicking build = %q, want the next build's value", got)
 	}
-	if got := cache.Load("key", func() string { return "later" }); got != "rebuilt" {
+	if got := loadWithin(t, &cache, "key", func() string { return "later" }); got != "rebuilt" {
 		t.Errorf("Load() = %q, want the rebuild memoized like any other value", got)
+	}
+}
+
+// loadWithin returns cache.Load(key, build), failing the test rather than
+// waiting for ever when the load does not come back.
+//
+// Every load after a panicking build goes through here, because the claim the
+// retry loop rests on is that the slot it drops is the spent one, so the
+// fresh slot it takes next has a once that has not run and the loop goes
+// round exactly once. A Load that drops the wrong slot, or none, does not
+// return a wrong value: it spins on a once that is already done over an entry
+// nobody removes, and never returns at all. Unbounded, that ends the whole
+// binary at its own timeout under whichever test was running, with every
+// assertion under the call unreported; bounded, it is this call that fails,
+// with the reason on it.
+func loadWithin[V any](t *testing.T, cache *OnceMap[string, V], key string, build func() V) V {
+	t.Helper()
+
+	loaded := make(chan V, 1)
+	go func() { loaded <- cache.Load(key, build) }()
+	select {
+	case value := <-loaded:
+		return value
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Load(%q) did not return in 10s: the retry loop is not dropping the spent slot", key)
+		var zero V
+		return zero
 	}
 }
 
@@ -134,7 +162,16 @@ func TestOnceMap_PanickingBuildReleasesWaitersToRebuild(t *testing.T) {
 			panic("the build failed")
 		})
 	}()
-	wg.Wait()
+	waited := make(chan struct{})
+	go func() { wg.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(10 * time.Second):
+		// The waiter is released by the panicking build and loads again; a
+		// retry loop that never drops the spent slot leaves it spinning here
+		// for ever, which would take the binary down instead of this test.
+		t.Fatal("the waiter did not finish its own build in 10s")
+	}
 
 	if waiter != "built by the waiter" {
 		t.Errorf("the waiter received %q, want the value of its own build", waiter)

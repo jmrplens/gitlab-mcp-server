@@ -8,7 +8,53 @@ package toolutil
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+// TestGraphQLDocumentScanners_EveryScanAdvances verifies that the
+// hand-written scans over a document always move forward, by driving all of
+// them from one document under a deadline and failing on the stall instead of
+// waiting for it.
+//
+// Every other test here asks what a scan returns, and none of them can ask
+// this: a scan that stops advancing never returns, so the assertion under it
+// is never reached. Each of these loops carries an index it moves itself —
+// past a name, past an escaped quote inside a string, past a reference it has
+// already matched — and a step in the wrong direction is a server that stops
+// answering rather than one that answers wrongly.
+//
+// It is deliberately the first test in the package to parse a document. A
+// scan that does not advance hangs every later test that parses one too, so
+// the binary still ends at its own timeout; what this buys is that the first
+// thing a reader sees names the cause, instead of a stack dump under
+// whichever test the runner happened to be in.
+//
+// The document reaches each scan on purpose: a fragment with an escaped quote
+// ahead of the operation (the keyword scan), a default value carrying one
+// (the definition scan and the signature scan), a comment (the comment
+// strip), and four variables declared and passed on (the declaration scan and
+// the reference scan).
+func TestGraphQLDocumentScanners_EveryScanAdvances(t *testing.T) {
+	document := `# page (forward or backward)
+fragment Names on Group { name(format: "a\")b") }
+query Page($first: Int, $after: String = "a\")b", $last: Int, $before: String) {
+  group(fullPath: "a\"b") {
+    projects(first: $first, after: $after, last: $last, before: $before) { nodes { ...Names } }
+  }
+}`
+
+	done := make(chan error, 1)
+	go func() { done <- requireGraphQLVariables(document, graphQLCursorVariables) }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("requireGraphQLVariables() = %v, want the document accepted", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a scan over the document did not finish in 10s: one of them is not advancing")
+	}
+}
 
 // TestFormatGID verifies that FormatGID produces correctly formatted
 // GitLab Global IDs for a variety of type names and numeric IDs.

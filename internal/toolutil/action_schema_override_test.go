@@ -184,3 +184,22 @@ func TestApplyInputSchemaOverrides_AppliesAndSkips(t *testing.T) {
 		t.Errorf("root override not applied: %v", schema)
 	}
 }
+
+// TestApplyInputSchemaOverrides_NilSchema_SkipsEveryOverride verifies the
+// contract an action with no input schema at all relies on: a nil map reaches
+// this from specInputSchema, and every override, root or property, has to be
+// skipped rather than written into a map that is not there. Writing to a nil
+// map panics, so the only evidence that the path resolution refuses it is a
+// call that returns.
+func TestApplyInputSchemaOverrides_NilSchema_SkipsEveryOverride(t *testing.T) {
+	var schema map[string]any
+
+	applyInputSchemaOverrides(schema, []InputSchemaOverride{
+		SchemaRootOverride(map[string]any{"additionalProperties": false}),
+		SchemaEnumOverride("state", "opened", "closed"),
+	})
+
+	if len(schema) != 0 {
+		t.Errorf("a nil schema gained content: %v", schema)
+	}
+}

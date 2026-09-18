@@ -63,8 +63,15 @@ func SchemaAnyOfRequired(propertyNames ...string) InputSchemaOverride {
 	return SchemaRootOverride(map[string]any{"anyOf": branches})
 }
 
+// applyInputSchemaOverrides patches schema in place with each override that
+// names a property the schema carries.
+//
+// An action with no input schema at all reaches this with a nil map, and the
+// nil is answered where every other unreachable path is: schemaOverrideTarget
+// resolves nothing in it and the override is skipped. Refusing it here as well
+// only meant that no test could tell the two refusals apart.
 func applyInputSchemaOverrides(schema map[string]any, overrides []InputSchemaOverride) {
-	if schema == nil || len(overrides) == 0 {
+	if len(overrides) == 0 {
 		return
 	}
 	for _, override := range overrides {
