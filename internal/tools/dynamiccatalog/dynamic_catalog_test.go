@@ -146,6 +146,108 @@ func TestBuild_SafeModePreviewsCoverTheStandaloneActions(t *testing.T) {
 	}
 }
 
+// TestBuild_SafeModeIsAppliedOverTheCompleteCatalogRatherThanInsideTheFilter
+// verifies the ordering this package exists to establish: the filter is handed
+// a configuration with safe mode switched off, so the catalog the standalone
+// actions join still carries its real write handlers, and the previews are
+// applied once afterwards over everything.
+//
+// It has to be stated at the two ends of that ordering, because the middle is
+// invisible. WithSafeModePreviews replaces a route whatever was in it, so
+// applying it twice produces exactly what applying it once produces: letting
+// the filter preview as well changes no answer any other test asks, and
+// deleting the line that stops it leaves the ordering resting on an
+// idempotence that belongs to another package. That is worth a test rather
+// than a comment because the day the rewrite stops being idempotent is the day
+// the standalone writes go back to being previewed by a second pass over a
+// catalog already wrapped by the first, which is the defect this package was
+// split out to fix.
+//
+// A still-destructive action is the discriminator rather than a handler call:
+// the preview rewrite clears Destructive on every write it replaces, and
+// calling a real write handler with no parameters is the very thing
+// TestBuild_SafeModePreviewsCoverTheStandaloneActions relies on failing.
+func TestBuild_SafeModeIsAppliedOverTheCompleteCatalogRatherThanInsideTheFilter(t *testing.T) {
+	original := addStandaloneCatalog
+	t.Cleanup(func() { addStandaloneCatalog = original })
+	var joined *actioncatalog.Catalog
+	addStandaloneCatalog = func(catalog *actioncatalog.Catalog, client *gitlabclient.Client, opts dynamictools.StandaloneOptions) (*actioncatalog.Catalog, error) {
+		joined = catalog
+		return original(catalog, client, opts)
+	}
+
+	built, _, err := Build(nil, &config.ServerConfig{
+		Tier:         edition.Free,
+		SafeMode:     true,
+		ExcludeTools: []string{"ordering-" + t.Name()},
+	})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if joined == nil {
+		t.Fatal("the standalone step never ran, so this test saw no filtered catalog")
+	}
+	if len(destructiveActionIDs(joined)) == 0 {
+		t.Error("the filtered catalog reached the standalone step already previewed; safe mode belongs over the complete catalog, not inside the filter")
+	}
+	if surviving := destructiveActionIDs(built); len(surviving) != 0 {
+		t.Errorf("the built catalog still marks %v destructive, so the final safe-mode pass did not reach every write", surviving)
+	}
+}
+
+// destructiveActionIDs names every action of catalog still marked destructive.
+// The safe-mode rewrite clears the flag on each write it replaces, so an empty
+// answer means every write in the catalog is a preview.
+func destructiveActionIDs(catalog *actioncatalog.Catalog) []string {
+	var ids []string
+	for _, action := range catalog.Actions() {
+		if action.Destructive {
+			ids = append(ids, string(action.ID))
+		}
+	}
+	return ids
+}
+
+// TestBuild_DoesNotShareTheMetaSurfacesCatalogEntry verifies the dynamic
+// catalog is cached under a name of its own.
+//
+// Both surfaces name one process-wide cache with the same tier, instance class
+// and narrowing, and differ only in the prefix each puts in front of it. A
+// dynamic catalog stored under the meta surface's name would simply be handed
+// to whichever surface asked second, and neither would refuse it: the two are
+// assembled to be interchangeable everywhere except in the standalone actions
+// only the dynamic one carries. So the prefix is checked by what depends on
+// it, in both directions: the dynamic catalog routes discover_project.resolve
+// and the meta one, which registers its standalone tools outside the catalog,
+// does not.
+func TestBuild_DoesNotShareTheMetaSurfacesCatalogEntry(t *testing.T) {
+	t.Parallel()
+
+	narrowing := func() *config.ServerConfig {
+		return &config.ServerConfig{Tier: edition.Free, ExcludeTools: []string{"surface-" + t.Name()}}
+	}
+	dynamic, _, err := Build(nil, narrowing())
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	meta, _, err := gitlabtools.SharedMetaCatalog(nil, narrowing())
+	if err != nil {
+		t.Fatalf("SharedMetaCatalog() error = %v", err)
+	}
+	if dynamic.SharedOrigin() == nil || meta.SharedOrigin() == nil {
+		t.Fatal("one of the two catalogs was not shared, so this proves nothing about the cache")
+	}
+	if dynamic.SharedOrigin() == meta.SharedOrigin() {
+		t.Fatal("the dynamic and the meta surface were served one cache entry for the same narrowing")
+	}
+	if _, ok := dynamic.Action("discover_project.resolve"); !ok {
+		t.Error("discover_project.resolve is missing from the dynamic catalog")
+	}
+	if _, ok := meta.Action("discover_project.resolve"); ok {
+		t.Error("discover_project.resolve reached the meta catalog, which registers its standalone tools outside it")
+	}
+}
+
 // TestBuild_AddsTheStandaloneActionsAfterFiltering verifies the standalone
 // actions are on top of the filtered catalog rather than under the filter,
 // so a narrowing cannot leave a hidden catalog action behind and the
