@@ -12,6 +12,53 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// TestCIVariableOptions_UnrecognizedAction_KeepsTheBaseMetadata asserts that an
+// action name the enrichment switch does not know still comes back with the
+// metadata registration needs, and with none of the per-action text.
+//
+// Why it matters: the switch enriches, it does not build. Everything a surface
+// needs to register an action — the owner package, the individual tool's name
+// and title, the tags, the open-world annotation — is set before it and must
+// survive a name it has no case for, or a sixth action added without its case
+// would be dropped rather than registered with a placeholder. The placeholder
+// usage is what makes that omission visible to a reader, so it is asserted
+// here as the fallback it is rather than left to whichever case ran last.
+func TestCIVariableOptions_UnrecognizedAction_KeepsTheBaseMetadata(t *testing.T) {
+	options := ciVariableOptionsForAction("archive", "gitlab_ci_variable_archive")
+
+	if options.OwnerPackage != "civariables" {
+		t.Errorf("OwnerPackage = %q, want %q", options.OwnerPackage, "civariables")
+	}
+	if options.IndividualTool.Name != "gitlab_ci_variable_archive" {
+		t.Errorf("IndividualTool.Name = %q, want %q", options.IndividualTool.Name, "gitlab_ci_variable_archive")
+	}
+	if options.IndividualTool.Title == "" {
+		t.Error("IndividualTool.Title is empty; the base metadata must title every action")
+	}
+	if !options.OpenWorld {
+		t.Error("OpenWorld = false, want true for every civariables action")
+	}
+	if len(options.Tags) == 0 {
+		t.Error("Tags is empty; the base metadata must tag every action")
+	}
+
+	if options.Usage != "Use to execute civariables domain action." {
+		t.Errorf("Usage = %q, want the placeholder the switch would have replaced", options.Usage)
+	}
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_ci_variable_archive" {
+		t.Errorf("Aliases = %#v, want only the individual tool name", options.Aliases)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty for an action the switch does not know", options.IndividualTool.Description)
+	}
+	if len(options.RelatedActions) != 0 {
+		t.Errorf("RelatedActions = %#v, want none", options.RelatedActions)
+	}
+	if len(options.ParameterGuidance) != 0 {
+		t.Errorf("ParameterGuidance = %#v, want none", options.ParameterGuidance)
+	}
+}
+
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
 // The test exercises the DELETE path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
