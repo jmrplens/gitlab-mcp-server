@@ -5,10 +5,12 @@ package accesstokens
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -2345,5 +2347,250 @@ func TestPersonalList_InvalidDateFilter(t *testing.T) {
 	_, err := PersonalList(context.Background(), client, PersonalListInput{LastUsedBefore: "31-12-2024"})
 	if err == nil {
 		t.Fatal("expected error for invalid last_used_before, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers put on the wire, rather than what the mock answers with
+// ---------------------------------------------------------------------------.
+
+// createBody is what a mock reads out of a create request so a test can say
+// whether an optional field was sent at all. The fields are pointers because
+// "absent" and "sent as the zero value" are different requests: GitLab reads
+// access_level 0 as a role it is being asked to grant, not as "unspecified".
+type createBody struct {
+	Description *string `json:"description"`
+	AccessLevel *int    `json:"access_level"`
+}
+
+// assertOptionalCreateFields states the property both create handlers share:
+// an optional field reaches GitLab when the caller set it, and is left out of
+// the request entirely when they did not.
+func assertOptionalCreateFields(t *testing.T, body createBody, sent bool, wantDesc string, wantLevel int) {
+	t.Helper()
+	if !sent {
+		if body.Description != nil {
+			t.Errorf("description sent as %q, want the key absent", *body.Description)
+		}
+		if body.AccessLevel != nil {
+			t.Errorf("access_level sent as %d, want the key absent", *body.AccessLevel)
+		}
+		return
+	}
+	switch {
+	case body.Description == nil:
+		t.Errorf("description key absent, want %q", wantDesc)
+	case *body.Description != wantDesc:
+		t.Errorf("description = %q, want %q", *body.Description, wantDesc)
+	}
+	switch {
+	case body.AccessLevel == nil:
+		t.Errorf("access_level key absent, want %d", wantLevel)
+	case *body.AccessLevel != wantLevel:
+		t.Errorf("access_level = %d, want %d", *body.AccessLevel, wantLevel)
+	}
+}
+
+// TestAccessTokenCreate_OptionalFields_AreSentOnlyWhenTheCallerSetThem reads the
+// POST body the handler builds, which every other create test leaves
+// unexamined: those assert on the canned token the mock writes back, so a
+// handler that stopped sending description and access_level altogether would
+// still return a token carrying both and pass. The unset cases are the half
+// that needs the guard rather than the assignment, since sending access_level 0
+// asks GitLab for a role instead of leaving the choice to it; and running both
+// the project and the group route keeps the two option-setting closures from
+// being wired to the wrong field without anything noticing.
+func TestAccessTokenCreate_OptionalFields_AreSentOnlyWhenTheCallerSetThem(t *testing.T) {
+	cases := []struct {
+		name      string
+		path      string
+		call      func(*gitlabclient.Client) error
+		sent      bool
+		wantDesc  string
+		wantLevel int
+	}{
+		{
+			name: "project token with both fields set",
+			path: pathProjectTokens,
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+					ProjectID: "42", Name: testTokenName, Scopes: []string{"api"},
+					Description: testDescTest, AccessLevel: 30,
+				})
+				return err
+			},
+			sent: true, wantDesc: testDescTest, wantLevel: 30,
+		},
+		{
+			name: "project token with neither field set",
+			path: pathProjectTokens,
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+					ProjectID: "42", Name: testTokenName, Scopes: []string{"api"},
+				})
+				return err
+			},
+		},
+		{
+			name: "group token with both fields set",
+			path: pathGroupTokens,
+			call: func(client *gitlabclient.Client) error {
+				_, err := GroupCreate(context.Background(), client, GroupCreateInput{
+					GroupID: "10", Name: testFullToken, Scopes: []string{"api"},
+					Description: testDescFullGroup, AccessLevel: 50,
+				})
+				return err
+			},
+			sent: true, wantDesc: testDescFullGroup, wantLevel: 50,
+		},
+		{
+			name: "group token with neither field set",
+			path: pathGroupTokens,
+			call: func(client *gitlabclient.Client) error {
+				_, err := GroupCreate(context.Background(), client, GroupCreateInput{
+					GroupID: "10", Name: testFullToken, Scopes: []string{"api"},
+				})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tc.path || r.Method != http.MethodPost {
+					testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+					return
+				}
+				var body createBody
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode create body: %v", err)
+					testutil.RespondJSON(w, http.StatusInternalServerError, jsonServerErr)
+					return
+				}
+				assertOptionalCreateFields(t, body, tc.sent, tc.wantDesc, tc.wantLevel)
+				testutil.RespondJSON(w, http.StatusCreated,
+					`{"id":7,"name":"my-token","token":"glpat-abc123","active":true,"scopes":["api"]}`)
+			}))
+
+			if err := tc.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestPersonalList_UserID_IsSentOnlyWhenTheCallerNamedOne pins the filter's
+// absence, not just its presence. user_id names whose tokens an admin is
+// listing, so a handler that sent it unconditionally would send 0, and GitLab
+// answers that with the tokens of no user rather than with the caller's own.
+// The existing user_id test asserts only the populated case, which a guard
+// that had stopped discriminating would still satisfy.
+func TestPersonalList_UserID_IsSentOnlyWhenTheCallerNamedOne(t *testing.T) {
+	cases := []struct {
+		name   string
+		userID int64
+		want   string
+	}{
+		{name: "named by the caller", userID: 42, want: "42"},
+		{name: "left unset", userID: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/personal_access_tokens" {
+					testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+					return
+				}
+				q := r.URL.Query()
+				switch {
+				case tc.want == "" && q.Has("user_id"):
+					t.Errorf("user_id sent as %q, want the filter absent", q.Get("user_id"))
+				case tc.want != "" && q.Get("user_id") != tc.want:
+					t.Errorf("user_id = %q, want %q", q.Get("user_id"), tc.want)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+
+			if _, err := PersonalList(context.Background(), client, PersonalListInput{UserID: tc.userID}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestAccessTokens_UnprocessableEntity_AnsweredWithTheValidationHint drives the
+// four handlers that treat 422 and 400 alike with the status only 422 reaches.
+// GitLab answers an unacceptable scope, access level or expiry with 422, and
+// every one of these branches was only ever entered through its 400 half, so
+// the 422 operand could have been dropped without a test noticing; the caller
+// would then be told to check that the token exists, which is the other
+// branch's advice and is wrong about what went wrong.
+func TestAccessTokens_UnprocessableEntity_AnsweredWithTheValidationHint(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		call func(*gitlabclient.Client) error
+		want string
+	}{
+		{
+			name: "project create",
+			path: pathProjectTokens,
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
+					ProjectID: "42", Name: testTokenName, Scopes: []string{"api"},
+				})
+				return err
+			},
+			want: "validate scopes",
+		},
+		{
+			name: "project rotate",
+			path: "/api/v4/projects/42/access_tokens/3/rotate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := ProjectRotate(context.Background(), client, ProjectRotateInput{ProjectID: "42", TokenID: 3})
+				return err
+			},
+			want: "within instance maximum lifetime",
+		},
+		{
+			name: "group rotate",
+			path: "/api/v4/groups/10/access_tokens/3/rotate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := GroupRotate(context.Background(), client, GroupRotateInput{GroupID: "10", TokenID: 3})
+				return err
+			},
+			want: "token may already be revoked/expired",
+		},
+		{
+			name: "personal rotate",
+			path: "/api/v4/personal_access_tokens/99/rotate",
+			call: func(client *gitlabclient.Client) error {
+				_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{TokenID: 99})
+				return err
+			},
+			want: "token may already be revoked/expired",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tc.path {
+					testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"scopes is invalid"}`)
+			}))
+
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf(fmtExpErrContaining, tc.want, err)
+			}
+		})
 	}
 }
