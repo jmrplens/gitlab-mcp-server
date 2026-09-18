@@ -4,7 +4,9 @@
 package freezeperiods
 
 import (
+	"encoding/json"
 	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -18,6 +20,14 @@ const (
 	testCronFreezeStart = "0 23 * * 5"
 	// testCronUpdatedStart identifies the test cron updated start constant used by this package.
 	testCronUpdatedStart = "0 0 * * 5"
+	// testCronFreezeEnd is the cron expression the create fixtures freeze until.
+	testCronFreezeEnd = "0 7 * * 1"
+	// testCronUpdatedEnd is the cron expression the update fixtures move the end of the window to.
+	testCronUpdatedEnd = "0 9 * * 1"
+	// testTimezoneMadrid is the IANA name the update fixtures read their cron expressions in.
+	testTimezoneMadrid = "Europe/Madrid"
+	// testTimezoneNewYork is the IANA name the create fixtures read theirs in.
+	testTimezoneNewYork = "America/New_York"
 	// errMissingFreezePeriodID identifies the err missing freeze period ID constant used by this package.
 	errMissingFreezePeriodID = "expected error for missing freeze_period_id"
 )
@@ -248,30 +258,47 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestGet_MissingFreezePeriodID verifies that Get_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGet_MissingFreezePeriodID verifies that Get refuses a freeze_period_id of
+// zero before it spends a request, and names the field it refused.
+//
+// Asserting only that some error came back passes for the wrong reason, which is
+// why the assertion is the one below: the SDK decodes a body on every GET, so an
+// id of zero that slipped past the guard would fail on the empty response the
+// mock writes and read exactly like the guard working. What the guard is for is
+// that `/freeze_periods/0` is never asked for, and that the caller is told which
+// parameter to supply rather than handed a decode error.
 func TestGet_MissingFreezePeriodID(t *testing.T) {
+	var requests atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	_, err := Get(t.Context(), client, GetInput{ProjectID: "1", FreezePeriodID: 0})
 	if err == nil {
 		t.Fatal(errMissingFreezePeriodID)
 	}
+	assertGuardedBeforeRequest(t, err, requests.Load())
 }
 
-// TestUpdate_MissingFreezePeriodID verifies that Update_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestUpdate_MissingFreezePeriodID verifies that Update refuses a
+// freeze_period_id of zero before it spends a request, and names the field it
+// refused.
+//
+// The stake is higher here than on the read: a PUT that reached GitLab with the
+// id missing would be a write aimed at whatever `/freeze_periods/0` resolves to.
+// The empty body the mock writes makes the SDK fail either way, so the assertion
+// has to be that nothing was sent at all.
 func TestUpdate_MissingFreezePeriodID(t *testing.T) {
+	var requests atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	_, err := Update(t.Context(), client, UpdateInput{ProjectID: "1", FreezePeriodID: 0})
 	if err == nil {
 		t.Fatal(errMissingFreezePeriodID)
 	}
+	assertGuardedBeforeRequest(t, err, requests.Load())
 }
 
 // TestDelete_MissingFreezePeriodID verifies that Delete_MissingFreezePeriodID returns a wrapped error when the GitLab API responds with an error status.
@@ -360,13 +387,13 @@ func TestCreate_WithTimezone(t *testing.T) {
 		ProjectID:    "1",
 		FreezeStart:  "0 23 * * 5",
 		FreezeEnd:    "0 7 * * 1",
-		CronTimezone: "America/New_York",
+		CronTimezone: testTimezoneNewYork,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.CronTimezone != "America/New_York" {
-		t.Errorf("CronTimezone = %q, want %q", out.CronTimezone, "America/New_York")
+	if out.CronTimezone != testTimezoneNewYork {
+		t.Errorf("CronTimezone = %q, want %q", out.CronTimezone, testTimezoneNewYork)
 	}
 }
 
@@ -584,9 +611,9 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 func TestFormatMarkdownString_AllFields(t *testing.T) {
 	out := Output{
 		ID:           5,
-		FreezeStart:  "0 23 * * 5",
-		FreezeEnd:    "0 7 * * 1",
-		CronTimezone: "America/New_York",
+		FreezeStart:  testCronFreezeStart,
+		FreezeEnd:    testCronFreezeEnd,
+		CronTimezone: testTimezoneNewYork,
 		CreatedAt:    "2026-01-01T00:00:00Z",
 	}
 	want := "## Freeze Period #5\n\n" +
@@ -633,6 +660,163 @@ func TestGet_SuccessWithTimestamps(t *testing.T) {
 	}
 	if out.UpdatedAt == "" {
 		t.Error("expected UpdatedAt to be set")
+	}
+}
+
+// assertGuardedBeforeRequest holds an identifier guard to the two things that
+// make it a guard rather than a comment: GitLab was never asked, and the caller
+// was told which parameter is missing.
+func assertGuardedBeforeRequest(t *testing.T, err error, requests int64) {
+	t.Helper()
+	if requests != 0 {
+		t.Errorf("requests reaching GitLab = %d, want 0: the identifier guard must refuse before spending one", requests)
+	}
+	if !containsStr(err.Error(), "freeze_period_id") {
+		t.Errorf("error = %q, want it to name freeze_period_id", err)
+	}
+}
+
+// decodeFreezeRequestBody reads the JSON body a handler built for GitLab.
+//
+// It decodes into a map rather than a struct because what these tests assert is
+// as much about a key being absent as about its value: the SDK's option structs
+// are pointers with omitempty, so "the caller did not name this field" and "the
+// caller named it empty" differ only by whether the key is on the wire.
+func decodeFreezeRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return nil
+	}
+	return body
+}
+
+// assertSent holds one field of a request body to the value the caller gave for
+// it. It is called from the mock's own goroutine, so it reports and never aborts.
+func assertSent(t *testing.T, body map[string]any, key, want string) {
+	t.Helper()
+	if got := body[key]; got != want {
+		t.Errorf("%s sent = %v, want %q", key, got, want)
+	}
+}
+
+// assertNotSent holds a field the caller never named to being absent from the
+// request rather than present and empty, which is a different instruction: an
+// empty cron expression asks GitLab to replace the one it holds.
+func assertNotSent(t *testing.T, body map[string]any, key string) {
+	t.Helper()
+	if got, ok := body[key]; ok {
+		t.Errorf("%s sent = %v, want the key to be absent: the caller named no new value for it", key, got)
+	}
+}
+
+// TestCreate_TimezoneNamed_SendsItInTheRequest verifies that a cron_timezone the
+// caller supplied reaches GitLab in the create request.
+//
+// A freeze window is two cron expressions read in some timezone, so dropping the
+// timezone does not fail: GitLab silently applies UTC and the deploys freeze at
+// the wrong hours. Nothing about the response says which timezone was applied
+// either, because the mock, and GitLab, echo back whatever they were given. The
+// assertion therefore has to be on the request.
+func TestCreate_TimezoneNamed_SendsItInTheRequest(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := decodeFreezeRequestBody(t, r)
+		assertSent(t, body, "cron_timezone", testTimezoneNewYork)
+		assertSent(t, body, "freeze_start", testCronFreezeStart)
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":2,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"America/New_York"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := Create(t.Context(), client, CreateInput{
+		ProjectID:    "1",
+		FreezeStart:  testCronFreezeStart,
+		FreezeEnd:    testCronFreezeEnd,
+		CronTimezone: testTimezoneNewYork,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCreate_NoTimezone_OmitsTheFieldSoGitLabDefaults verifies that a create
+// call naming no timezone leaves cron_timezone off the request entirely.
+//
+// The alternative is not harmless: sending an empty cron_timezone asks GitLab to
+// resolve "" as a timezone rather than letting it apply its documented UTC
+// default, which is a validation error on a call the caller made correctly.
+func TestCreate_NoTimezone_OmitsTheFieldSoGitLabDefaults(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := decodeFreezeRequestBody(t, r)
+		assertNotSent(t, body, "cron_timezone")
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":3,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"UTC"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := Create(t.Context(), client, CreateInput{
+		ProjectID:   "1",
+		FreezeStart: testCronFreezeStart,
+		FreezeEnd:   testCronFreezeEnd,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestUpdate_EveryFieldNamed_SendsAllThree verifies that each of the three
+// optional update fields reaches GitLab carrying the caller's own value.
+//
+// Each is copied into the options struct behind its own guard, and a response
+// assertion cannot tell the three apart: the mock echoes a body it was written
+// with, so a handler that sent one field, the wrong field or no field at all
+// produces the same output. Only the request distinguishes them.
+func TestUpdate_EveryFieldNamed_SendsAllThree(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := decodeFreezeRequestBody(t, r)
+		assertSent(t, body, "freeze_start", testCronUpdatedStart)
+		assertSent(t, body, "freeze_end", testCronUpdatedEnd)
+		assertSent(t, body, "cron_timezone", testTimezoneMadrid)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":5,"freeze_start":"0 0 * * 5","freeze_end":"0 9 * * 1","cron_timezone":"Europe/Madrid"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := Update(t.Context(), client, UpdateInput{
+		ProjectID:      "1",
+		FreezePeriodID: 5,
+		FreezeStart:    testCronUpdatedStart,
+		FreezeEnd:      testCronUpdatedEnd,
+		CronTimezone:   testTimezoneMadrid,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestUpdate_OnlyTheTimezoneNamed_LeavesTheCronFieldsOut verifies that a partial
+// update sends the field the caller named and nothing else.
+//
+// This is the half of the update that a response can never show. GitLab's update
+// is a patch, so a freeze_start the caller did not name must not be on the wire:
+// sent empty, it would blank the start of a live freeze window while the handler
+// reported success, and the echoed response would still carry whatever the
+// caller expected to see.
+func TestUpdate_OnlyTheTimezoneNamed_LeavesTheCronFieldsOut(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := decodeFreezeRequestBody(t, r)
+		assertSent(t, body, "cron_timezone", testTimezoneMadrid)
+		assertNotSent(t, body, "freeze_start")
+		assertNotSent(t, body, "freeze_end")
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":5,"freeze_start":"0 23 * * 5","freeze_end":"0 7 * * 1","cron_timezone":"Europe/Madrid"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := Update(t.Context(), client, UpdateInput{
+		ProjectID:      "1",
+		FreezePeriodID: 5,
+		CronTimezone:   testTimezoneMadrid,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
