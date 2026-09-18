@@ -4,6 +4,7 @@
 package importservice
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -880,5 +882,181 @@ func TestMarkdownRegistry_PointerOutputFormatters(t *testing.T) {
 			}
 			assertImportMarkdown(t, text.Text, tc.want)
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers actually send GitLab
+// ---------------------------------------------------------------------------.
+
+// captureImportRequest answers one POST to path with respBody and hands back
+// the JSON object GitLab was sent.
+//
+// The request body is the only place an optional field can be observed. What a
+// handler returns is decided by the fixture response, so an assertion on the
+// output passes whether the field reached GitLab or not, and an optional field
+// has three states rather than two on the wire: absent, carrying the caller's
+// value, and carrying an empty string, which GitLab reads as an instruction
+// rather than as a silence.
+func captureImportRequest(t *testing.T, path, respBody string, call func(*gitlabclient.Client) error) map[string]any {
+	t.Helper()
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode request body: %v", err)
+			http.Error(w, "decode request body", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated, respBody)
+	}))
+	if err := call(client); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	return sent
+}
+
+// assertImportFieldSent fails unless the recorded request carried field with
+// exactly the value the caller gave.
+func assertImportFieldSent(t *testing.T, sent map[string]any, field, want string) {
+	t.Helper()
+	got, ok := sent[field]
+	if !ok {
+		t.Errorf("request body omitted %q; body=%v", field, sent)
+		return
+	}
+	if got != want {
+		t.Errorf("request body %q = %v, want %q", field, got, want)
+	}
+}
+
+// assertImportFieldAbsent fails when the recorded request carried field at all,
+// an empty value included.
+func assertImportFieldAbsent(t *testing.T, sent map[string]any, field string) {
+	t.Helper()
+	if got, ok := sent[field]; ok {
+		t.Errorf("request body carried %q = %v, and nothing asked for it", field, got)
+	}
+}
+
+// TestImportFromBitbucketCloud_NewName_TravelsOnlyWhenTheCallerGaveOne asserts
+// the new_name guard both ways: the name a caller asked for reaches GitLab, and
+// a caller who asked for none sends no new_name at all.
+//
+// Only the second half is about the guard being the right way round. GitLab
+// names the imported project after the Bitbucket repository unless new_name
+// says otherwise, and an empty new_name is not the same as no new_name: the
+// import is refused for a blank path. Nothing before this test looked at the
+// body of this call, so the guard could have been inverted and every assertion
+// here still read the fixture's own name back out of the response.
+func TestImportFromBitbucketCloud_NewName_TravelsOnlyWhenTheCallerGaveOne(t *testing.T) {
+	const respBody = `{"id":2,"name":"bb-new","full_path":"ns/bb-new","import_status":"scheduled"}`
+	base := ImportFromBitbucketCloudInput{
+		BitbucketUsername:    "user",
+		BitbucketAppPassword: "pass",
+		RepoPath:             "user/repo",
+		TargetNamespace:      testNamespace,
+	}
+
+	t.Run("given", func(t *testing.T) {
+		input := base
+		input.NewName = "bb-new"
+		sent := captureImportRequest(t, "/api/v4/import/bitbucket", respBody, func(client *gitlabclient.Client) error {
+			_, err := ImportFromBitbucketCloud(t.Context(), client, input)
+			return err
+		})
+		assertImportFieldSent(t, sent, "new_name", "bb-new")
+	})
+
+	t.Run("omitted", func(t *testing.T) {
+		sent := captureImportRequest(t, "/api/v4/import/bitbucket", respBody, func(client *gitlabclient.Client) error {
+			_, err := ImportFromBitbucketCloud(t.Context(), client, base)
+			return err
+		})
+		assertImportFieldAbsent(t, sent, "new_name")
+	})
+}
+
+// TestImportFromBitbucketServer_OptionalFields_TravelOnlyWhenTheCallerGaveThem
+// asserts the same property for the three optional fields of the Bitbucket
+// Server import: new_name, new_namespace and timeout_strategy each reach GitLab
+// with the caller's value, and none of them is sent when the caller gave none.
+//
+// timeout_strategy is the one with teeth: GitLab accepts "optimistic" or
+// "pessimistic" and refuses anything else, so a guard sending an empty string
+// for every caller who did not choose one would fail every import of a large
+// repository — the only imports for which this handler's other two options
+// exist.
+func TestImportFromBitbucketServer_OptionalFields_TravelOnlyWhenTheCallerGaveThem(t *testing.T) {
+	const respBody = `{"id":3,"name":"bbs-new","full_path":"ns/bbs-new","full_name":"ns / bbs-new"}`
+	base := ImportFromBitbucketServerInput{
+		BitbucketServerURL:      "https://bitbucket.example.com",
+		BitbucketServerUsername: "admin",
+		PersonalAccessToken:     "pat123",
+		BitbucketServerProject:  "PROJ",
+		BitbucketServerRepo:     "repo",
+	}
+	optional := []struct {
+		field string
+		want  string
+	}{
+		{"new_name", "bbs-new"},
+		{"new_namespace", testNamespace},
+		{"timeout_strategy", "pessimistic"},
+	}
+
+	t.Run("given", func(t *testing.T) {
+		input := base
+		input.NewName = "bbs-new"
+		input.NewNamespace = testNamespace
+		input.TimeoutStrategy = "pessimistic"
+		sent := captureImportRequest(t, "/api/v4/import/bitbucket_server", respBody, func(client *gitlabclient.Client) error {
+			_, err := ImportFromBitbucketServer(t.Context(), client, input)
+			return err
+		})
+		for _, tc := range optional {
+			t.Run(tc.field, func(t *testing.T) {
+				assertImportFieldSent(t, sent, tc.field, tc.want)
+			})
+		}
+	})
+
+	t.Run("omitted", func(t *testing.T) {
+		sent := captureImportRequest(t, "/api/v4/import/bitbucket_server", respBody, func(client *gitlabclient.Client) error {
+			_, err := ImportFromBitbucketServer(t.Context(), client, base)
+			return err
+		})
+		for _, tc := range optional {
+			t.Run(tc.field, func(t *testing.T) {
+				assertImportFieldAbsent(t, sent, tc.field)
+			})
+		}
+	})
+}
+
+// TestCancelGitHubImport_ZeroProjectID_RefusedWithoutCallingGitLab asserts the
+// guard refuses project_id 0 rather than sending it.
+//
+// Zero is what a missing, misspelled or non-numeric argument decodes to, which
+// is exactly the case the guard exists for: a handler that only refused a
+// negative id would ask GitLab to cancel the import of "project 0" and hand the
+// model GitLab's own 404 instead of naming the parameter it got wrong. The
+// existing refusal test passes -1, which a guard narrowed to "< 0" still
+// refuses, so it could never see that narrowing.
+func TestCancelGitHubImport_ZeroProjectID_RefusedWithoutCallingGitLab(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("GitLab must not be called when project_id is zero")
+		testutil.RespondJSON(w, http.StatusOK, `{"id":0,"name":"my-repo"}`)
+	}))
+
+	_, err := CancelGitHubImport(t.Context(), client, CancelGitHubImportInput{ProjectID: 0})
+	if err == nil {
+		t.Fatal("expected error for zero project_id")
+	}
+	if !strings.Contains(err.Error(), "project_id") {
+		t.Errorf("expected error to mention 'project_id', got %q", err.Error())
 	}
 }
