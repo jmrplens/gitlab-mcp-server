@@ -6,6 +6,7 @@ package licensetemplates
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -488,6 +489,246 @@ func TestLicenseTemplates_UnreadableCapturedPopular(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// The popular flag is GitLab's own key, per template, in order
+// ---------------------------------------------------------------------------.
+
+// TestList_PopularFollowsGitLabsOwnKeyPerTemplate verifies that each published
+// template's Popular flag is the `popular` key GitLab sent for that same
+// template, and neither the `featured` key the SDK decodes beside it nor
+// another template's answer.
+//
+// Both halves are why the handler reads the captured response at all
+// (ADR-0021). client-go's LicenseTemplate models `featured` and not `popular`,
+// so a conversion taking l.Featured compiles, publishes a plausible boolean,
+// and silently answers a different question than the field name promises. And
+// the extras come back as a list indexed in step with the decoded templates, so
+// this fixture makes the two templates disagree on both keys: a flag read off
+// the wrong template is then a wrong answer rather than the right one by luck,
+// which a single-template fixture can never tell apart.
+func TestList_PopularFollowsGitLabsOwnKeyPerTemplate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+
+			`{"key":"mit","name":"MIT License","featured":true,"popular":false},`+
+			`{"key":"gpl-3.0","name":"GPL 3.0","featured":false,"popular":true}`+
+			`]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Licenses) != 2 {
+		t.Fatalf("len(Licenses) = %d, want 2", len(out.Licenses))
+	}
+	cases := []struct {
+		name    string
+		index   int
+		key     string
+		popular bool
+	}{
+		{"featured but not popular", 0, "mit", false},
+		{"popular but not featured", 1, "gpl-3.0", true},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := out.Licenses[tt.index]
+			if got.Key != tt.key {
+				t.Fatalf("Licenses[%d].Key = %q, want %q: templates are published in the order GitLab sent them", tt.index, got.Key, tt.key)
+			}
+			if got.Popular != tt.popular {
+				t.Errorf("%s: Popular = %v, want %v", got.Key, got.Popular, tt.popular)
+			}
+		})
+	}
+}
+
+// TestGet_PopularFollowsGitLabsOwnKey verifies that the single-template read
+// publishes the `popular` key GitLab sent rather than the `featured` one the
+// SDK decodes. The fixture makes the two disagree, so a read that took the
+// SDK's field, or that dropped the captured extra on the floor and passed a
+// zero one, answers false where GitLab said true.
+func TestGet_PopularFollowsGitLabsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"key":"mit","name":"MIT License","featured":false,"popular":true}`)
+	}))
+	out, err := Get(t.Context(), client, GetInput{Key: "mit"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if !out.Popular {
+		t.Error("Popular = false, want the popular template GitLab's own key describes")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Every field of a template reaches the caller under its own name
+// ---------------------------------------------------------------------------.
+
+// TestGet_PublishesEveryFieldGitLabSent verifies that each field of the
+// published template carries the value GitLab sent under that same name.
+//
+// Every one of these is a plain copy, so transposing two of them changes no
+// control flow and nothing downstream complains. The html_url and source_url
+// pair is the case worth naming: both are URLs of the same template, a reader
+// handed them the wrong way round has no way to notice, and until this test
+// neither was asserted anywhere in the package at all.
+func TestGet_PublishesEveryFieldGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{`+
+			`"key":"mit","name":"MIT License","nickname":"MIT",`+
+			`"html_url":"https://gitlab.example.com/licenses/mit",`+
+			`"source_url":"https://opensource.org/licenses/MIT",`+
+			`"description":"A short permissive license",`+
+			`"conditions":["include-copyright"],`+
+			`"permissions":["commercial-use","modification"],`+
+			`"limitations":["no-liability"],`+
+			`"content":"MIT License\n\nCopyright (c) 2026 Jane Doe"`+
+			`}`)
+	}))
+	out, err := Get(t.Context(), client, GetInput{Key: "mit"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	scalars := []struct {
+		field string
+		got   string
+		want  string
+	}{
+		{"Key", out.Key, "mit"},
+		{"Name", out.Name, "MIT License"},
+		{"Nickname", out.Nickname, "MIT"},
+		{"HTMLURL", out.HTMLURL, "https://gitlab.example.com/licenses/mit"},
+		{"SourceURL", out.SourceURL, "https://opensource.org/licenses/MIT"},
+		{"Description", out.Description, "A short permissive license"},
+		{"Content", out.Content, "MIT License\n\nCopyright (c) 2026 Jane Doe"},
+	}
+	for _, tt := range scalars {
+		t.Run(tt.field, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %q, want %q", tt.field, tt.got, tt.want)
+			}
+		})
+	}
+	lists := []struct {
+		field string
+		got   []string
+		want  []string
+	}{
+		{"Conditions", out.Conditions, []string{"include-copyright"}},
+		{"Permissions", out.Permissions, []string{"commercial-use", "modification"}},
+		{"Limitations", out.Limitations, []string{"no-liability"}},
+	}
+	for _, tt := range lists {
+		t.Run(tt.field, func(t *testing.T) {
+			if !slices.Equal(tt.got, tt.want) {
+				t.Errorf("%s = %q, want %q", tt.field, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The pagination block describes the listing that carried it
+// ---------------------------------------------------------------------------.
+
+// TestList_PaginationDescribesTheListResponse verifies that the pagination
+// block a listing publishes is built from the headers GitLab put on that very
+// response, rather than left at its zero value.
+//
+// This is the one part of the output nothing else in the package depends on,
+// which is exactly why it can go missing unnoticed: the licenses themselves are
+// correct either way. A caller reads this block to decide whether to ask for
+// another page, so a zeroed one makes every page look like the last and puts
+// the remaining templates out of reach. The whole struct is compared rather
+// than a field or two, so a block filled from the wrong place cannot pass by
+// agreeing on the fields somebody happened to check.
+func TestList_PaginationDescribesTheListResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"key":"mit","name":"MIT License"}]`,
+			testutil.PaginationHeaders{Page: "2", PerPage: "1", Total: "3", TotalPages: "3", NextPage: "3", PrevPage: "1"},
+		)
+	}))
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalItems: 3, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Each hint is attached to the one refusal it explains
+// ---------------------------------------------------------------------------.
+
+// TestList_ForbiddenSuggestsTheScopeAndOtherFailuresDoNot verifies that a
+// listing GitLab refuses carries the scope hint, and that a failure of another
+// kind does not.
+//
+// Both halves are the property. A hint offered on every failure sends a caller
+// to widen a token that was never the problem; a hint wired to the wrong status
+// is never offered when it would have helped. The status the handler named is
+// invisible from outside, so the suggestion it produces is the only evidence of
+// which one it is — asserting merely that the call failed, as this package did
+// before, holds neither half.
+func TestList_ForbiddenSuggestsTheScopeAndOtherFailuresDoNot(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"forbidden", http.StatusForbidden, true},
+		{"bad request", http.StatusBadRequest, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			_, err := List(t.Context(), client, ListInput{})
+			if err == nil {
+				t.Fatalf("status %d: expected an error", tt.status)
+			}
+			got := strings.Contains(err.Error(), "Suggestion: verify your token has read_api scope")
+			if got != tt.wantHint {
+				t.Errorf("status %d: read_api suggestion present = %v, want %v; error was %q", tt.status, got, tt.wantHint, err.Error())
+			}
+		})
+	}
+}
+
+// TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot verifies the same of the
+// single-template read: the hint pointing a caller back at the listing belongs
+// to the missing-key refusal that it answers, and to no other failure. A key
+// that does not exist is the one thing the listing can fix.
+func TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"not found", http.StatusNotFound, true},
+		{"bad request", http.StatusBadRequest, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+			_, err := Get(t.Context(), client, GetInput{Key: "nope"})
+			if err == nil {
+				t.Fatalf("status %d: expected an error", tt.status)
+			}
+			got := strings.Contains(err.Error(), "Suggestion: verify key with gitlab_list_license_templates")
+			if got != tt.wantHint {
+				t.Errorf("status %d: list suggestion present = %v, want %v; error was %q", tt.status, got, tt.wantHint, err.Error())
+			}
+		})
+	}
 }
 
 // licenseTemplateSpecsByTool supports license template specs by tool assertions in licensetemplates tests.
