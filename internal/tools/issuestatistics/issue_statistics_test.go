@@ -5,6 +5,8 @@ package issuestatistics
 
 import (
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -883,5 +885,199 @@ func TestGetProject_ExtendedFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Discovery metadata (R-META)
+// ---------------------------------------------------------------------------.
+
+// issueStatsSpecs builds the package's action specs against a client that
+// answers nothing: every assertion below reads metadata rather than calling a
+// route.
+func issueStatsSpecs(t *testing.T) []toolutil.ActionSpec {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	return ActionSpecs(client)
+}
+
+// publishedJSONFields returns the json names a tool input struct publishes,
+// which is the set an input-schema override may name.
+func publishedJSONFields(input any) map[string]bool {
+	fields := make(map[string]bool)
+	for field := range reflect.TypeOf(input).Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			fields[name] = true
+		}
+	}
+	return fields
+}
+
+// enumFor returns the enum an override publishes for the named input property.
+func enumFor(overrides []toolutil.InputSchemaOverride, property string) ([]any, bool) {
+	for _, override := range overrides {
+		if override.PropertyPath != property {
+			continue
+		}
+		values, ok := override.Values["enum"].([]any)
+		return values, ok
+	}
+	return nil, false
+}
+
+// TestActionSpecs_EveryActionCarriesDecoratedMetadata checks that every action
+// ActionSpecs registers has been through decorateIssueStatisticsMeta, by
+// comparing each against the undecorated options an unrecognized tool name
+// returns.
+//
+// Why that matters: decorateIssueStatisticsMeta is a switch with no default,
+// so an action added to ActionSpecs without a case of its own ships silently
+// with the generic package usage, no related actions, no individual-tool
+// description and none of the enum constraints. That is the whole of what a
+// model reads to find the tool and call it correctly, and nothing asserted any
+// of it: the decorator could be neutered in full with this suite still green,
+// which was verified by hand before this test existed.
+//
+// The undecorated baseline is computed rather than quoted, so it cannot drift
+// from the source. It is asserted to be undecorated first, and that control is
+// the load-bearing half: without it, a decorator that stopped decorating would
+// move both sides of every comparison together and each assertion below would
+// pass while asserting nothing.
+func TestActionSpecs_EveryActionCarriesDecoratedMetadata(t *testing.T) {
+	baseline := issueStatisticsOptions("gitlab_get_issue_statistics_no_such_tool")
+
+	if len(baseline.RelatedActions) != 0 || len(baseline.InputSchemaOverrides) != 0 || baseline.IndividualTool.Description != "" {
+		t.Fatalf("an unrecognized tool name came back decorated, so the comparisons below prove nothing: %+v", baseline)
+	}
+
+	for _, spec := range issueStatsSpecs(t) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if spec.Usage == baseline.Usage {
+				t.Errorf("Usage is the undecorated placeholder %q", spec.Usage)
+			}
+			if len(spec.Aliases) <= len(baseline.Aliases) {
+				t.Errorf("Aliases = %v, want the tool name plus natural-language aliases", spec.Aliases)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Error("IndividualTool.Description is empty, so the individual surface lists this tool with no description")
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Error("RelatedActions is empty, so nothing routes a model to the other scopes")
+			}
+			if len(spec.InputSchemaOverrides) == 0 {
+				t.Error("InputSchemaOverrides is empty, so no fixed vocabulary reaches the served schema")
+			}
+		})
+	}
+}
+
+// TestActionSpecs_RelatedActionsNameTheSiblingScopes checks that each action's
+// RelatedActions names the canonical ID of the package's other two actions,
+// never its own, and at least one action outside the package.
+//
+// Why that matters: the three actions differ only in scope, so the routing a
+// model needs most from this metadata is the way to the other two. The IDs are
+// hand-written in three near-identical switch cases, where a copy-paste leaves
+// an action pointing at itself or naming one sibling twice, and a rename
+// leaves a dangling reference that resolves to nothing. The expected IDs are
+// built from the specs themselves, so this fails on the rename rather than
+// preserving whatever the source happens to say today.
+func TestActionSpecs_RelatedActionsNameTheSiblingScopes(t *testing.T) {
+	specs := issueStatsSpecs(t)
+	canonical := func(spec toolutil.ActionSpec) string { return spec.OwnerPackage + "." + spec.Name }
+
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			own := canonical(spec)
+			if slices.Contains(spec.RelatedActions, own) {
+				t.Errorf("RelatedActions = %v, names the action itself (%s)", spec.RelatedActions, own)
+			}
+			outside := 0
+			for _, related := range spec.RelatedActions {
+				if !strings.HasPrefix(related, spec.OwnerPackage+".") {
+					outside++
+				}
+			}
+			if outside == 0 {
+				t.Errorf("RelatedActions = %v, names no action outside %s to reach the issues behind the counts", spec.RelatedActions, spec.OwnerPackage)
+			}
+			for _, sibling := range specs {
+				id := canonical(sibling)
+				if id != own && !slices.Contains(spec.RelatedActions, id) {
+					t.Errorf("RelatedActions = %v, missing sibling scope %s", spec.RelatedActions, id)
+				}
+			}
+		})
+	}
+}
+
+// TestActionSpecs_EnumOverridesConstrainPublishedFields checks that every
+// input-schema override names a field its own action publishes, and that each
+// fixed-vocabulary field an action publishes is constrained to GitLab's own
+// vocabulary.
+//
+// Why that matters in both directions: an override whose PropertyPath matches
+// no property patches nothing and says nothing about it, so the constraint
+// never reaches the served schema and a model stays free to send a value
+// GitLab refuses. The three inputs are deliberately not the same shape, since
+// only the global route takes "in", so the copy-paste that would carry the
+// "in" override onto the group action is exactly what the first half catches
+// and the second half is what catches one being dropped. The vocabularies are
+// GitLab's documented ones for the issue statistics endpoints rather than a
+// copy of the source line, so the assertion and the code cannot drift together.
+func TestActionSpecs_EnumOverridesConstrainPublishedFields(t *testing.T) {
+	inputFields := map[string]map[string]bool{
+		"gitlab_get_issue_statistics":         publishedJSONFields(GetInput{}),
+		"gitlab_get_group_issue_statistics":   publishedJSONFields(GetGroupInput{}),
+		"gitlab_get_project_issue_statistics": publishedJSONFields(GetProjectInput{}),
+	}
+	vocabularies := map[string][]any{
+		"scope": {"created_by_me", "assigned_to_me", "all"},
+		"in":    {"title", "description", "title,description"},
+	}
+
+	for _, spec := range issueStatsSpecs(t) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			published, known := inputFields[spec.IndividualTool.Name]
+			if !known {
+				t.Fatalf("no input struct is mapped to %s", spec.IndividualTool.Name)
+			}
+			assertOverridesNamePublishedFields(t, spec.InputSchemaOverrides, published)
+			for field, want := range vocabularies {
+				t.Run(field, func(t *testing.T) {
+					assertVocabulary(t, spec.InputSchemaOverrides, published, field, want)
+				})
+			}
+		})
+	}
+}
+
+// assertOverridesNamePublishedFields checks that every override names a field
+// the action's input publishes. One that does not patches nothing, silently.
+func assertOverridesNamePublishedFields(t *testing.T, overrides []toolutil.InputSchemaOverride, published map[string]bool) {
+	t.Helper()
+	for _, override := range overrides {
+		if !published[override.PropertyPath] {
+			t.Errorf("override constrains %q, which this action's input does not publish, so it patches nothing", override.PropertyPath)
+		}
+	}
+}
+
+// assertVocabulary checks that a fixed-vocabulary field the action's input
+// publishes is constrained to GitLab's own values.
+func assertVocabulary(t *testing.T, overrides []toolutil.InputSchemaOverride, published map[string]bool, field string, want []any) {
+	t.Helper()
+	if !published[field] {
+		return
+	}
+	got, ok := enumFor(overrides, field)
+	if !ok {
+		t.Fatalf("input publishes %q and no override constrains it to a vocabulary", field)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("%q enum = %v, want GitLab's vocabulary %v", field, got, want)
 	}
 }
