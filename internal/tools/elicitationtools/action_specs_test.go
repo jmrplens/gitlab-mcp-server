@@ -16,16 +16,28 @@ import (
 
 // roundTripCancelCase describes one tool registration's cancellation flow.
 type roundTripCancelCase struct {
-	tool       string
-	args       map[string]any
+	tool string
+	args map[string]any
+	// action is what the simulated user answers every prompt with: "cancel"
+	// (the dialog dismissed) or "decline" (the question refused). The two
+	// reach the route as different sentinels and both must end the same way,
+	// which is the property runRoundTripCancelCase exists to hold. Empty
+	// means "cancel".
+	action     string
 	wantInBody string // substring that must appear in the CancelledResult text
 }
 
 // runRoundTripCancelCase calls the named catalog-backed MCP tool through an
-// in-memory client whose elicitation handler immediately cancels. The tool
-// route translates the wrapped ErrCancelled into a CancelledResult.
+// in-memory client whose elicitation handler immediately refuses. The tool
+// route translates the wrapped ErrCancelled or ErrDeclined into a
+// CancelledResult.
 func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	t.Helper()
+
+	action := tc.action
+	if action == "" {
+		action = "cancel"
+	}
 
 	gitlabClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -52,7 +64,7 @@ func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
 		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "cancel"}, nil
+			return &mcp.ElicitResult{Action: action}, nil
 		},
 	})
 	session, err := mcpClient.Connect(ctx, ct, nil)
@@ -184,6 +196,54 @@ func TestCatalogSurface_ProjectCancelRoundTrip(t *testing.T) {
 		args:       map[string]any{},
 		wantInBody: "Project creation cancelled",
 	})
+}
+
+// TestCatalogSurface_DeclineRoundTrip_IsAlsoACancelledResult holds the second
+// way a person refuses a wizard.
+//
+// A dialog can end two ways and the elicitation specification gives each its
+// own action: "cancel" is the dialog dismissed, "decline" is the question
+// answered with no. They arrive at the catalog route as two different
+// sentinels, ErrCancelled and ErrDeclined, and the route names both because a
+// person who says no has not consented any more than one who closed the
+// window. Every case above answers "cancel", so the ErrDeclined half of that
+// condition was never once true: the route could have stopped recognizing a
+// decline and every test would still have passed, while a declining client
+// got a raw Go error instead of the message that tells the model the user
+// refused.
+func TestCatalogSurface_DeclineRoundTrip_IsAlsoACancelledResult(t *testing.T) {
+	tests := []roundTripCancelCase{
+		{
+			tool:       "gitlab_interactive_issue_create",
+			args:       map[string]any{keyProjectID: "42"},
+			action:     "decline",
+			wantInBody: "Issue creation cancelled",
+		},
+		{
+			tool:       "gitlab_interactive_mr_create",
+			args:       map[string]any{keyProjectID: "42"},
+			action:     "decline",
+			wantInBody: "Merge request creation cancelled",
+		},
+		{
+			tool:       "gitlab_interactive_release_create",
+			args:       map[string]any{keyProjectID: "42"},
+			action:     "decline",
+			wantInBody: "Release creation cancelled",
+		},
+		{
+			tool:       "gitlab_interactive_project_create",
+			args:       map[string]any{},
+			action:     "decline",
+			wantInBody: "Project creation cancelled",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.tool, func(t *testing.T) {
+			runRoundTripCancelCase(t, tc)
+		})
+	}
 }
 
 func elicitationSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
