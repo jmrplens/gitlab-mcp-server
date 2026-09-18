@@ -3,6 +3,7 @@ package groupprotectedbranches
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -550,6 +551,65 @@ func TestUpdate_ContextCancelled(t *testing.T) {
 	_, err := Update(ctx, client, UpdateInput{GroupID: "mygroup", Branch: "main"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+// TestUpdate_Rename_SendsNameOnlyWhenTheCallerGaveOne holds both halves of the
+// optional rename: `name` reaches GitLab exactly when the caller supplied one,
+// and the key is absent from the body when they did not.
+//
+// Why it matters: every other rename assertion in this file reads the new name
+// back out of the mock's own response, which the test itself wrote, so both
+// sides of that comparison move together and the guard deciding whether `name`
+// is sent at all can be inverted without failing anything. Inverted, a caller
+// who asked for a rename has it silently dropped and is handed back a rule
+// still carrying its old name, while a caller who asked for no rename has
+// GitLab told to name the rule the empty string, which it refuses. Only the
+// request the handler builds can tell those apart, so this asserts on the body
+// rather than on the output.
+func TestUpdate_Rename_SendsNameOnlyWhenTheCallerGaveOne(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    UpdateInput
+		wantSent bool
+		wantName string
+	}{
+		{
+			name:     "a supplied name reaches GitLab",
+			input:    UpdateInput{GroupID: "mygroup", Branch: "main", Name: "main-v2"},
+			wantSent: true,
+			wantName: "main-v2",
+		},
+		{
+			name:  "no name leaves the key out of the body",
+			input: UpdateInput{GroupID: "mygroup", Branch: "main"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode PATCH body: %v", err)
+					http.Error(w, "decode PATCH body", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, branchJSON)
+			}))
+
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Update() error = %v", err)
+			}
+
+			got, sent := body["name"]
+			if sent != tt.wantSent {
+				t.Fatalf("name sent = %v, want %v; body = %#v", sent, tt.wantSent, body)
+			}
+			if tt.wantSent && got != tt.wantName {
+				t.Errorf("name = %#v, want %q", got, tt.wantName)
+			}
+		})
 	}
 }
 
