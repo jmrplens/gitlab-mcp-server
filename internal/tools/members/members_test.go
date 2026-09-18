@@ -6,7 +6,9 @@ package members
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -27,6 +29,12 @@ const (
 	testUsername               = "alice"
 	fmtErrShouldContain        = "error %q should contain %q"
 	fmtOutUsernameWant         = "out.Username = %q, want %q"
+	// The member fields GitLab is sent, as the write endpoints spell them on
+	// the wire; the body assertions below name keys, not Go fields.
+	fieldUsername     = "username"
+	fieldExpiresAt    = "expires_at"
+	fieldMemberRoleID = "member_role_id"
+	pathAddMember     = "/api/v4/projects/42/members"
 )
 
 // TestProjectMembersList_Success verifies that projectMembersList returns all
@@ -1257,5 +1265,182 @@ func TestMemberEdit_GenericAPIError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "higher access level") {
 		t.Errorf("error must not contain 403 hint for non-403 status; got %q", err.Error())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The request the write handlers build
+// ---------------------------------------------------------------------------.
+
+// memberBodyRecorder answers method plus path with response and records the
+// JSON body GitLab was sent into recorded, so a test can assert on the request
+// the handler built. Every other write test here asserts the fixture the mock
+// answers with, and the mock answers it whatever the handler sent.
+func memberBodyRecorder(t *testing.T, method, path, response string, status int, recorded *map[string]any) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the %s %s body: %v", method, path, err)
+		}
+		*recorded = body
+		testutil.RespondJSON(w, status, response)
+	})
+}
+
+// assertMemberRequestBody checks that body carries each key of present with
+// that value, and none of the keys named in absent.
+func assertMemberRequestBody(t *testing.T, body, present map[string]any, absent []string) {
+	t.Helper()
+	for key, want := range present {
+		got, ok := body[key]
+		if !ok {
+			t.Errorf("request body has no %q; body = %v", key, body)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("request body %q = %#v, want %#v", key, got, want)
+		}
+	}
+	for _, key := range absent {
+		if got, ok := body[key]; ok {
+			t.Errorf("request body carries %q = %#v, want it left out", key, got)
+		}
+	}
+}
+
+// TestMemberAdd_SendsTheIdentityAndOptionsItWasGiven holds the POST body Add
+// builds: the identity the caller named and not the other one, and expires_at
+// and member_role_id carried only where they were set.
+//
+// Why it matters: each of those four is guarded by its own "is it set" check,
+// and inverting any one of them changes only the request. A caller who named a
+// username would have GitLab told the empty string, a caller who named a user
+// id would have it dropped, and a custom member role would silently not be
+// attached — while the mock still answers the same member and every
+// response-shaped assertion in this file still passes.
+func TestMemberAdd_SendsTheIdentityAndOptionsItWasGiven(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   AddInput
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name:  "user_id names the member",
+			input: AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30},
+			// expires_at has no omitempty on the SDK option, so GitLab is
+			// always told about it; unset it must be null and never "".
+			present: map[string]any{testFieldUserID: float64(10), paramAccessLevel: float64(30), fieldExpiresAt: nil},
+			absent:  []string{fieldUsername, fieldMemberRoleID},
+		},
+		{
+			name:    "username names the member",
+			input:   AddInput{ProjectID: testProjectID, Username: "bob", AccessLevel: 30},
+			present: map[string]any{fieldUsername: "bob"},
+			absent:  []string{testFieldUserID, fieldMemberRoleID},
+		},
+		{
+			name:    "expires_at is carried when set",
+			input:   AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30, ExpiresAt: "2026-06-30"},
+			present: map[string]any{fieldExpiresAt: "2026-06-30"},
+		},
+		{
+			name:    "member_role_id is carried when set",
+			input:   AddInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 30, MemberRoleID: 5},
+			present: map[string]any{fieldMemberRoleID: float64(5)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, memberBodyRecorder(t, http.MethodPost, pathAddMember, memberJSON, http.StatusCreated, &body))
+			if _, err := Add(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Add() unexpected error: %v", err)
+			}
+			assertMemberRequestBody(t, body, tt.present, tt.absent)
+		})
+	}
+}
+
+// TestMemberEdit_SendsOnlyTheOptionsItWasGiven holds the PUT body Edit builds
+// to the options the caller set and no others.
+//
+// Why it matters: an edit is a partial update, so a field GitLab is told about
+// is a field GitLab changes. Inverting either guard sends expires_at as the
+// empty string or drops a member_role_id the caller asked for, which clears an
+// expiry or leaves a custom role unattached — and the mock answers the same
+// member either way, so nothing that reads the response can notice.
+func TestMemberEdit_SendsOnlyTheOptionsItWasGiven(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   EditInput
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name:    "access level alone leaves the rest untouched",
+			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40},
+			present: map[string]any{paramAccessLevel: float64(40)},
+			absent:  []string{fieldExpiresAt, fieldMemberRoleID},
+		},
+		{
+			name:    "expires_at is carried when set",
+			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, ExpiresAt: "2026-12-31"},
+			present: map[string]any{fieldExpiresAt: "2026-12-31"},
+		},
+		{
+			name:    "member_role_id is carried when set",
+			input:   EditInput{ProjectID: testProjectID, UserID: 10, AccessLevel: 40, MemberRoleID: 7},
+			present: map[string]any{fieldMemberRoleID: float64(7)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, memberBodyRecorder(t, http.MethodPut, pathProjectMember10, memberJSON, http.StatusOK, &body))
+			if _, err := Edit(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Edit() unexpected error: %v", err)
+			}
+			assertMemberRequestBody(t, body, tt.present, tt.absent)
+		})
+	}
+}
+
+// TestFormatListMarkdownString_OneLinkedMember_KeepsTheHintForTheWholePage
+// verifies that a single member carrying a profile URL is enough for the page
+// to keep the instruction to preserve links, even when a later member has
+// none.
+//
+// Why it matters: the flag is accumulated across the rows, and every other
+// list test here renders a page whose members either all carry a URL or none
+// do, so the accumulation itself was never exercised. A page that stopped
+// accumulating would drop the guidance for the links it does render, and the
+// model would present them as plain text.
+func TestFormatListMarkdownString_OneLinkedMember_KeepsTheHintForTheWholePage(t *testing.T) {
+	lo := ListOutput{
+		Members: []Output{
+			{
+				Username: testUsername, Name: "Alice", AccessLevel: 30,
+				State: "active", WebURL: "https://gitlab.example.com/alice",
+			},
+			{Username: "bob", Name: "Bob", AccessLevel: 40, State: "active"},
+		},
+	}
+	want := "## Project Members (2)\n\n" + memberListHeader +
+		"| [@alice](https://gitlab.example.com/alice) | Alice | Developer (30) | active |  |  |\n" +
+		"| @bob | Bob | Maintainer (40) | active |  |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'project.member_get' to see one member's details\n" +
+		"- Use action 'project.member_add' to add a member to this project\n"
+	if got := FormatListMarkdownString(lo); got != want {
+		t.Errorf("FormatListMarkdownString =\n%q\nwant\n%q", got, want)
 	}
 }

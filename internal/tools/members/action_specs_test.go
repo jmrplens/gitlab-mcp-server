@@ -130,6 +130,74 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// TestMemberOptions_EveryRegisteredTool_CarriesMetadataOfItsOwn verifies that
+// each of the six tool names ActionSpecs registers is answered by a branch of
+// memberOptions with its own usage, its own aliases and an individual-tool
+// description, rather than falling through to the package defaults.
+//
+// Why it matters: memberOptions decides that per tool name, and a name with no
+// branch is not an error — it yields a spec whose usage is the placeholder and
+// whose individual description is empty. The surface is still registered and
+// still routes, so a tool added to ActionSpecs and forgotten here ships with no
+// description at all, which is the one piece of metadata a model reads to
+// decide whether the tool is the one it wants.
+func TestMemberOptions_EveryRegisteredTool_CarriesMetadataOfItsOwn(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, memberActionHandler()))
+	if len(specs) != 6 {
+		t.Fatalf("len(ActionSpecs()) = %d, want 6", len(specs))
+	}
+
+	defaults := memberOptions("gitlab_project_member_not_a_tool")
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			opts := memberOptions(spec.IndividualTool.Name)
+			if opts.Usage == defaults.Usage {
+				t.Errorf("usage is still the package placeholder %q", opts.Usage)
+			}
+			if opts.IndividualTool.Description == "" {
+				t.Error("IndividualTool.Description is empty")
+			}
+			if len(opts.Aliases) < 2 {
+				t.Errorf("Aliases = %v, want the tool name plus natural-language aliases", opts.Aliases)
+			}
+		})
+	}
+}
+
+// TestMemberOptions_AnUnknownToolName_KeepsThePackageDefaults verifies what a
+// name no branch matches is answered with: the shared tags, owner package and
+// related actions, its own name as the only alias, and no individual-tool
+// description.
+//
+// Why it matters: this is the fall-through the test above is measured against,
+// and it is deliberately harmless rather than a panic or a half-filled spec —
+// the defaults are a complete, if generic, spec. Stating it here is what makes
+// "the description is empty" a fact about the branch that is missing rather
+// than about whichever branch happened to run last.
+func TestMemberOptions_AnUnknownToolName_KeepsThePackageDefaults(t *testing.T) {
+	const name = "gitlab_project_member_not_a_tool"
+	opts := memberOptions(name)
+
+	if opts.Usage != "Use to execute members domain action." {
+		t.Errorf("Usage = %q, want the package default", opts.Usage)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty for a name no branch matches", opts.IndividualTool.Description)
+	}
+	if opts.IndividualTool.Name != name {
+		t.Errorf("IndividualTool.Name = %q, want %q", opts.IndividualTool.Name, name)
+	}
+	if len(opts.Aliases) != 1 || opts.Aliases[0] != name {
+		t.Errorf("Aliases = %v, want only %q", opts.Aliases, name)
+	}
+	if opts.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", opts.ParameterGuidance)
+	}
+	if opts.OwnerPackage != "members" {
+		t.Errorf("OwnerPackage = %q, want %q", opts.OwnerPackage, "members")
+	}
+}
+
 func memberActionHandler() http.Handler {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/projects/42/members/all/10", func(w http.ResponseWriter, _ *http.Request) {
