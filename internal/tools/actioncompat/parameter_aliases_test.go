@@ -1,6 +1,8 @@
 package actioncompat
 
 import (
+	"fmt"
+	"maps"
 	"reflect"
 	"testing"
 
@@ -1222,5 +1224,549 @@ func TestIntegerValue_TypeCoverage(t *testing.T) {
 				t.Fatalf("integerValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantInt, tc.wantOK)
 			}
 		})
+	}
+}
+
+// TestNormalizeParamsWithExplanation_TargetNotInSchema_LeavesParamsAlone
+// asserts the rule every schema-checked normalizer shares: a rewrite is
+// abandoned when the action's own input schema does not carry the field it
+// would write.
+//
+// It matters because the schema is what the tool advertises. A normalizer that
+// wrote past it would hand GitLab a parameter the action never declared and
+// report an alias the caller cannot find in the tool's own description, which
+// is worse than leaving the caller's spelling alone: the caller can see their
+// own spelling in the error GitLab returns.
+//
+// Each case pins one half of the guard by giving the parameter and withholding
+// the target from the schema. A schema that accepts everything cannot tell the
+// two operands apart, which is why the fixtures name the properties one by one.
+func TestNormalizeParamsWithExplanation_TargetNotInSchema_LeavesParamsAlone(t *testing.T) {
+	testCases := []struct {
+		name             string
+		actionID         string
+		params           map[string]any
+		schemaProperties []string
+	}{
+		{
+			name:             "issue link does not copy project_id into a target the schema omits",
+			actionID:         "issue.link_create",
+			params:           map[string]any{"project_id": 42, "target_issue_iid": 7},
+			schemaProperties: []string{"project_id", "target_issue_iid"},
+		},
+		{
+			name:             "member add does not coerce an access level the schema omits",
+			actionID:         "project.member_add",
+			params:           map[string]any{"project_id": 42, "user_id": 3, "access_level": "developer"},
+			schemaProperties: []string{"project_id", "user_id"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			wantParams := maps.Clone(testCase.params)
+			normalized, explanations := NormalizeParamsWithExplanation(testCase.actionID, testCase.params, schemaWithProperties(testCase.schemaProperties...))
+			if !reflect.DeepEqual(normalized, wantParams) {
+				t.Fatalf("normalized params = %#v, want them untouched as %#v", normalized, wantParams)
+			}
+			if len(explanations) != 0 {
+				t.Fatalf("explanations = %#v, want none for a target the schema does not accept", explanationAliases(explanations))
+			}
+		})
+	}
+}
+
+// TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs
+// asserts that the maintainer default is attached to an approval rule for one
+// reason only: the rule asks for approvals and names nobody to give them.
+//
+// GitLab rejects an approval rule that names no principal, so the normalizer
+// supplies access_level 40 for a caller who sent a bare required_approvals.
+// A rule that asks for no approvals is not that case, and filling one in would
+// invent a maintainer approval requirement the caller never wrote. Both
+// subtests send a rule with no principal so that the approval count alone
+// decides, which is the operand this pins.
+func TestNormalizeProtectedEnvironmentParams_RuleWithoutApprovals_KeepsEntryAsIs(t *testing.T) {
+	schema := schemaWithProperties("id", "name", "approval_rules")
+
+	t.Run("no approvals asked for leaves the rule untouched", func(t *testing.T) {
+		params := map[string]any{
+			"id":             42,
+			"name":           "production",
+			"approval_rules": []any{map[string]any{"group_inheritance_type": 1}},
+		}
+		normalized, explanations := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		rules, ok := normalized["approval_rules"].([]any)
+		if !ok || len(rules) != 1 {
+			t.Fatalf("approval_rules = %#v, want one entry", normalized["approval_rules"])
+		}
+		if entry, entryOK := rules[0].(map[string]any); !entryOK || len(entry) != 1 {
+			t.Fatalf("approval rule = %#v, want the caller's single field and no invented access_level", rules[0])
+		}
+		if len(explanations) != 0 {
+			t.Fatalf("explanations = %#v, want none for a rule nothing had to be done to", explanationAliases(explanations))
+		}
+	})
+
+	t.Run("approvals asked for with no principal defaults to maintainer", func(t *testing.T) {
+		params := map[string]any{
+			"id":             42,
+			"name":           "production",
+			"approval_rules": []any{map[string]any{"required_approvals": 2}},
+		}
+		normalized, _ := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		rules, ok := normalized["approval_rules"].([]any)
+		if !ok || len(rules) != 1 {
+			t.Fatalf("approval_rules = %#v, want one entry", normalized["approval_rules"])
+		}
+		entry, entryOK := rules[0].(map[string]any)
+		if !entryOK {
+			t.Fatalf("approval rule = %#v, want an object", rules[0])
+		}
+		if entry["access_level"] != 40 {
+			t.Fatalf("approval rule = %#v, want access_level 40 supplied for a rule that names no principal", entry)
+		}
+	})
+}
+
+// TestNormalizeSnippetProjectCreateParams_OneLegacyFieldDropped_FoldsIntoFiles
+// asserts that the single-file form is folded into the files array as soon as
+// either half of it, file_name or content, is missing from the action's schema.
+//
+// The pair only works if the action still accepts both names. Requiring both to
+// be gone would leave a caller who sent file_name and content against a schema
+// that kept just one of them with a request GitLab refuses, and the normalizer
+// exists precisely to spare them that. The case already in the table above
+// withholds both names at once, where an "or" and an "and" answer alike; these
+// two withhold one at a time, which is the only arrangement that tells them
+// apart.
+func TestNormalizeSnippetProjectCreateParams_OneLegacyFieldDropped_FoldsIntoFiles(t *testing.T) {
+	testCases := []struct {
+		name             string
+		schemaProperties []string
+	}{
+		{name: "schema keeps content but not file_name", schemaProperties: []string{"files", "content"}},
+		{name: "schema keeps file_name but not content", schemaProperties: []string{"files", "file_name"}},
+	}
+
+	wantParams := map[string]any{"files": []any{map[string]any{"file_path": "main.go", "content": "package main"}}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			params := map[string]any{"file_name": "main.go", "content": "package main"}
+			normalized, explanations := NormalizeParamsWithExplanation("snippet.project_create", params, schemaWithProperties(testCase.schemaProperties...))
+			if !reflect.DeepEqual(normalized, wantParams) {
+				t.Fatalf("normalized params = %#v, want %#v", normalized, wantParams)
+			}
+			if gotAliases := explanationAliases(explanations); !reflect.DeepEqual(gotAliases, []string{"file_name/content->files"}) {
+				t.Fatalf("explanations = %#v, want the single-file fold reported", gotAliases)
+			}
+		})
+	}
+}
+
+// accessLevelCase is one spelling a caller may send for an access level and the
+// number GitLab expects in its place.
+type accessLevelCase struct {
+	value     any
+	wantLevel int
+}
+
+// runAccessLevelCases drives one converter over a whole table, naming each
+// subtest after the value under test.
+func runAccessLevelCases(t *testing.T, convert func(any) (int, bool), cases []accessLevelCase) {
+	t.Helper()
+	for _, testCase := range cases {
+		t.Run(fmt.Sprintf("%T_%v", testCase.value, testCase.value), func(t *testing.T) {
+			got, ok := convert(testCase.value)
+			if !ok || got != testCase.wantLevel {
+				t.Fatalf("convert(%#v) = %d, %v; want %d, true", testCase.value, got, ok, testCase.wantLevel)
+			}
+		})
+	}
+}
+
+// TestGitLabAccessLevelValue_EverySpelling_ResolvesToItsLevel drives the member
+// access-level converter over every value it admits: each of the nine numbers
+// as an integer and again as the numeric string a JSON caller sends, and both
+// the singular and the plural of every role name.
+//
+// The plurals are the half worth stating out loud. They exist because models
+// write "developers" as readily as "developer", and each one is a separate case
+// label that nothing else in the package reaches: a table entry dropped in an
+// edit would turn a working spelling into an unconverted string that GitLab
+// answers with a 400, and no other test here would notice.
+func TestGitLabAccessLevelValue_EverySpelling_ResolvesToItsLevel(t *testing.T) {
+	runAccessLevelCases(t, gitlabAccessLevelValue, []accessLevelCase{
+		{value: 5, wantLevel: 5},
+		{value: 10, wantLevel: 10},
+		{value: 15, wantLevel: 15},
+		{value: 20, wantLevel: 20},
+		{value: 25, wantLevel: 25},
+		{value: 30, wantLevel: 30},
+		{value: 40, wantLevel: 40},
+		{value: 50, wantLevel: 50},
+		{value: 60, wantLevel: 60},
+		{value: "5", wantLevel: 5},
+		{value: "10", wantLevel: 10},
+		{value: "15", wantLevel: 15},
+		{value: "20", wantLevel: 20},
+		{value: "25", wantLevel: 25},
+		{value: "30", wantLevel: 30},
+		{value: "40", wantLevel: 40},
+		{value: "50", wantLevel: 50},
+		{value: "60", wantLevel: 60},
+		{value: "minimal", wantLevel: 5},
+		{value: "minimal access", wantLevel: 5},
+		{value: "guest", wantLevel: 10},
+		{value: "guests", wantLevel: 10},
+		{value: "planner", wantLevel: 15},
+		{value: "planners", wantLevel: 15},
+		{value: "reporter", wantLevel: 20},
+		{value: "reporters", wantLevel: 20},
+		{value: "security manager", wantLevel: 25},
+		{value: "security_manager", wantLevel: 25},
+		{value: "securitymanager", wantLevel: 25},
+		{value: "developer", wantLevel: 30},
+		{value: "developers", wantLevel: 30},
+		{value: "maintainer", wantLevel: 40},
+		{value: "maintainers", wantLevel: 40},
+		{value: "owner", wantLevel: 50},
+		{value: "owners", wantLevel: 50},
+	})
+}
+
+// TestEnvironmentAccessLevelValue_EverySpelling_ResolvesToItsLevel does the
+// same for protected environments, whose table differs from the member one at
+// both ends: it admits 0 for "nobody may deploy" and 60 for an administrator,
+// and it has no minimal, planner or security-manager tier at all.
+//
+// The four ways of saying nobody and the four ways of saying administrator are
+// the entries a caller is most likely to reach for, and each is its own case
+// label. Underscore and hyphen spellings go through the same table after a
+// replacer, which is why "no_access" resolves without a case of its own.
+func TestEnvironmentAccessLevelValue_EverySpelling_ResolvesToItsLevel(t *testing.T) {
+	runAccessLevelCases(t, environmentAccessLevelValue, []accessLevelCase{
+		{value: 0, wantLevel: 0},
+		{value: 10, wantLevel: 10},
+		{value: 20, wantLevel: 20},
+		{value: 30, wantLevel: 30},
+		{value: 40, wantLevel: 40},
+		{value: 50, wantLevel: 50},
+		{value: 60, wantLevel: 60},
+		{value: "no access", wantLevel: 0},
+		{value: "no_access", wantLevel: 0},
+		{value: "no one", wantLevel: 0},
+		{value: "nobody", wantLevel: 0},
+		{value: "none", wantLevel: 0},
+		{value: "guest", wantLevel: 10},
+		{value: "guests", wantLevel: 10},
+		{value: "reporter", wantLevel: 20},
+		{value: "reporters", wantLevel: 20},
+		{value: "developer", wantLevel: 30},
+		{value: "developers", wantLevel: 30},
+		{value: "maintainer", wantLevel: 40},
+		{value: "maintainers", wantLevel: 40},
+		{value: "owner", wantLevel: 50},
+		{value: "owners", wantLevel: 50},
+		{value: "admin", wantLevel: 60},
+		{value: "admins", wantLevel: 60},
+		{value: "administrator", wantLevel: 60},
+		{value: "administrators", wantLevel: 60},
+	})
+}
+
+// TestGitLabBranchProtectionAccessLevelValue_EverySpelling_ResolvesToItsLevel
+// covers the narrowest of the three tables: branch protection accepts only
+// no-access, developer and maintainer, and a caller naming any other role is
+// told so by GitLab rather than silently promoted.
+//
+// Every accepted spelling is listed because this converter is what a caller
+// reaches through push_access_level and merge_access_level on the protect
+// actions, and a spelling that stopped resolving would send the label itself
+// where GitLab expects a number.
+func TestGitLabBranchProtectionAccessLevelValue_EverySpelling_ResolvesToItsLevel(t *testing.T) {
+	runAccessLevelCases(t, gitLabBranchProtectionAccessLevelValue, []accessLevelCase{
+		{value: 0, wantLevel: 0},
+		{value: 30, wantLevel: 30},
+		{value: 40, wantLevel: 40},
+		{value: "0", wantLevel: 0},
+		{value: "developer", wantLevel: 30},
+		{value: "developers", wantLevel: 30},
+		{value: "maintainer", wantLevel: 40},
+		{value: "maintainers", wantLevel: 40},
+		{value: "no access", wantLevel: 0},
+		{value: "no-access", wantLevel: 0},
+		{value: "no one", wantLevel: 0},
+		{value: "nobody", wantLevel: 0},
+		{value: "none", wantLevel: 0},
+	})
+}
+
+// TestIssueStateEventValue_EverySpelling_ResolvesToTheAPIVerb covers both verbs
+// GitLab accepts and the historical spellings models send instead. The API
+// takes the verb (close, reopen) and rejects the adjective (closed, opened),
+// which is the whole reason this converter exists, so every accepted input is
+// listed rather than one per branch.
+func TestIssueStateEventValue_EverySpelling_ResolvesToTheAPIVerb(t *testing.T) {
+	testCases := []struct {
+		testName string
+		value    any
+		want     string
+		wantOK   bool
+	}{
+		{testName: "close", value: "close", want: "close", wantOK: true},
+		{testName: "closed", value: "closed", want: "close", wantOK: true},
+		{testName: "padded_and_capitalized_closed", value: " Closed ", want: "close", wantOK: true},
+		{testName: "reopen", value: "reopen", want: "reopen", wantOK: true},
+		{testName: "open", value: "open", want: "reopen", wantOK: true},
+		{testName: "opened", value: "opened", want: "reopen", wantOK: true},
+		{testName: "unknown_verb", value: "archive", wantOK: false},
+		{testName: "not_a_string", value: 42, wantOK: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.testName, func(t *testing.T) {
+			got, ok := IssueStateEventValue(testCase.value)
+			if ok != testCase.wantOK || got != testCase.want {
+				t.Fatalf("IssueStateEventValue(%#v) = %q, %v; want %q, %v", testCase.value, got, ok, testCase.want, testCase.wantOK)
+			}
+		})
+	}
+}
+
+// assertParamsUnchanged runs one action's normalization and asserts it did
+// nothing at all: the params come back as they went in and no alias is
+// reported. Both halves matter, because a normalizer that rewrote a value and
+// forgot to report it and one that reported a rewrite it did not make are
+// equally wrong.
+func assertParamsUnchanged(t *testing.T, actionID string, params map[string]any, schemaProperties ...string) {
+	t.Helper()
+	want := maps.Clone(params)
+	normalized, explanations := NormalizeParamsWithExplanation(actionID, params, schemaWithProperties(schemaProperties...))
+	if !reflect.DeepEqual(normalized, want) {
+		t.Fatalf("normalized params = %#v, want them untouched as %#v", normalized, want)
+	}
+	if len(explanations) != 0 {
+		t.Fatalf("explanations = %#v, want none", explanationAliases(explanations))
+	}
+}
+
+// TestNormalizeParamsWithExplanation_SchemaStillAcceptsTheAlias_LeavesItInPlace
+// asserts the other side of the schema check: a compatibility alias is applied
+// only while the action has stopped accepting the name the caller used.
+//
+// These aliases exist to rescue a spelling the surface dropped. Where the
+// surface still carries it, the caller's spelling is the current one and
+// rewriting it would report an alias for a name that was never legacy, and
+// would move a value the action was ready to receive. The three cases are the
+// three helpers that make this decision, each reached through the action that
+// uses it.
+func TestNormalizeParamsWithExplanation_SchemaStillAcceptsTheAlias_LeavesItInPlace(t *testing.T) {
+	t.Run("job status is left alone while the schema still takes status", func(t *testing.T) {
+		assertParamsUnchanged(t, "job.list", map[string]any{"status": "failed"}, "status", "scope")
+	})
+
+	t.Run("feature flag user list keeps a name the schema still takes", func(t *testing.T) {
+		assertParamsUnchanged(t, "feature_flags.ff_user_list_list", map[string]any{"name": "beta"}, "project_id", "name")
+	})
+
+	t.Run("snippet keeps the single-file pair while the schema takes both halves", func(t *testing.T) {
+		assertParamsUnchanged(t, "snippet.project_create",
+			map[string]any{"file_name": "main.go", "content": "package main"},
+			"files", "file_name", "content")
+	})
+}
+
+// TestNormalizeParamsWithExplanation_NothingToRewrite_ReturnsTheParamsUnchanged
+// covers the quiet path through three normalizers: the action is one they know,
+// and the parameter they would rewrite is simply not there.
+//
+// It is worth a test of its own because the normalizers are keyed by action and
+// run on every call to it. Most calls carry none of the legacy spellings, so
+// this is the common case rather than an edge, and a normalizer that wrote a
+// zero value or reported an alias for an absent parameter would corrupt every
+// ordinary request to that action.
+func TestNormalizeParamsWithExplanation_NothingToRewrite_ReturnsTheParamsUnchanged(t *testing.T) {
+	t.Run("issue update without a state event", func(t *testing.T) {
+		assertParamsUnchanged(t, "issue.update", map[string]any{"title": "new title"}, "title", "state_event")
+	})
+
+	t.Run("runner update without a paused flag", func(t *testing.T) {
+		assertParamsUnchanged(t, "runner.update", map[string]any{"description": "shared runner"}, "description", "paused")
+	})
+
+	t.Run("release link batch whose schema has no links field", func(t *testing.T) {
+		assertParamsUnchanged(t, "release.link_create_batch",
+			map[string]any{"tag_name": "v1.0.0", "links": []any{map[string]any{"link_url": "https://example.test/a"}}},
+			"tag_name")
+	})
+
+	t.Run("protected environment with no deploy access levels to normalize", func(t *testing.T) {
+		assertParamsUnchanged(t, "environment.protected_update",
+			map[string]any{"name": "production"},
+			"name", "deploy_access_levels", "approval_rules")
+	})
+}
+
+// TestNormalizeProtectedEnvironmentParams_EntryFields_NormalizeIndependently
+// walks the per-entry rules of a protected environment access list, which is
+// the densest piece of normalization here: each entry may name its principal
+// under any of four legacy keys, may carry an approval count under any of
+// three, and each of those is converted or dropped on its own.
+//
+// The cases that matter are the ones where a rule declines to act, since those
+// are the ones a looser reading would get wrong: a role name GitLab does not
+// have is dropped rather than guessed at, a value already under the canonical
+// key is not overwritten by a legacy one, and an entry nothing applies to is
+// returned identical so the caller's list is not rewritten for no reason.
+func TestNormalizeProtectedEnvironmentParams_EntryFields_NormalizeIndependently(t *testing.T) {
+	schema := schemaWithProperties("name", "deploy_access_levels", "approval_rules")
+
+	t.Run("an unconvertible legacy principal is dropped without inventing a level", func(t *testing.T) {
+		params := map[string]any{
+			"name":                 "production",
+			"deploy_access_levels": []any{map[string]any{"deploy_access_level": "chief-deployer"}},
+		}
+		normalized, _ := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		entries, ok := normalized["deploy_access_levels"].([]any)
+		if !ok || len(entries) != 1 {
+			t.Fatalf("deploy_access_levels = %#v, want one entry", normalized["deploy_access_levels"])
+		}
+		entry, entryOK := entries[0].(map[string]any)
+		if !entryOK || len(entry) != 0 {
+			t.Fatalf("entry = %#v, want the unknown role dropped and no access_level guessed", entries[0])
+		}
+	})
+
+	t.Run("an unconvertible canonical level is left for GitLab to refuse", func(t *testing.T) {
+		assertParamsUnchanged(t, "environment.protected_update", map[string]any{
+			"name":                 "production",
+			"deploy_access_levels": []any{map[string]any{"access_level": "chief-deployer"}},
+		}, "name", "deploy_access_levels", "approval_rules")
+	})
+
+	t.Run("a legacy approval count does not overwrite the canonical one", func(t *testing.T) {
+		params := map[string]any{
+			"name":           "production",
+			"approval_rules": []any{map[string]any{"required_approvals": 3, "approval_count": 9}},
+		}
+		normalized, _ := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		entries, ok := normalized["approval_rules"].([]any)
+		if !ok || len(entries) != 1 {
+			t.Fatalf("approval_rules = %#v, want one entry", normalized["approval_rules"])
+		}
+		entry, entryOK := entries[0].(map[string]any)
+		if !entryOK {
+			t.Fatalf("approval rule = %#v, want an object", entries[0])
+		}
+		if entry["required_approvals"] != 3 {
+			t.Fatalf("approval rule = %#v, want required_approvals kept at 3", entry)
+		}
+		if _, stillThere := entry["approval_count"]; stillThere {
+			t.Fatalf("approval rule = %#v, want the legacy approval_count dropped", entry)
+		}
+	})
+
+	t.Run("every entry of a list is normalized, not just the first", func(t *testing.T) {
+		params := map[string]any{
+			"name": "production",
+			"deploy_access_levels": []any{
+				map[string]any{"deploy_access_level": "developer"},
+				map[string]any{"group_access_level": "maintainer"},
+			},
+		}
+		normalized, _ := NormalizeParamsWithExplanation("environment.protected_update", params, schema)
+		entries, ok := normalized["deploy_access_levels"].([]any)
+		if !ok || len(entries) != 2 {
+			t.Fatalf("deploy_access_levels = %#v, want two entries", normalized["deploy_access_levels"])
+		}
+		want := []any{
+			map[string]any{"access_level": 30},
+			map[string]any{"access_level": 40},
+		}
+		if !reflect.DeepEqual(entries, want) {
+			t.Fatalf("deploy_access_levels = %#v, want %#v", entries, want)
+		}
+	})
+}
+
+// TestNormalizeParamsWithExplanation_ListEntries_KeepWhatTheCallerAlreadySpelled
+// covers the entry-level rules of the two actions that normalize inside an
+// array, where the same question is asked once per element.
+//
+// Each case is one the array form makes possible and the flat form does not: a
+// caller who filled both the legacy and the canonical key in one entry, a
+// second element that must be rewritten after the first already forced a copy
+// of the list, a field whose value is present but blank, and a value of a type
+// the rule does not apply to. An entry rule that mishandled any of these would
+// damage one element of a list while the rest of the request looked right.
+func TestNormalizeParamsWithExplanation_ListEntries_KeepWhatTheCallerAlreadySpelled(t *testing.T) {
+	t.Run("a batch link keeps the url it already has", func(t *testing.T) {
+		params := map[string]any{"links": []any{map[string]any{
+			"link_url": "https://example.test/legacy",
+			"url":      "https://example.test/canonical",
+		}}}
+		normalized, _ := NormalizeParamsWithExplanation("release.link_create_batch", params, schemaWithProperties("links"))
+		want := map[string]any{"links": []any{map[string]any{"url": "https://example.test/canonical"}}}
+		if !reflect.DeepEqual(normalized, want) {
+			t.Fatalf("normalized params = %#v, want %#v", normalized, want)
+		}
+	})
+
+	t.Run("every file carrying a create action is stripped, not just the first", func(t *testing.T) {
+		params := map[string]any{"files": []any{
+			map[string]any{"file_path": "one.go", "action": "create"},
+			map[string]any{"file_path": "two.go", "action": "create"},
+		}}
+		normalized, _ := NormalizeParamsWithExplanation("snippet.project_create", params, schemaWithProperties("files"))
+		want := map[string]any{"files": []any{
+			map[string]any{"file_path": "one.go"},
+			map[string]any{"file_path": "two.go"},
+		}}
+		if !reflect.DeepEqual(normalized, want) {
+			t.Fatalf("normalized params = %#v, want %#v", normalized, want)
+		}
+	})
+
+	t.Run("a file action that is not a string is left alone", func(t *testing.T) {
+		assertParamsUnchanged(t, "snippet.project_create",
+			map[string]any{"files": []any{map[string]any{"file_path": "one.go", "action": 42}}},
+			"files")
+	})
+
+	t.Run("a blank file name is not a file name", func(t *testing.T) {
+		assertParamsUnchanged(t, "snippet.project_create",
+			map[string]any{"file_name": "   ", "content": "package main"},
+			"files")
+	})
+
+	t.Run("content without a file name builds no files array", func(t *testing.T) {
+		assertParamsUnchanged(t, "snippet.project_create",
+			map[string]any{"content": "package main"},
+			"files")
+	})
+}
+
+// TestMoveAcceptedAliasParam_AliasEqualsTarget_KeepsTheValue asserts that
+// moving a parameter onto its own name is a no-op.
+//
+// The accepted-alias move exists to drop a legacy name when the canonical one
+// is already filled, and it does that by deleting the alias. Where the two
+// names are the same, deleting the alias deletes the value the caller sent, so
+// the guard that stops it is the difference between a rename and data loss. No
+// call site passes the same name twice today, which is exactly why the guard
+// needs a test rather than a reader's trust: nothing would fail the day one
+// does.
+func TestMoveAcceptedAliasParam_AliasEqualsTarget_KeepsTheValue(t *testing.T) {
+	params := map[string]any{"description": "nightly build"}
+	state := newParamNormalization(params, schemaWithProperties("description"))
+
+	state.moveAcceptedAliasParam("description", "description", "a rename onto the same name")
+
+	if !reflect.DeepEqual(state.out, map[string]any{"description": "nightly build"}) {
+		t.Fatalf("params = %#v, want the value kept under its own name", state.out)
+	}
+	if len(state.explanations) != 0 {
+		t.Fatalf("explanations = %#v, want none for a move that changed nothing", state.explanations)
 	}
 }
