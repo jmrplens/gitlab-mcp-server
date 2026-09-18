@@ -5,7 +5,9 @@ package features
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -362,6 +364,79 @@ func TestSet_AllOptionalFields(t *testing.T) {
 	}
 	if out.Feature.State != "conditional" {
 		t.Errorf("expected conditional, got %s", out.Feature.State)
+	}
+}
+
+// TestSet_RequestBody_CarriesOnlyTheScopesTheCallerNamed holds the one property
+// the hand-assembled body in Set exists for. GitLab refuses a feature_set whose
+// scope fields are present but empty, answering "mutually exclusive", which is
+// why the handler builds a map instead of passing client-go's
+// SetFeatureFlagOptions, whose fields lack omitempty. Nothing above the wire can
+// see that: GitLab echoes the flag either way, so a guard inverted here would
+// send a scope the caller never named, or drop one they did, and every other
+// assertion in this file would still pass. The request itself is therefore the
+// assertion, in both directions — a caller who named no scope sends no scope key
+// at all, and a caller who named them all sends each under GitLab's own spelling
+// carrying that caller's value and not a neighbour's. The two path values differ
+// on purpose, so crossing project with repository fails rather than agreeing.
+func TestSet_RequestBody_CarriesOnlyTheScopesTheCallerNamed(t *testing.T) {
+	cases := []struct {
+		name  string
+		input SetInput
+		want  map[string]any
+	}{
+		{
+			name:  "no scope named",
+			input: SetInput{Name: "my_flag", Value: true},
+			want:  map[string]any{"value": true},
+		},
+		{
+			name: "every scope named",
+			input: SetInput{
+				Name:         "my_flag",
+				Value:        50,
+				Key:          "percentage_of_time",
+				FeatureGroup: "beta",
+				User:         "admin",
+				Group:        "mygroup",
+				Namespace:    "myns",
+				Project:      "myns/myproj",
+				Repository:   "myns/myproj.git",
+				Force:        true,
+			},
+			want: map[string]any{
+				"value":         float64(50),
+				"key":           "percentage_of_time",
+				"feature_group": "beta",
+				"user":          "admin",
+				"group":         "mygroup",
+				"namespace":     "myns",
+				"project":       "myns/myproj",
+				"repository":    "myns/myproj.git",
+				"force":         true,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request body: %v", err)
+					http.Error(w, "decode request body", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"name":"my_flag","state":"on","gates":[]}`)
+			}))
+
+			if _, err := Set(t.Context(), client, tc.input); err != nil {
+				t.Fatalf("Set() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("request body = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 

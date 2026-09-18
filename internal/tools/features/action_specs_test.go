@@ -4,6 +4,7 @@ package features
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,6 +39,62 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if !byTool["gitlab_delete_feature_flag"].Route.Destructive {
 		t.Fatal("gitlab_delete_feature_flag should be destructive")
+	}
+}
+
+// TestActionSpecs_Metadata_DescribesTheActionItIsAttachedTo holds each action's
+// usage line and parameter guidance to the action itself, rather than to the
+// weaker claim that both are non-empty. featureOptions decides all four from one
+// actionName, so a guard that names the wrong action there moves the metadata
+// wholesale: a delete tool would advertise the list usage, or a read tool would
+// ask a model for a `name` it takes no such parameter for. That is a discovery
+// defect and not a runtime one, which is the worse half to leave — the usage
+// line and the guidance are what a model reads to decide the call is possible,
+// and every handler would keep working while they said the wrong thing. The
+// reads are asserted to carry no guidance at all for the same reason: the
+// absence is the property, and only naming it makes an over-broad guard fail.
+func TestActionSpecs_Metadata_DescribesTheActionItIsAttachedTo(t *testing.T) {
+	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
+
+	const (
+		listUsage   = "List instance feature flags and definitions."
+		setUsage    = "Set or update an instance feature flag value (bool/int/string)."
+		deleteUsage = "Delete an instance feature flag override by name."
+	)
+
+	tests := []struct {
+		tool          string
+		usage         string
+		guidanceNames []string
+	}{
+		{tool: "gitlab_list_features", usage: listUsage},
+		{tool: "gitlab_list_feature_definitions", usage: listUsage},
+		{tool: "gitlab_set_feature_flag", usage: setUsage, guidanceNames: []string{"name", "value"}},
+		{tool: "gitlab_delete_feature_flag", usage: deleteUsage, guidanceNames: []string{"name"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.Usage != tt.usage {
+				t.Errorf("Usage = %q, want %q", spec.Usage, tt.usage)
+			}
+			got := make([]string, 0, len(spec.ParameterGuidance))
+			for param := range spec.ParameterGuidance {
+				got = append(got, param)
+			}
+			slices.Sort(got)
+			want := slices.Clone(tt.guidanceNames)
+			slices.Sort(want)
+			if !slices.Equal(got, want) {
+				t.Errorf("guided parameters = %v, want %v", got, want)
+			}
+			for _, param := range tt.guidanceNames {
+				if spec.ParameterGuidance[param].SemanticRole == "" {
+					t.Errorf("guidance for %q carries no SemanticRole", param)
+				}
+			}
+		})
 	}
 }
 
