@@ -106349,8 +106349,11 @@
           "type": "string"
         },
         "priority": {
-          "description": "New label priority (0 to remove)",
-          "type": "integer"
+          "description": "New label priority; 0 removes the priority GitLab has",
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
