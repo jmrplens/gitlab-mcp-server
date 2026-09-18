@@ -349,6 +349,10 @@ func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 	if f.UpdatedAt != nil {
 		out.UpdatedAt = f.UpdatedAt.Format(time.RFC3339)
 	}
+	// Every array GitLab sends here decodes into a slice of pointers, so a
+	// null element is a nil the converters would dereference. All three loops
+	// skip one rather than take the process down with a response we merely
+	// read.
 	for _, sc := range f.Scopes {
 		if sc == nil {
 			continue
@@ -359,6 +363,9 @@ func convertFeatureFlag(f *gl.ProjectFeatureFlag) Output {
 		})
 	}
 	for _, s := range f.Strategies {
+		if s == nil {
+			continue
+		}
 		out.Strategies = append(out.Strategies, convertStrategy(s))
 	}
 	return out
@@ -391,6 +398,9 @@ func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 		}
 	}
 	for _, sc := range s.Scopes {
+		if sc == nil {
+			continue
+		}
 		out.Scopes = append(out.Scopes, ScopeOutput{
 			ID:               sc.ID,
 			EnvironmentScope: sc.EnvironmentScope,

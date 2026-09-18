@@ -1249,3 +1249,69 @@ func TestUpdateFeatureFlag_ScopeAddressedByIDAlone_IsAccepted(t *testing.T) {
 	}
 	assertFeatureFlagBody(t, gotBody, []string{`"id":40`}, []string{`"environment_scope"`})
 }
+
+// TestGetFeatureFlag_NullArrayElements_AreSkippedRatherThanDereferenced
+// verifies that a null inside any of the three arrays GitLab sends is skipped.
+// All three decode into slices of pointers, so a null is a nil the converters
+// walk straight into: until this was fixed only the flag's own scopes were
+// guarded, and a null strategy — or a null scope inside one — took the process
+// down on a response the handler does no more than read. The flag around it
+// still has to arrive, which is the half a recover would not give.
+func TestGetFeatureFlag_NullArrayElements_AreSkippedRatherThanDereferenced(t *testing.T) {
+	tests := []struct {
+		name string
+		resp string
+	}{
+		{
+			name: "a null strategy",
+			resp: `{"name":"my-flag","description":"","active":true,"version":"new_version_flag",` +
+				`"scopes":[],"strategies":[null,{"id":1,"name":"default","scopes":[]}]}`,
+		},
+		{
+			name: "a null scope inside a strategy",
+			resp: `{"name":"my-flag","description":"","active":true,"version":"new_version_flag",` +
+				`"scopes":[],"strategies":[{"id":1,"name":"default","scopes":[null,{"id":10,"environment_scope":"production"}]}]}`,
+		},
+		{
+			name: "a null scope on the flag",
+			resp: `{"name":"my-flag","description":"","active":true,"version":"new_version_flag",` +
+				`"scopes":[null,{"id":7,"environment_scope":"production"}],"strategies":[]}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v4/projects/1/feature_flags/my-flag", func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.resp)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			out, err := GetFeatureFlag(t.Context(), client, GetInput{ProjectID: "1", Name: "my-flag"})
+			if err != nil {
+				t.Fatalf("GetFeatureFlag() error = %v", err)
+			}
+			if out.Name != "my-flag" {
+				t.Fatalf("Name = %q, want the flag to survive the null: %#v", out.Name, out)
+			}
+			assertNoZeroScopes(t, "the flag", out.Scopes)
+			for _, s := range out.Strategies {
+				if s.ID == 0 {
+					t.Errorf("a null strategy was published as a zero one: %#v", out.Strategies)
+				}
+				assertNoZeroScopes(t, "a strategy", s.Scopes)
+			}
+		})
+	}
+}
+
+// assertNoZeroScopes holds a published scope list to carrying no zero-valued
+// entry, which is what a skipped null must not turn into: publishing an empty
+// scope is the same loss of information as the panic, only quieter.
+func assertNoZeroScopes(t *testing.T, where string, scopes []ScopeOutput) {
+	t.Helper()
+	for _, sc := range scopes {
+		if sc.ID == 0 {
+			t.Errorf("%s published a null element as a zero scope: %#v", where, scopes)
+		}
+	}
+}
