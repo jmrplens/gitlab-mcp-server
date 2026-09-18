@@ -21,6 +21,16 @@ var (
 	initialFatalWriter    = fatalStderr
 	initialProgressWriter = progressStderr
 	initialExitProcess    = exitProcess
+
+	// os.Stderr is captured here as well, and it has to be. Under
+	// `go test -json`, which is what the runner CI uses, the testing package
+	// replaces os.Stdout and os.Stderr so it can attribute output to the test
+	// that wrote it, so the value read inside a test is a different *os.File
+	// than the one this package bound at init. Comparing a captured writer
+	// against a freshly read os.Stderr therefore passes under a plain
+	// `go test` and fails under CI, which is the worst shape an assertion can
+	// have. Both sides are taken at the same moment instead.
+	initialStderr io.Writer = os.Stderr
 )
 
 // TestRepositoryRoot_FindsModuleRoot verifies RepositoryRoot walks from a
@@ -201,8 +211,8 @@ func TestDiagnosticWriters_AsShipped_AreStderrAndNotStdout(t *testing.T) {
 		{name: "Progressf writes its progress line to stderr", writer: initialProgressWriter},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.writer != io.Writer(os.Stderr) {
-				t.Errorf("writer = %v, want os.Stderr; a command's generated stdout must not carry these lines", tc.writer)
+			if tc.writer != initialStderr {
+				t.Errorf("writer = %v, want the process stderr this package bound at init; a command's generated stdout must not carry these lines", tc.writer)
 			}
 		})
 	}
