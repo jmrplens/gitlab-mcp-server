@@ -5,13 +5,16 @@ package externalstatuschecks
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -901,5 +904,221 @@ func TestSetProjectMRExternalStatusCheckStatus_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 422 response, got nil")
+	}
+}
+
+// TestExternalStatusChecks_IdentifierAtZero_RefusedBeforeReachingGitLab
+// verifies that every handler taking a numeric identifier refuses a zero one
+// itself, naming the field, instead of building a request around it.
+//
+// Zero is the value a missing identifier arrives as: meta and dynamic dispatch
+// decode the arguments into the input struct, so a model that spells
+// `mr_iid` instead of `merge_request_iid` leaves `MRIID` at its zero and
+// nothing else notices. The guards are written `<= 0` for that reason, and the
+// difference between `<= 0` and `< 0` is invisible to a test that only asks
+// for an error: with the guard weakened, the request goes out as
+// `/merge_requests/0/…`, GitLab answers 404, and an error still comes back —
+// one that tells the model to check its permissions rather than that it named
+// the parameter wrongly. This test therefore asserts both halves: the message
+// is the local one, and nothing reached the server.
+func TestExternalStatusChecks_IdentifierAtZero_RefusedBeforeReachingGitLab(t *testing.T) {
+	var requests atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		t.Errorf("a zero identifier reached GitLab as %s %s", r.Method, r.URL.Path)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	tests := []struct {
+		name  string
+		field string
+		call  func(context.Context) error
+	}{
+		{"list mr checks", "merge_request_iid", func(ctx context.Context) error {
+			_, err := ListProjectMRExternalStatusChecks(ctx, client, ListProjectMRInput{ProjectID: "1"})
+			return err
+		}},
+		{"delete check", "check_id", func(ctx context.Context) error {
+			return DeleteProjectExternalStatusCheck(ctx, client, DeleteProjectInput{ProjectID: "1"})
+		}},
+		{"update check", "check_id", func(ctx context.Context) error {
+			_, err := UpdateProjectExternalStatusCheck(ctx, client, UpdateProjectInput{ProjectID: "1", Name: "Updated"})
+			return err
+		}},
+		{"retry without merge_request_iid", "merge_request_iid", func(ctx context.Context) error {
+			return RetryFailedExternalStatusCheckForProjectMR(ctx, client, RetryProjectInput{ProjectID: "1", CheckID: 42})
+		}},
+		{"retry without check_id", "check_id", func(ctx context.Context) error {
+			return RetryFailedExternalStatusCheckForProjectMR(ctx, client, RetryProjectInput{ProjectID: "1", MRIID: 10})
+		}},
+		{"set status without merge_request_iid", "merge_request_iid", func(ctx context.Context) error {
+			return SetProjectMRExternalStatusCheckStatus(ctx, client, SetProjectStatusInput{
+				ProjectID: "1", SHA: "abc", ExternalStatusCheckID: 42, Status: "passed",
+			})
+		}},
+		{"set status without external_status_check_id", "external_status_check_id", func(ctx context.Context) error {
+			return SetProjectMRExternalStatusCheckStatus(ctx, client, SetProjectStatusInput{
+				ProjectID: "1", MRIID: 10, SHA: "abc", Status: "passed",
+			})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := requests.Load()
+
+			err := tt.call(t.Context())
+			if err == nil {
+				t.Fatalf("expected an error for a zero %s, got nil", tt.field)
+			}
+			if !strings.Contains(err.Error(), tt.field) || !strings.Contains(err.Error(), "must be > 0") {
+				t.Errorf("error = %q, want the local refusal naming %s and requiring > 0", err, tt.field)
+			}
+			if got := requests.Load() - before; got != 0 {
+				t.Errorf("handler issued %d request(s) for a zero %s, want 0", got, tt.field)
+			}
+		})
+	}
+}
+
+// TestCreateProjectExternalStatusCheck_OptionalFields_ReachTheRequestBody
+// verifies that a shared secret and a protected-branch scope the caller gave
+// are both sent, and sent as given.
+//
+// Each is guarded by an "is it set" check whose failure is silent: the check
+// is created, GitLab answers 201, and the handler returns the created check,
+// so the only evidence that the HMAC secret was dropped is that the external
+// service's later callbacks are rejected, and the only evidence the branch
+// scope was dropped is a check that fires on every branch. Nothing about the
+// response says either happened, which is why the assertion is on the request.
+func TestCreateProjectExternalStatusCheck_OptionalFields_ReachTheRequestBody(t *testing.T) {
+	client, fields := captureRequestFields(t, "POST /api/v4/projects/1/external_status_checks", http.StatusCreated, projectStatusCheckJSON)
+
+	if _, err := CreateProjectExternalStatusCheck(context.Background(), client, CreateProjectInput{
+		ProjectID:          "1",
+		Name:               "Security Scan",
+		ExternalURL:        "https://scan.example.com",
+		SharedSecret:       "secret123",
+		ProtectedBranchIDs: []int64{100, 200},
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	body := fields()
+	for _, tt := range []struct {
+		field string
+		want  string
+	}{
+		{"name", `"Security Scan"`},
+		{"external_url", `"https://scan.example.com"`},
+		{"shared_secret", `"secret123"`},
+		{"protected_branch_ids", `[100,200]`},
+	} {
+		t.Run(tt.field, func(t *testing.T) {
+			got, ok := body[tt.field]
+			if !ok {
+				t.Fatalf("request body %v carries no %s", body, tt.field)
+			}
+			if string(got) != tt.want {
+				t.Errorf("%s = %s, want %s", tt.field, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCreateProjectExternalStatusCheck_OptionalFieldsUnset_StayOutOfTheBody
+// and its update sibling verify that a field the caller left empty is absent
+// from the request rather than present and null.
+//
+// The SDK's optional fields are pointers, so taking the address of an empty
+// slice unconditionally would satisfy `omitempty` and put
+// `"protected_branch_ids": null` on the wire: a payload that speaks about the
+// branch scope, sent by a caller who said nothing about it. The guard is the
+// only thing keeping the two apart, and no assertion on the decoded body can
+// see the difference, since an explicit null and an absent key both decode to
+// nil — hence the raw-key comparison.
+func TestCreateProjectExternalStatusCheck_OptionalFieldsUnset_StayOutOfTheBody(t *testing.T) {
+	client, fields := captureRequestFields(t, "POST /api/v4/projects/1/external_status_checks", http.StatusCreated, projectStatusCheckJSON)
+
+	if _, err := CreateProjectExternalStatusCheck(context.Background(), client, CreateProjectInput{
+		ProjectID:   "1",
+		Name:        "Security Scan",
+		ExternalURL: "https://scan.example.com",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	assertFieldsAbsent(t, fields(), "shared_secret", "protected_branch_ids")
+}
+
+// TestUpdateProjectExternalStatusCheck_OptionalFieldsUnset_StayOutOfTheBody
+// verifies the same of the update, where it decides more: a PUT naming
+// protected_branch_ids is a PUT that speaks about the branch scope, and a
+// caller who only renamed a check must not be made to say anything about the
+// branches it applies to.
+func TestUpdateProjectExternalStatusCheck_OptionalFieldsUnset_StayOutOfTheBody(t *testing.T) {
+	client, fields := captureRequestFields(t, "PUT /api/v4/projects/1/external_status_checks/42", http.StatusOK, projectStatusCheckJSON)
+
+	if _, err := UpdateProjectExternalStatusCheck(context.Background(), client, UpdateProjectInput{
+		ProjectID: "1",
+		CheckID:   42,
+		Name:      "Updated",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	body := fields()
+	if got, ok := body["name"]; !ok || string(got) != `"Updated"` {
+		t.Errorf("name = %s (present: %t), want \"Updated\"", got, ok)
+	}
+	assertFieldsAbsent(t, body, "external_url", "shared_secret", "protected_branch_ids")
+}
+
+// captureRequestFields answers one request on pattern with response, and
+// returns the client to drive it with alongside a reader of the top-level
+// fields of the JSON body the handler was sent.
+//
+// The fields come back as raw messages rather than decoded into a struct
+// because the callers ask whether a key is in the body at all: encoding/json
+// gives an absent key and an explicit null the same nil, and the difference
+// between them is the whole question for an optional field on a PUT.
+func captureRequestFields(t *testing.T, pattern string, status int, response string) (*gitlabclient.Client, func() map[string]json.RawMessage) {
+	t.Helper()
+
+	var captured []byte
+	mux := http.NewServeMux()
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		captured = body
+		testutil.RespondJSON(w, status, response)
+	})
+
+	return testutil.NewTestClient(t, mux), func() map[string]json.RawMessage {
+		t.Helper()
+		fields := map[string]json.RawMessage{}
+		if err := json.Unmarshal(captured, &fields); err != nil {
+			t.Fatalf("decode captured request body %q: %v", captured, err)
+		}
+		return fields
+	}
+}
+
+// assertFieldsAbsent reports every named key the request body carries, quoting
+// what it carried: "present as null" and "present with a value" are different
+// defects and the message says which one happened.
+func assertFieldsAbsent(t *testing.T, body map[string]json.RawMessage, fields ...string) {
+	t.Helper()
+	for _, field := range fields {
+		t.Run(field, func(t *testing.T) {
+			if got, ok := body[field]; ok {
+				t.Errorf("request body carries %s as %s, want the key absent", field, got)
+			}
+		})
 	}
 }

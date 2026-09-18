@@ -94,6 +94,39 @@ func TestFormatMergeCheckMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatMergeCheckMarkdown_CheckWithoutAName_OpensTheGenericHeading
+// verifies that a check GitLab sent with no usable name opens the bare
+// "External Status Check" heading, and that a name of nothing but whitespace
+// counts as none.
+//
+// The name is the one GitLab-authored value this package puts in a Markdown
+// heading, and it is the only branch of the heading helper no other test
+// reaches: every fixture above names its check. Without this, the helper could
+// stop trimming, or compose the colon unconditionally, and the render would
+// become "External Status Check: " with a dangling colon — which a reader
+// takes for a fault in the rendering rather than for a check nobody named.
+func TestFormatMergeCheckMarkdown_CheckWithoutAName_OpensTheGenericHeading(t *testing.T) {
+	want := "## External Status Check\n\n" +
+		"- **ID**: 7\n" +
+		"- **Status**: pending\n" +
+		mergeCheckHints
+
+	tests := []struct {
+		name  string
+		input MergeStatusCheckOutput
+	}{
+		{"no name at all", MergeStatusCheckOutput{ID: 7, Status: "pending"}},
+		{"name of only whitespace", MergeStatusCheckOutput{ID: 7, Name: " \t\n ", Status: "pending"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatMergeCheckMarkdown(tt.input); got != want {
+				t.Errorf("FormatMergeCheckMarkdown() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
 // TestFormatProjectCheckMarkdown verifies that a project status check renders
 // as a card whose branch scope is stated either way: the branches it names as
 // a collection under their own heading, and "All branches" when it names none,

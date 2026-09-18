@@ -3,6 +3,7 @@ package externalstatuschecks
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,31 +142,84 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 // TestDecorateExternalStatusCheckMeta_Coverage verifies the discovery-metadata
 // decorator both enriches a known tool and leaves the generic placeholder
 // metadata untouched for an unknown tool (the no-op early-return branch).
-// It asserts every known tool gains a non-generic Usage and a
-// "Returns: … See also: …" description, and that an unrecognized tool keeps
-// the default placeholder Usage.
+// It asserts every known tool gains a non-generic Usage, a
+// "Returns: … See also: …" description, and the exact aliases and related
+// actions its entry names, and that an unrecognized tool keeps the default
+// placeholder Usage.
+//
+// The alias and related-action halves are compared against the entry rather
+// than merely counted: the generic options already carry one alias, the tool's
+// own name, so "has at least one alias" is an assertion about metadata the
+// decorator never touched and passes with every natural-language alias
+// dropped. Those aliases are what a model's own words reach the action
+// through, and RelatedActions is what the next-step hints are drawn from, so
+// losing either leaves an action that works and cannot be found.
 func TestDecorateExternalStatusCheckMeta_Coverage(t *testing.T) {
 	const genericUsage = "Use to execute externalstatuschecks domain action."
 
-	for tool := range externalStatusCheckActionMeta {
-		options := externalStatusCheckOptions(tool)
-		decorateExternalStatusCheckMeta(&options, tool)
-		if options.Usage == genericUsage || options.Usage == "" {
-			t.Errorf("%s: Usage not enriched: %q", tool, options.Usage)
-		}
-		if !strings.Contains(options.IndividualTool.Description, "Returns:") ||
-			!strings.Contains(options.IndividualTool.Description, "See also:") {
-			t.Errorf("%s: description missing Returns/See also: %q", tool, options.IndividualTool.Description)
-		}
-		if len(options.Aliases) == 0 {
-			t.Errorf("%s: expected natural-language aliases", tool)
-		}
+	for tool, meta := range externalStatusCheckActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			options := externalStatusCheckOptions(tool)
+			decorateExternalStatusCheckMeta(&options, tool)
+			if options.Usage == genericUsage || options.Usage == "" {
+				t.Errorf("%s: Usage not enriched: %q", tool, options.Usage)
+			}
+			if !strings.Contains(options.IndividualTool.Description, "Returns:") ||
+				!strings.Contains(options.IndividualTool.Description, "See also:") {
+				t.Errorf("%s: description missing Returns/See also: %q", tool, options.IndividualTool.Description)
+			}
+			if !slices.Equal(options.Aliases, meta.aliases) {
+				t.Errorf("%s: Aliases = %q, want the entry's %q", tool, options.Aliases, meta.aliases)
+			}
+			if !slices.Equal(options.RelatedActions, meta.related) {
+				t.Errorf("%s: RelatedActions = %q, want the entry's %q", tool, options.RelatedActions, meta.related)
+			}
+		})
 	}
 
 	unknown := externalStatusCheckOptions("gitlab_unknown_tool")
 	decorateExternalStatusCheckMeta(&unknown, "gitlab_unknown_tool")
 	if unknown.Usage != genericUsage {
 		t.Errorf("unknown tool Usage = %q, want generic placeholder", unknown.Usage)
+	}
+}
+
+// TestDecorateExternalStatusCheckMeta_EntryNamesNothing_KeepsWhatTheCallerHad
+// verifies that the decorator replaces only the fields its entry actually
+// names, and leaves the rest of the options as the caller built them.
+//
+// That is what the four "is it set" guards are for, and no entry in the table
+// can demonstrate it: all eight fill every field, so each guard is only ever
+// taken one way and a guard that fired on an empty value would look identical.
+// The entry is therefore injected for the length of this test. What it
+// protects is concrete: the generic options carry the individual tool's own
+// name as its one alias, which is how a caller naming the tool reaches the
+// action at all, so a guard that replaced it with an entry's empty list would
+// leave an action answering to no name — and a partially filled entry is
+// exactly what an author adding a ninth action writes first.
+func TestDecorateExternalStatusCheckMeta_EntryNamesNothing_KeepsWhatTheCallerHad(t *testing.T) {
+	const tool = "gitlab_external_status_check_unfilled_entry"
+	externalStatusCheckActionMeta[tool] = externalStatusCheckActionMetaEntry{}
+	t.Cleanup(func() { delete(externalStatusCheckActionMeta, tool) })
+
+	options := externalStatusCheckOptions(tool)
+	options.RelatedActions = []string{actionListProject}
+	options.IndividualTool.Description = "the description the caller already had"
+	before := options
+
+	decorateExternalStatusCheckMeta(&options, tool)
+
+	if options.Usage != before.Usage {
+		t.Errorf("Usage = %q, want it left at %q", options.Usage, before.Usage)
+	}
+	if !slices.Equal(options.Aliases, before.Aliases) {
+		t.Errorf("Aliases = %q, want them left at %q", options.Aliases, before.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, before.RelatedActions) {
+		t.Errorf("RelatedActions = %q, want them left at %q", options.RelatedActions, before.RelatedActions)
+	}
+	if options.IndividualTool.Description != before.IndividualTool.Description {
+		t.Errorf("Description = %q, want it left at %q", options.IndividualTool.Description, before.IndividualTool.Description)
 	}
 }
 
