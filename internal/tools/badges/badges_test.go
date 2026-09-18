@@ -4,7 +4,10 @@
 package badges
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -41,6 +44,9 @@ const testBadgeName = "coverage"
 
 // testLinkURL identifies the test link URL constant used by this package.
 const testLinkURL = "https://example.com"
+
+// testImageURL identifies the test image URL constant used by this package.
+const testImageURL = "https://img.shields.io/badge/t-green"
 
 // TestApplyOrderSort verifies that applyOrderSort copies only the supplied
 // order_by and sort fields onto a gl.ListOptions and is a no-op on a nil
@@ -1209,4 +1215,232 @@ func TestBadgeIndividualDescription_AllBranches(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Optional fields — what the handler actually sends GitLab
+// ---------------------------------------------------------------------------.
+
+// badgeSentBody drives one badge handler against a stub instance and returns
+// the top-level fields of the JSON body that reached it.
+//
+// Every optional field of the add and edit handlers is guarded by
+// `if input.X != ""`, and the badge these tests get back is a fixture of their
+// own writing, so no assertion on the output can tell whether the guard fired.
+// Inverting one of those guards drops a value the caller supplied and sends an
+// empty one they did not — GitLab would clear a badge's name on an edit that
+// only meant to change its link — and the request is the one place that is
+// visible.
+func badgeSentBody(t *testing.T, call func(client *gitlabclient.Client) error) map[string]any {
+	t.Helper()
+	var captured string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "unreadable body", http.StatusInternalServerError)
+			return
+		}
+		captured = string(raw)
+		testutil.RespondJSON(w, http.StatusOK, badgeJSON)
+	}))
+	if err := call(client); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	fields := map[string]any{}
+	if err := json.Unmarshal([]byte(captured), &fields); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", captured, err)
+	}
+	return fields
+}
+
+// badgeSentQuery is badgeSentBody for a handler whose optional fields travel in
+// the query string rather than a body, which is how the render endpoints are
+// reached.
+func badgeSentQuery(t *testing.T, call func(client *gitlabclient.Client) error) url.Values {
+	t.Helper()
+	var captured url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, badgeJSON)
+	}))
+	if err := call(client); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	return captured
+}
+
+// assertBadgeSent asserts the request carried the key with exactly the value
+// the caller supplied.
+func assertBadgeSent(t *testing.T, fields map[string]any, key, want string) {
+	t.Helper()
+	got, ok := fields[key]
+	if !ok {
+		t.Fatalf("request omitted %q; it carried %v", key, fields)
+	}
+	if got != want {
+		t.Fatalf("request sent %q = %v, want %q", key, got, want)
+	}
+}
+
+// assertBadgeNotSent asserts the request carried no such key at all. An empty
+// value is not the same as an absent one: GitLab reads an empty name as an
+// instruction to clear it.
+func assertBadgeNotSent(t *testing.T, fields map[string]any, key string) {
+	t.Helper()
+	if got, ok := fields[key]; ok {
+		t.Fatalf("request sent %q = %v, want it left out entirely", key, got)
+	}
+}
+
+// TestAddProject_OptionalName_SentOnlyWhenTheCallerSuppliedIt asserts that a
+// name given to AddProject reaches GitLab and that one left empty is left out
+// of the request rather than sent blank.
+//
+// It matters because the guard deciding this is invisible from the response:
+// with it inverted, every named badge would be created nameless and every
+// unnamed one would be created with an empty name.
+func TestAddProject_OptionalName_SentOnlyWhenTheCallerSuppliedIt(t *testing.T) {
+	t.Run("supplied", func(t *testing.T) {
+		fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+			_, err := AddProject(t.Context(), client, AddProjectInput{
+				ProjectID: "1", LinkURL: testLinkURL, ImageURL: testImageURL, Name: testBadgeName,
+			})
+			return err
+		})
+		assertBadgeSent(t, fields, "name", testBadgeName)
+	})
+	t.Run("omitted", func(t *testing.T) {
+		fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+			_, err := AddProject(t.Context(), client, AddProjectInput{
+				ProjectID: "1", LinkURL: testLinkURL, ImageURL: testImageURL,
+			})
+			return err
+		})
+		assertBadgeNotSent(t, fields, "name")
+		assertBadgeSent(t, fields, "link_url", testLinkURL)
+	})
+}
+
+// TestAddGroup_OptionalName_SentOnlyWhenTheCallerSuppliedIt is the group-scope
+// half of TestAddProject_OptionalName_SentOnlyWhenTheCallerSuppliedIt: the two
+// handlers carry separate copies of the same guard, so one being right says
+// nothing about the other.
+func TestAddGroup_OptionalName_SentOnlyWhenTheCallerSuppliedIt(t *testing.T) {
+	t.Run("supplied", func(t *testing.T) {
+		fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+			_, err := AddGroup(t.Context(), client, AddGroupInput{
+				GroupID: "1", LinkURL: testLinkURL, ImageURL: testImageURL, Name: testBadgeName,
+			})
+			return err
+		})
+		assertBadgeSent(t, fields, "name", testBadgeName)
+	})
+	t.Run("omitted", func(t *testing.T) {
+		fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+			_, err := AddGroup(t.Context(), client, AddGroupInput{
+				GroupID: "1", LinkURL: testLinkURL, ImageURL: testImageURL,
+			})
+			return err
+		})
+		assertBadgeNotSent(t, fields, "name")
+		assertBadgeSent(t, fields, "link_url", testLinkURL)
+	})
+}
+
+// TestEditProject_SendsOnlyTheFieldsTheCallerSupplied asserts that an edit
+// carrying one field sends that field and nothing else.
+//
+// An edit is a partial update, so this is the property that keeps it partial:
+// a guard inverted here would silently blank the two fields the caller never
+// mentioned while dropping the one they did.
+func TestEditProject_SendsOnlyTheFieldsTheCallerSupplied(t *testing.T) {
+	cases := []struct {
+		name  string
+		input EditProjectInput
+		key   string
+		value string
+	}{
+		{"link_url alone", EditProjectInput{ProjectID: "1", BadgeID: 1, LinkURL: testLinkURL}, "link_url", testLinkURL},
+		{"image_url alone", EditProjectInput{ProjectID: "1", BadgeID: 1, ImageURL: testImageURL}, "image_url", testImageURL},
+		{"name alone", EditProjectInput{ProjectID: "1", BadgeID: 1, Name: testBadgeName}, "name", testBadgeName},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+				_, err := EditProject(t.Context(), client, tc.input)
+				return err
+			})
+			assertBadgeSent(t, fields, tc.key, tc.value)
+			for _, other := range []string{"link_url", "image_url", "name"} {
+				if other != tc.key {
+					assertBadgeNotSent(t, fields, other)
+				}
+			}
+		})
+	}
+}
+
+// TestEditGroup_SendsOnlyTheFieldsTheCallerSupplied is the group-scope half of
+// TestEditProject_SendsOnlyTheFieldsTheCallerSupplied, which builds its own
+// options struct from its own three guards.
+func TestEditGroup_SendsOnlyTheFieldsTheCallerSupplied(t *testing.T) {
+	cases := []struct {
+		name  string
+		input EditGroupInput
+		key   string
+		value string
+	}{
+		{"link_url alone", EditGroupInput{GroupID: "1", BadgeID: 1, LinkURL: testLinkURL}, "link_url", testLinkURL},
+		{"image_url alone", EditGroupInput{GroupID: "1", BadgeID: 1, ImageURL: testImageURL}, "image_url", testImageURL},
+		{"name alone", EditGroupInput{GroupID: "1", BadgeID: 1, Name: testBadgeName}, "name", testBadgeName},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := badgeSentBody(t, func(client *gitlabclient.Client) error {
+				_, err := EditGroup(t.Context(), client, tc.input)
+				return err
+			})
+			assertBadgeSent(t, fields, tc.key, tc.value)
+			for _, other := range []string{"link_url", "image_url", "name"} {
+				if other != tc.key {
+					assertBadgeNotSent(t, fields, other)
+				}
+			}
+		})
+	}
+}
+
+// TestPreviewGroup_OptionalName_SentOnlyWhenTheCallerSuppliedIt asserts the
+// same property for the one preview handler that accepts a name, where the
+// value travels as a query parameter of a GET rather than in a body.
+//
+// A preview persists nothing, so the request is the entire observable effect
+// of the call and the only place the guard can be seen at all.
+func TestPreviewGroup_OptionalName_SentOnlyWhenTheCallerSuppliedIt(t *testing.T) {
+	t.Run("supplied", func(t *testing.T) {
+		query := badgeSentQuery(t, func(client *gitlabclient.Client) error {
+			_, err := PreviewGroup(t.Context(), client, PreviewGroupInput{
+				GroupID: "1", LinkURL: testLinkURL, ImageURL: testImageURL, Name: testBadgeName,
+			})
+			return err
+		})
+		if got := query.Get("name"); got != testBadgeName {
+			t.Fatalf("preview sent name=%q, want %q", got, testBadgeName)
+		}
+	})
+	t.Run("omitted", func(t *testing.T) {
+		query := badgeSentQuery(t, func(client *gitlabclient.Client) error {
+			_, err := PreviewGroup(t.Context(), client, PreviewGroupInput{
+				GroupID: "1", LinkURL: testLinkURL, ImageURL: testImageURL,
+			})
+			return err
+		})
+		if query.Has("name") {
+			t.Fatalf("preview sent name=%q, want it left out entirely", query.Get("name"))
+		}
+		if got := query.Get("link_url"); got != testLinkURL {
+			t.Fatalf("preview sent link_url=%q, want %q", got, testLinkURL)
+		}
+	})
 }
