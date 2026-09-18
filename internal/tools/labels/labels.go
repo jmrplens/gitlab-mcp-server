@@ -41,7 +41,7 @@ type UpdateInput struct {
 	// and with a plain int64 that promise could not be kept: encoding/json
 	// omits a zero under omitempty, so the handler could not tell a caller
 	// asking for removal from one saying nothing at all.
-	Priority *int64 `json:"priority,omitempty"    jsonschema:"New label priority; 0 removes the priority GitLab has"`
+	Priority *int64 `json:"priority,omitempty"    jsonschema:"New label priority, where 0 removes the priority GitLab has"`
 	Archived *bool  `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
 }
 

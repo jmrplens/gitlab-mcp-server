@@ -106349,7 +106349,7 @@
           "type": "string"
         },
         "priority": {
-          "description": "New label priority; 0 removes the priority GitLab has",
+          "description": "New label priority, where 0 removes the priority GitLab has",
           "type": [
             "null",
             "integer"

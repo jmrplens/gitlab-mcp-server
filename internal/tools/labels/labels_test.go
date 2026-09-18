@@ -526,7 +526,7 @@ func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 			name: "every optional field supplied",
 			input: UpdateInput{
 				ProjectID: "42", LabelID: "bug", Name: "bug", NewName: "defect",
-				Color: "#00FF00", Description: "Bug report", Priority: 5, Archived: &archived,
+				Color: "#00FF00", Description: "Bug report", Priority: new(int64(5)), Archived: &archived,
 			},
 			contains: []string{
 				`"name":"bug"`, `"new_name":"defect"`, `"color":"#00FF00"`,
@@ -540,8 +540,18 @@ func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 			omits:    []string{`"name"`, `"color"`, `"description"`, `"priority"`, `"archived"`},
 		},
 		{
-			name:     "priority zero is no priority",
-			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect", Priority: 0},
+			// Zero is the removal the schema promises, and GitLab performs it
+			// on an explicit null rather than on the number 0, which would set
+			// a priority of zero. Omitting the key would leave the priority
+			// the label already has, which is the one thing a caller passing
+			// zero is asking not to happen.
+			name:     "priority zero asks GitLab to remove the priority",
+			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect", Priority: new(int64(0))},
+			contains: []string{`"new_name":"defect"`, `"priority":null`},
+		},
+		{
+			name:     "priority unset leaves the label's own priority alone",
+			input:    UpdateInput{ProjectID: "42", LabelID: "bug", NewName: "defect"},
 			contains: []string{`"new_name":"defect"`},
 			omits:    []string{`"priority"`},
 		},
@@ -919,7 +929,7 @@ func TestUpdate_WithDescAndPriority(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := Update(context.Background(), client, UpdateInput{
-		ProjectID: "42", LabelID: "bug", Description: "Critical", Priority: 5,
+		ProjectID: "42", LabelID: "bug", Description: "Critical", Priority: new(int64(5)),
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
