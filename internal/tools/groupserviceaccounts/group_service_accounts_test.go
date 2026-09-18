@@ -3,7 +3,9 @@ package groupserviceaccounts
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -970,4 +972,161 @@ func TestFormatListPATMarkdownString(t *testing.T) {
 			t.Errorf("FormatListPATMarkdownString =\n%q\nwant\n%q", got, want)
 		}
 	})
+}
+
+// recordRequestBody decodes the JSON object a handler was sent into body. It
+// runs on the httptest server's goroutine, so a body that does not decode is
+// reported and the handler still answers, rather than aborting that goroutine.
+func recordRequestBody(t *testing.T, r *http.Request, body *map[string]any) {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+		t.Errorf("decoding the %s %s body: %v", r.Method, r.URL.Path, err)
+		return
+	}
+	*body = decoded
+}
+
+// assertRequestBody compares what GitLab was sent with the exact object the
+// input should have produced. The comparison is whole rather than per key
+// because an inverted guard does two things at once — it drops the field the
+// caller gave and adds the one they left out — and a check for the presence of
+// one key sees only half of that.
+func assertRequestBody(t *testing.T, got, want map[string]any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("request body = %v, want %v", got, want)
+	}
+}
+
+// TestCreate_OptionalFields_AreSentOnlyWhenTheCallerGaveThem holds the three
+// guards that decide what Create puts in the POST body. Nothing in the response
+// depends on them: GitLab answers with the account it made, and a test that
+// only reads the returned account passes whether the request named the account
+// the caller asked for or an empty one. Inverted, each guard sends an empty
+// value for the field that was given and omits it when it was not, which is a
+// service account created under the wrong name and nothing to see it.
+func TestCreate_OptionalFields_AreSentOnlyWhenTheCallerGaveThem(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    CreateInput
+		wantBody map[string]any
+	}{
+		{
+			name:     "every optional field given",
+			input:    CreateInput{GroupID: "mygroup", Name: "svc-bot", Username: "svc-user", Email: "svc@test.com"},
+			wantBody: map[string]any{"name": "svc-bot", "username": "svc-user", "email": "svc@test.com"},
+		},
+		{
+			name:     "none given",
+			input:    CreateInput{GroupID: "mygroup"},
+			wantBody: map[string]any{},
+		},
+		{
+			name:     "only the username given",
+			input:    CreateInput{GroupID: "mygroup", Username: "svc-user"},
+			wantBody: map[string]any{"username": "svc-user"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				recordRequestBody(t, r, &sent)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"svc-bot","username":"svc-user","email":"svc@test.com"}`)
+			}))
+			if _, err := Create(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			assertRequestBody(t, sent, tt.wantBody)
+		})
+	}
+}
+
+// TestUpdate_OptionalFields_AreSentOnlyWhenTheCallerGaveThem is the same
+// property for Update, where the cost of an inverted guard is higher: a PATCH
+// carrying a field the caller never named overwrites what the account already
+// had, and one omitting the field they did name renames nothing while the
+// handler reports the account GitLab echoed back.
+func TestUpdate_OptionalFields_AreSentOnlyWhenTheCallerGaveThem(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    UpdateInput
+		wantBody map[string]any
+	}{
+		{
+			name:     "every optional field given",
+			input:    UpdateInput{GroupID: "mygroup", ServiceAccountID: 42, Name: "new", Username: "new-u", Email: "new@t.com"},
+			wantBody: map[string]any{"name": "new", "username": "new-u", "email": "new@t.com"},
+		},
+		{
+			name:     "none given",
+			input:    UpdateInput{GroupID: "mygroup", ServiceAccountID: 42},
+			wantBody: map[string]any{},
+		},
+		{
+			name:     "only the email given",
+			input:    UpdateInput{GroupID: "mygroup", ServiceAccountID: 42, Email: "new@t.com"},
+			wantBody: map[string]any{"email": "new@t.com"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				recordRequestBody(t, r, &sent)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"new","username":"new-u","email":"new@t.com"}`)
+			}))
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+			assertRequestBody(t, sent, tt.wantBody)
+		})
+	}
+}
+
+// TestCreatePAT_Description_IsSentOnlyWhenTheCallerGaveIt holds the one
+// optional-field guard of the token create call, alongside the two fields it
+// always sends and the expiry it parses. A token's description is the only
+// thing distinguishing two tokens of the same name in a listing, and the
+// response echoes whatever GitLab stored, so an inverted guard shows a
+// description in the result of a request that never carried one.
+func TestCreatePAT_Description_IsSentOnlyWhenTheCallerGaveIt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    CreatePATInput
+		wantBody map[string]any
+	}{
+		{
+			name: "description and expiry given",
+			input: CreatePATInput{
+				GroupID: "mygroup", ServiceAccountID: 42, Name: "deploy-token",
+				Scopes: []string{"api"}, Description: "CI deploy", ExpiresAt: "2026-12-31",
+			},
+			wantBody: map[string]any{
+				"name": "deploy-token", "scopes": []any{"api"},
+				"description": "CI deploy", "expires_at": "2026-12-31",
+			},
+		},
+		{
+			name: "neither given",
+			input: CreatePATInput{
+				GroupID: "mygroup", ServiceAccountID: 42, Name: "tok", Scopes: []string{"read_api"},
+			},
+			wantBody: map[string]any{"name": "tok", "scopes": []any{"read_api"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				recordRequestBody(t, r, &sent)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"tok","scopes":["api"],"user_id":42,"active":true,"token":"glpat-xxxx"}`)
+			}))
+			if _, err := CreatePAT(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("CreatePAT() unexpected error: %v", err)
+			}
+			assertRequestBody(t, sent, tt.wantBody)
+		})
+	}
 }
