@@ -221,6 +221,295 @@ func TestActionSpecs_NoGenericMetadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema verifies
+// that every admin parameter GitLab restricts to a closed set is served with
+// that set, and that the two parameters the package deliberately leaves
+// free-form are served with the corrected description instead.
+//
+// The expected values are spelled out here rather than read back from
+// adminInputSchemaOverrides, so the assertion is about what a model is shown
+// and not about the table agreeing with itself. It matters because the schema
+// is the only place a model learns that a value is not free-form: client-go
+// types all of these as plain strings and several struct tags describe the
+// vocabulary in prose ("Type: banner or notification") without constraining
+// it, so an override that stopped being applied would compile, pass every
+// other test in this file, and quietly widen the surface back to any string
+// the instance then refuses.
+func TestActionSpecs_InputSchemaOverrides_ConstrainTheServedInputSchema(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+
+	broadcastThemes := []string{"indigo", "light-indigo", "blue", "light-blue", "green", "light-green", "red", "light-red", "dark", "light"}
+	bulkImportStatuses := []string{"created", "started", "finished", "timeout", "failed", "canceled"}
+	customAttributeTypes := []string{"user", "group", "project"}
+
+	tests := []struct {
+		action      string
+		path        string
+		wantEnum    []string
+		description string
+	}{
+		{action: "broadcast_message_create", path: "broadcast_type", wantEnum: []string{"banner", "notification"}},
+		{action: "broadcast_message_create", path: "theme", wantEnum: broadcastThemes},
+		{action: "broadcast_message_update", path: "broadcast_type", wantEnum: []string{"banner", "notification"}},
+		{action: "broadcast_message_update", path: "theme", wantEnum: broadcastThemes},
+		{action: "bulk_import_list", path: "status", wantEnum: bulkImportStatuses},
+		{action: "bulk_import_entity_list", path: "status", wantEnum: bulkImportStatuses},
+		{action: "bulk_import_start", path: "entities.source_type", wantEnum: []string{"group_entity", "project_entity"}},
+		{action: "custom_attr_list", path: "resource_type", wantEnum: customAttributeTypes},
+		{action: "custom_attr_get", path: "resource_type", wantEnum: customAttributeTypes},
+		{action: "custom_attr_set", path: "resource_type", wantEnum: customAttributeTypes},
+		{action: "custom_attr_delete", path: "resource_type", wantEnum: customAttributeTypes},
+		{action: "feature_set", path: "key", wantEnum: []string{"percentage_of_actors", "percentage_of_time"}},
+		{action: "import_github", path: "timeout_strategy", wantEnum: []string{"optimistic", "pessimistic"}},
+		{action: "import_bitbucket_server", path: "timeout_strategy", wantEnum: []string{"optimistic", "pessimistic"}},
+		// No enum on purpose: the database names and project paths below are
+		// instance data, not a fixed vocabulary, so the override rewrites the
+		// description the struct tag read a value list into and stops there.
+		{action: "db_migration_mark", path: "database", description: "Database the migration belongs to. Defaults to main."},
+		{action: "feature_set", path: "project", description: "Project path such as gitlab-org/gitlab-foss. Separate several paths with commas."},
+		{action: "terraform_state_unlock", path: "name", description: "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.action+"."+tt.path, func(t *testing.T) {
+			spec, ok := specs[tt.action]
+			if !ok {
+				t.Fatalf("missing action %q", tt.action)
+			}
+			property := schemaPropertyAt(t, spec.Route.InputSchema, tt.path)
+			if got := schemaEnumValues(t, property); !slices.Equal(got, tt.wantEnum) {
+				t.Fatalf("%s %s enum = %v, want %v", tt.action, tt.path, got, tt.wantEnum)
+			}
+			if tt.description == "" {
+				return
+			}
+			if got, _ := property["description"].(string); got != tt.description {
+				t.Fatalf("%s %s description = %q, want %q", tt.action, tt.path, got, tt.description)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_InputSchemaOverrides_CoverExactlyTheDocumentedActions verifies
+// that the admin actions carrying an input-schema override are exactly the ones
+// the test above states the served schema for. An override added for a new
+// action, or lost by one that had it, is invisible to every other assertion in
+// this file, so without this the vocabularies would be checked only where
+// somebody remembered to check them.
+func TestActionSpecs_InputSchemaOverrides_CoverExactlyTheDocumentedActions(t *testing.T) {
+	var overridden []string
+	for _, spec := range ActionSpecs(nil) {
+		if len(spec.InputSchemaOverrides) > 0 {
+			overridden = append(overridden, spec.Name)
+		}
+	}
+	slices.Sort(overridden)
+
+	want := []string{
+		"broadcast_message_create",
+		"broadcast_message_update",
+		"bulk_import_entity_list",
+		"bulk_import_list",
+		"bulk_import_start",
+		"custom_attr_delete",
+		"custom_attr_get",
+		"custom_attr_list",
+		"custom_attr_set",
+		"db_migration_mark",
+		"feature_set",
+		"import_bitbucket_server",
+		"import_github",
+		"terraform_state_unlock",
+	}
+	if !slices.Equal(overridden, want) {
+		t.Fatalf("actions with input-schema overrides = %v, want %v", overridden, want)
+	}
+}
+
+// TestApplyAdminMeta_EntryOmittingAField_KeepsWhatTheBuilderSet verifies that an
+// entry stating only part of an action's discovery metadata replaces that part
+// and leaves the rest exactly as the dedicated builder wrote it.
+//
+// Three entries are already partial in this way: the system-hook ones carry
+// usage, aliases and related actions while adminSystemHookEditSpec and its two
+// siblings write the description by hand, and overwriting it with an empty
+// string would serve a model a nameless tool. No entry omits an alias or a
+// related list today, so nothing projected from ActionSpecs would notice either
+// of those guards becoming an unconditional assignment; the contract is
+// therefore stated against the function rather than discovered through the
+// specs, where it currently holds by the shape of the data alone.
+func TestApplyAdminMeta_EntryOmittingAField_KeepsWhatTheBuilderSet(t *testing.T) {
+	const (
+		builtUsage       = "Usage written by the dedicated builder."
+		builtDescription = "Description written by the dedicated builder. Returns: nothing. See also: nothing."
+		entryUsage       = "Usage stated by the table entry."
+		entryDescription = "Description stated by the table entry. Returns: a thing. See also: another thing."
+	)
+	builtAliases := []string{"gitlab_builder_tool"}
+	builtRelated := []string{"admin.builder_related"}
+	entryAliases := []string{"entry alias one", "entry alias two"}
+	entryRelated := []string{"admin.entry_related"}
+
+	tests := []struct {
+		name            string
+		meta            adminActionMetaEntry
+		wantUsage       string
+		wantAliases     []string
+		wantRelated     []string
+		wantDescription string
+	}{
+		{
+			name:            "every field stated",
+			meta:            adminActionMetaEntry{usage: entryUsage, aliases: entryAliases, related: entryRelated, description: entryDescription},
+			wantUsage:       entryUsage,
+			wantAliases:     entryAliases,
+			wantRelated:     entryRelated,
+			wantDescription: entryDescription,
+		},
+		{
+			name:            "usage omitted",
+			meta:            adminActionMetaEntry{aliases: entryAliases, related: entryRelated, description: entryDescription},
+			wantUsage:       builtUsage,
+			wantAliases:     entryAliases,
+			wantRelated:     entryRelated,
+			wantDescription: entryDescription,
+		},
+		{
+			name:            "aliases omitted",
+			meta:            adminActionMetaEntry{usage: entryUsage, related: entryRelated, description: entryDescription},
+			wantUsage:       entryUsage,
+			wantAliases:     builtAliases,
+			wantRelated:     entryRelated,
+			wantDescription: entryDescription,
+		},
+		{
+			name:            "related actions omitted",
+			meta:            adminActionMetaEntry{usage: entryUsage, aliases: entryAliases, description: entryDescription},
+			wantUsage:       entryUsage,
+			wantAliases:     entryAliases,
+			wantRelated:     builtRelated,
+			wantDescription: entryDescription,
+		},
+		{
+			// The shape the three system-hook entries are in.
+			name:            "description omitted",
+			meta:            adminActionMetaEntry{usage: entryUsage, aliases: entryAliases, related: entryRelated},
+			wantUsage:       entryUsage,
+			wantAliases:     entryAliases,
+			wantRelated:     entryRelated,
+			wantDescription: builtDescription,
+		},
+		{
+			name:            "nothing stated",
+			meta:            adminActionMetaEntry{},
+			wantUsage:       builtUsage,
+			wantAliases:     builtAliases,
+			wantRelated:     builtRelated,
+			wantDescription: builtDescription,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			options := toolutil.ActionSpecOptions{
+				Usage:          builtUsage,
+				Aliases:        slices.Clone(builtAliases),
+				RelatedActions: slices.Clone(builtRelated),
+				IndividualTool: toolutil.IndividualToolSpec{Description: builtDescription},
+			}
+
+			applyAdminMeta(&options, tt.meta)
+
+			if options.Usage != tt.wantUsage {
+				t.Fatalf("Usage = %q, want %q", options.Usage, tt.wantUsage)
+			}
+			if !slices.Equal(options.Aliases, tt.wantAliases) {
+				t.Fatalf("Aliases = %v, want %v", options.Aliases, tt.wantAliases)
+			}
+			if !slices.Equal(options.RelatedActions, tt.wantRelated) {
+				t.Fatalf("RelatedActions = %v, want %v", options.RelatedActions, tt.wantRelated)
+			}
+			if options.IndividualTool.Description != tt.wantDescription {
+				t.Fatalf("IndividualTool.Description = %q, want %q", options.IndividualTool.Description, tt.wantDescription)
+			}
+		})
+	}
+}
+
+// TestApplyAdminMeta_EntrySlices_AreCopiedNotAliased verifies the aliases and related
+// actions written onto the options do not share backing arrays with the entry
+// they came from. adminActionMeta is a package-level table read once per spec
+// build and every surface is projected from those specs, so a caller sorting or
+// appending to a spec's aliases would otherwise rewrite the table for every
+// later build in the process.
+func TestApplyAdminMeta_EntrySlices_AreCopiedNotAliased(t *testing.T) {
+	meta := adminActionMetaEntry{
+		aliases: []string{"entry alias"},
+		related: []string{"admin.entry_related"},
+	}
+
+	var options toolutil.ActionSpecOptions
+	applyAdminMeta(&options, meta)
+	options.Aliases[0] = "scribbled"
+	options.RelatedActions[0] = "admin.scribbled"
+
+	if meta.aliases[0] != "entry alias" {
+		t.Fatalf("entry aliases = %v, want the table value untouched", meta.aliases)
+	}
+	if meta.related[0] != "admin.entry_related" {
+		t.Fatalf("entry related actions = %v, want the table value untouched", meta.related)
+	}
+}
+
+// schemaPropertyAt walks a JSON Schema down a dotted property path and returns
+// the property object at the end of it, stepping through an array's items the
+// way toolutil resolves an override target so a path into a list of objects
+// ("entities.source_type") reads the same property the override patched.
+func schemaPropertyAt(t *testing.T, schema map[string]any, path string) map[string]any {
+	t.Helper()
+	parts := strings.Split(path, ".")
+	current := schema
+	for i, part := range parts {
+		properties, ok := current["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("schema at %q carries no properties", strings.Join(parts[:i], "."))
+		}
+		child, ok := properties[part].(map[string]any)
+		if !ok {
+			t.Fatalf("schema carries no property %q", strings.Join(parts[:i+1], "."))
+		}
+		if items, hasItems := child["items"].(map[string]any); hasItems && i < len(parts)-1 {
+			child = items
+		}
+		current = child
+	}
+	return current
+}
+
+// schemaEnumValues returns the enum a schema property publishes, or nil when it
+// publishes none, refusing an entry that is not a string so an enum rendered in
+// some other shape reads as a failure rather than as an absence.
+func schemaEnumValues(t *testing.T, property map[string]any) []string {
+	t.Helper()
+	raw, ok := property["enum"]
+	if !ok {
+		return nil
+	}
+	entries, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("enum = %T, want []any", raw)
+	}
+	values := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		value, isString := entry.(string)
+		if !isString {
+			t.Fatalf("enum entry = %T (%v), want string", entry, entry)
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
 func assertNonGenericUsage(t *testing.T, spec toolutil.ActionSpec) {
 	t.Helper()
 	const genericUsage = "Use to execute adminspecs domain action."
