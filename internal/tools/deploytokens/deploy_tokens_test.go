@@ -5,10 +5,13 @@ package deploytokens
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1196,5 +1199,116 @@ func TestTimeStr_NilInput(t *testing.T) {
 	result := timeStr(nil)
 	if result != "" {
 		t.Errorf("expected empty string for nil time, got %q", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Create — the optional username, read off the request the handler built
+// ---------------------------------------------------------------------------.
+
+// createProjectDeployTokenAs and createGroupDeployTokenAs create a token in
+// each scope with the username the case gives, everything else fixed.
+func createProjectDeployTokenAs(client *gitlabclient.Client, username string) error {
+	_, err := CreateProject(context.Background(), client, CreateProjectInput{
+		ProjectID: "10", Name: "ci-token", Username: username,
+		Scopes: []string{"read_repository"},
+	})
+	return err
+}
+
+func createGroupDeployTokenAs(client *gitlabclient.Client, username string) error {
+	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
+		GroupID: "20", Name: "ci-token", Username: username,
+		Scopes: []string{"read_repository"},
+	})
+	return err
+}
+
+// deployTokenUsernameCases drives both create handlers once with a username
+// and once without, and says whether the request body should name one.
+var deployTokenUsernameCases = []struct {
+	name        string
+	path        string
+	username    string
+	wantPresent bool
+	call        func(client *gitlabclient.Client, username string) error
+}{
+	{
+		name:        "project with username",
+		path:        "/api/v4/projects/10/deploy_tokens",
+		username:    "deployer",
+		wantPresent: true,
+		call:        createProjectDeployTokenAs,
+	},
+	{
+		name:        "project without username",
+		path:        "/api/v4/projects/10/deploy_tokens",
+		username:    "",
+		wantPresent: false,
+		call:        createProjectDeployTokenAs,
+	},
+	{
+		name:        "group with username",
+		path:        "/api/v4/groups/20/deploy_tokens",
+		username:    "deployer",
+		wantPresent: true,
+		call:        createGroupDeployTokenAs,
+	},
+	{
+		name:        "group without username",
+		path:        "/api/v4/groups/20/deploy_tokens",
+		username:    "",
+		wantPresent: false,
+		call:        createGroupDeployTokenAs,
+	},
+}
+
+// TestCreateDeployToken_Username_ReachesGitLabOnlyWhenTheCallerGaveOne asserts
+// that a create call names `username` in the request body exactly when the
+// input carried one, in both the project and the group scope.
+//
+// Why it matters: the username is the account a CI job authenticates as, and
+// the guard that decides whether to send it cannot be seen from the output.
+// GitLab echoes back whichever username the token ended up with, so a handler
+// that dropped the caller's choice and let GitLab generate one returns a
+// response that still looks well-formed — which is why the fixture below
+// answers with a username nobody asked for. The request is the only place the
+// difference shows, and sending `"username":""` for a caller who named none is
+// the same defect from the other side.
+func TestCreateDeployToken_Username_ReachesGitLabOnlyWhenTheCallerGaveOne(t *testing.T) {
+	for _, testCase := range deployTokenUsernameCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var sent []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != testCase.path {
+					t.Errorf("request path = %q, want %q", r.URL.Path, testCase.path)
+					http.NotFound(w, r)
+					return
+				}
+				body, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					t.Errorf("read request body: %v", readErr)
+				}
+				sent = body
+				testutil.RespondJSON(w, http.StatusCreated,
+					`{"id":10,"name":"ci-token","username":"gitlab-generated","token":"tok-abc","scopes":["read_repository"]}`)
+			}))
+
+			if err := testCase.call(client, testCase.username); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+
+			var payload map[string]any
+			if err := json.Unmarshal(sent, &payload); err != nil {
+				t.Fatalf("request body %q does not decode: %v", sent, err)
+			}
+			got, present := payload["username"]
+			if present != testCase.wantPresent {
+				t.Errorf("request body %s: username present = %v, want %v", sent, present, testCase.wantPresent)
+			}
+			if testCase.wantPresent && got != testCase.username {
+				t.Errorf("request body %s: username = %v, want %q", sent, got, testCase.username)
+			}
+		})
 	}
 }

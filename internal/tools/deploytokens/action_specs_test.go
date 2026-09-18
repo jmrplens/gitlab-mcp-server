@@ -4,6 +4,7 @@ package deploytokens
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -289,6 +290,74 @@ func TestDecorateDeployTokenMeta_PerAction(t *testing.T) {
 	decorateDeployTokenMeta(&options, "unknown_action")
 	if options.Usage != "placeholder" || len(options.Aliases) != 1 {
 		t.Errorf("unknown action mutated options: usage=%q aliases=%v", options.Usage, options.Aliases)
+	}
+}
+
+// deployTokenIDGuidance says which individual tools publish deploy_token_id
+// parameter guidance: exactly the four actions whose input carries that field.
+var deployTokenIDGuidance = map[string]bool{
+	"gitlab_deploy_token_list_all":       false,
+	"gitlab_deploy_token_list_project":   false,
+	"gitlab_deploy_token_list_group":     false,
+	"gitlab_deploy_token_get_project":    true,
+	"gitlab_deploy_token_get_group":      true,
+	"gitlab_deploy_token_create_project": false,
+	"gitlab_deploy_token_create_group":   false,
+	"gitlab_deploy_token_delete_project": true,
+	"gitlab_deploy_token_delete_group":   true,
+}
+
+// TestActionSpecs_DeployTokenIDGuidance_OnlyWhereTheActionTakesOne asserts
+// both halves of the guard that adds deploy_token_id guidance: the four
+// actions that accept the parameter describe it, and the five that do not
+// stay silent about it.
+//
+// Why it matters: parameter guidance is what a model reads to decide which
+// arguments an action wants. Guidance for a parameter the action has no field
+// for invites a call GitLab refuses, and it is invisible to every assertion
+// that only checks the actions which should carry it — which is how each of
+// the guard's later operands could be inverted with nothing failing.
+func TestActionSpecs_DeployTokenIDGuidance_OnlyWhereTheActionTakesOne(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := deployTokenSpecsByTool(t, ActionSpecs(client))
+
+	if len(byTool) != len(deployTokenIDGuidance) {
+		t.Fatalf("registered tools = %d, expectations = %d", len(byTool), len(deployTokenIDGuidance))
+	}
+	for toolName, spec := range byTool {
+		t.Run(toolName, func(t *testing.T) {
+			want, declared := deployTokenIDGuidance[toolName]
+			if !declared {
+				t.Fatalf("tool %q has no deploy_token_id expectation", toolName)
+			}
+			_, got := spec.ParameterGuidance["deploy_token_id"]
+			if got != want {
+				t.Errorf("deploy_token_id guidance = %v, want %v (guidance: %v)", got, want, spec.ParameterGuidance)
+			}
+		})
+	}
+}
+
+// TestDeployTokenOptions_UnknownAction_KeepsTheGenericScopeMetadata asserts
+// that an action name no case of the scope switch names falls through to the
+// generic related actions and to no scope guidance at all.
+//
+// Why it matters: a deploy-token action added to ActionSpecs and forgotten in
+// that switch is served exactly this — no project_id or group_id guidance and
+// the neighboring-domain related actions — rather than anything tailored. It
+// is also the only way the last case of the switch is ever evaluated false,
+// since the cases above it exhaust every name the package registers.
+func TestDeployTokenOptions_UnknownAction_KeepsTheGenericScopeMetadata(t *testing.T) {
+	options := deployTokenOptions("deploy_token_not_an_action", "gitlab_deploy_token_not_an_action")
+
+	if len(options.ParameterGuidance) != 0 {
+		t.Errorf("ParameterGuidance = %v, want none", options.ParameterGuidance)
+	}
+	want := []string{"access.deploy_key_list_project", actionProjectGet, "group.get"}
+	if !slices.Equal(options.RelatedActions, want) {
+		t.Errorf("RelatedActions = %v, want %v", options.RelatedActions, want)
 	}
 }
 
