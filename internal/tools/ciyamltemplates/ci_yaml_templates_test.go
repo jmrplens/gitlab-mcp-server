@@ -166,6 +166,75 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
+// TestList_TemplateRow_CarriesGitLabKeyAndNameOntoTheirOwnFields pins which of
+// GitLab's two template columns lands in which published field.
+//
+// Every other fixture in this file answers with the key and the name spelled
+// identically ("Go"/"Go"), which asserts the two fields against each other: a
+// handler that swapped them satisfied the whole suite when tried by hand. The
+// key is the argument template.ci_yml_get takes, so a swap would hand a model
+// a human title to fetch a template by and every follow-up call would 404.
+func TestList_TemplateRow_CarriesGitLabKeyAndNameOntoTheirOwnFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitlab_ci_ymls")
+		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Jobs/Build","name":"Build a Docker image"}]`)
+	}))
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Templates) != 1 {
+		t.Fatalf("len(Templates) = %d, want 1", len(out.Templates))
+	}
+	if got := out.Templates[0].Key; got != "Jobs/Build" {
+		t.Errorf("Key = %q, want GitLab's key %q", got, "Jobs/Build")
+	}
+	if got := out.Templates[0].Name; got != "Build a Docker image" {
+		t.Errorf("Name = %q, want GitLab's name %q", got, "Build a Docker image")
+	}
+}
+
+// TestList_Error_SuggestsTheReadAPIScopeOnForbiddenAlone states which status
+// carries the scope hint, and that the others carry none.
+//
+// The hint is the actionable half of the error contract in ADR-0007, and the
+// status it is bound to is a bare constant that no mutation or condition gate
+// can move: replacing http.StatusForbidden by hand left the suite green,
+// because the error tests above assert only that err is non-nil. A model told
+// "verify your token has read_api scope" retries with a wider credential; told
+// nothing, it reports the tool as broken. Asserting the negative case too is
+// what pins the branch rather than the wording: a hint attached to every
+// status would satisfy the positive half alone.
+func TestList_Error_SuggestsTheReadAPIScopeOnForbiddenAlone(t *testing.T) {
+	const scopeHint = "Suggestion: verify your token has read_api scope"
+
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"forbidden", http.StatusForbidden, true},
+		{"server_error", http.StatusInternalServerError, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"denied"}`)
+			}))
+			_, err := List(t.Context(), client, ListInput{})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.HasPrefix(err.Error(), "list_ci_yml_templates: ") {
+				t.Errorf("error = %q, want it to name the operation", err.Error())
+			}
+			if got := strings.Contains(err.Error(), scopeHint); got != tc.wantHint {
+				t.Errorf("scope hint present = %v, want %v; error = %q", got, tc.wantHint, err.Error())
+			}
+		})
+	}
+}
+
 // TestList_OrderSortKeyset verifies that List forwards order_by, sort, and
 // keyset pagination parameters (pagination, page_token) onto the GitLab API
 // query string.
@@ -247,6 +316,46 @@ func TestGet_EmptyKey_Cov(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{Key: ""})
 	if err == nil {
 		t.Fatal("expected error for empty key")
+	}
+}
+
+// TestGet_Error_SuggestsTheListActionOnNotFoundAlone states which status
+// carries the hint pointing back at the list action, and that the others carry
+// none.
+//
+// A key is a string a model either read from template.ci_yml_list or invented,
+// so 404 is the status where naming the list action is the whole repair, and
+// it is the one recovery this tool can offer. Like its sibling above, the
+// status is a constant the gates cannot move: swapping it for
+// http.StatusForbidden by hand left every test green, since the error tests
+// assert only that err is non-nil.
+func TestGet_Error_SuggestsTheListActionOnNotFoundAlone(t *testing.T) {
+	const listHint = "Suggestion: verify name with gitlab_list_ci_yml_templates"
+
+	cases := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"not_found", http.StatusNotFound, true},
+		{"server_error", http.StatusInternalServerError, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"no such template"}`)
+			}))
+			_, err := Get(t.Context(), client, GetInput{Key: "Nope"})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.HasPrefix(err.Error(), "get_ci_yml_template: ") {
+				t.Errorf("error = %q, want it to name the operation", err.Error())
+			}
+			if got := strings.Contains(err.Error(), listHint); got != tc.wantHint {
+				t.Errorf("list hint present = %v, want %v; error = %q", got, tc.wantHint, err.Error())
+			}
+		})
 	}
 }
 
