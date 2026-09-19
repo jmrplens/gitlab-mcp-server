@@ -1096,10 +1096,10 @@ func TestEdit_WithHostKeys(t *testing.T) {
 // distinctMirrorJSON is a mirror in which no two values agree: three different
 // timestamps, five different non-empty strings, and a bool triple chosen so
 // that every pairwise swap of the three flags shows up in one of the two cases
-// below. The shared mirrorJSON cannot serve here — it sends one instant as both
-// last_successful_update_at and last_update_at, and the empty string as both
-// mirror_branch_regex and last_error, so a converter reading either field from
-// its neighbor produces exactly the same output.
+// below. The shared mirrorJSON cannot serve here, because it sends one instant
+// as both last_successful_update_at and last_update_at, and the empty string as
+// both mirror_branch_regex and last_error, so a converter reading either field
+// from its neighbor produces exactly the same output.
 const distinctMirrorJSON = `{
 	"id": 77,
 	"enabled": true,

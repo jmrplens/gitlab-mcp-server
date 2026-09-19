@@ -125,8 +125,8 @@ func TestActionSpecs_RelatedActions_NameTheSecuritySettingsSiblings(t *testing.T
 // three IDs the cards build their hints from are the domain of the catalog
 // group each spec joins plus the spec's own name.
 //
-// They are two blocks of literals — the constants in markdown.go and the
-// action names in this file — with nothing between them, so renaming an action
+// They are two blocks of literals (the constants in markdown.go and the
+// action names in this file) with nothing between them, so renaming an action
 // would leave a card pointing a model at an ID the catalog no longer holds.
 // The domains stay literal because they are the group the aggregation appends
 // each set to, gitlab_project and gitlab_group, which this package cannot see.

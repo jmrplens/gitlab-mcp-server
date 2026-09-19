@@ -518,7 +518,7 @@ var missingIDValues = []struct {
 // Zero is the value a caller really reaches, since an omitted snippet_id
 // arrives here as the zero value, and it is the one the old assertions could
 // not see: they only asked that some error came back, and a guard written
-// "< 0" instead of "<= 0" still produced one — GitLab's 404 for snippet 0,
+// "< 0" instead of "<= 0" still produced one: GitLab's 404 for snippet 0,
 // which tells the caller nothing about the parameter it forgot. The mock
 // refuses every request, so reaching the network is itself a failure.
 func TestSnippetIDRequired_Validation(t *testing.T) {
@@ -1000,7 +1000,7 @@ func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 //
 // Nothing asserted it before: the tests that send page and per_page check the
 // query string and drop the response, so List could have published an empty
-// block — no page, no total, no next page — and stayed green, leaving a model
+// block (no page, no total, no next page) and stayed green, leaving a model
 // with a page of notes and no way to learn there are more. Every header here
 // carries a different number so a block filled from the wrong one is visible.
 func TestList_PaginationBlock_MirrorsTheResponseHeaders(t *testing.T) {

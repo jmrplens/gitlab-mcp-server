@@ -343,8 +343,8 @@ func TestCreate_DefaultDescription(t *testing.T) {
 // TestCreate_DescriptionReachesGitLabOnlyWhenGiven reads the request body the
 // handler actually sent, in both states of the guard around the optional
 // description. Nothing looked at that body before, so the guard could have
-// been inverted — the caller's description dropped and an empty one sent in
-// its place — with every existing Create test still passing, because the mock
+// been inverted, the caller's description dropped and an empty one sent in
+// its place, with every existing Create test still passing, because the mock
 // answers the same fixture whatever it is asked.
 func TestCreate_DescriptionReachesGitLabOnlyWhenGiven(t *testing.T) {
 	tests := []struct {

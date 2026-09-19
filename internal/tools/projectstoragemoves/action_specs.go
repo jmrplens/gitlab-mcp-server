@@ -8,7 +8,7 @@ import (
 // Canonical action IDs for cross-linking project storage move actions, and the
 // only block naming them: the markdown hints read these too. The domain is
 // storage_move, the catalog group all three storage-move packages register
-// under, and never this package's own name — an ID spelled from the package
+// under, and never this package's own name. An ID spelled from the package
 // answers a model "unknown action" the moment it follows the hint, and nothing
 // in the repository validates one.
 const (

@@ -92,8 +92,8 @@ func assertStr(t *testing.T, field, got, want string) {
 // assertRequestBody compares the whole JSON body of a scheduling request with
 // what the handler is meant to send, keys and values alike. It runs on the
 // httptest goroutine, so it reports and never aborts. Nothing asserted the
-// bodies before, which left the one thing these two actions do — naming the
-// shards — readable from no test at all.
+// bodies before, which left the one thing these two actions do (naming the
+// shards) readable from no test at all.
 func assertRequestBody(t *testing.T, r *http.Request, want map[string]any) {
 	t.Helper()
 	var got map[string]any

@@ -186,7 +186,7 @@ func TestCreate_Success(t *testing.T) {
 // TestCreate_RequestBody_CarriesTheNameAndProjectIDTheCallerGave holds the POST
 // body to the caller's own values. Nothing asserted them: the alias in the
 // reply is a fixture this test writes, so a handler that sent an empty name or
-// a zero project_id would create the wrong alias — or none — while every
+// a zero project_id would create the wrong alias, or none at all, while every
 // assertion about what came back still passed.
 func TestCreate_RequestBody_CarriesTheNameAndProjectIDTheCallerGave(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

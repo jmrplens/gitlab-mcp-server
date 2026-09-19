@@ -598,8 +598,8 @@ func TestUpdate_Success(t *testing.T) {
 // value the attribute GitLab answers with reaches the output field of the same
 // name, the nested category included. Until this existed the suite asserted
 // the two parsed IDs and nothing else, so the converter could read a
-// neighbour's key — the name from the color, the category's name from its
-// editable state — and stay green on every run.
+// neighbour's key (the name from the color, the category's name from its
+// editable state) and stay green on every run.
 func TestUpdate_ResponseFields_LandOnTheFieldThatNamesThem(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeUpdate": func(w http.ResponseWriter, _ *http.Request) {

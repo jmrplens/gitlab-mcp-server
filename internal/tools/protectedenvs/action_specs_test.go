@@ -265,7 +265,7 @@ func TestProtectedEnvironmentMeta_PerToolDiscovery(t *testing.T) {
 // property decorateProtectedEnvironmentMeta assigns unconditionally on: it
 // used to guard each field against being empty, and because no entry ever is,
 // no test could tell a guard that fired from one that did not. Asserting the
-// map directly puts that where it can fail — an entry added without aliases
+// map directly puts that where it can fail: an entry added without aliases
 // or without related actions is reported here instead of silently keeping the
 // shared defaults that R-META exists to replace.
 func TestProtectedEnvironmentActionMeta_EveryEntry_FillsAllThreeFields(t *testing.T) {
@@ -288,7 +288,7 @@ func TestProtectedEnvironmentActionMeta_EveryEntry_FillsAllThreeFields(t *testin
 // cross-links each tool publishes, spelled out rather than counted. Nothing in
 // the repository checks a related action against the catalog, and these
 // actions are merged into the gitlab_environment group, so a deployment action
-// is environment.deployment_list and never deployment.list — which is what
+// is environment.deployment_list and never deployment.list, which is what
 // this list carried until a model following the hint would have been answered
 // "unknown action".
 func TestProtectedEnvironmentMeta_RelatedActions_AreCanonicalCatalogIDs(t *testing.T) {

@@ -455,8 +455,8 @@ func captureRuleRequestBody(t *testing.T, call func(client *gitlabclient.Client)
 // TestCreate_SendsEachFieldTheCallerSetUnderItsOwnKey verifies a create request
 // carries every field the caller supplied under the key client-go spells for
 // it. The four values are deliberately distinct, so a converter reading a
-// neighbour's field — the pattern sent as the type, the push level sent as the
-// delete level — fails here instead of silently protecting the wrong thing.
+// neighbour's field (the pattern sent as the type, the push level sent as the
+// delete level) fails here instead of silently protecting the wrong thing.
 func TestCreate_SendsEachFieldTheCallerSetUnderItsOwnKey(t *testing.T) {
 	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
 		if _, err := Create(context.Background(), client, CreateInput{

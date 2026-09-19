@@ -271,7 +271,7 @@ func bodyText(t *testing.T, b envBody) string {
 }
 
 // TestProtect_EveryOptionalField_ReachesItsOwnKeyInTheRequestBody sends one
-// rule of each shape GitLab accepts — a role, a user, a group — and compares
+// rule of each shape GitLab accepts (a role, a user, a group) and compares
 // the decoded body field for field. A rule naming a user carries no
 // access_level, which is the guard the builder wraps that assignment in, and
 // a builder that read a neighbour's field would send the same set of keys.
@@ -499,8 +499,8 @@ const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 // TestFormatOutputMarkdown_WithRules pins the whole card of a protected
 // environment: the headline defers to the per-rule counts below it, and every
 // rule says which role it grants, to whom, and whether a group rule reaches
-// inherited members. Both group rules are here on purpose — one direct, one
-// inherited — since GitLab's zero means "direct" for a group rule and "not
+// inherited members. Both group rules are here on purpose, one direct and one
+// inherited, since GitLab's zero means "direct" for a group rule and "not
 // applicable" for a rule that is not about a group at all.
 func TestFormatOutputMarkdown_WithRules(t *testing.T) {
 	got := FormatOutputMarkdown(Output{

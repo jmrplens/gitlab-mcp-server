@@ -45,7 +45,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // RelatedActions, so a wrong spelling passes every gate and answers a model
 // "unknown action" the moment it follows the hint. This package shipped all six
 // spelled from its own package name, and the markdown hints kept a second,
-// correct copy beside them — which is why the one block is now shared and why
+// correct copy beside them. That is why the one block is now shared and why
 // this asserts the set rather than a sample.
 func TestActionSpecs_ActionIDs_NameTheActionsThisPackageDeclares(t *testing.T) {
 	// The domain is named here rather than read from the source, so the

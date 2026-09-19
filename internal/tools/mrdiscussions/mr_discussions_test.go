@@ -1478,8 +1478,8 @@ func TestLineRangeOutput_NilAndEmpty(t *testing.T) {
 // What an optional input does to the request GitLab receives
 //
 // Every assertion above this line reads the response, and the response is the
-// mock's own fixture: a guard around an optional field can be inverted — the
-// caller's value dropped and an empty one sent in its place — without any of
+// mock's own fixture: a guard around an optional field can be inverted, the
+// caller's value dropped and an empty one sent in its place, without any of
 // them noticing. These read the body the handler actually sent.
 // ---------------------------------------------------------------------------.
 

@@ -175,8 +175,8 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // releaseLinkOptions builds all six from one options value and then overwrites
 // the parts that differ, so every one of those overwrites is an `actionName ==`
 // guard on a shared variable. Invert one and an action silently takes a
-// sibling's discovery text — link_update telling a model to call
-// link_create_batch instead, or link_get answering with the bare default — with
+// sibling's discovery text (link_update telling a model to call
+// link_create_batch instead, or link_get answering with the bare default), with
 // nothing in the served surface to say which action it is describing.
 func TestActionSpecs_EachActionCarriesItsOwnDiscoveryMetadata(t *testing.T) {
 	tests := []struct {
@@ -238,8 +238,8 @@ func declaredLinkActionIDs() map[string]bool {
 // Nothing else in the repository checks these strings: the discovery audit only
 // reports an empty related list, so a misspelled ID passes every gate and
 // answers a model "unknown action" the moment it follows the cross-link. This
-// package carried one — "release_link.list", unused, five characters from the
-// real ID — until the sweep removed it.
+// package carried one ("release_link.list", unused, five characters from the
+// real ID) until the sweep removed it.
 func TestActionSpecs_LinkActionIDsAreTheOnesTheCatalogProjects(t *testing.T) {
 	specs := ActionSpecs(testutil.NewTestClient(t, releaseLinksActionHandler()))
 	projected := make(map[string]bool, len(specs))
@@ -277,7 +277,7 @@ func TestActionSpecs_LinkActionIDsAreTheOnesTheCatalogProjects(t *testing.T) {
 // rendered hints actually carry, which is the text a model reads and acts on.
 //
 // The constants are shared with the specs, so this can only fail once somebody
-// writes an ID by hand in a formatter — which is exactly how the two constant
+// writes an ID by hand in a formatter, which is exactly how the two constant
 // blocks this package used to keep would have drifted apart.
 func TestActionSpecs_LinkHintsNameActionsThisPackageDeclares(t *testing.T) {
 	link := Output{ID: 10, Name: "Binary", URL: "https://example.com/bin", LinkType: "package"}

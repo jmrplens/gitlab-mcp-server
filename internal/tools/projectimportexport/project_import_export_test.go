@@ -58,7 +58,8 @@ func captureScheduleExport(t *testing.T, assert func(scheduleExportBody)) http.H
 }
 
 // wantString reports the pointed-to value under name, or fails the test when
-// the key was absent — the shape an inverted `!= ""` guard leaves behind.
+// the key was absent, which is the shape an inverted `!= ""` guard leaves
+// behind.
 func wantString(t *testing.T, name string, got *string, want string) {
 	t.Helper()
 	if got == nil {
@@ -324,8 +325,8 @@ func TestImportFromFile_InvalidBase64_Error(t *testing.T) {
 // gl.ImportStatus mistags as `create_at`) included.
 //
 // The fixture spells no two values alike and the import is a failed one, so
-// import_error and correlation_id — the two fields a caller reads to find out
-// why — are exercised rather than left empty and vacuously right.
+// import_error and correlation_id (the two fields a caller reads to find out
+// why) are exercised rather than left empty and vacuously right.
 func TestGetImportStatus_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/import" && r.Method == http.MethodGet {
@@ -1077,8 +1078,8 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 //
 // These four decide where the project lands and whether an existing one is
 // replaced, and nothing read them off the wire: every guard around them could
-// invert — sending nothing for a caller who named a namespace, and an empty
-// value for one who did not — with the whole suite still green.
+// invert, sending nothing for a caller who named a namespace and an empty
+// value for one who did not, with the whole suite still green.
 func TestImportFromFile_ForwardsDestination(t *testing.T) {
 	wantParams := map[string]string{
 		"namespace": "destination-group",

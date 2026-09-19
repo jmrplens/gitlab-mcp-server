@@ -1445,8 +1445,8 @@ func TestListProject_APIError(t *testing.T) {
 
 // TestListProject_AllFilters verifies every filter the caller set reaches
 // GitLab. type, status and tag_list were unasserted here, and their three
-// guards could each be inverted — dropping the caller's filter and sending the
-// unset one — with the whole suite still green.
+// guards could each be inverted, dropping the caller's filter and sending the
+// unset one, with the whole suite still green.
 func TestListProject_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
@@ -1719,8 +1719,8 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 // TestRegister_OneFieldAtATime_SendsThatFieldBesideTheToken drives one
 // registration per optional field and compares the whole request body against
 // the token plus that field. The token is the only thing GitLab requires, so a
-// field the handler silently dropped still registered a runner — configured as
-// nothing the caller asked for — and the suite reported success.
+// field the handler silently dropped still registered a runner (configured as
+// nothing the caller asked for), and the suite reported success.
 func TestRegister_OneFieldAtATime_SendsThatFieldBesideTheToken(t *testing.T) {
 	paused, locked, runUntagged, active := true, false, true, true
 	maxTimeout := int64(3600)

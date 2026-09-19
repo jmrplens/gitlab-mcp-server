@@ -149,8 +149,8 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	}
 	// Unguarded: a missing entry assigns the empty string the field already
 	// holds, so the guard that used to stand here could never be observed
-	// false. The property it was standing in for — that every action this
-	// package declares has a description — is pinned by
+	// false. The property it was standing in for (that every action this
+	// package declares has a description) is pinned by
 	// TestReleaseLinkDescriptions_RMeta instead.
 	options.IndividualTool.Description = releaseLinkDescriptions[actionName]
 	return options

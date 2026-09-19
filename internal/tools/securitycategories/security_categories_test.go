@@ -108,7 +108,7 @@ func TestCreate_Success(t *testing.T) {
 // distinctCategory is the fixture no two values of which agree: the category
 // and its attribute differ in every field, and the two editable states differ
 // too. Only such a fixture can tell a converter reading its neighbour's key
-// from one reading its own — sampleCategory gives both objects the state
+// from one reading its own: sampleCategory gives both objects the state
 // "EDITABLE", so swapping them changed nothing.
 const distinctCategory = `{
 	"id": "gid://gitlab/Security::Category/7",

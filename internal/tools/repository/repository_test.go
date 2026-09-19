@@ -538,7 +538,7 @@ func TestRepositoryArchive_Success(t *testing.T) {
 
 // TestRepositoryArchive_DefaultFormat pins the whole address of the plainest
 // request: no format asked for means tar.gz, and neither a ref nor a
-// subdirectory means no query string at all — not an empty one. A bare "?" is
+// subdirectory means no query string at all, not an empty one. A bare "?" is
 // what an unguarded join leaves behind, and the address is handed to a caller
 // to fetch rather than used here, so nothing downstream would report it.
 func TestRepositoryArchive_DefaultFormat(t *testing.T) {
@@ -1007,7 +1007,7 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 
 // TestRepositoryAddChangelog_WithoutOptions is the other side of those guards:
 // with only the two required fields supplied, no optional key is sent at all.
-// An empty `branch` or `file` is not the same request as an absent one —
+// An empty `branch` or `file` is not the same request as an absent one:
 // GitLab reads it as a branch or path named "" rather than as its default.
 func TestRepositoryAddChangelog_WithoutOptions(t *testing.T) {
 	var body map[string]any
@@ -1110,8 +1110,8 @@ func TestRepositoryGenerateChangelogData_WithoutOptions(t *testing.T) {
 // reaches the address, beside the ref. GitLab archives the subdirectory
 // "path" names and the whole repository without it, so while this action
 // dropped the input it published, a caller asking for one directory was handed
-// the address of the entire repository — a wrong answer that downloads, so
-// nothing downstream could report it.
+// the address of the entire repository. That is a wrong answer that downloads,
+// so nothing downstream could report it.
 func TestRepositoryArchive_WithPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1941,9 +1941,9 @@ func TestRepositoryContributors_FieldsComeFromTheirOwnKeys(t *testing.T) {
 // flags one at a time, because that is the only fixture that tells them apart:
 // every other fixture in this file answers with both false, and setting both
 // true would hide an exchange just as completely. It is also what GitLab really
-// answers, since a comparison is either the same ref or a timeout, never both —
-// and the two render different cards, so reading one for the other tells a
-// caller their refs are identical when the comparison merely gave up.
+// answers, since a comparison is either the same ref or a timeout, never both.
+// The two render different cards, so reading one for the other tells a caller
+// their refs are identical when the comparison merely gave up.
 func TestRepositoryCompare_FlagsComeFromTheirOwnKeys(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -2007,8 +2007,8 @@ func TestRepositoryMergeBase_RefsReachTheRequest(t *testing.T) {
 // TestActionSpecs_RelatedActionsAreCanonicalIDs holds every related-action this
 // package publishes to the one constant block markdown.go declares, and pins
 // each constant's literal spelling. Nothing in the repository compares such an
-// ID with the catalog — audit_discovery_completeness only counts an empty
-// related list — so a misspelling ships and answers a model "unknown action"
+// ID with the catalog (audit_discovery_completeness only counts an empty
+// related list), so a misspelling ships and answers a model "unknown action"
 // the moment it follows the hint. The specs already carried one: "commit.list"
 // for the listing the catalog calls repository.commit_list.
 func TestActionSpecs_RelatedActionsAreCanonicalIDs(t *testing.T) {

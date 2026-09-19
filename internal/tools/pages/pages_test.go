@@ -539,7 +539,7 @@ func assertPagesRequestBody(t *testing.T, r *http.Request, want map[string]any, 
 // that an option left alone is not sent at all.
 //
 // Each option sits behind a guard of its own, and an inverted guard drops the
-// caller's value while sending an empty one — which GitLab reads as a request
+// caller's value while sending an empty one, which GitLab reads as a request
 // to clear the setting, the opposite of what was asked.
 func TestUpdatePages_OptionalFieldsReachTheRequestBody(t *testing.T) {
 	uniqueDomain := true

@@ -106,7 +106,7 @@ func TestList_Success(t *testing.T) {
 // the few fields a caller is most likely to read. Description and solution,
 // the two line numbers, the scanner's vendor, the blob path, an identifier's
 // type and id, and the vulnerability's state were all unasserted, and each one
-// could be swapped for its neighbour with the suite still green.
+// could be swapped for its neighbor with the suite still green.
 func assertSampleSecurityFinding(t *testing.T, finding FindingItem) {
 	t.Helper()
 	want := FindingItem{

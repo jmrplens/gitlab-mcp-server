@@ -1305,7 +1305,7 @@ func decodeBody(t *testing.T, body string) map[string]any {
 // Both halves are the same defect seen from two sides. An inverted `!= ""`
 // guard drops the value the caller did set, which GitLab ignores in silence,
 // and sends an empty string for the one they never mentioned, which GitLab
-// applies — an update of the name alone would blank the URL. The last case
+// applies: an update of the name alone would blank the URL. The last case
 // gives all five distinct values so no assignment can read its neighbour's
 // field either.
 func TestReleaseLinkUpdate_SendsOnlyTheFieldsTheCallerSet(t *testing.T) {
@@ -1359,8 +1359,8 @@ func TestReleaseLinkUpdate_SendsOnlyTheFieldsTheCallerSet(t *testing.T) {
 // "other", so a handler that always sends the key would pin "" on an ordinary
 // asset, and one that never sends it would silently stop labeling generic
 // package assets as packages. The rest of the object is compared whole, so
-// name and url — and direct_asset_path and filepath, which are two spellings of
-// one idea — cannot be assigned from each other.
+// name and url (and direct_asset_path and filepath, which are two spellings of
+// one idea) cannot be assigned from each other.
 func TestReleaseLinkCreate_SendsEachFieldUnderItsOwnKey(t *testing.T) {
 	const genericPackageURL = "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/bin"
 

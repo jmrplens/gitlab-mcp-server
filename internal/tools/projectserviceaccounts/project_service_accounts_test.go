@@ -257,7 +257,7 @@ func TestCreateUpdateDelete(t *testing.T) {
 // of what the account handlers put on the wire: a field the caller named
 // reaches GitLab under its own key, and one the caller left unset does not
 // reach it at all. The guards deciding that are invertible in silence, and
-// each direction is its own defect — inverted, the caller's name never leaves
+// each direction is its own defect: inverted, the caller's name never leaves
 // this process, while an unset one arrives as "", which GitLab reads as an
 // instruction to blank the field.
 func TestAccountMutations_OptionalFieldsTravelUnderTheirOwnKeys(t *testing.T) {
