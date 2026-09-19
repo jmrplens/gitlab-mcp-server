@@ -522,11 +522,16 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 // pass. The expectations are written out rather than read back from
 // groupImportExportActionMeta, because a test sourced from the same table the
 // code reads moves both sides together and proves nothing.
+//
+// It asks which sibling is named and not whether the name resolves: written
+// out, these literals were the bare action names for a while and every one of
+// them was dead. Whether an ID resolves is asked of the catalog in
+// action_specs_test.go.
 func TestActionSpecs_RelatedActions_NameTheSiblingRoutes(t *testing.T) {
 	want := map[string][]string{
-		"gitlab_schedule_group_export":  {"group_export_download", "group_import_file", "group.get"},
-		"gitlab_download_group_export":  {"group_export_schedule", "group_import_file", "group.get"},
-		"gitlab_import_group_from_file": {"group_export_schedule", "group_export_download", "group.list"},
+		"gitlab_schedule_group_export":  {"group.group_export_download", "group.group_import_file", "group.get"},
+		"gitlab_download_group_export":  {"group.group_export_schedule", "group.group_import_file", "group.get"},
+		"gitlab_import_group_from_file": {"group.group_export_schedule", "group.group_export_download", "group.list"},
 	}
 
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))

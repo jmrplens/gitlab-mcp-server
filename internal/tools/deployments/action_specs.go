@@ -9,10 +9,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog action IDs this package names to a model, in the one
+// block both the discovery metadata below and the next-step hints in
+// markdown.go read. Every surface resolves the ID: the dynamic surface
+// executes it and the meta and individual surfaces resolve it to their own
+// tool names.
+//
+// A deployment action is projected under the environment domain, because
+// these specs are aggregated into the gitlab_environment catalog group. It
+// was two blocks until they disagreed, and the metadata's "deployment." half
+// named no group at all, so it resolved to nothing anywhere.
 const (
-	actionDeploymentUpdate = "deployment.update"
-	actionDeploymentGet    = "deployment.get"
-	actionDeploymentList   = "deployment.list"
+	actionDeploymentGet     = "environment.deployment_get"
+	actionDeploymentList    = "environment.deployment_list"
+	actionDeploymentUpdate  = "environment.deployment_update"
+	actionDeploymentApprove = "environment.deployment_approve_or_reject"
+	actionDeploymentMRs     = "environment.deployment_merge_requests"
+	actionEnvironmentGet    = "environment.get"
+	actionEnvironmentList   = "environment.list"
+	actionPipelineGet       = "pipeline.get"
 )
 
 // ActionSpecs returns canonical specs for deployment actions.
@@ -59,7 +74,7 @@ func deploymentDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 func deploymentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute deployments domain action.", Tags: []string{"environment", "deployment"},
-		RelatedActions: []string{"environment.get", "pipeline.get"},
+		RelatedActions: []string{actionEnvironmentGet, actionPipelineGet},
 		OpenWorld:      true,
 		OwnerPackage:   "deployments",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -69,7 +84,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_list":
 		options.Usage = "Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions."
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
-		options.RelatedActions = []string{actionDeploymentGet, "environment.list", "pipeline.get"}
+		options.RelatedActions = []string{actionDeploymentGet, actionEnvironmentList, actionPipelineGet}
 		options.IndividualTool.Description = "List deployments in a project with environment, status, and date filters plus offset or keyset pagination. Returns: matching deployments with ref, sha, status, user, environment, and deployable (CI job) objects, and pagination metadata. See also: gitlab_deployment_get, gitlab_environment_list, gitlab_pipeline_get."
 		// doc/api/deployments.md "List project deployments": the status
 		// filter also takes blocked, which client-go's DeploymentStatusValue
@@ -85,7 +100,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_get":
 		options.Usage = "Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata."
 		options.Aliases = []string{"get deployment", "show deployment details", "lookup deployment"}
-		options.RelatedActions = []string{actionDeploymentList, actionDeploymentUpdate, "deployment.approve_or_reject"}
+		options.RelatedActions = []string{actionDeploymentList, actionDeploymentUpdate, actionDeploymentApprove}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"deployment_id": {
 				SemanticRole:   "deployment_id",
@@ -96,7 +111,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_create":
 		options.Usage = "Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries."
 		options.Aliases = []string{"create deployment", "start deployment", "new deployment"}
-		options.RelatedActions = []string{"environment.get", actionDeploymentList, actionDeploymentUpdate}
+		options.RelatedActions = []string{actionEnvironmentGet, actionDeploymentList, actionDeploymentUpdate}
 		options.IndividualTool.Description = "Create a deployment record for an environment at a given ref and sha with an initial status. Returns: the created deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_environment_get, gitlab_deployment_list, gitlab_deployment_update."
 		// doc/api/deployments.md "Create a deployment": the initial status is
 		// one of running, success, failed or canceled; created is a state a
@@ -124,7 +139,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_update":
 		options.Usage = "Update an existing deployment's status (running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
 		options.Aliases = []string{"update deployment status", "set deployment status", "transition deployment"}
-		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentList, "deployment.approve_or_reject"}
+		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentList, actionDeploymentApprove}
 		options.IndividualTool.Description = "Update a deployment's status by deployment_id within a project. Returns: the updated deployment with id, iid, ref, sha, status, and nested user, environment, and deployable objects. See also: gitlab_deployment_get, gitlab_deployment_list, gitlab_deployment_approve_or_reject."
 		// doc/api/deployments.md "Update a deployment": the new status is one
 		// of running, success, failed or canceled. created and blocked are

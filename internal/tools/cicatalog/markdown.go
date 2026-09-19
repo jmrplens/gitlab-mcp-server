@@ -7,13 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name.
-const (
-	actionCatalogGetHint  = "ci_catalog.get"
-	actionCatalogListHint = "ci_catalog.list"
-	actionLintHint        = "template.lint"
-)
-
 // descriptionCellRunes is how much of a resource description one table cell
 // carries before it is cut.
 const descriptionCellRunes = 60
@@ -48,8 +41,8 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WriteGraphQLPagination(&b, out.Pagination, len(out.Resources))
 	toolutil.WriteHints(&b,
-		toolutil.HintAction(actionCatalogGetHint, "see one resource with its components and inputs"),
-		toolutil.HintAction(actionLintHint, "check a configuration that includes one"),
+		toolutil.HintAction(actionCatalogGet, "see one resource with its components and inputs"),
+		toolutil.HintAction(actionTemplateLint, "check a configuration that includes one"),
 	)
 	return b.String()
 }
@@ -75,8 +68,8 @@ func FormatGetMarkdown(out GetOutput) string {
 	writeCatalogResourceComponents(c, r.Components)
 	writeCatalogResourceVersions(c, r.Versions)
 	c.End(
-		toolutil.HintAction(actionLintHint, "check a configuration that includes this component"),
-		toolutil.HintAction(actionCatalogListHint, "browse the catalog for others"),
+		toolutil.HintAction(actionTemplateLint, "check a configuration that includes this component"),
+		toolutil.HintAction(actionCatalogList, "browse the catalog for others"),
 	)
 	return b.String()
 }

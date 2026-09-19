@@ -8,28 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. Every surface resolves the ID: the
-// dynamic surface executes it and the meta and individual surfaces resolve it
-// to their own tool names, so a hint written this way never names something
-// the serving surface does not register — which "the selected tool surface's
-// pipeline-schedule update action" was a sentence-long way of avoiding.
-//
-// The ID is the catalog's: these actions are registered under the
-// gitlab_pipeline group, so their domain is "pipeline" and not
-// "pipeline_schedule", which is what the related-action constants beside
-// ActionSpecs still spell.
-const (
-	hintActionScheduleGet            = "pipeline.schedule_get"
-	hintActionScheduleList           = "pipeline.schedule_list"
-	hintActionScheduleCreate         = "pipeline.schedule_create"
-	hintActionScheduleUpdate         = "pipeline.schedule_update"
-	hintActionScheduleDelete         = "pipeline.schedule_delete"
-	hintActionScheduleRun            = "pipeline.schedule_run"
-	hintActionScheduleEditVariable   = "pipeline.schedule_edit_variable"
-	hintActionScheduleDeleteVariable = "pipeline.schedule_delete_variable"
-	hintActionPipelineGet            = "pipeline.get"
-)
-
 // FormatOutputMarkdown renders one pipeline schedule as the card of a single
 // object. A schedule with no ID is no schedule and renders nothing.
 func FormatOutputMarkdown(s Output) string {
@@ -61,9 +39,9 @@ func FormatOutputMarkdown(s Output) string {
 	c.Time("Created", s.CreatedAt)
 	c.Time("Updated", s.UpdatedAt)
 	c.End(
-		toolutil.HintAction(hintActionScheduleUpdate, "change this schedule"),
-		toolutil.HintAction(hintActionScheduleRun, "trigger it now"),
-		toolutil.HintAction(hintActionScheduleDelete, "remove it"),
+		toolutil.HintAction(actionScheduleUpdate, "change this schedule"),
+		toolutil.HintAction(actionScheduleRun, "trigger it now"),
+		toolutil.HintAction(actionScheduleDelete, "remove it"),
 	)
 	return b.String()
 }
@@ -125,8 +103,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintActionScheduleGet, "see one schedule in full"),
-		toolutil.HintAction(hintActionScheduleCreate, "add a schedule"),
+		toolutil.HintAction(actionScheduleGet, "see one schedule in full"),
+		toolutil.HintAction(actionScheduleCreate, "add a schedule"),
 	)
 	return b.String()
 }
@@ -141,8 +119,8 @@ func FormatVariableMarkdown(v VariableOutput) string {
 	// A CI variable type is one of GitLab's fixed set (env_var, file).
 	c.Field("Type", v.VariableType)
 	c.End(
-		toolutil.HintAction(hintActionScheduleEditVariable, "change this variable"),
-		toolutil.HintAction(hintActionScheduleDeleteVariable, "remove it"),
+		toolutil.HintAction(actionScheduleEditVariable, "change this variable"),
+		toolutil.HintAction(actionScheduleDeleteVariable, "remove it"),
 	)
 	return b.String()
 }
@@ -166,8 +144,8 @@ func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionPipelineGet, "see one pipeline in full"),
-		toolutil.HintAction(hintActionScheduleList, "see the schedules of this project"),
+		toolutil.HintAction(actionPipelineGet, "see one pipeline in full"),
+		toolutil.HintAction(actionScheduleList, "see the schedules of this project"),
 	)
 	return b.String()
 }

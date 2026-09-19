@@ -5,13 +5,31 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs referenced by group import/export discovery metadata.
+// The bare action names these specs register. They are relative to the
+// catalog group, which is what [toolutil.ActionSpec] takes.
 const (
-	actionGroupExportSchedule = "group_export_schedule"
-	actionGroupExportDownload = "group_export_download"
-	actionGroupImportFile     = "group_import_file"
-	actionGroupGet            = "group.get"
-	actionGroupList           = "group.list"
+	nameGroupExportSchedule = "group_export_schedule"
+	nameGroupExportDownload = "group_export_download"
+	nameGroupImportFile     = "group_import_file"
+)
+
+// The canonical catalog action IDs this package names to a model, in the one
+// block both the discovery metadata below and the next-step hints in
+// markdown.go read. They are derived from the names above rather than spelled
+// again, because the two were written out separately and the metadata half
+// published the bare names: a name is what the catalog registers an action
+// under, and an ID is what a model calls, and only the second resolves.
+//
+// The domain is "group" because these specs are aggregated into the
+// gitlab_group catalog group.
+const (
+	groupDomain = "group."
+
+	actionGroupExportSchedule = groupDomain + nameGroupExportSchedule
+	actionGroupExportDownload = groupDomain + nameGroupExportDownload
+	actionGroupImportFile     = groupDomain + nameGroupImportFile
+	actionGroupGet            = groupDomain + "get"
+	actionGroupList           = groupDomain + "list"
 )
 
 // ActionSpecs returns canonical specs for group import and export actions.
@@ -24,12 +42,12 @@ const (
 // meta, nor individual surface inherits placeholder text (1:1 audit R-META).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		// gitlab_schedule_group_export — start an asynchronous export of a group.
-		groupImportExportCreateSpec(actionGroupExportSchedule, toolutil.RouteAction(client, ScheduleExport), "gitlab_schedule_group_export"),
-		// gitlab_download_group_export — download the finished export archive.
-		groupImportExportReadSpec(actionGroupExportDownload, toolutil.RouteAction(client, ExportDownload), "gitlab_download_group_export"),
-		// gitlab_import_group_from_file — import a group from a local export archive.
-		groupImportExportCreateSpec(actionGroupImportFile, toolutil.RouteAction(client, ImportFile), "gitlab_import_group_from_file"),
+		// gitlab_schedule_group_export: start an asynchronous export of a group.
+		groupImportExportCreateSpec(nameGroupExportSchedule, toolutil.RouteAction(client, ScheduleExport), "gitlab_schedule_group_export"),
+		// gitlab_download_group_export: download the finished export archive.
+		groupImportExportReadSpec(nameGroupExportDownload, toolutil.RouteAction(client, ExportDownload), "gitlab_download_group_export"),
+		// gitlab_import_group_from_file: import a group from a local export archive.
+		groupImportExportCreateSpec(nameGroupImportFile, toolutil.RouteAction(client, ImportFile), "gitlab_import_group_from_file"),
 	}
 }
 
