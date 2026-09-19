@@ -31,6 +31,6 @@ func FormatMarkdown(out StatisticsOutput) string {
 	c.Int("All", counts.All)
 	c.Int("Opened", counts.Opened)
 	c.Int("Closed", counts.Closed)
-	c.End(toolutil.HintAction("issue.list", "see the individual issues behind these counts"))
+	c.End(toolutil.HintAction(actionIssueList, "see the individual issues behind these counts"))
 	return b.String()
 }

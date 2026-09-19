@@ -8,18 +8,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves: the
-// draft note actions belong to the gitlab_mr_review catalog group, so their IDs
-// carry the mr_review domain. The action_specs.go constants of the same shape
-// spell that domain "mrdraftnotes" and are used for related-action metadata
-// only; a hint naming one would name an action no surface can execute.
-const (
-	hintActionDraftNoteGet        = "mr_review.draft_note_get"
-	hintActionDraftNoteUpdate     = "mr_review.draft_note_update"
-	hintActionDraftNoteDelete     = "mr_review.draft_note_delete"
-	hintActionDraftNotePublish    = "mr_review.draft_note_publish"
-	hintActionDraftNotePublishAll = "mr_review.draft_note_publish_all"
-)
+// The hints below name the canonical action IDs declared in action_specs.go,
+// which is the one block in this package that spells them. A second block here
+// is what let the two drift apart once.
 
 // noteCellRunes is how much of a draft note's body a list row shows.
 const noteCellRunes = 60
@@ -85,9 +76,9 @@ func FormatOutputMarkdown(out Output) string {
 	c.Markdown("Position", positionText(out.Position))
 	c.Text("Note", out.Note)
 	c.End(
-		toolutil.HintAction(hintActionDraftNotePublish, "publish this draft note"),
-		toolutil.HintAction(hintActionDraftNoteUpdate, "change it before publishing"),
-		toolutil.HintAction(hintActionDraftNoteDelete, "discard it"),
+		toolutil.HintAction(actionDraftNotePublish, "publish this draft note"),
+		toolutil.HintAction(actionDraftNoteUpdate, "change it before publishing"),
+		toolutil.HintAction(actionDraftNoteDelete, "discard it"),
 	)
 	return b.String()
 }
@@ -114,8 +105,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintActionDraftNoteGet, "read one draft note in full"),
-		toolutil.HintAction(hintActionDraftNotePublishAll, "publish every draft at once"),
+		toolutil.HintAction(actionDraftNoteGet, "read one draft note in full"),
+		toolutil.HintAction(actionDraftNotePublishAll, "publish every draft at once"),
 	)
 	return b.String()
 }
