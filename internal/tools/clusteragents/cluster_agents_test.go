@@ -874,8 +874,9 @@ func clusterAgentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 // TestClusterAgents_UnreadableCapturedIsReceptive verifies that every agent
 // handler reading is_receptive off the captured answer returns an error rather
 // than a half-filled agent when GitLab sends the flag as something that is not
-// a boolean. The SDK ignores the key its own Agent does not model, so the
-// captured read is the only thing that can notice.
+// a boolean. client-go models is_receptive on its own Agent as of v3.12.0, so
+// its decoder reaches the bad value before the captured read does, and either
+// refusal is what this asserts.
 func TestClusterAgents_UnreadableCapturedIsReceptive(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -884,7 +885,7 @@ func TestClusterAgents_UnreadableCapturedIsReceptive(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"id":1,"name":"prod","is_receptive":"maybe"}]`)
 			_, err := ListAgents(context.Background(), client, ListAgentsInput{ProjectID: "42"})

@@ -380,9 +380,10 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // TestSCIMIdentities_UnreadableCapturedExternUID verifies that both SCIM
 // identity read handlers return an error rather than a half-filled identity
-// when GitLab sends extern_uid as something that is not a string. The SDK
-// models the identity under another name and ignores this key, so the read of
-// the captured response is the only thing that can notice, and an identity
+// when GitLab sends extern_uid as something that is not a string. client-go
+// spelled this key external_uid until v3.12.0 and now spells it as GitLab
+// does, so its decoder reaches the bad value before the read of the captured
+// response does; either refusal is what this asserts, because an identity
 // published without its external uid names nobody.
 func TestSCIMIdentities_UnreadableCapturedExternUID(t *testing.T) {
 	// A list answers with an array and a get with an object, so each case
@@ -392,7 +393,7 @@ func TestSCIMIdentities_UnreadableCapturedExternUID(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"user_id":1,"active":true,"extern_uid":42}]`)
 			_, err := List(context.Background(), client, ListInput{GroupID: "42"})

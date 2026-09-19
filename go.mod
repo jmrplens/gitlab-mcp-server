@@ -12,7 +12,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/vektah/gqlparser/v2 v2.5.37
-	gitlab.com/gitlab-org/api/client-go/v3 v3.0.0
+	gitlab.com/gitlab-org/api/client-go/v3 v3.12.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.22.0
