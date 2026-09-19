@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -100,6 +102,134 @@ func TestCreate_Success(t *testing.T) {
 	}
 	if len(out.SecurityAttributes) != 1 || out.SecurityAttributes[0].ID != 9 {
 		t.Fatalf("SecurityAttributes = %#v", out.SecurityAttributes)
+	}
+}
+
+// distinctCategory is the fixture no two values of which agree: the category
+// and its attribute differ in every field, and the two editable states differ
+// too. Only such a fixture can tell a converter reading its neighbour's key
+// from one reading its own — sampleCategory gives both objects the state
+// "EDITABLE", so swapping them changed nothing.
+const distinctCategory = `{
+	"id": "gid://gitlab/Security::Category/7",
+	"name": "Business impact",
+	"description": "Ranks a project by the money it moves",
+	"multipleSelection": true,
+	"editableState": "EDITABLE_ATTRIBUTES",
+	"templateType": "BUSINESS_IMPACT",
+	"securityAttributes": [{
+		"id": "gid://gitlab/Security::Attribute/9",
+		"name": "High",
+		"color": "#FF0000",
+		"description": "Loss of revenue within a day",
+		"editableState": "LOCKED"
+	}]
+}`
+
+// TestCreate_CarriesEveryFieldGitLabSentIntoTheOutput compares the whole
+// converted output against the whole fixture rather than a field at a time.
+//
+// Both gates score branches, so the assignments in categoryNodeOutput and
+// attributeNodeSummary are invisible to them: the attribute's name and
+// description could be read from each other's key, and the category's editable
+// state from its name, with every test still green. A fixture in which no two
+// values agree is what makes those swaps fail.
+func TestCreate_CarriesEveryFieldGitLabSentIntoTheOutput(t *testing.T) {
+	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+		"securityCategoryCreate": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryCreate":{"securityCategory":`+distinctCategory+`,"errors":[]}}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Business impact"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	want := Output{
+		ID:                7,
+		Name:              "Business impact",
+		Description:       "Ranks a project by the money it moves",
+		MultipleSelection: true,
+		EditableState:     "EDITABLE_ATTRIBUTES",
+		TemplateType:      "BUSINESS_IMPACT",
+		SecurityAttributes: []AttributeSummary{{
+			ID:            9,
+			Name:          "High",
+			Color:         "#FF0000",
+			Description:   "Loss of revenue within a day",
+			EditableState: "LOCKED",
+		}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Create() output = %#v, want %#v", out, want)
+	}
+}
+
+// TestCreate_CategoryWithoutOptionalFields_LeavesThemEmpty verifies that a
+// category GitLab sends with a null description, a null template type and no
+// attributes converts to empty values instead of dereferencing a nil pointer.
+//
+// Both fields are nullable in the schema, and every other fixture here fills
+// them, so the branch that skips a missing one was never taken.
+func TestCreate_CategoryWithoutOptionalFields_LeavesThemEmpty(t *testing.T) {
+	const bare = `{
+		"id": "gid://gitlab/Security::Category/12",
+		"name": "Exposure",
+		"description": null,
+		"multipleSelection": false,
+		"editableState": "LOCKED",
+		"templateType": null,
+		"securityAttributes": null
+	}`
+	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+		"securityCategoryCreate": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryCreate":{"securityCategory":`+bare+`,"errors":[]}}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, Name: "Exposure"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	want := Output{ID: 12, Name: "Exposure", EditableState: "LOCKED", SecurityAttributes: []AttributeSummary{}}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Create() output = %#v, want %#v", out, want)
+	}
+}
+
+// TestUpdate_DescriptionOnly_SendsNoName verifies that an update carrying only
+// a description reaches GitLab without a name key.
+//
+// GitLab's SecurityCategoryUpdateInput takes name and description apart, so a
+// handler that always sent a name would rename the category to the empty
+// string on every description edit. Every other update test passes a name, so
+// this is the only case in which the optional branch is not taken.
+func TestUpdate_DescriptionOnly_SendsNoName(t *testing.T) {
+	description := "Ranks a project by the money it moves"
+	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
+		"securityCategoryUpdate": func(w http.ResponseWriter, r *http.Request) {
+			input := graphQLInput(t, r)
+			if _, present := input["name"]; present {
+				t.Errorf("input carries name = %#v, want it absent", input["name"])
+			}
+			if input["description"] != description {
+				t.Errorf("description = %#v, want %q", input["description"], description)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityCategoryUpdate":{"securityCategory":`+distinctCategory+`,"errors":[]}}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101, Description: &description})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if out.Description != description {
+		t.Errorf("Update() Description = %q, want %q", out.Description, description)
 	}
 }
 
@@ -746,5 +876,94 @@ func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	updateSchema := specByName["update"].Route.InputSchema
 	if anyOf, ok := updateSchema["anyOf"].([]any); !ok || len(anyOf) != 2 {
 		t.Fatalf("update anyOf = %#v, want name/description requirement", updateSchema["anyOf"])
+	}
+}
+
+// declaredActionIDs is the block markdown.go holds, repeated here so a test can
+// ask whether anything spells an ID outside it.
+var declaredActionIDs = []string{
+	actionCategoryCreate, actionCategoryUpdate, actionCategoryDelete,
+	actionAttributeCreate, actionAttributeUpdate, actionAttributeDelete,
+	actionAttributeProjectUpdate, actionGroupGet, actionProjectGet,
+}
+
+// hintActionID returns the canonical action ID [toolutil.HintAction] quoted
+// inside hint, or the empty string when the hint names none, which the caller
+// reports as an undeclared ID rather than asserting here.
+func hintActionID(hint string) string {
+	_, rest, ok := strings.Cut(hint, "'")
+	if !ok {
+		return ""
+	}
+	id, _, ok := strings.Cut(rest, "'")
+	if !ok {
+		return ""
+	}
+	return id
+}
+
+// TestActionIDs_MatchTheActionsThisPackageRegisters verifies that the category
+// constants are the canonical IDs of the specs this package actually declares.
+//
+// Nothing in the repository checks that an action ID names an action the
+// catalog holds, so a renamed action would leave the constants pointing at an
+// ID no surface resolves and every gate would still pass.
+func TestActionIDs_MatchTheActionsThisPackageRegisters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	byName := map[string]string{
+		"create": actionCategoryCreate,
+		"update": actionCategoryUpdate,
+		"delete": actionCategoryDelete,
+	}
+
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			declared, ok := byName[spec.Name]
+			if !ok {
+				t.Fatalf("spec %q has no declared action ID constant", spec.Name)
+			}
+			if want := "security_category." + spec.Name; declared != want {
+				t.Errorf("constant = %q, want %q", declared, want)
+			}
+		})
+	}
+}
+
+// TestActionIDs_RelatedActionsAndHintsSpellOnlyDeclaredIDs verifies that every
+// ID the ActionSpec metadata and the card's hints name comes from the one
+// declared block.
+//
+// The two files used to keep their own copies of "security_category.update"
+// and "security_attribute.create", which is how a hint and a related action
+// can disagree about the same call; this is what keeps them one block.
+func TestActionIDs_RelatedActionsAndHintsSpellOnlyDeclaredIDs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	type use struct{ where, id string }
+	var uses []use
+
+	for _, spec := range ActionSpecs(client) {
+		for _, id := range spec.RelatedActions {
+			uses = append(uses, use{where: "related action of " + spec.Name, id: id})
+		}
+	}
+	for _, state := range []string{"unset", editableStateLocked, editableStateEditableAttributes, "EDITABLE"} {
+		hintState := state
+		if state == "unset" {
+			hintState = ""
+		}
+		for _, hint := range categoryHints(hintState) {
+			uses = append(uses, use{where: "hint for " + state, id: hintActionID(hint)})
+		}
+	}
+	if len(uses) == 0 {
+		t.Fatal("no action IDs collected, the test asserts nothing")
+	}
+
+	for _, u := range uses {
+		t.Run(u.where+" "+u.id, func(t *testing.T) {
+			if !slices.Contains(declaredActionIDs, u.id) {
+				t.Errorf("action ID %q is spelled outside the declared block", u.id)
+			}
+		})
 	}
 }
