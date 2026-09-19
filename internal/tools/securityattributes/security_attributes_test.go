@@ -35,23 +35,47 @@ const sampleAttribute = `{
 	}
 }`
 
+// sampleAttributeBareCategory is the same attribute under a category GitLab
+// created from no template: the schema declares description and templateType
+// nullable, and a category with neither answers null for both.
+const sampleAttributeBareCategory = `{
+	"id": "gid://gitlab/Security::Attribute/9",
+	"name": "High",
+	"color": "#FF0000",
+	"description": "High impact",
+	"editableState": "EDITABLE",
+	"securityCategory": {
+		"id": "gid://gitlab/Security::Category/7",
+		"name": "Business impact",
+		"description": null,
+		"multipleSelection": false,
+		"editableState": "LOCKED",
+		"templateType": null
+	}
+}`
+
 // attributeGraphQLMux returns a GraphQL test handler for security attribute
 // mutations keyed by operation name.
 func attributeGraphQLMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
-// attributeGraphQLInput parses the GraphQL input variables from r and fails the
-// calling test if the request does not contain the expected input object.
+// attributeGraphQLInput parses the GraphQL input variables from r and reports a
+// request that carries no input object. It reports rather than aborts because
+// every caller runs it inside an httptest handler, on the server's own
+// goroutine: a FailNow there kills that goroutine and leaves the call under
+// test waiting on a response nobody will write. A nil map reads as a request
+// carrying nothing, so the assertions after it report too.
 func attributeGraphQLInput(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 	vars, err := testutil.ParseGraphQLVariables(r)
 	if err != nil {
-		t.Fatalf("ParseGraphQLVariables error: %v", err)
+		t.Errorf("ParseGraphQLVariables error: %v", err)
+		return nil
 	}
 	input, ok := vars["input"].(map[string]any)
 	if !ok {
-		t.Fatalf("GraphQL input = %#v, want map", vars["input"])
+		t.Errorf("GraphQL input = %#v, want map", vars["input"])
 	}
 	return input
 }
@@ -68,21 +92,17 @@ func TestCreate_Success(t *testing.T) {
 		"securityAttributeCreate": func(w http.ResponseWriter, r *http.Request) {
 			input := attributeGraphQLInput(t, r)
 			if input["namespaceId"] != "gid://gitlab/Namespace/101" {
-				t.Fatalf("namespaceId = %#v", input["namespaceId"])
+				t.Errorf("namespaceId = %#v", input["namespaceId"])
 			}
 			if input["categoryId"] != "gid://gitlab/Security::Category/7" {
-				t.Fatalf("categoryId = %#v", input["categoryId"])
+				t.Errorf("categoryId = %#v", input["categoryId"])
 			}
-			attributes, ok := input["attributes"].([]any)
-			if !ok || len(attributes) != 1 {
-				t.Fatalf("attributes = %#v", input["attributes"])
-			}
-			attribute, ok := attributes[0].(map[string]any)
-			if !ok {
-				t.Fatalf("attribute = %#v", attributes[0])
-			}
-			if attribute["name"] != "High" || attribute["description"] != "High impact" || attribute["color"] != "#FF0000" {
-				t.Fatalf("attribute input = %#v", attribute)
+			if attributes, listed := input["attributes"].([]any); !listed || len(attributes) != 1 {
+				t.Errorf("attributes = %#v", input["attributes"])
+			} else if attribute, object := attributes[0].(map[string]any); !object {
+				t.Errorf("attribute = %#v", attributes[0])
+			} else if attribute["name"] != "High" || attribute["description"] != "High impact" || attribute["color"] != "#FF0000" {
+				t.Errorf("attribute input = %#v", attribute)
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeCreate":{"securityAttributes":[`+sampleAttribute+`],"errors":[]}}`)
 		},
@@ -555,10 +575,10 @@ func TestUpdate_Success(t *testing.T) {
 		"securityAttributeUpdate": func(w http.ResponseWriter, r *http.Request) {
 			input := attributeGraphQLInput(t, r)
 			if input["id"] != "gid://gitlab/Security::Attribute/9" {
-				t.Fatalf("id = %#v", input["id"])
+				t.Errorf("id = %#v", input["id"])
 			}
 			if input["name"] != name || input["description"] != description || input["color"] != color {
-				t.Fatalf("input = %#v", input)
+				t.Errorf("input = %#v", input)
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+sampleAttribute+`,"errors":[]}}`)
 		},
@@ -571,6 +591,100 @@ func TestUpdate_Success(t *testing.T) {
 	}
 	if out.ID != 9 || out.SecurityCategory == nil {
 		t.Fatalf("Update() output = %#v", out)
+	}
+}
+
+// TestUpdate_ResponseFields_LandOnTheFieldThatNamesThem verifies that every
+// value the attribute GitLab answers with reaches the output field of the same
+// name, the nested category included. Until this existed the suite asserted
+// the two parsed IDs and nothing else, so the converter could read a
+// neighbour's key — the name from the color, the category's name from its
+// editable state — and stay green on every run.
+func TestUpdate_ResponseFields_LandOnTheFieldThatNamesThem(t *testing.T) {
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"securityAttributeUpdate": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+sampleAttribute+`,"errors":[]}}`)
+		},
+	})
+
+	name := "Critical"
+	out, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{AttributeID: 9, Name: &name})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if out.ID != 9 || out.Name != "High" || out.Color != "#FF0000" || out.Description != "High impact" || out.EditableState != "EDITABLE" {
+		t.Fatalf("Update() attribute = %#v", out)
+	}
+	if out.SecurityCategory == nil {
+		t.Fatalf("Update() category = nil, want the category the response carries")
+	}
+	want := CategorySummary{
+		ID:                7,
+		Name:              "Business impact",
+		Description:       "Business impact labels",
+		MultipleSelection: true,
+		EditableState:     "EDITABLE",
+		TemplateType:      "APPLICATION",
+	}
+	if *out.SecurityCategory != want {
+		t.Fatalf("Update() category = %#v, want %#v", *out.SecurityCategory, want)
+	}
+}
+
+// TestUpdate_NullableCategoryFields_ReadAsEmptyStrings verifies that the two
+// nullable fields of a security category convert to the empty string rather
+// than to a dereference of nil. The schema declares description and
+// templateType nullable, so a category GitLab created from no template really
+// does answer null for both.
+func TestUpdate_NullableCategoryFields_ReadAsEmptyStrings(t *testing.T) {
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"securityAttributeUpdate": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+sampleAttributeBareCategory+`,"errors":[]}}`)
+		},
+	})
+
+	name := "Critical"
+	out, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{AttributeID: 9, Name: &name})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if out.SecurityCategory == nil {
+		t.Fatalf("Update() category = nil, want the category the response carries")
+	}
+	want := CategorySummary{ID: 7, Name: "Business impact", MultipleSelection: false, EditableState: "LOCKED"}
+	if *out.SecurityCategory != want {
+		t.Fatalf("Update() category = %#v, want %#v", *out.SecurityCategory, want)
+	}
+}
+
+// TestUpdate_WithoutAName_SendsOnlyTheFieldsSupplied verifies that a change
+// naming no name leaves name out of the mutation input instead of sending it
+// empty, and that the description it does send is normalized. GitLab reads a
+// supplied field as the new value, so an empty name in the input is a rename
+// to nothing rather than a field the caller left alone; and a model that
+// writes a two-line description writes the line break as the two characters
+// it typed, which normalization turns into one.
+func TestUpdate_WithoutAName_SendsOnlyTheFieldsSupplied(t *testing.T) {
+	description := `Critical impact\nSecond line`
+	color := "#990000"
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"securityAttributeUpdate": func(w http.ResponseWriter, r *http.Request) {
+			input := attributeGraphQLInput(t, r)
+			if value, ok := input["name"]; ok {
+				t.Errorf("name = %#v, want the field left out entirely", value)
+			}
+			if input["description"] != "Critical impact\nSecond line" {
+				t.Errorf("description = %#v, want the escape turned into a real newline", input["description"])
+			}
+			if input["color"] != color {
+				t.Errorf("color = %#v, want %q", input["color"], color)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeUpdate":{"securityAttribute":`+sampleAttribute+`,"errors":[]}}`)
+		},
+	})
+
+	if _, err := Update(context.Background(), testutil.NewTestClient(t, handler), UpdateInput{AttributeID: 9, Description: &description, Color: &color}); err != nil {
+		t.Fatalf("Update() error = %v", err)
 	}
 }
 
@@ -615,7 +729,7 @@ func TestDelete_Success(t *testing.T) {
 		"securityAttributeDestroy": func(w http.ResponseWriter, r *http.Request) {
 			input := attributeGraphQLInput(t, r)
 			if input["id"] != "gid://gitlab/Security::Attribute/9" {
-				t.Fatalf("id = %#v", input["id"])
+				t.Errorf("id = %#v", input["id"])
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeDestroy":{"errors":[]}}`)
 		},
@@ -648,22 +762,23 @@ func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 // attribute IDs as GraphQL global IDs.
 //
 // The mocked mutation checks the projectId, addAttributeIds, and
-// removeAttributeIds fields, then returns added and removed counts. The handler
-// output must preserve those counts for callers.
+// removeAttributeIds fields, then returns added and removed counts. The two
+// counts differ on purpose: while both read 1 the handler could report the
+// removals as additions and the reverse, and nothing here could tell.
 func TestProjectUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeProjectUpdate": func(w http.ResponseWriter, r *http.Request) {
 			input := attributeGraphQLInput(t, r)
 			if input["projectId"] != "gid://gitlab/Project/42" {
-				t.Fatalf("projectId = %#v", input["projectId"])
+				t.Errorf("projectId = %#v", input["projectId"])
 			}
-			if input["addAttributeIds"].([]any)[0] != "gid://gitlab/Security::Attribute/9" {
-				t.Fatalf("addAttributeIds = %#v", input["addAttributeIds"])
+			if ids, ok := input["addAttributeIds"].([]any); !ok || len(ids) != 1 || ids[0] != "gid://gitlab/Security::Attribute/9" {
+				t.Errorf("addAttributeIds = %#v", input["addAttributeIds"])
 			}
-			if input["removeAttributeIds"].([]any)[0] != "gid://gitlab/Security::Attribute/10" {
-				t.Fatalf("removeAttributeIds = %#v", input["removeAttributeIds"])
+			if ids, ok := input["removeAttributeIds"].([]any); !ok || len(ids) != 1 || ids[0] != "gid://gitlab/Security::Attribute/10" {
+				t.Errorf("removeAttributeIds = %#v", input["removeAttributeIds"])
 			}
-			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeProjectUpdate":{"addedCount":1,"removedCount":1,"errors":[]}}`)
+			testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeProjectUpdate":{"addedCount":2,"removedCount":1,"errors":[]}}`)
 		},
 	})
 
@@ -672,8 +787,60 @@ func TestProjectUpdate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProjectUpdate() error = %v", err)
 	}
-	if out.AddedCount != 1 || out.RemovedCount != 1 {
-		t.Fatalf("ProjectUpdate() output = %#v", out)
+	if out.AddedCount != 2 || out.RemovedCount != 1 {
+		t.Fatalf("ProjectUpdate() output = %#v, want added 2 and removed 1", out)
+	}
+}
+
+// TestProjectUpdate_OneDirection_LeavesTheOtherFieldOutOfTheRequest verifies
+// that an add-only or remove-only request carries only the field it asked for.
+// The guard that decides this reads len() > 0, and at zero "send an empty
+// list" and "send nothing" are different requests: an empty
+// removeAttributeIds tells GitLab a removal set was supplied, and the suite
+// drove both directions together so neither side was ever observed alone.
+func TestProjectUpdate_OneDirection_LeavesTheOtherFieldOutOfTheRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   ProjectUpdateInput
+		present string
+		absent  string
+		wantGID string
+	}{
+		{
+			name:    "add only",
+			input:   ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}},
+			present: "addAttributeIds",
+			absent:  "removeAttributeIds",
+			wantGID: "gid://gitlab/Security::Attribute/9",
+		},
+		{
+			name:    "remove only",
+			input:   ProjectUpdateInput{ProjectID: 42, RemoveAttributeIDs: []int64{10}},
+			present: "removeAttributeIds",
+			absent:  "addAttributeIds",
+			wantGID: "gid://gitlab/Security::Attribute/10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				"securityAttributeProjectUpdate": func(w http.ResponseWriter, r *http.Request) {
+					input := attributeGraphQLInput(t, r)
+					if ids, ok := input[tt.present].([]any); !ok || len(ids) != 1 || ids[0] != tt.wantGID {
+						t.Errorf("%s = %#v, want [%q]", tt.present, input[tt.present], tt.wantGID)
+					}
+					if value, ok := input[tt.absent]; ok {
+						t.Errorf("%s = %#v, want the field left out entirely", tt.absent, value)
+					}
+					testutil.RespondGraphQL(w, http.StatusOK, `{"securityAttributeProjectUpdate":{"addedCount":2,"removedCount":1,"errors":[]}}`)
+				},
+			})
+
+			if _, err := ProjectUpdate(context.Background(), testutil.NewTestClient(t, handler), tt.input); err != nil {
+				t.Fatalf("ProjectUpdate() error = %v", err)
+			}
+		})
 	}
 }
 
@@ -715,16 +882,14 @@ func TestBulkUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
 			input := attributeGraphQLInput(t, r)
-			items := input["items"].([]any)
-			if len(items) != 2 || items[0] != "gid://gitlab/Group/5" || items[1] != "gid://gitlab/Project/42" {
-				t.Fatalf("items = %#v", items)
+			if items, ok := input["items"].([]any); !ok || len(items) != 2 || items[0] != "gid://gitlab/Group/5" || items[1] != "gid://gitlab/Project/42" {
+				t.Errorf("items = %#v", input["items"])
 			}
-			attributes := input["attributes"].([]any)
-			if len(attributes) != 1 || attributes[0] != "gid://gitlab/Security::Attribute/9" {
-				t.Fatalf("attributes = %#v", attributes)
+			if attributes, ok := input["attributes"].([]any); !ok || len(attributes) != 1 || attributes[0] != "gid://gitlab/Security::Attribute/9" {
+				t.Errorf("attributes = %#v", input["attributes"])
 			}
 			if input["mode"] != "REPLACE" {
-				t.Fatalf("mode = %#v", input["mode"])
+				t.Errorf("mode = %#v", input["mode"])
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"bulkUpdateSecurityAttributes":{"errors":[]}}`)
 		},
@@ -742,6 +907,52 @@ func TestBulkUpdate_Success(t *testing.T) {
 	}
 	if out.Status != "success" || out.Mode != BulkUpdateModeReplace {
 		t.Fatalf("BulkUpdate() output = %#v", out)
+	}
+	// The echo is what tells a caller which targets the request reached, and
+	// the two lists are the same shape: without this, groups and projects
+	// could be echoed under each other's name.
+	if len(out.GroupIDs) != 1 || out.GroupIDs[0] != 5 {
+		t.Errorf("BulkUpdate() group_ids = %#v, want [5]", out.GroupIDs)
+	}
+	if len(out.ProjectIDs) != 1 || out.ProjectIDs[0] != 42 {
+		t.Errorf("BulkUpdate() project_ids = %#v, want [42]", out.ProjectIDs)
+	}
+	if len(out.AttributeIDs) != 1 || out.AttributeIDs[0] != 9 {
+		t.Errorf("BulkUpdate() attribute_ids = %#v, want [9]", out.AttributeIDs)
+	}
+}
+
+// TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems verifies that a request
+// naming no project sends the groups alone and echoes no project. Every bulk
+// test used to name a project, so the project list was never empty: the
+// validation that only runs for a non-empty list could have run for an empty
+// one and refused every group-only call, and the item list could have been
+// sized off a list that is not there. REMOVE is the mode here because it was
+// the one branch of the three that nothing exercised.
+func TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems(t *testing.T) {
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
+			input := attributeGraphQLInput(t, r)
+			if items, ok := input["items"].([]any); !ok || len(items) != 2 || items[0] != "gid://gitlab/Group/5" || items[1] != "gid://gitlab/Group/6" {
+				t.Errorf("items = %#v, want the two groups and nothing else", input["items"])
+			}
+			if input["mode"] != "REMOVE" {
+				t.Errorf("mode = %#v, want REMOVE", input["mode"])
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{"bulkUpdateSecurityAttributes":{"errors":[]}}`)
+		},
+	})
+
+	out, err := BulkUpdate(context.Background(), testutil.NewTestClient(t, handler), BulkUpdateInput{
+		GroupIDs:     []int64{5, 6},
+		AttributeIDs: []int64{9},
+		Mode:         BulkUpdateModeRemove,
+	})
+	if err != nil {
+		t.Fatalf("BulkUpdate() error = %v", err)
+	}
+	if out.Mode != BulkUpdateModeRemove || len(out.ProjectIDs) != 0 {
+		t.Fatalf("BulkUpdate() output = %#v, want mode REMOVE and no projects", out)
 	}
 }
 
@@ -797,12 +1008,17 @@ func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	mode := glBulkMode(BulkUpdateModeAdd)
 	ids := []int64{9}
+	noIDs := []int64{}
 	tests := []struct {
 		name string
 		opts *gl.BulkUpdateSecurityAttributesOptions
 		want string
 	}{
 		{name: "missing attributes", opts: &gl.BulkUpdateSecurityAttributesOptions{Mode: &mode}, want: "attribute_ids is required"},
+		// An empty list is a different shape from a missing one, and the only
+		// caller in this package rejects it first, so nothing else can reach
+		// this branch of the helper's own guard.
+		{name: "empty attributes", opts: &gl.BulkUpdateSecurityAttributesOptions{AttributeIDs: &noIDs, Mode: &mode}, want: "attribute_ids is required"},
 		{name: "missing mode", opts: &gl.BulkUpdateSecurityAttributesOptions{AttributeIDs: &ids}, want: "mode is required"},
 	}
 
@@ -902,6 +1118,52 @@ func TestFormatCreateMarkdown_RendersTheCollection(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_UnnamedAttribute_OpensTheGenericHeading verifies
+// that an attribute GitLab sent no name for still opens a heading, rather than
+// one trailing a colon and nothing. The name is what the heading is built
+// from, so the empty case is the only one that can produce it.
+func TestFormatOutputMarkdown_UnnamedAttribute_OpensTheGenericHeading(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 9, Name: "  ", EditableState: "EDITABLE"})
+
+	want := "## Security Attribute\n\n" +
+		"- **ID**: 9\n" +
+		"- **Editable state**: `EDITABLE`\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.update' to rename, re-describe or recolor this attribute\n" +
+		"- Use action 'security_attribute.project_update' to apply this attribute to a project\n" +
+		"- Use action 'security_attribute.bulk_update' to apply it to many groups or projects at once\n"
+
+	if md != want {
+		t.Errorf("FormatOutputMarkdown() =\n%s\nwant:\n%s", md, want)
+	}
+}
+
+// TestFormatCreateMarkdown_AttributeWithoutACategory_LeavesTheCellEmpty
+// verifies that an attribute carrying no category still renders its row, with
+// an empty category cell. Reading the category's name off a nil pointer is the
+// one way this table can panic, and until now every row the tests rendered
+// had a category.
+func TestFormatCreateMarkdown_AttributeWithoutACategory_LeavesTheCellEmpty(t *testing.T) {
+	want := "## Security Attributes Created (1)\n\n" +
+		"| ID | Name | Color | Description | Category | Editable state |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| 9 | High | `#FF0000` | High impact |  | `EDITABLE` |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_attribute.project_update' to apply these attributes to a project\n" +
+		"- Use action 'security_attribute.bulk_update' to apply them to many groups or projects at once\n"
+
+	got := FormatCreateMarkdown(CreateOutput{Attributes: []Output{{
+		ID:            9,
+		Name:          "High",
+		Color:         "#FF0000",
+		Description:   "High impact",
+		EditableState: "EDITABLE",
+	}}})
+	if got != want {
+		t.Errorf("FormatCreateMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatCreateMarkdown_Empty verifies that a creation response carrying no
 // attributes renders the one empty-list sentence rather than a heading
 // counting zero above an empty table.
@@ -967,10 +1229,109 @@ func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
 	if out, err := attributeNodesOutput(nil); err != nil || len(out.Attributes) != 0 {
 		t.Fatalf("attributeNodesOutput(nil) = %#v", out)
 	}
+	// An attribute node carrying no category converts to an output carrying
+	// none, rather than to one carrying an empty category object a reader
+	// would take for a category GitLab named.
+	out, err := attributeNodeOutput(&attributeNode{ID: "gid://gitlab/Security::Attribute/9", Name: "High"})
+	if err != nil || out.ID != 9 || out.Name != "High" || out.SecurityCategory != nil {
+		t.Fatalf("attributeNodeOutput(no category) = %#v, err = %v", out, err)
+	}
 }
 
 func glBulkMode(mode BulkUpdateMode) gl.SecurityAttributeBulkUpdateMode {
 	return gl.SecurityAttributeBulkUpdateMode(mode)
+}
+
+// declaredActionIDs is every canonical action ID this package may name,
+// written out here rather than read from the constants so that a reviewer
+// comparing this list with the catalog is comparing the catalog with
+// something, not with itself.
+var declaredActionIDs = map[string]bool{
+	"security_attribute.create":         true,
+	"security_attribute.update":         true,
+	"security_attribute.delete":         true,
+	"security_attribute.project_update": true,
+	"security_attribute.bulk_update":    true,
+	"security_category.create":          true,
+	"security_category.update":          true,
+	"security_category.delete":          true,
+	"project.get":                       true,
+	"group.get":                         true,
+}
+
+// hintedActionIDs returns every action ID the rendered Markdown names, read
+// back out of the hint sentence [toolutil.HintAction] writes.
+func hintedActionIDs(markdown string) []string {
+	var ids []string
+	for _, rest := range strings.Split(markdown, "Use action '")[1:] {
+		if id, _, found := strings.Cut(rest, "'"); found {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// TestActionIDs_EveryIDThisPackageNames_IsOneOfTheDeclaredOnes verifies that
+// the related actions of all five specs and the hints of all four Markdown
+// formatters name only the IDs declared in action_specs.go.
+//
+// Nothing in the repository checks these strings against the catalog: the
+// discovery audit only counts an empty related list, so a wrong spelling
+// passes every gate and answers a model "unknown action" the moment it
+// follows the hint. This package kept two constant blocks naming the same
+// calls under two spellings, which is how such a pair drifts; the block is one
+// now, and this is what holds it there.
+func TestActionIDs_EveryIDThisPackageNames_IsOneOfTheDeclaredOnes(t *testing.T) {
+	for id, constant := range map[string]string{
+		"security_attribute.create":         actionAttributeCreate,
+		"security_attribute.update":         actionAttributeUpdate,
+		"security_attribute.delete":         actionAttributeDelete,
+		"security_attribute.project_update": actionAttributeProjectUpdate,
+		"security_attribute.bulk_update":    actionAttributeBulkUpdate,
+		"security_category.create":          actionCategoryCreate,
+		"security_category.update":          actionCategoryUpdate,
+		"security_category.delete":          actionCategoryDelete,
+		"project.get":                       actionProjectGet,
+		"group.get":                         actionGroupGet,
+	} {
+		t.Run("constant "+id, func(t *testing.T) {
+			if constant != id {
+				t.Errorf("constant = %q, want %q", constant, id)
+			}
+		})
+	}
+
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	for _, spec := range ActionSpecs(client) {
+		t.Run("related actions of "+spec.Name, func(t *testing.T) {
+			for _, related := range spec.RelatedActions {
+				if !declaredActionIDs[related] {
+					t.Errorf("related action %q is not a declared ID", related)
+				}
+			}
+		})
+	}
+
+	renders := map[string]string{
+		"attribute":      FormatOutputMarkdown(testAttribute),
+		"locked":         FormatOutputMarkdown(Output{ID: 9, EditableState: editableStateLocked}),
+		"create":         FormatCreateMarkdown(CreateOutput{Attributes: []Output{testAttribute}}),
+		"project update": FormatProjectUpdateMarkdown(ProjectUpdateOutput{}),
+		"bulk update":    FormatBulkUpdateMarkdown(BulkUpdateOutput{Status: "success"}),
+	}
+	for name, markdown := range renders {
+		t.Run("hints of "+name, func(t *testing.T) {
+			ids := hintedActionIDs(markdown)
+			if len(ids) == 0 {
+				t.Fatalf("render names no action at all:\n%s", markdown)
+			}
+			for _, id := range ids {
+				if !declaredActionIDs[id] {
+					t.Errorf("hint names %q, which is not a declared ID", id)
+				}
+			}
+		})
+	}
 }
 
 // TestActionSpecs_Metadata_ExpectedResult verifies the canonical security

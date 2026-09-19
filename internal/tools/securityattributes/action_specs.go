@@ -5,17 +5,30 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Every canonical `domain.action` ID this package names, declared once. The
+// specs' related actions, the usage prose and the Markdown hints all read from
+// here, because nothing in the repository checks these strings against the
+// catalog: a second block would let one copy drift and answer a model "unknown
+// action" the moment it follows the hint.
+const (
+	actionAttributeCreate        = "security_attribute.create"
+	actionAttributeUpdate        = "security_attribute.update"
+	actionAttributeDelete        = "security_attribute.delete"
+	actionAttributeProjectUpdate = "security_attribute.project_update"
+	actionAttributeBulkUpdate    = "security_attribute.bulk_update"
+	actionCategoryCreate         = "security_category.create"
+	actionCategoryUpdate         = "security_category.update"
+	actionCategoryDelete         = "security_category.delete"
+	actionProjectGet             = "project.get"
+	actionGroupGet               = "group.get"
+)
+
 const (
 	schemaType     = "type"
 	schemaTypeArr  = "array"
 	schemaTypeStr  = "string"
 	schemaMinItems = "minItems"
 	schemaMinLen   = "minLength"
-
-	actionSecAttrCreate     = "security_attribute.create"
-	actionSecCatCreate      = "security_category.create"
-	actionSecAttrProjUpdate = "security_attribute.project_update"
-	actionProjectGet        = "project.get"
 
 	descriptionCreateSecurityAttribute        = "Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate"
 	descriptionUpdateSecurityAttribute        = "Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate"
@@ -51,7 +64,7 @@ func securityAttributeCreateSpec(name string, route toolutil.ActionRoute, indivi
 	}
 	options.Usage = "Create one or more security attribute values under an existing security category, supplying namespace_id, category_id, and each attribute's name, description, and hex color. Use this to define new classification labels (for example business-impact tiers) before assigning them to projects."
 	options.Aliases = []string{"create security attribute", "add security attribute value", "define security classification label", "new security attribute under category"}
-	options.RelatedActions = []string{actionSecCatCreate, actionSecAttrProjUpdate, "security_attribute.bulk_update", actionProjectGet}
+	options.RelatedActions = []string{actionCategoryCreate, actionAttributeProjectUpdate, actionAttributeBulkUpdate, actionProjectGet}
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
@@ -66,7 +79,7 @@ func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, indivi
 	}
 	options.Usage = "Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color. Template-provided attributes are not editable."
 	options.Aliases = []string{"update security attribute", "rename security attribute", "recolor security attribute", "edit security classification label"}
-	options.RelatedActions = []string{actionSecAttrCreate, "security_attribute.delete", "security_category.update", actionProjectGet}
+	options.RelatedActions = []string{actionAttributeCreate, actionAttributeDelete, actionCategoryUpdate, actionProjectGet}
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
@@ -75,7 +88,7 @@ func securityAttributeDeleteSpec(name string, route toolutil.ActionRoute, indivi
 	options := securityAttributeOptions(individualTool, description)
 	options.Usage = "Permanently delete an editable custom security attribute by attribute_id. This destructive action removes the attribute and unassigns it from every project that uses it. Template-provided attributes cannot be deleted."
 	options.Aliases = []string{"delete security attribute", "remove security attribute value", "destroy security classification label"}
-	options.RelatedActions = []string{actionSecAttrCreate, "security_attribute.update", "security_category.delete", actionSecAttrProjUpdate}
+	options.RelatedActions = []string{actionAttributeCreate, actionAttributeUpdate, actionCategoryDelete, actionAttributeProjectUpdate}
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
@@ -87,9 +100,9 @@ func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute,
 		toolutil.SchemaPropertyOverride("add_attribute_ids", map[string]any{schemaType: schemaTypeArr, schemaMinItems: 1}),
 		toolutil.SchemaPropertyOverride("remove_attribute_ids", map[string]any{schemaType: schemaTypeArr, schemaMinItems: 1}),
 	}
-	options.Usage = "Assign or unassign existing security attributes on a single project by project_id, supplying add_attribute_ids, remove_attribute_ids, or both. Use this to classify one project. For many targets at once use security_attribute.bulk_update instead."
+	options.Usage = "Assign or unassign existing security attributes on a single project by project_id, supplying add_attribute_ids, remove_attribute_ids, or both. Use this to classify one project. For many targets at once use " + actionAttributeBulkUpdate + " instead."
 	options.Aliases = []string{"assign security attributes to project", "tag project with security attribute", "remove security attribute from project", "classify project security attributes"}
-	options.RelatedActions = []string{"security_attribute.bulk_update", actionSecAttrCreate, actionProjectGet, actionSecCatCreate}
+	options.RelatedActions = []string{actionAttributeBulkUpdate, actionAttributeCreate, actionProjectGet, actionCategoryCreate}
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
@@ -103,16 +116,16 @@ func securityAttributeBulkUpdateSpec(name string, route toolutil.ActionRoute, in
 		toolutil.SchemaPropertyOverride("attribute_ids", map[string]any{schemaType: schemaTypeArr, schemaMinItems: 1}),
 		toolutil.SchemaPropertyOverride("mode", map[string]any{"enum": []string{string(BulkUpdateModeAdd), string(BulkUpdateModeRemove), string(BulkUpdateModeReplace)}}),
 	}
-	options.Usage = "Add, remove, or replace security attributes across many groups and projects in one request. Provide attribute_ids, at least one of group_ids or project_ids, and a mode of ADD, REMOVE, or REPLACE (REPLACE swaps the full set on each target). Use this for fleet-wide classification rather than the single-project security_attribute.project_update."
+	options.Usage = "Add, remove, or replace security attributes across many groups and projects in one request. Provide attribute_ids, at least one of group_ids or project_ids, and a mode of ADD, REMOVE, or REPLACE (REPLACE swaps the full set on each target). Use this for fleet-wide classification rather than the single-project " + actionAttributeProjectUpdate + "."
 	options.Aliases = []string{"bulk assign security attributes", "mass tag projects with security attributes", "apply security attributes across groups and projects", "fleet-wide security classification"}
-	options.RelatedActions = []string{actionSecAttrProjUpdate, actionSecAttrCreate, "group.get", actionProjectGet}
+	options.RelatedActions = []string{actionAttributeProjectUpdate, actionAttributeCreate, actionGroupGet, actionProjectGet}
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func securityAttributeOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute securityattributes domain action.", Tags: []string{"security", "attribute", "graphql", "namespace"},
-		RelatedActions: []string{actionSecCatCreate, "security_category.update", actionProjectGet, "group.get"},
+		RelatedActions: []string{actionCategoryCreate, actionCategoryUpdate, actionProjectGet, actionGroupGet},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "securityattributes",

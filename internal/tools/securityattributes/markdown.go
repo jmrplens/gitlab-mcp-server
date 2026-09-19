@@ -7,13 +7,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionAttributeUpdate        = "security_attribute.update"
-	actionAttributeProjectUpdate = "security_attribute.project_update"
-	actionAttributeBulkUpdate    = "security_attribute.bulk_update"
-	actionCategoryCreate         = "security_category.create"
-)
+// The canonical action IDs these hints name are declared once beside the
+// specs, in action_specs.go, so a hint and a related action cannot name the
+// same call under two spellings.
 
 // editableStateLocked is the SecurityCategoryEditableState a template-provided
 // attribute carries. GitLab refuses to change such an attribute, so the card
