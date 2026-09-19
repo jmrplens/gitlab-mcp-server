@@ -14,6 +14,7 @@
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
+	check-em-dash check-pr-description \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -1890,6 +1891,27 @@ check-test-file-names:
 ## security policy, or an installer that stopped verifying the signature.
 check-supply-chain:
 	go run ./cmd/audit_supply_chain/
+
+## check-em-dash: fail when a line this branch adds carries an em dash
+## (U+2014). Scoped to the added lines of EM_DASH_BASE...HEAD, net over the
+## branch rather than per commit, so a branch that adds one and cleans it up at
+## its tip passes. It has to be scoped: the tree already carries thousands in
+## prose written before the rule, so a whole-tree check would be red on its
+## first run and switched off on its second. No network, no Go build, so it is
+## a gate; run it before pushing. EM_DASH_BASE defaults to origin/main.
+check-em-dash:
+	scripts/check-em-dash.sh diff $(EM_DASH_BASE)
+
+## check-pr-description: fail when the pull request title or body carries an em
+## dash, or when the body carries a block a review bot injected. This is the
+## half no later commit can fix: a squash merge copies the description into
+## main's history. A branch with no pull request open passes, having no
+## description to land; PR_NUMBER names one explicitly. Without gh it fails
+## and says so, because a check that cannot read what it judges must not
+## report that it judged it. PR_TITLE_FILE and PR_BODY_FILE judge text from
+## disk instead, which needs no gh and is how the gate is rehearsed.
+check-pr-description:
+	scripts/check-em-dash.sh description
 
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
