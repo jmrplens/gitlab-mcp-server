@@ -10,18 +10,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name: the one form every surface resolves,
-// where an individual tool name is a name two of the three surfaces do not
-// register.
-// Work items are routes on the issue catalog group, so every ID is namespaced
-// under the issue domain, which is what a caller passes to
-// gitlab_execute_action and what the meta and individual surfaces resolve to
-// their own names.
-const (
-	hintActionWorkItemGet    = "issue.work_item_get"
-	hintActionWorkItemUpdate = "issue.work_item_update"
-	hintActionWorkItemCreate = "issue.work_item_create"
-)
+// The hints below name the canonical action IDs declared in action_specs.go,
+// the one form every surface resolves: the dynamic surface executes the ID,
+// and the meta and individual surfaces resolve it to their own tool names,
+// where an individual tool name is a name two of the three do not register.
+// They used to be a second block of constants here, which is how this file
+// and action_specs.go came to disagree about the domain work items sit under.
 
 // FormatGetMarkdown renders one work item as a card: its own fields, then the
 // description as quoted prose, then the hierarchy and the links it carries as
@@ -46,7 +40,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	c.Text("Description", wi.Description)
 	writeLinkedItems(c, wi)
 	writeChildren(c, wi)
-	c.End(toolutil.HintAction(hintActionWorkItemUpdate, "modify this work item"))
+	c.End(toolutil.HintAction(actionWorkItemUpdate, "modify this work item"))
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
@@ -206,7 +200,7 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		))
 	}
 	toolutil.WriteGraphQLPagination(&sb, out.Pagination, len(out.WorkItems))
-	writeListHints(&sb, linked, toolutil.HintAction(hintActionWorkItemGet, "view full details of a specific item"))
+	writeListHints(&sb, linked, toolutil.HintAction(actionWorkItemGet, "view full details of a specific item"))
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -248,7 +242,7 @@ func FormatWorkItemTypeListMarkdown(out WorkItemTypeListOutput) *mcp.CallToolRes
 		))
 	}
 	toolutil.WriteGraphQLPagination(&sb, out.Pagination, len(out.Types))
-	toolutil.WriteHints(&sb, toolutil.HintAction(hintActionWorkItemCreate, "create work items of a type, with the work_item_type_id from the ID column"))
+	toolutil.WriteHints(&sb, toolutil.HintAction(actionWorkItemCreate, "create work items of a type, with the work_item_type_id from the ID column"))
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

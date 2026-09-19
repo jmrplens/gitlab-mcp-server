@@ -11,26 +11,52 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The names these specs register under, and the canonical catalog IDs they are
+// published as.
+//
+// Work items are routes on the issue catalog group, so a spec registered under
+// the bare name work_item_get is published as issue.work_item_get, and that is
+// the ID a model passes to gitlab_execute_action. This file used to name them
+// under a work_item domain the catalog does not have: "work_item.get" resolves
+// to no action, and a model that followed one was answered "unknown action".
+// markdown.go held the right spelling in a second block of its own, which is
+// the drift this single block ends. Each ID is concatenated from the same
+// constant the spec is built from, so renaming an action moves both at once.
 const (
-	actionWorkItemList = "work_item.list"
-	actionWorkItemGet  = "work_item.get"
+	// domainIssue is the catalog group these specs are aggregated into, by
+	// buildIssueActionSpecs in internal/tools/action_specs.go.
+	domainIssue = "issue."
+
+	specWorkItemGet      = "work_item_get"
+	specWorkItemList     = "work_item_list"
+	specWorkItemCreate   = "work_item_create"
+	specWorkItemUpdate   = "work_item_update"
+	specWorkItemDelete   = "work_item_delete"
+	specWorkItemTypeList = "work_item_type_list"
+
+	actionWorkItemGet      = domainIssue + specWorkItemGet
+	actionWorkItemList     = domainIssue + specWorkItemList
+	actionWorkItemCreate   = domainIssue + specWorkItemCreate
+	actionWorkItemUpdate   = domainIssue + specWorkItemUpdate
+	actionWorkItemDelete   = domainIssue + specWorkItemDelete
+	actionWorkItemTypeList = domainIssue + specWorkItemTypeList
 )
 
 // ActionSpecs returns canonical specs for work item actions exposed through gitlab_issue.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_get_work_item — fetch a single work item by namespace path and IID.
-		workItemReadSpec("work_item_get", toolutil.RouteAction(client, Get), "gitlab_get_work_item"),
+		workItemReadSpec(specWorkItemGet, toolutil.RouteAction(client, Get), "gitlab_get_work_item"),
 		// gitlab_list_work_items — list work items for a project or group with cursor pagination.
-		workItemReadSpec("work_item_list", toolutil.RouteAction(client, List), "gitlab_list_work_items"),
+		workItemReadSpec(specWorkItemList, toolutil.RouteAction(client, List), "gitlab_list_work_items"),
 		// gitlab_create_work_item — create a new work item under a namespace.
-		workItemCreateSpec("work_item_create", toolutil.RouteAction(client, Create), "gitlab_create_work_item"),
+		workItemCreateSpec(specWorkItemCreate, toolutil.RouteAction(client, Create), "gitlab_create_work_item"),
 		// gitlab_update_work_item — update an existing work item's fields, status, or labels.
-		workItemUpdateSpec("work_item_update", toolutil.RouteAction(client, Update), "gitlab_update_work_item"),
+		workItemUpdateSpec(specWorkItemUpdate, toolutil.RouteAction(client, Update), "gitlab_update_work_item"),
 		// gitlab_delete_work_item — permanently delete a work item by IID (destructive).
-		workItemDeleteSpec("work_item_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_work_item"),
+		workItemDeleteSpec(specWorkItemDelete, toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_work_item"),
 		// gitlab_list_work_item_types — list system-defined and custom work item types for a namespace.
-		workItemReadSpec("work_item_type_list", toolutil.RouteAction(client, ListWorkItemTypes), "gitlab_list_work_item_types"),
+		workItemReadSpec(specWorkItemTypeList, toolutil.RouteAction(client, ListWorkItemTypes), "gitlab_list_work_item_types"),
 	}
 }
 
@@ -51,20 +77,20 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 	opts := workItemOptions(individualTool)
 	switch individualTool {
 	case "gitlab_get_work_item":
-		opts.Usage = "Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number. Prefer work_item.get over work_item.list when the target is already known."
+		opts.Usage = "Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number. Prefer " + actionWorkItemGet + " over " + actionWorkItemList + " when the target is already known."
 		opts.Aliases = []string{"get work item", "show work item details", "fetch work item by iid", individualTool}
-		opts.RelatedActions = []string{actionWorkItemList, "work_item.update", "work_item.delete"}
+		opts.RelatedActions = []string{actionWorkItemList, actionWorkItemUpdate, actionWorkItemDelete}
 		opts.IndividualTool.Description = "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item."
 	case "gitlab_list_work_items":
 		opts.Usage = "List work items in one project or group namespace. Use filters such as state, search, types, author_username, assignee_usernames, label_name, milestone_title, iteration_id, weight, health_status_filter, the closed/created/due/updated date ranges, confidential, sort, include_ancestors/descendants, and cursor pagination when the prompt asks for matching work items in a known namespace. The ids, parent_ids, iteration_id and iteration_cadence_id filters take full global IDs (gid://gitlab/WorkItem/123), while iids takes the plain numbers shown in the UI and crm_contact_id and crm_organization_id take plain numeric ids as strings, never the gid:// form. returned_fields is not a filter: it names the fields of each matching work item the query asks for, so a listing that only needs iid and title can say so and pay for nothing else. Pages in both directions: first with after walks forward, last with before walks back from a start cursor."
 		opts.Aliases = []string{"list work items", "find work items in namespace", "show open work items", individualTool}
-		opts.RelatedActions = []string{actionWorkItemGet, "work_item.create", "work_item.type_list"}
+		opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemCreate, actionWorkItemTypeList}
 		opts.IndividualTool.Description = "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, assignees, labels, linked items, parent and child work items, milestone, start and due dates, timestamps, and the cursors for the next and previous pages. On Premium and Ultimate instances the status, weight, health status, iteration and color of each item come back too. returned_fields narrows that set to the fields named, which shrinks a large page without changing which work items match. Pages in both directions: first with after walks forward, last with before walks back. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types."
 		opts.InputSchemaOverrides = workItemListEnumOverrides()
 	case "gitlab_list_work_item_types":
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."
 		opts.Aliases = []string{"list work item types", "show work item types", "find work item types", individualTool}
-		opts.RelatedActions = []string{actionWorkItemList, "work_item.create"}
+		opts.RelatedActions = []string{actionWorkItemList, actionWorkItemCreate}
 		opts.IndividualTool.Description = "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, only_available flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item."
 		opts.InputSchemaOverrides = workItemTypeListEnumOverrides()
 	}
@@ -74,9 +100,9 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 // workItemCreateSpec builds the canonical create spec for a work item tool.
 func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with work_item.type_list), and a title. Add description, confidential, assignee_ids, milestone_id, label_ids, crm_contact_ids, parent_id, iteration_id, weight, health_status, status, color, dates, create_source, or linked_items only when requested. parent_id creates the item already under its parent, which otherwise takes a create followed by an update."
+	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with " + actionWorkItemTypeList + "), and a title. Add description, confidential, assignee_ids, milestone_id, label_ids, crm_contact_ids, parent_id, iteration_id, weight, health_status, status, color, dates, create_source, or linked_items only when requested. parent_id creates the item already under its parent, which otherwise takes a create followed by an update."
 	opts.Aliases = []string{"create work item", "open new work item", "add epic or task", individualTool}
-	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemList, "work_item.type_list"}
+	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemList, actionWorkItemTypeList}
 	opts.IndividualTool.Description = "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types."
 	opts.InputSchemaOverrides = workItemCreateEnumOverrides()
 	return toolutil.NewCreateActionSpec(name, route, opts)
@@ -87,7 +113,7 @@ func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool 
 	opts := workItemOptions(individualTool)
 	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
 	opts.Aliases = []string{"update work item", "edit work item fields", "close or reopen work item", individualTool}
-	opts.RelatedActions = []string{actionWorkItemGet, "work_item.delete", actionWorkItemList}
+	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemDelete, actionWorkItemList}
 	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, parent and child work items, milestone, iteration, weight, health status, color, start and due dates, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
 	opts.InputSchemaOverrides = workItemUpdateEnumOverrides()
 	return toolutil.NewUpdateActionSpec(name, route, opts)
@@ -98,7 +124,7 @@ func workItemDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 	opts := workItemOptions(individualTool)
 	opts.Usage = "Permanently delete a work item by namespace full_path plus work_item_iid. Deletion is irreversible. Only the author or a Maintainer/Owner can delete, and some work item types are protected."
 	opts.Aliases = []string{"delete work item", "remove work item permanently", "destroy work item", individualTool}
-	opts.RelatedActions = []string{actionWorkItemGet, "work_item.update"}
+	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemUpdate}
 	opts.IndividualTool.Description = "Delete a work item permanently by namespace path and IID. Returns: a success confirmation naming the work item and namespace. Experimental. See also: gitlab_get_work_item, gitlab_update_work_item."
 	return toolutil.NewDeleteActionSpec(name, route, opts)
 }
