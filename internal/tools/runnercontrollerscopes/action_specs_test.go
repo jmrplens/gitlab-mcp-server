@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,6 +49,14 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // prefix plus the name of another spec here. Nothing else in the repository
 // checks these strings, and a bare action name passes every gate while
 // answering a model "unknown action" the moment it follows the cross-link.
+//
+// The domain itself is pinned through the individual tool names, which the doc
+// and e2e gates already hold: every tool this package registers is prefixed
+// gitlab_<domain>_, so a domain invented here stops matching them. Without that
+// line both sides of the comparison come out of runnerDomain and the test is a
+// tautology, because the constant is what builds the published IDs as well as
+// the oracle they are held to: spelling it "runners." would move the two
+// together and nothing here or anywhere else would fail.
 func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
 	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
 
@@ -58,6 +67,9 @@ func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
 
 	for _, spec := range specs {
 		t.Run(spec.Name, func(t *testing.T) {
+			if want := "gitlab_" + strings.TrimSuffix(runnerDomain, ".") + "_"; !strings.HasPrefix(spec.IndividualTool.Name, want) {
+				t.Errorf("individual tool %q does not carry the %q domain this package cross-links with; want the prefix %q", spec.IndividualTool.Name, runnerDomain, want)
+			}
 			if len(spec.RelatedActions) == 0 {
 				t.Fatalf("%s declares no related actions", spec.Name)
 			}
@@ -77,6 +89,11 @@ func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
 // specs they point at, so the two readers of an action ID cannot drift: the
 // cross-links above and the hints a card closes with come from one block, and
 // this is what says that block still names the actions this package registers.
+//
+// The names are what this holds, not the domain in front of them, which comes
+// out of runnerDomain on both sides here. The domain is pinned once, against
+// the individual tool names, in the test above; asserting it a second time
+// would be a copy of a guard rather than a second property.
 func TestMarkdownHints_NameTheSameCanonicalIDs(t *testing.T) {
 	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
 
