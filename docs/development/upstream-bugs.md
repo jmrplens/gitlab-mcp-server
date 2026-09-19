@@ -2576,7 +2576,7 @@ and `GpgKey#verified_and_belongs_to_email?` accepted them, which is what
 decides the Verified badge on a signed commit. Deleting the key and adding it
 again does not help, because the UID is inside the key.
 
-**What it costs this server**: `commit.get_signature` publishes GitLab's
+**What it costs this server**: `repository.commit_signature` publishes GitLab's
 `verification_status` verbatim (`internal/tools/commits/commits.go`), so a
 commit signed under an address its owner revoked is served to a model as
 `verified`, which is the one thing that field exists to say. There is nothing
