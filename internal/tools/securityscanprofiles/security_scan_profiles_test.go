@@ -39,6 +39,9 @@ func scanProfileInput(t *testing.T, r *http.Request) map[string]any {
 
 // TestAttach_Success verifies that Attach resolves a scan-type identifier into
 // a scan profile global ID and sends the project and group targets as GIDs.
+// The echoed confirmation is compared field by field, projects against groups:
+// the two lists are the only record of what the call touched, and a swap
+// between them is invisible to a length check.
 func TestAttach_Success(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"securityScanProfileAttach": func(w http.ResponseWriter, r *http.Request) {
@@ -65,11 +68,14 @@ func TestAttach_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Attach() unexpected error: %v", err)
 	}
-	if out.Status != "success" || out.SecurityScanProfileID != "dependency_scanning" {
-		t.Errorf("Attach() output = %+v", out)
+	if out.Status != "success" || out.Message != "Successfully attached security scan profile." {
+		t.Errorf("Attach() status/message = %q/%q, want success and the attach confirmation", out.Status, out.Message)
 	}
-	if len(out.ProjectIDs) != 1 || len(out.GroupIDs) != 1 {
-		t.Errorf("Attach() echoed targets = %+v", out)
+	if out.SecurityScanProfileID != "dependency_scanning" {
+		t.Errorf("Attach() echoed profile = %q, want the caller's own identifier", out.SecurityScanProfileID)
+	}
+	if !slices.Equal(out.ProjectIDs, []int64{7}) || !slices.Equal(out.GroupIDs, []int64{3}) {
+		t.Errorf("Attach() echoed projects %v and groups %v, want [7] and [3]", out.ProjectIDs, out.GroupIDs)
 	}
 }
 
@@ -151,11 +157,19 @@ func TestAttach_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestDetach_Success verifies that Detach sends the resolved profile and targets.
+// TestDetach_Success verifies that Detach sends the resolved profile and
+// targets when a group is the only target named. Its confirmation is held to
+// the detach wording and to each target list in its own field: attach and
+// detach return the same type, so a confirmation naming the wrong operation
+// reads as a successful attach, and a group echoed under project_ids tells a
+// reader the call touched something it never touched.
 func TestDetach_Success(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"securityScanProfileDetach": func(w http.ResponseWriter, r *http.Request) {
 			input := scanProfileInput(t, r)
+			if got := input["projectIds"]; !equalStrings(got, []string{}) {
+				t.Errorf("projectIds = %v, want an empty list", got)
+			}
 			if got := input["groupIds"]; !equalStrings(got, []string{"gid://gitlab/Group/9"}) {
 				t.Errorf("groupIds = %v, want [gid://gitlab/Group/9]", got)
 			}
@@ -171,8 +185,14 @@ func TestDetach_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Detach() unexpected error: %v", err)
 	}
-	if out.Status != "success" || len(out.GroupIDs) != 1 {
-		t.Errorf("Detach() output = %+v", out)
+	if out.Status != "success" || out.Message != "Successfully detached security scan profile." {
+		t.Errorf("Detach() status/message = %q/%q, want success and the detach confirmation", out.Status, out.Message)
+	}
+	if out.SecurityScanProfileID != "gid://gitlab/Security::ScanProfile/5" {
+		t.Errorf("Detach() echoed profile = %q, want the caller's own identifier", out.SecurityScanProfileID)
+	}
+	if len(out.ProjectIDs) != 0 || !slices.Equal(out.GroupIDs, []int64{9}) {
+		t.Errorf("Detach() echoed projects %v and groups %v, want none and [9]", out.ProjectIDs, out.GroupIDs)
 	}
 }
 
@@ -206,6 +226,59 @@ func TestDetach_RejectsScanTypeName(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "numeric ID") {
 				t.Errorf("Detach(%q) error = %v, want persisted-numeric-ID hint", id, err)
+			}
+		})
+	}
+}
+
+// TestDetach_IdentifierForms_DecideWhatReachesGitLab drives each shape of the
+// detach identifier through the handler and asserts what GitLab is sent, or
+// that nothing is sent at all. The digits at both ends of the range and the
+// padded value are here because the guard scans runes and the resolver trims:
+// a boundary off by one would refuse a profile whose ID contains a 0 or a 9,
+// and a lost trim would send GitLab an identifier with spaces inside it.
+func TestDetach_IdentifierForms_DecideWhatReachesGitLab(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		// sent is the securityScanProfileId GitLab receives; empty means the
+		// guard must refuse the identifier before a request exists.
+		sent string
+	}{
+		{"digits at both ends of the range", "90", "gid://gitlab/Security::ScanProfile/90"},
+		{"surrounding whitespace trimmed off", "  42  ", "gid://gitlab/Security::ScanProfile/42"},
+		{"global ID with a numeric tail", "gid://gitlab/Security::ScanProfile/109", "gid://gitlab/Security::ScanProfile/109"},
+		{"tail taken from the last slash wherever it sits", "gid:///5", "gid:///5"},
+		{"a character below the digits", "4-2", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Errorf("Detach(%q) dispatched a request the guard should have refused", tc.id)
+				w.WriteHeader(http.StatusOK)
+			})
+			if tc.sent != "" {
+				handler = testutil.GraphQLHandler(map[string]http.HandlerFunc{
+					"securityScanProfileDetach": func(w http.ResponseWriter, r *http.Request) {
+						input := scanProfileInput(t, r)
+						if got := input["securityScanProfileId"]; got != tc.sent {
+							t.Errorf("securityScanProfileId = %v, want %q", got, tc.sent)
+						}
+						testutil.RespondGraphQL(w, http.StatusOK, `{"securityScanProfileDetach":{"errors":[]}}`)
+					},
+				})
+			}
+			client := testutil.NewTestClient(t, handler)
+
+			_, err := Detach(context.Background(), client, DetachInput{SecurityScanProfileID: tc.id, ProjectIDs: []int64{1}})
+			if tc.sent == "" {
+				if err == nil {
+					t.Fatalf("Detach(%q) expected validation error, got nil", tc.id)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Detach(%q) unexpected error: %v", tc.id, err)
 			}
 		})
 	}
@@ -259,7 +332,12 @@ func TestListProjectStatuses_ContextCancelled(t *testing.T) {
 }
 
 // TestListProjectStatuses_Success verifies that statuses are mapped from the
-// GraphQL response into the output structs.
+// GraphQL response into the output structs. Every value in the fixture differs
+// from every other, and the whole slice is compared rather than one field:
+// the ID is what detach takes and the name is prose, so a converter reading
+// one where it meant the other hands a model an identifier that does not
+// exist. The path is asserted on both sides because it is sent trimmed and
+// echoed back as the heading of the render.
 func TestListProjectStatuses_Success(t *testing.T) {
 	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
 		"scanProfileStatuses": func(w http.ResponseWriter, r *http.Request) {
@@ -272,22 +350,30 @@ func TestListProjectStatuses_Success(t *testing.T) {
 				t.Errorf("fullPath = %v, want group/project", got)
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{"project":{"scanProfileStatuses":[
-				{"status":"ACTIVE","scanProfile":{"id":"gid://gitlab/Security::ScanProfile/1","name":"Default","scanType":"dependency_scanning"}}
+				{"status":"ACTIVE","scanProfile":{"id":"gid://gitlab/Security::ScanProfile/31","name":"Nightly deep scan","scanType":"dependency_scanning"}},
+				{"status":"NOT_CONFIGURED","scanProfile":{"id":"gid://gitlab/Security::ScanProfile/48","name":"Baseline secrets","scanType":"secret_detection"}}
 			]}}`)
 		},
 	})
 	client := testutil.NewTestClient(t, handler)
 
-	out, err := ListProjectStatuses(context.Background(), client, ListProjectStatusesInput{ProjectFullPath: "group/project"})
+	out, err := ListProjectStatuses(context.Background(), client, ListProjectStatusesInput{ProjectFullPath: "  group/project  "})
 	if err != nil {
 		t.Fatalf("ListProjectStatuses() unexpected error: %v", err)
 	}
-	if len(out.Statuses) != 1 {
-		t.Fatalf("ListProjectStatuses() statuses = %d, want 1", len(out.Statuses))
+	if out.ProjectFullPath != "group/project" {
+		t.Errorf("ListProjectStatuses() path = %q, want the trimmed group/project", out.ProjectFullPath)
 	}
-	s := out.Statuses[0]
-	if s.Status != "ACTIVE" || s.ScanProfile.ScanType != "dependency_scanning" {
-		t.Errorf("ListProjectStatuses() status = %+v", s)
+	want := []ScanProfileStatus{
+		{Status: "ACTIVE", ScanProfile: ScanProfile{
+			ID: "gid://gitlab/Security::ScanProfile/31", Name: "Nightly deep scan", ScanType: "dependency_scanning",
+		}},
+		{Status: "NOT_CONFIGURED", ScanProfile: ScanProfile{
+			ID: "gid://gitlab/Security::ScanProfile/48", Name: "Baseline secrets", ScanType: "secret_detection",
+		}},
+	}
+	if !slices.Equal(out.Statuses, want) {
+		t.Errorf("ListProjectStatuses() statuses =\n%+v\nwant:\n%+v", out.Statuses, want)
 	}
 }
 
@@ -446,6 +532,38 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if byName["attach"].Destructive {
 		t.Error("attach should not be destructive")
+	}
+}
+
+// TestActionSpecs_ActionIDs_NameActionsThatExist holds the domain.action
+// constants the markdown hints and the related lists are built from against
+// the spec names they claim to address. Nothing in the repository validates a
+// related_actions entry or a hint target, so a misspelling passes every gate
+// and answers a model "unknown action" the moment it follows the hint.
+func TestActionSpecs_ActionIDs_NameActionsThatExist(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	own := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		own["security_scan_profile."+s.Name] = true
+	}
+	for _, id := range []string{actionAttach, actionDetach, actionListProjectStatuses} {
+		if !own[id] {
+			t.Errorf("constant %q names no action this package registers (registered: %v)", id, own)
+		}
+	}
+	// The two foreign IDs are the only actions outside this package the specs
+	// and hints are allowed to send a model to; both are checked against the
+	// catalog by hand, since nothing here can see it.
+	neighbors := map[string]bool{actionProjectGet: true, actionVulnList: true}
+	for _, s := range specs {
+		for _, rel := range s.RelatedActions {
+			if !own[rel] && !neighbors[rel] {
+				t.Errorf("action %q relates to %q, which is neither ours nor a declared neighbor", s.Name, rel)
+			}
+		}
 	}
 }
 
