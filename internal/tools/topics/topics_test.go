@@ -431,13 +431,12 @@ func TestDelete_APIError400(t *testing.T) {
 	}
 }
 
-// TestTopics_UnreadableCapturedOrganizationID verifies that every topic handler
+// TestTopics_UnreadableOrganizationID verifies that every topic handler
 // returns an error rather than a half-filled topic when GitLab sends
 // organization_id as something that is not a number. client-go models
-// organization_id on its own Topic as of v3.12.0, so its decoder reaches the
-// bad value before the read of the captured response does, and either refusal
-// is what this asserts.
-func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
+// organization_id on its own Topic as of v3.12.0, so the SDK's decoder is what
+// refuses it now that the captured read is retired.
+func TestTopics_UnreadableOrganizationID(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
 	poisoned := func(body string) *gitlabclient.Client {
