@@ -14,10 +14,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// actionGroupUnshare is the canonical ID of the route that revokes the share
-// this card confirms.
-const actionGroupUnshare = "group.unshare_from_group"
-
 // ---------------------------------------------------------------------------
 // ShareGroupWithGroup
 // ---------------------------------------------------------------------------.

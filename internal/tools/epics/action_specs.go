@@ -8,11 +8,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes. Epic actions are projected
+// into the gitlab_group catalog group, so every surface resolves
+// "group.epic_list" and never the bare "epic.list" the domain reads like.
 const (
-	actionEpicList   = "epic.list"
-	actionEpicGet    = "epic.get"
-	actionEpicUpdate = "epic.update"
+	actionEpicList     = "group.epic_list"
+	actionEpicGet      = "group.epic_get"
+	actionEpicUpdate   = "group.epic_update"
+	actionEpicCreate   = "group.epic_create"
+	actionEpicDelete   = "group.epic_delete"
+	actionEpicGetLinks = "group.epic_get_links"
+	actionEpicNoteList = "group.epic_note_list"
+	actionGroupGet     = "group.get"
+)
 
+const (
 	// formatDateTime is the JSON Schema format of the four timestamp filters
 	// and of created_at: GitLab reads them as ISO 8601 date-times, and the
 	// canonical list in toolutil does not know these names.
@@ -161,7 +171,7 @@ func epicUpdateEnumOverrides() []toolutil.InputSchemaOverride {
 func epicOptions(individualTool string) toolutil.ActionSpecOptions {
 	opts := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute epics domain action.", Tags: []string{"group", "epic"},
-		RelatedActions: []string{"group.get"},
+		RelatedActions: []string{actionGroupGet},
 		Edition:        "premium",
 		OpenWorld:      true,
 		OwnerPackage:   "epics",
@@ -180,12 +190,12 @@ func decorateEpicMeta(opts *toolutil.ActionSpecOptions, individualTool string) {
 	case "gitlab_epic_list":
 		opts.Usage = "List epics in a group with filtering (state, search, in, author, assignees, labels, milestone, weight, health status, subscription, iids, ids, parent_ids, my_reaction_emoji, created/updated/closed/due ranges, order_by, sort) and pagination in both directions. Use when the prompt asks for matching or recent epics in a known group."
 		opts.Aliases = []string{individualTool, "list epics", "show group epics", "find epics"}
-		opts.RelatedActions = []string{actionEpicGet, "epic.create", "group.get"}
+		opts.RelatedActions = []string{actionEpicGet, actionEpicCreate, actionGroupGet}
 		opts.IndividualTool.Description = "List epics in a group with filtering and pagination. Returns: matching epics with state, labels, author, assignees, dates, children, and the pagination block of whichever API answered. See also: gitlab_epic_get, gitlab_epic_create, gitlab_epic_get_links."
 	case "gitlab_epic_get":
 		opts.Usage = "Get one exact epic by full_path plus epic_iid. Use this after list results or when the prompt already names a concrete epic number."
 		opts.Aliases = []string{individualTool, "get epic", "show epic details", "fetch epic"}
-		opts.RelatedActions = []string{actionEpicList, actionEpicUpdate, "epic.delete", "epic.get_links"}
+		opts.RelatedActions = []string{actionEpicList, actionEpicUpdate, actionEpicDelete, actionEpicGetLinks}
 		opts.IndividualTool.Description = "Get a single epic from a group by epic IID. Returns: epic metadata, state, labels, author, assignees, start/due dates, health status, weight, parent, and linked items. See also: gitlab_epic_list, gitlab_epic_update, gitlab_epic_get_links, gitlab_epic_delete."
 	case "gitlab_epic_get_links":
 		opts.Usage = "List the child epics of a parent epic by full_path plus epic_iid. Use when the prompt asks for sub-epics or the epic hierarchy below a known epic."
@@ -200,7 +210,7 @@ func decorateEpicMeta(opts *toolutil.ActionSpecOptions, individualTool string) {
 	case "gitlab_epic_update":
 		opts.Usage = "Update an existing epic by full_path plus epic_iid. Supports close/reopen via state_event, reparenting via parent_id, milestone assignment, label add/remove, dates, weight and health status."
 		opts.Aliases = []string{individualTool, "update epic", "edit epic", "close epic", "reopen epic"}
-		opts.RelatedActions = []string{actionEpicGet, actionEpicList, "epic.delete"}
+		opts.RelatedActions = []string{actionEpicGet, actionEpicList, actionEpicDelete}
 		opts.IndividualTool.Description = "Update an existing epic. Supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete."
 	case "gitlab_epic_delete":
 		opts.Usage = "Permanently delete an epic by full_path plus epic_iid. Destructive. Requires confirmation and Owner role at the group level."
