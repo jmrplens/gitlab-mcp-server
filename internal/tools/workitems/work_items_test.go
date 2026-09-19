@@ -1899,7 +1899,7 @@ func TestUpdate_EmptyAssigneesWithNestedConfirmProceeds(t *testing.T) {
 
 	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
-			Name:      "gitlab_execute_action",
+			Name: "gitlab_execute_action",
 			// The canonical ID, not "work_item.update": the guard reads confirm
 			// out of params and never resolves the action, so a fixture naming
 			// an action that does not exist passes while documenting a call a
