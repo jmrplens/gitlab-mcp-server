@@ -985,9 +985,24 @@ func TestActionSpecs_EveryActionCarriesDecoratedMetadata(t *testing.T) {
 // leaves a dangling reference that resolves to nothing. The expected IDs are
 // built from the specs themselves, so this fails on the rename rather than
 // preserving whatever the source happens to say today.
+//
+// The ID is built from [catalogDomain] and not from the spec's OwnerPackage.
+// Those are different things: the owner package is where the handler lives,
+// while the domain is the catalog group these specs are aggregated into. This
+// test used to build it from the owner package, and so demanded of every
+// action exactly the dead ID the package published, which is how six
+// unresolvable related actions passed a test written to catch them. That the
+// domain itself is right is not something this package can check; the external
+// test in issue_statistics_catalog_test.go puts every published ID to the
+// catalog.
 func TestActionSpecs_RelatedActionsNameTheSiblingScopes(t *testing.T) {
 	specs := issueStatsSpecs(t)
-	canonical := func(spec toolutil.ActionSpec) string { return spec.OwnerPackage + "." + spec.Name }
+	canonical := func(spec toolutil.ActionSpec) string { return catalogDomain + "." + spec.Name }
+
+	ours := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		ours[canonical(spec)] = struct{}{}
+	}
 
 	for _, spec := range specs {
 		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
@@ -997,7 +1012,11 @@ func TestActionSpecs_RelatedActionsNameTheSiblingScopes(t *testing.T) {
 			}
 			outside := 0
 			for _, related := range spec.RelatedActions {
-				if !strings.HasPrefix(related, spec.OwnerPackage+".") {
+				// Membership of this package's own three, not a domain
+				// prefix: the siblings and the way out of the counts now
+				// share the issue domain, so a prefix test would pass on an
+				// action that named nothing but its siblings.
+				if _, mine := ours[related]; !mine {
 					outside++
 				}
 			}

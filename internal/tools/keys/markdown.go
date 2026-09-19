@@ -37,7 +37,7 @@ func FormatMarkdownString(out Output) string {
 		user.Field("Name", out.User.Name)
 		user.Field("Username", toolutil.MdUserHandle(out.User.Username))
 	}
-	c.End(toolutil.HintAction("keys.key_get_by_fingerprint", "look a key up by its fingerprint instead of its ID"))
+	c.End(toolutil.HintAction(actionKeyGetByFingerprint, "look a key up by its fingerprint instead of its ID"))
 	return b.String()
 }
 
