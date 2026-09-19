@@ -9,17 +9,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
+// Canonical action IDs, the one form every surface resolves. Both the card
+// hints below and the RelatedActions of action_specs.go read this block and
+// nothing else: while each file kept its own, the specs pointed a reader at
+// "commit.list" for a commit listing the catalog calls repository.commit_list,
+// and no gate in this repository compares either spelling with the catalog.
 const (
 	actionTree              = "repository.tree"
 	actionCompare           = "repository.compare"
+	actionBlob              = "repository.blob"
 	actionRawBlob           = "repository.raw_blob"
+	actionMergeBase         = "repository.merge_base"
 	actionChangelogAdd      = "repository.changelog_add"
 	actionChangelogGenerate = "repository.changelog_generate"
 	actionFileGet           = "repository.file_get"
 	actionCommitGet         = "repository.commit_get"
 	actionCommitList        = "repository.commit_list"
+	actionBranchList        = "branch.list"
+	actionTagList           = "tag.list"
+	actionTagCreate         = "tag.create"
 	actionReleaseCreate     = "release.create"
+	actionReleaseList       = "release.list"
 )
 
 // imageNote is the sentence a card writes where the bytes themselves are
