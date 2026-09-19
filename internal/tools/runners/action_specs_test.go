@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -98,28 +99,30 @@ func TestActionSpecs_EveryDecoratedTool_PublishesItsMetadataEntry(t *testing.T) 
 	}
 }
 
-// TestRunnerActionMeta_RelatedActions_NameActionsThisPackageRegisters checks
-// every cross-link against the canonical action IDs the specs really build. A
-// misspelled one answers a model "unknown action" the moment it follows the
-// hint.
+// TestRunnerActionMeta_RelatedActions_NameCanonicalActionIDs checks every
+// cross-link against the canonical IDs the specs really declare.
 //
-// The IDs, not the individual tool names these entries are keyed by. Both
-// resolve for gitlab_execute_action, since the decoration makes the tool name
-// an alias, and only the canonical ID is published by the discovery tools that
-// carry this field, so a tool name here is a cross-link a model can follow but
-// cannot look up. cmd/audit_action_ids holds the whole tree to that rule.
-func TestRunnerActionMeta_RelatedActions_NameActionsThisPackageRegisters(t *testing.T) {
-	specs := ActionSpecs(testutil.NewTestClient(t, runnerActionHandler()))
-	actions := make(map[string]struct{}, len(specs))
-	for _, spec := range specs {
-		actions["runner."+spec.Name] = struct{}{}
+// It used to check them against the individual tool names instead, and passed,
+// because every spec here declares its tool name as an alias: the cross-links
+// resolved when a model followed one and could be found in no listing, since
+// gitlab_find_action publishes IDs. `make check-action-ids` is the gate that
+// holds the whole tree to this now; this test is what says it of the package a
+// change is made in.
+func TestRunnerActionMeta_RelatedActions_NameCanonicalActionIDs(t *testing.T) {
+	client := testutil.NewTestClient(t, runnerActionHandler())
+	declared := make(map[string]struct{})
+	for _, spec := range ActionSpecs(client) {
+		declared[domainRunner+spec.Name] = struct{}{}
 	}
 
 	for tool, meta := range runnerActionMeta {
 		t.Run(tool, func(t *testing.T) {
 			for _, related := range meta.related {
-				if _, ok := actions[related]; !ok {
-					t.Errorf("related action %q names no action this package registers", related)
+				if _, ok := declared[related]; !ok {
+					t.Errorf("related action %q is not a canonical ID this group declares", related)
+				}
+				if strings.HasPrefix(related, "gitlab_") {
+					t.Errorf("related action %q is an individual tool name, not a catalog ID", related)
 				}
 			}
 		})

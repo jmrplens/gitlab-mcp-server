@@ -1102,19 +1102,28 @@ func TestSiblingClusters_SpecsWithoutOwner_ClusterByInferredOwner(t *testing.T) 
 	}
 }
 
-// TestSiblingMatches_EmbeddedSiblingName_MatchesByContains verifies the
-// defensive fallback: a related action that is neither an exact nor a
-// dot-tail match still counts when it embeds a sibling name, so a
-// non-conformant RelatedActions value does not produce a false gap.
-func TestSiblingMatches_EmbeddedSiblingName_MatchesByContains(t *testing.T) {
+// TestSiblingMatches_EmbeddedSiblingName_IsNotAMatch verifies the tolerance
+// that is gone. A related action that is neither the sibling, nor the dot-tail
+// spelling of it, nor the underscore one, used to count whenever a sibling
+// name appeared anywhere inside it, so a cluster with a sibling called
+// link_create counted legacy_link_create_v2 as a cross-link to it.
+//
+// The tolerance was written when nothing held a RelatedActions entry to the
+// catalog. `make check-action-ids` does now, so every entry reaching here is a
+// canonical ID in one of the three accepted forms, and what a substring match
+// can still do is report a package complete on the strength of one.
+func TestSiblingMatches_EmbeddedSiblingName_IsNotAMatch(t *testing.T) {
 	siblings := map[string]struct{}{"link_create": {}}
 	tests := []struct {
 		name    string
 		related string
 		want    bool
 	}{
-		{name: "embedded sibling", related: "legacy_link_create_v2", want: true},
+		{name: "embedded sibling", related: "legacy_link_create_v2", want: false},
+		{name: "sibling as a substring of a longer action", related: "release.link_create_batch", want: false},
 		{name: "unrelated", related: "tag_delete", want: false},
+		{name: "the sibling itself", related: "link_create", want: true},
+		{name: "the canonical ID of the sibling", related: "release.link_create", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

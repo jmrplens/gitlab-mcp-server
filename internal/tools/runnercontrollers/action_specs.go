@@ -18,6 +18,31 @@ const (
 	toolControllerDelete = "gitlab_runner_controller_delete"
 )
 
+// Canonical catalog IDs, the one form every surface resolves: a controller
+// action is projected under the runner domain rather than the package name.
+//
+// They are what a RelatedActions list carries and what the Markdown hints
+// name, and they are separate constants from the individual tool names above
+// because the two are different names for the same action: the tool name is
+// what the individual surface registers, and the ID is what
+// gitlab_find_action publishes and gitlab_execute_action takes. The related
+// lists used to be spelled with the tool names, which resolve through the
+// alias each spec declares, so every cross-link worked when a model followed
+// one and none of them could be looked up in a listing.
+//
+// The last two belong to the sibling packages whose actions this group also
+// carries, and are named here because the hints in markdown.go cross-link to
+// them.
+const (
+	actionControllerList      = "runner.controller_list"
+	actionControllerGet       = "runner.controller_get"
+	actionControllerCreate    = "runner.controller_create"
+	actionControllerUpdate    = "runner.controller_update"
+	actionControllerDelete    = "runner.controller_delete"
+	actionControllerTokenList = "runner.controller_token_list"
+	actionControllerScopeList = "runner.controller_scope_list"
+)
+
 // ActionSpecs returns canonical specs for runner controller actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{

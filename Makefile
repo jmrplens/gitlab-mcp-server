@@ -15,7 +15,7 @@
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description \
-	audit-action-ids \
+	audit-action-ids check-action-ids \
 	audit-dead-consts check-dead-consts \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
@@ -806,25 +806,26 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/19] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/19] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/19] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/19] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/19] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/19] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/19] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/19] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/19] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/19] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[11/19] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/19] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/19] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[14/19] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[15/19] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[16/19] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[17/19] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[18/19] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[19/19] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[1/20] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/20] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/20] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/20] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/20] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/20] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/20] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/20] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/20] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/20] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[11/20] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/20] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/20] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/20] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/20] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/20] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/20] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/20] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/20] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/20] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1042,11 +1043,15 @@ brand-rasters: brand
 check-icon-webp:
 	go run ./cmd/gen_icon_webp/ --check
 
-## audit-doc-tool-names: report documentation that names a tool no surface registers.
+## audit-doc-tool-names: report documentation that names a tool no surface
+## registers, or a canonical action ID the catalog does not publish. Both
+## halves of one sentence: a page teaching a call names the tool on the
+## individual surface and the ID on the dynamic one.
 audit-doc-tool-names:
 	go run ./cmd/audit_doc_tool_names/
 
-## check-doc-tool-names: fail when the documentation names a tool that does not exist.
+## check-doc-tool-names: fail when the documentation names a tool or an action
+## ID that does not exist.
 check-doc-tool-names:
 	go run ./cmd/audit_doc_tool_names/ --check
 
@@ -1696,10 +1701,19 @@ check-md-escaping:
 ## Constants are folded by the type checker rather than matched as text, and
 ## the IDs are judged against the catalog built at Ultimate for a self-managed
 ## instance and for GitLab.com together, so the Orbit family does not read as
-## dead. It reports and does not gate: the findings are spread over packages no
-## single change touches. The work list lands in plan/action-ids.json.
+## dead. The work list lands in plan/action-ids.json.
 audit-action-ids:
 	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
+
+## check-action-ids: fail when a published ID is not a canonical catalog ID.
+## The demand is the canonical ID and not mere resolvability: a registered
+## alias fails too, because gitlab_execute_action resolves one and
+## gitlab_find_action publishes IDs, so a cross-link spelled as an alias works
+## when it is followed and can be found in no listing. A site the type checker
+## could not fold fails as well, since a gate with a silent blind spot is one a
+## new site can step into. CI gate.
+check-action-ids:
+	go run ./cmd/audit_action_ids/ -check -json ''
 
 ## audit-dead-consts: report every unexported constant in internal/ and cmd/
 ## that nothing reads. staticcheck's unused judges a const group as one unit,

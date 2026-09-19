@@ -39,6 +39,26 @@ var proseNonDomains = map[string]string{
 	"params": "the binding an example writes, as in params.status: the right half is a parameter name and collides with an action name by accident",
 }
 
+// declaredAliasMentions are the prose tokens that name a **registered alias**
+// on purpose, because the sentence is about the alias.
+//
+// The gate demands a canonical catalog ID everywhere else, and this table is
+// the one place that demand would be wrong rather than strict. A cross-link
+// field publishes IDs a model calls, so an alias there is a defect whatever it
+// resolves to; a Usage line is prose, and a line whose subject is "execute also
+// accepts these two spellings" cannot state that in canonical IDs without
+// saying something false. The distinction is enforced structurally rather than
+// by trust: only a prose site consults this table, so a related entry or a hint
+// naming one of these is still a finding.
+//
+// It stays a table of two because a run also refuses an entry that no longer
+// resolves as an alias: if the spelling is retired, or promoted to a canonical
+// ID of its own, the entry excuses nothing and is reported stale.
+var declaredAliasMentions = map[string]string{
+	"issue.close":  "the gitlab_issue_update Usage line, which exists to tell a model that dynamic execute accepts this spelling and fills state_event from it",
+	"issue.reopen": "the other half of that same sentence",
+}
+
 // exemptProse reports whether a prose token is declared not to be an action ID.
 func exemptProse(token string) bool {
 	if _, declared := proseExemptions[token]; declared {
@@ -52,12 +72,26 @@ func exemptProse(token string) bool {
 	return isBinding
 }
 
-// staleProseExemptions names the entries that excused nothing this run.
-func staleProseExemptions(used map[string]struct{}) []string {
+// exemptAliasMention reports whether a prose token is declared to name a
+// registered alias on purpose.
+func exemptAliasMention(token string) bool {
+	_, declared := declaredAliasMentions[token]
+	return declared
+}
+
+// staleDeclarations names the entries of both tables that excused nothing this
+// run, each with the table it sits in, so a reader is sent to one file and one
+// map rather than to a token they then have to find.
+func staleDeclarations(usedExemptions, usedAliasMentions map[string]struct{}) []string {
 	var stale []string
 	for token := range proseExemptions {
-		if _, wasUsed := used[token]; !wasUsed {
-			stale = append(stale, token)
+		if _, wasUsed := usedExemptions[token]; !wasUsed {
+			stale = append(stale, token+" is no longer spelled in any Usage line or description (proseExemptions)")
+		}
+	}
+	for token := range declaredAliasMentions {
+		if _, wasUsed := usedAliasMentions[token]; !wasUsed {
+			stale = append(stale, token+" is no longer a registered alias named in prose (declaredAliasMentions)")
 		}
 	}
 	sort.Strings(stale)

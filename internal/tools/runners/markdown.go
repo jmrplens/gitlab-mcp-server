@@ -8,37 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints and the RelatedActions cross-links name, the
-// one form every surface resolves.
-//
-// The individual tool names in the const block of action_specs.go are not an
-// alternative spelling for either. A tool name is what one surface calls the
-// tool, and the discovery tools that publish these two fields hand out
-// canonical IDs; a tool name written into a cross-link resolves through the
-// alias table for execute and is findable under no name a listing shows.
-const (
-	actionRunnerGet              = "runner.get"
-	actionRunnerJobs             = "runner.jobs"
-	actionRunnerList             = "runner.list"
-	actionRunnerListAll          = "runner.list_all"
-	actionRunnerListProject      = "runner.list_project"
-	actionRunnerListGroup        = "runner.list_group"
-	actionRunnerUpdate           = "runner.update"
-	actionRunnerRemove           = "runner.remove"
-	actionRunnerEnableProject    = "runner.enable_project"
-	actionRunnerDisableProject   = "runner.disable_project"
-	actionRunnerRegister         = "runner.register"
-	actionRunnerDeleteRegistered = "runner.delete_registered"
-	actionRunnerDeleteByToken    = "runner.delete_by_token"
-	actionRunnerVerify           = "runner.verify"
-	actionRunnerResetToken       = "runner.reset_token"
-	actionRunnerResetInstanceReg = "runner.reset_instance_reg_token"
-	actionRunnerResetGroupReg    = "runner.reset_group_reg_token"
-	actionRunnerResetProjectReg  = "runner.reset_project_reg_token"
-	actionRunnerListManagers     = "runner.list_managers"
-	actionJobGet                 = "job.get"
-)
-
 // writeRunnerSummary writes the fields a runner carries wherever it is
 // rendered, so the summary and the detail card cannot drift apart.
 func writeRunnerSummary(c *toolutil.Card, name, description, runnerType, status, jobStatus string, shared, online, paused bool) {
