@@ -748,12 +748,16 @@ func TestConvertAccessRequest_WithoutDates(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // cardHints is the guidance section every access-request card ends with, the
-// four canonical actions a reader of one request can take next.
+// four canonical actions a reader of one request can take next. The IDs are
+// spliced in from the constants the formatter itself reads rather than typed
+// out again: when they were typed out, these expectations froze the wrong ones
+// ("accessrequests.approve_project", which names no catalog action) and passed
+// for as long as the formatter published the same mistake.
 const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'accessrequests.approve_project' to approve this request at project scope\n" +
-	"- Use action 'accessrequests.approve_group' to approve this request at group scope\n" +
-	"- Use action 'accessrequests.deny_project' to deny this request at project scope\n" +
-	"- Use action 'accessrequests.deny_group' to deny this request at group scope\n"
+	"- Use action '" + actionAccessApproveProject + "' to approve this request at project scope\n" +
+	"- Use action '" + actionAccessApproveGroup + "' to approve this request at group scope\n" +
+	"- Use action '" + actionAccessDenyProject + "' to deny this request at project scope\n" +
+	"- Use action '" + actionAccessDenyGroup + "' to deny this request at group scope\n"
 
 // TestFormatOutputMarkdown_AllFields pins the whole card a fully populated
 // access request renders: every row in order, the access level as its role
@@ -902,10 +906,10 @@ func TestFormatOutputMarkdown_PendingRequestNamesNoRole(t *testing.T) {
 // canonical actions.
 const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 	"- " + toolutil.HintPreserveLinks + "\n" +
-	"- Use action 'accessrequests.approve_project' to approve one of these requests at project scope\n" +
-	"- Use action 'accessrequests.approve_group' to approve one of these requests at group scope\n" +
-	"- Use action 'accessrequests.deny_project' to deny one of these requests at project scope\n" +
-	"- Use action 'accessrequests.deny_group' to deny one of these requests at group scope\n"
+	"- Use action '" + actionAccessApproveProject + "' to approve one of these requests at project scope\n" +
+	"- Use action '" + actionAccessApproveGroup + "' to approve one of these requests at group scope\n" +
+	"- Use action '" + actionAccessDenyProject + "' to deny one of these requests at project scope\n" +
+	"- Use action '" + actionAccessDenyGroup + "' to deny one of these requests at group scope\n"
 
 // TestFormatListMarkdown_WithItems pins the whole list document: the heading
 // counting what the page shows when GitLab sent no total, the table, and the

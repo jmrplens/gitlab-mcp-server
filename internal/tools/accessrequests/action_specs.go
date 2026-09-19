@@ -7,15 +7,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs this package publishes, through RelatedActions here
+// and through the HintAction calls in markdown.go, which read the same block.
+// These specs are aggregated into the gitlab_access catalog group, so the
+// domain is "access" and never this package's name; the member listings live
+// in gitlab_project and gitlab_group and are spelled "members", not
+// "member_list". A model following any other spelling is answered "unknown
+// action", so every ID here is held against the catalog by
+// TestAccessRequestActionSpecs_PublishedActionIDs_NameCatalogActions.
 const (
-	actionProjectMemberList        = "project.member_list"
-	actionGroupMemberList          = "group.member_list"
-	actionAccessApproveProject     = "accessrequests.approve_project"
-	actionAccessDenyProject        = "accessrequests.deny_project"
-	actionAccessApproveGroup       = "accessrequests.approve_group"
-	actionAccessDenyGroup          = "accessrequests.deny_group"
-	actionAccessRequestListProject = "accessrequests.request_list_project"
-	actionAccessRequestListGroup   = "accessrequests.request_list_group"
+	actionProjectMemberList        = "project.members"
+	actionGroupMemberList          = "group.members"
+	actionAccessApproveProject     = "access.approve_project"
+	actionAccessDenyProject        = "access.deny_project"
+	actionAccessApproveGroup       = "access.approve_group"
+	actionAccessDenyGroup          = "access.deny_group"
+	actionAccessRequestListProject = "access.request_list_project"
+	actionAccessRequestListGroup   = "access.request_list_group"
 	paramUserID                    = "user_id"
 )
 
