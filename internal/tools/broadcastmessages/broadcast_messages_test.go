@@ -821,8 +821,9 @@ func TestFormatMessageMarkdown_Color(t *testing.T) {
 // TestBroadcastMessages_UnreadableCapturedColor verifies that every broadcast
 // message handler reading the color off the captured answer returns an error
 // rather than a half-filled message when GitLab sends color as something that
-// is not a string. The SDK ignores the key its own BroadcastMessage does not
-// model, so the captured read is the only thing that can notice.
+// is not a string. client-go models color on its own BroadcastMessage as of
+// v3.12.0, so its decoder reaches the bad value before the captured read
+// does, and either refusal is what this asserts.
 func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -831,7 +832,7 @@ func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"id":1,"message":"hello","color":7}]`)
 			_, err := List(context.Background(), client, ListInput{})

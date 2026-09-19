@@ -466,9 +466,10 @@ func newLicenseRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 
 // TestLicenseTemplates_UnreadableCapturedPopular verifies that both license
 // template handlers return an error rather than a half-filled template when
-// GitLab sends popular as something that is not a boolean. The SDK ignores the
-// key its own LicenseTemplate does not model, so the read of the captured
-// response is the only thing that can notice.
+// GitLab sends popular as something that is not a boolean. client-go models
+// popular on its own LicenseTemplate as of v3.12.0, so its decoder reaches the
+// bad value before the read of the captured response does, and either refusal
+// is what this asserts.
 func TestLicenseTemplates_UnreadableCapturedPopular(t *testing.T) {
 	// A list answers with an array and a get with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -477,7 +478,7 @@ func TestLicenseTemplates_UnreadableCapturedPopular(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"key":"mit","name":"MIT License","popular":"yes"}]`)
 			_, err := List(context.Background(), client, ListInput{})
