@@ -4,7 +4,11 @@
 package resourcegroups
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,21 +22,36 @@ const errExpectedErr = "expected error"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestListAll verifies ListAll.
+// The one resource group body the handler tests decode, and the item it must
+// produce. Every field carries a different value and every field is asserted,
+// which is what makes a converter that drops one or reads a neighbour's key
+// observable: each handler used to be judged on a single field, so the other
+// two could go missing with nothing failing.
+const fixtureGroupJSON = `{"id":7,"key":"production","process_mode":"oldest_first"}`
+
+// wantFixtureGroup is fixtureGroupJSON as the handlers must convert it.
+func wantFixtureGroup() ResourceGroupItem {
+	return ResourceGroupItem{ID: 7, Key: "production", ProcessMode: "oldest_first"}
+}
+
+// TestListAll verifies ListAll converts every field GitLab sent, not only the
+// key: the whole item is compared, because asserting one field left the
+// converter free to drop the id and the process mode with nothing failing.
 func TestListAll(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups" || r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"key":"production","process_mode":"unordered"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[`+fixtureGroupJSON+`]`)
 	}))
 	out, err := ListAll(t.Context(), client, ListInput{ProjectID: "1"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Groups) != 1 || out.Groups[0].Key != "production" {
-		t.Errorf("unexpected groups: %+v", out.Groups)
+	want := []ResourceGroupItem{wantFixtureGroup()}
+	if !reflect.DeepEqual(out.Groups, want) {
+		t.Errorf("ListAll groups = %+v, want %+v", out.Groups, want)
 	}
 }
 
@@ -47,21 +66,23 @@ func TestListAll_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies Get.
+// TestGet verifies Get converts the whole resource group. Only the process
+// mode used to be asserted, so the id and the key could go missing from the
+// card a model reads and the suite stayed green.
 func TestGet(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"key":"production","process_mode":"unordered"}`)
+		testutil.RespondJSON(w, http.StatusOK, fixtureGroupJSON)
 	}))
 	out, err := Get(t.Context(), client, GetInput{ProjectID: "1", Key: "production"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ProcessMode != "unordered" {
-		t.Errorf("expected unordered, got %s", out.ProcessMode)
+	if want := wantFixtureGroup(); !reflect.DeepEqual(out, want) {
+		t.Errorf("Get() = %+v, want %+v", out, want)
 	}
 }
 
@@ -76,21 +97,49 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestEdit verifies Edit.
+// TestEdit verifies that the process mode the caller asked for is what reaches
+// GitLab, and that the answer is read back rather than echoed.
+//
+// Both halves were unobservable. The request body was never inspected, so
+// building the options without ProcessMode at all left the suite green while
+// the one input this tool exists to carry never left the process; and the mock
+// answered the mode that had just been asked for, so a handler returning its
+// own input would have passed too. The mock therefore answers a different mode
+// than was requested, which no two assertions can now confuse.
 func TestEdit(t *testing.T) {
+	var sentProcessMode string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production" || r.Method != http.MethodPut {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"key":"production","process_mode":"newest_first"}`)
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("reading the edit request body: %v", readErr)
+			testutil.RespondJSON(w, http.StatusOK, fixtureGroupJSON)
+			return
+		}
+		var sent struct {
+			ProcessMode string `json:"process_mode"`
+		}
+		if decodeErr := json.Unmarshal(body, &sent); decodeErr != nil {
+			t.Errorf("edit request body %q is not JSON: %v", body, decodeErr)
+			testutil.RespondJSON(w, http.StatusOK, fixtureGroupJSON)
+			return
+		}
+		sentProcessMode = sent.ProcessMode
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"key":"production","process_mode":"newest_ready_first"}`)
 	}))
 	out, err := Edit(t.Context(), client, EditInput{ProjectID: "1", Key: "production", ProcessMode: "newest_first"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ProcessMode != "newest_first" {
-		t.Errorf("expected newest_first, got %s", out.ProcessMode)
+	if sentProcessMode != "newest_first" {
+		t.Errorf("GitLab was sent process_mode %q, want %q", sentProcessMode, "newest_first")
+	}
+	want := ResourceGroupItem{ID: 7, Key: "production", ProcessMode: "newest_ready_first"}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Edit() = %+v, want %+v", out, want)
 	}
 }
 
@@ -105,21 +154,25 @@ func TestEdit_Error(t *testing.T) {
 	}
 }
 
-// TestListUpcomingJobs verifies ListUpcomingJobs.
+// TestListUpcomingJobs verifies every field of a queued job survives the
+// conversion. The old fixture named the job and its stage both "deploy" and
+// only the name was asserted, so swapping the status and the stage, or dropping
+// the id, produced exactly the same passing run.
 func TestListUpcomingJobs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/resource_groups/production/upcoming_jobs" || r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"deploy","status":"pending","stage":"deploy"}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"deploy-to-prod","status":"pending","stage":"release"}]`)
 	}))
 	out, err := ListUpcomingJobs(t.Context(), client, ListUpcomingJobsInput{ProjectID: "1", Key: "production"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Jobs) != 1 || out.Jobs[0].Name != "deploy" {
-		t.Errorf("unexpected jobs: %+v", out.Jobs)
+	want := []JobItem{{ID: 10, Name: "deploy-to-prod", Status: "pending", Stage: "release"}}
+	if !reflect.DeepEqual(out.Jobs, want) {
+		t.Errorf("ListUpcomingJobs jobs = %+v, want %+v", out.Jobs, want)
 	}
 }
 
@@ -220,6 +273,28 @@ func TestFormatJobsMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestFormatJobsMarkdown_BlankStatus checks the cell a job with no status
+// renders to. A queued job can reach this table before GitLab has given it one,
+// and a blank cell must stay blank: pasting the glyph onto an empty string
+// would put a lone status emoji in the row, which reads as a status the job
+// does not have. Whitespace counts as no status for the same reason.
+func TestFormatJobsMarkdown_BlankStatus(t *testing.T) {
+	md := FormatJobsMarkdown(ListUpcomingJobsOutput{
+		Jobs: []JobItem{{ID: 12, Name: "provision", Status: "  ", Stage: "setup"}},
+	})
+	want := "## Upcoming Jobs (1)\n\n" +
+		"| ID | Name | Status | Stage |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 12 | provision |  | setup |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'job.get' to see one of these jobs in full\n" +
+		"- Use action 'job.trace' to read a job's log\n" +
+		"- Use action 'pipeline.resource_group_list' to see the other resource groups of this project\n"
+	if md != want {
+		t.Errorf("FormatJobsMarkdown(blank status)\n got %q\nwant %q", md, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
@@ -288,7 +363,70 @@ func TestActionSpecs_Metadata(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Canonical action IDs
 // ---------------------------------------------------------------------------.
+
+// registeredActionIDs returns the canonical catalog ID of every action this
+// package registers: the group domain, a dot, and the spec name.
+func registeredActionIDs(t *testing.T) []string {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	ids := make([]string, 0, 4)
+	for _, spec := range ActionSpecs(client) {
+		ids = append(ids, catalogDomain+"."+spec.Name)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// TestActionSpecs_CanonicalIDConstantsMatchTheRegisteredSpecs pins the four
+// canonical IDs to the names ActionSpecs really registers under, so renaming an
+// action cannot leave a related entry or a Markdown hint pointing at the old
+// one. The constants used to be written out by hand in two files and had
+// drifted apart in exactly that way.
+func TestActionSpecs_CanonicalIDConstantsMatchTheRegisteredSpecs(t *testing.T) {
+	want := registeredActionIDs(t)
+	got := []string{
+		actionResourceGroupEdit,
+		actionResourceGroupGet,
+		actionResourceGroupList,
+		actionResourceGroupUpcomingJobs,
+	}
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("canonical ID constants = %v, registered actions = %v", got, want)
+	}
+}
+
+// TestActionSpecs_RelatedActionsNameActionsThatExist holds every RelatedActions
+// entry to an action something really serves. Nothing else in the tree does:
+// audit_discovery_completeness only reports an empty list, so a wrong spelling
+// passes every gate and answers a model "unknown action" the moment it follows
+// the hint. All four entries named a resource_group.* domain the catalog has
+// never had, because these actions are routes on gitlab_pipeline.
+func TestActionSpecs_RelatedActionsNameActionsThatExist(t *testing.T) {
+	own := registeredActionIDs(t)
+	// Actions of other groups this package deliberately points at. Listing them
+	// is what makes adding one a decision rather than a typo.
+	foreign := []string{actionJobGet, actionJobList, actionJobTrace}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			for _, related := range spec.RelatedActions {
+				if slices.Contains(own, related) || slices.Contains(foreign, related) {
+					continue
+				}
+				t.Errorf("RelatedActions names %q, which is neither one of this package's actions %v nor a declared foreign action %v",
+					related, own, foreign)
+			}
+		})
+	}
+}
 
 // ---------------------------------------------------------------------------
 // ActionSpec route execution for all 4 individual tools
