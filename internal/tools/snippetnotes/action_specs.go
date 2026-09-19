@@ -54,6 +54,11 @@ func snippetNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 	return toolutil.NewDeleteActionSpec(name, route, snippetNoteOptions(individualTool))
 }
 
+// genericSnippetNoteUsage is the placeholder every spec starts with, kept as
+// one spelling so a test can tell a decorated action from one the metadata
+// switch never matched.
+const genericSnippetNoteUsage = "Use to execute snippetnotes domain action."
+
 // Canonical action IDs referenced by snippet note RelatedActions. The snippet
 // note actions are projected under the gitlab_snippet catalog group, so their
 // base domain is "snippet".
@@ -105,7 +110,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 func snippetNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases:        []string{individualTool},
-		Usage:          "Use to execute snippetnotes domain action.",
+		Usage:          genericSnippetNoteUsage,
 		Tags:           []string{"snippet", "note"},
 		OpenWorld:      true,
 		OwnerPackage:   "snippetnotes",
