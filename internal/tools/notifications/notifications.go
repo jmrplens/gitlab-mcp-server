@@ -3,6 +3,8 @@ package notifications
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
@@ -26,8 +28,15 @@ type GetGroupInput struct {
 }
 
 // eventFields holds all notification event boolean flags shared across update inputs.
+//
+// The Level description names no values on purpose: the account-wide settings
+// accept one level fewer than a project's or a group's, and one embedded struct
+// cannot say two things. Each of the three update specs overrides this
+// description and the enum beside it with the list its own scope accepts (see
+// levelSchemaOverrides in action_specs.go), so what a model reads is always the
+// scope's own list rather than this fallback.
 type eventFields struct {
-	Level                     string `json:"level,omitempty" jsonschema:"Notification level: disabled, participating, watch, global, mention, custom"`
+	Level                     string `json:"level,omitempty" jsonschema:"Notification level, one of the values this action's enum publishes"`
 	NotificationEmail         string `json:"notification_email,omitempty" jsonschema:"Email address for notifications"`
 	CloseIssue                *bool  `json:"close_issue,omitempty" jsonschema:"Notify on issue close"`
 	CloseMergeRequest         *bool  `json:"close_merge_request,omitempty" jsonschema:"Notify on MR close"`
@@ -146,11 +155,14 @@ func GetSettingsForGroup(ctx context.Context, client *gitlabclient.Client, input
 // notification settings via the GitLab Notification settings API
 // (PUT /notification_settings). Only non-nil fields are applied.
 func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, input UpdateGlobalInput) (Output, error) {
-	opts := buildUpdateOpts(input.eventFields)
+	opts, err := buildUpdateOpts(input.eventFields, globalLevels)
+	if err != nil {
+		return Output{}, err
+	}
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_global_update", err, http.StatusBadRequest,
-			"valid level values: disabled, participating, watch, global, mention, custom")
+			levelHint(globalLevels))
 	}
 	return toOutput(settings), nil
 }
@@ -162,11 +174,14 @@ func UpdateSettingsForProject(ctx context.Context, client *gitlabclient.Client, 
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_project_update", toolutil.ErrFieldRequired("project_id"))
 	}
-	opts := buildUpdateOpts(input.eventFields)
+	opts, err := buildUpdateOpts(input.eventFields, scopedLevels)
+	if err != nil {
+		return Output{}, err
+	}
 	settings, _, err := client.GL().NotificationSettings.UpdateSettingsForProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_project_update", err, http.StatusBadRequest,
-			"valid level values: disabled, participating, watch, global, mention, custom; verify project_id")
+			levelHint(scopedLevels)+"; verify project_id")
 	}
 	return toOutput(settings), nil
 }
@@ -178,16 +193,24 @@ func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, in
 	if input.GroupID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_group_update", toolutil.ErrFieldRequired("group_id"))
 	}
-	opts := buildUpdateOpts(input.eventFields)
+	opts, err := buildUpdateOpts(input.eventFields, scopedLevels)
+	if err != nil {
+		return Output{}, err
+	}
 	settings, _, err := client.GL().NotificationSettings.UpdateSettingsForGroup(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("notification_group_update", err, http.StatusBadRequest,
-			"valid level values: disabled, participating, watch, global, mention, custom; verify group_id")
+			levelHint(scopedLevels)+"; verify group_id")
 	}
 	return toOutput(settings), nil
 }
 
 // Helpers.
+
+// inheritLevel is the level that defers to the setting one scope up. It is the
+// only difference between the two lists below, so it is spelled once and read
+// by both of them rather than written out three times.
+const inheritLevel = "global"
 
 // levelMap translates the human-friendly notification level strings
 // accepted in [eventFields.Level] to the [gl.NotificationLevelValue]
@@ -196,20 +219,56 @@ var levelMap = map[string]gl.NotificationLevelValue{
 	"disabled":      gl.DisabledNotificationLevel,
 	"participating": gl.ParticipatingNotificationLevel,
 	"watch":         gl.WatchNotificationLevel,
-	"global":        gl.GlobalNotificationLevel,
+	inheritLevel:    gl.GlobalNotificationLevel,
 	"mention":       gl.MentionNotificationLevel,
 	"custom":        gl.CustomNotificationLevel,
 }
 
+// scopedLevels are the levels a project's or a group's settings accept, in the
+// order they are published. [inheritLevel] belongs here because a project and a
+// group both have account-wide settings to defer to.
+var scopedLevels = []string{"disabled", "participating", "watch", inheritLevel, "mention", "custom"}
+
+// globalLevels are the levels the account-wide settings accept: [scopedLevels]
+// without [inheritLevel], since nothing sits above the account to inherit from.
+// It is derived rather than written out so the one value that separates the two
+// scopes stays the only difference between them.
+//
+// client-go refuses [inheritLevel] in NotificationSettingsService.UpdateGlobalSettings
+// before it builds a request, so publishing it on the account-wide action would
+// advertise a value no caller could ever use. GitLab itself is laxer: its
+// NotificationSetting model declares the value and its Grape layer takes level
+// as a free string, so the narrowing is the SDK's, but it sits upstream of the
+// wire and nothing sent from here can get past it.
+var globalLevels = slices.DeleteFunc(slices.Clone(scopedLevels), func(level string) bool {
+	return level == inheritLevel
+})
+
+// levelHint renders the "valid level values" suggestion a 400 carries, from the
+// same list the action publishes as its enum so that the two cannot disagree.
+func levelHint(levels []string) string {
+	return "valid level values: " + strings.Join(levels, ", ")
+}
+
 // buildUpdateOpts assembles a [gl.NotificationSettingsOptions] from
 // the shared [eventFields], translating the Level string via
-// [levelMap] and copying every event flag onto the options.
-func buildUpdateOpts(e eventFields) *gl.NotificationSettingsOptions {
+// [levelMap] and copying every event flag onto the options. levels names the
+// values the caller's scope accepts, and a Level outside them is refused here.
+//
+// Refusing matters more than it looks. An unrecognized level used to be dropped
+// on the floor: the PUT went out carrying every other field and no level, GitLab
+// kept the level it already had and answered 200, and the handler rendered that
+// unchanged level as a successful update. Nothing in that answer distinguished
+// it from the change the caller asked for, which is the one kind of failure a
+// model cannot recover from on its own.
+func buildUpdateOpts(e eventFields, levels []string) (*gl.NotificationSettingsOptions, error) {
 	opts := &gl.NotificationSettingsOptions{}
 	if e.Level != "" {
-		if lv, ok := levelMap[e.Level]; ok {
-			opts.Level = &lv
+		lv, known := levelMap[e.Level]
+		if !known || !slices.Contains(levels, e.Level) {
+			return nil, toolutil.ErrInvalidEnum("level", e.Level, levels)
 		}
+		opts.Level = &lv
 	}
 	if e.NotificationEmail != "" {
 		opts.NotificationEmail = &e.NotificationEmail
@@ -232,7 +291,7 @@ func buildUpdateOpts(e eventFields) *gl.NotificationSettingsOptions {
 	opts.ReopenIssue = e.ReopenIssue
 	opts.ReopenMergeRequest = e.ReopenMergeRequest
 	opts.SuccessPipeline = e.SuccessPipeline
-	return opts
+	return opts, nil
 }
 
 // Converters.
