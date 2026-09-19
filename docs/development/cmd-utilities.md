@@ -14,6 +14,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                                                                                                                                                                             | `make audit-catalog-first`                                                                                                                                              |
 | `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                                                                                                                                                                                | `make audit-discovery`                                                                                                                                                  |
 | `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                                                                                                                                                                         | `make audit-doc-coverage`                                                                                                                                               |
+| `audit_action_ids`             | Catalog & metadata audits     | Every canonical action ID the server publishes to a model, in a cross-link, a hint, a usage line or a description, is one the catalog has                                                                                                                                                                                                                 | `make audit-action-ids`                                                                                                                                                 |
 | `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                                                                                                                                                                       | `make check-doc-tool-names`                                                                                                                                             |
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                                                                                                                                                                                  | `make audit-dynamic-aliases`                                                                                                                                            |
 | `audit_e2e_coverage`           | Catalog & metadata audits     | What the e2e suite covered, from the calls it recorded and the actions the server dispatched: every runtime x surface x mode x action classified, the levels L1 to L3, the non-tool capabilities; `-static` is the push gate over typed action ids, and `-record`/`-check-record`/`-check-record-page` commit the per-runtime summary and gate it offline | `make audit-e2e-coverage`, `make audit-e2e-gaps`, `make check-e2e-static`, `make e2e-coverage-record`, `make check-e2e-coverage-record`, `make check-e2e-coverage-page` |
@@ -323,6 +324,51 @@ The number of registered names and of documentation files scanned, then each unr
 
 - `make audit-doc-tool-names` — the report.
 - `make check-doc-tool-names` — CI gate.
+
+### audit_action_ids
+
+Holds every canonical action ID this repository publishes to a model against the IDs the catalog really builds. `audit_doc_tool_names` asks the same question of the documentation; this asks it of the server's own output, where a wrong ID is worse: an ID that resolves to nothing answers `unknown action` the moment a model follows it, and the model concludes the capability is missing rather than that the cross-link is wrong.
+
+Three kinds of string reach a model as an ID it is invited to call next, and all three are read: the `RelatedActions` list of an `ActionSpec`, which the dynamic find and execute results carry; the first argument of `toolutil.HintAction`, which a Markdown formatter writes into the result; and a dotted ID spelled inside a `Usage` line or an individual tool's `Description`. The source is loaded through `cmd/internal/goprogram` and constants are folded by the type checker rather than matched as text, which is the whole reason for the loader: the IDs are written as package-local constants, about fifty packages keep them in a metadata table with a lowercase `related` field copied onto the options, one keeps its table as a map to an anonymous struct, several hand the list in as a parameter, and two build an ID by concatenating a domain constant onto a name. A scan over literals reports the bare prefix as a finding and passes the folded value in silence, which is how a regex over `runnercontrollertokens` produced five phantoms that were never there. A value the walk cannot fold is named in an unresolved bucket rather than passed over, since a site the audit could not see must not be reported clean.
+
+The IDs are judged against the catalog this tree builds at the Ultimate tier, twice: once against a self-managed stub instance and once against GitLab.com, with the union as the oracle. Orbit registers only for GitLab.com, so a single self-managed build reports its six IDs as phantoms and a fixer deletes six working cross-links. The standalone dynamic actions are added the way `cmd/server` adds them, because `gitlab_execute_action` takes those IDs too.
+
+Two limits are worth knowing before a clean run is read for more than it is. It answers whether an ID **resolves**, never whether it is the **right** ID: the catalog has both `snippet.get` and `snippet.project_get`, so a project-snippet action cross-linked to the first is silent here. And an ID that is a **registered alias** rather than a catalog ID is reported apart, under `alias`, and is not counted a finding: `gitlab_execute_action` resolves an alias while `gitlab_find_action` publishes canonical IDs, and which of those two facts should decide is a question for the layer that fixes the cross-links.
+
+A dotted token in prose is only taken as an ID when its left half names a catalog domain, which is what turns away `github.com`, `gitlab.com` and every `params.note_id` an example binding writes. The tokens that pass that test and are still not IDs are declared in `cmd/audit_action_ids/declarations.go` with a reason each, and an entry that excuses nothing is reported like every stale declaration in this repository.
+
+It **reports and does not gate**. The findings are spread over packages no single change touches, so a gate that failed today would fail on code the change introducing it never went near; the fixes land in later layers, and the flag that turns this into a gate belongs to the layer that can pass it.
+
+#### Usage
+
+```bash
+# Report, with the work list
+go run ./cmd/audit_action_ids/
+
+# Also the alias references and the sites that could not be folded
+go run ./cmd/audit_action_ids/ -v
+
+# One package, without touching the tree's work list
+go run ./cmd/audit_action_ids/ -json "" ./internal/tools/issues
+```
+
+#### Flags
+
+| Flag    | Type     | Default                | Description                                                            |
+| ------- | -------- | ---------------------- | ---------------------------------------------------------------------- |
+| `-dir`  | `string` | `.`                    | Repository root the patterns are resolved against                      |
+| `-json` | `string` | `plan/action-ids.json` | Write the work list here; empty writes none                            |
+| `-v`    | `bool`   | `false`                | Also print the alias references and the sites that could not be folded |
+
+Positional arguments are package patterns; with none, `./internal/tools/...`.
+
+#### Output
+
+Every wrong ID with its file, its line, the string and the closest real ID, grouped by the package that has to act on it, then a summary naming how many IDs were judged against how many catalog IDs. Exits `1` only for a run that could not be made: a catalog that would not build, source that did not type-check, or a work list that could not be written.
+
+#### Make targets
+
+- `make audit-action-ids`: the report plus `plan/action-ids.json`.
 
 ### audit_dynamic_aliases
 

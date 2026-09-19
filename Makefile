@@ -15,6 +15,7 @@
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description \
+	audit-action-ids \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -1684,6 +1685,18 @@ audit-md-escaping:
 ## formatter that calls it. The staged rules are not judged here. CI gate.
 check-md-escaping:
 	go run ./cmd/audit_md_escaping/ -check -fail-unresolved-in internal/toolutil
+
+## audit-action-ids: report every canonical action ID this repository publishes
+## to a model that the catalog does not have: the RelatedActions of an
+## ActionSpec, the first argument of every toolutil.HintAction call, and a
+## dotted ID spelled inside a Usage line or an individual tool's description.
+## Constants are folded by the type checker rather than matched as text, and
+## the IDs are judged against the catalog built at Ultimate for a self-managed
+## instance and for GitLab.com together, so the Orbit family does not read as
+## dead. It reports and does not gate: the findings are spread over packages no
+## single change touches. The work list lands in plan/action-ids.json.
+audit-action-ids:
+	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every
