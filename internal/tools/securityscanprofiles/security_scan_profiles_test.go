@@ -550,9 +550,11 @@ func TestActionSpecs_ActionIDs_NameActionsThatExist(t *testing.T) {
 		own["security_scan_profile."+s.Name] = true
 	}
 	for _, id := range []string{actionAttach, actionDetach, actionListProjectStatuses} {
-		if !own[id] {
-			t.Errorf("constant %q names no action this package registers (registered: %v)", id, own)
-		}
+		t.Run(id, func(t *testing.T) {
+			if !own[id] {
+				t.Errorf("constant %q names no action this package registers (registered: %v)", id, own)
+			}
+		})
 	}
 	// The two foreign IDs are the only actions outside this package the specs
 	// and hints are allowed to send a model to; both are checked against the
