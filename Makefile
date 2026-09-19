@@ -9,7 +9,8 @@
 	golangci-lint govulncheck sonar sonar-status \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
-	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
+	audit-output audit-tokens audit-tools audit-surface-quality check-surface-quality check-spec-conditions audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
+	audit-catalog-first \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-sdk audit-1to1-enums audit-1to1-paths audit-1to1-paths-endpoints audit-1to1-paths-e2e audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-e2e-coverage e2e-go-coverage check-e2e-static audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests check-supply-chain \
 	e2e-coverage-record e2e-coverage-record-ce e2e-coverage-record-ee e2e-coverage-record-render check-e2e-coverage-record check-e2e-coverage-page \
@@ -806,26 +807,27 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/20] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/20] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/20] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/20] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/20] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/20] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/20] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/20] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/20] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/20] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[11/20] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
-	run_check "[12/20] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[13/20] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[14/20] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[15/20] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[16/20] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[17/20] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[18/20] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
-	run_check "[19/20] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[20/20] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[1/21] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/21] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/21] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/21] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/21] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/21] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/21] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/21] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/21] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/21] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[11/21] published action IDs" go run ./cmd/audit_action_ids/ -check -json ''; \
+	run_check "[12/21] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[13/21] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[14/21] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[15/21] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[16/21] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[17/21] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[18/21] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[19/21] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[20/21] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[21/21] MCP tool surface quality" go run ./cmd/audit_surface_quality/ -check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1399,6 +1401,19 @@ check-action-catalog-manifest:
 ## Combines the former audit_tools (metadata) and audit_output (output quality).
 audit-surface-quality:
 	go run ./cmd/audit_surface_quality/
+
+## check-surface-quality: the same audit as a gate. Prints the violations that
+## gate and exits non-zero on any. The result-envelope section stays a report.
+check-surface-quality:
+	@echo === MCP tool surface quality ===
+	go run ./cmd/audit_surface_quality/ -check
+
+## check-spec-conditions: condition coverage (gobco) over the action_specs.go
+## this branch changes against BASE (default origin/main). A condition no test
+## evaluates both ways fails; a package gobco cannot instrument is reported.
+check-spec-conditions:
+	@echo === action spec conditions ===
+	./scripts/check-spec-conditions.sh $(BASE)
 
 ## audit-output: run MCP output quality audit on all tools.
 ## Backward-compat wrapper over audit-surface-quality -view=output.

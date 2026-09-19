@@ -87,6 +87,15 @@ copies every `.go` file into its work directory ignoring `//go:build`, so
 (`openLeafNoFollow`, `bindUnixSocket`). Those two are covered by mutation
 testing only.
 
+**Nor a package whose `export_test.go` hands a symbol to its external test
+package.** It resolves the `_test` package against the non-test files alone,
+so `internal/tools/todos` dies with `action_specs_test.go:49:27: undefined:
+todos.PublishedActionIDs` before instrumenting anything. Twenty-five of the
+169 packages that carry an `action_specs.go` are in that state today. The
+limitation is the tool's rather than the package's, which is why
+`make check-spec-conditions` reports such a package as not measured instead
+of failing on it.
+
 **A gremlins run reporting TIMED OUT on a fast package has measured nothing.**
 It derives each mutant's timeout from the package's own baseline times a
 coefficient and applies no floor, so where the tests are quick that product
@@ -249,6 +258,30 @@ test file holds the shipped writer, and a second one holds `os.Stderr` taken
 right beside it. `internal/cmdutil`'s `initialStderr` is the worked example,
 and the test that needed it still fails when the package is pointed at
 `os.Stdout`, which is the property it exists to hold.
+
+### One condition class that gates
+
+One narrow reading of gobco's output is a gate rather than a report, and it
+came out of this sweep. `make check-spec-conditions`, which is
+`scripts/check-spec-conditions.sh`, runs gobco over the `action_specs.go` of
+the packages a branch changes and fails on a condition no test evaluates
+both ways. The shape it is aimed at is the one the sweep keeps finding and
+no other gate reads: a per-action metadata table plus a dispatch on the tool
+name, where every entry of the table fills every field, so each
+`if meta.x != ""` arm is always taken and its fallback can never publish
+anything. The condition is then a decoration, and the mapping from action to
+metadata is stated nowhere a reader can check.
+
+It is narrow on purpose. gobco costs 60 to 80 seconds per package and caches
+nothing, so the 169 packages carrying an `action_specs.go` would be about
+three hours; a condition anywhere else in a package stays the sweep's subject
+and is read with `make coverage-conditions`. A condition that genuinely
+cannot take the other value is declared on its own line, and a declaration
+that answers nothing fails:
+
+```go
+if meta.usage != "" { // gobco: always true because every entry sets it
+```
 
 ## When To Use Each Layer
 

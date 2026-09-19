@@ -273,7 +273,7 @@ func TestAuditResultEnvelopes_Registry_DrivesEveryFormatterAndCountsWhatItLacks(
 		return "## " + v.Name
 	})
 
-	audit := auditResultEnvelopes()
+	audit, _ := auditResultEnvelopes()
 
 	if audit.Formatters == 0 || audit.Formatters != toolutil.MarkdownFormatterCount() {
 		t.Errorf("formatters = %d, want the %d the registry holds", audit.Formatters, toolutil.MarkdownFormatterCount())
@@ -313,7 +313,8 @@ func TestRenderEnvelope_Panic_IsReportedRatherThanRaised(t *testing.T) {
 	type panicking struct{ Name string }
 	toolutil.RegisterMarkdown(func(panicking) string { panic("no render") })
 
-	result, panicked := renderEnvelope(reflect.TypeFor[panicking](), testutil.FixtureMultiPage)
+	value := testutil.FillFixture(reflect.TypeFor[panicking](), testutil.FixtureOptions{State: testutil.FixtureMultiPage, Text: fixtureText})
+	result, panicked := renderEnvelope(value)
 
 	if result != nil || panicked != "no render" {
 		t.Errorf("renderEnvelope = %v, %q, want nil and the panic's message", result, panicked)

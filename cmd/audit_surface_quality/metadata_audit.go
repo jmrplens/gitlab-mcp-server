@@ -45,9 +45,10 @@ type violation struct {
 }
 
 // runMetadataAudit runs the metadata-quality checks (naming, descriptions,
-// annotations, schema shape, duplicates, register-meta inventory) and prints
-// the report to stdout.
-func runMetadataAudit(client *gitlabclient.Client) {
+// annotations, schema shape, duplicates, edition tier, register-meta
+// inventory, constant index) and prints the report to stdout. It returns how
+// many violations gate, which is what -check exits on.
+func runMetadataAudit(client *gitlabclient.Client) int {
 	individualTools := listTools(client, false)
 	metaTools := listTools(client, true)
 
@@ -65,6 +66,7 @@ func runMetadataAudit(client *gitlabclient.Client) {
 	violations = append(violations, auditAdditionalProperties(metaTools, "meta")...)
 	violations = append(violations, auditDuplicates(individualTools, "individual")...)
 	violations = append(violations, auditDuplicates(metaTools, "meta")...)
+	violations = append(violations, auditEditionTier(client)...)
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
@@ -79,7 +81,14 @@ func runMetadataAudit(client *gitlabclient.Client) {
 		violations = append(violations, auditRegisterMetaDefinitionViolations(registerMetaDefinitions)...)
 	}
 
-	printMetadataReport(individualTools, metaTools, violations, registerMetaDefinitions, auditResultEnvelopes())
+	envelopes, constantIndex := auditResultEnvelopes()
+	violations = append(violations, applyConstantIndexDeclarations(constantIndex)...)
+
+	if checkMode {
+		return reportGate("metadata", violations)
+	}
+	printMetadataReport(individualTools, metaTools, violations, registerMetaDefinitions, envelopes)
+	return len(violations)
 }
 
 // envelopeAudit is what driving every registered Markdown formatter with a
@@ -101,9 +110,16 @@ type envelopeAudit struct {
 // auditResultEnvelopes drives every registered formatter through
 // MarkdownForResult, the way the dispatchers do, with the zero value and the
 // populated fixture the runtime gate uses, and records what the envelope
-// lacked.
-func auditResultEnvelopes() envelopeAudit {
+// lacked. Beside the report it returns the constant-index violations the
+// same populated render answers, which gate.
+//
+// The fixture is filled through [fixtureText] rather than with the shared
+// filler's own sentinels, so the two elements of every slice differ. Until
+// they did, this walk could not tell a formatter that renders each element
+// of a list from one that renders the first twice.
+func auditResultEnvelopes() (envelopeAudit, []violation) {
 	audit := envelopeAudit{RegistrationProblems: toolutil.MarkdownRegistrationProblems()}
+	var constantIndex []violation
 	for _, typ := range toolutil.RegisteredMarkdownTypes() {
 		audit.Formatters++
 		name := typ.String()
@@ -111,7 +127,8 @@ func auditResultEnvelopes() envelopeAudit {
 			name += " (" + fn + ")"
 		}
 		for _, state := range []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage} {
-			result, panicked := renderEnvelope(typ, state)
+			value := testutil.FillFixture(typ, testutil.FixtureOptions{State: state, Text: fixtureText})
+			result, panicked := renderEnvelope(value)
 			switch {
 			case panicked != "":
 				audit.Panicked = append(audit.Panicked, name+" ["+state.String()+"]: "+panicked)
@@ -125,21 +142,24 @@ func auditResultEnvelopes() envelopeAudit {
 						audit.Unannotated = append(audit.Unannotated, fmt.Sprintf("%s [%s] block %d (%T)", name, state, i, block))
 					}
 				}
+				if state == testutil.FixtureMultiPage {
+					constantIndex = append(constantIndex, constantIndexViolations(name, value, result)...)
+				}
 			}
 		}
 	}
-	return audit
+	return audit, constantIndex
 }
 
-// renderEnvelope renders one type in one state, reporting a panic rather
-// than ending the audit on it.
-func renderEnvelope(typ reflect.Type, state testutil.FixtureState) (result *mcp.CallToolResult, panicked string) {
+// renderEnvelope renders one filled fixture, reporting a panic rather than
+// ending the audit on it.
+func renderEnvelope(value reflect.Value) (result *mcp.CallToolResult, panicked string) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = fmt.Sprint(r)
 		}
 	}()
-	return toolutil.MarkdownForResult(testutil.FillFixture(typ, testutil.FixtureOptions{State: state}).Interface()), ""
+	return toolutil.MarkdownForResult(value.Interface()), ""
 }
 
 // blockAnnotated reports whether a content block carries Annotations, for
