@@ -4,12 +4,16 @@
 package notifications
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -505,5 +509,206 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 				t.Fatalf("nil result for %s", tc.name)
 			}
 		})
+	}
+}
+
+// Per-event identity.
+
+// eventFieldCase ties one notification event to the three spellings it travels
+// under: the JSON key GitLab reads and writes, the [EventOutput] field it is
+// decoded into, and the card row it is rendered as.
+//
+// Three places copy the eighteen events field by field: the converter, the
+// request-option builder and the card. A line that names the wrong one of the
+// eighteen is a pure assignment, so neither the mutation nor the condition gate
+// can see it, and only a fixture that moves one event at a time can. That is
+// why all three tests below share this table.
+type eventFieldCase struct {
+	key   string
+	label string
+	set   func(*EventOutput)
+	send  func(*eventFields, *bool)
+}
+
+// eventFieldCases lists every event the notification settings carry.
+var eventFieldCases = []eventFieldCase{
+	{"close_issue", "Close Issue", func(e *EventOutput) { e.CloseIssue = true }, func(f *eventFields, v *bool) { f.CloseIssue = v }},
+	{"close_merge_request", "Close MR", func(e *EventOutput) { e.CloseMergeRequest = true }, func(f *eventFields, v *bool) { f.CloseMergeRequest = v }},
+	{"failed_pipeline", "Failed Pipeline", func(e *EventOutput) { e.FailedPipeline = true }, func(f *eventFields, v *bool) { f.FailedPipeline = v }},
+	{"fixed_pipeline", "Fixed Pipeline", func(e *EventOutput) { e.FixedPipeline = true }, func(f *eventFields, v *bool) { f.FixedPipeline = v }},
+	{"issue_due", "Issue Due", func(e *EventOutput) { e.IssueDue = true }, func(f *eventFields, v *bool) { f.IssueDue = v }},
+	{"merge_merge_request", "Merge MR", func(e *EventOutput) { e.MergeMergeRequest = true }, func(f *eventFields, v *bool) { f.MergeMergeRequest = v }},
+	{"merge_when_pipeline_succeeds", "Merge When Pipeline Succeeds", func(e *EventOutput) { e.MergeWhenPipelineSucceeds = true }, func(f *eventFields, v *bool) { f.MergeWhenPipelineSucceeds = v }},
+	{"moved_project", "Moved Project", func(e *EventOutput) { e.MovedProject = true }, func(f *eventFields, v *bool) { f.MovedProject = v }},
+	{"new_issue", "New Issue", func(e *EventOutput) { e.NewIssue = true }, func(f *eventFields, v *bool) { f.NewIssue = v }},
+	{"new_merge_request", "New MR", func(e *EventOutput) { e.NewMergeRequest = true }, func(f *eventFields, v *bool) { f.NewMergeRequest = v }},
+	{"new_epic", "New Epic", func(e *EventOutput) { e.NewEpic = true }, func(f *eventFields, v *bool) { f.NewEpic = v }},
+	{"new_note", "New Note", func(e *EventOutput) { e.NewNote = true }, func(f *eventFields, v *bool) { f.NewNote = v }},
+	{"push_to_merge_request", "Push to MR", func(e *EventOutput) { e.PushToMergeRequest = true }, func(f *eventFields, v *bool) { f.PushToMergeRequest = v }},
+	{"reassign_issue", "Reassign Issue", func(e *EventOutput) { e.ReassignIssue = true }, func(f *eventFields, v *bool) { f.ReassignIssue = v }},
+	{"reassign_merge_request", "Reassign MR", func(e *EventOutput) { e.ReassignMergeRequest = true }, func(f *eventFields, v *bool) { f.ReassignMergeRequest = v }},
+	{"reopen_issue", "Reopen Issue", func(e *EventOutput) { e.ReopenIssue = true }, func(f *eventFields, v *bool) { f.ReopenIssue = v }},
+	{"reopen_merge_request", "Reopen MR", func(e *EventOutput) { e.ReopenMergeRequest = true }, func(f *eventFields, v *bool) { f.ReopenMergeRequest = v }},
+	{"success_pipeline", "Success Pipeline", func(e *EventOutput) { e.SuccessPipeline = true }, func(f *eventFields, v *bool) { f.SuccessPipeline = v }},
+}
+
+// TestGetGlobalSettings_OneEventAtATime_LandsInItsOwnOutputField verifies that
+// each key GitLab sends is decoded into the field of the same name and into no
+// other, by answering with exactly one enabled event and demanding exactly that
+// field back.
+//
+// The fixtures this replaces sent every flag as false but one, so two fields
+// crossed in the converter would have told a caller that an event they asked
+// about is off while a different one is on.
+func TestGetGlobalSettings_OneEventAtATime_LandsInItsOwnOutputField(t *testing.T) {
+	for _, tc := range eventFieldCases {
+		t.Run(tc.key, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{"level":"custom","events":{%q:true}}`, tc.key))
+			}))
+
+			out, err := GetGlobalSettings(t.Context(), client, GetGlobalInput{})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.Events == nil {
+				t.Fatal("events = nil, want the flags GitLab sent")
+			}
+			var want EventOutput
+			tc.set(&want)
+			if *out.Events != want {
+				t.Errorf("events = %+v, want %+v", *out.Events, want)
+			}
+		})
+	}
+}
+
+// TestUpdateGlobalSettings_OneEventAtATime_SendsOnlyThatKey verifies that each
+// event a caller sets reaches GitLab under its own key, alone, and that a flag
+// set to false is sent as false rather than dropped.
+//
+// Both halves matter: a request option copied from the neighboring field
+// silently changes an event the caller never named, and "stop notifying me"
+// that never leaves the process reads to the caller as a change that was made.
+func TestUpdateGlobalSettings_OneEventAtATime_SendsOnlyThatKey(t *testing.T) {
+	for _, tc := range eventFieldCases {
+		t.Run(tc.key, func(t *testing.T) {
+			sent := captureUpdateBody(t, func(client *gitlabclient.Client) error {
+				off := false
+				var input UpdateGlobalInput
+				tc.send(&input.eventFields, &off)
+				_, err := UpdateGlobalSettings(t.Context(), client, input)
+				return err
+			})
+
+			if len(sent) != 1 {
+				t.Fatalf("request body = %v, want only %q", sent, tc.key)
+			}
+			flag, ok := sent[tc.key].(bool)
+			if !ok || flag {
+				t.Errorf("%s = %v, want the false the caller asked for", tc.key, sent[tc.key])
+			}
+		})
+	}
+}
+
+// TestUpdateSettingsForGroup_Level_SendsTheSpellingGitLabAccepts verifies that
+// each level name the input schema offers is translated into the enum value
+// GitLab reads, and that nothing else joins it in the body.
+//
+// levelMap is a plain literal, so two levels swapped in it would set a caller
+// asking to be left alone to watching every event, and no branch is involved
+// for either gate to score. The group scope is used because it is the one that
+// accepts all six: the SDK refuses "global" for the account-wide settings.
+func TestUpdateSettingsForGroup_Level_SendsTheSpellingGitLabAccepts(t *testing.T) {
+	for _, level := range []string{"disabled", "participating", "watch", "global", "mention", "custom"} {
+		t.Run(level, func(t *testing.T) {
+			sent := captureUpdateBody(t, func(client *gitlabclient.Client) error {
+				_, err := UpdateSettingsForGroup(t.Context(), client, UpdateGroupInput{GroupID: "grp", Level: level})
+				return err
+			})
+
+			if len(sent) != 1 {
+				t.Fatalf("request body = %v, want only the level", sent)
+			}
+			if got, _ := sent["level"].(string); got != level {
+				t.Errorf("level = %q, want %q", got, level)
+			}
+		})
+	}
+}
+
+// captureUpdateBody runs call against a client whose GitLab answers every
+// request with the shared settings fixture, and returns the JSON body the call
+// put on the wire. A handler cannot abort the test goroutine, so a read failure
+// is reported and the decode below fails on the empty body.
+func captureUpdateBody(t *testing.T, call func(*gitlabclient.Client) error) map[string]any {
+	t.Helper()
+
+	var body []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		read, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading request body: %v", err)
+		}
+		body = read
+		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
+	}))
+
+	if err := call(client); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("request body %q is not an object: %v", body, err)
+	}
+	return sent
+}
+
+// TestFormatMarkdownString_OneEventAtATime_TicksOnlyItsOwnRow verifies that
+// each event is rendered on the row bearing its own name, by enabling one at a
+// time and demanding a single tick on that row.
+//
+// The card names the events in an order of its own rather than the struct's, so
+// a row reading its neighbor's field would tell a reader that an event is on
+// while the JSON beside it says otherwise.
+func TestFormatMarkdownString_OneEventAtATime_TicksOnlyItsOwnRow(t *testing.T) {
+	for _, tc := range eventFieldCases {
+		t.Run(tc.key, func(t *testing.T) {
+			var events EventOutput
+			tc.set(&events)
+
+			got := FormatMarkdownString(Output{Level: "custom", Events: &events})
+			if row := "- **" + tc.label + "**: ✅\n"; !strings.Contains(got, row) {
+				t.Errorf("card is missing %q:\n%s", row, got)
+			}
+			if n := strings.Count(got, "✅"); n != 1 {
+				t.Errorf("card ticks %d events, want only %s", n, tc.label)
+			}
+		})
+	}
+}
+
+// TestNotificationOptions_NameWithNoMetadata_KeepsTheSharedBaseOptions
+// verifies that an action the discovery-metadata map does not hold keeps the
+// base options rather than having them blanked.
+//
+// The map lookup guards exactly that: without it, an absent entry would
+// overwrite the tool-name alias with nothing, and a newly added action would be
+// unreachable by any name a model could search for.
+func TestNotificationOptions_NameWithNoMetadata_KeepsTheSharedBaseOptions(t *testing.T) {
+	options := notificationOptions("notification_unlisted_get", "gitlab_notification_unlisted_get")
+
+	if len(options.Aliases) != 1 || options.Aliases[0] != "gitlab_notification_unlisted_get" {
+		t.Errorf("Aliases = %v, want only the individual tool name", options.Aliases)
+	}
+	if options.OwnerPackage != "notifications" {
+		t.Errorf("OwnerPackage = %q, want notifications", options.OwnerPackage)
+	}
+	if options.IndividualTool.Name != "gitlab_notification_unlisted_get" {
+		t.Errorf("IndividualTool.Name = %q, want gitlab_notification_unlisted_get", options.IndividualTool.Name)
+	}
+	if options.Usage != "" || len(options.RelatedActions) != 0 {
+		t.Errorf("Usage = %q, RelatedActions = %v, want both empty for an action with no metadata", options.Usage, options.RelatedActions)
 	}
 }
