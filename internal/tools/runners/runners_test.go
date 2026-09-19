@@ -6,6 +6,7 @@ package runners
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -1035,6 +1036,24 @@ func TestResetProjectRegToken_APIError(t *testing.T) {
 	}
 }
 
+// TestResetRegToken_ResponseWithoutAToken_LeavesTheOutputEmpty pins what the
+// registration-token converter does with a response carrying neither field. Its
+// two nil checks had never once been taken on the false side, so the read they
+// guard was covered by nothing and a dereference there would have shipped.
+func TestResetRegToken_ResponseWithoutAToken_LeavesTheOutputEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{}`)
+	}))
+
+	out, err := ResetInstanceRegToken(context.Background(), client, ResetInstanceRegTokenInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Token != "" || out.ExpiresAt != "" {
+		t.Errorf("output = %+v, want both fields empty", out)
+	}
+}
+
 // TestRunnerStatusSpecificAPIErrors covers status-specific hints not exercised by generic API-error tests.
 func TestRunnerStatusSpecificAPIErrors(t *testing.T) {
 	tests := []struct {
@@ -1114,6 +1133,19 @@ func assertRunnerQuery(t *testing.T, q url.Values, want map[string]string) {
 	for key, exp := range want {
 		if got := q.Get(key); got != exp {
 			t.Errorf("query %s = %q, want %q", key, got, exp)
+		}
+	}
+}
+
+// assertRunnerQueryAbsent fails the test for any named query parameter the
+// request carries at all. A filter the caller left unset must not travel as an
+// empty value: an inverted guard sends exactly that, and Get cannot tell an
+// empty value from a parameter that is not there.
+func assertRunnerQueryAbsent(t *testing.T, q url.Values, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if q.Has(key) {
+			t.Errorf("query carries %s = %q, want the parameter absent", key, q.Get(key))
 		}
 	}
 }
@@ -1244,6 +1276,70 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	}
 }
 
+// runnerRequestBody decodes the JSON body a handler sent GitLab. It returns the
+// whole object rather than one key, because a field the handler dropped and a
+// field it invented are both a wrong request and only the whole map shows the
+// second.
+func runnerRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode body: %v", err)
+		return nil
+	}
+	return body
+}
+
+// TestUpdate_OneFieldAtATime_SendsThatFieldAndNothingElse drives one update per
+// optional field and compares the whole request body. One field at a time is
+// what distinguishes them: a block of flags set together is indistinguishable
+// under a swap, and until this existed every guard in the options block could be
+// inverted with nothing failing, which sends GitLab the unset value and drops
+// the one the caller asked for. The empty case is the other half: a runner whose
+// tags were never mentioned must not have them cleared.
+func TestUpdate_OneFieldAtATime_SendsThatFieldAndNothingElse(t *testing.T) {
+	paused, locked, runUntagged, active := false, false, true, true
+	maxTimeout := int64(7200)
+
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{"nothing", UpdateInput{RunnerID: 10}, map[string]any{}},
+		{"description", UpdateInput{RunnerID: 10, Description: "desc-1"}, map[string]any{"description": "desc-1"}},
+		{"paused", UpdateInput{RunnerID: 10, Paused: &paused}, map[string]any{"paused": false}},
+		{"tag_list", UpdateInput{RunnerID: 10, TagList: []string{"docker", "linux"}}, map[string]any{"tag_list": []any{"docker", "linux"}}},
+		{"run_untagged", UpdateInput{RunnerID: 10, RunUntagged: &runUntagged}, map[string]any{"run_untagged": true}},
+		{"locked", UpdateInput{RunnerID: 10, Locked: &locked}, map[string]any{"locked": false}},
+		{"access_level", UpdateInput{RunnerID: 10, AccessLevel: "ref_protected"}, map[string]any{"access_level": "ref_protected"}},
+		{"maximum_timeout", UpdateInput{RunnerID: 10, MaximumTimeout: &maxTimeout}, map[string]any{"maximum_timeout": float64(7200)}},
+		{"maintenance_note", UpdateInput{RunnerID: 10, MaintenanceNote: "under repair"}, map[string]any{"maintenance_note": "under repair"}},
+		{"active", UpdateInput{RunnerID: 10, Active: &active}, map[string]any{"active": true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathRunner10 || r.Method != http.MethodPut {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+					return
+				}
+				got = runnerRequestBody(t, r)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"r-10"}`)
+			}))
+
+			if _, err := Update(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Remove — canceled context, API error
 // ---------------------------------------------------------------------------.
@@ -1347,13 +1443,17 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_AllFilters verifies ListProject when all filters.
+// TestListProject_AllFilters verifies every filter the caller set reaches
+// GitLab. type, status and tag_list were unasserted here, and their three
+// guards could each be inverted — dropping the caller's filter and sending the
+// unset one — with the whole suite still green.
 func TestListProject_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/runners" && r.Method == http.MethodGet {
 			assertRunnerQuery(t, r.URL.Query(), map[string]string{
 				"scope": "active", "paused": "false", "order_by": "id", "sort": "asc",
 				"pagination": "keyset", "page_token": "p-tok",
+				"type": "group_type", "status": "online", "tag_list": "docker,linux",
 			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "0", TotalPages: "0"})
@@ -1455,10 +1555,17 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroup_AllFilters verifies ListGroup when all filters.
+// TestListGroup_AllFilters verifies every filter the caller set reaches GitLab.
+// This test used to assert nothing about the request at all, so the group
+// endpoint's three filter guards could be inverted without a single failure and
+// a group runner search would have been answered from the unfiltered list.
 func TestListGroup_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/7/runners" && r.Method == http.MethodGet {
+			assertRunnerQuery(t, r.URL.Query(), map[string]string{
+				"type": "instance_type", "status": "offline", "tag_list": "ci,nightly",
+				"order_by": "id", "sort": "desc", "page": "1", "per_page": "5",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "0", TotalPages: "0"})
 			return
@@ -1471,10 +1578,52 @@ func TestListGroup_AllFilters(t *testing.T) {
 		Type:    "instance_type",
 		Status:  "offline",
 		TagList: []string{"ci", "nightly"},
+		OrderBy: "id",
+		Sort:    "desc",
 		Page:    1, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestListScoped_NoFilters_SendsNoEmptyFilterParameter pins the other half of
+// each filter guard: a filter the caller left unset is not sent as an empty
+// value. GitLab reads `type=` as a type it does not have, so an inverted guard
+// turns "list this project's runners" into "list the ones with no type".
+func TestListScoped_NoFilters_SendsNoEmptyFilterParameter(t *testing.T) {
+	filters := []string{"type", "status", "tag_list"}
+
+	tests := []struct {
+		name string
+		path string
+		call func(*gitlabclient.Client) error
+	}{
+		{"project", "/api/v4/projects/42/runners", func(c *gitlabclient.Client) error {
+			_, err := ListProject(context.Background(), c, ListProjectInput{ProjectID: "42"})
+			return err
+		}},
+		{"group", "/api/v4/groups/7/runners", func(c *gitlabclient.Client) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "7"})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path {
+					t.Errorf("unexpected path %s, want %s", r.URL.Path, tt.path)
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+					return
+				}
+				assertRunnerQueryAbsent(t, r.URL.Query(), filters...)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+
+			if err := tt.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
 	}
 }
 
@@ -1564,6 +1713,68 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 	if out.Token != "glrt-new" || !out.Active || out.IPAddress != "10.1.2.3" ||
 		out.TokenExpiresAt != "2026-12-31T00:00:00Z" {
 		t.Errorf("runner output deprecated fields mismatch: %+v", out)
+	}
+}
+
+// TestRegister_OneFieldAtATime_SendsThatFieldBesideTheToken drives one
+// registration per optional field and compares the whole request body against
+// the token plus that field. The token is the only thing GitLab requires, so a
+// field the handler silently dropped still registered a runner — configured as
+// nothing the caller asked for — and the suite reported success.
+func TestRegister_OneFieldAtATime_SendsThatFieldBesideTheToken(t *testing.T) {
+	paused, locked, runUntagged, active := true, false, true, true
+	maxTimeout := int64(3600)
+	base := func() RegisterInput { return RegisterInput{Token: "reg-token"} }
+	with := func(mutate func(*RegisterInput)) RegisterInput {
+		in := base()
+		mutate(&in)
+		return in
+	}
+
+	tests := []struct {
+		name  string
+		input RegisterInput
+		want  map[string]any
+	}{
+		{"token only", base(), map[string]any{}},
+		{"description", with(func(in *RegisterInput) { in.Description = "desc-1" }), map[string]any{"description": "desc-1"}},
+		{
+			"info", with(func(in *RegisterInput) {
+				in.Info = &RegisterInfoInput{Name: "rn-1", Version: "16.1", Revision: "rev-9f", Platform: "linux", Architecture: "amd64"}
+			}),
+			map[string]any{"info": map[string]any{"name": "rn-1", "version": "16.1", "revision": "rev-9f", "platform": "linux", "architecture": "amd64"}},
+		},
+		{"paused", with(func(in *RegisterInput) { in.Paused = &paused }), map[string]any{"paused": true}},
+		{"locked", with(func(in *RegisterInput) { in.Locked = &locked }), map[string]any{"locked": false}},
+		{"run_untagged", with(func(in *RegisterInput) { in.RunUntagged = &runUntagged }), map[string]any{"run_untagged": true}},
+		{"tag_list", with(func(in *RegisterInput) { in.TagList = []string{"docker", "linux"} }), map[string]any{"tag_list": []any{"docker", "linux"}}},
+		{"access_level", with(func(in *RegisterInput) { in.AccessLevel = "ref_protected" }), map[string]any{"access_level": "ref_protected"}},
+		{"maximum_timeout", with(func(in *RegisterInput) { in.MaximumTimeout = &maxTimeout }), map[string]any{"maximum_timeout": float64(3600)}},
+		{"maintenance_note", with(func(in *RegisterInput) { in.MaintenanceNote = "new runner" }), map[string]any{"maintenance_note": "new runner"}},
+		{"active", with(func(in *RegisterInput) { in.Active = &active }), map[string]any{"active": true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathRunners || r.Method != http.MethodPost {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+					return
+				}
+				got = runnerRequestBody(t, r)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"name":"nr-99","token":"glrt-new"}`)
+			}))
+
+			if _, err := Register(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			want := map[string]any{"token": "reg-token"}
+			maps.Copy(want, tt.want)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("request body = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -1958,6 +2169,32 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 	}
 }
 
+// TestFormatDetailsMarkdown_CreatedBy_RendersTheUserLink pins the one row the
+// detail card adds when GitLab names who created the runner. The field is read
+// from the captured response (ADR-0021) because client-go does not model it, so
+// the card is the only place a reader ever sees it.
+func TestFormatDetailsMarkdown_CreatedBy_RendersTheUserLink(t *testing.T) {
+	got := FormatDetailsMarkdown(DetailsOutput{
+		ID:        10,
+		Name:      "detail-runner",
+		CreatedBy: &toolutil.UserBasicOutput{Username: "ada", WebURL: "https://gitlab.example.com/ada"},
+	})
+
+	want := "## Runner #10: Details\n\n" +
+		"- **ID**: 10\n" +
+		"- **Name**: detail-runner\n" +
+		"- **Shared**: ❌\n" +
+		"- **Online**: ❌\n" +
+		"- **Locked**: ❌\n" +
+		"- **Run Untagged**: ❌\n" +
+		"- **Created By**: [@ada](https://gitlab.example.com/ada)\n" +
+		detailHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatListMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
@@ -2036,6 +2273,25 @@ func TestFormatJobListMarkdown_WithData(t *testing.T) {
 		"| [100](https://gitlab.example.com/acme/web/-/jobs/100) | build | ✅ success | build | main | 12.5s |\n" +
 		"| 101 | test | \U0001F535 running | test | develop | 0.0s |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
+		jobListHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatJobListMarkdown_JobWithNoStatus_LeavesTheStatusCellEmpty pins the
+// cell for a job GitLab sent no status for. A glyph with nothing beside it
+// still reads as a state, so the empty cell is what says the state is unknown;
+// nothing had ever driven the formatter with a blank status.
+func TestFormatJobListMarkdown_JobWithNoStatus_LeavesTheStatusCellEmpty(t *testing.T) {
+	got := FormatJobListMarkdown(JobListOutput{
+		Jobs: []jobs.Output{{ID: 100, Name: "build", Stage: "build", Ref: "main", Duration: 1.0}},
+	})
+
+	want := "## Runner Jobs (1)\n\n" +
+		"| ID | Name | Status | Stage | Ref | Duration |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 100 | build |  | build | main | 1.0s |\n" +
 		jobListHints
 
 	if got != want {
@@ -2306,6 +2562,42 @@ func TestListManagers_Success(t *testing.T) {
 	}
 }
 
+// TestListManagers_EveryField_ComesFromItsOwnKey drives the handler against a
+// manager in which no two values agree and compares the whole converted object.
+// The converter is a block of straight-line assignments, which neither the
+// mutation nor the condition gate scores: version and revision could be read
+// from each other's key, and platform from architecture's, with every other
+// assertion in this file still passing.
+func TestListManagers_EveryField_ComesFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/runners/1/managers" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id":10,"system_id":"sys-01","version":"16.1","revision":"rev-9f",
+			"platform":"linux","architecture":"amd64","ip_address":"10.0.0.1",
+			"status":"online","job_execution_status":"idle",
+			"created_at":"2026-01-15T10:00:00Z","contacted_at":"2026-01-15T11:30:00Z"
+		}]`)
+	}))
+
+	out, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := []ManagerOutput{{
+		ID: 10, SystemID: "sys-01", Version: "16.1", Revision: "rev-9f",
+		Platform: "linux", Architecture: "amd64", IPAddress: "10.0.0.1",
+		Status: "online", JobExecutionStatus: "idle",
+		CreatedAt: "2026-01-15T10:00:00Z", ContactedAt: "2026-01-15T11:30:00Z",
+	}}
+	if !reflect.DeepEqual(out.Managers, want) {
+		t.Errorf("managers = %+v, want %+v", out.Managers, want)
+	}
+}
+
 // TestListManagers_ZeroRunnerID verifies validation of zero runner ID.
 func TestListManagers_ZeroRunnerID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
@@ -2368,7 +2660,6 @@ func TestFormatManagerListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestToManagerOutput_Timestamps verifies timestamp fields are formatted when present.
 // TestListManagers_UnreadableCapturedJobExecutionStatus verifies that the
 // runner manager list handler returns an error rather than a half-filled
 // manager when GitLab sends job_execution_status as something that is not a
@@ -2384,6 +2675,7 @@ func TestListManagers_UnreadableCapturedJobExecutionStatus(t *testing.T) {
 	}
 }
 
+// TestToManagerOutput_Timestamps verifies timestamp fields are formatted when present.
 func TestToManagerOutput_Timestamps(t *testing.T) {
 	createdAt := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	contactedAt := time.Date(2026, 1, 15, 11, 30, 0, 0, time.UTC)

@@ -166,23 +166,21 @@ func runnerListFilterOverrides() []toolutil.InputSchemaOverride {
 // actions: natural-language Aliases, RelatedActions cross-links, and the
 // "Returns: … See also: …" individual-tool description the model sees. It is a
 // no-op for any tool not present in runnerActionMeta.
+//
+// The map lookup is the only guard: every entry carries all four fields, so a
+// second "was this one set" guard around each assignment could never decide
+// anything, and a branch nothing can reach is a branch nothing can hold to its
+// promise. TestRunnerActionMeta_EveryEntry_CarriesAllFourFields is what keeps
+// that invariant true as entries are added.
 func decorateRunnerMeta(options *toolutil.ActionSpecOptions, individualTool string) {
 	meta, ok := runnerActionMeta[individualTool]
 	if !ok {
 		return
 	}
-	if meta.usage != "" {
-		options.Usage = meta.usage
-	}
-	if len(meta.aliases) > 0 {
-		options.Aliases = append(append([]string(nil), individualTool), meta.aliases...)
-	}
-	if len(meta.related) > 0 {
-		options.RelatedActions = append([]string(nil), meta.related...)
-	}
-	if meta.description != "" {
-		options.IndividualTool.Description = meta.description
-	}
+	options.Usage = meta.usage
+	options.Aliases = append(append([]string(nil), individualTool), meta.aliases...)
+	options.RelatedActions = append([]string(nil), meta.related...)
+	options.IndividualTool.Description = meta.description
 }
 
 // runnerActionMetaEntry is the discovery metadata for one runner action.
