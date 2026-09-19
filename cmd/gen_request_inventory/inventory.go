@@ -50,6 +50,10 @@ type shardRecord struct {
 	Body      []string `json:"body,omitempty"`
 	Operation string   `json:"operation,omitempty"`
 	Variables []string `json:"variables,omitempty"`
+	// Identifiers is the running count of distinct raw values the recorder had
+	// seen behind each placeholder when it wrote this line. It rises across a
+	// shard, so the row's answer is the highest line's; see [mergeIdentifiers].
+	Identifiers map[string]int `json:"identifiers,omitempty"`
 }
 
 // row is one endpoint one package was seen to call.
@@ -207,6 +211,7 @@ func merge(records []shardRecord) []row {
 	queries := map[rowKey]map[string]struct{}{}
 	bodies := map[rowKey]map[string]struct{}{}
 	variables := map[rowKey]map[string]struct{}{}
+	identifiers := map[rowKey]map[string]int{}
 	for _, record := range records {
 		key := rowKey{
 			pkg:       record.Package,
@@ -223,23 +228,50 @@ func merge(records []shardRecord) []row {
 		addAll(queries[key], record.Query)
 		addAll(bodies[key], record.Body)
 		addAll(variables[key], record.Variables)
+		identifiers[key] = mergeIdentifiers(identifiers[key], record.Identifiers)
 	}
 
 	rows := make([]row, 0, len(queries))
 	for key, query := range queries {
 		rows = append(rows, row{
-			Package:   key.pkg,
-			Kind:      key.kind,
-			Method:    key.method,
-			Path:      key.path,
-			Query:     sortedNames(query),
-			Body:      sortedNames(bodies[key]),
-			Operation: key.operation,
-			Variables: sortedNames(variables[key]),
+			Package:     key.pkg,
+			Kind:        key.kind,
+			Method:      key.method,
+			Path:        key.path,
+			Query:       sortedNames(query),
+			Body:        sortedNames(bodies[key]),
+			Operation:   key.operation,
+			Variables:   sortedNames(variables[key]),
+			Identifiers: identifiers[key],
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return less(rows[i], rows[j]) })
 	return rows
+}
+
+// mergeIdentifiers folds one line's running counts into the row's, keeping the
+// highest seen for each placeholder.
+//
+// The highest is the answer rather than the sum, for two different reasons that
+// both land here. Within one shard the counts are a running total of the same
+// set, so adding them would count every value again on every later line. Across
+// shards they are two processes' totals, and a row belongs to one package,
+// which the compiler builds into one test binary, so two shards carrying one
+// row means the same package ran twice over the same fixtures. Where that is
+// not true the highest undercounts, which can only leave a row looking narrower
+// than the suite's reach and so can only produce a lead that is not one, never
+// hide one.
+func mergeIdentifiers(into, counts map[string]int) map[string]int {
+	if len(counts) == 0 {
+		return into
+	}
+	if into == nil {
+		into = make(map[string]int, len(counts))
+	}
+	for placeholder, count := range counts {
+		into[placeholder] = max(into[placeholder], count)
+	}
+	return into
 }
 
 // addAll adds every name to set.
@@ -316,6 +348,14 @@ func mapHas(set map[string]struct{}, key string) bool {
 }
 
 // rowLine renders one row as the single line a difference is reported on.
+//
+// The identifier counts are deliberately left off it. They are a property of
+// how far the fixtures reach rather than of the request, so a test that adds a
+// second project would otherwise print the row under both headings as though
+// the server had started calling something new and stopped calling something
+// old. The artifact is still reported stale, since the comparison is on bytes;
+// what this list loses is only the ability to say which row moved, in the one
+// case where nothing about the request did.
 func rowLine(r row) string {
 	line := r.Package + " " + r.Method + " " + r.Path
 	if r.Operation != "" {

@@ -11,6 +11,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -300,6 +301,47 @@ func TestMerge_SameEndpoint_IsOneRowWithTheUnionOfParameters(t *testing.T) {
 	}
 	if rows[1].Query != nil {
 		t.Errorf("the POST carries %v, want no query names", rows[1].Query)
+	}
+}
+
+// TestMerge_IdentifierCounts_TakeTheHighestLine verifies how the running count
+// each recorded line carries becomes the row's answer.
+//
+// The recorder writes a new line whenever a placeholder is seen with one more
+// distinct value, so a row's lines carry 1, then 2, then 3, and the total is
+// the highest rather than the sum: adding them would count every earlier value
+// again on every later line, and a row reached with three projects would report
+// six. A placeholder only one line mentions keeps its own count, which is what
+// lets two paths of one row disagree about how far the fixtures reached.
+func TestMerge_IdentifierCounts_TakeTheHighestLine(t *testing.T) {
+	rows := merge([]shardRecord{
+		{Package: "internal/tools/issues", Kind: "rest", Method: "GET", Path: "/projects/:project_id/issues/:issue_id", Identifiers: map[string]int{":project_id": 1, ":issue_id": 1}},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "GET", Path: "/projects/:project_id/issues/:issue_id", Identifiers: map[string]int{":project_id": 1, ":issue_id": 2}},
+		{Package: "internal/tools/issues", Kind: "rest", Method: "GET", Path: "/projects/:project_id/issues/:issue_id", Identifiers: map[string]int{":project_id": 1, ":issue_id": 3}},
+	})
+
+	if len(rows) != 1 {
+		t.Fatalf("merged into %d row(s), want 1: %+v", len(rows), rows)
+	}
+	want := map[string]int{":project_id": 1, ":issue_id": 3}
+	if !maps.Equal(rows[0].Identifiers, want) {
+		t.Errorf("identifiers = %v, want %v", rows[0].Identifiers, want)
+	}
+}
+
+// TestMerge_ARowWithNoIdentifierCount_CarriesNone verifies that a row recorded
+// before the counts existed, or one whose path has no placeholder, leaves the
+// field out rather than writing an empty object into the artifact.
+func TestMerge_ARowWithNoIdentifierCount_CarriesNone(t *testing.T) {
+	rows := merge([]shardRecord{
+		{Package: "internal/tools/projects", Kind: "rest", Method: "GET", Path: "/projects"},
+	})
+
+	if len(rows) != 1 {
+		t.Fatalf("merged into %d row(s), want 1: %+v", len(rows), rows)
+	}
+	if rows[0].Identifiers != nil {
+		t.Errorf("identifiers = %v, want nil", rows[0].Identifiers)
 	}
 }
 

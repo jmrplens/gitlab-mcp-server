@@ -21,6 +21,7 @@ const (
 		"One row per package, method and templated endpoint: what the unit suite was seen to send " +
 		"through internal/testutil.NewTestClient, which is not the same as everything this server can send. " +
 		"`query`, `body` and `variables` are the union of the names that package sent that endpoint, never one call's set. " +
+		"`identifiers` counts the distinct raw values each placeholder was seen standing for, which is a lead about a hard-coded identifier and never a verdict. " +
 		"A segment the shape rule could not recognize as an identifier is still a fixture value, " +
 		"so one endpoint reached with two branch names is two rows: the rule is in internal/testutil/request_shape.go " +
 		"and what a row is is in cmd/internal/requestinventory. " +
@@ -47,6 +48,20 @@ type Row struct {
 	Body      []string `json:"body,omitempty"`
 	Operation string   `json:"operation,omitempty"`
 	Variables []string `json:"variables,omitempty"`
+	// Identifiers counts, per placeholder of Path, the distinct raw values the
+	// recorder templated into that position across every call this package
+	// made to this endpoint.
+	//
+	// It is the only thing in a row that is about the values rather than the
+	// names, and it is here because the templating that makes a row an
+	// endpoint is also what hides a whole class of defect: with one fixture
+	// value, a handler that builds /projects/1/... and one that builds
+	// /projects/<the caller's id>/... produce the same row. A count of one is
+	// therefore a lead and never a verdict, and most of them are innocent.
+	//
+	// Absent on a row recorded before this field existed, and on a path with
+	// no placeholder in it at all.
+	Identifiers map[string]int `json:"identifiers,omitempty"`
 }
 
 // Inventory is the committed artifact.

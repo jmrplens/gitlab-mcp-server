@@ -61,7 +61,7 @@ func restRequest(t *testing.T, target string) *http.Request {
 func TestDescribeRequest_REST_RecordsMethodPathAndQueryNames(t *testing.T) {
 	request := restRequest(t, "/api/v4/projects/42/issues?state=opened&per_page=20&state=closed")
 
-	record, ok := describeRequest(requestOrigin{pkg: "internal/tools/issues", test: "TestIssueList"}, request)
+	record, _, ok := describeRequest(requestOrigin{pkg: "internal/tools/issues", test: "TestIssueList"}, request)
 
 	if !ok {
 		t.Fatal("describeRequest reported no record for a REST call")
@@ -80,7 +80,7 @@ func TestDescribeRequest_REST_RecordsMethodPathAndQueryNames(t *testing.T) {
 // TestDescribeRequest_NoQuery_OmitsTheField verifies that a call with no query
 // string records none, so the artifact carries no empty arrays.
 func TestDescribeRequest_NoQuery_OmitsTheField(t *testing.T) {
-	record, ok := describeRequest(requestOrigin{}, restRequest(t, "/api/v4/projects/42"))
+	record, _, ok := describeRequest(requestOrigin{}, restRequest(t, "/api/v4/projects/42"))
 
 	if !ok {
 		t.Fatal("describeRequest reported no record")
@@ -145,7 +145,7 @@ func TestDescribeRequest_JSONBody_RecordsItsFieldNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			request := tt.request()
 
-			record, ok := describeRequest(requestOrigin{}, request)
+			record, _, ok := describeRequest(requestOrigin{}, request)
 
 			if !ok {
 				t.Fatal("describeRequest reported no record for a REST call")
@@ -163,7 +163,7 @@ func TestDescribeRequest_JSONBody_RecordsItsFieldNames(t *testing.T) {
 func TestDescribeRequest_JSONBody_StaysReadable(t *testing.T) {
 	request := jsonRequest(t, http.MethodPost, "application/json", `{"title":"t"}`)
 
-	if _, ok := describeRequest(requestOrigin{}, request); !ok {
+	if _, _, ok := describeRequest(requestOrigin{}, request); !ok {
 		t.Fatal("describeRequest reported no record")
 	}
 
@@ -182,7 +182,7 @@ func TestDescribeRequest_JSONBody_StaysReadable(t *testing.T) {
 func TestDescribeRequest_GraphQL_RecordsOperationAndVariables(t *testing.T) {
 	request := graphQLRequest(t, `{"query":"query($fullPath: ID!) { project(fullPath: $fullPath) { id } }","variables":{"fullPath":"g/p"}}`)
 
-	record, ok := describeRequest(requestOrigin{pkg: "internal/tools/projects"}, request)
+	record, _, ok := describeRequest(requestOrigin{pkg: "internal/tools/projects"}, request)
 
 	if !ok {
 		t.Fatal("describeRequest reported no record for a GraphQL call")
@@ -202,7 +202,7 @@ func TestDescribeRequest_GraphQL_BodyStaysReadable(t *testing.T) {
 	const body = `{"query":"{ project { id } }"}`
 	request := graphQLRequest(t, body)
 
-	if _, ok := describeRequest(requestOrigin{}, request); !ok {
+	if _, _, ok := describeRequest(requestOrigin{}, request); !ok {
 		t.Fatal("describeRequest reported no record")
 	}
 
@@ -245,7 +245,7 @@ func TestDescribeRequest_UnrecordableGraphQL_IsSkipped(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if record, ok := describeRequest(requestOrigin{}, tt.request()); ok {
+			if record, _, ok := describeRequest(requestOrigin{}, tt.request()); ok {
 				t.Errorf("describeRequest recorded %+v, want nothing", record)
 			}
 		})
@@ -294,8 +294,8 @@ func TestRecorderObserve_RepeatedRequest_IsWrittenOnce(t *testing.T) {
 	origin := requestOrigin{pkg: "internal/tools/issues", test: t.Name()}
 
 	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/1/issues"))
-	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/2/issues"))
-	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/3/issues?state=opened"))
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/1/issues"))
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/1/issues?state=opened"))
 
 	lines := shardLines(t, rec.dir)
 	if len(lines) != 2 {
@@ -304,6 +304,87 @@ func TestRecorderObserve_RepeatedRequest_IsWrittenOnce(t *testing.T) {
 	if reporter.joined() != "" {
 		t.Errorf("reported %q, want nothing", reporter.joined())
 	}
+}
+
+// TestRecorderObserve_DistinctIdentifiers_AreCounted verifies the one thing the
+// templating throws away that the inventory needs back: how many different
+// identifiers a package reached an endpoint with.
+//
+// It is what tells a handler that reads the caller's project from one that has
+// a fixture's id written into it, and with one fixture value the two are
+// indistinguishable in every other dimension of this record. The count is
+// running rather than final, because the recorder has no shutdown hook to write
+// a total from, so each new value costs one more line and the merge takes the
+// highest; the three requests below therefore write three lines carrying 1, 2
+// and 3.
+func TestRecorderObserve_DistinctIdentifiers_AreCounted(t *testing.T) {
+	rec := newRecorderIn(t)
+	reporter := &recordingReporter{name: t.Name()}
+	origin := requestOrigin{pkg: "internal/tools/issues", test: t.Name()}
+
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/1/issues"))
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/2/issues"))
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/2/issues"))
+	rec.observe(reporter, origin, restRequest(t, "/api/v4/projects/3/issues"))
+
+	counts := recordedIdentifierCounts(t, rec.dir)
+	if !slices.Equal(counts, []int{1, 2, 3}) {
+		t.Errorf("recorded counts = %v, want [1 2 3]: a repeated value writes no line and each new one raises the count", counts)
+	}
+	if reporter.joined() != "" {
+		t.Errorf("reported %q, want nothing", reporter.joined())
+	}
+}
+
+// TestRecorderObserve_SeparateTests_ShareOneRowsCount verifies that the count
+// is a property of the row rather than of the test that produced it, which is
+// what makes it an answer about the package's handlers: two tests reaching one
+// endpoint with two projects is a varied identifier, however the fixtures are
+// split up.
+func TestRecorderObserve_SeparateTests_ShareOneRowsCount(t *testing.T) {
+	rec := newRecorderIn(t)
+	reporter := &recordingReporter{name: t.Name()}
+
+	rec.observe(reporter, requestOrigin{pkg: "internal/tools/issues", test: "TestOne"}, restRequest(t, "/api/v4/projects/1/issues"))
+	rec.observe(reporter, requestOrigin{pkg: "internal/tools/issues", test: "TestTwo"}, restRequest(t, "/api/v4/projects/2/issues"))
+
+	counts := recordedIdentifierCounts(t, rec.dir)
+	if !slices.Contains(counts, 2) {
+		t.Errorf("recorded counts = %v, want one of them to be 2", counts)
+	}
+}
+
+// TestRecorderObserve_APathWithNoIdentifier_CountsNothing verifies that a row
+// with nothing to template carries no identifier block, so the artifact holds
+// no empty objects.
+func TestRecorderObserve_APathWithNoIdentifier_CountsNothing(t *testing.T) {
+	rec := newRecorderIn(t)
+
+	rec.observe(&recordingReporter{name: t.Name()}, requestOrigin{pkg: "internal/tools/projects"}, restRequest(t, "/api/v4/projects"))
+
+	for _, line := range shardLines(t, rec.dir) {
+		if strings.Contains(line, "identifiers") {
+			t.Errorf("line %s carries an identifier block, want none", line)
+		}
+	}
+}
+
+// recordedIdentifierCounts reads back the :project_id count every recorded line
+// carries, in the order the counts rose.
+func recordedIdentifierCounts(t *testing.T, dir string) []int {
+	t.Helper()
+	var counts []int
+	for _, line := range shardLines(t, dir) {
+		var record requestRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("parse %s: %v", line, err)
+		}
+		if count, ok := record.Identifiers[":project_id"]; ok {
+			counts = append(counts, count)
+		}
+	}
+	slices.Sort(counts)
+	return counts
 }
 
 // TestRecorderObserve_UnrecordableRequest_WritesNothing verifies that a

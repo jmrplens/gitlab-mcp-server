@@ -101,6 +101,19 @@ type requestRecord struct {
 	// describe a REST one. See [graphQLShape].
 	Operation string   `json:"operation,omitempty"`
 	Variables []string `json:"variables,omitempty"`
+	// Identifiers counts, per placeholder of Path, how many distinct raw
+	// values this row has been seen with so far. It is the one thing the
+	// templating discards that a reader of the inventory needs: a row says
+	// which endpoint was reached and never with how many identifiers, and a
+	// handler that hard-codes one looks exactly like a handler that reads the
+	// caller's when every fixture uses the same value.
+	//
+	// It is a running count rather than a total, because the recorder has no
+	// shutdown hook to write a total from. A line is written whenever the
+	// count rises, so the shard carries 1, then 2, then 3, and the merge takes
+	// the highest. The values themselves are never written: a value is a
+	// fixture and a count is a property of the suite's reach.
+	Identifiers map[string]int `json:"identifiers,omitempty"`
 }
 
 // requestOrigin is the attribution the transport can honestly make: the Go
@@ -159,9 +172,27 @@ type recorder struct {
 	// seen holds the lines already written, so a path exercised by two
 	// hundred assertions costs two hundred map lookups and one write.
 	seen map[string]bool
+	// identifiers holds, per row and per placeholder, the distinct raw values
+	// that position has been seen with, which is what
+	// [requestRecord.Identifiers] counts. It is the one thing the recorder
+	// remembers beyond the lines it has written, and it is bounded by how many
+	// identifiers the fixtures use rather than by how many requests they make.
+	identifiers map[identifierKey]map[string]bool
 	// stopped is set once something has gone wrong and been reported, so a
 	// broken directory produces one failure and not one per request.
 	stopped bool
+}
+
+// identifierKey names one placeholder of one row: the row the merge will fold
+// a record into, and the position inside its path.
+//
+// The row is spelled without the test, because the merge folds tests together
+// and the question is what the package reached the endpoint with. Two tests of
+// one package that use different projects are two distinct values of one row,
+// which is exactly the evidence this exists to collect.
+type identifierKey struct {
+	row         string
+	placeholder string
 }
 
 // inventoryRecorder returns the recorder for the configured directory, or nil
@@ -258,45 +289,82 @@ func selfFunctionName() string {
 // it reports with Errorf and never aborts
 // (.github/instructions/test-goroutines.instructions.md).
 func (rec *recorder) observe(reporter requestReporter, origin requestOrigin, r *http.Request) {
-	record, ok := describeRequest(origin, r)
+	record, identifiers, ok := describeRequest(origin, r)
 	if !ok {
 		return
 	}
-	// A struct of strings and string slices always marshals, so there is no
-	// error here to report and no branch worth carrying for one.
+	record.Identifiers = rec.countIdentifiers(record, identifiers)
+	// A struct of strings, string slices and a string-keyed map always
+	// marshals, so there is no error here to report and no branch worth
+	// carrying for one.
 	line, _ := json.Marshal(record) //nolint:errchkjson // see above
 	rec.writeLine(reporter, string(line))
 }
 
-// describeRequest turns one request into the row it belongs in, reporting
-// false for a request that has no shape worth recording.
-func describeRequest(origin requestOrigin, r *http.Request) (requestRecord, bool) {
+// countIdentifiers folds one request's raw identifier values into what its row
+// has already been seen with, and reports the distinct count per placeholder.
+//
+// It takes the lock itself rather than sharing [recorder.writeLine]'s, and the
+// gap between the two is harmless because a count only ever rises: two
+// goroutines that compute 2 and 3 and then write in the other order still leave
+// the shard carrying 3, and the merge takes the highest of a row's lines.
+func (rec *recorder) countIdentifiers(record requestRecord, values map[string][]string) map[string]int {
+	if len(values) == 0 {
+		return nil
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.identifiers == nil {
+		rec.identifiers = map[identifierKey]map[string]bool{}
+	}
+	row := strings.Join([]string{record.Package, record.Kind, record.Method, record.Path, record.Operation}, " ")
+	counts := make(map[string]int, len(values))
+	for placeholder, seen := range values {
+		key := identifierKey{row: row, placeholder: placeholder}
+		distinct := rec.identifiers[key]
+		if distinct == nil {
+			distinct = map[string]bool{}
+			rec.identifiers[key] = distinct
+		}
+		for _, value := range seen {
+			distinct[value] = true
+		}
+		counts[placeholder] = len(distinct)
+	}
+	return counts
+}
+
+// describeRequest turns one request into the row it belongs in and the raw
+// values its path carried, reporting false for a request that has no shape
+// worth recording.
+func describeRequest(origin requestOrigin, r *http.Request) (requestRecord, map[string][]string, bool) {
+	path, identifiers := templatePath(r.URL.EscapedPath())
 	record := requestRecord{
 		Package: origin.pkg,
 		Test:    origin.test,
 		Kind:    kindREST,
 		Method:  r.Method,
-		Path:    templatePath(r.URL.EscapedPath()),
+		Path:    path,
 	}
 
 	if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, graphQLPath) {
 		record.Query = queryKeys(r)
 		record.Body = bodyKeys(r)
-		return record, true
+		return record, identifiers, true
 	}
 
 	document, ok := recordedGraphQLDocument(r)
 	if !ok {
-		return requestRecord{}, false
+		return requestRecord{}, nil, false
 	}
 	shape, ok := summarizeGraphQL(document)
 	if !ok {
-		return requestRecord{}, false
+		return requestRecord{}, nil, false
 	}
 	record.Kind = kindGraphQL
 	record.Operation = shape.Operation
 	record.Variables = shape.Variables
-	return record, true
+	return record, identifiers, true
 }
 
 // queryKeys lists the query parameter names of a request, sorted and

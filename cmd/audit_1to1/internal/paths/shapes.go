@@ -322,6 +322,17 @@ type operation struct {
 	// page_token the Link header carries, and a page/total block would be the
 	// wrong shape to publish for it.
 	Keyset bool
+	// Params is what the route declares it accepts, keyed by the name GitLab
+	// spells, a nested one in subscripts under its parent. It is the half of
+	// the record no comparison of published fields can use, and it answers the
+	// one question about a request body that is not about names:
+	// [AlwaysSentCheck] asks whether a param the SDK sends on every call is one
+	// GitLab lets a caller leave out.
+	//
+	// Where two routes share a shape the params are unioned and a param either
+	// declares required takes it, which is the direction that loses a finding
+	// rather than inventing one.
+	Params map[string]apilive.Param
 	// Routes is how many mounted routes were folded into this operation, which
 	// is one for an exact path and more for a shape two routes share. A reader
 	// of Offset on a merged shape needs to know it is a union.
@@ -369,6 +380,7 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 			Nested:   record.NestedNames(route.Entity),
 			Offset:   offset,
 			Keyset:   keyset,
+			Params:   route.Params,
 			Routes:   1,
 		}
 		pathKey := route.Method + " " + normalized
@@ -382,6 +394,7 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 			// second route's params would make it depend on mount order.
 			taken.Offset = taken.Offset || offset
 			taken.Keyset = taken.Keyset || keyset
+			taken.Params = unionParams(taken.Params, route.Params)
 			taken.Routes++
 			index.byPath[pathKey] = taken
 		}
@@ -392,6 +405,7 @@ func newOperationIndex(record apilive.Document) *operationIndex {
 		merged.Nested = unionNested(merged.Nested, built.Nested)
 		merged.Offset = merged.Offset || offset
 		merged.Keyset = merged.Keyset || keyset
+		merged.Params = unionParams(merged.Params, route.Params)
 		merged.Routes++
 		// The entity is the first one a route of this shape named, and is what
 		// a reader is shown for the operation as a whole. Which entity answers
@@ -419,6 +433,34 @@ func routePagination(route apilive.Route) (offset, keyset bool) {
 		return true, false
 	}
 	return false, true
+}
+
+// unionParams merges two routes' declared params. A param both declare keeps
+// the first route's description and is required when either route requires it,
+// since the claim a finding rests on is that GitLab lets a caller leave the
+// param out, and a route that demands it refutes that claim.
+//
+// The first map is never written into: it is the record's own, shared by every
+// reader of that route.
+func unionParams(a, b map[string]apilive.Param) map[string]apilive.Param {
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+	out := make(map[string]apilive.Param, len(a)+len(b))
+	maps.Copy(out, a)
+	for name, param := range b {
+		taken, known := out[name]
+		if !known {
+			out[name] = param
+			continue
+		}
+		taken.Required = taken.Required || param.Required
+		out[name] = taken
+	}
+	return out
 }
 
 // entityOf attributes every key of one route's response to the entity that
