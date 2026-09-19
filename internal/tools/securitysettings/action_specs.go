@@ -25,59 +25,68 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 // projectSecurityReadSpec builds the canonical read-only spec for a project security settings tool.
 func projectSecurityReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, projectSecurityOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, projectSecurityGetOptions(individualTool))
 }
 
 // projectSecurityUpdateSpec builds the canonical update spec for a project security settings tool.
 func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, projectSecurityOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, projectSecurityUpdateOptions(individualTool))
 }
 
-func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
-	usage := "Use project security settings for secret push protection and secret_push_protection_enabled changes. Do not use project.update for secret push protection."
-	tags := []string{"project", "security"}
-	// Default: every action keeps its own canonical individual-tool
-	// name in the alias list. Per-action overrides below may add more
-	// aliases; they must always preserve the individual tool name so
-	// alias-based resolution still hits the action.
-	aliases := []string{individualTool}
-	var related []string
-	var description string
-	switch individualTool {
-	case "gitlab_get_project_security_settings":
-		usage = "Reads the project's security settings (currently secret_push_protection_enabled and continuous_vulnerability_scans_enabled, among others). Use this when the prompt asks for the security posture, secret-push protection status, or vulnerability scanning config of a project. Do not use project.update for these."
-		tags = []string{"project", "security", "secret_push_protection", "vulnerability_scan", "settings", "configuration"}
-		aliases = []string{
+// projectSecurityGetOptions is the discovery metadata of the project read.
+//
+// Both project actions used to share one function that chose between them on
+// the tool name, behind a generic usage, tag and alias set for a third name
+// nothing ever passes: the two callers below are the only ones, so the switch
+// could never fall through and the fallback was metadata no surface published.
+// Each action states its own here, as the group action already did.
+func projectSecurityGetOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		// The individual tool name stays in the alias list so alias-based
+		// resolution keeps hitting the action.
+		Aliases: []string{
 			individualTool,
 			"gitlab_get_project_security_settings",
 			"project_security_settings_get",
 			"project_secret_push_protection_get",
 			"project_security_posture",
 			"project_vulnerability_scan_settings",
-		}
-		related = []string{"project.get", "project.security_settings_update"}
-		description = "Read a project's security settings (Ultimate). Returns: secret_push_protection_enabled, continuous_vulnerability_scans_enabled, container scanning, and per-analyzer auto-fix flags. See also: gitlab_update_project_secret_push_protection, gitlab_project_get."
-	case "gitlab_update_project_secret_push_protection":
-		usage = "Toggles the project's secret_push_protection_enabled setting so GitLab rejects pushes that contain detected secrets. Set secret_push_protection_enabled to true to block leaked credentials at push time, or false to allow them. Requires Maintainer role and an Ultimate license. Do not use project.update for this. It does not change secret push protection."
-		tags = []string{"project", "security", "secret_push_protection", "settings", "configuration"}
-		aliases = []string{
+		},
+		Tags:           []string{"project", "security", "secret_push_protection", "vulnerability_scan", "settings", "configuration"},
+		Usage:          "Reads the project's security settings (currently secret_push_protection_enabled and continuous_vulnerability_scans_enabled, among others). Use this when the prompt asks for the security posture, secret-push protection status, or vulnerability scanning config of a project. Do not use project.update for these.",
+		RelatedActions: []string{"project.get", "project.security_settings_update"},
+		OpenWorld:      true,
+		Edition:        "ultimate",
+		OwnerPackage:   "securitysettings",
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: "Read a project's security settings (Ultimate). Returns: secret_push_protection_enabled, continuous_vulnerability_scans_enabled, container scanning, and per-analyzer auto-fix flags. See also: gitlab_update_project_secret_push_protection, gitlab_project_get.",
+		},
+	}
+}
+
+// projectSecurityUpdateOptions is the discovery metadata of the project
+// secret-push-protection toggle.
+func projectSecurityUpdateOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
+		Aliases: []string{
 			individualTool,
 			"enable secret push protection on a project",
 			"disable secret push protection on a project",
 			"block secrets on push for a project",
-		}
-		related = []string{"project.security_settings_get"}
-		description = "Enable or disable secret push protection for a project (Ultimate). Returns: the project's security settings including secret_push_protection_enabled, continuous vulnerability scanning, and auto-fix flags. See also: gitlab_get_project_security_settings, gitlab_update_group_secret_push_protection."
-	}
-	return toolutil.ActionSpecOptions{
-		Aliases:        aliases,
-		Tags:           tags,
-		Usage:          usage,
-		RelatedActions: related,
+		},
+		Tags:           []string{"project", "security", "secret_push_protection", "settings", "configuration"},
+		Usage:          "Toggles the project's secret_push_protection_enabled setting so GitLab rejects pushes that contain detected secrets. Set secret_push_protection_enabled to true to block leaked credentials at push time, or false to allow them. Requires Maintainer role and an Ultimate license. Do not use project.update for this. It does not change secret push protection.",
+		RelatedActions: []string{"project.security_settings_get"},
 		OpenWorld:      true,
 		Edition:        "ultimate",
 		OwnerPackage:   "securitysettings",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: "Enable or disable secret push protection for a project (Ultimate). Returns: the project's security settings including secret_push_protection_enabled, continuous vulnerability scanning, and auto-fix flags. See also: gitlab_get_project_security_settings, gitlab_update_group_secret_push_protection.",
+		},
 	}
 }
 
@@ -97,9 +106,13 @@ func groupSecuritySettingsOptions(individualTool string) toolutil.ActionSpecOpti
 		Tags:           []string{"group", "security", "secret_push_protection", "settings", "configuration"},
 		Usage:          "Toggles a group's secret_push_protection_enabled setting, which is inherited by the group's projects so GitLab rejects pushes containing detected secrets. Set secret_push_protection_enabled to true to enforce protection group-wide, or false to disable it. Use projects_to_exclude to opt specific projects out. Requires Owner role and an Ultimate license. Do not use group.update for this. It does not change secret push protection.",
 		RelatedActions: []string{"group.get", "project.security_settings_get"},
-		Edition:        "premium",
-		OpenWorld:      true,
-		OwnerPackage:   "securitysettings",
+		// Secret push protection is Ultimate at group scope as it is at
+		// project scope, which is what the catalog tags this spec with and
+		// what the tool description says; "premium" here contradicted both
+		// and only went unnoticed because the aggregation overwrites it.
+		Edition:      "ultimate",
+		OpenWorld:    true,
+		OwnerPackage: "securitysettings",
 		IndividualTool: toolutil.IndividualToolSpec{
 			Name:        individualTool,
 			Title:       toolutil.TitleFromName(individualTool),
