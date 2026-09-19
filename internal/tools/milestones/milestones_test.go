@@ -4,6 +4,7 @@ package milestones
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -286,6 +287,42 @@ func TestMilestoneCreate_InvalidDate(t *testing.T) {
 	}
 }
 
+// TestMilestoneCreate_Description_ReachesGitLabOnlyWhenGiven reads the body
+// GitLab receives rather than the milestone it answers with. The guard around
+// an optional field decides both directions at once: a caller's description
+// must arrive, and an unset one must not be sent as an empty string, which
+// would clear a field the caller never named.
+func TestMilestoneCreate_Description_ReachesGitLabOnlyWhenGiven(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		wantSent    bool
+	}{
+		{"description given", "Third release", true},
+		{"description omitted", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathProjectMilestones {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				assertBodyField(t, r, "description", tc.description, tc.wantSent)
+				testutil.RespondJSON(w, http.StatusCreated, covMilestoneJSON)
+			}))
+
+			if _, err := Create(t.Context(), client, CreateInput{
+				ProjectID: "42", Title: "v3.0", Description: tc.description,
+			}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
 // ---------- Update ----------.
 
 // TestMilestoneUpdate_Success verifies MilestoneUpdate when success.
@@ -395,6 +432,69 @@ func TestMilestoneUpdate_WithDates(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("milestoneUpdate() unexpected error: %v", err)
+	}
+}
+
+// TestMilestoneUpdate_OptionalFields_ReachGitLabOnlyWhenGiven holds each of
+// update's three optional strings to both directions of its guard, read off
+// the body GitLab receives. An update sends only what the caller named, so a
+// field omitted here must stay out of the request: sent as an empty string it
+// would wipe the milestone's title or description, and an empty state_event is
+// a transition GitLab does not define.
+func TestMilestoneUpdate_OptionalFields_ReachGitLabOnlyWhenGiven(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    UpdateInput
+		field    string
+		value    string
+		wantSent bool
+	}{
+		{"title given", UpdateInput{Title: "v1.1"}, "title", "v1.1", true},
+		{"title omitted", UpdateInput{}, "title", "", false},
+		{"description given", UpdateInput{Description: "Second release"}, "description", "Second release", true},
+		{"description omitted", UpdateInput{}, "description", "", false},
+		{"state_event given", UpdateInput{StateEvent: "close"}, "state_event", "close", true},
+		{"state_event omitted", UpdateInput{}, "state_event", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
+			})
+			mux.HandleFunc(pathProjectMilestones+"/1", func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPut)
+				assertBodyField(t, r, tc.field, tc.value, tc.wantSent)
+				testutil.RespondJSON(w, http.StatusOK, covMilestoneJSON)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			input := tc.input
+			input.ProjectID, input.MilestoneIID = "42", 1
+			if _, err := Update(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// assertBodyField reports whether one optional field of a request body was
+// sent, and with which value. Presence is the half a decoded struct cannot
+// state: an absent key and a key holding "" decode alike.
+func assertBodyField(t *testing.T, r *http.Request, field, value string, wantSent bool) {
+	t.Helper()
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decoding the request body: %v", err)
+		return
+	}
+	got, sent := body[field]
+	switch {
+	case sent != wantSent:
+		t.Errorf("%s present in the request = %t, want %t (body %v)", field, sent, wantSent, body)
+	case sent && got != value:
+		t.Errorf("%s sent as %v, want %q", field, got, value)
 	}
 }
 
@@ -1244,6 +1344,37 @@ func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdownStrings_MissingState_LeaveTheStateCellEmpty pins what both
+// tables print where GitLab sent no state. The glyph helpers answer an unknown
+// state with a question mark, so writing one unconditionally would put "state
+// unknown" in a row about an object whose state was never in question; an
+// empty cell says the value is absent, which is what happened.
+func TestFormatMarkdownStrings_MissingState_LeaveTheStateCellEmpty(t *testing.T) {
+	t.Run("issues", func(t *testing.T) {
+		md := FormatIssuesMarkdownString(MilestoneIssuesOutput{
+			Issues: []IssueItem{{IID: 7, Title: "Stateless"}},
+		})
+		if !strings.Contains(md, "| #7 | Stateless |  |  |\n") {
+			t.Errorf("issue row did not leave the state cell empty:\n%s", md)
+		}
+		if strings.Contains(md, toolutil.EmojiQuestion) {
+			t.Errorf("issue row marked an absent state as unknown:\n%s", md)
+		}
+	})
+
+	t.Run("merge requests", func(t *testing.T) {
+		md := FormatMergeRequestsMarkdownString(MilestoneMergeRequestsOutput{
+			MergeRequests: []MergeRequestItem{{IID: 7, Title: "Stateless", SourceBranch: "a", TargetBranch: "b"}},
+		})
+		if !strings.Contains(md, "| !7 | Stateless |  | a | b |  |\n") {
+			t.Errorf("merge request row did not leave the state cell empty:\n%s", md)
+		}
+		if strings.Contains(md, toolutil.EmojiQuestion) {
+			t.Errorf("merge request row marked an absent state as unknown:\n%s", md)
+		}
+	})
+}
+
 // TestFormatMergeRequestsMarkdown verifies FormatMergeRequestsMarkdown.
 func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	out := MilestoneMergeRequestsOutput{
@@ -1415,6 +1546,59 @@ func TestActionSpecs_MilestoneGetRouteNotFound(t *testing.T) {
 	}
 	if _, ok := result.(milestoneNotFoundOutput); !ok {
 		t.Fatalf("result type = %T, want milestoneNotFoundOutput", result)
+	}
+}
+
+// TestActionSpecs_MilestoneGetRoute_InstanceFailureStaysAnError pins the other
+// side of the get route's 404 conversion: only a 404 becomes the not-found
+// card. An instance that failed reported as "milestone does not exist" tells a
+// model the wrong thing to do next, since it would stop retrying and start
+// creating.
+func TestActionSpecs_MilestoneGetRoute_InstanceFailureStaysAnError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/milestones", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
+	})
+	mux.HandleFunc("/api/v4/projects/42/milestones/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 1})
+	if err == nil {
+		t.Fatalf("Route.Handler() error = nil, want the instance failure; result = %#v", result)
+	}
+	if _, ok := result.(milestoneNotFoundOutput); ok {
+		t.Errorf("a 500 was reported as a missing milestone: %#v", result)
+	}
+}
+
+// TestMilestoneOptionsForAction_UnknownName_KeepsTheBaseMetadata holds the
+// switch to being a customization layer over usable defaults: every name
+// ActionSpecs registers is customized, and one it does not name still carries
+// the owner package, tags and individual tool a surface needs to project it.
+func TestMilestoneOptionsForAction_UnknownName_KeepsTheBaseMetadata(t *testing.T) {
+	const baseUsage = "Use to execute milestones domain action."
+
+	fallback := milestoneOptionsForAction("milestone_unmapped", "gitlab_milestone_unmapped")
+	if fallback.Usage != baseUsage {
+		t.Errorf("Usage for an unmapped action = %q, want the base %q", fallback.Usage, baseUsage)
+	}
+	if fallback.OwnerPackage != "milestones" || len(fallback.Tags) == 0 || len(fallback.RelatedActions) == 0 {
+		t.Errorf("unmapped action lost its base metadata: %#v", fallback)
+	}
+	if fallback.IndividualTool.Name != "gitlab_milestone_unmapped" || fallback.IndividualTool.Title == "" {
+		t.Errorf("IndividualTool for an unmapped action = %#v, want the name it was given and a title", fallback.IndividualTool)
+	}
+
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if spec.Usage == baseUsage {
+				t.Errorf("%s fell through to the base usage: no case names it", spec.Name)
+			}
+		})
 	}
 }
 
