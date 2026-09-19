@@ -507,6 +507,52 @@ func TestDraftNotePublishAll_Success(t *testing.T) {
 	}
 }
 
+// TestDraftNotePublishAll_SendsNoPublishParameters pins the body of the
+// bulk-publish POST, which client-go v3.12.0 changed without changing a line
+// here and without failing anything.
+//
+// v3.12.0 added PublishAllDraftNotesWithOptions and made PublishAllDraftNotes
+// delegate to it with a nil *PublishAllDraftNotesOptions. NewRequestToURL
+// decides whether to marshal a body with `opt != nil`, an interface
+// comparison, and a typed nil pointer held in an interface is not nil, so the
+// body went from absent (Content-Length 0) under v3.0.0 to the four bytes
+// "null". Grape sets its form hash only for a body that parses to a Hash, so
+// the endpoint is expected to see the same empty parameter set and the call
+// keeps working; the bytes on the wire are what moved, and the other tests
+// here assert only the path and the method. Recorded in
+// docs/development/upstream-bugs.md as a client-go defect.
+//
+// What this holds is the property that outlives an upstream fix: PublishAll
+// sends none of the note, internal and reviewer_state parameters the endpoint
+// gained in that release, however the empty body happens to be spelled. An
+// empty or null body cannot carry a parameter, so the two accepted spellings
+// are the assertion.
+func TestDraftNotePublishAll_SendsNoPublishParameters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathDraftNotes+"/bulk_publish" || r.Method != http.MethodPost {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
+		}
+		if got := strings.TrimSpace(string(body)); got != "" && got != "null" {
+			t.Errorf("bulk_publish body = %q, want an empty or null body carrying no publish parameters", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	if err := PublishAll(context.Background(), client, PublishAllInput{
+		ProjectID: "42",
+		MRIID:     1,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
 // TestDraftNotePublishAll_MissingProjectID verifies DraftNotePublishAll when missing project ID.
 func TestDraftNotePublishAll_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
