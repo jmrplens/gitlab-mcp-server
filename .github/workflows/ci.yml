@@ -155,6 +155,12 @@ jobs:
         run: make check-doc-tool-names
       - name: Check no read-only action reaches a GraphQL mutation
         run: make check-readonly-graphql
+      # The half of `unused` staticcheck cannot reach: it judges a const group
+      # as one unit, so a member sharing a declaration with a member that is
+      # read is never looked at. That group is the prevailing shape here, and
+      # the first run of this rule found twenty-five constants nothing reads.
+      - name: Check no constant is left unread
+        run: make check-dead-consts
       - name: Check the pinned GraphQL schema parses
         run: make check-graphql-schema
       # The REST twin of the schema pin, and the oracle that is evaluated

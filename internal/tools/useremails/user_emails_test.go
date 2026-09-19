@@ -13,7 +13,6 @@ import (
 
 const (
 	errExpAPIFailure   = "expected error for API failure, got nil"
-	errExpValidation   = "expected validation error, got nil"
 	pathEmailsForUser  = "/api/v4/users/42/emails"
 	pathGetEmail       = "/api/v4/user/emails/1"
 	pathAddEmail       = "/api/v4/user/emails"

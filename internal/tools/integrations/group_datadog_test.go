@@ -19,7 +19,6 @@ import (
 
 const (
 	testGroupPath   = "my-group"
-	testGroupSlug   = "/groups/my-group/integrations/datadog"
 	testAPIURL      = "https://api.datadoghq.com"
 	testDatadogSite = "datadoghq.com"
 )

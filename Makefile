@@ -16,6 +16,7 @@
 	audit-md-escaping check-md-escaping \
 	check-em-dash check-pr-description \
 	audit-action-ids \
+	audit-dead-consts check-dead-consts \
 	check-readonly-graphql audit-readonly-graphql \
 	audit-meta-descriptions check-meta-descriptions \
 	gen-graphql-schema check-graphql-schema check-graphql-documents audit-graphql-documents check-graphql-documents-live check-graphql-shapes audit-graphql-shapes audit-graphql-sent \
@@ -805,23 +806,24 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/17] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/17] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/17] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/17] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/17] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/17] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[7/17] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[8/17] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[9/17] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[10/17] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[11/17] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[12/17] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[13/17] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[14/17] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[15/17] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[16/17] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[17/17] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[1/18] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/18] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/18] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/18] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/18] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/18] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/18] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/18] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/18] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/18] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[11/18] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/18] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/18] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/18] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[15/18] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[16/18] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[17/18] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[18/18] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1697,6 +1699,20 @@ check-md-escaping:
 ## single change touches. The work list lands in plan/action-ids.json.
 audit-action-ids:
 	go run ./cmd/audit_action_ids/ -v -json plan/action-ids.json
+
+## audit-dead-consts: report every unexported constant in internal/ and cmd/
+## that nothing reads. staticcheck's unused judges a const group as one unit,
+## so a member sharing a declaration with a member that is read is never
+## looked at, and that group is the prevailing shape here: the action-ID block
+## every domain keeps, and the assertion-message block beside it in the tests.
+audit-dead-consts:
+	go run ./cmd/audit_dead_consts/ -v
+
+## check-dead-consts: the same rule as a gate. A constant nothing reads is
+## deleted by the change that introduces it, so this fails rather than
+## reporting. CI gate.
+check-dead-consts:
+	go run ./cmd/audit_dead_consts/ -check
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every

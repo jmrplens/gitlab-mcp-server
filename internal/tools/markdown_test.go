@@ -67,7 +67,6 @@ const (
 	errMissingHeader   = "missing header"
 	errMissingEmptyMsg = "missing empty message"
 	testDate20260101   = "2026-01-01"
-	mdDescriptionHdr   = "### Description"
 	fmtMissing         = "missing %q"
 	testTitleAddFeat   = "Add feature"
 	testTitleFixBug    = "Fix bug"

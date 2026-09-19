@@ -23,7 +23,6 @@ const (
 	subtestDefault     = "default value"
 	subtestCustom      = "custom value"
 	subtestInvalid     = "invalid value"
-	testCustomRepo     = "custom/group/project"
 )
 
 // TestMain redirects HOME and USERPROFILE to a throwaway temp directory for the
