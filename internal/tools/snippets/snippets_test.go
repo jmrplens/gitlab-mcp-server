@@ -1099,9 +1099,10 @@ func TestSnippets_OmitTheCloneURLsGitLabDidNotSend(t *testing.T) {
 }
 
 // TestSnippets_UnreadableCapturedFields verifies every handler answering with
-// a snippet reports the captured response's decode failure rather than a
-// snippet missing what GitLab sent. The SDK's own Snippet has no imported
-// flag, so only the read beside it can notice GitLab sent a string there.
+// a snippet reports a decode failure rather than a snippet missing what GitLab
+// sent. client-go models the imported flag on its own Snippet as of v3.12.0,
+// so its decoder reaches the string GitLab sent there before the read beside
+// it does, and either refusal is what this asserts.
 func TestSnippets_UnreadableCapturedFields(t *testing.T) {
 	const poisoned = `{"id":42,"title":"Test Snippet","imported":"yes"}`
 	cases := make([]testutil.CapturedCase, 0, len(snippetCalls))
@@ -1111,7 +1112,7 @@ func TestSnippets_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}})
 	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
 // TestFormatMarkdown_FilesAndHintsFollowTheSnippet verifies the file table is

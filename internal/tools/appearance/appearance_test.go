@@ -591,15 +591,16 @@ func TestFormatGetMarkdown_SiteName(t *testing.T) {
 
 // TestAppearance_UnreadableCapturedSiteName verifies that both appearance
 // handlers return an error rather than a half-filled result when GitLab sends
-// site_name as something that is not a string. The SDK ignores the key its own
-// Appearance struct does not model, so the read of the captured response is the
-// only thing that can notice, and a handler that swallowed its failure would
-// publish an appearance with no site name and no complaint.
+// site_name as something that is not a string. client-go models site_name on
+// its own Appearance as of v3.12.0, so its decoder reaches the bad value
+// before the read of the captured response does; either refusal is what this
+// asserts, because a handler that swallowed one would publish an appearance
+// with no site name and no complaint.
 func TestAppearance_UnreadableCapturedSiteName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"title":"GitLab CE","site_name":42}`)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "get", Call: func() error {
 			_, err := Get(t.Context(), client, GetInput{})
 			return err

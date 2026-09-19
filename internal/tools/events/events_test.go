@@ -1216,10 +1216,11 @@ func TestEvents_OmitTheWikiPageGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestEvents_UnreadableCapturedFields verifies both event handlers report the
-// captured response's decode failure rather than an event missing what GitLab
-// sent. The SDK's own event structs have no imported flag, so only the read
-// beside them can notice GitLab sent a string there.
+// TestEvents_UnreadableCapturedFields verifies both event handlers report a
+// decode failure rather than an event missing what GitLab sent. client-go
+// carries the imported flag on both of its event structs as of v3.12.0, so
+// its decoder reaches the string GitLab sent there before the read beside it
+// does, and either refusal is what this asserts.
 func TestEvents_UnreadableCapturedFields(t *testing.T) {
 	const poisoned = `[{"id":1,"project_id":42,"action_name":"created","imported":"yes"}]`
 	cases := make([]testutil.CapturedCase, 0, len(eventCalls))
@@ -1229,7 +1230,7 @@ func TestEvents_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}})
 	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
 // TestFormatEventListMarkdown_SentFields verifies both list formatters name
