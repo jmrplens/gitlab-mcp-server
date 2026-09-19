@@ -5,10 +5,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog action IDs for cross-linking these six actions. The
+// catalog domain is storage_move, the group all three storage-move packages
+// register under, so the ID is never the individual tool name: a model on the
+// dynamic surface passes these verbatim to gitlab_execute_action.
+//
+// They live here rather than beside the hints in markdown.go because both
+// readers need the same strings, and two copies of an unvalidated ID drift.
+const (
+	actionRetrieveAllSnippet   = "storage_move.retrieve_all_snippet"
+	actionRetrieveSnippet      = "storage_move.retrieve_snippet"
+	actionGetSnippet           = "storage_move.get_snippet"
+	actionGetSnippetForSnippet = "storage_move.get_snippet_for_snippet"
+	actionScheduleSnippet      = "storage_move.schedule_snippet"
+	actionScheduleAllSnippet   = "storage_move.schedule_all_snippet"
+)
+
 // snippetStorageMoveMeta carries the non-generic discovery metadata for one
 // snippet storage move action: its individual tool name, an action-specific
 // usage sentence, distinctive natural-language aliases, a "Returns: … See
-// also: …" description, and the related action tool names surfaced to clients.
+// also: …" description, and the related canonical action IDs surfaced to
+// clients.
 type snippetStorageMoveMeta struct {
 	tool        string
 	usage       string
@@ -26,7 +43,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "List every snippet repository storage move across the whole instance. Use to audit in-flight or completed Gitaly shard migrations of snippet repositories, ordered and paginated, when you do not have a specific snippet in mind.",
 			aliases:     []string{"list all snippet repository storage moves", "audit instance-wide snippet shard migrations", "show every snippet storage move"},
 			description: "List every snippet repository storage move on the instance with ordering and pagination. Returns: storage moves with state, source and destination storage shards, the associated snippet, and pagination metadata. See also: gitlab_get_snippet_storage_move, gitlab_retrieve_snippet_storage_moves, gitlab_schedule_all_snippet_storage_moves.",
-			related:     []string{"gitlab_get_snippet_storage_move", "gitlab_retrieve_snippet_storage_moves", "gitlab_schedule_all_snippet_storage_moves"},
+			related:     []string{actionGetSnippet, actionRetrieveSnippet, actionScheduleAllSnippet},
 		}),
 		// gitlab_retrieve_snippet_storage_moves — list storage moves for one snippet.
 		snippetStorageMoveReadSpec("retrieve_snippet", toolutil.RouteAction(client, RetrieveForSnippet), snippetStorageMoveMeta{
@@ -34,7 +51,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "List repository storage moves scoped to one snippet by snippet ID. Use to track the Gitaly shard migration history of a single snippet's repository, ordered and paginated.",
 			aliases:     []string{"list storage moves for a snippet", "track one snippet's shard migrations", "show a snippet's repository storage moves"},
 			description: "List repository storage moves for one snippet with ordering and pagination. Returns: storage moves scoped to the snippet with state, source and destination storage shards, and pagination metadata. See also: gitlab_get_snippet_storage_move_for_snippet, gitlab_retrieve_all_snippet_storage_moves, gitlab_schedule_snippet_storage_move.",
-			related:     []string{"gitlab_get_snippet_storage_move_for_snippet", "gitlab_retrieve_all_snippet_storage_moves", "gitlab_schedule_snippet_storage_move"},
+			related:     []string{actionGetSnippetForSnippet, actionRetrieveAllSnippet, actionScheduleSnippet},
 		}),
 		// gitlab_get_snippet_storage_move — fetch a single snippet storage move by ID.
 		snippetStorageMoveReadSpec("get_snippet", toolutil.RouteAction(client, Get), snippetStorageMoveMeta{
@@ -42,7 +59,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "Fetch a single snippet repository storage move by its global move ID. Use when you already have a move ID from a list and need its current state, source shard, and destination shard.",
 			aliases:     []string{"get a snippet storage move by id", "show one snippet repository storage move", "check snippet shard migration status by move id"},
 			description: "Get a single snippet repository storage move by its ID. Returns: the storage move with state, source and destination storage shards, and the associated snippet. See also: gitlab_retrieve_all_snippet_storage_moves, gitlab_get_snippet_storage_move_for_snippet.",
-			related:     []string{"gitlab_retrieve_all_snippet_storage_moves", "gitlab_get_snippet_storage_move_for_snippet"},
+			related:     []string{actionRetrieveAllSnippet, actionGetSnippetForSnippet},
 		}),
 		// gitlab_get_snippet_storage_move_for_snippet — fetch one storage move scoped to a snippet.
 		snippetStorageMoveReadSpec("get_snippet_for_snippet", toolutil.RouteAction(client, GetForSnippet), snippetStorageMoveMeta{
@@ -50,7 +67,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "Fetch a single repository storage move scoped to a specific snippet, using both the snippet ID and the move ID. Use to confirm a particular move belongs to that snippet and inspect its state and shards.",
 			aliases:     []string{"get a snippet's storage move by snippet and move id", "show one move scoped to a snippet", "verify a snippet repository storage move"},
 			description: "Get a single repository storage move scoped to one snippet by snippet ID and move ID. Returns: the storage move with state, source and destination storage shards, and the associated snippet. See also: gitlab_retrieve_snippet_storage_moves, gitlab_get_snippet_storage_move.",
-			related:     []string{"gitlab_retrieve_snippet_storage_moves", "gitlab_get_snippet_storage_move"},
+			related:     []string{actionRetrieveSnippet, actionGetSnippet},
 		}),
 		// gitlab_schedule_snippet_storage_move — schedule a repository storage move for a single snippet.
 		snippetStorageMoveCreateSpec("schedule_snippet", toolutil.RouteAction(client, Schedule), snippetStorageMoveMeta{
@@ -58,7 +75,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "Schedule a repository storage move for one snippet onto a destination Gitaly storage shard. Use to migrate a single snippet's repository when rebalancing or evacuating a shard. The move runs asynchronously.",
 			aliases:     []string{"migrate one snippet's repository to a shard", "schedule a snippet storage move", "move a snippet repository to another Gitaly shard"},
 			description: "Schedule a repository storage move for one snippet to a destination Gitaly storage shard. Returns: the scheduled storage move with its initial state and the associated snippet. See also: gitlab_retrieve_snippet_storage_moves, gitlab_get_snippet_storage_move_for_snippet, gitlab_schedule_all_snippet_storage_moves.",
-			related:     []string{"gitlab_retrieve_snippet_storage_moves", "gitlab_get_snippet_storage_move_for_snippet", "gitlab_schedule_all_snippet_storage_moves"},
+			related:     []string{actionRetrieveSnippet, actionGetSnippetForSnippet, actionScheduleAllSnippet},
 		}),
 		// gitlab_schedule_all_snippet_storage_moves — schedule moves for all snippets on a source shard.
 		snippetStorageMoveCreateSpec("schedule_all_snippet", toolutil.RouteAction(client, ScheduleAll), snippetStorageMoveMeta{
@@ -66,7 +83,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			usage:       "Schedule repository storage moves for every snippet sitting on a given source Gitaly storage shard. Use to bulk-evacuate or drain a shard of all snippet repositories in one operation. Moves run asynchronously.",
 			aliases:     []string{"bulk-migrate all snippets off a shard", "drain a Gitaly shard of snippet repositories", "schedule storage moves for all snippets on a source shard"},
 			description: "Schedule repository storage moves for all snippets on a source Gitaly storage shard. Returns: a confirmation that the bulk move was scheduled. See also: gitlab_retrieve_all_snippet_storage_moves, gitlab_schedule_snippet_storage_move.",
-			related:     []string{"gitlab_retrieve_all_snippet_storage_moves", "gitlab_schedule_snippet_storage_move"},
+			related:     []string{actionRetrieveAllSnippet, actionScheduleSnippet},
 		}),
 	}
 }

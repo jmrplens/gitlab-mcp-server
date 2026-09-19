@@ -4,7 +4,11 @@ package snippetstoragemoves
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -741,9 +745,17 @@ const fullSnippetMoveJSON = `{
 	}
 }`
 
-// TestToOutput_FullSnippetFields verifies that toOutput maps every field of the
-// embedded gl.RepositorySnippet onto SnippetOutput (1:1 audit).
-func TestToOutput_FullSnippetFields(t *testing.T) {
+// TestToOutput_FullSnippetFields_EachValueComesFromItsOwnKey verifies that
+// toOutput maps every field of the embedded gl.RepositorySnippet onto the
+// SnippetOutput field of the same name (1:1 audit), by holding each to the one
+// distinct value the fixture gives it.
+//
+// The four repository URLs and the two timestamps are the reason this is exact
+// rather than a non-empty check: they are same-typed neighbors in the same
+// literal, so any permutation among them still leaves every one populated and
+// every mutant alive. Both gates score branches and a straight-line assignment
+// has none, so nothing else here can see a swap.
+func TestToOutput_FullSnippetFields_EachValueComesFromItsOwnKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, fullSnippetMoveJSON)
 	}))
@@ -756,20 +768,35 @@ func TestToOutput_FullSnippetFields(t *testing.T) {
 	if s == nil {
 		t.Fatal("expected snippet, got nil")
 	}
-	if s.ID != 55 || s.Title != "my-snippet" || s.Description != "a snippet" {
-		t.Errorf("unexpected core fields: %+v", s)
+	strFields := []struct{ key, got, want string }{
+		{"title", s.Title, "my-snippet"},
+		{"description", s.Description, "a snippet"},
+		{"visibility", s.Visibility, "private"},
+		{"web_url", s.WebURL, "https://gitlab.example.com/snippets/55"},
+		{"raw_url", s.RawURL, "https://gitlab.example.com/snippets/55/raw"},
+		{"ssh_url_to_repo", s.SSHURLToRepo, "git@gitlab.example.com:snippets/55.git"},
+		{"http_url_to_repo", s.HTTPURLToRepo, "https://gitlab.example.com/snippets/55.git"},
 	}
-	if s.Visibility != "private" {
-		t.Errorf("Visibility = %q, want private", s.Visibility)
+	for _, f := range strFields {
+		t.Run(f.key, func(t *testing.T) {
+			if f.got != f.want {
+				t.Errorf("%s = %q, want %q", f.key, f.got, f.want)
+			}
+		})
+	}
+	if s.ID != 55 {
+		t.Errorf("ID = %d, want 55", s.ID)
 	}
 	if s.ProjectID != 12 {
 		t.Errorf("ProjectID = %d, want 12", s.ProjectID)
 	}
-	if s.UpdatedAt == nil || s.CreatedAt == nil {
-		t.Fatal("expected non-nil UpdatedAt/CreatedAt")
+	wantUpdated := time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC)
+	if s.UpdatedAt == nil || !s.UpdatedAt.Equal(wantUpdated) {
+		t.Errorf("UpdatedAt = %v, want %v", s.UpdatedAt, wantUpdated)
 	}
-	if s.RawURL == "" || s.SSHURLToRepo == "" || s.HTTPURLToRepo == "" {
-		t.Errorf("expected populated repo URLs, got %+v", s)
+	wantCreated := time.Date(2026, 1, 1, 8, 0, 0, 0, time.UTC)
+	if s.CreatedAt == nil || !s.CreatedAt.Equal(wantCreated) {
+		t.Errorf("CreatedAt = %v, want %v", s.CreatedAt, wantCreated)
 	}
 }
 
@@ -864,6 +891,294 @@ func TestSnippetStorageMoves_UnreadableCapturedErrorMessage(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// The captured error message, and what a schedule actually sends
+// ---------------------------------------------------------------------------
+
+// failedSnippetMovesJSON is a page of two failed moves whose error messages
+// differ, so a handler that read one move's message onto another shows.
+const failedSnippetMovesJSON = `[
+	{"id": 11, "state": "failed", "source_storage_name": "default", "destination_storage_name": "storage2", "error_message": "destination storage is full"},
+	{"id": 12, "state": "failed", "source_storage_name": "default", "destination_storage_name": "storage3", "error_message": "source shard is unreachable"}
+]`
+
+// TestSnippetStorageMoves_ErrorMessage_IsCarriedPerMoveOnEveryListing asserts
+// that each move on a page reaches the caller with the error_message GitLab
+// sent for that move.
+//
+// client-go's SnippetRepositoryStorageMove does not model the field, so the
+// captured response is the only source and the extras are matched to the moves
+// by position (ADR-0021). Nothing asserted either half: dropping the
+// assignment, or reading extras[0] for every move, left the whole suite green,
+// and a failed move published without its message reads as one that failed for
+// no reason.
+func TestSnippetStorageMoves_ErrorMessage_IsCarriedPerMoveOnEveryListing(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(*gitlabclient.Client) (ListOutput, error)
+	}{
+		{"retrieve_all", func(c *gitlabclient.Client) (ListOutput, error) {
+			return RetrieveAll(context.Background(), c, ListInput{})
+		}},
+		{"retrieve_for_snippet", func(c *gitlabclient.Client) (ListOutput, error) {
+			return RetrieveForSnippet(context.Background(), c, ListForSnippetInput{SnippetID: 55})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, failedSnippetMovesJSON)
+			}))
+
+			out, err := tc.call(client)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(out.Moves) != 2 {
+				t.Fatalf("got %d moves, want 2", len(out.Moves))
+			}
+			if out.Moves[0].ErrorMessage != "destination storage is full" {
+				t.Errorf("Moves[0].ErrorMessage = %q, want why the first move failed", out.Moves[0].ErrorMessage)
+			}
+			if out.Moves[1].ErrorMessage != "source shard is unreachable" {
+				t.Errorf("Moves[1].ErrorMessage = %q, want why the second move failed", out.Moves[1].ErrorMessage)
+			}
+		})
+	}
+}
+
+// TestSnippetStorageMoves_ErrorMessage_IsCarriedOnEverySingleMoveRead asserts
+// the same for the three handlers that answer with one move, so a failure
+// reason is not lost on the call a caller makes to find out why.
+func TestSnippetStorageMoves_ErrorMessage_IsCarriedOnEverySingleMoveRead(t *testing.T) {
+	const failed = `{"id": 11, "state": "failed", "source_storage_name": "default", "destination_storage_name": "storage2", "error_message": "destination storage is full"}`
+	cases := []struct {
+		name string
+		call func(*gitlabclient.Client) (Output, error)
+	}{
+		{"get", func(c *gitlabclient.Client) (Output, error) {
+			return Get(context.Background(), c, IDInput{ID: 11})
+		}},
+		{"get_for_snippet", func(c *gitlabclient.Client) (Output, error) {
+			return GetForSnippet(context.Background(), c, SnippetMoveInput{SnippetID: 55, ID: 11})
+		}},
+		{"schedule", func(c *gitlabclient.Client) (Output, error) {
+			return Schedule(context.Background(), c, ScheduleInput{SnippetID: 55})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, failed)
+			}))
+
+			out, err := tc.call(client)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.ErrorMessage != "destination storage is full" {
+				t.Errorf("ErrorMessage = %q, want why the move failed", out.ErrorMessage)
+			}
+		})
+	}
+}
+
+// decodeSnippetMoveBody decodes a POST body into a map so a test can state
+// which keys a handler sent. It reports rather than aborts, since it runs on
+// the httptest server's goroutine.
+func decodeSnippetMoveBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("read request body: %v", err)
+		return nil
+	}
+	var body map[string]any
+	if err = json.Unmarshal(raw, &body); err != nil {
+		t.Errorf("decode request body %q: %v", raw, err)
+		return nil
+	}
+	return body
+}
+
+// TestSchedule_DestinationShard_ReachesTheBodyOnlyWhenNamed asserts that the
+// destination shard a caller names is the one GitLab is asked for, and that a
+// caller naming none sends no key at all.
+//
+// Only the path and the method were asserted, so dropping the field from the
+// options left the suite green while GitLab picked a shard by weight instead of
+// the one the operator chose: a repository lands somewhere nobody asked for and
+// the response looks like a success.
+func TestSchedule_DestinationShard_ReachesTheBodyOnlyWhenNamed(t *testing.T) {
+	dest := "storage9"
+	cases := []struct {
+		name  string
+		input ScheduleInput
+		want  map[string]any
+	}{
+		{"named", ScheduleInput{SnippetID: 77, DestinationStorageName: &dest}, map[string]any{"destination_storage_name": "storage9"}},
+		{"omitted", ScheduleInput{SnippetID: 77}, map[string]any{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sent = decodeSnippetMoveBody(t, r)
+				testutil.RespondJSON(w, http.StatusCreated, storageMoveJSON)
+			}))
+
+			if _, err := Schedule(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(sent, tc.want) {
+				t.Errorf("request body = %v, want %v", sent, tc.want)
+			}
+		})
+	}
+}
+
+// TestScheduleAll_EachShard_ReachesTheBodyUnderItsOwnKey asserts that the
+// source and destination shards of a bulk move arrive under the keys GitLab
+// reads them from, and that a call naming neither sends neither.
+//
+// The two are same-typed neighbors assigned one after the other, so a swap is
+// a straight-line defect no mutation or condition gate can see: it would drain
+// the shard the operator was migrating onto, back onto the one being
+// evacuated, for every snippet on the instance.
+func TestScheduleAll_EachShard_ReachesTheBodyUnderItsOwnKey(t *testing.T) {
+	src, dest := "old-shard", "new-shard"
+	cases := []struct {
+		name  string
+		input ScheduleAllInput
+		want  map[string]any
+	}{
+		{
+			name:  "both named",
+			input: ScheduleAllInput{SourceStorageName: &src, DestinationStorageName: &dest},
+			want:  map[string]any{"source_storage_name": "old-shard", "destination_storage_name": "new-shard"},
+		},
+		{"neither named", ScheduleAllInput{}, map[string]any{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sent = decodeSnippetMoveBody(t, r)
+				w.WriteHeader(http.StatusAccepted)
+			}))
+
+			if _, err := ScheduleAll(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(sent, tc.want) {
+				t.Errorf("request body = %v, want %v", sent, tc.want)
+			}
+		})
+	}
+}
+
+// TestSnippetStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains
+// verifies, for every handler here, that its corrective hint reaches the caller
+// at the HTTP status that handler classifies, and at no other status.
+//
+// These six endpoints are admin, self-managed surfaces that refuse with a bare
+// 403, 404 or 400 and no body, so the hint is the only thing that tells a model
+// whether it lacked admin, named an id that does not exist, or asked for a
+// shard the instance has not got. The status each hint is written for was
+// asserted nowhere, and the error tests answer 403 to handlers that classify
+// 404 and 400, so a hint attached to a status GitLab never sends for that call
+// would have failed nothing. The negative half keeps the hint from being handed
+// out for an unrelated failure.
+func TestSnippetStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(*gitlabclient.Client) error
+	}{
+		{
+			name:   "retrieve_all",
+			status: http.StatusForbidden,
+			hint:   "requires administrator access; self-managed only; storage moves are repository shard migrations between Gitaly nodes",
+			call: func(c *gitlabclient.Client) error {
+				_, err := RetrieveAll(context.Background(), c, ListInput{})
+				return err
+			},
+		},
+		{
+			name:   "retrieve_for_snippet",
+			status: http.StatusNotFound,
+			hint:   "requires admin; verify snippet_id exists; only storage moves for the given snippet are returned",
+			call: func(c *gitlabclient.Client) error {
+				_, err := RetrieveForSnippet(context.Background(), c, ListForSnippetInput{SnippetID: 55})
+				return err
+			},
+		},
+		{
+			name:   "get",
+			status: http.StatusNotFound,
+			hint:   "requires admin; verify id with gitlab_retrieve_all_snippet_storage_moves; the move record may have been pruned after completion",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Get(context.Background(), c, IDInput{ID: 1})
+				return err
+			},
+		},
+		{
+			name:   "get_for_snippet",
+			status: http.StatusNotFound,
+			hint:   "requires admin; verify snippet_id + id combination with gitlab_get_snippet_storage_move_for_snippet",
+			call: func(c *gitlabclient.Client) error {
+				_, err := GetForSnippet(context.Background(), c, SnippetMoveInput{SnippetID: 55, ID: 1})
+				return err
+			},
+		},
+		{
+			name:   "schedule",
+			status: http.StatusBadRequest,
+			hint:   "requires admin; destination_storage_name must reference an existing Gitaly storage shard configured on the instance; cannot move to the same shard the snippet is already on",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Schedule(context.Background(), c, ScheduleInput{SnippetID: 55})
+				return err
+			},
+		},
+		{
+			name:   "schedule_all",
+			status: http.StatusBadRequest,
+			hint:   "requires admin; source_storage_name and destination_storage_name must reference configured Gitaly shards; bulk operation. May schedule many concurrent moves",
+			call: func(c *gitlabclient.Client) error {
+				_, err := ScheduleAll(context.Background(), c, ScheduleAllInput{})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			refusing := func(status int) *gitlabclient.Client {
+				return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(status)
+				}))
+			}
+
+			err := tc.call(refusing(tc.status))
+			if err == nil {
+				t.Fatalf("expected an error for status %d", tc.status)
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("status %d does not reach the caller with this action's guidance\n got: %v\nwant it to contain: %q", tc.status, err, tc.hint)
+			}
+
+			err = tc.call(refusing(http.StatusInternalServerError))
+			if err == nil {
+				t.Fatal("expected an error for status 500")
+			}
+			if strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("the status-%d guidance is offered for a 500 too, which advises about a refusal that did not happen: %v", tc.status, err)
+			}
+		})
+	}
 }
 
 // TestFormatScheduleAllMarkdown verifies the whole card the bulk schedule
