@@ -3,7 +3,9 @@ package runnercontrollerscopes
 
 import (
 	"context"
+	"maps"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,6 +40,61 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs holds every
+// RelatedActions entry to an ID a surface can actually resolve: the domain
+// prefix plus the name of another spec here. Nothing else in the repository
+// checks these strings, and a bare action name passes every gate while
+// answering a model "unknown action" the moment it follows the cross-link.
+func TestActionSpecs_RelatedActions_NameCanonicalCatalogIDs(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+
+	canonical := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		canonical[runnerDomain+spec.Name] = true
+	}
+
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			if len(spec.RelatedActions) == 0 {
+				t.Fatalf("%s declares no related actions", spec.Name)
+			}
+			for _, related := range spec.RelatedActions {
+				if !canonical[related] {
+					t.Errorf("related action %q is no scope action of this package; want one of %v", related, slices.Sorted(maps.Keys(canonical)))
+				}
+				if related == runnerDomain+spec.Name {
+					t.Errorf("%s lists itself as a related action", spec.Name)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownHints_NameTheSameCanonicalIDs ties the next-step hints to the
+// specs they point at, so the two readers of an action ID cannot drift: the
+// cross-links above and the hints a card closes with come from one block, and
+// this is what says that block still names the actions this package registers.
+func TestMarkdownHints_NameTheSameCanonicalIDs(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+
+	registered := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		registered[runnerDomain+spec.Name] = true
+	}
+
+	hinted := []string{catalogScopeList, catalogScopeAddInstance, catalogScopeRemoveInstance, catalogScopeAddRunner, catalogScopeRemoveRunner}
+	for _, id := range hinted {
+		t.Run(id, func(t *testing.T) {
+			if !registered[id] {
+				t.Errorf("hint names %q, which this package registers no spec for", id)
+			}
+		})
+	}
+	if len(hinted) != len(registered) {
+		t.Errorf("hinted %d IDs, registered %d specs; every scope action should be reachable from a card", len(hinted), len(registered))
 	}
 }
 

@@ -6,6 +6,7 @@ package runnercontrollerscopes
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,7 +14,12 @@ import (
 )
 
 const (
-	sampleScopesJSON        = `{"instance_level_scopings":[{"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}],"runner_level_scopings":[{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}]}`
+	sampleScopesJSON = `{"instance_level_scopings":[{"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}],"runner_level_scopings":[{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}]}`
+	// halfTimestampedScopesJSON gives every scoping one of the two timestamps
+	// and a value no other scoping carries, so a converter that reads the
+	// neighboring field or skips a nil guard cannot answer the same card.
+	halfTimestampedScopesJSON = `{"instance_level_scopings":[{"created_at":"2026-01-15T10:00:00Z","updated_at":null},{"updated_at":"2026-01-15T11:00:00Z"}],` +
+		`"runner_level_scopings":[{"runner_id":42,"created_at":"2026-01-15T12:00:00Z"},{"runner_id":43,"updated_at":"2026-01-15T13:00:00Z","created_at":null}]}`
 	sampleInstanceScopeJSON = `{"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	sampleRunnerScopeJSON   = `{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-15T12:00:00Z"}`
 	errUnexpected           = "unexpected error: %v"
@@ -44,6 +50,38 @@ func TestList_Success(t *testing.T) {
 	}
 	if out.RunnerLevelScopings[0].RunnerID != 42 {
 		t.Errorf("runner_id = %d, want 42", out.RunnerLevelScopings[0].RunnerID)
+	}
+}
+
+// TestList_ScopingsWithOneTimestamp_CarryOnlyWhatGitLabSent pins each scoping
+// against the timestamp GitLab sent for it and nothing else. Both fields are
+// pointers, so a converter reading its neighbor, or dropping the nil guard,
+// still produces a plausible card; only a fixture where each entry carries one
+// of the two, all four values distinct, tells those apart.
+func TestList_ScopingsWithOneTimestamp_CarryOnlyWhatGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, halfTimestampedScopesJSON)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ControllerID: 1})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+
+	wantInstance := []InstanceScopeItem{
+		{CreatedAt: "2026-01-15T10:00:00Z"},
+		{UpdatedAt: "2026-01-15T11:00:00Z"},
+	}
+	if !reflect.DeepEqual(out.InstanceLevelScopings, wantInstance) {
+		t.Errorf("instance scopings = %+v, want %+v", out.InstanceLevelScopings, wantInstance)
+	}
+
+	wantRunner := []RunnerScopeItem{
+		{RunnerID: 42, CreatedAt: "2026-01-15T12:00:00Z"},
+		{RunnerID: 43, UpdatedAt: "2026-01-15T13:00:00Z"},
+	}
+	if !reflect.DeepEqual(out.RunnerLevelScopings, wantRunner) {
+		t.Errorf("runner scopings = %+v, want %+v", out.RunnerLevelScopings, wantRunner)
 	}
 }
 
@@ -93,8 +131,39 @@ func TestAddInstanceScope_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
 	}
-	if out.CreatedAt == "" {
-		t.Error("expected non-empty CreatedAt")
+	if out.CreatedAt != "2026-01-15T10:00:00Z" || out.UpdatedAt != "2026-01-15T12:00:00Z" {
+		t.Errorf("timestamps = %q/%q, want the created and updated values GitLab sent", out.CreatedAt, out.UpdatedAt)
+	}
+}
+
+// TestAddInstanceScope_OneTimestamp_LeavesTheOtherEmpty holds the granted scope
+// to the fields GitLab actually sent. client-go models both as pointers, so a
+// missing one must stay empty rather than borrow the other's value, which is
+// what a card reader would otherwise report as a scope updated when it was not.
+func TestAddInstanceScope_OneTimestamp_LeavesTheOtherEmpty(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantCreated string
+		wantUpdated string
+	}{
+		{"created only", `{"created_at":"2026-01-15T10:00:00Z","updated_at":null}`, "2026-01-15T10:00:00Z", ""},
+		{"updated only", `{"updated_at":"2026-01-15T11:00:00Z"}`, "", "2026-01-15T11:00:00Z"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusCreated, tt.body)
+			}))
+
+			out, err := AddInstanceScope(context.Background(), client, AddInstanceScopeInput{ControllerID: 1})
+			if err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+			if out.CreatedAt != tt.wantCreated || out.UpdatedAt != tt.wantUpdated {
+				t.Errorf("timestamps = %q/%q, want %q/%q", out.CreatedAt, out.UpdatedAt, tt.wantCreated, tt.wantUpdated)
+			}
+		})
 	}
 }
 
@@ -222,6 +291,41 @@ func TestAddRunnerScope_Success(t *testing.T) {
 	}
 	if out.RunnerID != 42 {
 		t.Errorf("runner_id = %d, want 42", out.RunnerID)
+	}
+	if out.CreatedAt != "2026-01-15T10:00:00Z" || out.UpdatedAt != "2026-01-15T12:00:00Z" {
+		t.Errorf("timestamps = %q/%q, want the created and updated values GitLab sent", out.CreatedAt, out.UpdatedAt)
+	}
+}
+
+// TestAddRunnerScope_OneTimestamp_KeepsTheRunnerAndLeavesTheOtherEmpty is the
+// runner-level half of the same property: the runner a scope names survives
+// whichever timestamp GitLab omitted, and the omitted one stays empty instead
+// of taking its neighbor's value.
+func TestAddRunnerScope_OneTimestamp_KeepsTheRunnerAndLeavesTheOtherEmpty(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantCreated string
+		wantUpdated string
+	}{
+		{"created only", `{"runner_id":42,"created_at":"2026-01-15T10:00:00Z","updated_at":null}`, "2026-01-15T10:00:00Z", ""},
+		{"updated only", `{"runner_id":42,"updated_at":"2026-01-15T11:00:00Z"}`, "", "2026-01-15T11:00:00Z"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusCreated, tt.body)
+			}))
+
+			out, err := AddRunnerScope(context.Background(), client, AddRunnerScopeInput{ControllerID: 1, RunnerID: 42})
+			if err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+			want := RunnerScopeOutput{RunnerID: 42, CreatedAt: tt.wantCreated, UpdatedAt: tt.wantUpdated}
+			if !reflect.DeepEqual(out, want) {
+				t.Errorf("output = %+v, want %+v", out, want)
+			}
+		})
 	}
 }
 
