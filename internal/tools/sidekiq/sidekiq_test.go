@@ -5,6 +5,7 @@ package sidekiq
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -17,7 +18,8 @@ const errExpectedNil = "expected error, got nil"
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// queueMetricsJSON identifies the queue metrics JSON constant used by this package.
+// queueMetricsJSON is two queues whose four counters are all different, so
+// backlog and latency cannot trade places unnoticed.
 const queueMetricsJSON = `{
 	"queues": {
 		"default": {"backlog": 10, "latency": 5},
@@ -25,18 +27,37 @@ const queueMetricsJSON = `{
 	}
 }`
 
-// processMetricsJSON identifies the process metrics JSON constant used by this package.
+// processMetricsJSON is one Sidekiq process in which no two values agree, so a
+// field read from a neighbour's key cannot pass unnoticed.
 const processMetricsJSON = `{
 	"processes": [
 		{
-			"hostname": "worker-01",
-			"pid": 1234,
-			"tag": "default",
+			"hostname": "sidekiq-worker-07",
+			"pid": 4242,
+			"tag": "mailers-only",
 			"started_at": "2026-01-15T10:00:00Z",
 			"queues": ["default", "mailers"],
-			"labels": ["reliable"],
+			"labels": ["reliable", "arm64"],
 			"concurrency": 25,
-			"busy": 10
+			"busy": 11
+		}
+	]
+}`
+
+// processNoStartJSON is a process GitLab reported without a start time. The
+// SDK models started_at as a pointer, so this is the one shape that reaches the
+// nil branch of the conversion.
+const processNoStartJSON = `{
+	"processes": [
+		{
+			"hostname": "sidekiq-worker-11",
+			"pid": 909,
+			"tag": "quiet",
+			"started_at": null,
+			"queues": ["default"],
+			"labels": ["spot"],
+			"concurrency": 5,
+			"busy": 0
 		}
 	]
 }`
@@ -50,21 +71,24 @@ const jobStatsJSON = `{
 	}
 }`
 
-// compoundMetricsJSON identifies the compound metrics JSON constant used by this package.
+// compoundMetricsJSON carries all three sections at once, again with no two
+// values agreeing: the compound handler fills its job counters from a literal
+// of its own rather than through GetJobStats, so a key read from the wrong
+// field here is a separate defect from the same mistake in the job stats call.
 const compoundMetricsJSON = `{
 	"queues": {
-		"default": {"backlog": 10, "latency": 5}
+		"default": {"backlog": 12, "latency": 3}
 	},
 	"processes": [
 		{
-			"hostname": "worker-01",
-			"pid": 1234,
-			"tag": "default",
+			"hostname": "sidekiq-worker-07",
+			"pid": 4242,
+			"tag": "mailers-only",
 			"started_at": "2026-01-15T10:00:00Z",
 			"queues": ["default"],
-			"labels": [],
-			"concurrency": 25,
-			"busy": 10
+			"labels": ["reliable"],
+			"concurrency": 30,
+			"busy": 7
 		}
 	],
 	"jobs": {
@@ -74,7 +98,11 @@ const compoundMetricsJSON = `{
 	}
 }`
 
-// TestGetQueueMetrics_Success verifies GetQueueMetrics when success.
+// TestGetQueueMetrics_Success verifies that each queue keeps its own name,
+// backlog and latency. GitLab sends the queues as an object keyed by name, so
+// the conversion has to carry the key onto the item; and backlog and latency
+// are two counters of one shape, which is exactly the pair a reader can swap
+// without the response looking wrong.
 func TestGetQueueMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/queue_metrics" && r.Method == http.MethodGet {
@@ -88,8 +116,17 @@ func TestGetQueueMetrics_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Queues) != 2 {
-		t.Fatalf("expected 2 queues, got %d", len(out.Queues))
+
+	want := map[string]QueueItem{
+		"default": {Name: "default", Backlog: 10, Latency: 5},
+		"mailers": {Name: "mailers", Backlog: 2, Latency: 1},
+	}
+	got := make(map[string]QueueItem, len(out.Queues))
+	for _, q := range out.Queues {
+		got[q.Name] = q
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GetQueueMetrics() queues = %#v, want %#v", got, want)
 	}
 }
 
@@ -105,7 +142,11 @@ func TestGetQueueMetrics_Error(t *testing.T) {
 	}
 }
 
-// TestGetProcessMetrics_Success verifies GetProcessMetrics when success.
+// TestGetProcessMetrics_Success verifies that every published field of a
+// process is read from its own key. Half of them are pairs a reader can confuse
+// without the answer looking wrong (a tag beside a hostname, the queue names
+// beside the labels), and asserting one field at a time is what let that pass:
+// nothing here noticed queues and labels swapping places.
 func TestGetProcessMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/process_metrics" && r.Method == http.MethodGet {
@@ -119,14 +160,53 @@ func TestGetProcessMetrics_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Processes) != 1 {
-		t.Fatalf("expected 1 process, got %d", len(out.Processes))
+
+	want := []ProcessItem{{
+		Hostname:    "sidekiq-worker-07",
+		Pid:         4242,
+		Tag:         "mailers-only",
+		StartedAt:   "2026-01-15T10:00:00Z",
+		Queues:      []string{"default", "mailers"},
+		Labels:      []string{"reliable", "arm64"},
+		Concurrency: 25,
+		Busy:        11,
+	}}
+	if !reflect.DeepEqual(out.Processes, want) {
+		t.Errorf("GetProcessMetrics() processes = %#v, want %#v", out.Processes, want)
 	}
-	if out.Processes[0].Hostname != "worker-01" {
-		t.Fatalf("expected hostname worker-01, got %s", out.Processes[0].Hostname)
+}
+
+// TestGetProcessMetrics_NoStartTime_LeavesStartedAtEmpty verifies that a
+// process GitLab reported without a start time is published with an empty
+// StartedAt and the rest of its fields intact. The SDK models started_at as a
+// pointer, so the conversion has to check it before formatting: reaching for
+// the value on the nil side would take the whole call down.
+func TestGetProcessMetrics_NoStartTime_LeavesStartedAtEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4//sidekiq/process_metrics" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, processNoStartJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetProcessMetrics(t.Context(), client, GetProcessMetricsInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Processes[0].Concurrency != 25 {
-		t.Fatalf("expected concurrency 25, got %d", out.Processes[0].Concurrency)
+
+	want := []ProcessItem{{
+		Hostname:    "sidekiq-worker-11",
+		Pid:         909,
+		Tag:         "quiet",
+		StartedAt:   "",
+		Queues:      []string{"default"},
+		Labels:      []string{"spot"},
+		Concurrency: 5,
+		Busy:        0,
+	}}
+	if !reflect.DeepEqual(out.Processes, want) {
+		t.Errorf("GetProcessMetrics() processes = %#v, want %#v", out.Processes, want)
 	}
 }
 
@@ -179,7 +259,11 @@ func TestGetJobStats_Error(t *testing.T) {
 	}
 }
 
-// TestGetCompoundMetrics_Success verifies GetCompoundMetrics when success.
+// TestGetCompoundMetrics_Success verifies that the compound call publishes all
+// three sections whole. Its job counters are assembled by a literal of its own
+// rather than by calling the job stats handler, so a counter read from the
+// wrong key here survives every assertion made about the standalone call; only
+// Processed was ever checked, and Failed and Enqueued could trade places.
 func TestGetCompoundMetrics_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4//sidekiq/compound_metrics" && r.Method == http.MethodGet {
@@ -193,14 +277,27 @@ func TestGetCompoundMetrics_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Queues) != 1 {
-		t.Fatalf("expected 1 queue, got %d", len(out.Queues))
+
+	wantQueues := []QueueItem{{Name: "default", Backlog: 12, Latency: 3}}
+	if !reflect.DeepEqual(out.Queues, wantQueues) {
+		t.Errorf("GetCompoundMetrics() queues = %#v, want %#v", out.Queues, wantQueues)
 	}
-	if len(out.Processes) != 1 {
-		t.Fatalf("expected 1 process, got %d", len(out.Processes))
+	wantProcesses := []ProcessItem{{
+		Hostname:    "sidekiq-worker-07",
+		Pid:         4242,
+		Tag:         "mailers-only",
+		StartedAt:   "2026-01-15T10:00:00Z",
+		Queues:      []string{"default"},
+		Labels:      []string{"reliable"},
+		Concurrency: 30,
+		Busy:        7,
+	}}
+	if !reflect.DeepEqual(out.Processes, wantProcesses) {
+		t.Errorf("GetCompoundMetrics() processes = %#v, want %#v", out.Processes, wantProcesses)
 	}
-	if out.Jobs.Processed != 100000 {
-		t.Fatalf("expected processed 100000, got %d", out.Jobs.Processed)
+	wantJobs := JobStatsItem{Processed: 100000, Failed: 50, Enqueued: 25}
+	if out.Jobs != wantJobs {
+		t.Errorf("GetCompoundMetrics() jobs = %#v, want %#v", out.Jobs, wantJobs)
 	}
 }
 
