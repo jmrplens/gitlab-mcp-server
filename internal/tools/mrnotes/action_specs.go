@@ -46,19 +46,30 @@ func mrNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 	return toolutil.NewDeleteActionSpec(name, route, mrNoteOptions(individualTool))
 }
 
-// Canonical action IDs referenced by merge request note RelatedActions. The MR
-// note actions are projected under the gitlab_merge_request catalog group, so
-// their base domain is "merge_request".
+// The one block every published action ID in this package is built from: the
+// RelatedActions of each spec, the parameter guidance, and the hints
+// markdown.go writes.
+//
+// The merge request note, discussion and draft note actions are projected
+// under the gitlab_mr_review catalog group, so their domain is "mr_review".
+// Only the merge request itself belongs to gitlab_merge_request. This used to
+// be two blocks, and they disagreed: markdown.go named mr_review and this file
+// named merge_request, on the reasoning that the metadata half was "used for
+// related-action metadata only". A RelatedActions entry is published to a
+// model exactly like a hint, so all nine IDs here answered unknown action, and
+// each had a plausible near-miss that resolved to the wrong resource
+// ("merge_request.note_list" against merge_request.list, the merge requests of
+// a project).
 const (
 	actionMRGet              = "merge_request.get"
-	actionMRNoteList         = "merge_request.note_list"
-	actionMRNoteGet          = "merge_request.note_get"
-	actionMRNoteCreate       = "merge_request.note_create"
-	actionMRNoteUpdate       = "merge_request.note_update"
-	actionMRNoteDelete       = "merge_request.note_delete"
-	actionMRDiscussionList   = "merge_request.discussion_list"
-	actionMRDiscussionCreate = "merge_request.discussion_create"
-	actionMRDraftNoteCreate  = "merge_request.draft_note_create"
+	actionMRNoteList         = "mr_review.note_list"
+	actionMRNoteGet          = "mr_review.note_get"
+	actionMRNoteCreate       = "mr_review.note_create"
+	actionMRNoteUpdate       = "mr_review.note_update"
+	actionMRNoteDelete       = "mr_review.note_delete"
+	actionMRDiscussionList   = "mr_review.discussion_list"
+	actionMRDiscussionCreate = "mr_review.discussion_create"
+	actionMRDraftNoteCreate  = "mr_review.draft_note_create"
 )
 
 // projectIDGuidance is the shared parameter guidance for the project_id input
@@ -86,9 +97,9 @@ func mrIIDGuidance() toolutil.ParameterGuidance {
 func noteIDGuidance() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "note_id",
-		ValueSource:      "Numeric note ID from a prior merge_request.note_list or merge_request.note_create result.",
+		ValueSource:      "Numeric note ID from a prior mr_review.note_list or mr_review.note_create result.",
 		ExampleBinding:   "params.note_id:200",
-		CommonConfusions: []string{"note_id is the comment ID, not the merge_request_iid. Obtain it from merge_request.note_list."},
+		CommonConfusions: []string{"note_id is the comment ID, not the merge_request_iid. Obtain it from mr_review.note_list."},
 	}
 }
 

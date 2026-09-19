@@ -5,10 +5,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs referenced by the MR context-commit RelatedActions.
-// Context commits live under the gitlab_merge_request meta-group, so the
-// merge_request.* IDs are siblings and the commit.* IDs cross-reference the
-// repository commit history the context SHAs are drawn from.
+// The one block every published action ID in this package is built from: the
+// RelatedActions of each spec and the hints markdown.go writes.
+//
+// Context commits live under the gitlab_merge_request catalog group, so the
+// merge_request.* IDs are siblings. The commit cross-references point at the
+// repository commit history the context SHAs are drawn from, which the catalog
+// projects under the gitlab_repository group: "commit.get" and "commit.list"
+// look like plausible pairs and are not IDs the catalog holds.
 const (
 	actionContextCommitsList   = "merge_request.context_commits_list"
 	actionContextCommitsCreate = "merge_request.context_commits_create"
@@ -18,8 +22,8 @@ const (
 	actionMergeRequestList    = "merge_request.list"
 	actionMergeRequestCommits = "merge_request.commits"
 
-	actionCommitGet  = "commit.get"
-	actionCommitList = "commit.list"
+	actionCommitGet  = "repository.commit_get"
+	actionCommitList = "repository.commit_list"
 )
 
 // ActionSpecs returns canonical specs for merge request context commit actions.

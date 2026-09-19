@@ -22,7 +22,9 @@ const (
 	actionJobDownloadSingle = "job.download_single_artifact"
 	actionPipelineGet       = "pipeline.get"
 	actionPipelineList      = "pipeline.list"
-	actionCommitGet         = "commit.get"
+	// Commits are routes on the gitlab_repository catalog group, so the ID is
+	// repository.commit_get and never commit.get, which resolves to nothing.
+	actionCommitGet = "repository.commit_get"
 )
 
 // guidanceProjectID is the shared parameter guidance for the project_id input

@@ -356,10 +356,17 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // contextCommitHints is the guidance section a context commit listing closes
 // with.
+//
+// The IDs come from the package's own constants rather than being written out
+// again: what these tests assert is the shape of the rendered guidance, and
+// whether each ID names an action that exists is a question only the catalog
+// can answer, which action_specs_test.go asks. Spelling the literal here would
+// have held the formatter to the old "commit.get", an ID the catalog does not
+// have, and called that a pass.
 const contextCommitHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use action 'commit.get' to read one of these commits in full\n" +
-	"- Use action 'merge_request.context_commits_create' to pin another commit to this review\n" +
-	"- Use action 'merge_request.context_commits_delete' to unpin one of these commits\n"
+	"- Use action '" + actionCommitGet + "' to read one of these commits in full\n" +
+	"- Use action '" + actionContextCommitsCreate + "' to pin another commit to this review\n" +
+	"- Use action '" + actionContextCommitsDelete + "' to unpin one of these commits\n"
 
 // TestFormatListMarkdown_ContentValidation verifies the whole rendering of a
 // context commit listing: the SHA as a code span, the pipe in a commit title
