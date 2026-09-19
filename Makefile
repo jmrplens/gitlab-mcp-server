@@ -806,24 +806,25 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/18] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/18] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/18] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/18] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
-	run_check "[5/18] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/18] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[7/18] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
-	run_check "[8/18] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
-	run_check "[9/18] supply-chain policy" go run ./cmd/audit_supply_chain; \
-	run_check "[10/18] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
-	run_check "[11/18] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
-	run_check "[12/18] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
-	run_check "[13/18] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
-	run_check "[14/18] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
-	run_check "[15/18] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
-	run_check "[16/18] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
-	run_check "[17/18] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
-	run_check "[18/18] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
+	run_check "[1/19] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/19] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/19] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/19] constants nothing reads" go run ./cmd/audit_dead_consts/ -check; \
+	run_check "[5/19] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[6/19] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[7/19] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[8/19] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
+	run_check "[9/19] supply-chain policy" go run ./cmd/audit_supply_chain; \
+	run_check "[10/19] Markdown escaping" go run ./cmd/audit_md_escaping --check -fail-unresolved-in internal/toolutil; \
+	run_check "[11/19] pinned GraphQL schema" go run ./cmd/gen_graphql_schema/ --check; \
+	run_check "[12/19] GraphQL documents" go run ./cmd/audit_graphql_documents/; \
+	run_check "[13/19] request paths (R-PATH)" go run ./cmd/audit_1to1/ -scope=paths -gaps-only; \
+	run_check "[14/19] meta descriptions" go run ./cmd/audit_meta_descriptions/ -check; \
+	run_check "[15/19] pinned live GitLab record" go run ./cmd/gen_api_live/ -check; \
+	run_check "[16/19] GraphQL response shapes" go run ./cmd/audit_graphql_shapes/; \
+	run_check "[17/19] catalog-first invariants" go run ./cmd/audit_catalog_first/; \
+	run_check "[18/19] e2e coverage (static)" go run ./cmd/audit_e2e_coverage/ -static; \
+	run_check "[19/19] e2e coverage record" go run ./cmd/audit_e2e_coverage/ -check-record -check-record-page; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \

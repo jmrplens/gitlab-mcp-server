@@ -177,6 +177,12 @@ func main() {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
 	cmdutil.Progressf("audit_catalog_first: scanning internal/tools source for ActionSpec catalog coverage...")
+	// Type-checked separately from the report, and only over the real
+	// repository: the rule loads ./internal/... with go/packages, which the
+	// planted fixture trees buildCoverageReport is also driven over are not.
+	if aggregationErr := assertActionSpecsAreAggregated(root); aggregationErr != nil {
+		cmdutil.Fatalf("%v", aggregationErr)
+	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
 		cmdutil.Fatalf("build coverage report: %v", err)

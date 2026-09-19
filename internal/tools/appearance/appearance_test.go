@@ -7,15 +7,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // appearanceJSON identifies the appearance JSON constant used by this package.
@@ -485,92 +482,6 @@ func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 	if got != want {
 		t.Errorf("FormatUpdateMarkdown() =\n%q\nwant:\n%q", got, want)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpec route execution
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	client := newAppearanceRouteClient(t)
-	specs := ActionSpecs(client)
-	getSpec := appearanceSpecByName(t, specs, "appearance_get")
-	if !strings.Contains(getSpec.Usage, "branding") {
-		t.Fatalf("appearance_get Usage = %q, want branding guidance", getSpec.Usage)
-	}
-	if !slices.Contains(getSpec.Aliases, "branding settings") {
-		t.Fatalf("appearance_get Aliases = %v, want branding settings alias", getSpec.Aliases)
-	}
-	updateSpec := appearanceSpecByName(t, specs, "appearance_update")
-	if guidance := updateSpec.ParameterGuidance["message_background_color"]; guidance.SemanticRole != "hex_color" {
-		t.Fatalf("appearance_update guidance = %+v, want hex_color", guidance)
-	}
-	if guidance := updateSpec.ParameterGuidance["title"]; guidance.SemanticRole != "instance_brand_title" {
-		t.Fatalf("appearance_update title guidance = %+v, want instance_brand_title", guidance)
-	}
-	if !strings.Contains(updateSpec.IndividualTool.Description, "Returns:") || !strings.Contains(updateSpec.IndividualTool.Description, "See also:") {
-		t.Fatalf("appearance_update description = %q, want Returns/See also guidance", updateSpec.IndividualTool.Description)
-	}
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get_appearance", "gitlab_get_appearance", map[string]any{}},
-		{"update_appearance", "gitlab_update_appearance", map[string]any{
-			"title": "New Title",
-		}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-func appearanceSpecByName(t *testing.T, specs []toolutil.ActionSpec, name string) toolutil.ActionSpec {
-	t.Helper()
-	for _, spec := range specs {
-		if spec.Name == name {
-			return spec
-		}
-	}
-	t.Fatalf("missing ActionSpec %s", name)
-	return toolutil.ActionSpec{}
-}
-
-// newAppearanceRouteClient returns a client backed by mock appearance endpoints.
-func newAppearanceRouteClient(t *testing.T) *gitlabclient.Client {
-	t.Helper()
-
-	handler := http.NewServeMux()
-	handler.HandleFunc("GET /api/v4/application/appearance", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, appearanceJSON)
-	})
-	handler.HandleFunc("PUT /api/v4/application/appearance", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, appearanceJSON)
-	})
-
-	return testutil.NewTestClient(t, handler)
 }
 
 // TestFormatGetMarkdown_SiteName verifies the site name reaches the rendered

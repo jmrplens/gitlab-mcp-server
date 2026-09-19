@@ -59,27 +59,9 @@ func TestPublishedActionIDs_NameActionsTheCatalogHolds(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_RelatedActionsNameActionsTheCatalogHolds verifies the same
-// for the RelatedActions every spec actually carries, which is what the dynamic
-// find and execute results publish.
-//
-// This is deliberately not the same assertion as the one above. That one reads
-// the shared constant block; this one reads the specs as they are built, so a
-// raw string literal written straight into a RelatedActions list, bypassing the
-// block, is caught rather than silently exempted.
-func TestActionSpecs_RelatedActionsNameActionsTheCatalogHolds(t *testing.T) {
-	t.Parallel()
-
-	catalog := catalogForTest(t)
-	specs := clusteragents.ActionSpecs(nil)
-	if len(specs) == 0 {
-		t.Fatal("ActionSpecs() is empty, so this test would assert nothing")
-	}
-	for _, spec := range specs {
-		for _, related := range spec.RelatedActions {
-			if _, found := catalog.Action(actioncatalog.ActionID(related)); !found {
-				t.Errorf("action %q relates to %q, which names no action the catalog holds", spec.Name, related)
-			}
-		}
-	}
-}
+// The RelatedActions half of this file went with the specs: this package used
+// to declare a full set of its own that nothing aggregated, and the specs the
+// gitlab_admin group really serves are declared in internal/tools/adminspecs,
+// where their related actions are held to the catalog beside them. What stays
+// here is the constant block the Markdown formatters read, which is published
+// to a model whatever surface is serving.

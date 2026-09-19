@@ -1,3 +1,12 @@
+// action_specs.go holds what this package contributes to the canonical action
+// catalog. The specs themselves are declared in internal/tools/adminspecs,
+// which is the one place the gitlab_admin group is assembled; what stays here
+// is the handler adaptation a spec routes to.
+//
+// This package used to declare a full set of specs of its own. Nothing ever
+// aggregated them, so they reached no surface: the served metadata had drifted
+// from this copy word for word, and a maintainer correcting the text here
+// changed nothing a model reads.
 package broadcastmessages
 
 import (
@@ -6,61 +15,6 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
-
-// Canonical catalog IDs this package publishes as RelatedActions. Appearance
-// is served from the gitlab_admin catalog group rather than a group of its
-// own, so the domain is "admin"; an "appearance." spelling names no action and
-// a model following it is answered "unknown action".
-const (
-	actionAdminSettingsGet   = "admin.settings_get"
-	actionAdminAppearanceGet = "admin.appearance_get"
-)
-
-// ActionSpecs returns canonical specs for broadcast message tools.
-func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
-	return []toolutil.ActionSpec{
-		broadcastMessageReadSpec("broadcast_message_list", toolutil.RouteAction(client, List), "gitlab_list_broadcast_messages"),
-		broadcastMessageReadSpec("broadcast_message_get", toolutil.RouteAction(client, Get), "gitlab_get_broadcast_message"),
-		broadcastMessageCreateSpec("broadcast_message_create", toolutil.RouteAction(client, Create), "gitlab_create_broadcast_message"),
-		broadcastMessageUpdateSpec("broadcast_message_update", toolutil.RouteAction(client, Update), "gitlab_update_broadcast_message"),
-		broadcastMessageDeleteSpec("broadcast_message_delete", toolutil.DestructiveAction(client, DeleteOutput), "gitlab_delete_broadcast_message"),
-	}
-}
-
-func broadcastMessageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, broadcastMessageOptions(individualTool))
-}
-
-func broadcastMessageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, broadcastMessageOptions(individualTool))
-}
-
-func broadcastMessageUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, broadcastMessageOptions(individualTool))
-}
-
-func broadcastMessageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, broadcastMessageOptions(individualTool))
-}
-
-func broadcastMessageOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Aliases:        []string{individualTool},
-		Tags:           []string{"admin", "broadcast"},
-		Usage:          "Manage instance broadcast messages (list/get/create/update/delete). Use for admin-visible announcements and scheduled banners.",
-		RelatedActions: []string{actionAdminSettingsGet, actionAdminAppearanceGet},
-		ParameterGuidance: map[string]toolutil.ParameterGuidance{
-			"id": {
-				SemanticRole:   "broadcast_message_id",
-				ValueSource:    "Broadcast message numeric ID from list/get outputs.",
-				ExampleBinding: "params.id:1",
-			},
-		},
-		OpenWorld:      true,
-		OwnerPackage:   "broadcastmessages",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	}
-}
 
 // DeleteOutput deletes a broadcast message and returns the legacy success message shape.
 func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {

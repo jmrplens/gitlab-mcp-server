@@ -72,6 +72,42 @@ const (
 	ownerUsageData         = "usagedata"
 )
 
+// adminOwnerTags is the domain tag set each owner package contributes to its
+// own actions, beside the "admin" every action in this group carries.
+//
+// It is here because each of those packages used to declare a full set of
+// specs of its own that nothing ever aggregated, and the tags were the part of
+// that metadata this group had no copy of: a model searching for "sidekiq" or
+// "secure file" matched the tag in a spec no surface served, while the served
+// one was tagged "admin" and nothing else. The table is keyed by owner rather
+// than by action because that is the grain the tags were written at, and it
+// leaves an action free to append its own on top.
+var adminOwnerTags = map[string][]string{
+	ownerAlertManagement:   {"alert", "metric-image"},
+	ownerAppStatistics:     {"statistics", "instance"},
+	ownerAppearance:        {tagAppearance, "branding"},
+	ownerApplications:      {"application"},
+	ownerBroadcastMessages: {"broadcast"},
+	ownerBulkImports:       {"import"},
+	ownerClusterAgents:     {"cluster-agent"},
+	ownerCustomAttributes:  {"custom-attribute"},
+	ownerDBMigrations:      {"database"},
+	ownerDependencyProxy:   {"dependency-proxy"},
+	ownerErrorTracking:     {"error-tracking"},
+	ownerFeatures:          {"feature"},
+	ownerImportService:     {"import"},
+	ownerLicense:           {"license"},
+	ownerMetadata:          {"metadata", "version"},
+	ownerPlanLimits:        {"plan-limit"},
+	ownerSecureFiles:       {"secure-file"},
+	ownerSettings:          {"settings", "application_settings"},
+	ownerSidekiq:           {"sidekiq", "metrics"},
+	ownerSystemHooks:       {"system-hook"},
+	ownerTerraformStates:   {"terraform-state"},
+	ownerTopics:            {"topic"},
+	ownerUsageData:         {"usage-data"},
+}
+
 const (
 	actionSystemHookGet      = "admin.system_hook_get"
 	actionSettingsGet        = "admin.settings_get"
@@ -288,7 +324,6 @@ func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerSettings, "gitlab_get_settings")
 	options.Usage = "Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information."
 	options.Aliases = []string{"application settings", "instance settings", "current settings", "admin settings", "gitlab settings"}
-	options.Tags = append(options.Tags, "settings", "application_settings")
 	options.RelatedActions = []string{"admin.settings_update", "admin.appearance_get", actionAdminMetadataGet}
 	options.IndividualTool.Description = "Get the current GitLab application (instance) settings. Returns: the full application settings object including sign-up, visibility, CI/CD, and rate-limit configuration. See also: gitlab_update_settings, gitlab_get_appearance, gitlab_get_metadata."
 	return toolutil.NewReadActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
@@ -298,7 +333,6 @@ func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerMetadata, "gitlab_get_metadata")
 	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
-	options.Tags = append(options.Tags, "metadata", "version")
 	options.RelatedActions = []string{actionAdminSettingsGet, "admin.app_statistics_get", "server.health_check"}
 	options.IndividualTool.Description = "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics."
 	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
@@ -308,7 +342,6 @@ func adminAppearanceGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions(ownerAppearance, "gitlab_get_appearance")
 	options.Usage = "Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata."
 	options.Aliases = []string{tagAppearance, "application appearance", "instance appearance", "branding settings", "gitlab appearance"}
-	options.Tags = append(options.Tags, tagAppearance, "branding")
 	options.RelatedActions = []string{actionAdminSettingsGet, actionAdminMetadataGet, "admin.appearance_update"}
 	options.IndividualTool.Description = "Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata."
 	return toolutil.NewReadActionSpec("appearance_get", toolutil.RouteAction(client, appearance.Get), options)
@@ -318,9 +351,13 @@ func adminAppearanceUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec 
 	options := adminOptions(ownerAppearance, "gitlab_update_appearance")
 	options.Usage = "Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately."
 	options.Aliases = []string{"update appearance", "change appearance", "update branding", "change branding", "appearance settings update"}
-	options.Tags = append(options.Tags, tagAppearance, "branding")
 	options.RelatedActions = []string{"admin.appearance_get", actionAdminSettingsGet, actionAdminMetadataGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"title": {
+			SemanticRole:   "instance_brand_title",
+			ValueSource:    "Instance branding title shown in the GitLab UI header.",
+			ExampleBinding: `params.title:"GitLab Engineering"`,
+		},
 		"message_background_color": {
 			SemanticRole:     "hex_color",
 			ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
@@ -340,7 +377,6 @@ func adminApplicationStatisticsGetSpec(client *gitlabclient.Client) toolutil.Act
 	options := adminOptions(ownerAppStatistics, "gitlab_get_application_statistics")
 	options.Usage = "Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access."
 	options.Aliases = []string{"application statistics", "instance statistics", "gitlab statistics", "admin statistics"}
-	options.Tags = append(options.Tags, "statistics", "instance")
 	options.RelatedActions = []string{actionAdminMetadataGet, "server.health_check"}
 	options.IndividualTool.Description = "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status."
 	return toolutil.NewReadActionSpec("app_statistics_get", toolutil.RouteAction(client, appstatistics.Get), options)
@@ -375,7 +411,7 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 // the owner constants above for why the distinction is load-bearing.
 func adminOptions(owner, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute adminspecs domain action.", Tags: []string{"admin"},
+		Aliases: []string{individualTool}, Usage: "Use to execute adminspecs domain action.", Tags: adminTags(owner),
 		OpenWorld:      true,
 		OwnerPackage:   owner,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -386,6 +422,15 @@ func adminOptions(owner, individualTool string) toolutil.ActionSpecOptions {
 	// does not name and could not change an answer either way.
 	options.InputSchemaOverrides = adminInputSchemaOverrides(individualTool)
 	return options
+}
+
+// adminTags returns a fresh tag slice for one owner: "admin" first, then
+// whatever adminOwnerTags holds for it. A new slice per call, because an
+// action that appends its own tags would otherwise write into the table.
+func adminTags(owner string) []string {
+	tags := make([]string, 0, 1+len(adminOwnerTags[owner]))
+	tags = append(tags, "admin")
+	return append(tags, adminOwnerTags[owner]...)
 }
 
 // adminInputSchemaOverrides returns the JSON Schema patches for admin actions
@@ -461,6 +506,11 @@ type adminActionMetaEntry struct {
 	aliases     []string
 	related     []string
 	description string
+	// guidance names the parameters whose meaning a model gets wrong without
+	// being told, keyed as the input schema spells them. Only parameters the
+	// action's own input declares belong here: the projection refuses a spec
+	// whose guidance names a parameter the schema has no property for.
+	guidance map[string]toolutil.ParameterGuidance
 }
 
 // decorateAdminMeta fills non-generic Usage, natural-language Aliases,
@@ -500,7 +550,50 @@ func applyAdminMeta(options *toolutil.ActionSpecOptions, meta adminActionMetaEnt
 	if meta.description != "" {
 		options.IndividualTool.Description = meta.description
 	}
+	for name, guidance := range meta.guidance {
+		if options.ParameterGuidance == nil {
+			options.ParameterGuidance = make(map[string]toolutil.ParameterGuidance, len(meta.guidance))
+		}
+		options.ParameterGuidance[name] = guidance
+	}
 }
+
+// Parameter guidance several actions of one family share. A sibling pair such
+// as admin.topic_get and admin.topic_delete takes the same identifier and is
+// confused in the same way, so the sentence a model reads for one is the
+// sentence it reads for the other, written once.
+var (
+	guidanceTopicID = toolutil.ParameterGuidance{
+		SemanticRole:   "topic_id",
+		ValueSource:    "Topic numeric ID from admin.topic_list or admin.topic_get output.",
+		ExampleBinding: "params.topic_id:1",
+	}
+	guidanceBroadcastMessageID = toolutil.ParameterGuidance{
+		SemanticRole:   "broadcast_message_id",
+		ValueSource:    "Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.",
+		ExampleBinding: "params.id:1",
+	}
+	guidanceClusterAgentID = toolutil.ParameterGuidance{
+		SemanticRole:   "cluster_agent_id",
+		ValueSource:    "Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.",
+		ExampleBinding: "params.agent_id:5",
+	}
+	guidanceOAuthApplicationID = toolutil.ParameterGuidance{
+		SemanticRole:   "oauth_application_id",
+		ValueSource:    "Numeric application ID from admin.application_list output.",
+		ExampleBinding: "params.id:12",
+	}
+	guidancePlanName = toolutil.ParameterGuidance{
+		SemanticRole:   "plan_name",
+		ValueSource:    "Plan name whose limits are read or changed, for example default, free or premium.",
+		ExampleBinding: `params.plan_name:"default"`,
+	}
+	guidanceFeatureFlagName = toolutil.ParameterGuidance{
+		SemanticRole:   "feature_flag_name",
+		ValueSource:    "Feature flag name from admin.feature_list or admin.feature_list_definitions output.",
+		ExampleBinding: `params.name:"flag1"`,
+	}
+)
 
 // adminActionMeta maps each individual admin tool to its discovery metadata.
 // Entries cover every admin action that routes through the shared adminOptions
@@ -520,6 +613,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"get topic", "show topic", "topic details"},
 		related:     []string{actionTopicList, actionTopicUpdate, actionTopicDelete},
 		description: "Get a single project topic by id. Returns: the topic with id, name, title, description, avatar, and project count. See also: gitlab_list_topics, gitlab_update_topic.",
+		guidance:    map[string]toolutil.ParameterGuidance{"topic_id": guidanceTopicID},
 	},
 	"gitlab_create_topic": {
 		usage:       "Create a new instance project topic (admin only). Provide name and optionally title, description, and avatar.",
@@ -532,18 +626,27 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"update topic", "edit topic", "rename topic"},
 		related:     []string{actionTopicGet, actionTopicList, actionTopicDelete},
 		description: "Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, gitlab_delete_topic.",
+		guidance:    map[string]toolutil.ParameterGuidance{"topic_id": guidanceTopicID},
 	},
 	"gitlab_delete_topic": {
 		usage:       "Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.",
 		aliases:     []string{"delete topic", "remove topic", "drop project topic"},
 		related:     []string{actionTopicGet, actionTopicList, "admin.topic_create"},
 		description: "Delete a project topic. Returns: a success status. See also: gitlab_get_topic, gitlab_create_topic.",
+		guidance:    map[string]toolutil.ParameterGuidance{"topic_id": guidanceTopicID},
 	},
 	"gitlab_update_settings": {
 		usage:       "Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.",
 		aliases:     []string{"update application settings", "change instance settings", "configure gitlab settings", "edit admin settings"},
 		related:     []string{actionSettingsGet, "admin.appearance_update", actionMetadataGet},
 		description: "Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: gitlab_get_settings, gitlab_update_appearance.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"settings": {
+				SemanticRole:   "settings_patch",
+				ValueSource:    "Map of setting keys to desired values, in the snake_case spelling the GitLab API expects.",
+				ExampleBinding: `params.settings:{"signup_enabled":false}`,
+			},
+		},
 	},
 	"gitlab_list_broadcast_messages": {
 		usage:       "List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.",
@@ -556,6 +659,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"get broadcast message", "show announcement", "broadcast details"},
 		related:     []string{actionBroadcastMsgList, actionBroadcastMsgUpd, actionBroadcastMsgDel},
 		description: "Get a broadcast message by id. Returns: the message with text, theme, target, and schedule. See also: gitlab_list_broadcast_messages, gitlab_update_broadcast_message.",
+		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceBroadcastMessageID},
 	},
 	"gitlab_create_broadcast_message": {
 		usage:       "Create a broadcast message banner or notification (admin only). Provide message text and optionally theme, target_path, broadcast_type, dismissable, starts_at, and ends_at.",
@@ -568,12 +672,14 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"update broadcast message", "edit announcement", "change instance banner"},
 		related:     []string{actionBroadcastMsgGet, actionBroadcastMsgList, actionBroadcastMsgDel},
 		description: "Update a broadcast message. Returns: the updated message. See also: gitlab_get_broadcast_message, gitlab_delete_broadcast_message.",
+		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceBroadcastMessageID},
 	},
 	"gitlab_delete_broadcast_message": {
 		usage:       "Delete a broadcast message by id (admin only), removing the banner or notification from the instance.",
 		aliases:     []string{"delete broadcast message", "remove announcement", "dismiss instance banner"},
 		related:     []string{actionBroadcastMsgGet, actionBroadcastMsgList, "admin.broadcast_message_create"},
 		description: "Delete a broadcast message. Returns: a success status. See also: gitlab_get_broadcast_message, gitlab_create_broadcast_message.",
+		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceBroadcastMessageID},
 	},
 	"gitlab_list_features": {
 		usage:       "List all defined feature flags and their current gate state on the instance. Use list_feature_definitions for the flag catalog with metadata.",
@@ -592,12 +698,21 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"set feature flag", "enable feature flag", "toggle feature", "configure feature gate"},
 		related:     []string{actionFeatureList, actionFeatureListDefs, actionFeatureDelete},
 		description: "Set a feature flag gate. Returns: the updated feature with its name, state, and gate values. See also: gitlab_list_features, gitlab_delete_feature_flag.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"name": guidanceFeatureFlagName,
+			"value": {
+				SemanticRole:   "feature_flag_value",
+				ValueSource:    "Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.",
+				ExampleBinding: "params.value:true",
+			},
+		},
 	},
 	"gitlab_delete_feature_flag": {
 		usage:       "Delete a feature flag by name (admin only), removing all of its gates and resetting it to its default state.",
 		aliases:     []string{"delete feature flag", "remove feature toggle", "reset feature gate"},
 		related:     []string{actionFeatureList, actionFeatureSet, actionFeatureListDefs},
 		description: "Delete a feature flag. Returns: a success status. See also: gitlab_set_feature_flag, gitlab_list_features.",
+		guidance:    map[string]toolutil.ParameterGuidance{"name": guidanceFeatureFlagName},
 	},
 	"gitlab_get_license": {
 		usage:       "Get the currently installed GitLab Enterprise license, including plan, expiration, user limits, and add-on entitlements. Requires administrator access.",
@@ -610,12 +725,26 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"add license", "install license", "upload license key", "activate license"},
 		related:     []string{"admin.license_get", "admin.license_delete"},
 		description: "Add a GitLab Enterprise license. Returns: the installed license with plan, expiration, and entitlements. See also: gitlab_get_license, gitlab_delete_license.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"license": {
+				SemanticRole:   "license_payload",
+				ValueSource:    "The encoded license text the administrator was issued, sent whole.",
+				ExampleBinding: `params.license:"base64-license-data"`,
+			},
+		},
 	},
 	"gitlab_delete_license": {
 		usage:       "Delete an installed license by id (admin only). Removing the active license downgrades the instance to Community/Free features.",
 		aliases:     []string{"delete license", "remove license", "uninstall license"},
 		related:     []string{"admin.license_get", "admin.license_add"},
 		description: "Delete an instance license. Returns: a success status. See also: gitlab_get_license, gitlab_add_license.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"id": {
+				SemanticRole:   "license_id",
+				ValueSource:    "License numeric ID from admin.license_get or admin.license_add output.",
+				ExampleBinding: "params.id:1",
+			},
+		},
 	},
 	"gitlab_list_system_hooks": {
 		usage:       "List instance-wide system hooks that fire on global events such as project, group, user, and key changes. Distinct from per-project webhooks.",
@@ -695,12 +824,14 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"get plan limits", "show plan caps", "instance plan limits"},
 		related:     []string{"admin.plan_limits_change", actionSettingsGet},
 		description: "Get plan limits for a plan. Returns: the limit values for CI, registry, import, and other resource caps. See also: gitlab_change_plan_limits, gitlab_get_settings.",
+		guidance:    map[string]toolutil.ParameterGuidance{"plan_name": guidancePlanName},
 	},
 	"gitlab_change_plan_limits": {
 		usage:       "Change plan limits for a plan (admin only). Provide plan_name and only the limit keys to change, such as ci_pipeline_size or import file sizes.",
 		aliases:     []string{"change plan limits", "update plan caps", "set plan limits"},
 		related:     []string{"admin.plan_limits_get", actionSettingsGet},
 		description: "Change plan limits. Returns: the updated plan limit values. See also: gitlab_get_plan_limits, gitlab_get_settings.",
+		guidance:    map[string]toolutil.ParameterGuidance{"plan_name": guidancePlanName},
 	},
 	"gitlab_get_service_ping": {
 		usage:       "Get the latest Service Ping (usage data) payload that GitLab reports for the instance.",
@@ -731,18 +862,39 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"track event", "record usage event", "send analytics event"},
 		related:     []string{"admin.usage_data_track_events", actionUsageDataPing},
 		description: "Track one usage event. Returns: a success status. See also: gitlab_track_events, gitlab_get_service_ping.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"event": {
+				SemanticRole:   "usage_event_name",
+				ValueSource:    "The single internal event name to record.",
+				ExampleBinding: `params.event:"my_event"`,
+			},
+		},
 	},
 	"gitlab_track_events": {
 		usage:       "Track multiple internal usage events in one call (admin only). Provide an array of events with names and context.",
 		aliases:     []string{"track events", "record usage events batch", "send analytics events"},
 		related:     []string{"admin.usage_data_track_event", actionUsageDataPing},
 		description: "Track multiple usage events. Returns: a success status. See also: gitlab_track_event, gitlab_get_service_ping.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"events": {
+				SemanticRole:   "usage_event_batch",
+				ValueSource:    "Array of event objects to record in one request.",
+				ExampleBinding: `params.events:[{"event":"my_event"}]`,
+			},
+		},
 	},
 	"gitlab_mark_migration": {
 		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.",
 		aliases:     []string{"mark migration", "mark database migration done", "force migration complete"},
 		related:     []string{actionSettingsGet, actionMetadataGet},
 		description: "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"version": {
+				SemanticRole:   "migration_version",
+				ValueSource:    "The migration's timestamp version, as GitLab names it in the migration file.",
+				ExampleBinding: "params.version:20240115100000",
+			},
+		},
 	},
 	"gitlab_list_applications": {
 		usage:       "List instance-level OAuth applications registered for the GitLab instance (admin only).",
@@ -755,18 +907,37 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"create application", "register oauth application", "add instance oauth app"},
 		related:     []string{actionApplicationList, actionApplicationDelete},
 		description: "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"name": {
+				SemanticRole:   "oauth_application_name",
+				ValueSource:    "Human-readable name for the OAuth application.",
+				ExampleBinding: `params.name:"CI Dashboard"`,
+			},
+			"redirect_uri": {
+				SemanticRole:   "oauth_redirect_uri",
+				ValueSource:    "Authorized callback URL the OAuth flow returns to.",
+				ExampleBinding: `params.redirect_uri:"https://example.com/oauth/callback"`,
+			},
+			"scopes": {
+				SemanticRole:   "oauth_scopes",
+				ValueSource:    "Space-delimited list of scopes GitLab OAuth supports.",
+				ExampleBinding: `params.scopes:"read_user api"`,
+			},
+		},
 	},
 	"gitlab_renew_application_secret": {
 		usage:       "Renew (rotate) the secret of an instance-level OAuth application by id (admin only). The previous secret is invalidated immediately, so update every client that uses it with the new value returned.",
 		aliases:     []string{"renew application secret", "rotate oauth secret", "regenerate application secret", "reset oauth client secret"},
 		related:     []string{actionApplicationList, actionApplicationCreate},
 		description: "Renew an instance OAuth application secret. Returns: the application with its freshly generated secret (shown once). See also: gitlab_list_applications, gitlab_create_application.",
+		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceOAuthApplicationID},
 	},
 	"gitlab_delete_application": {
 		usage:       "Delete an instance-level OAuth application by id (admin only), revoking its credentials.",
 		aliases:     []string{"delete application", "remove oauth application", "revoke instance oauth app"},
 		related:     []string{actionApplicationList, actionApplicationCreate},
 		description: "Delete an instance OAuth application. Returns: a success status. See also: gitlab_list_applications, gitlab_create_application.",
+		guidance:    map[string]toolutil.ParameterGuidance{"id": guidanceOAuthApplicationID},
 	},
 	"gitlab_list_custom_attributes": {
 		usage:       "List custom attributes set on a user, group, or project (admin only). Custom attributes are admin-only key/value metadata.",
@@ -851,6 +1022,13 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"delete error tracking client key", "remove error tracking key", "revoke sentry client key"},
 		related:     []string{actionErrTrackingList, "admin.error_tracking_create", actionErrTrackingGet},
 		description: "Delete an error-tracking client key. Returns: a success status. See also: gitlab_list_error_tracking_client_keys, gitlab_create_error_tracking_client_key.",
+		guidance: map[string]toolutil.ParameterGuidance{
+			"key_id": {
+				SemanticRole:   "error_tracking_key_id",
+				ValueSource:    "Client key numeric ID from admin.error_tracking_list output.",
+				ExampleBinding: "params.key_id:10",
+			},
+		},
 	},
 	"gitlab_get_error_tracking_settings": {
 		usage:       "Get the integrated error-tracking settings for a project, including whether it is enabled. Provide project_id.",
@@ -953,6 +1131,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"get cluster agent", "get kubernetes agent", "show k8s agent"},
 		related:     []string{actionClusterAgentList, "admin.cluster_agent_delete", actionClusterAgentTokLst},
 		description: "Get a cluster agent. Returns: the agent with id, name, config project, and created_at. See also: gitlab_list_cluster_agents, gitlab_list_cluster_agent_tokens.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_register_cluster_agent": {
 		usage:       "Register a new GitLab Agent for Kubernetes in a project. Provide project_id and the agent name.",
@@ -965,30 +1144,35 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		aliases:     []string{"delete cluster agent", "remove kubernetes agent", "unregister k8s agent"},
 		related:     []string{actionClusterAgentList, "admin.cluster_agent_get", "admin.cluster_agent_register"},
 		description: "Delete a cluster agent. Returns: a success status. See also: gitlab_get_cluster_agent, gitlab_register_cluster_agent.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_list_cluster_agent_tokens": {
 		usage:       "List the tokens for a GitLab Agent for Kubernetes. Provide project_id and agent id.",
 		aliases:     []string{"list cluster agent tokens", "kubernetes agent tokens", "show k8s agent tokens"},
 		related:     []string{actionClusterAgentTokGet, actionClusterAgentTokCrt, actionClusterAgentTokRev},
 		description: "List cluster agent tokens. Returns: an array of agent tokens with id, name, and status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_get_cluster_agent_token": {
 		usage:       "Get one cluster agent token by project_id, agent id, and token id.",
 		aliases:     []string{"get cluster agent token", "kubernetes agent token details", "show k8s agent token"},
 		related:     []string{actionClusterAgentTokLst, actionClusterAgentTokCrt, actionClusterAgentTokRev},
 		description: "Get a cluster agent token. Returns: the token with id, name, status, and last_used_at. See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_create_cluster_agent_token": {
 		usage:       "Create a token for a GitLab Agent for Kubernetes. Provide project_id, agent id, and a token name.",
 		aliases:     []string{"create cluster agent token", "new kubernetes agent token", "add k8s agent token"},
 		related:     []string{actionClusterAgentTokLst, actionClusterAgentTokGet, actionClusterAgentTokRev},
 		description: "Create a cluster agent token. Returns: the created token including the secret value (shown once). See also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_revoke_cluster_agent_token": {
 		usage:       "Revoke a cluster agent token by project_id, agent id, and token id, immediately invalidating it.",
 		aliases:     []string{"revoke cluster agent token", "delete kubernetes agent token", "invalidate k8s agent token"},
 		related:     []string{actionClusterAgentTokLst, actionClusterAgentTokGet, actionClusterAgentTokCrt},
 		description: "Revoke a cluster agent token. Returns: a success status. See also: gitlab_get_cluster_agent_token, gitlab_create_cluster_agent_token.",
+		guidance:    map[string]toolutil.ParameterGuidance{"agent_id": guidanceClusterAgentID},
 	},
 	"gitlab_purge_dependency_proxy": {
 		usage:       "Purge the dependency proxy cache for a group, freeing storage used by cached upstream images. Provide the group id.",

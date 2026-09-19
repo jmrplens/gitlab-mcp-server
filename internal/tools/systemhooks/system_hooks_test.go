@@ -460,6 +460,23 @@ func TestGet_APIError(t *testing.T) {
 // Add — API error, with all optional fields
 // ---------------------------------------------------------------------------.
 
+// TestEdit_APIError verifies that an edit GitLab refused is reported rather
+// than swallowed. The refusal carries the hint that names the listing to
+// verify the hook id with, which is the one thing a caller who reached a hook
+// that is not there can act on.
+func TestEdit_APIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	_, err := Edit(context.Background(), client, EditInput{ID: 999, URL: "https://hook.example.com"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_list_system_hooks") {
+		t.Errorf("error = %v, want it to name the listing that verifies the hook id", err)
+	}
+}
+
 // TestAdd_APIError verifies Add when API error.
 func TestAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

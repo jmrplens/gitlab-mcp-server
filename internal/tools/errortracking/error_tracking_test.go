@@ -221,12 +221,8 @@ func TestDeleteClientKey_InvalidKeyID(t *testing.T) {
 // Constants & fixtures
 // ---------------------------------------------------------------------------.
 
-const (
-	// covSettingsJSON identifies the cov settings JSON constant used by this package.
-	covSettingsJSON = `{"active":true,"project_name":"proj","sentry_external_url":"https://sentry.io","api_url":"https://sentry.io/api","integrated":true}`
-	// covKeyJSON identifies the cov key JSON constant used by this package.
-	covKeyJSON = `{"id":1,"active":true,"public_key":"pk-abc","sentry_dsn":"https://dsn"}`
-)
+// covKeyJSON identifies the cov key JSON constant used by this package.
+const covKeyJSON = `{"id":1,"active":true,"public_key":"pk-abc","sentry_dsn":"https://dsn"}`
 
 // ---------------------------------------------------------------------------
 // ListClientKeys — offset pagination branch (Page > 0, PerPage > 0)

@@ -679,125 +679,48 @@ func TestMarkdownRegistry_MessageOutputTypes(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpecs — metadata
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	specs := ActionSpecs(client)
-	byTool := broadcastMessageSpecsByTool(t, specs)
-
-	if len(specs) != 5 {
-		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
-	}
-	if len(byTool) != len(specs) {
-		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
-	}
-	if !byTool["gitlab_delete_broadcast_message"].Route.Destructive {
-		t.Fatal("gitlab_delete_broadcast_message should be destructive")
-	}
-	if byTool["gitlab_list_broadcast_messages"].Usage == "" {
-		t.Fatal("gitlab_list_broadcast_messages should define usage")
-	}
-	if len(byTool["gitlab_get_broadcast_message"].Aliases) == 0 {
-		t.Fatal("gitlab_get_broadcast_message should define aliases")
-	}
-	if byTool["gitlab_update_broadcast_message"].ParameterGuidance["id"].SemanticRole == "" {
-		t.Fatal("gitlab_update_broadcast_message should define id parameter guidance")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpecs — all routes
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallAllRoutes(t *testing.T) {
-	byTool := newBroadcastRouteSpecs(t)
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
+// TestDeleteOutput verifies the adapter the gitlab_admin spec for
+// admin.broadcast_message_delete routes to: the confirmation shape on GitLab's
+// 204, and the refusal rather than that shape on an error.
+func TestDeleteOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		wantErr bool
 	}{
-		{"list", "gitlab_list_broadcast_messages", map[string]any{}},
-		{"get", "gitlab_get_broadcast_message", map[string]any{"id": float64(1)}},
-		{"create", "gitlab_create_broadcast_message", map[string]any{"message": "Hello"}},
-		{"update", "gitlab_update_broadcast_message", map[string]any{"id": float64(1), "message": "Updated"}},
-		{"delete", "gitlab_delete_broadcast_message", map[string]any{"id": float64(1)}},
+		{name: "deleted", status: http.StatusNoContent},
+		{name: "refused", status: http.StatusForbidden, body: `{"message":"403 Forbidden"}`, wantErr: true},
 	}
 
-	for _, tt := range tools {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.body == "" {
+					w.WriteHeader(tt.status)
+					return
+				}
+				testutil.RespondJSON(w, tt.status, tt.body)
+			}))
+
+			out, err := DeleteOutput(t.Context(), client, DeleteInput{ID: 1})
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("DeleteOutput() error = nil, want the backend refusal")
+				}
+				if out.Status != "" {
+					t.Errorf("DeleteOutput() = %+v, want the zero output beside the error", out)
+				}
+				return
 			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			if err != nil {
+				t.Fatalf("DeleteOutput() error = %v, want nil", err)
+			}
+			if out.Status != "success" || out.Message != "Successfully deleted broadcast_message." {
+				t.Errorf("DeleteOutput() = %+v, want the success confirmation", out)
 			}
 		})
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: route spec factory
-// ---------------------------------------------------------------------------.
-
-// newBroadcastRouteSpecs constructs broadcast route specs test fixtures.
-func newBroadcastRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
-	t.Helper()
-
-	msgJSON := `{"id":1,"message":"Hello","starts_at":"2026-01-01T00:00:00Z","ends_at":"2026-01-02T00:00:00Z","active":true,"broadcast_type":"banner","dismissable":true,"theme":"indigo"}`
-
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/broadcast_messages", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+msgJSON+`]`)
-	})
-
-	handler.HandleFunc("GET /api/v4/broadcast_messages/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, msgJSON)
-	})
-
-	handler.HandleFunc("POST /api/v4/broadcast_messages", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, msgJSON)
-	})
-
-	handler.HandleFunc("PUT /api/v4/broadcast_messages/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, msgJSON)
-	})
-
-	handler.HandleFunc("DELETE /api/v4/broadcast_messages/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	return broadcastMessageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
-}
-
-// broadcastMessageSpecsByTool supports broadcast message specs by tool assertions in broadcastmessages tests.
-func broadcastMessageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	t.Helper()
-	byTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		toolName := spec.IndividualTool.Name
-		if toolName == "" {
-			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
-		}
-		if _, exists := byTool[toolName]; exists {
-			t.Fatalf("duplicate individual tool %q", toolName)
-		}
-		byTool[toolName] = spec
-	}
-	return byTool
 }
 
 // TestFormatMessageMarkdown_Color verifies the color reaches the rendered

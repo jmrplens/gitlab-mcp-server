@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestMark verifies the Mark handler.
@@ -203,99 +202,5 @@ func TestFormatMarkMarkdown_HostileStatus(t *testing.T) {
 		markHints
 	if got != want {
 		t.Errorf("FormatMarkMarkdown() =\n%q\nwant:\n%q", got, want)
-	}
-}
-
-// ---------- Tests consolidated from coverage_test.go ----------.
-
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 1 {
-		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
-	}
-	if specs[0].OwnerPackage != "dbmigrations" || specs[0].IndividualTool.Name != "gitlab_mark_migration" {
-		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
-	}
-	if specs[0].Usage == "" {
-		t.Fatal("db migration ActionSpec should define usage")
-	}
-	if len(specs[0].Aliases) == 0 {
-		t.Fatal("db migration ActionSpec should define aliases")
-	}
-	if specs[0].ParameterGuidance["version"].SemanticRole == "" {
-		t.Fatal("db migration ActionSpec should define version parameter guidance")
-	}
-}
-
-// TestActionSpecs_IndividualTool_AnnotatesNonDestructive verifies the one place
-// this package deliberately disagrees with itself: marking a migration is
-// registered through NewDeleteActionSpec, so the action stays destructive for
-// the confirmation prompt and the read-only filter, while the tool an
-// individual-surface client is listed declares destructiveHint false.
-//
-// Both halves are asserted together because either one alone is satisfied by
-// deleting the override: with it gone the annotation simply follows the
-// catalog, and every other test in this package still passes. The assertion
-// reads the projected tool rather than the override field, because what a
-// client is told is the annotation, and the projection may narrow an override
-// on its way out.
-func TestActionSpecs_IndividualTool_AnnotatesNonDestructive(t *testing.T) {
-	spec := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))[0]
-	if !spec.Destructive {
-		t.Fatal("db_migration_mark should stay destructive in the catalog")
-	}
-
-	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{
-		Description: "Mark a pending database migration as successfully executed.",
-	})
-	if err != nil {
-		t.Fatalf("IndividualToolFromActionSpec: %v", err)
-	}
-	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
-		t.Fatalf("individual tool declares no destructive hint: %+v", tool.Annotations)
-	}
-	if *tool.Annotations.DestructiveHint {
-		t.Error("destructiveHint = true, want false: the individual projection overrides the catalog classification")
-	}
-}
-
-// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoute(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	spec := ActionSpecs(client)[0]
-	res, err := spec.Route.Handler(t.Context(), map[string]any{"version": int64(20240115100000)})
-	if err != nil {
-		t.Fatalf("Route.Handler: %v", err)
-	}
-	if res == nil {
-		t.Fatal("nil result")
-	}
-}
-
-// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_CallRouteError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-
-	client := testutil.NewTestClient(t, mux)
-	spec := ActionSpecs(client)[0]
-	if _, err := spec.Route.Handler(t.Context(), map[string]any{"version": int64(99999)}); err == nil {
-		t.Fatal("expected route error")
 	}
 }
