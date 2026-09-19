@@ -6,15 +6,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. Both update actions are named when the
-// formatter does not know which scope it is rendering, because the registry
-// dispatches on the Go type and the group and project handlers answer with the
-// same one.
-const (
-	actionGroupUpdate   = "merge_request.approval_settings_group_update"
-	actionProjectUpdate = "merge_request.approval_settings_project_update"
-)
-
 // settingCells renders one setting as the three cells that follow its name: the
 // value, whether a parent locked it, and the group it was inherited from.
 //

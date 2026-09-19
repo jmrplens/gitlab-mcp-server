@@ -59,7 +59,7 @@ func clusterAgentOptions(individualTool, description string) toolutil.ActionSpec
 		Aliases:        []string{individualTool},
 		Tags:           []string{"cluster-agent"},
 		Usage:          "Manage GitLab Kubernetes agents and agent tokens (list/get/register/delete/list tokens/get token/create token/revoke token).",
-		RelatedActions: []string{"environment.list", "deployment.list"},
+		RelatedActions: []string{actionEnvironmentList, actionDeploymentList},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
