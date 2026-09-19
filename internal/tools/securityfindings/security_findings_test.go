@@ -4,15 +4,23 @@ package securityfindings
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Sample GraphQL response payloads.
 
+// sampleFindingNode gives every field a value no other field of the node
+// carries: the end line differs from the start line, the vulnerability's state
+// differs from the finding's, and the blob path differs from the file. A
+// converter that reads a neighbour's key is invisible against a fixture where
+// two fields agree, which is what this one is shaped to prevent.
 const sampleFindingNode = `{
   "uuid": "550e8400-e29b-41d4-a716-446655440001",
   "title": "Potential XSS in template",
@@ -32,8 +40,8 @@ const sampleFindingNode = `{
   "location": {
     "file": "src/app.js",
     "startLine": "42",
-    "endLine": "42",
-    "blobPath": "/src/app.js"
+    "endLine": "57",
+    "blobPath": "/-/blob/main/src/app.js"
   },
   "state": "DETECTED",
   "evidence": {
@@ -42,7 +50,7 @@ const sampleFindingNode = `{
   },
   "vulnerability": {
     "id": "gid://gitlab/Vulnerability/12345",
-    "state": "DETECTED"
+    "state": "CONFIRMED"
   }
 }`
 
@@ -68,8 +76,8 @@ func TestList_Success(t *testing.T) {
 							"pageInfo": {
 								"hasNextPage": true,
 								"hasPreviousPage": false,
-								"endCursor": "cursor-abc",
-								"startCursor": ""
+								"endCursor": "cursor-end",
+								"startCursor": "cursor-start"
 							}
 						}
 					}
@@ -94,41 +102,56 @@ func TestList_Success(t *testing.T) {
 	assertSecurityFindingPagination(t, out)
 }
 
+// assertSampleSecurityFinding compares the whole converted finding rather than
+// the few fields a caller is most likely to read. Description and solution,
+// the two line numbers, the scanner's vendor, the blob path, an identifier's
+// type and id, and the vulnerability's state were all unasserted, and each one
+// could be swapped for its neighbour with the suite still green.
 func assertSampleSecurityFinding(t *testing.T, finding FindingItem) {
 	t.Helper()
-	if finding.UUID != "550e8400-e29b-41d4-a716-446655440001" || finding.Title != "Potential XSS in template" {
-		t.Fatalf("finding identity = %+v, want sample XSS finding", finding)
+	want := FindingItem{
+		UUID:        "550e8400-e29b-41d4-a716-446655440001",
+		Title:       "Potential XSS in template",
+		Severity:    "HIGH",
+		ReportType:  "SAST",
+		Scanner:     &ScannerItem{Name: "Semgrep", Vendor: "GitLab", ExternalID: "semgrep-sast"},
+		Description: "User input is rendered without escaping.",
+		Solution:    "Use textContent instead of innerHTML.",
+		Identifiers: []IdentifierItem{
+			{Name: "CWE-79", ExternalType: "CWE", ExternalID: "79", URL: "https://cwe.mitre.org/data/definitions/79.html"},
+			{Name: "OWASP A7:2017", ExternalType: "OWASP", ExternalID: "A7-2017"},
+		},
+		Location:  &LocationItem{File: "src/app.js", StartLine: 42, EndLine: 57, BlobPath: "/-/blob/main/src/app.js"},
+		State:     "DETECTED",
+		Evidence:  &EvidenceItem{Summary: "element.innerHTML = userInput;", Source: "Semgrep rule js.xss", SourceURL: "https://semgrep.dev/r/js.xss"},
+		VulnID:    "gid://gitlab/Vulnerability/12345",
+		VulnState: "CONFIRMED",
 	}
-	if finding.Severity != "HIGH" || finding.ReportType != "SAST" || finding.State != "DETECTED" {
-		t.Errorf("finding classification = %+v, want HIGH/SAST/DETECTED", finding)
-	}
-	if finding.Scanner == nil || finding.Scanner.Name != "Semgrep" || finding.Scanner.ExternalID != "semgrep-sast" {
-		t.Errorf("Scanner = %+v, want Semgrep semgrep-sast", finding.Scanner)
-	}
-	if finding.Location == nil || finding.Location.File != "src/app.js" || finding.Location.StartLine != 42 {
-		t.Errorf("Location = %+v, want src/app.js:42", finding.Location)
-	}
-	if len(finding.Identifiers) != 2 || finding.Identifiers[0].Name != "CWE-79" {
-		t.Fatalf("Identifiers = %+v, want CWE-79 first plus second identifier", finding.Identifiers)
-	}
-	if finding.Evidence == nil || finding.Evidence.Summary != "element.innerHTML = userInput;" {
-		t.Errorf("Evidence.Summary = %v, want the evidence summary", finding.Evidence)
-	}
-	if finding.Evidence == nil || finding.Evidence.Source != "Semgrep rule js.xss" || finding.Evidence.SourceURL != "https://semgrep.dev/r/js.xss" {
-		t.Errorf("Evidence source = %v, want the named Semgrep rule and its URL", finding.Evidence)
-	}
-	if finding.VulnID != "gid://gitlab/Vulnerability/12345" {
-		t.Errorf("VulnID = %q, want gid://gitlab/Vulnerability/12345", finding.VulnID)
+	if !reflect.DeepEqual(finding, want) {
+		t.Errorf("finding = %s\nwant: %s", formatFinding(finding), formatFinding(want))
 	}
 }
 
+// formatFinding spells a finding out with its pointer members followed, since
+// %+v on the struct prints the addresses of the scanner, location and evidence
+// rather than what a failing comparison needs to show.
+func formatFinding(f FindingItem) string {
+	return fmt.Sprintf("%+v scanner=%+v location=%+v evidence=%+v", f, f.Scanner, f.Location, f.Evidence)
+}
+
+// assertSecurityFindingPagination compares the whole pageInfo block. The
+// fixture gives its two flags opposite values and its two cursors different
+// text, so a block filled from the wrong half of the response is a failure
+// rather than a pair of assertions that happen to agree.
 func assertSecurityFindingPagination(t *testing.T, out ListOutput) {
 	t.Helper()
-	if !out.Pagination.HasNextPage {
-		t.Error("expected HasNextPage=true")
+	want := toolutil.GraphQLPaginationOutput{
+		HasNextPage: true,
+		EndCursor:   "cursor-end",
+		StartCursor: "cursor-start",
 	}
-	if out.Pagination.EndCursor != "cursor-abc" {
-		t.Errorf("EndCursor = %q, want cursor-abc", out.Pagination.EndCursor)
+	if out.Pagination != want {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -208,6 +231,52 @@ func TestList_WithFilters(t *testing.T) {
 	}
 	if len(out.Findings) != 0 {
 		t.Errorf("expected 0 findings, got %d", len(out.Findings))
+	}
+}
+
+// TestList_UnsetFiltersAreLeftOffTheWire verifies that a filter the caller did
+// not name is absent from the GraphQL variables rather than sent empty.
+//
+// Each of these is a list GitLab matches a finding against, so an empty one is
+// not the same request as none at all: it asks for findings whose severity,
+// scanner, report type or state is a member of nothing. Only the presence of
+// the key distinguishes the two, and the guard that decides it is one
+// character away from always sending it.
+func TestList_UnsetFiltersAreLeftOffTheWire(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			var sent []string
+			for _, key := range []string{"severity", "scanner", "reportType", "state", "sort"} {
+				if value, ok := vars[key]; ok {
+					sent = append(sent, fmt.Sprintf("%s=%#v", key, value))
+				}
+			}
+			if len(sent) > 0 {
+				t.Errorf("variables carry %v, want no filter sent when the caller named none", sent)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": {
+						"securityReportFindings": {
+							"nodes": [],
+							"pageInfo": {"hasNextPage": false, "hasPreviousPage": false, "endCursor": "", "startCursor": ""}
+						}
+					}
+				}
+			}`)
+		},
+	})
+
+	if _, err := List(context.Background(), testutil.NewTestClient(t, handler), ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "321",
+	}); err != nil {
+		t.Fatalf("List() error = %v", err)
 	}
 }
 

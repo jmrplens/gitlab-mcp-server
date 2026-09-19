@@ -270,10 +270,15 @@ func nodeToItem(n gqlFindingNode) FindingItem {
 			EndLine:   lineNumber(n.Location.EndLine),
 			BlobPath:  n.Location.BlobPath,
 		}
-		if loc.File == "" && n.Location.Path != "" {
+		// A location is one member of a union and each member spells its
+		// subject its own way: file for SAST, path for DAST, image for
+		// container scanning. Emptiness alone decides the fallback, since no
+		// member declares two of them and writing an empty value over an
+		// empty File is what skipping it already did.
+		if loc.File == "" {
 			loc.File = n.Location.Path
 		}
-		if loc.File == "" && n.Location.Image != "" {
+		if loc.File == "" {
 			loc.File = n.Location.Image
 		}
 		item.Location = loc
