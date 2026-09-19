@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: How-to
 > **Audience**: Maintainers and contributors closing the gate on one package
-> **Prerequisites**: [Testing Documentation](README.md), section "Beyond Statement Coverage"
+> **Prerequisites**: [Testing Documentation](../docs/development/testing/README.md), section "Beyond Statement Coverage"
 
 A sweep closes the mutation and condition gate on one Go package. This document
 is the brief it is run from, and it is read in full before the first command,
@@ -71,12 +71,22 @@ there formats the copy: the run reports clean while the committed file is not.
    same binary hanging under the mutation and hiding the assertion that would
    have killed it.
 
-   **Restore a probe with `git stash push -- <file>` or a patch file, never
-   with `git checkout -- <file>`.** A checkout cannot distinguish the mutation
-   from the fix written beside it, so it reverts both and the suite goes green
-   because the defect is back. Commit the fix before probing where that is
-   possible; nothing in a build can observe a working-tree operation that
-   happened before it ran, so this one is prevented by procedure or not at all.
+   **Commit the fix before you probe, then restore with a patch file.** Write
+   the mutation down first (`git diff -- <file> > /tmp/probe.patch`) and undo it
+   with `git apply -R /tmp/probe.patch`, which touches the mutation and nothing
+   else.
+
+   Neither of the obvious shortcuts works. `git checkout -- <file>` cannot tell
+   the mutation from the fix written beside it, so it reverts both and the suite
+   goes green because the defect is back. `git stash push -- <file>` is worse
+   rather than better: with the fix uncommitted it stashes the fix and the
+   mutation together and restores the file from `HEAD`, so the next run measures
+   code that was never fixed, and popping brings the mutation back with the fix.
+   It is also forbidden here for an unrelated reason, since every worktree on
+   this machine shares one stash stack.
+
+   Nothing in a build can observe a working-tree operation that happened before
+   it ran, so this one is prevented by procedure or not at all.
 
 4. **Classify what really survives.** Read [Testing Documentation](README.md),
    section "Reading a survivor", which lists the six shapes no test can kill. A
@@ -207,9 +217,12 @@ not.
   `t.Run`. `make check-test-subtests` gates this.
 - Never call `t.Fatal` or `FailNow` off the test goroutine (`httptest` handlers,
   `go` statements): use `t.Errorf` plus a deterministic response and `return`.
-- A test that reads `os.Stdout` or `os.Stderr` inside the test compares against a
-  different file than the package bound at init, because CI runs under `go test
-  -json`, which replaces both. Capture each side at the same moment.
+- A test that reads `os.Stderr` inside the test compares against a different file
+  than the package bound at init. CI runs under `go test -json`, and
+  `testing.M.Run` points `os.Stderr` at `os.Stdout` after package
+  initialization has already run, so a package global captured at init still
+  holds the original stderr. `os.Stdout` is not reassigned. Capture each side at
+  the same moment, or inject the writer.
 - Test names are `TestThing_Scenario_ExpectedResult`, and a `_test.go` file
   exists only under the name of a module it tests.
 - Every test added carries a doc comment saying what it asserts and why that

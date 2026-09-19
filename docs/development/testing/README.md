@@ -199,8 +199,14 @@ most often meets are not the first ones listed.
   branch is the only reader of a returned error, and deleting it is what
   `errcheck` refuses. So the remedy differs too. Keep the check and assert the
   property that makes it unreachable, which here is that the round trip
-  publishes what GitLab sent, key for key. Any package round-tripping a struct
-  it controls through `encoding/json` will meet this shape.
+  publishes what GitLab sent, key for key. The shape recurs wherever a package
+  round-trips a struct through `encoding/json`, but it is a claim about the
+  concrete type and never about the pattern: these four are reachable only
+  through `*gl.Settings`, whose fields marshal and whose document is an object.
+  A type that declares `MarshalJSON`, that can hold a `NaN` or an `Inf`, or
+  that marshals to something other than an object can make the same branch
+  fail, so name the type and say why its values cannot before filing one of
+  these.
 
 **Read the tool artifacts, do not wave them through.** "Reached" is not
 "asserted", and the tool that reports these can tell you neither. Of the 100 not-covered
