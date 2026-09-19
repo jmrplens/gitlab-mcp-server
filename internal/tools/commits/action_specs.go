@@ -5,15 +5,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const (
-	actionRepositoryTree = "repository.tree"
-	actionCommitDiff     = "commit.diff"
-	actionCommitGet      = "commit.get"
-	actionCommitList     = "commit.list"
-	actionCommitStatuses = "commit.statuses"
-	actionBranchList     = "branch.list"
-)
-
 // ActionSpecs returns canonical specs for commit actions exposed as MCP tools.
 // Every read, create, update, and history route is projected into the dynamic,
 // meta, individual, and audit surfaces by the action catalog (ADR-0004).
@@ -100,19 +91,19 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_get":
 		options.Usage = "Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata, message, stats, trailers, or last pipeline are needed. Set stats=true to force inclusion of line stats."
 		options.Aliases = []string{"get commit", "show commit details", "lookup commit", "describe commit"}
-		options.RelatedActions = []string{actionCommitList, actionCommitDiff, "commit.refs", actionCommitStatuses}
+		options.RelatedActions = []string{actionCommitList, actionCommitDiff, actionCommitRefs, actionCommitStatuses}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "Get a single commit from a project by SHA (full, short, branch, or tag). Returns: full commit metadata, message, parent IDs, author/committer, dates, stats, trailers, project ID, and last pipeline. See also: gitlab_commit_list, gitlab_commit_diff, gitlab_commit_refs, gitlab_commit_statuses."
 	case "commit_diff":
 		options.Usage = "Get the file diffs for a single commit with offset or keyset pagination. Use unidiff=true for a git-compatible unified-diff format when applying or rendering changes."
 		options.Aliases = []string{"commit diff", "show commit changes", "get commit diff", "diff commit"}
-		options.RelatedActions = []string{actionCommitGet, actionCommitList, "commit.comments"}
+		options.RelatedActions = []string{actionCommitGet, actionCommitList, actionCommitComments}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "Get the file diffs of a single commit, optionally in unified-diff format. Returns: per-file diffs (old/new path, diff body, new/renamed/deleted flags, file modes) with pagination metadata. See also: gitlab_commit_get, gitlab_commit_list, gitlab_commit_comments."
 	case "commit_refs":
 		options.Usage = "List the branches and tags that contain a commit, filtered by type (branch, tag, or all) with pagination. Use this to discover where a commit has been merged or released."
 		options.Aliases = []string{"commit refs", "branches containing commit", "tags containing commit", "where is commit"}
-		options.RelatedActions = []string{actionCommitGet, actionBranchList, "tag.list"}
+		options.RelatedActions = []string{actionCommitGet, actionBranchList, actionTagList}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List branches and tags that reference (contain) a commit, optionally filtered by ref type. Returns: ref entries with type and name plus pagination metadata. See also: gitlab_commit_get, gitlab_branch_list, gitlab_tag_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -121,13 +112,13 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_comments":
 		options.Usage = "List the comments posted on a commit with pagination. Use this before adding a comment or to review existing review notes attached to a commit."
 		options.Aliases = []string{"commit comments", "list commit comments", "show commit notes", "read commit discussion"}
-		options.RelatedActions = []string{"commit.comment_create", actionCommitGet, actionCommitDiff}
+		options.RelatedActions = []string{actionCommitCommentCreate, actionCommitGet, actionCommitDiff}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List the comments on a commit. Returns: comment entries with note text, author user object, optional file path, line, and line type, plus pagination metadata. See also: gitlab_commit_comment_create, gitlab_commit_get, gitlab_commit_diff."
 	case "commit_comment_create":
 		options.Usage = "Post a comment on a commit, optionally inline by supplying path, line, and line_type. Use this to leave review feedback on a specific commit or changed line."
 		options.Aliases = []string{"comment on commit", "add commit comment", "post commit note", "review commit line"}
-		options.RelatedActions = []string{"commit.comments", actionCommitDiff, actionCommitGet}
+		options.RelatedActions = []string{actionCommitComments, actionCommitDiff, actionCommitGet}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.ParameterGuidance["note"] = toolutil.ParameterGuidance{
 			SemanticRole:   "comment_body",
@@ -141,13 +132,13 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_statuses":
 		options.Usage = "List the pipeline/external statuses of a commit, filtered by ref, stage, name, or pipeline_id, with pagination. Use this to check CI/CD or integration check results for a commit."
 		options.Aliases = []string{"commit statuses", "list commit statuses", "show commit checks", "ci status for commit"}
-		options.RelatedActions = []string{"commit.status_set", actionCommitGet, "pipeline.list"}
+		options.RelatedActions = []string{actionCommitStatusSet, actionCommitGet, actionPipelineList}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline. Returns: status entries with state, name, ref, coverage, pipeline ID, timestamps, and author user object, plus pagination metadata. See also: gitlab_commit_status_set, gitlab_commit_get, gitlab_pipeline_list."
 	case "commit_status_set":
 		options.Usage = "Set the pipeline/check status of a commit SHA (pending, running, success, failed, canceled, skipped). Use this for external CI or reporting integrations that publish commit check results."
 		options.Aliases = []string{"set commit status", "update commit status", "report commit check", "publish commit status"}
-		options.RelatedActions = []string{actionCommitStatuses, actionCommitGet, "pipeline.list"}
+		options.RelatedActions = []string{actionCommitStatuses, actionCommitGet, actionPipelineList}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.ParameterGuidance["state"] = toolutil.ParameterGuidance{
 			SemanticRole:   "status_state",
@@ -161,13 +152,13 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_merge_requests":
 		options.Usage = "List the merge requests that include a commit. Use this to trace which MR introduced or carries a commit."
 		options.Aliases = []string{"merge requests for commit", "mrs containing commit", "list commit merge requests", "which mr has commit"}
-		options.RelatedActions = []string{actionCommitGet, "mr.get", "mr.changes_get"}
+		options.RelatedActions = []string{actionCommitGet, actionMRGet, actionMRChangesGet}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.IndividualTool.Description = "List merge requests associated with a commit. Returns: basic MR entries with IID, title, state, source/target branches, web URL, and author. See also: gitlab_commit_get, gitlab_mr_get, gitlab_mr_changes_get."
 	case "commit_cherry_pick":
 		options.Usage = "Cherry-pick a commit onto a target branch, optionally as a dry run to detect conflicts before creating the commit. Use this to port a single change to another branch."
 		options.Aliases = []string{"cherry-pick commit", "cherry pick", "apply commit to branch", "port commit"}
-		options.RelatedActions = []string{actionCommitGet, actionBranchList, "commit.revert"}
+		options.RelatedActions = []string{actionCommitGet, actionBranchList, actionCommitRevert}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.ParameterGuidance["branch"] = toolutil.ParameterGuidance{
 			SemanticRole:   "git_branch",
@@ -178,7 +169,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_revert":
 		options.Usage = "Revert a commit on a target branch, creating a new commit that undoes its changes. Use this to back out a change that has already been merged."
 		options.Aliases = []string{"revert commit", "undo commit", "back out commit", "create revert"}
-		options.RelatedActions = []string{actionCommitGet, actionBranchList, "commit.cherry_pick"}
+		options.RelatedActions = []string{actionCommitGet, actionBranchList, actionCommitCherryPick}
 		options.ParameterGuidance["sha"] = shaGuidance()
 		options.ParameterGuidance["branch"] = toolutil.ParameterGuidance{
 			SemanticRole:   "git_branch",

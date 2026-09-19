@@ -9,12 +9,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionMergeRequestGet     = "merge_request.get"
-	actionMergeRequestChanges = "mr_review.changes_get"
-)
-
 // FormatListMarkdown renders the merge requests a deployment shipped.
 func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatListMarkdownString(out))
