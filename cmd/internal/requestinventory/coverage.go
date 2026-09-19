@@ -89,11 +89,13 @@ type Owner struct {
 // catalog's ownership metadata rather than in any test.
 //
 // Silent is weaker than "never exercised" for a second reason beyond the
-// coarse grain, and internal/tools/adminspecs is the whole of it today: a
-// package may declare specs whose handlers live in other packages, and the
-// request is then recorded under the package that made it while the count of
-// silent actions blames the one that declared them. Reading the silent list as
-// a work list means reading it package by package, not action by action.
+// coarse grain: a package may declare specs whose handlers live in other
+// packages, and the request is then recorded under the package that made it
+// while the count of silent actions blames the one that declared them.
+// internal/tools/adminspecs was that case for 92 actions until each of them was
+// given the domain package its route names as its owner. Reading the silent
+// list as a work list still means reading it package by package, not action by
+// action.
 type Coverage struct {
 	Total    int
 	Covered  int

@@ -32,12 +32,12 @@ const (
 // A declaration that no longer describes the tree is a finding too: a package
 // that has since recorded a request, or that no longer owns any action, leaves
 // a claim behind that a later reader would trust.
-var declaredSilentOwners = map[string]silentOwnerDeclaration{
-	"adminspecs": {
-		Category: categoryRecordedElsewhere,
-		Reason: "declares the instance-administration specs whose handlers live in the domain packages " +
-			"(topics, settings, system hooks and twenty more), so every request it owns an action for is " +
-			"recorded under the package that issues it. Its own silence says nothing about whether those " +
-			"requests were seen, which is why the count of silent actions is read package by package.",
-	},
-}
+//
+// The table is empty, and an empty one is the healthy state rather than an
+// unfinished one. It held a single entry until then: internal/tools/adminspecs
+// declared the 92 instance-administration actions while their handlers, and so
+// their requests, live in the twenty-three domain packages the routes name.
+// Each of those actions now names the package it routes to, which is the answer
+// a declaration can only approximate, since a declaration excuses a join that
+// cannot be made and a true owner makes it.
+var declaredSilentOwners = map[string]silentOwnerDeclaration{}
