@@ -7,12 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const (
-	actionPagesDomainList   = "pages.domain_list"
-	actionPagesDomainGet    = "pages.domain_get"
-	actionPagesDomainCreate = "pages.domain_create"
-)
-
 // ActionSpecs returns canonical specs for project Pages actions
 // exposed as MCP tools. The settings, custom domain, and admin
 // routes are projected into the dynamic, meta, individual, and
@@ -144,47 +138,47 @@ var pagesActionMeta = map[string]pagesActionMetadata{
 	"pages_get": {
 		usage:   "Read the GitLab Pages settings for a project, including the published URL and HTTPS configuration.",
 		aliases: []string{"get pages settings", "show pages configuration", "view pages site url"},
-		related: []string{"pages.update", "pages.unpublish", actionPagesDomainList},
+		related: []string{actionPagesUpdate, actionPagesUnpublish, actionDomainList},
 	},
 	"pages_update": {
 		usage:   "Update a project's GitLab Pages settings such as force-HTTPS, unique-domain, and the primary domain.",
 		aliases: []string{"update pages settings", "configure pages https", "set pages primary domain"},
-		related: []string{"pages.get", "pages.unpublish", actionPagesDomainCreate},
+		related: []string{actionPagesGet, actionPagesUnpublish, actionDomainCreate},
 	},
 	"pages_unpublish": {
 		usage:   "Unpublish and tear down a project's GitLab Pages site, removing the deployed content.",
 		aliases: []string{"unpublish pages site", "remove pages deployment", "take down pages"},
-		related: []string{"pages.get", "pages.update"},
+		related: []string{actionPagesGet, actionPagesUpdate},
 	},
 	"pages_domain_list_all": {
 		usage:   "List ALL GitLab Pages custom domains across the whole instance in one call (admin only). Use this instead of pages_domain_list when you need every domain on the instance, not just those attached to a single project.",
 		aliases: []string{"list all pages domains", "audit pages custom domains", "show instance pages domains", "enumerate every custom domain"},
-		related: []string{actionPagesDomainList, actionPagesDomainGet, actionPagesDomainCreate},
+		related: []string{actionDomainList, actionDomainGet, actionDomainCreate},
 	},
 	"pages_domain_list": {
 		usage:   "List the custom Pages domains attached to a project, with verification and SSL status.",
 		aliases: []string{"list project pages domains", "show custom domains", "find pages domains for project"},
-		related: []string{actionPagesDomainGet, actionPagesDomainCreate, "pages.domain_list_all"},
+		related: []string{actionDomainGet, actionDomainCreate, actionDomainListAll},
 	},
 	"pages_domain_get": {
 		usage:   "Fetch one custom Pages domain by name, including its verification code and certificate details.",
 		aliases: []string{"get pages domain", "show custom domain details", "check pages domain verification"},
-		related: []string{actionPagesDomainList, "pages.domain_update", "pages.domain_delete"},
+		related: []string{actionDomainList, actionDomainUpdate, actionDomainDelete},
 	},
 	"pages_domain_create": {
 		usage:   "Attach a new custom Pages domain to a project and obtain its DNS verification code.",
 		aliases: []string{"add pages domain", "create custom domain", "attach domain to pages"},
-		related: []string{actionPagesDomainGet, "pages.domain_update", actionPagesDomainList},
+		related: []string{actionDomainGet, actionDomainUpdate, actionDomainList},
 	},
 	"pages_domain_update": {
 		usage:   "Update a custom Pages domain's auto-SSL setting or TLS certificate and key.",
 		aliases: []string{"update pages domain", "set pages domain certificate", "toggle pages domain auto ssl"},
-		related: []string{actionPagesDomainGet, "pages.domain_delete", actionPagesDomainList},
+		related: []string{actionDomainGet, actionDomainDelete, actionDomainList},
 	},
 	"pages_domain_delete": {
 		usage:   "Detach and delete a custom Pages domain from a project.",
 		aliases: []string{"delete pages domain", "remove custom domain", "detach pages domain"},
-		related: []string{actionPagesDomainGet, actionPagesDomainList},
+		related: []string{actionDomainGet, actionDomainList},
 	},
 }
 

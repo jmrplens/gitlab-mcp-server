@@ -5,7 +5,9 @@ package pages
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -47,6 +49,47 @@ func TestGetPages_Success(t *testing.T) {
 	}
 	if len(out.Deployments) != 1 {
 		t.Fatalf("got %d deployments, want 1", len(out.Deployments))
+	}
+}
+
+// TestGetPages_EveryFieldIsReadFromItsOwnKey asserts the whole shape a caller
+// receives, the deployment included, against a fixture in which no two values
+// agree.
+//
+// A converter reading the wrong key is a straight-line assignment that neither
+// mutation nor condition coverage can see, and the pairs here are the ones that
+// would survive it silently: the site URL beside the primary domain, and a
+// deployment's path prefix beside its root directory.
+func TestGetPages_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"url":"https://site.pages.io",
+			"is_unique_domain_enabled":true,
+			"force_https":false,
+			"primary_domain":"primary.example.com",
+			"deployments":[{"created_at":"2026-01-15T10:00:00Z","url":"https://deployment.pages.io","path_prefix":"staging","root_directory":"public"}]
+		}`)
+	}))
+
+	out, err := GetPages(context.Background(), client, GetPagesInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := Output{
+		URL:                   "https://site.pages.io",
+		IsUniqueDomainEnabled: true,
+		ForceHTTPS:            false,
+		PrimaryDomain:         "primary.example.com",
+		Deployments: []DeploymentOutput{{
+			CreatedAt:     "2026-01-15T10:00:00Z",
+			URL:           "https://deployment.pages.io",
+			PathPrefix:    "staging",
+			RootDirectory: "public",
+		}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetPages() = %+v, want %+v", out, want)
 	}
 }
 
@@ -243,6 +286,59 @@ func TestGetDomain_Success(t *testing.T) {
 	}
 }
 
+// TestGetDomain_EveryFieldIsReadFromItsOwnKey asserts the whole shape a caller
+// receives for one domain, against a fixture in which no two values agree.
+//
+// The two flags are deliberately opposite and the two URLs deliberately
+// different: a converter that crossed `verified` with `auto_ssl_enabled`, or
+// dropped the domain's URL, changes what a model is told about a domain that is
+// not yet serving traffic, and no guard is involved for either gate to notice.
+func TestGetDomain_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"domain":"shop.example.com",
+			"auto_ssl_enabled":false,
+			"url":"https://shop.example.com",
+			"project_id":77,
+			"verified":true,
+			"verification_code":"code-9001",
+			"enabled_until":"2026-03-04T05:06:07Z",
+			"certificate":{
+				"subject":"CN=shop.example.com",
+				"expired":false,
+				"expiration":"2026-04-05T06:07:08Z",
+				"certificate":"-----BEGIN CERTIFICATE-----\nlive\n-----END CERTIFICATE-----",
+				"certificate_text":"Certificate:\n    Serial Number: 1"
+			}
+		}`)
+	}))
+
+	out, err := GetDomain(context.Background(), client, GetDomainInput{ProjectID: "42", Domain: "shop.example.com"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := DomainOutput{
+		Domain:           "shop.example.com",
+		AutoSslEnabled:   false,
+		URL:              "https://shop.example.com",
+		ProjectID:        77,
+		Verified:         true,
+		VerificationCode: "code-9001",
+		EnabledUntil:     "2026-03-04T05:06:07Z",
+		Certificate: CertificateOutput{
+			Subject:         "CN=shop.example.com",
+			Expired:         false,
+			Expiration:      "2026-04-05T06:07:08Z",
+			Certificate:     "-----BEGIN CERTIFICATE-----\nlive\n-----END CERTIFICATE-----",
+			CertificateText: "Certificate:\n    Serial Number: 1",
+		},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetDomain() = %+v, want %+v", out, want)
+	}
+}
+
 // TestGetDomain_ValidationError verifies GetDomain when validation error.
 func TestGetDomain_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
@@ -413,6 +509,82 @@ func TestUpdatePages_AllOptionalFields(t *testing.T) {
 	}
 }
 
+// assertPagesRequestBody reports every way the JSON body client-go put on the
+// wire differs from what the caller asked for: a key missing, a value that is
+// not the one supplied, or a key present for an option nobody set.
+//
+// It runs on the httptest goroutine, so it reports with t.Errorf and returns
+// rather than aborting the server's handler.
+func assertPagesRequestBody(t *testing.T, r *http.Request, want map[string]any, absent ...string) {
+	t.Helper()
+	var got map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("body[%q] = %#v, want %#v", key, got[key], value)
+		}
+	}
+	for _, key := range absent {
+		if _, ok := got[key]; ok {
+			t.Errorf("body carries %q = %#v; an option nobody set must not be sent", key, got[key])
+		}
+	}
+}
+
+// TestUpdatePages_OptionalFieldsReachTheRequestBody asserts that each optional
+// setting the caller supplied is the one that lands in the PATCH body, and
+// that an option left alone is not sent at all.
+//
+// Each option sits behind a guard of its own, and an inverted guard drops the
+// caller's value while sending an empty one — which GitLab reads as a request
+// to clear the setting, the opposite of what was asked.
+func TestUpdatePages_OptionalFieldsReachTheRequestBody(t *testing.T) {
+	uniqueDomain := true
+	httpsOnly := false
+
+	tests := []struct {
+		name   string
+		input  UpdatePagesInput
+		want   map[string]any
+		absent []string
+	}{
+		{
+			name: "every option supplied",
+			input: UpdatePagesInput{
+				ProjectID:                "42",
+				PagesUniqueDomainEnabled: &uniqueDomain,
+				PagesHTTPSOnly:           &httpsOnly,
+				PagesPrimaryDomain:       "primary.example.com",
+			},
+			want: map[string]any{
+				"pages_unique_domain_enabled": true,
+				"pages_https_only":            false,
+				"pages_primary_domain":        "primary.example.com",
+			},
+		},
+		{
+			name:   "no option supplied",
+			input:  UpdatePagesInput{ProjectID: "42"},
+			absent: []string{"pages_unique_domain_enabled", "pages_https_only", "pages_primary_domain"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertPagesRequestBody(t, r, tt.want, tt.absent...)
+				testutil.RespondJSON(w, http.StatusOK, pagesActionPagesJSON)
+			}))
+			if _, err := UpdatePages(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // GetPages -- API error
 // ---------------------------------------------------------------------------.
@@ -562,6 +734,59 @@ func TestCreateDomain_WithCert(t *testing.T) {
 	}
 }
 
+// TestCreateDomain_OptionalFieldsReachTheRequestBody asserts that the domain
+// and each optional field the caller supplied are what land in the POST body,
+// and that an option nobody set is not sent.
+//
+// A certificate and key are a matching pair GitLab validates together, so a
+// guard that dropped one of them while sending the other would be refused; one
+// that sent an empty pair for a caller who supplied neither would be too.
+func TestCreateDomain_OptionalFieldsReachTheRequestBody(t *testing.T) {
+	autoSSL := false
+
+	tests := []struct {
+		name   string
+		input  CreateDomainInput
+		want   map[string]any
+		absent []string
+	}{
+		{
+			name: "every option supplied",
+			input: CreateDomainInput{
+				ProjectID:      "42",
+				Domain:         "new.example.com",
+				AutoSslEnabled: &autoSSL,
+				Certificate:    "-----BEGIN CERTIFICATE-----\ncreated cert\n-----END CERTIFICATE-----",
+				Key:            "-----BEGIN PRIVATE KEY-----\ncreated key\n-----END PRIVATE KEY-----",
+			},
+			want: map[string]any{
+				"domain":           "new.example.com",
+				"auto_ssl_enabled": false,
+				"certificate":      "-----BEGIN CERTIFICATE-----\ncreated cert\n-----END CERTIFICATE-----",
+				"key":              "-----BEGIN PRIVATE KEY-----\ncreated key\n-----END PRIVATE KEY-----",
+			},
+		},
+		{
+			name:   "no option supplied",
+			input:  CreateDomainInput{ProjectID: "42", Domain: "bare.example.com"},
+			want:   map[string]any{"domain": "bare.example.com"},
+			absent: []string{"auto_ssl_enabled", "certificate", "key"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertPagesRequestBody(t, r, tt.want, tt.absent...)
+				testutil.RespondJSON(w, http.StatusCreated, pagesActionDomainJSON)
+			}))
+			if _, err := CreateDomain(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // UpdateDomain -- validation errors, API error, with optional fields
 // ---------------------------------------------------------------------------.
@@ -615,6 +840,57 @@ func TestUpdateDomain_WithCert(t *testing.T) {
 	}
 	if out.Domain != testDomain {
 		t.Errorf("expected example.com, got %s", out.Domain)
+	}
+}
+
+// TestUpdateDomain_OptionalFieldsReachTheRequestBody asserts that each option
+// the caller supplied is the one that lands in the PUT body, and that an
+// option nobody set is not sent.
+//
+// The domain itself travels in the path here, so the body carries nothing but
+// the options: a guard that sent an empty certificate for a caller who only
+// wanted the auto-SSL flag changed would replace the domain's live one.
+func TestUpdateDomain_OptionalFieldsReachTheRequestBody(t *testing.T) {
+	autoSSL := true
+
+	tests := []struct {
+		name   string
+		input  UpdateDomainInput
+		want   map[string]any
+		absent []string
+	}{
+		{
+			name: "every option supplied",
+			input: UpdateDomainInput{
+				ProjectID:      "42",
+				Domain:         testDomain,
+				AutoSslEnabled: &autoSSL,
+				Certificate:    "-----BEGIN CERTIFICATE-----\nupdated cert\n-----END CERTIFICATE-----",
+				Key:            "-----BEGIN PRIVATE KEY-----\nupdated key\n-----END PRIVATE KEY-----",
+			},
+			want: map[string]any{
+				"auto_ssl_enabled": true,
+				"certificate":      "-----BEGIN CERTIFICATE-----\nupdated cert\n-----END CERTIFICATE-----",
+				"key":              "-----BEGIN PRIVATE KEY-----\nupdated key\n-----END PRIVATE KEY-----",
+			},
+		},
+		{
+			name:   "no option supplied",
+			input:  UpdateDomainInput{ProjectID: "42", Domain: testDomain},
+			absent: []string{"auto_ssl_enabled", "certificate", "key"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assertPagesRequestBody(t, r, tt.want, tt.absent...)
+				testutil.RespondJSON(w, http.StatusOK, pagesActionDomainJSON)
+			}))
+			if _, err := UpdateDomain(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
 	}
 }
 
