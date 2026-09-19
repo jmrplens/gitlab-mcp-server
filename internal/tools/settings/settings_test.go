@@ -6,13 +6,17 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -488,5 +492,278 @@ func TestUpdate_UnmarshalResponseError(t *testing.T) {
 	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
 	if err == nil {
 		t.Fatal("expected error for non-object response, got nil")
+	}
+}
+
+// TestUpdate_Request_CarriesTheCallersSettingsAsTheBody verifies that the map a
+// caller passes is what GitLab receives, key for key and value for value.
+//
+// Every other Update case here drives the handler and reads its answer, so a
+// handler sending an empty options struct satisfied all of them while changing
+// nothing on the instance. The four values are deliberately all different, so a
+// key that picked up a neighbour's value is visible too.
+func TestUpdate_Request_CarriesTheCallersSettingsAsTheBody(t *testing.T) {
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/application/settings" || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode request body: %v", err)
+			http.Error(w, "decode request body", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+	}))
+
+	if _, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{
+		"signup_enabled":             false,
+		"default_project_visibility": "internal",
+		"default_branch_name":        "trunk",
+		"max_artifacts_size":         250,
+	}}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := []struct {
+		key   string
+		value any
+	}{
+		{"signup_enabled", false},
+		{"default_project_visibility", "internal"},
+		{"default_branch_name", "trunk"},
+		{"max_artifacts_size", float64(250)},
+	}
+	for _, tt := range want {
+		t.Run(tt.key, func(t *testing.T) {
+			got, ok := sent[tt.key]
+			if !ok {
+				t.Fatalf("request body has no %q; GitLab was sent %v", tt.key, sent)
+			}
+			if got != tt.value {
+				t.Errorf("request body[%q] = %v, want %v", tt.key, got, tt.value)
+			}
+		})
+	}
+}
+
+// TestGet_SettingsMap_IsTheWholeSettingsObject verifies that Get answers with
+// the settings object re-keyed the way GitLab spells it: a false and a zero
+// GitLab sent survive as themselves, and a key GitLab left out still arrives,
+// at its zero value.
+//
+// That last part is also why the two error branches on this round trip cannot
+// fire: what is marshaled is the SDK's struct, so it always encodes, and it
+// always encodes as an object, which always decodes into a map.
+func TestGet_SettingsMap_IsTheWholeSettingsObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":false,"max_artifacts_size":0}`)
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := []struct {
+		key   string
+		value any
+	}{
+		{"signup_enabled", false},
+		{"max_artifacts_size", float64(0)},
+		{"default_branch_name", ""},
+	}
+	for _, tt := range want {
+		t.Run(tt.key, func(t *testing.T) {
+			got, ok := out.Settings[tt.key]
+			if !ok {
+				t.Fatalf("Settings has no %q", tt.key)
+			}
+			if got != tt.value {
+				t.Errorf("Settings[%q] = %v, want %v", tt.key, got, tt.value)
+			}
+		})
+	}
+	if len(out.Settings) <= len(want) {
+		t.Errorf("len(Settings) = %d, want the whole settings object rather than the keys GitLab happened to send", len(out.Settings))
+	}
+}
+
+// TestGet_Forbidden_CarriesTheAdministratorHint verifies that a 403 reaches the
+// caller naming the action and carrying the hint about administrator access.
+// The hint is the only thing that tells a model the read was refused for want
+// of rights, and it is attached by the status it is keyed to.
+func TestGet_Forbidden_CarriesTheAdministratorHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := Get(t.Context(), client, GetInput{})
+	if err == nil {
+		t.Fatal("Get() = nil error, want the 403")
+	}
+	if !strings.HasPrefix(err.Error(), "settings_get: ") {
+		t.Errorf("Get() error = %q, want it to name the settings_get action", err)
+	}
+	if !strings.Contains(err.Error(), "Suggestion: requires administrator access") {
+		t.Errorf("Get() error = %q, want the administrator-access hint", err)
+	}
+}
+
+// TestGet_NotFound_CarriesNoHint verifies that the administrator hint belongs to
+// GitLab's 403 alone: another status still names the action and offers no advice
+// about rights, since a hint a model acts on has to be one that applies.
+func TestGet_NotFound_CarriesNoHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := Get(t.Context(), client, GetInput{})
+	if err == nil {
+		t.Fatal("Get() = nil error, want the 404")
+	}
+	if !strings.HasPrefix(err.Error(), "settings_get: ") {
+		t.Errorf("Get() error = %q, want it to name the settings_get action", err)
+	}
+	if strings.Contains(err.Error(), "Suggestion:") {
+		t.Errorf("Get() error = %q, want no hint on a status the hint is not keyed to", err)
+	}
+}
+
+// TestUpdate_Forbidden_CarriesNoSnakeCaseHint verifies that the key-spelling
+// guidance belongs to GitLab's 400: a 403 names the action and says nothing
+// about snake_case, which would send a model to rewrite a patch already right.
+func TestUpdate_Forbidden_CarriesNoSnakeCaseHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+	if err == nil {
+		t.Fatal("Update() = nil error, want the 403")
+	}
+	if !strings.HasPrefix(err.Error(), "settings_update: ") {
+		t.Errorf("Update() error = %q, want it to name the settings_update action", err)
+	}
+	if strings.Contains(err.Error(), "snake_case") {
+		t.Errorf("Update() error = %q, want the key-spelling guidance only on a 400", err)
+	}
+}
+
+// TestSettings_CancelledContext_NeverReachesGitLab verifies that the caller's
+// context travels with both requests. A handler that dropped it would keep
+// asking GitLab on behalf of a caller who has already gone away, and would
+// answer nobody.
+func TestSettings_CancelledContext_NeverReachesGitLab(t *testing.T) {
+	calls := []struct {
+		name string
+		call func(context.Context, *gitlabclient.Client) error
+	}{
+		{"get", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Get(ctx, client, GetInput{})
+			return err
+		}},
+		{"update", func(ctx context.Context, client *gitlabclient.Client) error {
+			_, err := Update(ctx, client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+			return err
+		}},
+	}
+
+	for _, tt := range calls {
+		t.Run(tt.name, func(t *testing.T) {
+			var served atomic.Bool
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				served.Store(true)
+				testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+			}))
+
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			if err := tt.call(ctx, client); err == nil {
+				t.Error("call with a cancelled context returned no error")
+			}
+			if served.Load() {
+				t.Error("call with a cancelled context reached GitLab")
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_EveryCuratedKey_RendersUnderTheCategoryThatOwnsIt
+// verifies that each curated key renders exactly once, under the heading named
+// here for it, and that the five headings come out in the declared order.
+//
+// The expectation is written out rather than read from settingCategories: a key
+// moved into the wrong list would move in both and the card would still be
+// wrong. The cases above reach seven of the twenty-seven keys and no Rate Limits
+// section at all.
+func TestFormatGetMarkdown_EveryCuratedKey_RendersUnderTheCategoryThatOwnsIt(t *testing.T) {
+	want := map[string]string{
+		"signup_enabled":               "General",
+		"sign_in_text":                 "General",
+		"after_sign_out_path":          "General",
+		"default_project_visibility":   "General",
+		"default_group_visibility":     "General",
+		"default_snippet_visibility":   "General",
+		"restricted_visibility_levels": "General",
+		"can_create_group":             "General",
+		"user_default_external":        "General",
+
+		"auto_devops_enabled":    "CI/CD",
+		"auto_devops_domain":     "CI/CD",
+		"shared_runners_enabled": "CI/CD",
+		"max_artifacts_size":     "CI/CD",
+		"default_ci_config_path": "CI/CD",
+		"ci_max_includes":        "CI/CD",
+
+		"password_authentication_enabled_for_web": "Authentication",
+		"password_authentication_enabled_for_git": "Authentication",
+		"two_factor_grace_period":                 "Authentication",
+		"require_two_factor_authentication":       "Authentication",
+
+		"default_branch_name":       "Repository",
+		"default_branch_protection": "Repository",
+		"max_attachment_size":       "Repository",
+		"max_import_size":           "Repository",
+
+		"throttle_authenticated_api_enabled":               "Rate Limits",
+		"throttle_unauthenticated_api_enabled":             "Rate Limits",
+		"throttle_authenticated_api_requests_per_period":   "Rate Limits",
+		"throttle_unauthenticated_api_requests_per_period": "Rate Limits",
+	}
+
+	// A value derived from its own key, so a row reading a neighbour's value
+	// shows up as plainly as a row under the wrong heading.
+	values := make(map[string]any, len(want))
+	for key := range want {
+		values[key] = "value of " + key
+	}
+
+	got := markdownText(t, FormatGetMarkdown(GetOutput{Settings: values}))
+
+	section := ""
+	headings := []string{}
+	rendered := make(map[string]string, len(want))
+	for line := range strings.SplitSeq(got, "\n") {
+		switch {
+		case strings.HasPrefix(line, "### "):
+			section = strings.TrimPrefix(line, "### ")
+			headings = append(headings, section)
+		case strings.HasPrefix(line, "- **"):
+			key, value, _ := strings.Cut(strings.TrimPrefix(line, "- **"), "**: ")
+			rendered[key] = section
+			if value != values[key] {
+				t.Errorf("row for %q reads %q, want %q", key, value, values[key])
+			}
+		}
+	}
+
+	if !maps.Equal(rendered, want) {
+		t.Errorf("key sections =\n%v\nwant\n%v", rendered, want)
+	}
+	if wantHeadings := []string{"General", "CI/CD", "Authentication", "Repository", "Rate Limits"}; !slices.Equal(headings, wantHeadings) {
+		t.Errorf("headings = %v, want %v", headings, wantHeadings)
 	}
 }
