@@ -5,10 +5,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs this package publishes, both as RelatedActions metadata
+// and as the hints markdown.go writes. One block, read by both: the two used to
+// be declared apart, and the copy here had drifted into naming the owner
+// package as the domain. These specs are aggregated into the gitlab_group
+// catalog group, so every ID is group.protected_env_*, and a
+// "groupprotectedenvs.protected_env_get" resolved to nothing on any surface.
 const (
-	actionGroupProtectedEnvProtect   = "groupprotectedenvs.protected_env_protect"
-	actionGroupProtectedEnvGet       = "groupprotectedenvs.protected_env_get"
-	actionGroupProtectedEnvUnprotect = "groupprotectedenvs.protected_env_unprotect"
+	actionList      = "group.protected_env_list"
+	actionGet       = "group.protected_env_get"
+	actionProtect   = "group.protected_env_protect"
+	actionUpdate    = "group.protected_env_update"
+	actionUnprotect = "group.protected_env_unprotect"
 )
 
 // ActionSpecs returns canonical specs for group protected environment actions.
@@ -121,27 +129,27 @@ var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
 	"gitlab_group_protected_environment_list": {
 		usage:   "List the protected environment tiers configured on a group, including their deploy access levels and approval rules. Use this when the prompt asks which group-level environment tiers are gated or who can deploy across the group's subgroup projects.",
 		aliases: []string{"list group protected environments", "show group deployment gates", "which group environment tiers are protected"},
-		related: []string{actionGroupProtectedEnvGet, actionGroupProtectedEnvProtect, "group.get"},
+		related: []string{actionGet, actionProtect, "group.get"},
 	},
 	"gitlab_group_protected_environment_get": {
 		usage:   "Fetch a single group-level protected environment tier by name. Use after a group list result or when the prompt names a concrete group environment tier and you need its deploy access levels and approval rules.",
 		aliases: []string{"get group protected environment", "show group deployment gate for a tier", "view group environment protection settings"},
-		related: []string{"groupprotectedenvs.protected_env_list", "groupprotectedenvs.protected_env_update", actionGroupProtectedEnvUnprotect},
+		related: []string{actionList, actionUpdate, actionUnprotect},
 	},
 	"gitlab_group_protected_environment_protect": {
 		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules. The gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. Require approvals via approval_rules with required_approvals.",
 		aliases: []string{"protect a group environment tier", "gate deployments across a group", "restrict group-wide deployment access", "require group deployment approvals"},
-		related: []string{actionGroupProtectedEnvGet, "groupprotectedenvs.protected_env_update", actionGroupProtectedEnvUnprotect},
+		related: []string{actionGet, actionUpdate, actionUnprotect},
 	},
 	"gitlab_group_protected_environment_update": {
 		usage:   "Change the deploy access levels or approval rules on an already-protected group environment tier. Pass _destroy on an existing entry to remove it. Use when adjusting who can deploy across subgroup projects or how many approvals a group-level gate needs.",
 		aliases: []string{"update group protected environment rules", "change group deployment access levels", "adjust group environment approval rules", "edit group deployment gate"},
-		related: []string{actionGroupProtectedEnvGet, actionGroupProtectedEnvProtect, actionGroupProtectedEnvUnprotect},
+		related: []string{actionGet, actionProtect, actionUnprotect},
 	},
 	"gitlab_group_protected_environment_unprotect": {
 		usage:   "Remove protection from a group-level environment tier, deleting its deployment gates from the group and its subgroup projects. Destructive. Confirm the group id and the environment tier name before calling.",
 		aliases: []string{"unprotect a group environment tier", "remove group deployment gate", "stop gating a group environment across subgroups"},
-		related: []string{"groupprotectedenvs.protected_env_list", actionGroupProtectedEnvProtect},
+		related: []string{actionList, actionProtect},
 	},
 }
 

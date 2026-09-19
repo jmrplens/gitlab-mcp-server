@@ -10,18 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionGet           = "group_milestone.get"
-	actionCreate        = "group_milestone.create"
-	actionUpdate        = "group_milestone.update"
-	actionDelete        = "group_milestone.delete"
-	actionIssues        = "group_milestone.issues"
-	actionMergeRequests = "group_milestone.merge_requests"
-	actionIssueGet      = "issue.get"
-	actionMRGet         = "merge_request.get"
-)
-
 // FormatMarkdown renders one group milestone as the card of one object.
 //
 // The hints used to name a milestone_id parameter that no group milestone

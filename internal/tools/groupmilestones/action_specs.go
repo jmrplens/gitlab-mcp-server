@@ -5,11 +5,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs this package publishes, both as RelatedActions metadata
+// and as the hints markdown.go writes. One block, read by both, because the two
+// used to be declared apart and drifted into naming the owner package as the
+// domain: these specs are aggregated into the gitlab_group catalog group, so
+// every ID here is group.group_milestone_*, and "group_milestone.get" resolved
+// to nothing on any surface.
 const (
-	actionGroupMilestoneGet    = "group_milestone.get"
-	actionGroupMilestoneList   = "group_milestone.list"
-	actionGroupMilestoneUpdate = "group_milestone.update"
-	actionGroupMilestoneIssues = "group_milestone.issues"
+	actionList          = "group.group_milestone_list"
+	actionGet           = "group.group_milestone_get"
+	actionCreate        = "group.group_milestone_create"
+	actionUpdate        = "group.group_milestone_update"
+	actionDelete        = "group.group_milestone_delete"
+	actionIssues        = "group.group_milestone_issues"
+	actionMergeRequests = "group.group_milestone_merge_requests"
+	actionBurndown      = "group.group_milestone_burndown"
+
+	// Siblings outside this package a hint or a related entry reaches for.
+	actionProjectMilestoneList = "project.milestone_list"
+	actionIssueGet             = "issue.get"
+	actionMRGet                = "merge_request.get"
 )
 
 // ActionSpecs returns canonical specs for group milestone actions.
@@ -113,7 +128,7 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 	"gitlab_group_milestone_list": {
 		usage:       "List milestones in a group with filtering, ordering, and pagination. Use filters such as state, title, search, include_ancestors, include_descendants, order_by, and sort when the prompt asks for matching group milestones.",
 		aliases:     []string{"list group milestones", "show group milestones", "find milestones in group"},
-		related:     []string{actionGroupMilestoneGet, "group_milestone.create", "milestone.list"},
+		related:     []string{actionGet, actionCreate, actionProjectMilestoneList},
 		description: "List milestones in a group with filtering and pagination. Returns: matching group milestones with state, dates, expiry, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_create, gitlab_milestone_list.",
 		inputSchemaOverrides: []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "closed"}}),
@@ -122,19 +137,19 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 	"gitlab_group_milestone_get": {
 		usage:       "Get one exact group milestone by group_id plus milestone_iid. Use after list results or when the prompt already names a concrete group milestone IID.",
 		aliases:     []string{"get group milestone", "show group milestone details", "fetch group milestone"},
-		related:     []string{actionGroupMilestoneList, actionGroupMilestoneUpdate, actionGroupMilestoneIssues},
+		related:     []string{actionList, actionUpdate, actionIssues},
 		description: "Get a single group milestone by IID. Returns: milestone metadata, state, start and due dates, expiry, and timestamps. See also: gitlab_group_milestone_list, gitlab_group_milestone_update, gitlab_group_milestone_issues.",
 	},
 	"gitlab_group_milestone_create": {
 		usage:       "Create a new milestone in a group. Provide title and optional description, start_date, and due_date.",
 		aliases:     []string{"create group milestone", "add group milestone", "new group milestone"},
-		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
+		related:     []string{actionGet, actionList, actionUpdate},
 		description: "Create a new group milestone. Returns: the created milestone with ID, IID, state, start and due dates. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_update.",
 	},
 	"gitlab_group_milestone_update": {
 		usage:       "Update an existing group milestone. Only non-empty fields are applied. Use state_event to close or activate.",
 		aliases:     []string{"update group milestone", "edit group milestone", "close group milestone", "activate group milestone"},
-		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, "group_milestone.delete"},
+		related:     []string{actionGet, actionList, actionDelete},
 		description: "Update an existing group milestone. Returns: the updated milestone with state, dates, and expiry. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_delete.",
 		inputSchemaOverrides: []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
@@ -143,25 +158,25 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 	"gitlab_group_milestone_delete": {
 		usage:       "Permanently delete a group milestone. Destructive and irreversible. Confirm group_id and milestone_iid before calling. Requires Owner role.",
 		aliases:     []string{"delete group milestone", "remove group milestone", "destroy group milestone", "drop group milestone"},
-		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
+		related:     []string{actionGet, actionList, actionUpdate},
 		description: "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",
 	},
 	"gitlab_group_milestone_issues": {
 		usage:       "List issues assigned to a group milestone, with ordering and pagination. Use to inspect the issue scope of a group milestone.",
 		aliases:     []string{"group milestone issues", "issues in group milestone", "list group milestone issues"},
-		related:     []string{actionGroupMilestoneGet, "group_milestone.merge_requests", "issue.list_group"},
+		related:     []string{actionGet, actionMergeRequests, "issue.list_group"},
 		description: "List issues assigned to a group milestone. Returns: assigned issues with state, web URL, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_merge_requests, gitlab_issue_list_group.",
 	},
 	"gitlab_group_milestone_merge_requests": {
 		usage:       "List merge requests assigned to a group milestone, with ordering and pagination. Use to inspect the MR scope of a group milestone.",
 		aliases:     []string{"group milestone merge requests", "merge requests in group milestone", "list group milestone MRs"},
-		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneIssues, "group_milestone.burndown"},
+		related:     []string{actionGet, actionIssues, actionBurndown},
 		description: "List merge requests assigned to a group milestone. Returns: assigned merge requests with state, source and target branches, and pagination metadata. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_burndown_events.",
 	},
 	"gitlab_group_milestone_burndown_events": {
 		usage:       "List burndown chart events for a group milestone, with ordering and pagination. Requires GitLab Premium or higher.",
 		aliases:     []string{"group milestone burndown", "burndown chart events", "group milestone burndown events"},
-		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneIssues, "group_milestone.merge_requests"},
+		related:     []string{actionGet, actionIssues, actionMergeRequests},
 		description: "List burndown chart events for a group milestone. Returns: dated burndown events with weight, action, and pagination metadata. Requires GitLab Premium or higher. See also: gitlab_group_milestone_get, gitlab_group_milestone_issues, gitlab_group_milestone_merge_requests.",
 	},
 }
