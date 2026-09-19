@@ -25,6 +25,7 @@ gitlab-mcp-server/
 │   │   ├── main.go              # Signal handling, transport selection
 │   │   └── main_test.go         # Server startup and HTTP handler tests
 │   ├── audit_1to1/              # Consolidated 1:1 SDK↔API parity audit (-scope structs|actions|metadata|enums|sdk)
+│   ├── audit_action_ids/        # Every action ID the server publishes to a model is one the catalog has
 │   ├── audit_catalog_first/     # ActionSpec catalog coverage inventory
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
 │   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
