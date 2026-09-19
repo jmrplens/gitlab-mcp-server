@@ -5,6 +5,7 @@ package mrdraftnotes
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -1330,5 +1331,116 @@ func TestFormatOutputMarkdown_PositionOldPathFallback(t *testing.T) {
 	md := FormatOutputMarkdown(out)
 	if !strings.Contains(md, "**Position**: `old.go` line 3") {
 		t.Errorf("expected old_path fallback in markdown:\n%s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers put in the request body
+// ---------------------------------------------------------------------------.
+
+// TestDraftNoteCreate_OptionalFieldsReachGitLab verifies that each optional
+// field of a create request is sent when the caller gave one and left out when
+// they did not. A test that reads only the response cannot see either half:
+// GitLab answers the same whatever the body held, so an inverted guard would
+// drop the caller's commit_id and send an empty one for the caller who set
+// nothing, and the draft note would be anchored to the wrong commit.
+func TestDraftNoteCreate_OptionalFieldsReachGitLab(t *testing.T) {
+	resolve := true
+	for _, tc := range []struct {
+		name    string
+		input   CreateInput
+		present []string
+		absent  []string
+	}{
+		{
+			name: "every optional field given",
+			input: CreateInput{
+				ProjectID: "42", MRIID: 1, Note: "Reply",
+				CommitID:              "abc123",
+				InReplyToDiscussionID: "disc1",
+				ResolveDiscussion:     &resolve,
+			},
+			present: []string{`"commit_id":"abc123"`, `"in_reply_to_discussion_id":"disc1"`, `"resolve_discussion":true`},
+		},
+		{
+			name:   "no optional field given",
+			input:  CreateInput{ProjectID: "42", MRIID: 1, Note: "Reply"},
+			absent: []string{"commit_id", "in_reply_to_discussion_id", "resolve_discussion"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				b, _ := io.ReadAll(r.Body)
+				body = string(b)
+				testutil.RespondJSON(w, http.StatusCreated, `{"id":21,"author_id":1,"merge_request_id":1,"note":"Reply"}`)
+			}))
+
+			if _, err := Create(context.Background(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			for _, want := range tc.present {
+				if !strings.Contains(body, want) {
+					t.Errorf("request body %q is missing %s", body, want)
+				}
+			}
+			for _, unwanted := range tc.absent {
+				if strings.Contains(body, unwanted) {
+					t.Errorf("request body %q carries %s the caller never set", body, unwanted)
+				}
+			}
+		})
+	}
+}
+
+// TestDraftNoteUpdate_NoteBodyReachesGitLab verifies that the revised body a
+// caller passes is the one sent, and that an omitted body is left out rather
+// than sent as an empty string. Both halves matter for an edit: GitLab's
+// answer is identical either way, so an inverted guard would blank the note it
+// was asked to change while silently discarding the replacement text.
+func TestDraftNoteUpdate_NoteBodyReachesGitLab(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		note    string
+		present string
+		absent  string
+	}{
+		{name: "a new body is sent", note: "Updated text", present: `"note":"Updated text"`},
+		{name: "an omitted body is not sent", note: "", absent: "note"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var body string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				b, _ := io.ReadAll(r.Body)
+				body = string(b)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"author_id":1,"merge_request_id":1,"note":"Updated text"}`)
+			}))
+
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", MRIID: 1, NoteID: 10, Note: tc.note})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if tc.present != "" && !strings.Contains(body, tc.present) {
+				t.Errorf("request body %q is missing %s", body, tc.present)
+			}
+			if tc.absent != "" && strings.Contains(body, tc.absent) {
+				t.Errorf("request body %q carries %s the caller never set", body, tc.absent)
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_NoteOfExactlyTheCellWidth verifies that a note as long
+// as the cell is shown whole. The ellipsis is a promise that something was cut,
+// and a note that fits entirely had nothing cut from it.
+func TestFormatListMarkdown_NoteOfExactlyTheCellWidth(t *testing.T) {
+	note := strings.Repeat("a", noteCellRunes)
+	out := ListOutput{DraftNotes: []Output{{ID: 1, AuthorID: 10, Note: note}}}
+	want := "## Draft Notes (1)\n\n" +
+		"| ID | Author ID | Commit | Note |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| 1 | 10 |  | " + note + " |\n" + draftListHints
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
