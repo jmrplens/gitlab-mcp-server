@@ -218,12 +218,15 @@ func rawBlobResult(out RawBlobContentOutput) *mcp.CallToolResult {
 func FormatArchiveMarkdown(out ArchiveOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Repository Archive")
-	// Archive makes no API call at all, so all three are the caller's own
+	// Archive makes no API call at all, so all four are the caller's own
 	// arguments echoed back, format included: nothing checks it against the
-	// eight values its schema lists.
+	// eight values its schema lists. The subdirectory is a row rather than
+	// something to read out of the URL, because the card used to look the same
+	// whether the path reached the address or was dropped.
 	c.Field("Project", out.ProjectID)
 	c.Field("Format", out.Format)
 	c.Field("SHA/Ref", out.SHA)
+	c.Field("Path", out.Path)
 	c.URL(out.URL)
 	c.End(toolutil.HintAction(actionTree, "browse the repository instead of downloading it"))
 	return b.String()
