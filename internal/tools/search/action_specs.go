@@ -5,33 +5,66 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical search action IDs referenced by RelatedActions metadata.
+// The spec names of the search actions, and the domain the catalog publishes
+// them under. Separating the two is what the specs below are registered with
+// and what RelatedActions names respectively: the spec name alone resolves to
+// no action.
 const (
-	actionSearchCode          = "search.code"
-	actionSearchProjects      = "search.projects"
-	actionSearchMergeRequests = "search.merge_requests"
-	actionSearchIssues        = "search.issues"
-	actionSearchCommits       = "search.commits"
-	actionSearchMilestones    = "search.milestones"
-	actionSearchNotes         = "search.notes"
-	actionSearchSnippets      = "search.snippets"
-	actionSearchUsers         = "search.users"
-	actionSearchWiki          = "search.wiki"
+	catalogDomain = "search"
+	domainPrefix  = catalogDomain + "."
+
+	specCode          = "code"
+	specProjects      = "projects"
+	specMergeRequests = "merge_requests"
+	specIssues        = "issues"
+	specCommits       = "commits"
+	specMilestones    = "milestones"
+	specNotes         = "notes"
+	specSnippets      = "snippets"
+	specUsers         = "users"
+	specWiki          = "wiki"
+)
+
+// The canonical search action IDs the RelatedActions metadata names, derived
+// from the spec names above so a rename cannot leave a cross-link pointing at
+// an action that is no longer there.
+const (
+	actionSearchCode          = domainPrefix + specCode
+	actionSearchProjects      = domainPrefix + specProjects
+	actionSearchMergeRequests = domainPrefix + specMergeRequests
+	actionSearchIssues        = domainPrefix + specIssues
+	actionSearchCommits       = domainPrefix + specCommits
+	actionSearchMilestones    = domainPrefix + specMilestones
+	actionSearchNotes         = domainPrefix + specNotes
+	actionSearchSnippets      = domainPrefix + specSnippets
+	actionSearchUsers         = domainPrefix + specUsers
+	actionSearchWiki          = domainPrefix + specWiki
+)
+
+// The canonical IDs of the other domains' actions this one cross-links to.
+// Each is the ID a caller passes, which is not the tail of the individual
+// tool name: gitlab_project_members_list is project.members, and reading the
+// tool name backwards produced the project.members_list that named nothing.
+const (
+	actionProjectMembers       = "project.members"
+	actionProjectMilestoneGet  = "project.milestone_get"
+	actionProjectMilestoneList = "project.milestone_list"
+	actionIssueNoteList        = "issue.note_list"
 )
 
 // ActionSpecs returns canonical specs for GitLab search actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		searchCodeSpec(client),
-		searchReadSpec("merge_requests", searchRoute(client, MergeRequests), "gitlab_search_merge_requests"),
-		searchReadSpec("issues", searchRoute(client, Issues), "gitlab_search_issues"),
-		searchReadSpec("commits", searchRoute(client, Commits), "gitlab_search_commits"),
-		searchReadSpec("milestones", searchRoute(client, Milestones), "gitlab_search_milestones"),
-		searchReadSpec("notes", searchRoute(client, Notes), "gitlab_search_notes"),
+		searchReadSpec(specMergeRequests, searchRoute(client, MergeRequests), "gitlab_search_merge_requests"),
+		searchReadSpec(specIssues, searchRoute(client, Issues), "gitlab_search_issues"),
+		searchReadSpec(specCommits, searchRoute(client, Commits), "gitlab_search_commits"),
+		searchReadSpec(specMilestones, searchRoute(client, Milestones), "gitlab_search_milestones"),
+		searchReadSpec(specNotes, searchRoute(client, Notes), "gitlab_search_notes"),
 		searchProjectsSpec(client),
-		searchReadSpec("snippets", searchRoute(client, Snippets), "gitlab_search_snippets"),
-		searchReadSpec("users", searchRoute(client, Users), "gitlab_search_users"),
-		searchReadSpec("wiki", searchRoute(client, Wiki), "gitlab_search_wiki"),
+		searchReadSpec(specSnippets, searchRoute(client, Snippets), "gitlab_search_snippets"),
+		searchReadSpec(specUsers, searchRoute(client, Users), "gitlab_search_users"),
+		searchReadSpec(specWiki, searchRoute(client, Wiki), "gitlab_search_wiki"),
 	}
 }
 
@@ -42,7 +75,7 @@ func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Tags = append(options.Tags, "code", "blob", "file_content")
 	options.RelatedActions = []string{actionSearchProjects, "repository.file_get", "repository.tree"}
 	options.IndividualTool.Description = "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree."
-	return toolutil.NewReadActionSpec("code", searchRoute(client, Code), options)
+	return toolutil.NewReadActionSpec(specCode, searchRoute(client, Code), options)
 }
 
 func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -52,7 +85,7 @@ func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Tags = append(options.Tags, "project", "repository", "namespace")
 	options.RelatedActions = []string{"project.get", "project.list", actionSearchCode}
 	options.IndividualTool.Description = "Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_project_get, gitlab_project_list, gitlab_search_code."
-	return toolutil.NewReadActionSpec("projects", searchRoute(client, Projects), options)
+	return toolutil.NewReadActionSpec(specProjects, searchRoute(client, Projects), options)
 }
 
 func searchReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -127,14 +160,14 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		usage:       "Search milestones by title and description across global, group (group_id), or project (project_id) scope. Use to locate a milestone by name when its ID is unknown.",
 		aliases:     []string{"search milestones", "find milestone by name", "full-text milestone search"},
 		tags:        []string{"milestone"},
-		related:     []string{"milestone.list", "milestone.get", actionSearchIssues},
+		related:     []string{actionProjectMilestoneList, actionProjectMilestoneGet, actionSearchIssues},
 		description: "Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_milestone_list, gitlab_milestone_get, gitlab_search_issues.",
 	},
 	"gitlab_search_notes": {
 		usage:       "Search note bodies within a single project (project_id is required). Use to find comments on issues, merge requests, or commits that mention given keywords.",
 		aliases:     []string{"search notes", "search comments", "find notes by content", "full-text note search"},
 		tags:        []string{"note", "comment"},
-		related:     []string{actionSearchIssues, actionSearchMergeRequests, "issue.notes_list"},
+		related:     []string{actionSearchIssues, actionSearchMergeRequests, actionIssueNoteList},
 		description: "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
 	},
 	"gitlab_search_snippets": {
@@ -148,7 +181,7 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		usage:       "Search users by name or username across global, group (group_id), or project (project_id) scope. Use to resolve a person to their user record before assigning or mentioning them.",
 		aliases:     []string{"global user search", "find people by name", "look up user account", "full-text user search"},
 		tags:        []string{"user"},
-		related:     []string{"user.get", "user.list", "project.members_list"},
+		related:     []string{"user.get", "user.list", actionProjectMembers},
 		description: "Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_project_members_list.",
 	},
 	"gitlab_search_wiki": {

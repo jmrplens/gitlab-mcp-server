@@ -5,8 +5,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical notification action names. These are the spec names projected
-// into every surface; RelatedActions cross-links reference them directly.
+// Notification action names. These are the spec names projected into every
+// surface, and they are not what a caller names: the catalog qualifies each
+// with the domain of the group these specs join, so a published cross-link
+// goes through [canonicalID] rather than naming one of these directly.
 const (
 	actionGlobalGet     = "notification_global_get"
 	actionGlobalUpdate  = "notification_global_update"
@@ -15,6 +17,20 @@ const (
 	actionGroupGet      = "notification_group_get"
 	actionGroupUpdate   = "notification_group_update"
 )
+
+// catalogDomain is the domain the notification specs are published under.
+// They are appended to the gitlab_user group in internal/tools/action_specs.go,
+// so the canonical ID of every one of them is "user.<spec name>".
+const catalogDomain = "user"
+
+// canonicalID qualifies a spec name with [catalogDomain], which is the ID a
+// model calls and the only spelling RelatedActions and the Markdown hints may
+// publish. The bare spec name resolves to no action, and it reads like an ID,
+// which is why both are derived from the one constant block above instead of
+// being written out a second time.
+func canonicalID(name string) string {
+	return catalogDomain + "." + name
+}
 
 // ActionSpecs returns canonical specs for notification settings actions
 // exposed as MCP tools. The global, project, and group read/update
@@ -96,37 +112,37 @@ var notificationActionMeta = map[string]notificationActionMetaEntry{
 	actionGlobalGet: {
 		usage:       "Read the authenticated user's account-wide (global) notification settings. Use when the prompt asks what notifications a user receives by default, or before changing them with the global update action. Requires read_user token scope.",
 		aliases:     []string{"get global notification settings", "show my notification settings", "read default notification level"},
-		related:     []string{actionGlobalUpdate, actionProjectGet, actionGroupGet},
+		related:     []string{canonicalID(actionGlobalUpdate), canonicalID(actionProjectGet), canonicalID(actionGroupGet)},
 		description: "Get the authenticated user's global notification settings. Returns: the global notification level, notification email, and the per-event flags (issue, merge request, pipeline, note, and epic events) when the level is custom. See also: gitlab_notification_global_update, gitlab_notification_project_get, gitlab_notification_group_get.",
 	},
 	actionGlobalUpdate: {
 		usage:       "Update the authenticated user's account-wide (global) notification settings. Set level (disabled, participating, watch, global, mention, custom), notification_email, and individual event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update global notification settings", "set my notification level", "change default notification email"},
-		related:     []string{actionGlobalGet, actionProjectUpdate, actionGroupUpdate},
+		related:     []string{canonicalID(actionGlobalGet), canonicalID(actionProjectUpdate), canonicalID(actionGroupUpdate)},
 		description: "Update the authenticated user's global notification settings. Returns: the updated global notification level, notification email, and per-event flags. See also: gitlab_notification_global_get, gitlab_notification_project_update, gitlab_notification_group_update.",
 	},
 	actionProjectGet: {
 		usage:       "Read the authenticated user's notification settings for one project. Use when the prompt asks how a user is notified for a specific project, or before overriding them with the project update action. Requires project membership.",
 		aliases:     []string{"get project notification settings", "show notification settings for project", "read project notification level"},
-		related:     []string{actionProjectUpdate, actionGlobalGet, actionGroupGet},
+		related:     []string{canonicalID(actionProjectUpdate), canonicalID(actionGlobalGet), canonicalID(actionGroupGet)},
 		description: "Get the authenticated user's notification settings for a project. Returns: the project notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_project_update, gitlab_notification_global_get, gitlab_notification_group_get.",
 	},
 	actionProjectUpdate: {
 		usage:       "Update the authenticated user's notification settings for one project. Pass project_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update project notification settings", "set notification level for project", "override notifications for project"},
-		related:     []string{actionProjectGet, actionGlobalUpdate, actionGroupUpdate},
+		related:     []string{canonicalID(actionProjectGet), canonicalID(actionGlobalUpdate), canonicalID(actionGroupUpdate)},
 		description: "Update the authenticated user's notification settings for a project. Returns: the updated project notification level, notification email, and per-event flags. See also: gitlab_notification_project_get, gitlab_notification_global_update, gitlab_notification_group_update.",
 	},
 	actionGroupGet: {
 		usage:       "Read the authenticated user's notification settings for one group. Use when the prompt asks how a user is notified for a specific group, or before overriding them with the group update action. Requires group membership.",
 		aliases:     []string{"get group notification settings", "show notification settings for group", "read group notification level"},
-		related:     []string{actionGroupUpdate, actionGlobalGet, actionProjectGet},
+		related:     []string{canonicalID(actionGroupUpdate), canonicalID(actionGlobalGet), canonicalID(actionProjectGet)},
 		description: "Get the authenticated user's notification settings for a group. Returns: the group notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_group_update, gitlab_notification_global_get, gitlab_notification_project_get.",
 	},
 	actionGroupUpdate: {
 		usage:       "Update the authenticated user's notification settings for one group. Pass group_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update group notification settings", "set notification level for group", "override notifications for group"},
-		related:     []string{actionGroupGet, actionGlobalUpdate, actionProjectUpdate},
+		related:     []string{canonicalID(actionGroupGet), canonicalID(actionGlobalUpdate), canonicalID(actionProjectUpdate)},
 		description: "Update the authenticated user's notification settings for a group. Returns: the updated group notification level, notification email, and per-event flags. See also: gitlab_notification_group_get, gitlab_notification_global_update, gitlab_notification_project_update.",
 	},
 }

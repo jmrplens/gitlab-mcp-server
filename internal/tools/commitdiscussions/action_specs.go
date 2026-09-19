@@ -7,16 +7,38 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical related-action ids referenced by commit discussion discovery
-// metadata. Commit discussion specs own the commit_discussion.* namespace;
-// cross-domain references to the commit itself use the repository.* namespace.
+// Commit discussion spec names. These are the names the specs below are
+// registered under, and they are not what a caller names: the catalog
+// qualifies each with the domain of the group these specs join, so a
+// published cross-link goes through [canonicalID].
+//
+// There is no commit_discussion.* namespace. These specs are appended to the
+// gitlab_repository group in internal/tools/action_specs.go, which is the same
+// domain the commit itself lives in, so every ID here is a repository.* one.
 const (
-	actionList       = "commit_discussion.commit_discussion_list"
-	actionGet        = "commit_discussion.commit_discussion_get"
-	actionCreate     = "commit_discussion.commit_discussion_create"
-	actionAddNote    = "commit_discussion.commit_discussion_add_note"
-	actionUpdateNote = "commit_discussion.commit_discussion_update_note"
-	actionDeleteNote = "commit_discussion.commit_discussion_delete_note"
+	specList       = "commit_discussion_list"
+	specGet        = "commit_discussion_get"
+	specCreate     = "commit_discussion_create"
+	specAddNote    = "commit_discussion_add_note"
+	specUpdateNote = "commit_discussion_update_note"
+	specDeleteNote = "commit_discussion_delete_note"
+)
+
+// catalogDomain is the domain the commit discussion specs are published
+// under, the gitlab_repository group's own.
+const catalogDomain = "repository"
+
+// canonicalID qualifies a spec name with [catalogDomain], which is the ID a
+// model calls. Deriving the cross-links from the same constants the specs are
+// registered under is what keeps the two from drifting apart, which is how
+// every cross-link in this package came to name a domain that does not exist.
+func canonicalID(name string) string {
+	return catalogDomain + "." + name
+}
+
+// Canonical ids of the commit actions this domain cross-links to. They are
+// already repository.* because the commit lives in the same group.
+const (
 	actionCommitGet  = "repository.commit_get"
 	actionCommitDiff = "repository.commit_diff"
 )
@@ -24,12 +46,12 @@ const (
 // ActionSpecs returns canonical specs for commit discussion actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		commitDiscussionReadSpec("commit_discussion_list", toolutil.RouteAction(client, List), "gitlab_list_commit_discussions"),
-		commitDiscussionReadSpec("commit_discussion_get", toolutil.RouteAction(client, Get), "gitlab_get_commit_discussion"),
-		commitDiscussionCreateSpec("commit_discussion_create", toolutil.RouteAction(client, Create), "gitlab_create_commit_discussion"),
-		commitDiscussionCreateSpec("commit_discussion_add_note", toolutil.RouteAction(client, AddNote), "gitlab_add_commit_discussion_note"),
-		commitDiscussionUpdateSpec("commit_discussion_update_note", toolutil.RouteAction(client, UpdateNote), "gitlab_update_commit_discussion_note"),
-		commitDiscussionDeleteSpec("commit_discussion_delete_note", toolutil.DestructiveAction(client, DeleteNoteOutput), "gitlab_delete_commit_discussion_note"),
+		commitDiscussionReadSpec(specList, toolutil.RouteAction(client, List), "gitlab_list_commit_discussions"),
+		commitDiscussionReadSpec(specGet, toolutil.RouteAction(client, Get), "gitlab_get_commit_discussion"),
+		commitDiscussionCreateSpec(specCreate, toolutil.RouteAction(client, Create), "gitlab_create_commit_discussion"),
+		commitDiscussionCreateSpec(specAddNote, toolutil.RouteAction(client, AddNote), "gitlab_add_commit_discussion_note"),
+		commitDiscussionUpdateSpec(specUpdateNote, toolutil.RouteAction(client, UpdateNote), "gitlab_update_commit_discussion_note"),
+		commitDiscussionDeleteSpec(specDeleteNote, toolutil.DestructiveAction(client, DeleteNoteOutput), "gitlab_delete_commit_discussion_note"),
 	}
 }
 
@@ -105,7 +127,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 	case "gitlab_list_commit_discussions":
 		options.Usage = "List all discussion threads tied to a commit SHA, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for a commit's review conversation, or before replying to a thread. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"gitlab_list_commit_discussions", "list commit discussions", "show commit review threads", "get commit conversation"}
-		options.RelatedActions = []string{actionGet, actionCreate, actionCommitGet, actionCommitDiff}
+		options.RelatedActions = []string{canonicalID(specGet), canonicalID(specCreate), actionCommitGet, actionCommitDiff}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["order_by"] = toolutil.ParameterGuidance{
 			SemanticRole:     "discussion_list_sort_field",
@@ -117,14 +139,14 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 	case "gitlab_get_commit_discussion":
 		options.Usage = "Fetch one discussion thread on a commit by its discussion_id, returning every note in the thread. Use this after gitlab_list_commit_discussions when the target thread is already known."
 		options.Aliases = []string{"gitlab_get_commit_discussion", "get commit discussion", "show commit discussion thread", "fetch commit discussion"}
-		options.RelatedActions = []string{actionList, actionAddNote, actionCommitGet}
+		options.RelatedActions = []string{canonicalID(specList), canonicalID(specAddNote), actionCommitGet}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.IndividualTool.Description = "Get a single commit discussion thread by its discussion id. Returns: the thread with every note (author, body, system flag, resolvable/resolved state, diff position). See also: gitlab_list_commit_discussions, gitlab_add_commit_discussion_note, gitlab_commit_get."
 	case "gitlab_create_commit_discussion":
 		options.Usage = "Open a new discussion thread on a commit. Provide a position to attach an inline diff comment to a specific file and line, or omit it for a general commit discussion. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_create_commit_discussion", "create commit discussion", "comment on commit diff", "start commit review thread"}
-		options.RelatedActions = []string{actionAddNote, actionList, actionCommitDiff, actionCommitGet}
+		options.RelatedActions = []string{canonicalID(specAddNote), canonicalID(specList), actionCommitDiff, actionCommitGet}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["body"] = toolutil.ParameterGuidance{
 			SemanticRole:   "comment_body",
@@ -150,7 +172,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 	case "gitlab_add_commit_discussion_note":
 		options.Usage = "Reply to an existing commit discussion thread by adding a note. Use this after gitlab_list_commit_discussions or gitlab_create_commit_discussion to continue a thread. Supports backdating via created_at for admins/owners."
 		options.Aliases = []string{"gitlab_add_commit_discussion_note", "reply to commit discussion", "add note to commit discussion", "comment on commit thread"}
-		options.RelatedActions = []string{actionCreate, actionGet, actionUpdateNote, actionList}
+		options.RelatedActions = []string{canonicalID(specCreate), canonicalID(specGet), canonicalID(specUpdateNote), canonicalID(specList)}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.ParameterGuidance["body"] = toolutil.ParameterGuidance{
@@ -162,7 +184,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 	case "gitlab_update_commit_discussion_note":
 		options.Usage = "Edit the body of a note in a commit discussion thread. Only the note author can edit the body. Identify the note with discussion_id plus note_id. Supports overriding created_at for admins/owners."
 		options.Aliases = []string{"gitlab_update_commit_discussion_note", "edit commit discussion note", "update commit discussion reply", "modify commit thread comment"}
-		options.RelatedActions = []string{actionAddNote, actionDeleteNote, actionGet}
+		options.RelatedActions = []string{canonicalID(specAddNote), canonicalID(specDeleteNote), canonicalID(specGet)}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.ParameterGuidance["note_id"] = noteIDGuidance()
@@ -175,7 +197,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 	case "gitlab_delete_commit_discussion_note":
 		options.Usage = "Permanently delete a note from a commit discussion thread (destructive, requires confirmation). Only the note author or a Maintainer can delete a note. Identify the note with discussion_id plus note_id."
 		options.Aliases = []string{"gitlab_delete_commit_discussion_note", "delete commit discussion note", "remove commit discussion reply", "delete commit thread comment"}
-		options.RelatedActions = []string{actionUpdateNote, actionGet, actionList}
+		options.RelatedActions = []string{canonicalID(specUpdateNote), canonicalID(specGet), canonicalID(specList)}
 		options.ParameterGuidance = commitScopeGuidance()
 		options.ParameterGuidance["discussion_id"] = discussionIDGuidance()
 		options.ParameterGuidance["note_id"] = noteIDGuidance()
