@@ -553,15 +553,20 @@ func BulkUpdate(ctx context.Context, client *gitlabclient.Client, input BulkUpda
 	}
 
 	mode := gl.SecurityAttributeBulkUpdateMode(input.Mode)
+	// Both target lists are handed over whether or not the caller named one.
+	// bulkUpdateSecurityAttributes appends each through formatGIDs, which
+	// contributes nothing from an empty list and sizes the item slice the same
+	// way, so a nil pointer and a pointer to an empty list build byte-identical
+	// requests. Guarding them here was a copy of that guard, and a copy whose
+	// two answers cannot be told apart is dead code rather than a decision.
+	// This is not the shape of ProjectUpdate above, where the pointer decides
+	// whether an addAttributeIds key exists at all and an empty list reaches
+	// GitLab as an empty array.
 	opts := &gl.BulkUpdateSecurityAttributesOptions{
+		GroupIDs:     &input.GroupIDs,
+		ProjectIDs:   &input.ProjectIDs,
 		AttributeIDs: &input.AttributeIDs,
 		Mode:         &mode,
-	}
-	if len(input.GroupIDs) > 0 {
-		opts.GroupIDs = &input.GroupIDs
-	}
-	if len(input.ProjectIDs) > 0 {
-		opts.ProjectIDs = &input.ProjectIDs
 	}
 	if err := bulkUpdateSecurityAttributes(ctx, client, opts); err != nil {
 		return BulkUpdateOutput{}, toolutil.WrapErrWithHint("bulk update security attributes", err, "verify group_ids, project_ids, attribute_ids, and mode; requires Premium or Ultimate")
@@ -699,20 +704,22 @@ func bulkUpdateSecurityAttributes(ctx context.Context, client *gitlabclient.Clie
 	if opts.Mode == nil {
 		return toolutil.ErrFieldRequired("mode")
 	}
-	itemsLen := 0
+	// Each list is formatted once and the capacity taken from the result, so
+	// the nil check is made once rather than twice. The second copy decided a
+	// capacity and nothing else, which no caller and no test can observe, and
+	// it survived every mutation for that reason. items is built with make
+	// rather than declared nil because an empty list has to reach GitLab as an
+	// empty array and a nil slice marshals as null.
+	var groups, projects []string
 	if opts.GroupIDs != nil {
-		itemsLen += len(*opts.GroupIDs)
+		groups = formatGIDs(groupGIDType, *opts.GroupIDs)
 	}
 	if opts.ProjectIDs != nil {
-		itemsLen += len(*opts.ProjectIDs)
+		projects = formatGIDs(projectGIDType, *opts.ProjectIDs)
 	}
-	items := make([]string, 0, itemsLen)
-	if opts.GroupIDs != nil {
-		items = append(items, formatGIDs(groupGIDType, *opts.GroupIDs)...)
-	}
-	if opts.ProjectIDs != nil {
-		items = append(items, formatGIDs(projectGIDType, *opts.ProjectIDs)...)
-	}
+	items := make([]string, 0, len(groups)+len(projects))
+	items = append(items, groups...)
+	items = append(items, projects...)
 	input := map[string]any{
 		"items":      items,
 		"attributes": formatGIDs(securityAttributeGIDType, *opts.AttributeIDs),
