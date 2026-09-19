@@ -8,12 +8,20 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves: a
-// controller action is projected under the runner domain.
+// Canonical action IDs the hints and the RelatedActions cross-links name, the
+// one form every surface resolves: a controller action is projected under the
+// runner domain.
+//
+// The individual tool names in the const block of action_specs.go are not an
+// alternative spelling for either: the discovery tools that publish both
+// fields hand out canonical IDs, and a tool name written into a cross-link is
+// findable under no name a listing shows.
 const (
 	actionControllerGet       = "runner.controller_get"
 	actionControllerList      = "runner.controller_list"
+	actionControllerCreate    = "runner.controller_create"
 	actionControllerUpdate    = "runner.controller_update"
+	actionControllerDelete    = "runner.controller_delete"
 	actionControllerTokenList = "runner.controller_token_list"
 	actionControllerScopeList = "runner.controller_scope_list"
 )

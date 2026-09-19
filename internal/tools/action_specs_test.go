@@ -392,9 +392,27 @@ func assertSurfacePolicyMetaProjection(t *testing.T, spec toolutil.ActionSpec, h
 	return metaRoutes
 }
 
+// surfacePolicyRelatedSpec is the action the spec under test cross-links to.
+//
+// It belongs in the group because the dynamic registry publishes a cross-link
+// only when the session it serves can run it: a related ID the catalog does
+// not hold is dropped rather than handed to a model as a next step it would be
+// told is unknown. Without this the projection assertion would be checking
+// that a dead link survives.
+func surfacePolicyRelatedSpec() toolutil.ActionSpec {
+	return toolutil.NewActionSpec("archive", toolutil.ActionRoute{
+		Handler:     func(context.Context, map[string]any) (any, error) { return map[string]any{"ok": true}, nil },
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+	}, toolutil.ActionSpecOptions{
+		Usage:          "Archive a project reversibly.",
+		OwnerPackage:   "projects",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_archive", Title: "Archive Project"},
+	})
+}
+
 func assertSurfacePolicyDynamicProjection(t *testing.T, spec toolutil.ActionSpec) {
 	t.Helper()
-	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{spec})
+	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{spec, surfacePolicyRelatedSpec()})
 	if err != nil {
 		t.Fatalf("GroupFromSpecs() error = %v", err)
 	}

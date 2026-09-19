@@ -28,34 +28,44 @@ func stubOracle() *oracle {
 	return ids
 }
 
-// TestClassify_ThreeOutcomes_AreKeptApart holds the split the whole report
-// rests on: an ID the catalog has is silent, a registered alias is reported
-// without being counted a finding, and anything else is a finding.
-func TestClassify_ThreeOutcomes_AreKeptApart(t *testing.T) {
+// TestClassify_FourOutcomes_AreKeptApart holds the split the whole report
+// rests on: an ID the catalog has is silent, anything it has never heard of is
+// a finding, and an alias is one or the other depending on where it is
+// written. In a structured field it is a finding carrying the canonical ID as
+// the fix; in prose it is reported without being counted, because a sentence
+// may be about the alias.
+func TestClassify_FourOutcomes_AreKeptApart(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 1, Kind: kindRelated, Value: "demo.get", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
-		{Package: "p", File: "p/a.go", Line: 4, Kind: kindRelated, Expr: "helper(x)"},
+		{Package: "p", File: "p/a.go", Line: 4, Kind: kindUsage, Value: "Dynamic execute also accepts demo.fetch.", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 5, Kind: kindRelated, Expr: "helper(x)"},
 	}, stubOracle())
 
-	if report.Summary.Findings != 1 || report.Findings[0].ID != "demo.gone" {
-		t.Errorf("findings = %+v, want the one dead ID", report.Findings)
+	if report.Summary.Findings != 2 {
+		t.Fatalf("findings = %+v, want the structured alias and the dead ID", report.Findings)
 	}
-	if report.Summary.AliasHits != 1 || report.AliasRefs[0].Canonical != "demo.get" {
-		t.Errorf("alias references = %+v, want demo.fetch resolved to demo.get", report.AliasRefs)
+	if report.Findings[0].ID != "demo.fetch" || report.Findings[0].Canonical != "demo.get" {
+		t.Errorf("first finding = %+v, want demo.fetch naming demo.get as the fix", report.Findings[0])
+	}
+	if report.Findings[1].ID != "demo.gone" || report.Findings[1].Canonical != "" {
+		t.Errorf("second finding = %+v, want the dead ID with no canonical target", report.Findings[1])
+	}
+	if report.Summary.AliasHits != 1 || report.AliasRefs[0].Kind != kindUsage {
+		t.Errorf("alias references = %+v, want only the alias named in prose", report.AliasRefs)
 	}
 	if report.Summary.Unresolved != 1 || report.Unresolved[0].Expression != "helper(x)" {
 		t.Errorf("unresolved = %+v, want the expression named", report.Unresolved)
 	}
-	if report.Summary.Judged != 3 {
-		t.Errorf("judged = %d, want the three folded IDs", report.Summary.Judged)
+	if report.Summary.Judged != 4 {
+		t.Errorf("judged = %d, want the three folded IDs and the prose token", report.Summary.Judged)
 	}
 	if report.Summary.Packages != 1 {
 		t.Errorf("packages with findings = %d, want 1", report.Summary.Packages)
 	}
-	if report.Summary.ByKind[kindHint] != 1 {
-		t.Errorf("findings by kind = %v, want the hint counted", report.Summary.ByKind)
+	if report.Summary.ByKind[kindHint] != 1 || report.Summary.ByKind[kindRelated] != 1 {
+		t.Errorf("findings by kind = %v, want the hint and the related entry counted", report.Summary.ByKind)
 	}
 }
 
@@ -210,12 +220,17 @@ func TestEditDistance_KnownPairs_AreTheLevenshteinDistance(t *testing.T) {
 
 // TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings holds what the two
 // report modes say. The quiet one is the work list; the verbose one adds the
-// aliases and the sites that could not be folded, which are the audit's own
-// blind spot rather than a clean answer.
+// aliases named in prose and the sites that could not be folded, which are the
+// audit's own blind spot rather than a clean answer.
+//
+// The two alias rows are both here on purpose, because each is printed with a
+// verb of its own: the one written into a cross-link is a finding and is read
+// as a spelling to correct, the one written into a sentence is not.
 func TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
+		{Package: "p", File: "p/a.go", Line: 5, Kind: kindUsage, Value: "Execute also accepts demo.fetch.", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 4, Kind: kindRelated, Expr: "helper(x)"},
 	}, stubOracle())
 
@@ -227,10 +242,21 @@ func TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings(t *testing.T) {
 	if strings.Contains(quiet.String(), "helper(x)") {
 		t.Error("the quiet report printed the unresolved bucket")
 	}
+	if strings.Contains(quiet.String(), "alias of") {
+		t.Error("the quiet report printed the prose alias bucket")
+	}
 
 	var loud bytes.Buffer
 	writeReport(&loud, report, true)
-	for _, want := range []string{"demo.gone", "demo.fetch", "helper(x)", "exemptions that excuse nothing", "judged by kind"} {
+	for _, want := range []string{
+		"demo.gone",
+		`"demo.fetch" is an alias, not the catalog ID demo.get`,
+		"aliases named in prose",
+		`"demo.fetch" alias of demo.get`,
+		"helper(x)",
+		"exemptions that excuse nothing",
+		"judged by kind",
+	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(loud.String(), want) {
 				t.Errorf("the verbose report left out %q", want)

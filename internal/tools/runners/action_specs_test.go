@@ -98,18 +98,28 @@ func TestActionSpecs_EveryDecoratedTool_PublishesItsMetadataEntry(t *testing.T) 
 	}
 }
 
-// TestRunnerActionMeta_RelatedActions_NameToolsThisPackageRegisters checks
-// every cross-link against the tools the specs really register. Nothing in the
-// repository validates these strings, so a misspelled one passes every gate and
-// answers a model "unknown tool" the moment it follows the hint.
-func TestRunnerActionMeta_RelatedActions_NameToolsThisPackageRegisters(t *testing.T) {
-	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
+// TestRunnerActionMeta_RelatedActions_NameActionsThisPackageRegisters checks
+// every cross-link against the canonical action IDs the specs really build. A
+// misspelled one answers a model "unknown action" the moment it follows the
+// hint.
+//
+// The IDs, not the individual tool names these entries are keyed by. Both
+// resolve for gitlab_execute_action, since the decoration makes the tool name
+// an alias, and only the canonical ID is published by the discovery tools that
+// carry this field, so a tool name here is a cross-link a model can follow but
+// cannot look up. cmd/audit_action_ids holds the whole tree to that rule.
+func TestRunnerActionMeta_RelatedActions_NameActionsThisPackageRegisters(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, runnerActionHandler()))
+	actions := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		actions["runner."+spec.Name] = struct{}{}
+	}
 
 	for tool, meta := range runnerActionMeta {
 		t.Run(tool, func(t *testing.T) {
 			for _, related := range meta.related {
-				if _, ok := byTool[related]; !ok {
-					t.Errorf("related action %q names no registered runner tool", related)
+				if _, ok := actions[related]; !ok {
+					t.Errorf("related action %q names no action this package registers", related)
 				}
 			}
 		})
@@ -138,10 +148,21 @@ func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) 
 		{actionRunnerGet, runnerActions},
 		{actionRunnerJobs, runnerActions},
 		{actionRunnerList, runnerActions},
+		{actionRunnerListAll, runnerActions},
+		{actionRunnerListProject, runnerActions},
+		{actionRunnerListGroup, runnerActions},
 		{actionRunnerUpdate, runnerActions},
 		{actionRunnerRemove, runnerActions},
+		{actionRunnerEnableProject, runnerActions},
+		{actionRunnerDisableProject, runnerActions},
 		{actionRunnerRegister, runnerActions},
+		{actionRunnerDeleteRegistered, runnerActions},
+		{actionRunnerDeleteByToken, runnerActions},
 		{actionRunnerVerify, runnerActions},
+		{actionRunnerResetToken, runnerActions},
+		{actionRunnerResetInstanceReg, runnerActions},
+		{actionRunnerResetGroupReg, runnerActions},
+		{actionRunnerResetProjectReg, runnerActions},
 		{actionRunnerListManagers, runnerActions},
 		{actionJobGet, jobActions},
 	}
