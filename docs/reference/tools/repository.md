@@ -85,7 +85,7 @@ Get the raw text content of a git blob by SHA. Returns the content as plain text
 
 ### `gitlab_repository_archive`
 
-Get the download URL for a repository archive. Supports tar.gz, tar.bz2, zip formats and optional SHA/branch/tag/path filters. Returns the URL (does not download binary content).
+Get the download URL for a repository archive. Supports tar.gz, tar.bz2, zip formats and optional SHA/branch/tag/path filters. Returns the URL, plus the ref, format and subdirectory it was built from (does not download binary content).
 
 | Annotation | **Read** |
 | ---------- | -------- |

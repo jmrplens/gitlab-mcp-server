@@ -1139,6 +1139,11 @@ func TestRepositoryArchive_WithPath(t *testing.T) {
 	if out.Format != "zip" {
 		t.Errorf("Format = %q, want %q", out.Format, "zip")
 	}
+	// The output echoes the subdirectory back, so a caller learns whether its
+	// path was honored without parsing the query string of the address.
+	if out.Path != "src" {
+		t.Errorf("Path = %q, want %q", out.Path, "src")
+	}
 }
 
 // TestRepositoryArchive_NoPath pins the other side of that guard: with no
@@ -1155,6 +1160,9 @@ func TestRepositoryArchive_NoPath(t *testing.T) {
 	}
 	if strings.Contains(out.URL, "path=") {
 		t.Errorf("archive URL should carry no path, got %q", out.URL)
+	}
+	if out.Path != "" {
+		t.Errorf("Path = %q, want empty", out.Path)
 	}
 }
 
@@ -1579,19 +1587,23 @@ func TestClassifyBlobContent(t *testing.T) {
 	}
 }
 
-// TestFormatArchiveMarkdown pins the whole archive card. All three values are
-// the caller's own arguments echoed back, so all three are rows the card
-// escapes.
+// TestFormatArchiveMarkdown pins the whole archive card. All four values are
+// the caller's own arguments echoed back, so all four are rows the card
+// escapes. The subdirectory row is what tells a caller its path reached the
+// address: without it the card reads the same whether the path was applied or
+// dropped, and the only evidence left is the URL's query string.
 func TestFormatArchiveMarkdown(t *testing.T) {
 	got := FormatArchiveMarkdown(ArchiveOutput{
-		ProjectID: "42", SHA: "main", Format: "zip", URL: "https://example.com/archive.zip",
+		ProjectID: "42", SHA: "main", Format: "zip", Path: "src",
+		URL: "https://example.com/archive.zip?path=src",
 	})
 
 	want := "## Repository Archive\n\n" +
 		"- **Project**: 42\n" +
 		"- **Format**: zip\n" +
 		"- **SHA/Ref**: main\n" +
-		"- **URL**: [https://example.com/archive.zip](https://example.com/archive.zip)\n" +
+		"- **Path**: src\n" +
+		"- **URL**: [https://example.com/archive.zip?path=src](https://example.com/archive.zip?path=src)\n" +
 		archiveHints
 
 	if got != want {
@@ -1599,8 +1611,8 @@ func TestFormatArchiveMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatArchiveMarkdown_NoSHA pins that an archive of the default branch,
-// which names no ref, writes no ref row.
+// TestFormatArchiveMarkdown_NoSHA pins that an archive of the whole default
+// branch, which names neither a ref nor a subdirectory, writes neither row.
 func TestFormatArchiveMarkdown_NoSHA(t *testing.T) {
 	got := FormatArchiveMarkdown(ArchiveOutput{
 		ProjectID: "42", Format: "tar.gz", URL: "https://example.com/archive.tar.gz",
