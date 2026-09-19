@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"runtime"
@@ -237,26 +238,58 @@ func TestImportFromFile_Base64_Success(t *testing.T) {
 }
 
 // TestImportFromFile_FilePath_Success verifies that ImportFromFile accepts a
-// canonical local archive path and forwards the overwrite option.
+// canonical local archive path and uploads the bytes that file holds.
+//
+// The comment used to claim it forwarded the overwrite option too, and the
+// body never read the request at all. Overwrite is asserted where it belongs,
+// in TestImportFromFile_ForwardsDestination: both branches reach the same
+// option block, so a second copy of that assertion here would state nothing
+// this file does not already hold. What only this branch does is open the
+// named file and stream it, and nothing read that back, so a handler that
+// uploaded an empty body or some other file would have passed: the archive is
+// therefore read out of the multipart body and compared.
 func TestImportFromFile_FilePath_Success(t *testing.T) {
+	const archiveContent = "fake archive"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
-			testutil.RespondJSON(w, http.StatusCreated, `{
-				"id": 43,
-				"name": "from-file",
-				"path": "from-file",
-				"path_with_namespace": "group/from-file",
-				"created_at": "2026-02-01T00:00:00Z",
-				"import_status": "scheduled"
-			}`)
+		if r.URL.Path != "/api/v4/projects/import" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("parse multipart: %v", err)
+			http.Error(w, "parse multipart", http.StatusInternalServerError)
+			return
+		}
+		uploaded, _, err := testutil.FormFile(form, "file")
+		if err != nil {
+			t.Errorf("multipart file: %v", err)
+			http.Error(w, "multipart file", http.StatusInternalServerError)
+			return
+		}
+		defer uploaded.Close()
+		sent, err := io.ReadAll(uploaded)
+		if err != nil {
+			t.Errorf("read multipart file: %v", err)
+			http.Error(w, "read multipart file", http.StatusInternalServerError)
+			return
+		}
+		if string(sent) != archiveContent {
+			t.Errorf("uploaded archive = %q, want the bytes of the named file, %q", sent, archiveContent)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"id": 43,
+			"name": "from-file",
+			"path": "from-file",
+			"path_with_namespace": "group/from-file",
+			"created_at": "2026-02-01T00:00:00Z",
+			"import_status": "scheduled"
+		}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
 	archivePath := t.TempDir() + "/project.tar.gz"
-	if err := os.WriteFile(archivePath, []byte("fake archive"), 0o600); err != nil {
+	if err := os.WriteFile(archivePath, []byte(archiveContent), 0o600); err != nil {
 		t.Fatalf("write archive: %v", err)
 	}
 	overwrite := true

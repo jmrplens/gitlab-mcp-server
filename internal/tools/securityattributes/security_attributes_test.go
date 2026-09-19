@@ -929,6 +929,11 @@ func TestBulkUpdate_Success(t *testing.T) {
 // one and refused every group-only call, and the item list could have been
 // sized off a list that is not there. REMOVE is the mode here because it was
 // the one branch of the three that nothing exercised.
+//
+// It is also half of what lets BulkUpdate hand both target lists over
+// unguarded: the empty project list now reaches formatGIDs rather than being
+// held back by a length check, and this says it still contributes no item.
+// TestBulkUpdate_ProjectsOnly_SendsOnlyTheProjectItems is the other half.
 func TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
@@ -953,6 +958,42 @@ func TestBulkUpdate_GroupsOnly_SendsOnlyTheGroupItems(t *testing.T) {
 	}
 	if out.Mode != BulkUpdateModeRemove || len(out.ProjectIDs) != 0 {
 		t.Fatalf("BulkUpdate() output = %#v, want mode REMOVE and no projects", out)
+	}
+}
+
+// TestBulkUpdate_ProjectsOnly_SendsOnlyTheProjectItems is the group-only test
+// in the other direction: a request naming no group sends the projects alone
+// and echoes no group.
+//
+// It states the property BulkUpdate relies on when it hands both lists over
+// unconditionally. An empty group list is passed to formatGIDs like any other,
+// and an item list that grew an empty entry, or that put the groups after the
+// projects, would be a different request for a mutation that replaces every
+// attribute on what it names.
+func TestBulkUpdate_ProjectsOnly_SendsOnlyTheProjectItems(t *testing.T) {
+	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
+			input := attributeGraphQLInput(t, r)
+			if items, ok := input["items"].([]any); !ok || len(items) != 2 || items[0] != "gid://gitlab/Project/42" || items[1] != "gid://gitlab/Project/43" {
+				t.Errorf("items = %#v, want the two projects and nothing else", input["items"])
+			}
+			if input["mode"] != "REPLACE" {
+				t.Errorf("mode = %#v, want REPLACE", input["mode"])
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{"bulkUpdateSecurityAttributes":{"errors":[]}}`)
+		},
+	})
+
+	out, err := BulkUpdate(context.Background(), testutil.NewTestClient(t, handler), BulkUpdateInput{
+		ProjectIDs:   []int64{42, 43},
+		AttributeIDs: []int64{9},
+		Mode:         BulkUpdateModeReplace,
+	})
+	if err != nil {
+		t.Fatalf("BulkUpdate() error = %v", err)
+	}
+	if out.Mode != BulkUpdateModeReplace || len(out.GroupIDs) != 0 {
+		t.Fatalf("BulkUpdate() output = %#v, want mode REPLACE and no groups", out)
 	}
 }
 
@@ -1027,6 +1068,56 @@ func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
 			err := bulkUpdateSecurityAttributes(context.Background(), client, tt.opts)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("bulkUpdateSecurityAttributes() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestBulkUpdateSecurityAttributes_AbsentTargetList_SendsTheOtherSideAlone
+// verifies the helper reads a target list its caller never set as no items and
+// still sends the list that is there.
+//
+// BulkUpdate always hands both lists over, empty or not, so this is the one
+// place that shape is driven and the only thing holding the two nil checks
+// around the deref. Without it they could not be told from an unconditional
+// deref that panics on the missing list, nor from a build that drops the list
+// that is present and sends a mutation naming nothing.
+func TestBulkUpdateSecurityAttributes_AbsentTargetList_SendsTheOtherSideAlone(t *testing.T) {
+	groups := []int64{5}
+	projects := []int64{42}
+	attributes := []int64{9}
+	mode := glBulkMode(BulkUpdateModeAdd)
+
+	tests := []struct {
+		name string
+		opts *gl.BulkUpdateSecurityAttributesOptions
+		want string
+	}{
+		{
+			name: "no group list",
+			opts: &gl.BulkUpdateSecurityAttributesOptions{ProjectIDs: &projects, AttributeIDs: &attributes, Mode: &mode},
+			want: "gid://gitlab/Project/42",
+		},
+		{
+			name: "no project list",
+			opts: &gl.BulkUpdateSecurityAttributesOptions{GroupIDs: &groups, AttributeIDs: &attributes, Mode: &mode},
+			want: "gid://gitlab/Group/5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
+				"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
+					input := attributeGraphQLInput(t, r)
+					if items, ok := input["items"].([]any); !ok || len(items) != 1 || items[0] != tt.want {
+						t.Errorf("items = %#v, want [%s] and nothing else", input["items"], tt.want)
+					}
+					testutil.RespondGraphQL(w, http.StatusOK, `{"bulkUpdateSecurityAttributes":{"errors":[]}}`)
+				},
+			})
+			if err := bulkUpdateSecurityAttributes(context.Background(), testutil.NewTestClient(t, handler), tt.opts); err != nil {
+				t.Fatalf("bulkUpdateSecurityAttributes() error = %v", err)
 			}
 		})
 	}
