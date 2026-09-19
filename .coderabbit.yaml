@@ -8,6 +8,21 @@
 language: en-US
 
 reviews:
+  # The high level summary goes into the walkthrough comment instead of the
+  # pull request description, which is the whole point: this repository squash
+  # merges, so the description becomes the commit message on main, and a
+  # generated block left in it lands permanently in the history. That is not
+  # hypothetical. It happened on pull request 832: the block was stripped
+  # before merging, CodeRabbit wrote it again, and the merge carried it into
+  # main where editing the description can no longer remove it.
+  #
+  # This is the fix rather than the check that catches it. Stripping the block
+  # by hand loses a race that runs on every review, and a gate that fails on
+  # something a bot does every time is a gate people learn to click past. The
+  # summary is worth having, so it is relocated rather than turned off with
+  # high_level_summary: false.
+  high_level_summary_in_walkthrough: true
+
   auto_review:
     enabled: true
     # Any base branch, so a stacked pull request is reviewed on its own diff
