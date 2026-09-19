@@ -157,7 +157,7 @@ func TestApplyActionMeta_AnEntryThatNamesSomeFields_LeavesTheRestAlone(t *testin
 		return toolutil.ActionSpecOptions{
 			Usage:          "generic usage",
 			Aliases:        []string{"gitlab_some_tool"},
-			RelatedActions: []string{"impersonationtokens.list_impersonation_tokens"},
+			RelatedActions: []string{actionImpersonationTokenList},
 			IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_some_tool", Description: "generic description"},
 		}
 	}
@@ -182,10 +182,10 @@ func TestApplyActionMeta_AnEntryThatNamesSomeFields_LeavesTheRestAlone(t *testin
 		},
 		{
 			name: "an entry naming only related actions keeps the other three",
-			meta: userTokenActionMetaEntry{related: []string{"impersonationtokens.revoke_impersonation_token"}},
+			meta: userTokenActionMetaEntry{related: []string{actionImpersonationTokenRevoke}},
 			want: func() toolutil.ActionSpecOptions {
 				o := base()
-				o.RelatedActions = []string{"impersonationtokens.revoke_impersonation_token"}
+				o.RelatedActions = []string{actionImpersonationTokenRevoke}
 				return o
 			}(),
 		},

@@ -7,11 +7,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs for the instance CI/CD variable actions. These specs
+// are aggregated into the gitlab_ci_variable catalog group alongside the
+// project and group variable packages, so the domain is ci_variable and never
+// the owner package name.
 const (
-	actionInstanceVariableGet    = "instancevariables.instance_get"
-	actionInstanceVariableUpdate = "instancevariables.instance_update"
-	actionInstanceVariableDelete = "instancevariables.instance_delete"
-	actionInstanceVariableList   = "instancevariables.instance_list"
+	actionInstanceVariableList   = "ci_variable.instance_list"
+	actionInstanceVariableGet    = "ci_variable.instance_get"
+	actionInstanceVariableCreate = "ci_variable.instance_create"
+	actionInstanceVariableUpdate = "ci_variable.instance_update"
+	actionInstanceVariableDelete = "ci_variable.instance_delete"
 )
 
 // ActionSpecs returns canonical specs for instance CI/CD variable actions.
@@ -60,7 +65,7 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 	case "instance_list":
 		options.Usage = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions."
 		options.Aliases = []string{individualTool, "list instance variables", "show instance variables", "find instance ci variables"}
-		options.RelatedActions = []string{actionInstanceVariableGet, "instancevariables.instance_create", actionInstanceVariableUpdate, actionInstanceVariableDelete}
+		options.RelatedActions = []string{actionInstanceVariableGet, actionInstanceVariableCreate, actionInstanceVariableUpdate, actionInstanceVariableDelete}
 		options.IndividualTool.Description = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete."
 	case "instance_get":
 		options.Usage = "Get one instance-level CI/CD variable by key. Admin-only. Use when exact variable settings are needed."

@@ -40,8 +40,8 @@ func FormatListMarkdownString(v ListOutput) string {
 	}
 	toolutil.WriteListFooter(&b, v.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		toolutil.HintAction("project.member_get", "see one member's details"),
-		toolutil.HintAction("project.member_add", "add a member to this project"),
+		toolutil.HintAction(actionMemberGet, "see one member's details"),
+		toolutil.HintAction(actionMemberAdd, "add a member to this project"),
 	)
 	return b.String()
 }
@@ -78,8 +78,8 @@ func FormatMarkdown(v Output) string {
 	c.Time("Expires At", v.ExpiresAt)
 	c.Time("Created", v.CreatedAt)
 	c.End(
-		toolutil.HintAction("project.member_edit", "change this member's access level"),
-		toolutil.HintAction("project.member_delete", "remove this member from the project"),
+		toolutil.HintAction(actionMemberEdit, "change this member's access level"),
+		toolutil.HintAction(actionMemberDelete, "remove this member from the project"),
 	)
 	return b.String()
 }

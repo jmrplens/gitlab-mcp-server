@@ -8,14 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The import/export routes a confirmation points at, by the canonical catalog
-// ID every surface resolves; the bare names beside them in action_specs.go are
-// the catalog's own cross-references, which are relative to the group.
-const (
-	hintActionExportDownload = "group." + actionGroupExportDownload
-	hintActionImportFile     = "group." + actionGroupImportFile
-)
-
 // confirmation renders a one-line result: the server's own sentence as the
 // card's heading, which terminates the line, collapses whatever line breaks it
 // carries and defuses a heading inside it, then the next steps.
@@ -35,7 +27,7 @@ func FormatScheduleExportMarkdown(out ScheduleExportOutput) *mcp.CallToolResult 
 		return nil
 	}
 	return confirmation(out.Message,
-		toolutil.HintAction(hintActionExportDownload, "download the export once it is complete"),
+		toolutil.HintAction(actionGroupExportDownload, "download the export once it is complete"),
 	)
 }
 
@@ -48,7 +40,7 @@ func FormatExportDownloadMarkdown(out ExportDownloadOutput) *mcp.CallToolResult 
 	c := toolutil.NewCard(&sb, toolutil.EmojiSuccess+" Group export archive downloaded")
 	c.Int("Size (bytes)", int64(out.SizeBytes))
 	c.Note("The archive is base64-encoded in the content_base64 field.")
-	c.End(toolutil.HintAction(hintActionImportFile, "import the archive into another group"))
+	c.End(toolutil.HintAction(actionGroupImportFile, "import the archive into another group"))
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

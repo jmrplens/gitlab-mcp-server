@@ -5,12 +5,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const (
-	actionGroupVariableUpdate = "group_variable.group_update"
-	actionGroupVariableGet    = "group_variable.group_get"
-	actionGroupVariableList   = "group_variable.group_list"
-)
-
 // ActionSpecs returns canonical specs for group CI/CD variable actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -50,7 +44,7 @@ func groupVariableOptionsForAction(actionName, individualTool string) toolutil.A
 	case "group_list":
 		options.Usage = "List group CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions."
 		options.Aliases = []string{"list group variables", "show group variables", "find group ci variables"}
-		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableUpdate, "group_variable.group_delete"}
+		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableUpdate, actionGroupVariableDelete}
 		options.IndividualTool.Description = "List a group's CI/CD variables with order_by, sort, and offset or keyset pagination. Returns: each variable's key, value, type, protected/masked/hidden/raw flags, environment scope, description, and pagination metadata. See also: gitlab_group_variable_get, gitlab_group_variable_create, gitlab_group_variable_update."
 	case "group_get":
 		options.Usage = "Get one group CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed."
@@ -89,7 +83,7 @@ func groupVariableOptionsForAction(actionName, individualTool string) toolutil.A
 	case "group_update":
 		options.Usage = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Use to change a variable's value or flags."
 		options.Aliases = []string{"update group variable", "edit group variable", "change group ci variable"}
-		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableList, "group_variable.group_delete"}
+		options.RelatedActions = []string{actionGroupVariableGet, actionGroupVariableList, actionGroupVariableDelete}
 		options.IndividualTool.Description = "Update a group CI/CD variable, selecting an environment-scoped instance via the filter. Returns: the updated variable's key, value, type, protected/masked/hidden/raw flags, environment scope, and description. See also: gitlab_group_variable_get, gitlab_group_variable_list, gitlab_group_variable_delete."
 	case "group_delete":
 		options.Usage = "Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter."

@@ -8,14 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical catalog action IDs the hints name. The SSH certificate actions are
-// routes on the group catalog group, so their domain is "group".
-const (
-	actionList   = "group.ssh_cert_list"
-	actionCreate = "group.ssh_cert_create"
-	actionDelete = "group.ssh_cert_delete"
-)
-
 // FormatOutputMarkdown renders one SSH CA certificate as a card. A certificate
 // GitLab sent nothing for renders as nothing.
 func FormatOutputMarkdown(o Output) string {

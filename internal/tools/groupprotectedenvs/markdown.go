@@ -10,15 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionGet       = "group.protected_env_get"
-	actionList      = "group.protected_env_list"
-	actionProtect   = "group.protected_env_protect"
-	actionUnprotect = "group.protected_env_unprotect"
-	actionUpdate    = "group.protected_env_update"
-)
-
 // FormatOutputMarkdown renders one group-level protected environment as the
 // card of a single object: the approvals it needs, then the deploy access
 // levels and the approval rules as nested collections.

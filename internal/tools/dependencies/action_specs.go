@@ -5,6 +5,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs this package names as siblings. The vulnerability list
+// is its own catalog group and so its domain is "vulnerability": the
+// "security.vulnerability_list" that stood here named a domain the catalog
+// does not have, and a model following it was answered "unknown action".
+const (
+	actionPipelineGet       = "pipeline.get"
+	actionVulnerabilityList = "vulnerability.list"
+	actionPackageList       = "package.list"
+)
+
 // ActionSpecs returns canonical specs for dependency list and export actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -69,7 +79,7 @@ func dependencyOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 		Aliases:              aliases,
 		Tags:                 []string{"dependency", "sbom"},
 		Usage:                usage,
-		RelatedActions:       []string{"pipeline.get", "security.vulnerability_list", "package.list"},
+		RelatedActions:       []string{actionPipelineGet, actionVulnerabilityList, actionPackageList},
 		ParameterGuidance:    guidance,
 		InputSchemaOverrides: overrides,
 		OpenWorld:            true,

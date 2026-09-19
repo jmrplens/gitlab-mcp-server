@@ -1326,10 +1326,10 @@ func TestFormatMarkdown_WithAllFields(t *testing.T) {
 		"- **Updated**: 15 Jan 2026 00:00 UTC\n" +
 		"- **Description**: Release milestone\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'group_milestone.update' to change this milestone, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.issues' to list its issues, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.merge_requests' to list its merge requests, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.delete' to remove it, with the same group_id, milestone_iid and confirm=true\n"
+		"- Use action 'group.group_milestone_update' to change this milestone, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_issues' to list its issues, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_merge_requests' to list its merge requests, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_delete' to remove it, with the same group_id, milestone_iid and confirm=true\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1347,10 +1347,10 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		"- **Group ID**: 10\n" +
 		"- **State**: closed\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'group_milestone.update' to change this milestone, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.issues' to list its issues, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.merge_requests' to list its merge requests, with the same group_id and milestone_iid\n" +
-		"- Use action 'group_milestone.delete' to remove it, with the same group_id, milestone_iid and confirm=true\n"
+		"- Use action 'group.group_milestone_update' to change this milestone, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_issues' to list its issues, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_merge_requests' to list its merge requests, with the same group_id and milestone_iid\n" +
+		"- Use action 'group.group_milestone_delete' to remove it, with the same group_id, milestone_iid and confirm=true\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1382,8 +1382,8 @@ func TestFormatListMarkdown_WithMilestones(t *testing.T) {
 		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'group_milestone.get' to read one milestone by its milestone_iid\n" +
-		"- Use action 'group_milestone.create' to add a new milestone to the group\n"
+		"- Use action 'group.group_milestone_get' to read one milestone by its milestone_iid\n" +
+		"- Use action 'group.group_milestone_create' to add a new milestone to the group\n"
 	if md != want {
 		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
 	}
@@ -1428,7 +1428,7 @@ func TestFormatIssuesMarkdown_WithData(t *testing.T) {
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'issue.get' to read one of these issues in full\n" +
-		"- Use action 'group_milestone.merge_requests' to see the merge requests in this milestone instead\n"
+		"- Use action 'group.group_milestone_merge_requests' to see the merge requests in this milestone instead\n"
 	if md != want {
 		t.Errorf("FormatIssuesMarkdownString()\n got %q\nwant %q", md, want)
 	}
@@ -1470,7 +1470,7 @@ func TestFormatMergeRequestsMarkdown_WithData(t *testing.T) {
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
-		"- Use action 'group_milestone.issues' to see the issues in this milestone instead\n"
+		"- Use action 'group.group_milestone_issues' to see the issues in this milestone instead\n"
 	if md != want {
 		t.Errorf("FormatMergeRequestsMarkdownString()\n got %q\nwant %q", md, want)
 	}
@@ -1513,7 +1513,7 @@ func TestFormatBurndownChartEventsMarkdown_WithData(t *testing.T) {
 		"| 6 Jan 2026 00:00 UTC | - | remove |\n\n" +
 		"Page 1 of 1 | 2 items total | 20 per page\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'group_milestone.issues' to see the issues whose weight these events moved\n"
+		"- Use action 'group.group_milestone_issues' to see the issues whose weight these events moved\n"
 	if md != want {
 		t.Errorf("FormatBurndownChartEventsMarkdownString()\n got %q\nwant %q", md, want)
 	}

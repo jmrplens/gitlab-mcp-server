@@ -8,20 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The canonical catalog IDs the hints name that the specs do not already
-// spell. The asset-link actions are projected under the release domain, so the
-// ID every surface resolves is "release.link_list" and not the
-// "release_link.list" the cross-link constant in action_specs.go spells.
-const (
-	hintActionReleaseLinkList   = "release.link_list"
-	actionReleaseCreate         = "release.create"
-	actionReleaseUpdate         = "release.update"
-	actionReleaseLinkCreate     = "release.link_create"
-	actionReleaseLinkCreateBulk = "release.link_create_batch"
-	actionPackagePublishAndLink = "package.publish_and_link"
-	actionTagList               = "tag.list"
-)
-
 type releaseNotFoundOutput struct {
 	Identifier string
 }
@@ -128,7 +114,7 @@ func FormatMarkdown(r Output) string {
 	c.URL(releaseWebURL(r))
 	c.Text("Description", r.Description)
 	c.End(
-		toolutil.HintAction(hintActionReleaseLinkList, "see the assets linked to this release"),
+		toolutil.HintAction(actionReleaseLinkList, "see the assets linked to this release"),
 		toolutil.HintAction(actionReleaseLinkCreate, "add a single asset link"),
 		toolutil.HintAction(actionReleaseLinkCreateBulk, "add several asset links in one call"),
 		toolutil.HintAction(actionPackagePublishAndLink, "upload a binary and link it to this release"),

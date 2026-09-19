@@ -5,11 +5,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionListGroup   = "issue.iteration_list_group"
-	actionListProject = "issue.iteration_list_project"
-)
+// The hints below name the canonical action IDs declared in action_specs.go,
+// the one form every surface resolves.
 
 // FormatListMarkdown renders a page of project iterations as the shared
 // iteration table, with the project's own title and empty-list sentence.

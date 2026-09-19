@@ -5,13 +5,44 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The names these specs register under, and the canonical catalog IDs they are
+// published as.
+//
+// A spec is registered under its bare name and the catalog publishes it under
+// the group it is aggregated into, so the ID a model calls is domainGroup plus
+// that name. The two used to be written separately, and every RelatedActions
+// entry in this file spelled the bare form: "group_member_edit" resolves to no
+// action, and a model that followed one was answered "unknown action". Each ID
+// below is now concatenated from the same constant the spec is built from, so
+// renaming an action moves both at once.
 const (
+	// domainGroup is the catalog group these specs are aggregated into, by
+	// buildGroupActionSpecs in internal/tools/action_specs.go.
+	domainGroup = "group."
+
+	specMemberGet            = "group_member_get"
+	specMemberGetInherited   = "group_member_get_inherited"
+	specMemberAdd            = "group_member_add"
+	specMemberEdit           = "group_member_edit"
+	specMemberRemove         = "group_member_remove"
+	specMemberShare          = "group_member_share"
+	specMemberUnshare        = "group_member_unshare"
+	specBillableMembers      = "group_billable_members_list"
+	specBillableMemberships  = "group_billable_member_memberships_list"
+	specBillableMemberRemove = "group_billable_member_remove"
+
 	actionGroupGet     = "group.get"
 	actionGroupMembers = "group.members"
 
-	actionBillableMembers           = "group_billable_members_list"
-	actionBillableMemberMemberships = "group_billable_member_memberships_list"
-	actionBillableMemberRemove      = "group_billable_member_remove"
+	actionMemberGet            = domainGroup + specMemberGet
+	actionMemberGetInherited   = domainGroup + specMemberGetInherited
+	actionMemberEdit           = domainGroup + specMemberEdit
+	actionMemberRemove         = domainGroup + specMemberRemove
+	actionMemberShare          = domainGroup + specMemberShare
+	actionMemberUnshare        = domainGroup + specMemberUnshare
+	actionBillableMembers      = domainGroup + specBillableMembers
+	actionBillableMemberships  = domainGroup + specBillableMemberships
+	actionBillableMemberRemove = domainGroup + specBillableMemberRemove
 
 	toolBillableMembers           = "gitlab_list_billable_group_members"
 	toolBillableMemberMemberships = "gitlab_list_billable_member_memberships"
@@ -26,16 +57,16 @@ const (
 // individual-tool Description) per the 1:1 audit R-META requirement.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		groupMemberReadSpec("group_member_get", toolutil.RouteAction(client, GetMember), "gitlab_group_member_get"),
-		groupMemberReadSpec("group_member_get_inherited", toolutil.RouteAction(client, GetInheritedMember), "gitlab_group_member_get_inherited"),
-		groupMemberCreateSpec("group_member_add", toolutil.RouteAction(client, AddMember), "gitlab_group_member_add"),
-		groupMemberUpdateSpec("group_member_edit", toolutil.RouteAction(client, EditMember), "gitlab_group_member_edit"),
-		groupMemberDeleteSpec("group_member_remove", toolutil.DestructiveAction(client, removeMemberOutput), "gitlab_group_member_remove"),
-		groupMemberCreateSpec("group_member_share", toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
-		groupMemberDeleteSpec("group_member_unshare", toolutil.DestructiveAction(client, unshareGroupOutput), "gitlab_group_unshare"),
+		groupMemberReadSpec(specMemberGet, toolutil.RouteAction(client, GetMember), "gitlab_group_member_get"),
+		groupMemberReadSpec(specMemberGetInherited, toolutil.RouteAction(client, GetInheritedMember), "gitlab_group_member_get_inherited"),
+		groupMemberCreateSpec(specMemberAdd, toolutil.RouteAction(client, AddMember), "gitlab_group_member_add"),
+		groupMemberUpdateSpec(specMemberEdit, toolutil.RouteAction(client, EditMember), "gitlab_group_member_edit"),
+		groupMemberDeleteSpec(specMemberRemove, toolutil.DestructiveAction(client, removeMemberOutput), "gitlab_group_member_remove"),
+		groupMemberCreateSpec(specMemberShare, toolutil.RouteAction(client, ShareGroup), "gitlab_group_share"),
+		groupMemberDeleteSpec(specMemberUnshare, toolutil.DestructiveAction(client, unshareGroupOutput), "gitlab_group_unshare"),
 		billableMembersListSpec(client),
-		billableMemberReadSpec(actionBillableMemberMemberships, toolutil.RouteAction(client, ListBillableMemberMemberships), toolBillableMemberMemberships),
-		billableMemberDeleteSpec(actionBillableMemberRemove, toolutil.DestructiveAction(client, removeBillableMemberOutput), toolBillableMemberRemove),
+		billableMemberReadSpec(specBillableMemberships, toolutil.RouteAction(client, ListBillableMemberMemberships), toolBillableMemberMemberships),
+		billableMemberDeleteSpec(specBillableMemberRemove, toolutil.DestructiveAction(client, removeBillableMemberOutput), toolBillableMemberRemove),
 	}
 }
 
@@ -67,7 +98,7 @@ func billableMembersListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			"last_activity_on_asc", "last_activity_on_desc",
 		}}),
 	}
-	return toolutil.NewReadActionSpec(actionBillableMembers, toolutil.RouteAction(client, ListBillableMembers), options)
+	return toolutil.NewReadActionSpec(specBillableMembers, toolutil.RouteAction(client, ListBillableMembers), options)
 }
 
 // billableMemberDeleteSpec builds a destructive, Premium/Ultimate-gated
@@ -224,7 +255,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_get": {
 		usage:   "Get one direct member of a group by group_id plus user_id. Use this when the prompt names a known user and group and you need that user's exact access level, expiry, or custom member role. Inherited members are not returned. Use group_member_get_inherited for those.",
 		aliases: []string{"get group member", "show group member access", "check user role in group"},
-		related: []string{actionGroupMembers, "group_member_get_inherited", "group_member_edit"},
+		related: []string{actionGroupMembers, actionMemberGetInherited, actionMemberEdit},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
 			"user_id":  userIDGuidance("Numeric user ID of the direct group member to inspect."),
@@ -234,7 +265,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_get_inherited": {
 		usage:   "Get a member of a group including membership inherited from ancestor groups, by group_id plus user_id. Use this when a user may be a member via a parent group rather than a direct membership.",
 		aliases: []string{"get inherited group member", "show inherited member access", "check inherited role"},
-		related: []string{"group_member_get", actionGroupMembers, "group_member_edit"},
+		related: []string{actionMemberGet, actionGroupMembers, actionMemberEdit},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
 			"user_id":  userIDGuidance("Numeric user ID of the member to inspect, including inherited memberships."),
@@ -244,7 +275,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_add": {
 		usage:   "Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally member_role_id for a custom role (Premium/Ultimate) or expires_at.",
 		aliases: []string{"add group member", "add existing user to group", "grant group access"},
-		related: []string{actionGroupMembers, "group_member_edit", "group_member_get"},
+		related: []string{actionGroupMembers, actionMemberEdit, actionMemberGet},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id":     groupIDGuidance(),
 			"user_id":      userIDGuidance("Numeric user ID to add as a member (alternative to username)."),
@@ -261,7 +292,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_edit": {
 		usage:   "Edit a direct group member's access level, expiry, or custom member role by group_id plus user_id. Use this to promote, demote, change expiry, or reassign the custom role of an existing direct member. Inherited members cannot be edited here.",
 		aliases: []string{"edit group member", "change group member access level", "update group role"},
-		related: []string{actionGroupMembers, "group_member_get", "group_member_remove"},
+		related: []string{actionGroupMembers, actionMemberGet, actionMemberRemove},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id":     groupIDGuidance(),
 			"user_id":      userIDGuidance("Numeric user ID of the direct member to edit."),
@@ -278,7 +309,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_remove": {
 		usage:   "Remove a direct member from a group by group_id plus user_id. Destructive: requires confirmation. Inherited members cannot be removed here. Remove them from the ancestor group where they were added directly.",
 		aliases: []string{"remove group member", "revoke group access", "delete group member"},
-		related: []string{actionGroupMembers, "group_member_get", "group_member_edit"},
+		related: []string{actionGroupMembers, actionMemberGet, actionMemberEdit},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
 			"user_id":  userIDGuidance("Numeric user ID of the direct member to remove."),
@@ -288,7 +319,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_share": {
 		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group). Group shares accept only Guest/Reporter/Developer/Maintainer levels.",
 		aliases: []string{"share group with group", "grant group access to another group", "add group share"},
-		related: []string{"group_member_unshare", actionGroupGet, actionGroupMembers},
+		related: []string{actionMemberUnshare, actionGroupGet, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id":       groupIDGuidance(),
 			"share_group_id": shareGroupIDGuidance("Numeric ID of the recipient group that should gain access."),
@@ -304,7 +335,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_unshare": {
 		usage:   "Stop sharing a group with another group by group_id plus share_group_id. Destructive: requires confirmation. Use this to revoke a previously created group share.",
 		aliases: []string{"unshare group", "revoke group share", "remove group share"},
-		related: []string{"group_member_share", actionGroupGet, actionGroupMembers},
+		related: []string{actionMemberShare, actionGroupGet, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id":       groupIDGuidance(),
 			"share_group_id": shareGroupIDGuidance("Numeric ID of the group whose share should be revoked."),
@@ -314,7 +345,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_list_billable_group_members": {
 		usage:   "List the billable members of a group: the users who count toward the group's seat usage, including members inherited from subgroups and shared projects. Use this to audit license/seat consumption (Premium/Ultimate). Filter with search and order with sort.",
 		aliases: []string{"list billable group members", "show seats used in group", "audit billable members", "list licensed users in group"},
-		related: []string{actionBillableMemberMemberships, actionBillableMemberRemove, actionGroupMembers},
+		related: []string{actionBillableMemberships, actionBillableMemberRemove, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
 			"search": {
@@ -345,7 +376,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_remove_billable_group_member": {
 		usage:   "Remove a billable member from a group to free a seat (Premium/Ultimate). Destructive: requires confirmation. Only members whose 'removable' flag is true can be removed here. The last owner cannot be removed. Supply group_id plus the billable member's user_id.",
 		aliases: []string{"remove billable group member", "free a group seat", "revoke billable member", "remove licensed user from group"},
-		related: []string{actionBillableMembers, actionBillableMemberMemberships, actionGroupMembers},
+		related: []string{actionBillableMembers, actionBillableMemberships, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
 			"user_id":  userIDGuidance("Numeric user ID of the removable billable member. Check the 'removable' flag from gitlab_list_billable_group_members first."),

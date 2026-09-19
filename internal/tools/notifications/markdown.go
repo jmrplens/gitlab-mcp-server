@@ -29,9 +29,9 @@ func FormatMarkdownString(out Output) string {
 		writeEventRows(c.Section("Custom Events"), *out.Events)
 	}
 	c.End(
-		toolutil.HintAction("user.notification_global_update", "change the account-wide preferences"),
-		toolutil.HintAction("user.notification_project_update", "override them for one project"),
-		toolutil.HintAction("user.notification_group_update", "override them for one group"),
+		toolutil.HintAction(canonicalID(actionGlobalUpdate), "change the account-wide preferences"),
+		toolutil.HintAction(canonicalID(actionProjectUpdate), "override them for one project"),
+		toolutil.HintAction(canonicalID(actionGroupUpdate), "override them for one group"),
 	)
 	return b.String()
 }

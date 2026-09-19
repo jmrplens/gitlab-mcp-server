@@ -1957,7 +1957,11 @@ func TestFormatRelatedMRsMarkdown_Populated(t *testing.T) {
 		"\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'merge_request.get' to view one merge request in full\n" +
-		"- Use action 'merge_request.changes_get' to see its diff\n"
+		// The diff is a route on the mr_review catalog group, not on
+		// merge_request. This wanted merge_request.changes_get, which is not
+		// an action, so it was holding the formatter to a hint a model could
+		// not follow.
+		"- Use action 'mr_review.changes_get' to see its diff\n"
 	if md != want {
 		t.Errorf("FormatRelatedMRsMarkdown()\n got %q\nwant %q", md, want)
 	}

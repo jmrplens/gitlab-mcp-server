@@ -8,15 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-// These actions are routes on the gitlab_repository catalog group, so each ID
-// carries that domain.
-const (
-	hintListSubmodules    = "repository.list_submodules"
-	hintReadSubmoduleFile = "repository.read_submodule_file"
-	hintUpdateSubmodule   = "repository.update_submodule"
-)
-
 // shortSHA is a git object id abbreviated to the eight characters a reader
 // compares by, or the whole id when it is shorter.
 func shortSHA(sha string) string {
@@ -48,8 +39,8 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction(hintReadSubmoduleFile, "read a file out of one submodule"),
-		toolutil.HintAction(hintUpdateSubmodule, "move a submodule to another commit"),
+		toolutil.HintAction(actionReadSubmoduleFile, "read a file out of one submodule"),
+		toolutil.HintAction(actionUpdateSubmodule, "move a submodule to another commit"),
 	)
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
@@ -77,7 +68,7 @@ func FormatReadMarkdown(out ReadOutput) *mcp.CallToolResult {
 	// as much the pusher's choice, which is why the info string goes through the
 	// same helper rather than into the fence line by hand.
 	c.Fence("Content", ext, out.Content)
-	c.End(toolutil.HintAction(hintUpdateSubmodule, "change the commit SHA this submodule is pinned to"))
+	c.End(toolutil.HintAction(actionUpdateSubmodule, "change the commit SHA this submodule is pinned to"))
 	return toolutil.ToolResultWithMarkdown(b.String())
 }
 
@@ -99,8 +90,8 @@ func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
 	c.Text("Message", out.Message)
 	c.Field("Status", out.Status)
 	c.End(
-		toolutil.HintAction(hintListSubmodules, "see every submodule of this repository"),
-		toolutil.HintAction(hintReadSubmoduleFile, "read a file at the new commit"),
+		toolutil.HintAction(actionListSubmodules, "see every submodule of this repository"),
+		toolutil.HintAction(actionReadSubmoduleFile, "read a file at the new commit"),
 	)
 	return toolutil.ToolResultWithMarkdown(b.String())
 }

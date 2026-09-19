@@ -5,6 +5,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes to a model. Both license
+// actions are aggregated into the shared "template" group rather than a group
+// named after this package, so the domain is "template" and never
+// "licensetemplates".
+const (
+	actionLicenseGet           = "template.license_get"
+	actionLicenseList          = "template.license_list"
+	actionProjectCreate        = "project.create"
+	actionRepositoryFileCreate = "repository.file_create"
+)
+
 // ActionSpecs returns canonical specs for license template actions
 // exposed as MCP tools. The list and get routes are projected into the
 // dynamic, meta, individual, and audit surfaces by the action catalog
@@ -35,13 +46,13 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		OwnerPackage:   "licensetemplates",
 		Tags:           []string{"template", "license"},
 		Aliases:        []string{individualTool, "list license templates", "show available open-source licenses", "browse MIT/Apache/GPL templates"},
-		RelatedActions: []string{"licensetemplates.license_get", "repository.file_create", "project.create"},
+		RelatedActions: []string{actionLicenseGet, actionRepositoryFileCreate, actionProjectCreate},
 		Usage:          "List available license templates with optional popular filter, ordering, and keyset pagination.",
 	}
 	if actionName == "license_get" {
 		opts.Usage = "Get one license template by key for project README/LICENSE scaffolding."
 		opts.Aliases = []string{individualTool, "get license template by key", "render LICENSE file for a project", "fetch MIT/Apache license text"}
-		opts.RelatedActions = []string{"licensetemplates.license_list", "repository.file_create", "project.create"}
+		opts.RelatedActions = []string{actionLicenseList, actionRepositoryFileCreate, actionProjectCreate}
 		opts.IndividualTool.Description = "Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_file_create."
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key":      {SemanticRole: "template_key", ValueSource: "License key returned by license template list output.", ExampleBinding: `params.key:"mit"`},

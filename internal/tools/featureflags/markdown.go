@@ -8,14 +8,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionGet     = "feature_flags.feature_flag_get"
-	actionCreate  = "feature_flags.feature_flag_create"
-	actionUpdate  = "feature_flags.feature_flag_update"
-	actionDelete  = "feature_flags.feature_flag_delete"
-	actionUseList = "feature_flags.ff_user_list_get"
-)
+// The canonical action IDs the hints below name are declared once in
+// action_specs.go, beside the specs that define them, so the hints and the
+// RelatedActions metadata cannot drift apart again.
 
 // strategyTargetCell names the user list a gitlabUserList strategy targets.
 // Without it the strategy row said "gitlabUserList" and nothing about which
@@ -62,9 +57,9 @@ func FormatFeatureFlagMarkdown(out Output) string {
 	}
 	writeStrategies(c, out.Strategies)
 	c.End(
-		toolutil.HintAction(actionUpdate, "toggle this flag active or inactive"),
-		toolutil.HintAction(actionDelete, "remove this feature flag"),
-		toolutil.HintAction(actionUseList, "read a user list a strategy targets"),
+		toolutil.HintAction(actionFeatureFlagUpdate, "toggle this flag active or inactive"),
+		toolutil.HintAction(actionFeatureFlagDelete, "remove this feature flag"),
+		toolutil.HintAction(actionFeatureFlagUserListGet, "read a user list a strategy targets"),
 	)
 	return b.String()
 }
@@ -87,8 +82,8 @@ func FormatListFeatureFlagsMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(actionGet, "read one flag with its strategies and scopes"),
-		toolutil.HintAction(actionCreate, "add a new feature flag"),
+		toolutil.HintAction(actionFeatureFlagGet, "read one flag with its strategies and scopes"),
+		toolutil.HintAction(actionFeatureFlagCreate, "add a new feature flag"),
 	)
 	return b.String()
 }

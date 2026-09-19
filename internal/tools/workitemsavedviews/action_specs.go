@@ -60,7 +60,7 @@ func getSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 func listSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := savedViewOptions("gitlab_work_item_saved_view_list")
 	opts.ContentKind = toolutil.ActionSpecContentList
-	opts.Usage = "List the work item saved views under one group or project namespace, with cursor pagination. Use this to discover a view's numeric ID before getting, updating, subscribing to, or deleting it. Filters are omitted from every entry, so read them with work_item_saved_view.get."
+	opts.Usage = "List the work item saved views under one group or project namespace, with cursor pagination. Use this to discover a view's numeric ID before getting, updating, subscribing to, or deleting it. Filters are omitted from every entry, so read them with " + actionGet + "."
 	opts.Aliases = append(opts.Aliases, "list work item saved views", "show saved views for namespace", "find saved work item filters")
 	opts.RelatedActions = []string{actionGet, actionCreate, actionWorkItemList}
 	opts.IndividualTool.Description = "List work item saved views for a group or project namespace with cursor pagination. Returns: id, name, description, private flag, subscription state, and sort order per view, plus pagination cursors. Filters are omitted here, so read one view with gitlab_work_item_saved_view_get. " + experimentalNote + " See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_create, gitlab_list_work_items."
@@ -81,7 +81,7 @@ func createSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 // updateSpec builds the canonical update spec for an existing saved view.
 func updateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := savedViewOptions("gitlab_work_item_saved_view_update")
-	opts.Usage = "Update a work item saved view by its numeric saved_view_id. Every field is optional and an omitted one is left unchanged. Supplying filters replaces the stored filter set wholesale, so read the current one with work_item_saved_view.get first when the intent is to add a condition rather than replace the query."
+	opts.Usage = "Update a work item saved view by its numeric saved_view_id. Every field is optional and an omitted one is left unchanged. Supplying filters replaces the stored filter set wholesale, so read the current one with " + actionGet + " first when the intent is to add a condition rather than replace the query."
 	opts.Aliases = append(opts.Aliases, "update work item saved view", "rename saved view", "change saved view filters")
 	opts.RelatedActions = []string{actionGet, actionList, actionDelete}
 	opts.InputSchemaOverrides = mutationSchemaOverrides()
@@ -92,7 +92,7 @@ func updateSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 // deleteSpec builds the canonical destructive spec for removing a saved view.
 func deleteSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	opts := savedViewOptions("gitlab_work_item_saved_view_delete")
-	opts.Usage = "Permanently delete a work item saved view by its numeric saved_view_id. Deletion is irreversible and removes the view for everyone it was shared with, so confirm the ID with work_item_saved_view.list first."
+	opts.Usage = "Permanently delete a work item saved view by its numeric saved_view_id. Deletion is irreversible and removes the view for everyone it was shared with, so confirm the ID with " + actionList + " first."
 	opts.Aliases = append(opts.Aliases, "delete work item saved view", "remove saved view", "discard saved work item filter")
 	opts.RelatedActions = []string{actionGet, actionList}
 	opts.IndividualTool.Description = "Delete a work item saved view permanently by numeric ID. Returns: a success confirmation naming the view. " + experimentalNote + " See also: gitlab_work_item_saved_view_get, gitlab_work_item_saved_view_list."

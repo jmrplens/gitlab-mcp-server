@@ -2006,7 +2006,7 @@ const (
 	commitMRsHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
 		"- Use action 'merge_request.get' to view one merge request\n" +
-		"- Use action 'merge_request.changes_get' to see its diff\n"
+		"- Use action 'mr_review.changes_get' to see its diff\n"
 
 	commitSignatureHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 		"- Use action 'repository.commit_get' to view the full commit details\n"

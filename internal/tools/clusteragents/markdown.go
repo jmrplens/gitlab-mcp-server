@@ -8,19 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. They used to name one surface's tool
-// ("Use action 'get'", "Use `gitlab_get_cluster_agent_token`"), which is a
-// route the default dynamic surface does not answer and the meta surface
-// spells differently; the catalog ID is the one form every surface resolves.
-const (
-	actionAgentGet    = "admin.cluster_agent_get"
-	actionAgentList   = "admin.cluster_agent_list"
-	actionTokenGet    = "admin.cluster_agent_token_get"
-	actionTokenList   = "admin.cluster_agent_token_list"
-	actionTokenCreate = "admin.cluster_agent_token_create"
-	actionTokenRevoke = "admin.cluster_agent_token_revoke"
-)
-
 // FormatAgentsListMarkdown renders cluster agents as a compact Markdown table.
 func FormatAgentsListMarkdown(out ListAgentsOutput) string {
 	if len(out.Agents) == 0 {

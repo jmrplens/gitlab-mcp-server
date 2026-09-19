@@ -16,6 +16,19 @@ const (
 	awardEmojiHintVerifyWithNote = "Verify the award_id, note_id, iid, and project_id are correct"
 )
 
+// The canonical catalog IDs the related-action lists name: the awardable this
+// package reacts to, and the list of notes on it that holds the note_id a note
+// reaction needs. The snippet pair is the project snippet rather than the
+// personal one, since every route here takes a project_id.
+const (
+	actionIssueGet          = "issue.get"
+	actionIssueNoteList     = "issue.note_list"
+	actionMergeRequestGet   = "merge_request.get"
+	actionMRNoteList        = "mr_review.note_list"
+	actionSnippetProjectGet = "snippet.project_get"
+	actionSnippetNoteList   = "snippet.note_list"
+)
+
 // awardEmojiDescriptions maps each individual award-emoji tool name to its
 // "Returns: … See also: …" description (1:1 audit R-META). The table is shared
 // across the issue/MR/snippet resource and note variants to keep the
@@ -161,7 +174,7 @@ func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
 	opts.Tags = []string{"issue", "emoji"}
 	opts.Usage = "Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues."
-	opts.RelatedActions = []string{"issue.get", "issue_note.list"}
+	opts.RelatedActions = []string{actionIssueGet, actionIssueNoteList}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole:   "scope_project",
@@ -207,7 +220,7 @@ func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions 
 	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
 	opts.Tags = []string{"merge_request", "emoji"}
 	opts.Usage = "Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals."
-	opts.RelatedActions = []string{"merge_request.get", "mr_note.list"}
+	opts.RelatedActions = []string{actionMergeRequestGet, actionMRNoteList}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole:   "scope_project",
@@ -239,7 +252,7 @@ func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
 	opts.Tags = []string{"snippet", "emoji"}
 	opts.Usage = "Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets."
-	opts.RelatedActions = []string{"snippet.get", "snippet_note.list"}
+	opts.RelatedActions = []string{actionSnippetProjectGet, actionSnippetNoteList}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole:   "scope_project",
