@@ -115,6 +115,7 @@ func CloneMetaSchemaRoutes(routes map[string]ActionMap) map[string]ActionMap {
 // them without reaching the original.
 func CloneActionRoute(route ActionRoute) ActionRoute {
 	route.Aliases = cloneRouteStrings(route.Aliases)
+	route.CompatibilityAliases = cloneRouteStrings(route.CompatibilityAliases)
 	route.Tags = cloneRouteStrings(route.Tags)
 	route.RelatedActions = cloneRouteStrings(route.RelatedActions)
 	return route
