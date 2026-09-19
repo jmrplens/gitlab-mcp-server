@@ -4,8 +4,12 @@
 package runnercontrollers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -25,6 +29,38 @@ const (
 
 func nopHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})
+}
+
+// requestBody reads a create or update body as a map, treating a body client-go
+// sent empty as the empty object it means.
+func requestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("reading the request body: %v", err)
+		return nil
+	}
+	body := map[string]any{}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if decodeErr := json.Unmarshal(raw, &body); decodeErr != nil {
+			t.Errorf("decoding the request body %q: %v", raw, decodeErr)
+		}
+	}
+	return body
+}
+
+// assertOptionalField holds one optional field of a request body to what the
+// caller asked for: GitLab reads a key it receives, so a field left empty must
+// be absent rather than sent as "", which would clear the stored value.
+func assertOptionalField(t *testing.T, body map[string]any, key, want string) {
+	t.Helper()
+	got, sent := body[key]
+	switch {
+	case sent != (want != ""):
+		t.Errorf("%s present in the request = %t, want %t (body %v)", key, sent, want != "", body)
+	case sent && got != want:
+		t.Errorf("%s sent as %v, want %q", key, got, want)
+	}
 }
 
 // TestList_Success verifies that List returns controllers with pagination.
@@ -198,6 +234,54 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
+// TestGet_EveryFieldReadFromItsOwnKey drives the converter through the handler
+// with a controller whose values all differ, then with one GitLab sent without
+// timestamps. The first is the only assertion that would fail if a field were
+// read from a neighbour's key; the second pins that an absent timestamp stays
+// empty instead of being formatted from a nil time.
+func TestGet_EveryFieldReadFromItsOwnKey(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want DetailsOutput
+	}{
+		{
+			name: "every value distinct",
+			body: `{"id":77,"description":"prod-fleet","state":"dry_run","connected":true,` +
+				`"created_at":"2026-03-04T05:06:07Z","updated_at":"2026-07-08T09:10:11Z"}`,
+			want: DetailsOutput{
+				ID: 77, Description: "prod-fleet", State: "dry_run",
+				CreatedAt: "2026-03-04T05:06:07Z", UpdatedAt: "2026-07-08T09:10:11Z",
+				Connected: true,
+			},
+		},
+		{
+			name: "timestamps omitted",
+			body: `{"id":77,"description":"prod-fleet","state":"dry_run"}`,
+			want: DetailsOutput{ID: 77, Description: "prod-fleet", State: "dry_run"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/runner_controllers/77" {
+					t.Errorf("path = %s, want /api/v4/runner_controllers/77", r.URL.Path)
+				}
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+
+			got, err := Get(t.Context(), client, GetInput{ControllerID: 77})
+			if err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("details = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestGet_ContextCancelled verifies that Get respects context cancellation.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -265,6 +349,39 @@ func TestCreate_BadRequest(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "experimental admin-only API") {
 		t.Fatalf("error = %v, want admin-only hint", err)
+	}
+}
+
+// TestCreate_OptionalFields_SentOnlyWhenTheCallerSetThem drives every
+// combination of the two optional fields through the handler and reads the body
+// GitLab would receive. Nothing else in the package looks at the request, so an
+// inverted guard would send an empty description over a controller's real one
+// while dropping the description a caller did set.
+func TestCreate_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		state       string
+	}{
+		{name: "both", description: "prod-fleet", state: "dry_run"},
+		{name: "description only", description: "prod-fleet"},
+		{name: "state only", state: "disabled"},
+		{name: "neither"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body := requestBody(t, r)
+				assertOptionalField(t, body, "description", tc.description)
+				assertOptionalField(t, body, "state", tc.state)
+				testutil.RespondJSON(w, http.StatusCreated, sampleControllerJSON)
+			}))
+
+			if _, err := Create(t.Context(), client, CreateInput{Description: tc.description, State: tc.state}); err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+		})
 	}
 }
 
@@ -336,6 +453,42 @@ func TestUpdate_NotFound(t *testing.T) {
 	}
 }
 
+// TestUpdate_OptionalFields_SentOnlyWhenTheCallerSetThem asks the same of the
+// update body, and of the path: an update is a partial edit, so a key GitLab
+// does not receive is the only way to leave the stored value alone, and the
+// controller edited is the one the caller named.
+func TestUpdate_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		state       string
+	}{
+		{name: "both", description: "prod-fleet", state: "dry_run"},
+		{name: "description only", description: "prod-fleet"},
+		{name: "state only", state: "disabled"},
+		{name: "neither"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v4/runner_controllers/77" {
+					t.Errorf("path = %s, want /api/v4/runner_controllers/77", r.URL.Path)
+				}
+				body := requestBody(t, r)
+				assertOptionalField(t, body, "description", tc.description)
+				assertOptionalField(t, body, "state", tc.state)
+				testutil.RespondJSON(w, http.StatusOK, sampleControllerJSON)
+			}))
+
+			_, err := Update(t.Context(), client, UpdateInput{ControllerID: 77, Description: tc.description, State: tc.state})
+			if err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+		})
+	}
+}
+
 // TestUpdate_ContextCancelled verifies that Update respects context cancellation.
 func TestUpdate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -347,13 +500,19 @@ func TestUpdate_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete succeeds.
+// TestDelete_Success verifies that Delete removes the controller the caller
+// named, and no other: the path is the whole of what a delete says, so a
+// handler reading the wrong field would decommission somebody else's
+// controller and still report success.
 func TestDelete_Success(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/runner_controllers/77" {
+			t.Errorf("request = %s %s, want DELETE /api/v4/runner_controllers/77", r.Method, r.URL.Path)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	err := Delete(context.Background(), client, DeleteInput{ControllerID: 1})
+	err := Delete(context.Background(), client, DeleteInput{ControllerID: 77})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
 	}

@@ -4,13 +4,21 @@ package runnercontrollers
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/runnercontrollertokens"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// runnerGroup is the catalog group these specs are aggregated into by
+// internal/tools/runners/action_specs.go, so a spec named controller_get is
+// published as runner.controller_get.
+const runnerGroup = "runner."
 
 // TestActionSpecs_CallAllRoutes exercises every runner controller tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
@@ -109,6 +117,83 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+}
+
+// TestActionSpecs_EveryToolCarriesItsOwnDiscoveryMetadata reads the published
+// surface rather than the table behind it: a spec whose usage, aliases, related
+// actions or individual description went missing is one a model discovers by a
+// generic line, and the discovery audit counts such a line as present.
+func TestActionSpecs_EveryToolCarriesItsOwnDiscoveryMetadata(t *testing.T) {
+	byTool := runnerControllerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerActionHandler())))
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" || !strings.Contains(spec.Usage, "runner controller") {
+				t.Errorf("%s usage is not about runner controllers: %q", tool, spec.Usage)
+			}
+			if len(spec.Aliases) < 2 || spec.Aliases[0] != tool {
+				t.Errorf("%s aliases = %v, want the tool name plus its own phrasings", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s names no related actions", tool)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Errorf("%s has no individual-tool description", tool)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_RelatedActionsNameRegisteredTools holds every cross-link to
+// the set this package registers. Nothing in the repository validates these
+// strings, so a misspelled one is a dead end a model follows once and abandons.
+func TestActionSpecs_RelatedActionsNameRegisteredTools(t *testing.T) {
+	byTool := runnerControllerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerActionHandler())))
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			for _, related := range spec.RelatedActions {
+				if _, ok := byTool[related]; !ok {
+					t.Errorf("%s names related action %q, which this package does not register", tool, related)
+				}
+				if related == tool {
+					t.Errorf("%s names itself as a related action", tool)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownHints_NameActionsTheRunnerGroupRegisters resolves every canonical
+// ID the three cards point a model at against the specs the runner group really
+// publishes, this package's and the two sibling packages' aggregated beside it.
+// Nothing else in the repository checks these strings, and a misspelled one
+// answers "unknown action" the moment a model follows the hint.
+func TestMarkdownHints_NameActionsTheRunnerGroupRegisters(t *testing.T) {
+	client := testutil.NewTestClient(t, nopHandler())
+	specs := ActionSpecs(client)
+	specs = append(specs, runnercontrollertokens.ActionSpecs(client)...)
+	specs = append(specs, runnercontrollerscopes.ActionSpecs(client)...)
+
+	published := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		published[runnerGroup+spec.Name] = struct{}{}
+	}
+
+	hints := []string{
+		actionControllerGet,
+		actionControllerList,
+		actionControllerUpdate,
+		actionControllerTokenList,
+		actionControllerScopeList,
+	}
+	for _, id := range hints {
+		t.Run(id, func(t *testing.T) {
+			if _, ok := published[id]; !ok {
+				t.Errorf("%s is not an action the runner group registers", id)
+			}
+		})
 	}
 }
 
