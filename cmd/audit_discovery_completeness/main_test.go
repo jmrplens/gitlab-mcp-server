@@ -744,75 +744,112 @@ func TestAliasesOnlyToolname(t *testing.T) {
 	}
 }
 
-// TestMissingParameterGuidance pins the scope-suggestive heuristic.
-func TestMissingParameterGuidance(t *testing.T) {
+// specWithSchema builds a spec whose input schema declares the given
+// properties, all of them required, so a case table can state the parameter
+// names it cares about and nothing else.
+func specWithSchema(required ...string) toolutil.ActionSpec {
+	props := make(map[string]any, len(required))
+	for _, name := range required {
+		props[name] = map[string]any{"type": "string"}
+	}
+	return toolutil.ActionSpec{Route: toolutil.ActionRoute{InputSchema: map[string]any{
+		"properties": props,
+		"required":   required,
+	}}}
+}
+
+// TestUnguidedRequiredIdentifiers pins the rewritten check. The old question
+// ("any guidance at all, given a scope-suggestive parameter") could not fire,
+// because internal/tools fills the canonical scope defaults into every spec
+// before this auditor reads one; these cases hold the two halves of the
+// replacement: guidance no richer than that central fill, and a required
+// identifier the fill does not cover.
+func TestUnguidedRequiredIdentifiers(t *testing.T) {
+	withGuidance := func(spec toolutil.ActionSpec, guidance map[string]toolutil.ParameterGuidance) toolutil.ActionSpec {
+		spec.ParameterGuidance = guidance
+		return spec
+	}
 	cases := []struct {
 		name string
 		spec toolutil.ActionSpec
-		want bool
+		want []string
 	}{
 		{
-			name: "scope-suggestive id without guidance",
-			spec: toolutil.ActionSpec{
-				Route: toolutil.ActionRoute{
-					InputSchema: map[string]any{
-						"properties": map[string]any{
-							"project_id": map[string]any{"type": "string"},
-							"name":       map[string]any{"type": "string"},
-						},
-					},
-				},
-			},
-			want: true,
+			name: "required identifier beside a centrally filled scope",
+			spec: toolutil.FillScopeParameterGuidanceSingle(specWithSchema("project_id", "hook_id")),
+			want: []string{"hook_id"},
 		},
 		{
-			name: "scope-suggestive name without guidance",
-			spec: toolutil.ActionSpec{
-				Route: toolutil.ActionRoute{
-					InputSchema: map[string]any{
-						"properties": map[string]any{
-							"ref": map[string]any{"type": "string"},
-						},
-					},
-				},
-			},
-			want: true,
+			name: "several identifiers are all named, sorted",
+			spec: specWithSchema("token_id", "agent_id"),
+			want: []string{"agent_id", "token_id"},
 		},
 		{
-			name: "guidance present",
-			spec: toolutil.ActionSpec{
-				Route: toolutil.ActionRoute{
-					InputSchema: map[string]any{
-						"properties": map[string]any{
-							"project_id": map[string]any{"type": "string"},
-						},
-					},
-				},
-				ParameterGuidance: map[string]toolutil.ParameterGuidance{
-					"project_id": {SemanticRole: "scope_project"},
-				},
-			},
-			want: false,
+			name: "authored guidance anywhere clears the action",
+			spec: withGuidance(specWithSchema("project_id", "hook_id"), map[string]toolutil.ParameterGuidance{
+				"hook_id": {SemanticRole: "system_hook_id"},
+			}),
+			want: nil,
 		},
 		{
-			name: "no scope-suggestive names",
-			spec: toolutil.ActionSpec{
-				Route: toolutil.ActionRoute{
-					InputSchema: map[string]any{
-						"properties": map[string]any{
-							"name":  map[string]any{"type": "string"},
-							"color": map[string]any{"type": "string"},
-						},
-					},
-				},
-			},
-			want: false,
+			name: "guidance richer than the central default is authored",
+			spec: withGuidance(specWithSchema("project_id", "hook_id"), map[string]toolutil.ParameterGuidance{
+				"project_id": {SemanticRole: "scope_project", CommonConfusions: []string{"not the group"}},
+			}),
+			want: nil,
+		},
+		{
+			name: "only scope-suggestive parameters, all covered by the fill",
+			spec: toolutil.FillScopeParameterGuidanceSingle(specWithSchema("project_id", "ref", "iid")),
+			want: nil,
+		},
+		{
+			name: "an identifier the action does not require is not a finding",
+			spec: toolutil.ActionSpec{Route: toolutil.ActionRoute{InputSchema: map[string]any{
+				"properties": map[string]any{"hook_id": map[string]any{"type": "string"}},
+			}}},
+			want: nil,
+		},
+		{
+			name: "required list naming an undeclared property is ignored",
+			spec: toolutil.ActionSpec{Route: toolutil.ActionRoute{InputSchema: map[string]any{
+				"properties": map[string]any{"name": map[string]any{"type": "string"}},
+				"required":   []any{"hook_id", 7},
+			}}},
+			want: nil,
+		},
+		{
+			name: "name, key and slug are content rather than identifiers",
+			spec: specWithSchema("name", "key", "slug"),
+			want: nil,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := missingParameterGuidance(tc.spec); got != tc.want {
-				t.Errorf("missingParameterGuidance = %v, want %v", got, tc.want)
+			if got := unguidedRequiredIdentifiers(tc.spec); !slices.Equal(got, tc.want) {
+				t.Errorf("unguidedRequiredIdentifiers = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRequiredParameterNames_JSONSpelling verifies the required list is read
+// whether a schema built in Go spells it []string or one decoded from JSON
+// spells it []any, and that a schema without the key names nothing.
+func TestRequiredParameterNames_JSONSpelling(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema map[string]any
+		want   []string
+	}{
+		{name: "go slice", schema: map[string]any{"required": []string{"hook_id"}}, want: []string{"hook_id"}},
+		{name: "decoded slice", schema: map[string]any{"required": []any{"hook_id", 7}}, want: []string{"hook_id"}},
+		{name: "absent", schema: map[string]any{}, want: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := requiredParameterNames(tc.schema); !slices.Equal(got, tc.want) {
+				t.Errorf("requiredParameterNames = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -960,8 +997,8 @@ func TestSeverityRank_Scenarios_RanksKnownLevels(t *testing.T) {
 
 // TestSeverityFor_NonEscalatingFlags_KeepFixedSeverity verifies the flags
 // whose severity does not depend on the cluster: the warning-level metadata
-// gaps, the two info-level backlog signals, and an unknown flag, which falls
-// back to info.
+// gaps, the three info-level backlog signals, and an unknown flag, which
+// falls back to info.
 func TestSeverityFor_NonEscalatingFlags_KeepFixedSeverity(t *testing.T) {
 	tests := []struct {
 		name string
@@ -970,8 +1007,8 @@ func TestSeverityFor_NonEscalatingFlags_KeepFixedSeverity(t *testing.T) {
 	}{
 		{name: "missing next steps", flag: "missing_next_steps", want: "warning"},
 		{name: "empty param description", flag: "empty_param_description", want: "warning"},
-		{name: "missing parameter guidance", flag: "missing_parameter_guidance", want: "warning"},
 		{name: "aliases only toolname", flag: "aliases_only_toolname", want: "warning"},
+		{name: "missing parameter guidance", flag: "missing_parameter_guidance", want: "info"},
 		{name: "empty output description", flag: "empty_output_description", want: "info"},
 		{name: "param enum candidate", flag: "param_enum_candidate", want: "info"},
 		{name: "unknown flag", flag: "not_a_flag", want: "info"},
@@ -1338,10 +1375,13 @@ func TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag(t *testing.T) {
 		ContentKind:    toolutil.ActionSpecContentDetail,
 		Route: toolutil.ActionRoute{
 			OutputType: reflect.TypeFor[unformattedOutput](),
-			InputSchema: map[string]any{"properties": map[string]any{
-				"project_id": map[string]any{"type": "string", "description": "The numeric project identifier or full path."},
-				"widget_id":  map[string]any{"type": "string"},
-			}},
+			InputSchema: map[string]any{
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string", "description": "The numeric project identifier or full path."},
+					"widget_id":  map[string]any{"type": "string"},
+				},
+				"required": []string{"project_id", "widget_id"},
+			},
 		},
 	}
 	projected := map[string]string{"gitlab_widget_get": "Reads one widget."}
@@ -1359,8 +1399,11 @@ func TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag(t *testing.T) {
 			}
 		})
 	}
-	t.Run("field breakdown names the undescribed parameter", func(t *testing.T) {
-		want := []fieldFinding{{Param: "widget_id", Flag: "empty_param_description"}}
+	t.Run("field breakdown names the parameter behind each flag", func(t *testing.T) {
+		want := []fieldFinding{
+			{Param: "widget_id", Flag: "empty_param_description"},
+			{Param: "widget_id", Flag: "missing_parameter_guidance"},
+		}
 		if !reflect.DeepEqual(finding.Fields, want) {
 			t.Errorf("fields = %+v, want %+v", finding.Fields, want)
 		}
@@ -1434,8 +1477,8 @@ func TestSummarize_EveryFlag_CountsPerFlagAndSeverity(t *testing.T) {
 			}
 		})
 	}
-	if summary.Errors != 2 || summary.Warnings != 7 || summary.Infos != 2 {
-		t.Errorf("severity totals = %d errors, %d warnings, %d infos; want 2/7/2", summary.Errors, summary.Warnings, summary.Infos)
+	if summary.Errors != 2 || summary.Warnings != 6 || summary.Infos != 3 {
+		t.Errorf("severity totals = %d errors, %d warnings, %d infos; want 2/6/3", summary.Errors, summary.Warnings, summary.Infos)
 	}
 }
 

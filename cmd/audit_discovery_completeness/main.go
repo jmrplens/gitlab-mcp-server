@@ -90,7 +90,15 @@ func severityFor(flagName string, inCluster bool, clusterMembers []string) strin
 		// regression.
 		return "info"
 	case "missing_parameter_guidance":
-		return "warning"
+		// Backlog signal, on the same terms as param_enum_candidate above. The
+		// warning this used to return was never exercised: the check could not
+		// fire at all (see unguidedRequiredIdentifiers), so it reported zero
+		// across the whole catalog. Asked in a form that can fire, it names
+		// roughly a quarter of the catalog, which is the true size of the
+		// unwritten guidance rather than a regression anybody introduced.
+		// Info-level keeps it visible in -gaps-only without making
+		// `-severity=warning` unusable; promote it once the backlog is drained.
+		return "info"
 	case "aliases_only_toolname":
 		return "warning"
 	}
@@ -380,16 +388,6 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 		addFlag("aliases_only_toolname")
 	}
 
-	// missing_parameter_guidance: actions with sibling-confusable parameters
-	// (e.g. project_id vs group_id, ref vs branch) need explicit guidance
-	// entries. We detect the heuristic pattern: the action has an input
-	// parameter that carries a known scope-style name (id/_id with a
-	// project/group/user/integer prefix), AND the spec has no ParameterGuidance
-	// entries at all.
-	if missingParameterGuidance(spec) {
-		addFlag("missing_parameter_guidance")
-	}
-
 	// Field-level (Check B): walk input schema, flag empty/boilerplate descriptions.
 	//
 	// Note on the output schema walk: `empty_output_description` is intentionally
@@ -409,6 +407,21 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	fields, fieldFlags := collectFieldFindings(spec)
 	for _, f := range fieldFlags {
 		addFlag(f)
+	}
+
+	// missing_parameter_guidance: the action requires an identifier naming the
+	// object it acts on (topic_id, hook_id, name ...) and publishes no guidance
+	// for it, its whole guidance set being what the central scope fill in
+	// internal/tools adds to every spec before this auditor reads one. Asking
+	// only "does the spec carry guidance" cannot fire at all, because that fill
+	// runs first; see unguidedRequiredIdentifiers. Each unexplained identifier
+	// is named in the per-field breakdown, so the report says which parameter
+	// to write guidance for rather than only which action.
+	if unguided := unguidedRequiredIdentifiers(spec); len(unguided) > 0 {
+		addFlag("missing_parameter_guidance")
+		for _, name := range unguided {
+			fields = append(fields, fieldFinding{Param: name, Flag: "missing_parameter_guidance"})
+		}
 	}
 
 	// Check C: sibling-cluster disambiguation.
@@ -1120,32 +1133,122 @@ func aliasesOnlyToolname(spec toolutil.ActionSpec) bool {
 	return !hasSignal
 }
 
-// missingParameterGuidance reports whether an action with sibling-
-// confusable parameters (project_id vs group_id, ref vs branch, etc.)
-// has no ParameterGuidance entries. The heuristic:
-//   - The action has at least one input parameter whose name matches a
-//     known scope-suggestive pattern (id/_id with project/group/user/
-//     instance prefix, or "ref", "branch", "tag").
-//   - The spec has zero ParameterGuidance entries.
+// unguidedRequiredIdentifiers names the required parameters an action binds
+// itself to one object with and publishes no guidance for. A non-empty result
+// raises missing_parameter_guidance.
 //
-// Mutating actions are prioritized (they fail with confusing 400s when
-// the wrong scope is chosen); read-only actions are still flagged but
-// with warning severity rather than escalating to error.
-func missingParameterGuidance(spec toolutil.ActionSpec) bool {
-	if len(spec.ParameterGuidance) > 0 {
-		return false
+// The question this used to ask was "does a spec with a scope-suggestive
+// parameter carry any ParameterGuidance at all", and that form could never
+// fire. Every spec this auditor reads arrives through
+// tools.CollectActionSpecs, which runs
+// [toolutil.FillScopeParameterGuidanceSingle] over all of them first, and that
+// fill adds a default entry for exactly the names isScopeSuggestiveName
+// matches. Anything able to trip the old check was given guidance a moment
+// before the check ran, so it reported zero across the whole catalog and
+// always would.
+//
+// What is asked instead keeps the two halves apart:
+//
+//   - The spec's guidance is no more than the central fill would have produced
+//     on its own, so no package author wrote anything here.
+//   - The action carries REQUIRED parameters identifying the object it acts on
+//     that the fill does not cover (topic_id, hook_id, agent_id,
+//     merge_request_iid).
+//
+// An action in that state publishes scope guidance for the parameters the fill
+// already explains and none for the values a model has to get right. The
+// schema is read rather than the Go type, so typed and untyped routes are
+// judged alike.
+func unguidedRequiredIdentifiers(spec toolutil.ActionSpec) []string {
+	if !guidanceIsCentralFillOnly(spec) {
+		return nil
 	}
-	// Walk the InputSchema properties for scope-suggestive parameter
-	// names. We deliberately look at the schema (not the Go type) so
-	// this works for both typed and untyped routes.
 	props, _ := spec.Route.InputSchema["properties"].(map[string]any)
-	for name := range props {
-		lname := strings.ToLower(name)
-		if isScopeSuggestiveName(lname) {
-			return true
+	var names []string
+	for _, name := range requiredParameterNames(spec.Route.InputSchema) {
+		if _, declared := props[name]; !declared {
+			continue
+		}
+		if isBindingIdentifierName(strings.ToLower(name)) {
+			names = append(names, name)
 		}
 	}
-	return false
+	sort.Strings(names)
+	return names
+}
+
+// guidanceIsCentralFillOnly reports whether every ParameterGuidance entry the
+// spec carries is one the central scope fill would have added anyway. The
+// expected set is reconstructed by running that same fill over the spec with
+// its guidance cleared, rather than by re-listing the defaults here, so this
+// cannot drift from what internal/tools actually applies.
+//
+// Containment rather than equality: a spec carrying fewer entries than the
+// fill would add has had nothing authored either, which is what a spec read
+// before the fill runs looks like.
+func guidanceIsCentralFillOnly(spec toolutil.ActionSpec) bool {
+	if len(spec.ParameterGuidance) == 0 {
+		return true
+	}
+	bare := spec
+	bare.ParameterGuidance = nil
+	filled := toolutil.FillScopeParameterGuidanceSingle(bare).ParameterGuidance
+	for name, authored := range spec.ParameterGuidance {
+		central, isCentral := filled[name]
+		if !isCentral || !sameParameterGuidance(authored, central) {
+			return false
+		}
+	}
+	return true
+}
+
+// sameParameterGuidance compares two guidance entries field by field.
+// [toolutil.ParameterGuidance] carries a slice, so it is not comparable and
+// maps.Equal cannot be used on a map of them.
+func sameParameterGuidance(left, right toolutil.ParameterGuidance) bool {
+	return left.SemanticRole == right.SemanticRole &&
+		left.ValueSource == right.ValueSource &&
+		left.ExampleBinding == right.ExampleBinding &&
+		slices.Equal(left.CommonConfusions, right.CommonConfusions)
+}
+
+// requiredParameterNames reads the schema's required list. A schema assembled
+// by hand spells it []string and one decoded from JSON spells it []any, so
+// both are accepted. The result is always the caller's own slice, never the
+// schema's, so sorting or filtering it cannot reorder a served input schema.
+func requiredParameterNames(schema map[string]any) []string {
+	switch values := schema["required"].(type) {
+	case []string:
+		return slices.Clone(values)
+	case []any:
+		names := make([]string, 0, len(values))
+		for _, value := range values {
+			if name, isString := value.(string); isString {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
+}
+
+// isBindingIdentifierName reports whether a parameter refers to an existing
+// object by its identifier and is not already covered by the central scope
+// fill: a bare "id", or an identifier suffix (topic_id, hook_id, agent_id,
+// merge_request_iid).
+//
+// "name", "key" and "slug" are deliberately excluded although several actions
+// do bind by one. Whether such a parameter identifies an object or carries
+// content the caller invents cannot be told from the name: admin.feature_set
+// identifies a feature flag by "name" while label.create names the label it is
+// about to make, and nothing in the schema separates them. Admitting them adds
+// 61 findings of mixed quality to a backlog that is already large, so the rule
+// stays on the names that can only be identifiers.
+func isBindingIdentifierName(name string) bool {
+	if isScopeSuggestiveName(name) {
+		return false
+	}
+	return name == "id" || strings.HasSuffix(name, "_id") || strings.HasSuffix(name, "_iid")
 }
 
 // isScopeSuggestiveName matches parameter names that frequently confuse

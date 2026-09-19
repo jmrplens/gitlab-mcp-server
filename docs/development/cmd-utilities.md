@@ -224,7 +224,9 @@ There is no `--check` mode; instead, the catalog-first invariants return a non-n
 
 ### audit_discovery_completeness
 
-Extended META-001 auditor for model-discovery metadata quality. It checks action-level gaps (`weak_aliases`, `generic_usage`, `empty_related`, `weak_individual_description`, `missing_next_steps`), field-level gaps (`empty_output_description`, `param_enum_candidate`, `empty_param_description`), and sibling-cluster gaps (`missing_disambiguation`, `missing_parameter_guidance`). It applies cluster-aware severity escalation for non-CRUD action families.
+Extended META-001 auditor for model-discovery metadata quality. It checks action-level gaps (`weak_aliases`, `generic_usage`, `empty_related`, `weak_individual_description`, `missing_next_steps`), field-level gaps (`empty_output_description`, `param_enum_candidate`, `empty_param_description`, `missing_parameter_guidance`), and the sibling-cluster gap `missing_disambiguation`. It applies cluster-aware severity escalation for non-CRUD action families.
+
+`missing_parameter_guidance` asks a question that can fire. Until 3.1.0 it asked whether a spec carrying a scope-suggestive parameter had any `ParameterGuidance` at all, and it reported zero across the whole catalog and always would: `tools.CollectActionSpecs` runs `toolutil.FillScopeParameterGuidanceSingle` over every spec before the auditor reads one, and that fill adds a default entry for exactly the names the check looked for. It now flags an action whose guidance is no richer than that central fill while it requires an identifier the fill does not cover (`topic_id`, `hook_id`, `agent_id`, `merge_request_iid`), and the per-field breakdown names each such parameter. `name`, `key` and `slug` are left out because nothing in a schema separates the ones that identify an object from the ones that carry content the caller invents. Asked this way it names 270 actions across 52 packages, so it is classified `info` like `param_enum_candidate`: visible in `-gaps-only`, counted in neither `errors` nor `warnings`, and due a promotion once the backlog is drained.
 
 #### Usage
 
