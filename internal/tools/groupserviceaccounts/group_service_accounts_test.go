@@ -915,9 +915,10 @@ func TestFormatPATMarkdownString(t *testing.T) {
 
 // TestGroupServiceAccounts_UnreadableCapturedPublicEmail verifies that every
 // service account handler returns an error rather than a half-filled account
-// when GitLab sends public_email as something that is not a string. The SDK
-// ignores the key its own ServiceAccount does not model, so the read of the
-// captured response is the only thing that can notice.
+// when GitLab sends public_email as something that is not a string. client-go
+// models public_email on its own GroupServiceAccount as of v3.12.0, so its
+// decoder reaches the bad value before the read of the captured response does;
+// this asserts the refusal rather than which of the two made it.
 func TestGroupServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 	for _, tt := range []struct {
 		name string

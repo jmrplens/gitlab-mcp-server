@@ -433,9 +433,10 @@ func TestDelete_APIError400(t *testing.T) {
 
 // TestTopics_UnreadableCapturedOrganizationID verifies that every topic handler
 // returns an error rather than a half-filled topic when GitLab sends
-// organization_id as something that is not a number. The SDK ignores the key
-// its own Topic does not model, so the read of the captured response is the
-// only thing that can notice.
+// organization_id as something that is not a number. client-go models
+// organization_id on its own Topic as of v3.12.0, so its decoder reaches the
+// bad value before the read of the captured response does, and either refusal
+// is what this asserts.
 func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -444,7 +445,7 @@ func TestTopics_UnreadableCapturedOrganizationID(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
+	testutil.AssertUnreadableBodyRefused(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"id":1,"name":"go","title":"Go","organization_id":"not-a-number"}]`)
 			_, err := List(context.Background(), client, ListInput{})

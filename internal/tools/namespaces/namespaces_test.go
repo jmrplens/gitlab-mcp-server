@@ -987,9 +987,10 @@ func TestNamespaces_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 }
 
 // TestNamespaces_UnreadableCapturedFields verifies every handler answering
-// with a namespace reports the captured response's decode failure rather than
-// a namespace missing what GitLab sent. The SDK's own Namespace has no
-// projects_count, so only the read beside it can notice GitLab sent a string.
+// with a namespace reports a decode failure rather than a namespace missing
+// what GitLab sent. client-go models projects_count on its own Namespace as of
+// v3.12.0, so its decoder reaches the string GitLab sent there before the read
+// beside it does, and either refusal is what this asserts.
 func TestNamespaces_UnreadableCapturedFields(t *testing.T) {
 	const poisoned = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
 		`"projects_count":"many"}`
@@ -1000,7 +1001,7 @@ func TestNamespaces_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}})
 	}
-	testutil.AssertCapturedDecodeFailures(t, cases)
+	testutil.AssertUnreadableBodyRefused(t, cases)
 }
 
 // TestFormatMarkdownString_SentFields verifies the namespace Markdown names
