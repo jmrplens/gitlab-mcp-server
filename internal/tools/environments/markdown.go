@@ -10,16 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The canonical catalog IDs the hints name that the specs do not already
-// spell. A deployment action is projected under the environment domain, so the
-// ID every surface resolves is "environment.deployment_list" and not the
-// "deployment.list" the cross-link constant in action_specs.go spells.
-const (
-	actionEnvironmentCreate  = "environment.create"
-	actionEnvironmentDelete  = "environment.delete"
-	hintActionDeploymentList = "environment.deployment_list"
-)
-
 type environmentNotFoundOutput struct {
 	Identifier string
 }
@@ -124,7 +114,7 @@ func stateHints(state string) []string {
 	default:
 		hints = append(hints, toolutil.HintAction(actionEnvironmentStop, "stop this environment"))
 	}
-	return append(hints, toolutil.HintAction(hintActionDeploymentList, "see the deployments to this environment"))
+	return append(hints, toolutil.HintAction(actionDeploymentList, "see the deployments to this environment"))
 }
 
 // FormatListMarkdown renders a page of a project's environments as a Markdown

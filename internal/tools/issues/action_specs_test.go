@@ -133,8 +133,11 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 	if guidance := getSpec.ParameterGuidance["issue_iid"]; guidance.SemanticRole != "issue_iid" {
 		t.Fatalf("get issue_iid guidance = %+v, want issue_iid", guidance)
 	}
-	if !slices.Contains(getSpec.RelatedActions, "issue.notes_list") {
-		t.Fatalf("get RelatedActions = %v, want issue.notes_list", getSpec.RelatedActions)
+	// The note list is issue.note_list. This assertion asked for
+	// issue.notes_list, which is not an action, so it was holding the spec to
+	// a cross-link a model could not follow.
+	if !slices.Contains(getSpec.RelatedActions, actionIssueNoteList) {
+		t.Fatalf("get RelatedActions = %v, want %s", getSpec.RelatedActions, actionIssueNoteList)
 	}
 
 	listSpec := byTool["gitlab_issue_list"]

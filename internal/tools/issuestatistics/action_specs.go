@@ -5,6 +5,23 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// catalogDomain is the domain half of every canonical ID these actions are
+// registered under. These specs are aggregated into the gitlab_issue catalog
+// group, so the domain is issue and never the owner package name: an ID built
+// as OwnerPackage + "." + Name resolves to nothing on any surface.
+const catalogDomain = "issue"
+
+// Canonical catalog IDs for the issue statistics actions, and the one block
+// the related-action metadata below and markdown.go's result hint both read.
+const (
+	actionStatisticsGet        = catalogDomain + ".statistics_get"
+	actionStatisticsGetGroup   = catalogDomain + ".statistics_get_group"
+	actionStatisticsGetProject = catalogDomain + ".statistics_get_project"
+	// actionIssueList is owned by the issues package rather than this one, and
+	// is declared here so every ID this package publishes has one home.
+	actionIssueList = catalogDomain + ".list"
+)
+
 // ActionSpecs returns canonical specs for issue statistics actions exposed
 // as MCP tools. The global, group, and project read routes are projected
 // into the dynamic, meta, individual, and audit surfaces by the action
@@ -52,7 +69,7 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 	case "gitlab_get_issue_statistics":
 		options.Usage = "Get aggregate issue counts (all, opened, closed) across every project visible to the authenticated user, optionally filtered by labels, milestone, assignee, author, dates, or search."
 		options.Aliases = []string{individualTool, "issue statistics", "count issues", "global issue counts"}
-		options.RelatedActions = []string{"issuestatistics.statistics_get_group", "issuestatistics.statistics_get_project", "issue.list_all"}
+		options.RelatedActions = []string{actionStatisticsGetGroup, actionStatisticsGetProject, "issue.list_all"}
 		options.IndividualTool.Description = "Get global issue count statistics across all visible projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_group_issue_statistics, gitlab_get_project_issue_statistics, gitlab_issue_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
@@ -61,7 +78,7 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 	case "gitlab_get_group_issue_statistics":
 		options.Usage = "Get aggregate issue counts (all, opened, closed) for a group and its descendant projects, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search."
 		options.Aliases = []string{individualTool, "group issue statistics", "count group issues", "group issue counts"}
-		options.RelatedActions = []string{"issuestatistics.statistics_get", "issuestatistics.statistics_get_project", "issue.list_group"}
+		options.RelatedActions = []string{actionStatisticsGet, actionStatisticsGetProject, "issue.list_group"}
 		options.IndividualTool.Description = "Get issue count statistics for a group and its descendant projects. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_issue_statistics, gitlab_get_project_issue_statistics, gitlab_group_get."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),
@@ -69,7 +86,7 @@ func decorateIssueStatisticsMeta(options *toolutil.ActionSpecOptions, individual
 	case "gitlab_get_project_issue_statistics":
 		options.Usage = "Get aggregate issue counts (all, opened, closed) for a single project, optionally filtered by labels, milestone, assignee, author, dates, IIDs, or search."
 		options.Aliases = []string{individualTool, "project issue statistics", "count project issues", "project issue counts"}
-		options.RelatedActions = []string{"issuestatistics.statistics_get", "issuestatistics.statistics_get_group", "issue.list"}
+		options.RelatedActions = []string{actionStatisticsGet, actionStatisticsGetGroup, actionIssueList}
 		options.IndividualTool.Description = "Get issue count statistics for a single project. Returns: a statistics object with nested counts (all, opened, closed). See also: gitlab_get_issue_statistics, gitlab_get_group_issue_statistics, gitlab_project_get."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaEnumOverride("scope", "created_by_me", "assigned_to_me", "all"),

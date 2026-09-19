@@ -9,10 +9,41 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The one block every published action ID in this package is built from, so a
+// spec name and the cross-links that point at it cannot name different
+// actions.
+//
+// Project labels are routes on the gitlab_project catalog group, so a label
+// action's canonical ID is its spec name under the "project" domain and never
+// under a "label" domain of its own: "label.get" and its seven siblings
+// resolved to nothing, and a model following one was answered unknown action.
+// The group label a promoted project label becomes is a route on the group
+// catalog group under its own "group_label_" prefix, which is why
+// actionGroupLabelList is spelled out rather than derived here.
 const (
-	actionIssueList     = "issue.list"
-	actionLabelGet      = "label.get"
-	actionLabelList     = "label.list"
+	domainPrefix = "project."
+
+	specLabelList        = "label_list"
+	specLabelGet         = "label_get"
+	specLabelCreate      = "label_create"
+	specLabelUpdate      = "label_update"
+	specLabelDelete      = "label_delete"
+	specLabelSubscribe   = "label_subscribe"
+	specLabelUnsubscribe = "label_unsubscribe"
+	specLabelPromote     = "label_promote"
+
+	actionLabelList        = domainPrefix + specLabelList
+	actionLabelGet         = domainPrefix + specLabelGet
+	actionLabelCreate      = domainPrefix + specLabelCreate
+	actionLabelUpdate      = domainPrefix + specLabelUpdate
+	actionLabelDelete      = domainPrefix + specLabelDelete
+	actionLabelSubscribe   = domainPrefix + specLabelSubscribe
+	actionLabelUnsubscribe = domainPrefix + specLabelUnsubscribe
+
+	actionProjectGet     = domainPrefix + "get"
+	actionIssueList      = "issue.list"
+	actionGroupLabelList = "group.group_label_list"
+
 	paramLabelID        = "label_id"
 	roleLabelIdentifier = "label_identifier"
 	hintLabelNameOrID   = "Label name or ID from task context or label list output."
@@ -26,22 +57,22 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_label_list — list project labels with optional search and pagination.
-		labelReadSpec("label_list", toolutil.RouteAction(client, List), "gitlab_label_list"),
+		labelReadSpec(specLabelList, toolutil.RouteAction(client, List), "gitlab_label_list"),
 		// gitlab_label_get — fetch a label by ID or name (returns a structured not-found result on 404).
-		labelReadSpec("label_get", labelGetRoute(client), "gitlab_label_get").
+		labelReadSpec(specLabelGet, labelGetRoute(client), "gitlab_label_get").
 			WithEmbeddedResource("gitlab://project/{project_id}/label/{label_id}"),
 		// gitlab_label_create — create a new project label.
-		labelCreateSpec("label_create", toolutil.RouteAction(client, Create), "gitlab_label_create"),
+		labelCreateSpec(specLabelCreate, toolutil.RouteAction(client, Create), "gitlab_label_create"),
 		// gitlab_label_update — update an existing project label.
-		labelUpdateSpec("label_update", toolutil.RouteAction(client, Update), "gitlab_label_update"),
+		labelUpdateSpec(specLabelUpdate, toolutil.RouteAction(client, Update), "gitlab_label_update"),
 		// gitlab_label_delete — remove a project label (destructive).
-		labelDeleteSpec("label_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_label_delete"),
+		labelDeleteSpec(specLabelDelete, toolutil.DestructiveVoidAction(client, Delete), "gitlab_label_delete"),
 		// gitlab_label_subscribe — subscribe the caller to label notifications.
-		labelUpdateSpec("label_subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_label_subscribe"),
+		labelUpdateSpec(specLabelSubscribe, toolutil.RouteAction(client, Subscribe), "gitlab_label_subscribe"),
 		// gitlab_label_unsubscribe — remove the caller's label subscription.
-		labelUpdateSpec("label_unsubscribe", toolutil.RouteVoidAction(client, Unsubscribe), "gitlab_label_unsubscribe"),
+		labelUpdateSpec(specLabelUnsubscribe, toolutil.RouteVoidAction(client, Unsubscribe), "gitlab_label_unsubscribe"),
 		// gitlab_label_promote — promote a project label to a group label.
-		labelUpdateSpec("label_promote", toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
+		labelUpdateSpec(specLabelPromote, toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
 	}
 }
 
@@ -92,22 +123,22 @@ func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute labels domain action.", Tags: []string{"project", "label"},
-		RelatedActions: []string{"project.get", actionIssueList},
+		RelatedActions: []string{actionProjectGet, actionIssueList},
 		OpenWorld:      true,
 		OwnerPackage:   "labels",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 
 	switch actionName {
-	case "label_list":
+	case specLabelList:
 		options.Usage = "List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance."
 		options.Aliases = []string{"list labels", "show project labels", "find labels"}
-		options.RelatedActions = []string{actionLabelGet, "label.create", actionIssueList}
+		options.RelatedActions = []string{actionLabelGet, actionLabelCreate, actionIssueList}
 		options.IndividualTool.Description = "List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, archived, and pagination metadata. See also: gitlab_label_get, gitlab_label_create, gitlab_issue_list."
-	case "label_get":
+	case specLabelGet:
 		options.Usage = "Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed."
 		options.Aliases = []string{"get label", "show label details", "lookup label"}
-		options.RelatedActions = []string{actionLabelList, "label.update", "label.delete"}
+		options.RelatedActions = []string{actionLabelList, actionLabelUpdate, actionLabelDelete}
 		options.IndividualTool.Description = "Get a single project label by ID or name. Returns: id, name, color, text_color, description, open/closed issue counts, open MR count, priority, subscribed, is_project_label, and archived. See also: gitlab_label_list, gitlab_label_update, gitlab_label_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
@@ -116,10 +147,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
-	case "label_create":
+	case specLabelCreate:
 		options.Usage = "Create a label in a project with required name and color, plus optional description and priority."
 		options.Aliases = []string{"create label", "add label", "new label"}
-		options.RelatedActions = []string{actionLabelGet, "label.update", actionIssueList}
+		options.RelatedActions = []string{actionLabelGet, actionLabelUpdate, actionIssueList}
 		options.IndividualTool.Description = "Create a project label with required name and hex color, plus optional description, priority, and archived state. Returns: the created label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_update, gitlab_issue_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"color": {
@@ -129,10 +160,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				CommonConfusions: []string{"Provide hex color values. Avoid named colors."},
 			},
 		}
-	case "label_update":
+	case specLabelUpdate:
 		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name). At least one mutable field is required."
 		options.Aliases = []string{"update label", "edit label", "rename label", "recolor label"}
-		options.RelatedActions = []string{actionLabelGet, actionLabelList, "label.delete"}
+		options.RelatedActions = []string{actionLabelGet, actionLabelList, actionLabelDelete}
 		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
@@ -141,10 +172,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
-	case "label_delete":
+	case specLabelDelete:
 		options.Usage = "Delete a project label by label_id (ID or name). Destructive and irreversible. Group-inherited labels must be deleted at the group level."
 		options.Aliases = []string{"delete label", "remove label", "drop label"}
-		options.RelatedActions = []string{actionLabelList, actionLabelGet, "label.create"}
+		options.RelatedActions = []string{actionLabelList, actionLabelGet, actionLabelCreate}
 		options.IndividualTool.Description = "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
@@ -153,10 +184,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
-	case "label_subscribe":
+	case specLabelSubscribe:
 		options.Usage = "Subscribe the authenticated user to a project label to receive notifications. Identify the label by label_id (ID or name)."
 		options.Aliases = []string{"subscribe to label", "follow label", "watch label"}
-		options.RelatedActions = []string{"label.unsubscribe", actionLabelGet, actionLabelList}
+		options.RelatedActions = []string{actionLabelUnsubscribe, actionLabelGet, actionLabelList}
 		options.IndividualTool.Description = "Subscribe the authenticated user to a project label for notifications. Returns: the label with subscribed=true (already-subscribed yields 304 Not Modified). See also: gitlab_label_unsubscribe, gitlab_label_get, gitlab_label_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
@@ -165,10 +196,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
-	case "label_unsubscribe":
+	case specLabelUnsubscribe:
 		options.Usage = "Unsubscribe the authenticated user from a project label to stop receiving notifications. Identify the label by label_id (ID or name)."
 		options.Aliases = []string{"unsubscribe from label", "unfollow label", "unwatch label"}
-		options.RelatedActions = []string{"label.subscribe", actionLabelGet, actionLabelList}
+		options.RelatedActions = []string{actionLabelSubscribe, actionLabelGet, actionLabelList}
 		options.IndividualTool.Description = "Unsubscribe the authenticated user from a project label. Returns: no content on success (not-subscribed yields 304 Not Modified). See also: gitlab_label_subscribe, gitlab_label_get, gitlab_label_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
@@ -177,10 +208,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.label_id:"bug"`,
 			},
 		}
-	case "label_promote":
+	case specLabelPromote:
 		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels."
 		options.Aliases = []string{"promote label", "promote to group label", "make group label"}
-		options.RelatedActions = []string{actionLabelGet, actionLabelList, "group_label.list"}
+		options.RelatedActions = []string{actionLabelGet, actionLabelList, actionGroupLabelList}
 		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {

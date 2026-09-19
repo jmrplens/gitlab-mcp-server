@@ -5,6 +5,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs for the admin key-lookup actions. These specs are
+// aggregated into the gitlab_user catalog group, so the domain is user and
+// never the owner package name. markdown.go builds its result hint from this
+// same block, so the hint a model is handed and the ID the catalog registers
+// cannot drift apart.
+const (
+	actionKeyGetByFingerprint = "user.key_get_by_fingerprint"
+)
+
 // ActionSpecs returns canonical specs for SSH key lookup actions exposed
 // as MCP tools. The two read routes (get by ID, get by fingerprint) are
 // projected into the dynamic, meta, individual, and audit surfaces by

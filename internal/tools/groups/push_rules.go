@@ -14,13 +14,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The push-rule actions this card points at, by the canonical catalog ID every
-// surface resolves.
-const (
-	actionGroupPushRuleEdit   = "group.push_rule_edit"
-	actionGroupPushRuleDelete = "group.push_rule_delete"
-)
-
 // PushRuleOutput represents a group's push-rule configuration. It mirrors
 // gl.GroupPushRules 1:1 (1:1 audit output-fidelity policy).
 type PushRuleOutput struct {

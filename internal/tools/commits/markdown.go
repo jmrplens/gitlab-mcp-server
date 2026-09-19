@@ -7,28 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves:
-// the dynamic surface executes them, and the meta and individual surfaces
-// resolve them to their own tool names. Every commit action is a route on the
-// gitlab_repository catalog group, so each ID carries that domain rather than
-// a "commit." prefix of its own.
-const (
-	hintCommitGet           = "repository.commit_get"
-	hintCommitList          = "repository.commit_list"
-	hintCommitDiff          = "repository.commit_diff"
-	hintCommitRefs          = "repository.commit_refs"
-	hintCommitComments      = "repository.commit_comments"
-	hintCommitCommentCreate = "repository.commit_comment_create"
-	hintCommitStatuses      = "repository.commit_statuses"
-	hintCommitStatusSet     = "repository.commit_status_set"
-	hintCommitCherryPick    = "repository.commit_cherry_pick"
-	hintFileGet             = "repository.file_get"
-	hintBranchGet           = "branch.get"
-	hintTagGet              = "tag.get"
-	hintMRGet               = "merge_request.get"
-	hintMRChangesGet        = "merge_request.changes_get"
-)
-
 // userDisplay returns a human-readable name for a commit comment/status author,
 // preferring the username and falling back to the display name. Returns a
 // dash when the author is absent.
@@ -117,9 +95,9 @@ func FormatOutputMarkdown(c Output) string {
 	card.Markdown("Pipeline", pipelineSummary(c.Status, c.LastPipeline))
 	card.URL(c.WebURL)
 	card.End(
-		toolutil.HintAction(hintCommitGet, "see this commit's full details and stats"),
-		toolutil.HintAction(hintCommitDiff, "see the file changes for this commit"),
-		toolutil.HintAction(hintCommitRefs, "see the branches and tags containing it"),
+		toolutil.HintAction(actionCommitGet, "see this commit's full details and stats"),
+		toolutil.HintAction(actionCommitDiff, "see the file changes for this commit"),
+		toolutil.HintAction(actionCommitRefs, "see the branches and tags containing it"),
 	)
 	return b.String()
 }
@@ -131,8 +109,8 @@ func formatNoCommitMarkdown() string {
 	card := toolutil.NewCard(&b, "No Commit Created")
 	card.Note("GitLab returned no commit. A dry run reports whether the change would apply cleanly and commits nothing; run the same action without dry_run to commit it.")
 	card.End(
-		toolutil.HintAction(hintCommitCherryPick, "apply the commit for real"),
-		toolutil.HintAction(hintCommitList, "check the branch for the commit"),
+		toolutil.HintAction(actionCommitCherryPick, "apply the commit for real"),
+		toolutil.HintAction(actionCommitList, "check the branch for the commit"),
 	)
 	return b.String()
 }
@@ -155,8 +133,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintCommitGet, "see one commit in full"),
-		toolutil.HintAction(hintCommitDiff, "see the file changes of one commit"),
+		toolutil.HintAction(actionCommitGet, "see one commit in full"),
+		toolutil.HintAction(actionCommitDiff, "see the file changes of one commit"),
 	)
 	return b.String()
 }
@@ -184,8 +162,8 @@ func FormatDetailMarkdown(c DetailOutput) string {
 		card.Text("Message", c.Message)
 	}
 	card.End(
-		toolutil.HintAction(hintCommitDiff, "view the file changes"),
-		toolutil.HintAction(hintCommitCherryPick, "apply this commit to another branch"),
+		toolutil.HintAction(actionCommitDiff, "view the file changes"),
+		toolutil.HintAction(actionCommitCherryPick, "apply this commit to another branch"),
 	)
 	return b.String()
 }
@@ -215,8 +193,8 @@ func FormatDiffMarkdown(out DiffOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintFileGet, "view one changed file"),
-		toolutil.HintAction(hintCommitCommentCreate, "comment on the changes"),
+		toolutil.HintAction(actionFileGet, "view one changed file"),
+		toolutil.HintAction(actionCommitCommentCreate, "comment on the changes"),
 	)
 	return b.String()
 }
@@ -237,8 +215,8 @@ func FormatRefsMarkdown(out RefsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintBranchGet, "view one branch"),
-		toolutil.HintAction(hintTagGet, "view one tag"),
+		toolutil.HintAction(actionBranchGet, "view one branch"),
+		toolutil.HintAction(actionTagGet, "view one tag"),
 	)
 	return b.String()
 }
@@ -269,8 +247,8 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintCommitCommentCreate, "add a comment"),
-		toolutil.HintAction(hintCommitGet, "view the commit"),
+		toolutil.HintAction(actionCommitCommentCreate, "add a comment"),
+		toolutil.HintAction(actionCommitGet, "view the commit"),
 	)
 	return b.String()
 }
@@ -288,8 +266,8 @@ func FormatCommentMarkdown(c CommentOutput) string {
 	card.Field("Line Type", c.LineType)
 	card.Text("Note", c.Note)
 	card.End(
-		toolutil.HintAction(hintCommitComments, "list every comment on the commit"),
-		toolutil.HintAction(hintFileGet, "view the referenced file"),
+		toolutil.HintAction(actionCommitComments, "list every comment on the commit"),
+		toolutil.HintAction(actionFileGet, "view the referenced file"),
 	)
 	return b.String()
 }
@@ -313,8 +291,8 @@ func FormatStatusesMarkdown(out StatusesOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(hintCommitStatusSet, "update a status"),
-		toolutil.HintAction(hintCommitGet, "view the commit"),
+		toolutil.HintAction(actionCommitStatusSet, "update a status"),
+		toolutil.HintAction(actionCommitGet, "view the commit"),
 	)
 	return b.String()
 }
@@ -347,8 +325,8 @@ func FormatStatusMarkdown(s StatusOutput) string {
 	card.Link("Target", s.TargetURL, s.TargetURL)
 	card.Text("Description", s.Description)
 	card.End(
-		toolutil.HintAction(hintCommitStatusSet, "update this status"),
-		toolutil.HintAction(hintCommitStatuses, "see all statuses on the commit"),
+		toolutil.HintAction(actionCommitStatusSet, "update this status"),
+		toolutil.HintAction(actionCommitStatuses, "see all statuses on the commit"),
 	)
 	return b.String()
 }
@@ -372,8 +350,8 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
-		toolutil.HintAction(hintMRGet, "view one merge request"),
-		toolutil.HintAction(hintMRChangesGet, "see its diff"),
+		toolutil.HintAction(actionMRGet, "view one merge request"),
+		toolutil.HintAction(actionMRChangesGet, "see its diff"),
 	)
 	return b.String()
 }
@@ -411,7 +389,7 @@ func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 		c.Code("Primary Key ID", sig.KeyPrimaryKeyID)
 	}
 	c.Field("Commit Source", sig.CommitSource)
-	c.End(toolutil.HintAction(hintCommitGet, "view the full commit details"))
+	c.End(toolutil.HintAction(actionCommitGet, "view the full commit details"))
 	return b.String()
 }
 

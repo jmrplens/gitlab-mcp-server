@@ -1,0 +1,99 @@
+// action_specs_test.go holds this package against the catalog: every canonical
+// action ID it publishes to a model, in an ActionSpec's RelatedActions and in
+// the hints its Markdown writes, must name an action the catalog really builds.
+//
+// It is an external test package (awardemoji_test) on purpose. The oracle is
+// the catalog, which lives in internal/tools and imports this package, so only
+// a test binary outside the package under test can hold one against the other;
+// an in-package test file would be an import cycle. Asserting the corrected
+// literal beside the constant would prove nothing, since both halves would be
+// the same mistake written twice.
+package awardemoji_test
+
+import (
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+)
+
+const (
+	// ownerPackage is the OwnerPackage every spec of this domain declares, and
+	// so the key its actions are found under in the catalog.
+	ownerPackage = "awardemoji"
+	// outputPkgPath is where this domain's output types are declared, which is
+	// how the registered Markdown formatters of this package are told from the
+	// several hundred registered by the others.
+	outputPkgPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/awardemoji"
+)
+
+// ultimateCatalog builds the canonical catalog at the highest tier, since a
+// Premium or Ultimate action is absent from a Free build and a reference to
+// one would read as an ID that resolves to nothing.
+func ultimateCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Tier: edition.Ultimate})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	return catalog
+}
+
+// assertResolves fails when id names no action of the catalog, naming where the
+// ID was published so the failure points at the line to fix.
+func assertResolves(t *testing.T, catalog *actioncatalog.Catalog, site, id string) {
+	t.Helper()
+	if _, ok := catalog.Action(actioncatalog.ActionID(id)); !ok {
+		t.Errorf("%s publishes action ID %q, which the catalog does not hold", site, id)
+	}
+}
+
+// TestAwardEmojiRelatedActions_EveryPublishedID_ResolvesInTheCatalog walks the
+// RelatedActions of every award emoji action as the catalog itself materialized
+// them, and checks each names an action a model could go on to call.
+//
+// The neighbors worth naming here are the awardable and the list of notes on
+// it that holds the note_id a note reaction needs, and both are actions of
+// another domain's group: a merge request's notes are mr_review actions, and a
+// project snippet is a snippet.project_* action rather than the personal
+// snippet the shorter name reaches.
+func TestAwardEmojiRelatedActions_EveryPublishedID_ResolvesInTheCatalog(t *testing.T) {
+	catalog := ultimateCatalog(t)
+
+	var owned int
+	for _, action := range catalog.Actions() {
+		if action.OwnerPackage != ownerPackage {
+			continue
+		}
+		owned++
+		for _, related := range action.RelatedActions {
+			assertResolves(t, catalog, string(action.ID)+" RelatedActions", related)
+		}
+	}
+	if owned == 0 {
+		t.Fatalf("the catalog holds no action owned by %q; the join this test rests on is broken", ownerPackage)
+	}
+}
+
+// TestAwardEmojiHints_EveryPublishedID_ResolvesInTheCatalog checks every action
+// ID this package's rendered Markdown invites a model to call.
+//
+// Today it checks nothing, and that is the point rather than a hole: the one
+// next step an award emoji result offers is the delete action of whichever of
+// the six awardables the reaction sits on, which no single canonical ID names,
+// so the guidance is written as prose. Finding none is therefore not a failure
+// here, unlike in the domains whose formatters do name an action; what this
+// holds is that the moment one is named, it has to be an ID the catalog holds.
+func TestAwardEmojiHints_EveryPublishedID_ResolvesInTheCatalog(t *testing.T) {
+	catalog := ultimateCatalog(t)
+
+	for outputType, ids := range hints.HintedActionIDs(t, outputPkgPath) {
+		t.Run(outputType, func(t *testing.T) {
+			for _, id := range ids {
+				assertResolves(t, catalog, outputType, id)
+			}
+		})
+	}
+}

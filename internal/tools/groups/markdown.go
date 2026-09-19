@@ -10,24 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The routes these cards and lists point at, by the canonical catalog ID every
-// surface resolves: the dynamic surface executes it, and the meta and
-// individual surfaces resolve it to their own tool names, so a hint written
-// this way never names something the serving surface does not register. The
-// member routes live in internal/tools/groupmembers and the project ones in
-// internal/tools/projects; both are actions of a catalog group, which is what
-// the ID spells.
-const (
-	actionGroupMemberAdd  = "group.group_member_add"
-	actionGroupMemberEdit = "group.group_member_edit"
-	actionProjectGet      = "project.get"
-	actionProjectCreate   = "project.create"
-	actionGroupHookAdd    = "group.hook_add"
-	actionGroupHookEdit   = "group.hook_edit"
-	actionGroupHookDelete = "group.hook_delete"
-	actionGroupTransfer   = "group.transfer"
-)
-
 type groupNotFoundOutput struct {
 	Identifier string
 }

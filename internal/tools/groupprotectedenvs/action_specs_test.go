@@ -249,10 +249,10 @@ func TestDecorateGroupProtectedEnvMeta_PartialEntry_KeepsTheSharedDefaults(t *te
 			name: "an entry naming no usage keeps the shared sentence while taking its own lists",
 			entry: groupProtectedEnvActionMetaEntry{
 				aliases: []string{"list group deployment gates"},
-				related: []string{actionGroupProtectedEnvGet},
+				related: []string{actionGet},
 			},
 			wantAliases: []string{"list group deployment gates"},
-			wantRelated: []string{actionGroupProtectedEnvGet},
+			wantRelated: []string{actionGet},
 		},
 	}
 

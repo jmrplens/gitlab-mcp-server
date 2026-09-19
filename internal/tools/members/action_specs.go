@@ -7,15 +7,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog action IDs this package publishes, as related actions
+// on its specs and as hints on its Markdown. Project member actions are
+// aggregated into the project group (internal/tools/action_specs.go), so their
+// IDs read project.*; the member.* and members.* spellings published here
+// before named nothing the catalog holds and a model following one was
+// answered "unknown action". One block, read by action_specs.go and
+// markdown.go alike, so the two cannot drift apart again.
 const (
-	actionMembersList = "members.list"
-	actionMemberGet   = "member.get"
-	actionMemberEdit  = "member.edit"
-	actionUserGet     = "user.get"
-	actionProjectGet  = "project.get"
-	paramUserID       = "user_id"
-	paramProjectID    = "project_id"
-	paramAccessLevel  = "access_level"
+	actionMembersList        = "project.members"
+	actionMemberGet          = "project.member_get"
+	actionMemberGetInherited = "project.member_inherited"
+	actionMemberAdd          = "project.member_add"
+	actionMemberEdit         = "project.member_edit"
+	actionMemberDelete       = "project.member_delete"
+	actionUserGet            = "user.get"
+	actionProjectGet         = "project.get"
+)
+
+const (
+	paramUserID      = "user_id"
+	paramProjectID   = "project_id"
+	paramAccessLevel = "access_level"
 )
 
 // ActionSpecs returns canonical specs for project member actions exposed
@@ -111,17 +124,17 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_project_members_list":
 		opts.Usage = "List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset or keyset pagination."
 		opts.Aliases = []string{individualTool, "list project members", "who has access to project", "show project team", "project collaborators"}
-		opts.RelatedActions = []string{actionMemberGet, "member.add", actionProjectGet, actionUserGet}
+		opts.RelatedActions = []string{actionMemberGet, actionMemberAdd, actionProjectGet, actionUserGet}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance}
 		opts.IndividualTool.Description = "List a project's members (direct plus inherited from parent groups). Returns: each member's id, username, name, state, access level, member role, created_by, seat usage, and web URL. Supports query/user_ids/show_seat_info filtering, order_by/sort, and offset or keyset pagination. See also: gitlab_project_member_get, gitlab_project_member_add, gitlab_project_get."
 	case "gitlab_project_member_get":
-		opts.Usage = "Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use member.get_inherited to include parent-group inheritance."
+		opts.Usage = "Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use " + actionMemberGetInherited + " to include parent-group inheritance."
 		opts.Aliases = []string{individualTool, "get project member", "show member access level", "is user a member"}
-		opts.RelatedActions = []string{actionMembersList, "member.get_inherited", actionMemberEdit, "member.delete"}
+		opts.RelatedActions = []string{actionMembersList, actionMemberGetInherited, actionMemberEdit, actionMemberDelete}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance, paramUserID: userIDGuidance}
 		opts.IndividualTool.Description = "Get a single direct project member by user ID. Returns: id, username, name, state, access level, member role, created_by, expiry, and web URL. Does not include inherited members. See also: gitlab_project_member_get_inherited, gitlab_project_members_list, gitlab_project_member_edit."
 	case "gitlab_project_member_get_inherited":
-		opts.Usage = "Get a project member including membership inherited from any parent group. Use when member.get returns not-found but the user has access through an ancestor group."
+		opts.Usage = "Get a project member including membership inherited from any parent group. Use when " + actionMemberGet + " returns not-found but the user has access through an ancestor group."
 		opts.Aliases = []string{individualTool, "get inherited member", "member including inherited", "effective project access"}
 		opts.RelatedActions = []string{actionMemberGet, actionMembersList, actionProjectGet}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance, paramUserID: userIDGuidance}
@@ -149,7 +162,7 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_project_member_edit":
 		opts.Usage = "Edit an existing project member's access_level, expires_at, or member_role_id. Requires at least the same access level as the target member."
 		opts.Aliases = []string{individualTool, "edit project member", "change member access level", "promote member", "update membership"}
-		opts.RelatedActions = []string{actionMembersList, actionMemberGet, "member.add", "member.delete"}
+		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberAdd, actionMemberDelete}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramProjectID: projectIDGuidance,
 			paramUserID:    userIDGuidance,

@@ -5,6 +5,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical action IDs this package names as siblings after a migration has
+// been marked. Neither "admin.version" nor "admin.health" was ever an action:
+// the instance version and revision are read through admin.metadata_get, and
+// the instance's own reachability through the server group's health check.
+const (
+	actionAdminMetadataGet = "admin.metadata_get"
+	actionServerHealth     = "server.health_check"
+)
+
 // ActionSpecs returns canonical specs for database migration tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	individualDestructive := false
@@ -20,7 +29,7 @@ func databaseMigrationOptions(individualTool string) toolutil.ActionSpecOptions 
 		Aliases:        []string{"mark migration", "database migration", "schema migration"},
 		Tags:           []string{"admin", "database"},
 		Usage:          "Mark a database migration as applied/up/down for administrative migration state management.",
-		RelatedActions: []string{"admin.version", "admin.health"},
+		RelatedActions: []string{actionAdminMetadataGet, actionServerHealth},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"version": {
 				SemanticRole:   "migration_version",

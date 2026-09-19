@@ -73,7 +73,7 @@ func FormatMarkdownString(out Output) string {
 	c.Time("Trial Ends On", out.TrialEndsOn)
 	c.Time("Subscription End Date", out.EndDate)
 	writeSeatRows(c, out)
-	c.End(toolutil.HintAction(actionNamespaceGet, "use this namespace ID with the project and group actions"))
+	c.End(toolutil.HintAction(actionGroupProjects, "list the projects in this namespace when its kind is group"))
 	return b.String()
 }
 

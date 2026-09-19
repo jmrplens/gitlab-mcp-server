@@ -41,8 +41,8 @@ func FormatMemberMarkdown(out Output) string {
 	// unconditionally, so a member GitLab sent no web_url for carried an
 	// instruction about links the card had not got.
 	c.End(
-		toolutil.HintAction("group.group_member_edit", "change this member's access level"),
-		toolutil.HintAction("group.group_member_remove", "remove this member"),
+		toolutil.HintAction(actionMemberEdit, "change this member's access level"),
+		toolutil.HintAction(actionMemberRemove, "remove this member"),
 	)
 	return b.String()
 }
@@ -57,8 +57,8 @@ func FormatShareMarkdown(out ShareOutput) string {
 	c.Text("Description", out.Description)
 	c.URL(out.WebURL)
 	c.End(
-		toolutil.HintAction("group.members", "see all members in the group"),
-		toolutil.HintAction("group.group_member_unshare", "revoke this share"),
+		toolutil.HintAction(actionGroupMembers, "see all members in the group"),
+		toolutil.HintAction(actionMemberUnshare, "revoke this share"),
 	)
 	return b.String()
 }
@@ -87,8 +87,8 @@ func FormatBillableMembersMarkdown(out BillableMembersOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		toolutil.HintAction("group.group_billable_member_memberships_list", "see why a member is billable"),
-		toolutil.HintAction("group.group_billable_member_remove", "remove a removable billable member"),
+		toolutil.HintAction(actionBillableMemberships, "see why a member is billable"),
+		toolutil.HintAction(actionBillableMemberRemove, "remove a removable billable member"),
 	)
 	return b.String()
 }
@@ -117,7 +117,7 @@ func FormatBillableMembershipsMarkdown(out BillableMembershipsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, linked,
 		toolutil.HintPreserveLinks,
-		toolutil.HintAction("group.members", "inspect the source group's membership"),
+		toolutil.HintAction(actionGroupMembers, "inspect the source group's membership"),
 	)
 	return b.String()
 }

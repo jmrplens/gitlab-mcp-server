@@ -5,11 +5,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs for CI/CD Catalog routes, reused across the per-tool
-// discovery metadata so RelatedActions stay in sync with the catalog.
+// The canonical catalog action IDs this package names to a model, in the one
+// block both the discovery metadata below and the next-step hints in
+// markdown.go read. They were two blocks until they disagreed: these specs are
+// aggregated into the gitlab_ci_catalog group, so the domain is "ci_catalog"
+// and the "cicatalog." the metadata spelled after the owner package resolved
+// to nothing on every surface.
 const (
-	actionCatalogList  = "cicatalog.list"
-	actionCatalogGet   = "cicatalog.get"
+	actionCatalogList  = "ci_catalog.list"
+	actionCatalogGet   = "ci_catalog.get"
 	actionTemplateLint = "template.lint"
 )
 

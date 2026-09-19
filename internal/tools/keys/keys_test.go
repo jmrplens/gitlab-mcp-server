@@ -135,8 +135,15 @@ func TestGetKeyWithUser_APIError(t *testing.T) {
 // keyCardHints is the guidance section every SSH-key card ends with, naming
 // the sibling lookup by its canonical catalog ID rather than by a tool name
 // the serving surface may not register.
+//
+// The ID is taken from the constant the formatter itself reads rather than
+// spelled out here. Spelled out, this line pinned "keys.key_get_by_fingerprint"
+// across seven golden cards, and since the formatter said the same thing the
+// tests were green on an ID no surface has ever registered. Whether that
+// constant is itself a real action is a question this package cannot answer;
+// keys_catalog_test.go puts it to the catalog.
 const keyCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
-	"- Use action 'keys.key_get_by_fingerprint' to look a key up by its fingerprint instead of its ID\n"
+	"- Use action '" + actionKeyGetByFingerprint + "' to look a key up by its fingerprint instead of its ID\n"
 
 // TestFormatMarkdownString pins the whole card of a key with only the fields
 // GitLab always sends, the owning user as a nested object.

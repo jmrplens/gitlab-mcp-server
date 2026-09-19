@@ -1899,8 +1899,12 @@ func TestUpdate_EmptyAssigneesWithNestedConfirmProceeds(t *testing.T) {
 
 	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
 		Params: &mcp.CallToolParamsRaw{
-			Name:      "gitlab_execute_action",
-			Arguments: json.RawMessage(`{"action":"work_item.update","params":{"full_path":"my-group/my-project","work_item_iid":1,"assignee_ids":[],"confirm":true}}`),
+			Name: "gitlab_execute_action",
+			// The canonical ID, not "work_item.update": the guard reads confirm
+			// out of params and never resolves the action, so a fixture naming
+			// an action that does not exist passes while documenting a call a
+			// model cannot make.
+			Arguments: json.RawMessage(`{"action":"issue.work_item_update","params":{"full_path":"my-group/my-project","work_item_iid":1,"assignee_ids":[],"confirm":true}}`),
 		},
 	})
 

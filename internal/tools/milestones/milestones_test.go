@@ -1159,9 +1159,9 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"- **Updated**: 15 Jan 2026 10:00 UTC\n" +
 		"- **Description**: First release\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
-		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
-		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+		"- Use action 'project.milestone_issues' to list the issues in this milestone\n" +
+		"- Use action 'project.milestone_merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'project.milestone_update' to change this milestone's dates or state\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1180,9 +1180,9 @@ func TestFormatMarkdown_ExpiredIsWarned(t *testing.T) {
 		"- **State**: closed\n" +
 		"- " + toolutil.EmojiWarning + " **Expired**\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
-		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
-		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+		"- Use action 'project.milestone_issues' to list the issues in this milestone\n" +
+		"- Use action 'project.milestone_merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'project.milestone_update' to change this milestone's dates or state\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1198,9 +1198,9 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 		"- **IID**: 2\n" +
 		"- **State**: closed\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'milestone.issues' to list the issues in this milestone\n" +
-		"- Use action 'milestone.merge_requests' to list the merge requests in this milestone\n" +
-		"- Use action 'milestone.update' to change this milestone's dates or state\n"
+		"- Use action 'project.milestone_issues' to list the issues in this milestone\n" +
+		"- Use action 'project.milestone_merge_requests' to list the merge requests in this milestone\n" +
+		"- Use action 'project.milestone_update' to change this milestone's dates or state\n"
 	if md != want {
 		t.Errorf("FormatMarkdown()\n got %q\nwant %q", md, want)
 	}
@@ -1237,8 +1237,8 @@ func TestFormatListMarkdownString_WithExpired(t *testing.T) {
 		"2 items total\n\n" +
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
-		"- Use action 'milestone.get' to read one milestone by its IID\n" +
-		"- Use action 'milestone.create' to add a new milestone to the project\n"
+		"- Use action 'project.milestone_get' to read one milestone by its IID\n" +
+		"- Use action 'project.milestone_create' to add a new milestone to the project\n"
 	if md != want {
 		t.Errorf("FormatListMarkdownString()\n got %q\nwant %q", md, want)
 	}
@@ -1288,7 +1288,7 @@ func TestFormatIssuesMarkdownString_WithIssues(t *testing.T) {
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'issue.get' to read one of these issues in full\n" +
-		"- Use action 'milestone.merge_requests' to see the merge requests in this milestone instead\n"
+		"- Use action 'project.milestone_merge_requests' to see the merge requests in this milestone instead\n"
 	if md != want {
 		t.Errorf("FormatIssuesMarkdownString()\n got %q\nwant %q", md, want)
 	}
@@ -1338,7 +1338,7 @@ func TestFormatMergeRequestsMarkdownString_WithMRs(t *testing.T) {
 		"---\n\U0001F4A1 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'merge_request.get' to read one of these merge requests in full\n" +
-		"- Use action 'milestone.issues' to see the issues in this milestone instead\n"
+		"- Use action 'project.milestone_issues' to see the issues in this milestone instead\n"
 	if md != want {
 		t.Errorf("FormatMergeRequestsMarkdownString()\n got %q\nwant %q", md, want)
 	}

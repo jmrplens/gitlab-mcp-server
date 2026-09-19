@@ -2759,8 +2759,8 @@ func TestPushRuleOutputFromGL_Nil_MapsToTheZeroOutput(t *testing.T) {
 
 // pushRuleHints is the guidance section every push rule card ends with.
 const pushRuleHints = "---\n💡 **Next steps:**\n" +
-	"- Use action 'project.edit_push_rule' to modify these push rules\n" +
-	"- Use action 'project.delete_push_rule' to remove them\n"
+	"- Use action 'project.push_rule_edit' to modify these push rules\n" +
+	"- Use action 'project.push_rule_delete' to remove them\n"
 
 // TestFormatPushRuleMarkdown verifies the whole push rule card: a regex is a
 // code span, the flags are glyphs, and the rules GitLab left empty write

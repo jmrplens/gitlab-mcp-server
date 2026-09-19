@@ -6,7 +6,6 @@ import (
 	"context"
 	"net/http"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -88,6 +87,12 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // stopped copying the metadata's related actions would leave every feature
 // flag action pointing a model at environment.list and ci_variable.list, and
 // nothing would notice.
+//
+// What counts as a sibling is the package's own canonical ID set rather than a
+// string prefix typed here. The prefix used to be the literal "feature_flag.",
+// which is the spelling the specs got wrong: every related ID carried it,
+// every one of them named no catalog action, and this test was green on all
+// five. A test that repeats the value under test can only agree with it.
 func TestFeatureFlagActionSpecs_RelatedActions_NameSiblingFeatureFlagActions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := featureFlagSpecsByTool(t, ActionSpecs(client))
@@ -100,7 +105,7 @@ func TestFeatureFlagActionSpecs_RelatedActions_NameSiblingFeatureFlagActions(t *
 			}
 			named := 0
 			for _, related := range spec.RelatedActions {
-				if strings.HasPrefix(related, "feature_flag.") {
+				if slices.Contains(PublishedActionIDs, related) {
 					named++
 				}
 			}

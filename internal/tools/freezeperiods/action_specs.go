@@ -74,7 +74,7 @@ func freezePeriodOptions(actionName, individualTool string) toolutil.ActionSpecO
 		Aliases:           aliases,
 		Tags:              []string{"environment", "freeze_period", "deployment"},
 		Usage:             usage,
-		RelatedActions:    []string{"environment.list", "deployment.list", "pipeline.list"},
+		RelatedActions:    []string{"environment.list", "environment.deployment_list", "pipeline.list"},
 		ParameterGuidance: guidance,
 		OpenWorld:         true,
 		OwnerPackage:      "freezeperiods",

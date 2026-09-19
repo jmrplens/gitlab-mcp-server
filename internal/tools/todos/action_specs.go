@@ -5,6 +5,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs for the three to-do actions, read both by the
+// RelatedActions metadata below and by the HintAction calls in markdown.go.
+// These specs are aggregated into the gitlab_user catalog group, so the domain
+// is "user" and the action carries the "todo_" prefix; a "todo." spelling
+// names no action and a model following one is answered "unknown action".
+// TestTodoActionSpecs_PublishedActionIDs_NameCatalogActions holds them against
+// the catalog.
+const (
+	actionList        = "user.todo_list"
+	actionMarkDone    = "user.todo_mark_done"
+	actionMarkAllDone = "user.todo_mark_all_done"
+)
+
 // ActionSpecs returns canonical specs for todo actions exposed through gitlab_user.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -55,19 +68,19 @@ var todoActionMeta = map[string]todoActionMetaEntry{
 	"gitlab_todo_list": {
 		usage:       "List the authenticated user's to-do items. Use filters such as action, state, project_id, group_id, author_id, type, order_by, sort, and pagination to narrow pending or done items.",
 		aliases:     []string{"list todos", "show my to-do items", "list pending todos", "my todo list"},
-		related:     []string{"todo.mark_done", "todo.mark_all_done"},
+		related:     []string{actionMarkDone, actionMarkAllDone},
 		description: "List the authenticated user's to-do items with optional filtering and pagination. Returns: to-do items with action, target object, project, author, state, and pagination metadata. See also: gitlab_todo_mark_done, gitlab_todo_mark_all_done.",
 	},
 	"gitlab_todo_mark_done": {
 		usage:       "Mark a single pending to-do item as done by its ID. Find the ID with gitlab_todo_list first.",
 		aliases:     []string{"mark todo done", "complete todo", "dismiss todo"},
-		related:     []string{"todo.list", "todo.mark_all_done"},
+		related:     []string{actionList, actionMarkAllDone},
 		description: "Mark a single to-do item as done. Returns: a confirmation naming the to-do item ID. See also: gitlab_todo_list, gitlab_todo_mark_all_done.",
 	},
 	"gitlab_todo_mark_all_done": {
 		usage:       "Mark every pending to-do item for the authenticated user as done in one call.",
 		aliases:     []string{"mark all todos done", "clear all todos", "dismiss all todos"},
-		related:     []string{"todo.list", "todo.mark_done"},
+		related:     []string{actionList, actionMarkDone},
 		description: "Mark all pending to-do items as done. Returns: a confirmation that all items were cleared. See also: gitlab_todo_list, gitlab_todo_mark_done.",
 	},
 }

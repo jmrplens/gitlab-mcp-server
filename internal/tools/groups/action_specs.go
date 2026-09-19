@@ -9,33 +9,55 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes, to related actions and to
+// result hints alike. Both readers take them from this one block so the two
+// cannot drift: the related actions used to spell the push-rule and member
+// routes by the verb-first individual tool names ("group.get_push_rules",
+// "group.member_add"), which resolve to nothing, while the cards beside them
+// already named the routes the catalog really holds.
 const (
-	actionGroupGet          = "group.get"
-	actionGroupUpdate       = "group.update"
-	actionGroupProjects     = "group.projects"
-	actionGroupSubgroups    = "group.subgroups"
-	actionGroupSharedWith   = "group.shared_with"
-	actionGroupMembers      = "group.members"
-	actionGroupList         = "group.list"
-	actionGroupHookList     = "group.hook_list"
-	actionGroupHookGet      = "group.hook_get"
-	actionGroupCreate       = "group.create"
-	actionGroupTransferLocs = "group.transfer_locations"
-	actionGroupDelete       = "group.delete"
-	paramGroupID            = "group_id"
-	roleScopeGroup          = "scope_group"
-	statusSuccess           = "success"
-	tagGroup                = "group"
-	paramSearch             = "search"
-	paramHookID             = "hook_id"
-	hintHookIDSource        = "Numeric hook ID from gitlab_group_hook_list."
-	toolGroupHookAdd        = "gitlab_group_hook_add"
-	toolGroupHookTest       = "gitlab_group_hook_test"
-	toolGroupHookResend     = "gitlab_group_hook_resend_event"
-	toolGroupHookSetHeader  = "gitlab_group_hook_set_custom_header"
-	toolGroupHookDelHeader  = "gitlab_group_hook_delete_custom_header"
-	toolGroupHookSetURLVar  = "gitlab_group_hook_set_url_variable"
-	toolGroupHookDelURLVar  = "gitlab_group_hook_delete_url_variable"
+	actionGroupGet            = "group.get"
+	actionGroupUpdate         = "group.update"
+	actionGroupProjects       = "group.projects"
+	actionGroupSubgroups      = "group.subgroups"
+	actionGroupSharedWith     = "group.shared_with"
+	actionGroupMembers        = "group.members"
+	actionGroupList           = "group.list"
+	actionGroupHookList       = "group.hook_list"
+	actionGroupHookGet        = "group.hook_get"
+	actionGroupCreate         = "group.create"
+	actionGroupTransferLocs   = "group.transfer_locations"
+	actionGroupDelete         = "group.delete"
+	actionGroupMemberAdd      = "group.group_member_add"
+	actionGroupMemberEdit     = "group.group_member_edit"
+	actionProjectGet          = "project.get"
+	actionProjectCreate       = "project.create"
+	actionGroupHookAdd        = "group.hook_add"
+	actionGroupHookEdit       = "group.hook_edit"
+	actionGroupHookDelete     = "group.hook_delete"
+	actionGroupTransfer       = "group.transfer"
+	actionGroupUnshare        = "group.unshare_from_group"
+	actionGroupPushRuleGet    = "group.push_rule_get"
+	actionGroupPushRuleAdd    = "group.push_rule_add"
+	actionGroupPushRuleEdit   = "group.push_rule_edit"
+	actionGroupPushRuleDelete = "group.push_rule_delete"
+)
+
+const (
+	paramGroupID           = "group_id"
+	roleScopeGroup         = "scope_group"
+	statusSuccess          = "success"
+	tagGroup               = "group"
+	paramSearch            = "search"
+	paramHookID            = "hook_id"
+	hintHookIDSource       = "Numeric hook ID from gitlab_group_hook_list."
+	toolGroupHookAdd       = "gitlab_group_hook_add"
+	toolGroupHookTest      = "gitlab_group_hook_test"
+	toolGroupHookResend    = "gitlab_group_hook_resend_event"
+	toolGroupHookSetHeader = "gitlab_group_hook_set_custom_header"
+	toolGroupHookDelHeader = "gitlab_group_hook_delete_custom_header"
+	toolGroupHookSetURLVar = "gitlab_group_hook_set_url_variable"
+	toolGroupHookDelURLVar = "gitlab_group_hook_delete_url_variable"
 )
 
 // ActionSpecs returns canonical specs for core group and group hook actions.
@@ -272,7 +294,7 @@ func groupOptionsForAction(individualTool string) toolutil.ActionSpecOptions {
 	case "gitlab_group_members_list":
 		options.Usage = "List the direct and inherited members of a group. Use query, user_ids, show_seat_info, and pagination when the user asks who belongs to a group or at what access level."
 		options.Aliases = []string{"list group members", "show group members", "who is in this group"}
-		options.RelatedActions = []string{actionGroupGet, actionGroupProjects, "group.member_add"}
+		options.RelatedActions = []string{actionGroupGet, actionGroupProjects, actionGroupMemberAdd}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramGroupID: {
 				SemanticRole:   roleScopeGroup,
@@ -516,7 +538,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 	case "gitlab_group_share_with_group":
 		options.Usage = "Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)"
 		options.Aliases = []string{"share group via groups api", "grant another group access to this group", "create group-to-group share link"}
-		options.RelatedActions = []string{actionGroupSharedWith, "group.unshare_from_group", actionGroupGet}
+		options.RelatedActions = []string{actionGroupSharedWith, actionGroupUnshare, actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"shared_group_id": {
 				ValueSource:      "Numeric ID of the group to grant access to.",
@@ -576,7 +598,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 // tools. Returns true when it handled individualTool.
 func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionSpecOptions) bool {
 	options.Tags = []string{tagGroup, "push_rule"}
-	options.RelatedActions = []string{"group.get_push_rules", "group.add_push_rule", "group.edit_push_rule", "group.delete_push_rule"}
+	options.RelatedActions = []string{actionGroupPushRuleGet, actionGroupPushRuleAdd, actionGroupPushRuleEdit, actionGroupPushRuleDelete}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramGroupID: {
 			SemanticRole:     roleScopeGroup,
@@ -682,7 +704,7 @@ func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecO
 	case "gitlab_group_hook_list":
 		options.Usage = "List the webhooks configured on a group. Use when the user asks which webhooks fire for a group and its subgroups/projects. Requires Owner role."
 		options.Aliases = []string{"list group hooks", "show group webhooks", "group webhook list"}
-		options.RelatedActions = []string{actionGroupHookGet, "group.hook_add", actionGroupGet}
+		options.RelatedActions = []string{actionGroupHookGet, actionGroupHookAdd, actionGroupGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramGroupID: {
 				SemanticRole:   roleScopeGroup,
@@ -694,7 +716,7 @@ func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecO
 	case "gitlab_group_hook_get":
 		options.Usage = "Fetch a single group webhook by hook_id. Use to inspect a webhook's URL, enabled events, and SSL/header settings. Requires Owner role."
 		options.Aliases = []string{"get group hook", "show group webhook", "view group webhook details"}
-		options.RelatedActions = []string{actionGroupHookList, "group.hook_edit", "group.hook_delete"}
+		options.RelatedActions = []string{actionGroupHookList, actionGroupHookEdit, actionGroupHookDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramHookID: {
 				ValueSource:    hintHookIDSource,
@@ -705,7 +727,7 @@ func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecO
 	case "gitlab_group_hook_delete":
 		options.Usage = "Delete a group webhook by hook_id. Destructive and irreversible. Confirm before calling. Requires Owner role."
 		options.Aliases = []string{"delete group hook", "remove group webhook", "destroy group webhook"}
-		options.RelatedActions = []string{actionGroupHookList, actionGroupHookGet, "group.hook_add"}
+		options.RelatedActions = []string{actionGroupHookList, actionGroupHookGet, actionGroupHookAdd}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramHookID: {
 				ValueSource:    hintHookIDSource,
@@ -728,7 +750,7 @@ func applyGroupHookMetadata(individualTool string, options *toolutil.ActionSpecO
 // applyGroupHookSubOpMetadata fills in discovery metadata for the group-webhook
 // sub-operation tools (custom headers, URL variables, test triggers, resends).
 func applyGroupHookSubOpMetadata(individualTool string, options *toolutil.ActionSpecOptions) {
-	options.RelatedActions = []string{actionGroupHookGet, actionGroupHookList, "group.hook_edit"}
+	options.RelatedActions = []string{actionGroupHookGet, actionGroupHookList, actionGroupHookEdit}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramHookID: {
 			ValueSource:    hintHookIDSource,
@@ -784,7 +806,7 @@ func applyGroupHookAddEditMetadata(individualTool string, options *toolutil.Acti
 			"enum": []any{"wildcard", "regex", "all_branches"},
 		}),
 	}
-	options.RelatedActions = []string{actionGroupHookList, actionGroupHookGet, "group.hook_delete"}
+	options.RelatedActions = []string{actionGroupHookList, actionGroupHookGet, actionGroupHookDelete}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"url": {
 			ValueSource:      "HTTP(S) endpoint that should receive webhook payloads.",

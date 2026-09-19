@@ -10,12 +10,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionList        = "todo.list"
-	actionMarkDone    = "todo.mark_done"
-	actionMarkAllDone = "todo.mark_all_done"
-)
+// The canonical action IDs the hints below name are declared once in
+// action_specs.go, beside the specs that define them, so the hints and the
+// RelatedActions metadata cannot drift apart. They used to be two blocks and
+// they did drift: both spelled the domain "todo", which names no action.
 
 // targetTitle returns the to-do target's title, or "" when no target is set.
 func targetTitle(t Output) string {

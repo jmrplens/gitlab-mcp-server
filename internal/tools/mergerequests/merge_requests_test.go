@@ -2080,6 +2080,14 @@ func TestFormatApproveMarkdown_Empty(t *testing.T) {
 
 // TestFormatCommitsMarkdown_Populated verifies the whole rendering of the
 // commits of a merge request.
+//
+// The two hint lines name their actions through the constants the formatter
+// reads rather than spelling them out. Spelled out, this test pinned
+// "commit.get", and since the formatter said the same thing it was green on an
+// invention: there is no commit domain, a single commit being read through
+// repository.commit_get. Whether those constants are real actions is a
+// question this package cannot answer; action_specs_catalog_test.go puts every
+// ID this package publishes to the catalog.
 func TestFormatCommitsMarkdown_Populated(t *testing.T) {
 	got := FormatCommitsMarkdown(CommitsOutput{
 		Commits: []commits.Output{
@@ -2093,8 +2101,8 @@ func TestFormatCommitsMarkdown_Populated(t *testing.T) {
 		"| [abc1234](https://gitlab.example.com/c/abc1234) | feat: add login | Alice | 1 Jan 2026 |\n" +
 		"\n1 items total\n" +
 		"\n---\n💡 **Next steps:**\n" + preserveLinksHint +
-		"- Use action 'commit.get' to view one of these commits\n" +
-		"- Use action 'mr_review.changes_get' to review the combined diff\n"
+		"- Use action '" + actionCommitGet + "' to view one of these commits\n" +
+		"- Use action '" + actionChangesGet + "' to review the combined diff\n"
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}

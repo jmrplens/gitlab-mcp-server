@@ -7,6 +7,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs this package publishes as RelatedActions. Appearance
+// is served from the gitlab_admin catalog group rather than a group of its
+// own, so the domain is "admin"; an "appearance." spelling names no action and
+// a model following it is answered "unknown action".
+const (
+	actionAdminSettingsGet   = "admin.settings_get"
+	actionAdminAppearanceGet = "admin.appearance_get"
+)
+
 // ActionSpecs returns canonical specs for broadcast message tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -39,7 +48,7 @@ func broadcastMessageOptions(individualTool string) toolutil.ActionSpecOptions {
 		Aliases:        []string{individualTool},
 		Tags:           []string{"admin", "broadcast"},
 		Usage:          "Manage instance broadcast messages (list/get/create/update/delete). Use for admin-visible announcements and scheduled banners.",
-		RelatedActions: []string{"admin.settings_get", "appearance.appearance_get"},
+		RelatedActions: []string{actionAdminSettingsGet, actionAdminAppearanceGet},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"id": {
 				SemanticRole:   "broadcast_message_id",

@@ -12,27 +12,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. A hint names the ID every surface
-// resolves — the dynamic surface executes it, and the meta and individual
-// surfaces resolve it to their own tool names — so a hint written this way is
-// never a name the serving surface does not register, which is what the mix of
-// tool names and bare action words in these hints used to be.
-const (
-	hintActionMRCreate        = "merge_request.create"
-	hintActionMRCommits       = "merge_request.commits"
-	hintActionMRPipelines     = "merge_request.pipelines"
-	hintActionMRRelatedIssues = "merge_request.related_issues"
-	hintActionMRDependencies  = "merge_request.dependencies_list"
-	hintActionMRParticipants  = "merge_request.participants"
-	hintActionChangesGet      = "mr_review.changes_get"
-	hintActionDiscussionList  = "mr_review.discussion_list"
-	hintActionNoteCreate      = "mr_review.note_create"
-	hintActionIssueGet        = "issue.get"
-	hintActionCommitGet       = "commit.get"
-	hintActionPipelineGet     = "pipeline.get"
-	hintActionJobList         = "job.list"
-	hintActionTodoMarkDone    = "user.todo_mark_done"
-)
+// The hints below name canonical action IDs, which is the one form every
+// surface resolves: the dynamic surface executes the ID, and the meta and
+// individual surfaces resolve it to their own tool names, so a hint written
+// this way is never a name the serving surface does not register. The IDs
+// themselves are declared once in action_specs.go, beside the related-action
+// metadata that names the same actions. A second block here is what let the
+// two drift apart, one spelling the diff action "mr_review.changes_get" and
+// the other "merge_request.changes_get".
 
 type mergeRequestNotFoundOutput struct {
 	Identifier string
@@ -88,9 +75,9 @@ func FormatMarkdown(mr Output) string {
 	c.Text("Description", mr.Description)
 	c.Note(toolutil.RichContentHint(toolutil.DetectRichContent(mr.Description), mr.WebURL))
 	c.End(
-		toolutil.HintAction(hintActionChangesGet, "see the diff of this merge request"),
-		toolutil.HintAction(hintActionDiscussionList, "see its review threads"),
-		toolutil.HintAction(hintActionMRPipelines, "check its CI status"),
+		toolutil.HintAction(actionChangesGet, "see the diff of this merge request"),
+		toolutil.HintAction(actionDiscussionList, "see its review threads"),
+		toolutil.HintAction(actionMRPipelines, "check its CI status"),
 		toolutil.HintAction(actionMRApprove, "approve it"),
 		toolutil.HintAction(actionMRMerge, "merge it"),
 	)
@@ -242,8 +229,8 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
 		toolutil.HintAction(actionMRGet, "see one merge request in full"),
-		toolutil.HintAction(hintActionMRCreate, "open a new merge request"),
-		toolutil.HintAction(hintActionChangesGet, "review a merge request's diff"),
+		toolutil.HintAction(actionMRCreate, "open a new merge request"),
+		toolutil.HintAction(actionChangesGet, "review a merge request's diff"),
 	)
 	return b.String()
 }
@@ -281,8 +268,8 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionCommitGet, "view one of these commits"),
-		toolutil.HintAction(hintActionChangesGet, "review the combined diff"),
+		toolutil.HintAction(actionCommitGet, "view one of these commits"),
+		toolutil.HintAction(actionChangesGet, "review the combined diff"),
 	)
 	return b.String()
 }
@@ -305,8 +292,8 @@ func FormatPipelinesMarkdown(out PipelinesOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
-		toolutil.HintAction(hintActionPipelineGet, "view one pipeline's details"),
-		toolutil.HintAction(hintActionJobList, "see its job statuses"),
+		toolutil.HintAction(pipelineGetAction, "view one pipeline's details"),
+		toolutil.HintAction(actionJobList, "see its job statuses"),
 	)
 	return b.String()
 }
@@ -358,7 +345,7 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
 		toolutil.HintAction(actionMRGet, "view the merge request"),
-		toolutil.HintAction(hintActionNoteCreate, "notify these participants"),
+		toolutil.HintAction(actionNoteCreate, "notify these participants"),
 	)
 	return b.String()
 }
@@ -398,7 +385,7 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 	toolutil.WriteListHeading(&b, "Issues Closed on Merge", len(out.Issues), out.Pagination)
 	writeIssueRows(&b, out.Issues)
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionIssueGet, "view one of these issues"),
+		toolutil.HintAction(actionIssueGet, "view one of these issues"),
 		toolutil.HintAction(actionMRMerge, "merge and close them"),
 	)
 	return b.String()
@@ -414,8 +401,8 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 	toolutil.WriteListHeading(&b, "Related Issues", len(out.Issues), out.Pagination)
 	writeIssueRows(&b, out.Issues)
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionIssueGet, "view one issue's details"),
-		toolutil.HintAction(hintActionMRRelatedIssues, "list them again after the merge request changes"),
+		toolutil.HintAction(actionIssueGet, "view one issue's details"),
+		toolutil.HintAction(actionMRRelatedIssues, "list them again after the merge request changes"),
 	)
 	return b.String()
 }
@@ -456,8 +443,8 @@ func FormatCreatePipelineMarkdown(p pipelines.Output) string {
 	c.Code("SHA", p.SHA)
 	c.URL(p.WebURL)
 	c.End(
-		toolutil.HintAction(hintActionPipelineGet, "check the pipeline's progress"),
-		toolutil.HintAction(hintActionJobList, "monitor its job statuses"),
+		toolutil.HintAction(pipelineGetAction, "check the pipeline's progress"),
+		toolutil.HintAction(actionJobList, "monitor its job statuses"),
 	)
 	return b.String()
 }
@@ -494,7 +481,7 @@ func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 	c.URL(t.TargetURL)
 	c.End(
 		toolutil.HintAction(actionMRGet, "view the merge request this is about"),
-		toolutil.HintAction(hintActionTodoMarkDone, "mark this todo as completed"),
+		toolutil.HintAction(actionTodoMarkDone, "mark this todo as completed"),
 	)
 	return b.String()
 }
@@ -510,7 +497,7 @@ func FormatDependencyMarkdown(d DependencyOutput) string {
 	writeBlockingMR(c, "Blocked MR", d.BlockedMergeRequest)
 	c.End(
 		toolutil.HintAction(actionMRGet, "view either merge request in full"),
-		toolutil.HintAction(hintActionMRDependencies, "list every dependency of this merge request"),
+		toolutil.HintAction(actionMRDependencies, "list every dependency of this merge request"),
 	)
 	return b.String()
 }

@@ -8,14 +8,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs for the draft note actions, and the one block every
+// file in this package reads: the related-action metadata below and the result
+// hints in markdown.go alike. These specs are aggregated into the
+// gitlab_mr_review catalog group, so the domain is mr_review and never the
+// owner package name. markdown.go used to keep a second block of its own
+// spelling the domain correctly while these spelled it "mrdraftnotes", so the
+// served hints resolved and every related action here named an action no
+// surface could execute.
 const (
-	actionDraftNoteList       = "mrdraftnotes.draft_note_list"
-	actionDraftNoteGet        = "mrdraftnotes.draft_note_get"
-	actionDraftNotePublish    = "mrdraftnotes.draft_note_publish"
-	actionDraftNotePublishAll = "mrdraftnotes.draft_note_publish_all"
-	paramMergeRequestIID      = "merge_request_iid"
-	paramProjectID            = "project_id"
-	paramNoteID               = "note_id"
+	actionDraftNoteList       = "mr_review.draft_note_list"
+	actionDraftNoteGet        = "mr_review.draft_note_get"
+	actionDraftNoteCreate     = "mr_review.draft_note_create"
+	actionDraftNoteUpdate     = "mr_review.draft_note_update"
+	actionDraftNoteDelete     = "mr_review.draft_note_delete"
+	actionDraftNotePublish    = "mr_review.draft_note_publish"
+	actionDraftNotePublishAll = "mr_review.draft_note_publish_all"
+)
+
+const (
+	paramMergeRequestIID = "merge_request_iid"
+	paramProjectID       = "project_id"
+	paramNoteID          = "note_id"
 )
 
 // ActionSpecs returns canonical specs for merge request draft note actions.
@@ -128,7 +142,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_mr_draft_note_list": {
 		Usage:   "List the pending (unpublished) draft review notes on a merge request. Use before publishing to review what will be posted, or to find a draft note's ID for get/update/delete.",
 		Aliases: []string{"list draft notes", "show pending mr review comments", "list unpublished mr notes"},
-		Related: []string{actionDraftNoteGet, "mrdraftnotes.draft_note_create", actionDraftNotePublishAll},
+		Related: []string{actionDraftNoteGet, actionDraftNoteCreate, actionDraftNotePublishAll},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,
@@ -138,7 +152,7 @@ var draftNoteActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_mr_draft_note_get": {
 		Usage:   "Get one pending draft note by ID, including its full body and any inline diff position. Use after list to inspect a specific draft before updating or publishing it.",
 		Aliases: []string{"get draft note", "show draft note details", "fetch pending mr comment"},
-		Related: []string{actionDraftNoteList, "mrdraftnotes.draft_note_update", actionDraftNotePublish},
+		Related: []string{actionDraftNoteList, actionDraftNoteUpdate, actionDraftNotePublish},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			paramProjectID:       projectGuidance,
 			paramMergeRequestIID: mrIIDGuidance,

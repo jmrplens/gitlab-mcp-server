@@ -5,10 +5,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes to a model, read by both
+// the specs here and the hints in markdown.go so the two cannot drift. The
+// namespace actions are aggregated into the "user" group rather than one named
+// after this package, so their domain is "user" and never "namespace".
 const (
-	actionNamespaceGet    = "namespace.get"
+	actionNamespaceGet    = "user.namespace_get"
+	actionNamespaceList   = "user.namespace_list"
+	actionNamespaceSearch = "user.namespace_search"
 	actionGroupList       = "group.list"
-	actionNamespaceSearch = "namespace.search"
+	actionGroupProjects   = "group.projects"
 )
 
 // ActionSpecs returns canonical specs for namespace actions exposed through gitlab_user.
@@ -43,7 +49,7 @@ var namespaceActionMeta = map[string]namespaceActionMetaEntry{
 	"gitlab_namespace_get": {
 		usage:       "Get one namespace by numeric ID or full path. Use after a list or search result, or when the prompt already names a concrete namespace.",
 		aliases:     []string{"get namespace", "show namespace details", "fetch namespace"},
-		related:     []string{"namespace.list", actionNamespaceSearch, "group.get"},
+		related:     []string{actionNamespaceList, actionNamespaceSearch, "group.get"},
 		description: "Get a single namespace by ID or path. Returns: the namespace with id, name, path, kind, full path, parent id, plan, trial state, and seat usage. See also: gitlab_namespace_list, gitlab_namespace_search.",
 	},
 	"gitlab_namespace_exists": {
@@ -55,7 +61,7 @@ var namespaceActionMeta = map[string]namespaceActionMetaEntry{
 	"gitlab_namespace_search": {
 		usage:       "Search namespaces by query string across name and path. Use when the user provides a partial namespace name or path fragment.",
 		aliases:     []string{"search namespaces", "find namespace", "lookup namespace by name"},
-		related:     []string{"namespace.list", actionNamespaceGet, actionGroupList},
+		related:     []string{actionNamespaceList, actionNamespaceGet, actionGroupList},
 		description: "Search namespaces by name or path. Returns: matching namespaces with id, name, path, kind, and pagination metadata. See also: gitlab_namespace_list, gitlab_namespace_get.",
 	},
 }

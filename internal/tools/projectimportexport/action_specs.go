@@ -67,13 +67,17 @@ type projectImportExportMetaEntry struct {
 	overrides []toolutil.InputSchemaOverride
 }
 
-// Canonical action IDs used for cross-linking related actions.
+// Canonical action IDs used for cross-linking related actions, read by both
+// the metadata below and the hints in markdown.go so the two cannot drift.
+// Every action here is aggregated into the "project" group rather than one
+// named after this package, so the domain is "project" and never
+// "projectimportexport".
 const (
-	actionExportSchedule = "projectimportexport.export_schedule"
-	actionExportStatus   = "projectimportexport.export_status"
-	actionExportDownload = "projectimportexport.export_download"
-	actionImportFromFile = "projectimportexport.import_from_file"
-	actionImportStatus   = "projectimportexport.import_status"
+	actionExportSchedule = "project.export_schedule"
+	actionExportStatus   = "project.export_status"
+	actionExportDownload = "project.export_download"
+	actionImportFromFile = "project.import_from_file"
+	actionImportStatus   = "project.import_status"
 	actionProjectGet     = "project.get"
 )
 
