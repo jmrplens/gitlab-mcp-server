@@ -9,13 +9,34 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical related-action IDs referenced across schedule discovery metadata.
+// The canonical catalog action IDs this package names to a model, in the one
+// block both the discovery metadata below and the next-step hints in
+// markdown.go read. Every surface resolves the ID: the dynamic surface
+// executes it and the meta and individual surfaces resolve it to their own
+// tool names, so a hint written this way never names something the serving
+// surface does not register.
+//
+// The domain is "pipeline" because these specs are aggregated into the
+// gitlab_pipeline catalog group. It was two blocks until they disagreed, and
+// the metadata's "pipeline_schedule." half named the package rather than the
+// group, so it resolved to nothing anywhere.
 const (
-	actionScheduleList     = "pipeline_schedule.schedule_list"
-	actionScheduleGet      = "pipeline_schedule.schedule_get"
-	actionScheduleUpdate   = "pipeline_schedule.schedule_update"
-	actionScheduleRun      = "pipeline_schedule.schedule_run"
-	actionPipelineList     = "pipeline.list"
+	actionScheduleList           = "pipeline.schedule_list"
+	actionScheduleGet            = "pipeline.schedule_get"
+	actionScheduleCreate         = "pipeline.schedule_create"
+	actionScheduleUpdate         = "pipeline.schedule_update"
+	actionScheduleDelete         = "pipeline.schedule_delete"
+	actionScheduleRun            = "pipeline.schedule_run"
+	actionScheduleTakeOwnership  = "pipeline.schedule_take_ownership"
+	actionScheduleCreateVariable = "pipeline.schedule_create_variable"
+	actionScheduleEditVariable   = "pipeline.schedule_edit_variable"
+	actionScheduleDeleteVariable = "pipeline.schedule_delete_variable"
+	actionScheduleListTriggered  = "pipeline.schedule_list_triggered_pipelines"
+	actionPipelineGet            = "pipeline.get"
+	actionPipelineList           = "pipeline.list"
+)
+
+const (
 	paramScheduleID        = "schedule_id"
 	rolePipelineScheduleID = "pipeline_schedule_id"
 	exampleScheduleID      = "params.schedule_id:13"
@@ -87,7 +108,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_list": {
 		usage:   "List pipeline schedules in a project. Use scope to filter active or inactive schedules and order_by/sort with pagination='keyset' for large ordered result sets.",
 		aliases: []string{"list pipeline schedules", "show scheduled pipelines", "list cron pipelines"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_create"},
+		related: []string{actionScheduleGet, actionScheduleCreate},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -138,7 +159,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_update": {
 		usage:   "Edit a pipeline schedule's description, ref, cron, cron_timezone, active state, or inputs. Only the schedule owner can edit. Take ownership first if needed.",
 		aliases: []string{"update pipeline schedule", "edit scheduled pipeline", "change schedule cron"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_take_ownership", actionScheduleList},
+		related: []string{actionScheduleGet, actionScheduleTakeOwnership, actionScheduleList},
 		guidance: map[string]toolutil.ParameterGuidance{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
@@ -164,7 +185,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_run": {
 		usage:   "Trigger a pipeline schedule to run immediately. Only the schedule owner can run it. Runs are rate-limited to roughly one per minute.",
 		aliases: []string{"run pipeline schedule", "trigger scheduled pipeline now", "play schedule"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_list_triggered_pipelines", "pipeline_schedule.schedule_take_ownership"},
+		related: []string{actionScheduleGet, actionScheduleListTriggered, actionScheduleTakeOwnership},
 		guidance: map[string]toolutil.ParameterGuidance{
 			paramScheduleID: {
 				SemanticRole:   rolePipelineScheduleID,
@@ -190,7 +211,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_create_variable": {
 		usage:   "Create a pipeline schedule variable. Provide key and value. Value is always required. Only the schedule owner can manage variables.",
 		aliases: []string{"create pipeline schedule variable", "add schedule variable", "set schedule env var"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_edit_variable", "pipeline_schedule.schedule_delete_variable"},
+		related: []string{actionScheduleGet, actionScheduleEditVariable, actionScheduleDeleteVariable},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:     "ci_variable_key",
@@ -204,7 +225,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_edit_variable": {
 		usage:   "Edit an existing pipeline schedule variable by key. Provide the new value. Value is always required. Only the schedule owner can manage variables.",
 		aliases: []string{"edit pipeline schedule variable", "update schedule variable", "change schedule env var"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_create_variable", "pipeline_schedule.schedule_delete_variable"},
+		related: []string{actionScheduleGet, actionScheduleCreateVariable, actionScheduleDeleteVariable},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:   "ci_variable_key",
@@ -217,7 +238,7 @@ var scheduleActionMeta = map[string]scheduleActionMetaEntry{
 	"gitlab_pipeline_schedule_delete_variable": {
 		usage:   "Delete a pipeline schedule variable by key. Destructive. Confirm project_id, schedule_id, and key before calling.",
 		aliases: []string{"delete pipeline schedule variable", "remove schedule variable", "destroy pipeline schedule variable", "drop schedule variable"},
-		related: []string{actionScheduleGet, "pipeline_schedule.schedule_create_variable", "pipeline_schedule.schedule_edit_variable"},
+		related: []string{actionScheduleGet, actionScheduleCreateVariable, actionScheduleEditVariable},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:   "ci_variable_key",

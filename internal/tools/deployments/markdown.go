@@ -12,18 +12,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The canonical catalog IDs the hints name. A deployment action is projected
-// under the environment domain, so the ID every surface resolves is
-// "environment.deployment_get" and not the "deployment.get" the cross-link
-// constants in action_specs.go spell.
-const (
-	hintActionDeploymentGet     = "environment.deployment_get"
-	hintActionDeploymentList    = "environment.deployment_list"
-	hintActionDeploymentMRs     = "environment.deployment_merge_requests"
-	hintActionDeploymentApprove = "environment.deployment_approve_or_reject"
-	hintActionEnvironmentGet    = "environment.get"
-)
-
 type deploymentNotFoundOutput struct {
 	Identifier string
 }
@@ -182,10 +170,10 @@ func approvedCount(approvals []toolutil.DeploymentApprovalOutput) int {
 func deploymentHints(d Output) []string {
 	hints := make([]string, 0, 3)
 	if d.PendingApprovalCount > 0 {
-		hints = append(hints, toolutil.HintAction(hintActionDeploymentApprove, "approve or reject this blocked deployment"))
+		hints = append(hints, toolutil.HintAction(actionDeploymentApprove, "approve or reject this blocked deployment"))
 	}
-	hints = append(hints, toolutil.HintAction(hintActionDeploymentMRs, "list the merge requests this deployment shipped"))
-	return append(hints, toolutil.HintAction(hintActionEnvironmentGet, "see the environment it deployed to"))
+	hints = append(hints, toolutil.HintAction(actionDeploymentMRs, "list the merge requests this deployment shipped"))
+	return append(hints, toolutil.HintAction(actionEnvironmentGet, "see the environment it deployed to"))
 }
 
 // FormatListMarkdown renders a page of a project's deployments as a Markdown
@@ -215,9 +203,9 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionDeploymentGet, "see one deployment, its approvals and its pipeline"),
-		toolutil.HintAction(hintActionDeploymentList, "page through the rest of the project's deployments"),
-		toolutil.HintAction(hintActionDeploymentMRs, "list the merge requests a deployment shipped"),
+		toolutil.HintAction(actionDeploymentGet, "see one deployment, its approvals and its pipeline"),
+		toolutil.HintAction(actionDeploymentList, "page through the rest of the project's deployments"),
+		toolutil.HintAction(actionDeploymentMRs, "list the merge requests a deployment shipped"),
 	)
 	return b.String()
 }
@@ -244,8 +232,8 @@ func FormatApproveOrRejectMarkdown(o ApproveOrRejectOutput) string {
 	var b strings.Builder
 	b.WriteString(toolutil.EmojiSuccess + " " + toolutil.EscapeMdTableCell(o.Message) + "\n")
 	toolutil.WriteHints(&b,
-		toolutil.HintAction(hintActionDeploymentGet, "read the deployment back with its approvals"),
-		toolutil.HintAction(hintActionDeploymentList, "see the other deployments to this environment"),
+		toolutil.HintAction(actionDeploymentGet, "read the deployment back with its approvals"),
+		toolutil.HintAction(actionDeploymentList, "see the other deployments to this environment"),
 	)
 	return b.String()
 }
