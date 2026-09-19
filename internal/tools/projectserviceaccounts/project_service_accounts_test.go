@@ -2,7 +2,11 @@ package projectserviceaccounts
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -249,6 +253,122 @@ func TestCreateUpdateDelete(t *testing.T) {
 	})
 }
 
+// TestAccountMutations_OptionalFieldsTravelUnderTheirOwnKeys pins both halves
+// of what the account handlers put on the wire: a field the caller named
+// reaches GitLab under its own key, and one the caller left unset does not
+// reach it at all. The guards deciding that are invertible in silence, and
+// each direction is its own defect — inverted, the caller's name never leaves
+// this process, while an unset one arrives as "", which GitLab reads as an
+// instruction to blank the field.
+func TestAccountMutations_OptionalFieldsTravelUnderTheirOwnKeys(t *testing.T) {
+	t.Run("create sends every named field", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "name", "svc")
+			assertSent(t, body, "username", "svc-user")
+			assertSent(t, body, "email", "svc@example.com")
+			testutil.RespondJSON(w, http.StatusCreated, projectServiceAccountJSON)
+		}))
+		if _, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "svc", Username: "svc-user", Email: "svc@example.com"}); err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("create omits every unnamed field", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "username", "svc-user")
+			assertNotSent(t, body, "name", "email")
+			testutil.RespondJSON(w, http.StatusCreated, projectServiceAccountJSON)
+		}))
+		if _, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Username: "svc-user"}); err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("update sends every named field", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "name", "renamed")
+			assertSent(t, body, "username", "renamed-user")
+			assertSent(t, body, "email", "renamed@example.com")
+			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountJSON)
+		}))
+		if _, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", ServiceAccountID: 7, Name: "renamed", Username: "renamed-user", Email: "renamed@example.com"}); err != nil {
+			t.Fatalf("Update() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("update omits every unnamed field", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "email", "renamed@example.com")
+			assertNotSent(t, body, "name", "username")
+			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountJSON)
+		}))
+		if _, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", ServiceAccountID: 7, Email: "renamed@example.com"}); err != nil {
+			t.Fatalf("Update() unexpected error: %v", err)
+		}
+	})
+}
+
+// TestPATMutations_RequestCarriesWhatTheCallerAskedFor pins the token requests
+// the same way: the name, the scopes and the two optional fields each reach
+// GitLab under their own key, and an expiry or description the caller withheld
+// is absent rather than empty. A token created with the wrong scopes or with no
+// expiry at all is a credential nobody asked for, and nothing above this reads
+// the request back.
+func TestPATMutations_RequestCarriesWhatTheCallerAskedFor(t *testing.T) {
+	t.Run("create sends name, scopes, description and expiry", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "name", "tok")
+			assertSent(t, body, "description", "deploy token")
+			assertSent(t, body, "expires_at", "2026-12-31")
+			assertSentList(t, body, "scopes", "api", "read_repository")
+			testutil.RespondJSON(w, http.StatusCreated, projectServiceAccountPATJSON)
+		}))
+		if _, err := CreatePAT(context.Background(), client, CreatePATInput{
+			ProjectID: "42", ServiceAccountID: 7, Name: "tok",
+			Scopes: []string{"api", "read_repository"}, Description: "deploy token", ExpiresAt: "2026-12-31",
+		}); err != nil {
+			t.Fatalf("CreatePAT() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("create omits a description and expiry the caller withheld", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := decodeRequestBody(t, r)
+			assertSent(t, body, "name", "tok")
+			assertNotSent(t, body, "description", "expires_at")
+			testutil.RespondJSON(w, http.StatusCreated, projectServiceAccountPATJSON)
+		}))
+		if _, err := CreatePAT(context.Background(), client, CreatePATInput{ProjectID: "42", ServiceAccountID: 7, Name: "tok", Scopes: []string{"api"}}); err != nil {
+			t.Fatalf("CreatePAT() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rotate sends the new expiry", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assertSent(t, decodeRequestBody(t, r), "expires_at", "2026-12-31")
+			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountPATJSON)
+		}))
+		if _, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 11, ExpiresAt: "2026-12-31"}); err != nil {
+			t.Fatalf("RotatePAT() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rotate omits an expiry the caller withheld", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assertNotSent(t, decodeRequestBody(t, r), "expires_at")
+			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountPATJSON)
+		}))
+		if _, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 11}); err != nil {
+			t.Fatalf("RotatePAT() unexpected error: %v", err)
+		}
+	})
+}
+
 // TestPATList validates PAT listing, supported query filters, and output mapping.
 func TestPATList(t *testing.T) {
 	t.Run("list PATs with filters", func(t *testing.T) {
@@ -472,28 +592,35 @@ func TestPATAPIErrors(t *testing.T) {
 }
 
 // TestPATTokenIDHint verifies ambiguous token lookup failures guide callers to
-// use the PAT ID rather than the service account user ID.
+// use the PAT ID rather than the service account user ID. GitLab answers a
+// token id it cannot place with any of three codes, depending on where the
+// lookup gave up, and the hint is attached to all three: under the two that
+// only the 404 used to stand in for, a caller was told the request was refused
+// and nothing about the identifier that refused it.
 func TestPATTokenIDHint(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-	}))
-
-	for _, tt := range []struct {
-		name string
-		call func() error
-	}{
-		{name: "rotate", call: func() error {
-			_, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
-			return err
-		}},
-		{name: "revoke", call: func() error {
-			return RevokePAT(context.Background(), client, RevokePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.call()
-			for _, want := range []string{"token_id", "service_account_id", "service_account_pat_list", "service_account_pat_create"} {
-				assertErrorContains(t, err, want)
+	for _, status := range []int{http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"refused"}`)
+			}))
+			for _, tt := range []struct {
+				name string
+				call func() error
+			}{
+				{name: "rotate", call: func() error {
+					_, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
+					return err
+				}},
+				{name: "revoke", call: func() error {
+					return RevokePAT(context.Background(), client, RevokePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
+				}},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					err := tt.call()
+					for _, want := range []string{"token_id", "service_account_id", "service_account_pat_list", "service_account_pat_create"} {
+						assertErrorContains(t, err, want)
+					}
+				})
 			}
 		})
 	}
@@ -766,6 +893,170 @@ func TestProjectServiceAccounts_UnreadableCapturedPublicEmail(t *testing.T) {
 				t.Fatal("error = nil, want the captured decode to fail")
 			}
 		})
+	}
+}
+
+// TestAccountOutput_EachFieldComesFromItsOwnSource drives one account through
+// the handler with six values that are all different from one another, so that
+// a field filled from a neighbour's source is a failure rather than a
+// coincidence. Nothing else here would notice: a converter is straight-line
+// assignment, which no branch coverage scores, and the fixtures that agree on
+// two values make two fields indistinguishable.
+func TestAccountOutput_EachFieldComesFromItsOwnSource(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"name":"Service Account","username":"svc-user",`+
+			`"email":"svc@example.com","unconfirmed_email":"pending@example.com","public_email":"public@example.com"}`)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Name: "Service Account"})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	for _, tt := range []struct {
+		field     string
+		got, want any
+	}{
+		{"id", out.ID, int64(7)},
+		{"name", out.Name, "Service Account"},
+		{"username", out.Username, "svc-user"},
+		{"email", out.Email, "svc@example.com"},
+		{"unconfirmed_email", out.UnconfirmedEmail, "pending@example.com"},
+		{"public_email", out.PublicEmail, "public@example.com"},
+	} {
+		t.Run(tt.field, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %#v, want %#v", tt.field, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPATOutput_EachFieldComesFromItsOwnSource does the same for a token, whose
+// converter has the more confusable pairs: two booleans that a revoked token
+// sets opposite ways, two identifiers, two names and three timestamps. The
+// fixture gives each one a value no other field carries.
+func TestPATOutput_EachFieldComesFromItsOwnSource(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":11,"name":"tok","description":"deploy token",`+
+			`"revoked":true,"active":false,"user_id":7,"scopes":["api"],"token":"glpat-test",`+
+			`"created_at":"2026-01-01T02:03:04Z","last_used_at":"2026-01-02T03:04:05Z","expires_at":"2026-12-31",`+
+			`"granular":true,"last_used_ips":["192.0.2.10"]}`)
+	}))
+
+	out, err := CreatePAT(context.Background(), client, CreatePATInput{ProjectID: "42", ServiceAccountID: 7, Name: "tok", Scopes: []string{"api"}})
+	if err != nil {
+		t.Fatalf("CreatePAT() unexpected error: %v", err)
+	}
+	for _, tt := range []struct {
+		field     string
+		got, want any
+	}{
+		{"id", out.ID, int64(11)},
+		{"name", out.Name, "tok"},
+		{"description", out.Description, "deploy token"},
+		{"revoked", out.Revoked, true},
+		{"active", out.Active, false},
+		{"user_id", out.UserID, int64(7)},
+		{"token", out.Token, "glpat-test"},
+		{"created_at", out.CreatedAt, "2026-01-01T02:03:04Z"},
+		{"last_used_at", out.LastUsedAt, "2026-01-02T03:04:05Z"},
+		{"expires_at", out.ExpiresAt, "2026-12-31"},
+		{"granular", out.Granular, true},
+		{"scopes", strings.Join(out.Scopes, ","), "api"},
+		{"last_used_ips", strings.Join(out.LastUsedIPs, ","), "192.0.2.10"},
+	} {
+		t.Run(tt.field, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %#v, want %#v", tt.field, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// TestListHandlers_PublishTheServersOwnPageMarkers verifies both list handlers
+// fill their pagination block from the response GitLab answered with. A caller
+// reading a page whose markers stayed zero cannot tell one page from the first
+// of twelve, and the block is the only thing that says which it is.
+func TestListHandlers_PublishTheServersOwnPageMarkers(t *testing.T) {
+	headers := testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "12", TotalPages: "3", NextPage: "3", PrevPage: "1"}
+	want := toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 12, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true}
+
+	t.Run("accounts", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, projectServiceAccountsJSON, headers)
+		}))
+		out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+		if err != nil {
+			t.Fatalf("List() unexpected error: %v", err)
+		}
+		if out.Pagination != want {
+			t.Errorf("List() pagination = %#v, want %#v", out.Pagination, want)
+		}
+	})
+
+	t.Run("tokens", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, projectServiceAccountPATsJSON, headers)
+		}))
+		out, err := ListPATs(context.Background(), client, ListPATInput{ProjectID: "42", ServiceAccountID: 7})
+		if err != nil {
+			t.Fatalf("ListPATs() unexpected error: %v", err)
+		}
+		if out.Pagination != want {
+			t.Errorf("ListPATs() pagination = %#v, want %#v", out.Pagination, want)
+		}
+	})
+}
+
+// decodeRequestBody reads the JSON body a handler built for GitLab.
+//
+// It decodes into a map rather than a struct because these tests assert as much
+// about a key being absent as about its value: the SDK's option structs are
+// pointers with omitempty, so "the caller left this unset" and "the caller set
+// it empty" differ only by whether the key reaches the wire. An empty body is
+// an options struct with nothing set, which is a shape these tests assert too.
+func decodeRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		t.Errorf("decode request body: %v", err)
+	}
+	return body
+}
+
+// assertSent holds one key of a request body to the value the caller gave for
+// it. It runs on the mock's own goroutine, so it reports and never aborts.
+func assertSent(t *testing.T, body map[string]any, key string, want any) {
+	t.Helper()
+	if got := body[key]; got != want {
+		t.Errorf("%s sent = %#v, want %#v", key, got, want)
+	}
+}
+
+// assertSentList holds one key of a request body to a list of values in order,
+// which is what a token's scopes are.
+func assertSentList(t *testing.T, body map[string]any, key string, want ...string) {
+	t.Helper()
+	got, _ := body[key].([]any)
+	if len(got) != len(want) {
+		t.Errorf("%s sent = %#v, want %v", key, body[key], want)
+		return
+	}
+	for i, value := range want {
+		if got[i] != value {
+			t.Errorf("%s[%d] sent = %#v, want %q", key, i, got[i], value)
+		}
+	}
+}
+
+// assertNotSent holds a key off the wire entirely, which is the half of an
+// optional field that a value assertion cannot state.
+func assertNotSent(t *testing.T, body map[string]any, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if got, ok := body[key]; ok {
+			t.Errorf("%s sent = %#v, want the key absent", key, got)
+		}
 	}
 }
 
