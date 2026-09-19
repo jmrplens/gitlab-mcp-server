@@ -8,11 +8,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -365,7 +367,10 @@ func TestUpdateNote_CreatedAt(t *testing.T) {
 	}
 }
 
-// TestNoteIDRequired_Validation ensures UpdateNote and DeleteNote reject zero/negative note_id.
+// TestNoteIDRequired_Validation ensures UpdateNote and DeleteNote reject
+// zero/negative note_id. Both handlers are driven at both sides of the
+// guard: zero is what an omitted note_id decodes to, so a guard that only
+// refused negatives would send a caller's omission to GitLab as note 0.
 func TestNoteIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
@@ -375,11 +380,18 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 		name string
 		fn   func() error
 	}{
-		{"UpdateNote", func() error {
+		{"UpdateNote/zero", func() error {
 			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "abc", NoteID: 0, Body: "x"})
 			return e
 		}},
-		{"DeleteNote", func() error {
+		{"UpdateNote/negative", func() error {
+			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "abc", NoteID: -1, Body: "x"})
+			return e
+		}},
+		{"DeleteNote/zero", func() error {
+			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "abc", NoteID: 0})
+		}},
+		{"DeleteNote/negative", func() error {
 			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, SnippetID: 10, DiscussionID: "abc", NoteID: -1})
 		}},
 	}
@@ -716,5 +728,205 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "42", SnippetID: 10, DiscussionID: "d1", NoteID: 1, Body: "x"})
 			return err
 		}},
+	})
+}
+
+// TestList_Pagination_ComesFromTheResponseHeaders pins the whole pagination
+// block against a page whose six figures all differ, so a block left at its
+// zero value or filled from the wrong response cannot pass. It is a plain
+// assignment, which neither gate scores, and it is the only thing that tells a
+// caller there is a second page of threads to ask for.
+func TestList_Pagination_ComesFromTheResponseHeaders(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+covDiscussionJSON+`]`,
+			testutil.PaginationHeaders{Page: "2", PerPage: "7", Total: "31", TotalPages: "5", NextPage: "3", PrevPage: "1"})
+	}))
+
+	out, err := List(t.Context(), client, ListInput{ProjectID: "1", SnippetID: 5})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := toolutil.PaginationOutput{Page: 2, PerPage: 7, TotalItems: 31, TotalPages: 5, NextPage: 3, PrevPage: 1, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// TestMutatingHandlers_TheRequestTheyBuild pins the method, the path and the
+// body of every request the four mutating handlers send. All three are
+// straight-line assignments that neither gate scores, and each has a failure a
+// caller would meet: a path assembled from the wrong identifiers edits somebody
+// else's thread, and a body that never leaves the process posts an empty note.
+// Every identifier here differs from every other, so a swapped argument cannot
+// read as a match.
+func TestMutatingHandlers_TheRequestTheyBuild(t *testing.T) {
+	ctx := t.Context()
+	const (
+		project    = "11"
+		snippet    = 5
+		discussion = "d9"
+		note       = 77
+	)
+
+	tests := []struct {
+		name       string
+		wantMethod string
+		wantPath   string
+		wantBody   string
+		answer     string // empty answers 204 with no body, as a delete does
+		call       func(client *gitlabclient.Client) error
+	}{
+		{
+			name: "Create", wantMethod: http.MethodPost,
+			wantPath: "/api/v4/projects/11/snippets/5/discussions",
+			wantBody: `"body":"first note"`, answer: covDiscussionJSON,
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(ctx, client, CreateInput{ProjectID: project, SnippetID: snippet, Body: "first note"})
+				return err
+			},
+		},
+		{
+			name: "AddNote", wantMethod: http.MethodPost,
+			wantPath: "/api/v4/projects/11/snippets/5/discussions/d9/notes",
+			wantBody: `"body":"a reply"`, answer: covNoteJSON,
+			call: func(client *gitlabclient.Client) error {
+				_, err := AddNote(ctx, client, AddNoteInput{ProjectID: project, SnippetID: snippet, DiscussionID: discussion, Body: "a reply"})
+				return err
+			},
+		},
+		{
+			name: "UpdateNote", wantMethod: http.MethodPut,
+			wantPath: "/api/v4/projects/11/snippets/5/discussions/d9/notes/77",
+			wantBody: `"body":"edited"`, answer: covNoteJSON,
+			call: func(client *gitlabclient.Client) error {
+				_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: project, SnippetID: snippet, DiscussionID: discussion, NoteID: note, Body: "edited"})
+				return err
+			},
+		},
+		{
+			name: "DeleteNote", wantMethod: http.MethodDelete,
+			wantPath: "/api/v4/projects/11/snippets/5/discussions/d9/notes/77",
+			call: func(client *gitlabclient.Client) error {
+				return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: project, SnippetID: snippet, DiscussionID: discussion, NoteID: note})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var seen atomic.Int32
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen.Add(1)
+				if r.Method != tt.wantMethod {
+					t.Errorf("method = %s, want %s", r.Method, tt.wantMethod)
+				}
+				if r.URL.Path != tt.wantPath {
+					t.Errorf("path = %s, want %s", r.URL.Path, tt.wantPath)
+				}
+				if body, _ := io.ReadAll(r.Body); tt.wantBody != "" && !strings.Contains(string(body), tt.wantBody) {
+					t.Errorf("body = %s, want it to carry %s", body, tt.wantBody)
+				}
+				if tt.answer == "" {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, tt.answer)
+			}))
+
+			if err := tt.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := seen.Load(); got != 1 {
+				t.Fatalf("GitLab saw %d requests, want 1", got)
+			}
+		})
+	}
+}
+
+// TestHandlers_TheHintIsAttachedToTheStatusItWasWrittenFor drives each handler
+// at the status its hint is declared for and at one it is not. Both the status
+// constant and the hint text are straight-line arguments, so nothing else here
+// would notice a hint moved to the wrong status: a model told to "verify
+// discussion_id" after a 403 goes looking for an id that was never wrong.
+func TestHandlers_TheHintIsAttachedToTheStatusItWasWrittenFor(t *testing.T) {
+	ctx := t.Context()
+	const unrelatedStatus = http.StatusConflict
+
+	tests := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(client *gitlabclient.Client) error
+	}{
+		{
+			name: "List", status: http.StatusNotFound,
+			hint: "verify project_id with gitlab_project_get and snippet_id with gitlab_project_snippet_list",
+			call: func(client *gitlabclient.Client) error {
+				_, err := List(ctx, client, ListInput{ProjectID: "1", SnippetID: 5})
+				return err
+			},
+		},
+		{
+			name: "Get", status: http.StatusNotFound,
+			hint: "verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Get(ctx, client, GetInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1"})
+				return err
+			},
+		},
+		{
+			name: "Create", status: http.StatusBadRequest,
+			hint: "body is required and cannot be empty; commenting requires Reporter role or being the snippet author",
+			call: func(client *gitlabclient.Client) error {
+				_, err := Create(ctx, client, CreateInput{ProjectID: "1", SnippetID: 5, Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "AddNote", status: http.StatusNotFound,
+			hint: "verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet",
+			call: func(client *gitlabclient.Client) error {
+				_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "UpdateNote", status: http.StatusForbidden,
+			hint: "updating a note requires being the note author; system notes cannot be modified",
+			call: func(client *gitlabclient.Client) error {
+				_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", NoteID: 1, Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "DeleteNote", status: http.StatusForbidden,
+			hint: "deleting a note requires being the note author or Maintainer role; system notes cannot be deleted",
+			call: func(client *gitlabclient.Client) error {
+				return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", NoteID: 1})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertContains(t, tt.call(testutil.NewTestClient(t, refusingHandler(tt.status))), tt.hint)
+
+			err := tt.call(testutil.NewTestClient(t, refusingHandler(unrelatedStatus)))
+			if err == nil {
+				t.Fatalf("expected an error from a %d", unrelatedStatus)
+			}
+			if strings.Contains(err.Error(), tt.hint) {
+				t.Errorf("a %d carried the hint written for %d: %v", unrelatedStatus, tt.status, err)
+			}
+		})
+	}
+}
+
+// refusingHandler answers every request with status, so a handler's error
+// classification is decided by the status alone.
+func refusingHandler(status int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, `{"message":"refused"}`)
 	})
 }
