@@ -10,10 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// actionTokenGet is the canonical catalog ID of the single-token read, the one
-// form every surface accepts.
-const actionTokenGet = "runnercontrollertokens.controller_token_get"
-
 // FormatOutputMarkdown renders a runner controller token as a card. The secret
 // is shown only on the result that mints it, and the advice to store it is
 // added by the card from the row that showed one: a get answers with the same
@@ -33,6 +29,10 @@ func FormatOutputMarkdown(out Output) string {
 }
 
 // FormatListMarkdown renders a list of runner controller tokens as a table.
+// Its closing hint is built by canonicalID from the action name action_specs.go
+// registers, rather than from a copy: the copy it used to hold was spelled with
+// this package's own name, which names no action at all, so a model following
+// the hint was told the action is unknown.
 func FormatListMarkdown(out ListOutput) string {
 	if len(out.Tokens) == 0 {
 		return toolutil.EmptyMessage("runner controller tokens")
@@ -50,7 +50,7 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, false,
-		toolutil.HintAction(actionTokenGet, "read one of these tokens in full"))
+		toolutil.HintAction(canonicalID(actionNameTokenGet), "read one of these tokens in full"))
 	return b.String()
 }
 

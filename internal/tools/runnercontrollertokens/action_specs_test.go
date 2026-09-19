@@ -3,7 +3,9 @@ package runnercontrollertokens
 
 import (
 	"context"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -147,6 +149,68 @@ func TestActionSpecs_MetadataIsNonGeneric(t *testing.T) {
 				t.Errorf("%s description missing Returns:/See also:: %q", tool, desc)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_RelatedActionsAreCanonicalCatalogIDs holds every related
+// action, and with it the hint markdown.go writes, to an ID the catalog really
+// carries: the domain these specs are registered under, followed by the name
+// of an action this package itself declares.
+//
+// Nothing outside this package checks either. The discovery audit only counts
+// an empty RelatedActions, so the whole set once named bare action names and
+// the list hint named this package instead of the group, and both shipped: a
+// model following one is answered "unknown action" and concludes the server
+// cannot do the thing it was just shown.
+//
+// The domain is pinned through the individual tool names, which the doc and
+// e2e gates already hold: every tool this package registers is prefixed
+// gitlab_<domain>_, so a domain invented here stops matching them.
+func TestActionSpecs_RelatedActionsAreCanonicalCatalogIDs(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, runnerControllerTokenActionHandler()))
+
+	canonical := make(map[string]string, len(specs))
+	for _, spec := range specs {
+		canonical[catalogDomain+"."+spec.Name] = spec.Name
+	}
+
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			if want := "gitlab_" + catalogDomain + "_"; !strings.HasPrefix(spec.IndividualTool.Name, want) {
+				t.Errorf("individual tool %q does not carry the %q domain this package hints with", spec.IndividualTool.Name, catalogDomain)
+			}
+			own := catalogDomain + "." + spec.Name
+			for _, related := range spec.RelatedActions {
+				if _, ok := canonical[related]; !ok {
+					t.Errorf("related action %q is no action this package registers; want one of %v", related, slices.Sorted(maps.Keys(canonical)))
+				}
+				if related == own {
+					t.Errorf("related action %q points at the action itself", related)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_HintNamesARegisteredAction is the other half of the
+// check above, for the one call to action a list document carries. The ID is
+// spelled here rather than taken from canonicalID, so a joiner that lost its
+// separator moves the document and not the expectation.
+func TestFormatListMarkdown_HintNamesARegisteredAction(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, runnerControllerTokenActionHandler()))
+
+	hint := catalogDomain + "." + actionNameTokenGet
+	found := false
+	for _, spec := range specs {
+		if catalogDomain+"."+spec.Name == hint {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("list hint names %q, which this package registers no action for", hint)
+	}
+	if got := FormatListMarkdown(ListOutput{Tokens: []Output{{ID: 10}}}); !strings.Contains(got, "'"+hint+"'") {
+		t.Errorf("list document does not quote %q:\n%s", hint, got)
 	}
 }
 
