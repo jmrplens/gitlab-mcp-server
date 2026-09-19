@@ -5,10 +5,27 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// actionDeployKeyListUserProject is the canonical action name for listing deploy
-// keys across a user's projects. It appears in ActionSpecs, deployKeyDescription,
-// and deployKeyAliases so is extracted here to prevent S1192 string duplication.
+// actionDeployKeyListUserProject is the action name for listing deploy keys
+// across a user's projects. It appears in ActionSpecs, deployKeyDescription,
+// and deployKeyAliases so is extracted here to prevent S1192 string
+// duplication. It is a spec name, not an action ID: the catalog prefixes it
+// with the group below.
 const actionDeployKeyListUserProject = "deploy_key_list_user_project"
+
+// The canonical catalog action IDs this package publishes as related actions
+// and names in its usage prose. Deploy key actions are aggregated into the
+// access group (internal/tools/action_specs.go), so their IDs read access.*;
+// the bare spec names were published here as IDs and named nothing the catalog
+// holds, so a model following one was answered "unknown action". The two
+// access.* IDs this package already spelled correctly sit in the same block,
+// so every ID it publishes is declared in one place.
+const (
+	actionDeployKeyListProject = "access.deploy_key_list_project"
+	actionDeployKeyAddInstance = "access.deploy_key_add_instance"
+	actionDeployKeyEnable      = "access.deploy_key_enable"
+	actionDeployTokenListProj  = "access.deploy_token_list_project"
+	actionTokenProjectList     = "access.token_project_list"
+)
 
 // ActionSpecs returns canonical specs for deploy key actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
@@ -47,7 +64,7 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		Tags:           []string{"access", "deploy_key", "ssh"},
 		Usage:          "Use for SSH deploy keys that grant repository access to projects.",
 		Aliases:        deployKeyAliases(actionName),
-		RelatedActions: []string{"access.deploy_token_list_project", "access.token_project_list"},
+		RelatedActions: []string{actionDeployTokenListProj, actionTokenProjectList},
 		OpenWorld:      true,
 		OwnerPackage:   "deploykeys",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -60,11 +77,11 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 			toolutil.SchemaFormatOverride("expires_at", "date-time"))
 	}
 	if actionName == "deploy_key_list_project" {
-		options.Usage = "Lists SSH deploy keys, not deploy tokens. Use access.deploy_token_list_project when credentials/tokens are requested."
+		options.Usage = "Lists SSH deploy keys, not deploy tokens. Use " + actionDeployTokenListProj + " when credentials/tokens are requested."
 	}
 	if actionName == "deploy_key_list_all" {
-		options.Usage = "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of deploy_key_list_project when you need every key on the instance, not just those enabled for a single project."
-		options.RelatedActions = []string{"deploy_key_list_project", "deploy_key_add_instance", "deploy_key_enable"}
+		options.Usage = "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of " + actionDeployKeyListProject + " when you need every key on the instance, not just those enabled for a single project."
+		options.RelatedActions = []string{actionDeployKeyListProject, actionDeployKeyAddInstance, actionDeployKeyEnable}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"page": {
 				SemanticRole: "page_offset",
