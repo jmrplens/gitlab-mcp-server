@@ -48,9 +48,10 @@ func decorateMRChangeMeta(options *toolutil.ActionSpecOptions, individualTool st
 	options.Aliases = append([]string{individualTool}, meta.aliases...)
 	options.RelatedActions = append([]string(nil), meta.related...)
 	options.IndividualTool.Description = meta.description
-	if len(meta.params) > 0 {
-		options.ParameterGuidance = meta.params
-	}
+	// Unconditional like its four siblings: an entry with no params holds a nil
+	// map, and the spec constructor turns an empty guidance into nil anyway, so
+	// a guard here could decide nothing a reader could observe.
+	options.ParameterGuidance = meta.params
 }
 
 // mrChangeActionMetaEntry is the discovery metadata for one MR-changes action.

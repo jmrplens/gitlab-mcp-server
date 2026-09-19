@@ -260,6 +260,50 @@ func TestGetDiffVersion_Error(t *testing.T) {
 	}
 }
 
+// TestGetDiffVersion_CreatedAt_SurfacedWhenSentAndEmptyWhenAbsent verifies that
+// the version's own created_at and its commits' reach the output as RFC3339,
+// and that a payload carrying neither renders neither. Both are pointers GitLab
+// leaves out on a version it is still collecting, so the guard that reads them
+// decides between an empty field and a dereference of nothing.
+func TestGetDiffVersion_CreatedAt_SurfacedWhenSentAndEmptyWhenAbsent(t *testing.T) {
+	const withDates = `{"id":3,"created_at":"2026-01-16T10:00:00Z","commits":[{"id":"abc","created_at":"2026-01-16T09:00:00Z"}]}`
+	const withoutDates = `{"id":3,"commits":[{"id":"abc"}]}`
+
+	get := func(t *testing.T, body string) DiffVersionOutput {
+		t.Helper()
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+		out, err := GetDiffVersion(context.Background(), client, DiffVersionGetInput{
+			ProjectID: "42", MRIID: 1, VersionID: 3,
+		})
+		if err != nil {
+			t.Fatalf("GetDiffVersion() unexpected error: %v", err)
+		}
+		return out
+	}
+
+	t.Run("sent", func(t *testing.T) {
+		out := get(t, withDates)
+		if out.CreatedAt != "2026-01-16T10:00:00Z" {
+			t.Errorf("CreatedAt = %q, want 2026-01-16T10:00:00Z", out.CreatedAt)
+		}
+		if len(out.Commits) != 1 || out.Commits[0].CreatedAt != "2026-01-16T09:00:00Z" {
+			t.Errorf("Commits = %+v, want one created 2026-01-16T09:00:00Z", out.Commits)
+		}
+	})
+
+	t.Run("absent", func(t *testing.T) {
+		out := get(t, withoutDates)
+		if out.CreatedAt != "" {
+			t.Errorf("CreatedAt = %q, want empty", out.CreatedAt)
+		}
+		if len(out.Commits) != 1 || out.Commits[0].CreatedAt != "" {
+			t.Errorf("Commits = %+v, want one with no created_at", out.Commits)
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // MRIID & VersionID required-field validation
 // ---------------------------------------------------------------------------.
@@ -396,6 +440,33 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	want := "No file changes found.\n"
 	if got := FormatOutputMarkdown(Output{MRIID: 7}); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_PatchFillsTheBudget_ShownAndTheNextElided pins both
+// sides of the diff budget: a patch that reaches it exactly is still shown, and
+// the one that no longer fits is named in the note instead of disappearing.
+// The note is the only thing telling a reader the rest is reachable through the
+// raw diff rather than absent, and nothing drove it.
+func TestFormatOutputMarkdown_PatchFillsTheBudget_ShownAndTheNextElided(t *testing.T) {
+	full := strings.Repeat("x", diffBudgetBytes)
+	got := FormatOutputMarkdown(Output{
+		MRIID: 12,
+		Changes: []FileDiffOutput{
+			{NewPath: "full.go", OldPath: "full.go", Diff: full},
+			{NewPath: "next.go", OldPath: "next.go", Diff: "+one more line"},
+		},
+	})
+
+	if !strings.Contains(got, "### full.go\n\n```diff\n"+full+"\n```\n") {
+		t.Error("the patch that exactly fills the budget was not shown")
+	}
+	if strings.Contains(got, "### next.go") {
+		t.Error("the patch past the budget was fenced anyway")
+	}
+	wantNote := "1 of 2 patches are not shown here: the response would be too large. Read them with action 'mr_review.raw_diffs'.\n"
+	if !strings.Contains(got, wantNote) {
+		t.Errorf("rendered =\n%q\nwant a note reading\n%q", got, wantNote)
 	}
 }
 
