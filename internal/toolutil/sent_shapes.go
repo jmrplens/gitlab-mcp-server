@@ -217,107 +217,6 @@ func CapturedPipeline(capture *gitlabclient.ResponseCapture) (PipelineExtra, err
 	return capturedOne[PipelineExtra](capture)
 }
 
-// TopicExtra is the organization a topic belongs to, which GitLab's topic
-// entity exposes under no condition and so sends on every topic.
-type TopicExtra struct {
-	OrganizationID int64 `json:"organization_id"`
-}
-
-// CapturedTopic reads it off the captured answer to a request for one topic.
-func CapturedTopic(capture *gitlabclient.ResponseCapture) (TopicExtra, error) {
-	return capturedOne[TopicExtra](capture)
-}
-
-// CapturedTopics reads the same off a list answer, one extra per topic in
-// order, the count held to what the SDK decoded.
-func CapturedTopics(capture *gitlabclient.ResponseCapture, decoded int) ([]TopicExtra, error) {
-	return capturedList[TopicExtra](capture, decoded, "topics")
-}
-
-// AppearanceExtra is the instance's site name, which GitLab's appearance
-// entity exposes under no condition.
-type AppearanceExtra struct {
-	SiteName string `json:"site_name"`
-}
-
-// CapturedAppearance reads it off the captured answer to an appearance
-// request.
-func CapturedAppearance(capture *gitlabclient.ResponseCapture) (AppearanceExtra, error) {
-	return capturedOne[AppearanceExtra](capture)
-}
-
-// BroadcastMessageExtra is the color a broadcast message is drawn in, which
-// GitLab's broadcast message entity exposes under no condition.
-type BroadcastMessageExtra struct {
-	Color string `json:"color"`
-}
-
-// CapturedBroadcastMessage reads it off the captured answer to a request for
-// one message.
-func CapturedBroadcastMessage(capture *gitlabclient.ResponseCapture) (BroadcastMessageExtra, error) {
-	return capturedOne[BroadcastMessageExtra](capture)
-}
-
-// CapturedBroadcastMessages reads the same off a list answer, one extra per
-// message in order, the count held to what the SDK decoded.
-func CapturedBroadcastMessages(capture *gitlabclient.ResponseCapture, decoded int) ([]BroadcastMessageExtra, error) {
-	return capturedList[BroadcastMessageExtra](capture, decoded, "broadcast messages")
-}
-
-// ClusterAgentExtra is whether an agent is receptive, meaning GitLab connects
-// out to it rather than waiting for it to connect in. The agent entity exposes
-// it under no condition.
-type ClusterAgentExtra struct {
-	IsReceptive bool `json:"is_receptive"`
-}
-
-// CapturedClusterAgent reads it off the captured answer to a request for one
-// agent.
-func CapturedClusterAgent(capture *gitlabclient.ResponseCapture) (ClusterAgentExtra, error) {
-	return capturedOne[ClusterAgentExtra](capture)
-}
-
-// CapturedClusterAgents reads the same off a list answer, one extra per agent
-// in order, the count held to what the SDK decoded.
-func CapturedClusterAgents(capture *gitlabclient.ResponseCapture, decoded int) ([]ClusterAgentExtra, error) {
-	return capturedList[ClusterAgentExtra](capture, decoded, "cluster agents")
-}
-
-// LicenseTemplateExtra is whether a license template is one of the popular
-// ones GitLab offers first, exposed under no condition.
-type LicenseTemplateExtra struct {
-	Popular bool `json:"popular"`
-}
-
-// CapturedLicenseTemplate reads it off the captured answer to a request for
-// one template.
-func CapturedLicenseTemplate(capture *gitlabclient.ResponseCapture) (LicenseTemplateExtra, error) {
-	return capturedOne[LicenseTemplateExtra](capture)
-}
-
-// CapturedLicenseTemplates reads the same off a list answer, one extra per
-// template in order, the count held to what the SDK decoded.
-func CapturedLicenseTemplates(capture *gitlabclient.ResponseCapture, decoded int) ([]LicenseTemplateExtra, error) {
-	return capturedList[LicenseTemplateExtra](capture, decoded, "license templates")
-}
-
-// SecureFileExtra is a secure file's extension, exposed under no condition.
-type SecureFileExtra struct {
-	FileExtension string `json:"file_extension"`
-}
-
-// CapturedSecureFile reads it off the captured answer to a request for one
-// secure file.
-func CapturedSecureFile(capture *gitlabclient.ResponseCapture) (SecureFileExtra, error) {
-	return capturedOne[SecureFileExtra](capture)
-}
-
-// CapturedSecureFiles reads the same off a list answer, one extra per file in
-// order, the count held to what the SDK decoded.
-func CapturedSecureFiles(capture *gitlabclient.ResponseCapture, decoded int) ([]SecureFileExtra, error) {
-	return capturedList[SecureFileExtra](capture, decoded, "secure files")
-}
-
 // PipelineTriggerExtra is when a trigger token stops working, exposed under no
 // condition and null on a token that never expires.
 type PipelineTriggerExtra struct {
@@ -371,24 +270,6 @@ func CapturedMergeRequestDiff(capture *gitlabclient.ResponseCapture) (MergeReque
 // version in order, the count held to what the SDK decoded.
 func CapturedMergeRequestDiffs(capture *gitlabclient.ResponseCapture, decoded int) ([]MergeRequestDiffExtra, error) {
 	return capturedList[MergeRequestDiffExtra](capture, decoded, "merge request versions")
-}
-
-// SCIMIdentityExtra is the identifier the SCIM provider knows a user by, which
-// GitLab's identity detail entity exposes under no condition.
-type SCIMIdentityExtra struct {
-	ExternUID string `json:"extern_uid"`
-}
-
-// CapturedSCIMIdentity reads it off the captured answer to a request for one
-// identity.
-func CapturedSCIMIdentity(capture *gitlabclient.ResponseCapture) (SCIMIdentityExtra, error) {
-	return capturedOne[SCIMIdentityExtra](capture)
-}
-
-// CapturedSCIMIdentities reads the same off a list answer, one extra per
-// identity in order, the count held to what the SDK decoded.
-func CapturedSCIMIdentities(capture *gitlabclient.ResponseCapture, decoded int) ([]SCIMIdentityExtra, error) {
-	return capturedList[SCIMIdentityExtra](capture, decoded, "SCIM identities")
 }
 
 // RunnerManagerExtra is what the manager is doing now, exposed under no
@@ -810,14 +691,13 @@ func CapturedStorageMoves(capture *gitlabclient.ResponseCapture, decoded int) ([
 // name and username: the public email always, and the unconfirmed one while a
 // change of address is waiting to be confirmed.
 //
-// Both keys are read here for the group endpoint, whose GroupServiceAccount
-// carries neither. The project endpoint's ServiceAccount already models the
-// unconfirmed address, so that package takes it from the SDK and only the
-// public email from here: the same GitLab entity, modeled twice upstream and
-// unevenly.
+// Only the public email is read here, and only for the project endpoint:
+// client-go's ProjectServiceAccount models the unconfirmed address and not the
+// public one, while GroupServiceAccount gained both in v3.12.0 and the group
+// package now reads them from the SDK. The same GitLab entity, modeled twice
+// upstream and unevenly.
 type ServiceAccountExtra struct {
-	PublicEmail      string `json:"public_email"`
-	UnconfirmedEmail string `json:"unconfirmed_email"`
+	PublicEmail string `json:"public_email"`
 }
 
 // CapturedServiceAccount reads them off the captured answer to a request for
@@ -882,13 +762,12 @@ type DeployKeyProjectOutput struct {
 	CreatedAt         *time.Time `json:"created_at"`
 }
 
-// DeployKeyExtra is what GitLab's deploy key entity sends that the key itself
-// does not say: when the key was last used to reach the instance and what it
-// may be used for, both unconditional, and the projects it can write to or
-// only read from, which are sent when the request asks for them.
+// DeployKeyExtra is the projects a deploy key can write to or only read from,
+// which GitLab sends when the request asks for them. client-go models the pair
+// on InstanceDeployKey and not on ProjectDeployKey, so this is read only for
+// the project-scoped handlers; the last use and the usage type this shape also
+// carried retired with client-go v3.12.0, which added both to both structs.
 type DeployKeyExtra struct {
-	LastUsedAt                 *time.Time               `json:"last_used_at"`
-	UsageType                  string                   `json:"usage_type"`
 	ProjectsWithWriteAccess    []DeployKeyProjectOutput `json:"projects_with_write_access"`
 	ProjectsWithReadonlyAccess []DeployKeyProjectOutput `json:"projects_with_readonly_access"`
 }
@@ -905,47 +784,17 @@ func CapturedDeployKeys(capture *gitlabclient.ResponseCapture, decoded int) ([]D
 	return capturedList[DeployKeyExtra](capture, decoded, "deploy keys")
 }
 
-// EventWikiPageOutput is the wiki page an event happened to, as the basic wiki
-// page entity renders it: how the page is written, where it lives, its title,
-// and the identifier of the record that survives a rename.
-type EventWikiPageOutput struct {
-	Format         string `json:"format"`
-	Slug           string `json:"slug"`
-	Title          string `json:"title"`
-	WikiPageMetaID int64  `json:"wiki_page_meta_id"`
-}
-
-// EventExtra is what GitLab's event entity sends that the event itself does
-// not say: whether the event arrived with an import rather than happening
-// here and which platform it came from, both unconditional, and the wiki page
-// an event about a wiki names.
-type EventExtra struct {
-	Imported     bool                 `json:"imported"`
-	ImportedFrom string               `json:"imported_from"`
-	WikiPage     *EventWikiPageOutput `json:"wiki_page"`
-}
-
-// CapturedEvents reads them off the captured answer to a list of events, one
-// extra per event in order, the count held to what the SDK decoded.
-func CapturedEvents(capture *gitlabclient.ResponseCapture, decoded int) ([]EventExtra, error) {
-	return capturedList[EventExtra](capture, decoded, "events")
-}
-
-// NamespaceExtra is what GitLab's namespace entity sends to a caller allowed
-// to see it. An administrator asking about a group is told how many projects
-// it holds and how much room their repositories take; a caller who may change
-// the namespace's limits is told the compute minutes and the purchased
-// storage; and a namespace with a subscription carries when that subscription
-// ends and when its seat high-water mark last moved.
+// NamespaceExtra is the three limits GitLab's namespace entity sends to a
+// caller who may change them. client-go v3.12.0 carries all three, and it
+// carries them as plain int64, where a null and a limit of zero are the same
+// value: a null shared_runners_minutes_limit is how GitLab says there is no
+// limit at all, so reading these from the SDK would publish "no limit" as
+// "limited to zero minutes". The other five fields this shape used to read
+// retired with that release, their SDK types carrying what GitLab sends.
 type NamespaceExtra struct {
-	ProjectsCount                    int64      `json:"projects_count"`
-	RootRepositorySize               int64      `json:"root_repository_size"`
-	SharedRunnersMinutesLimit        *int64     `json:"shared_runners_minutes_limit"`
-	ExtraSharedRunnersMinutesLimit   *int64     `json:"extra_shared_runners_minutes_limit"`
-	AdditionalPurchasedStorageSize   *int64     `json:"additional_purchased_storage_size"`
-	AdditionalPurchasedStorageEndsOn string     `json:"additional_purchased_storage_ends_on"`
-	MaxSeatsUsedChangedAt            *time.Time `json:"max_seats_used_changed_at"`
-	EndDate                          string     `json:"end_date"`
+	SharedRunnersMinutesLimit      *int64 `json:"shared_runners_minutes_limit"`
+	ExtraSharedRunnersMinutesLimit *int64 `json:"extra_shared_runners_minutes_limit"`
+	AdditionalPurchasedStorageSize *int64 `json:"additional_purchased_storage_size"`
 }
 
 // CapturedNamespace reads them off the captured answer to a request for one
@@ -1091,29 +940,6 @@ type InvitationExtra struct {
 // SDK decoded.
 func CapturedPendingInvites(capture *gitlabclient.ResponseCapture, decoded int) ([]InvitationExtra, error) {
 	return capturedList[InvitationExtra](capture, decoded, "invitations")
-}
-
-// SnippetExtra is what GitLab's snippet entity sends that the snippet itself
-// does not say: whether it arrived with an import rather than being written
-// here and which platform it came from, both unconditional, and the two clone
-// URLs of its repository, sent once that repository exists.
-type SnippetExtra struct {
-	Imported      bool   `json:"imported"`
-	ImportedFrom  string `json:"imported_from"`
-	SSHURLToRepo  string `json:"ssh_url_to_repo"`
-	HTTPURLToRepo string `json:"http_url_to_repo"`
-}
-
-// CapturedSnippet reads them off the captured answer to a request for one
-// snippet.
-func CapturedSnippet(capture *gitlabclient.ResponseCapture) (SnippetExtra, error) {
-	return capturedOne[SnippetExtra](capture)
-}
-
-// CapturedSnippets reads the same off a list answer, one extra per snippet in
-// order, the count held to what the SDK decoded.
-func CapturedSnippets(capture *gitlabclient.ResponseCapture, decoded int) ([]SnippetExtra, error) {
-	return capturedList[SnippetExtra](capture, decoded, "snippets")
 }
 
 // MergeRequestExtra is what lib/api/entities/merge_request_basic.rb sends that

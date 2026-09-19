@@ -382,9 +382,8 @@ func TestDelete_CancelledContext(t *testing.T) {
 // identity read handlers return an error rather than a half-filled identity
 // when GitLab sends extern_uid as something that is not a string. client-go
 // spelled this key external_uid until v3.12.0 and now spells it as GitLab
-// does, so its decoder reaches the bad value before the read of the captured
-// response does; either refusal is what this asserts, because an identity
-// published without its external uid names nobody.
+// does, so the SDK's decoder is what refuses it now that the captured read is
+// retired; an identity published without its external uid names nobody.
 func TestSCIMIdentities_UnreadableCapturedExternUID(t *testing.T) {
 	// A list answers with an array and a get with an object, so each case
 	// drives a client of its own rather than one shared handler.

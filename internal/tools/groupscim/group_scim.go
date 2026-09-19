@@ -40,9 +40,9 @@ type DeleteInput struct {
 // Output represents a SCIM identity.
 // ExternUID is spelled the way GitLab spells it. The SDK struct declared the
 // key as external_uid until client-go v3.12.0, a key GitLab never sends, so
-// the SDK's own field never decoded and this output used to publish it always
-// empty; the capture read below is what filled it. v3.12.0 corrected the tag
-// to extern_uid, so both decoders now read the same key and agree.
+// the SDK's own field never decoded and this output was filled from the
+// captured response instead. v3.12.0 corrected the tag to extern_uid, which
+// is why the capture is gone and the SDK struct is read directly.
 type Output struct {
 	toolutil.HintableOutput
 	ExternUID string `json:"extern_uid"`
@@ -63,12 +63,12 @@ type UpdateOutput struct {
 	Message string `json:"message"`
 }
 
-func toOutput(id *gl.GroupSCIMIdentity, extra toolutil.SCIMIdentityExtra) Output {
+func toOutput(id *gl.GroupSCIMIdentity) Output {
 	if id == nil {
 		return Output{}
 	}
 	return Output{
-		ExternUID: extra.ExternUID,
+		ExternUID: id.ExternalUID,
 		UserID:    id.UserID,
 		Active:    id.Active,
 	}
@@ -82,18 +82,13 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	if in.GroupID.String() == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	ids, _, err := client.GL().GroupSCIM.GetSCIMIdentitiesForGroup(in.GroupID.String(), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list SCIM identities for group", err, http.StatusNotFound, "verify group_id; Group SCIM requires Premium license, SAML SSO, and SCIM provisioning")
 	}
-	extras, err := toolutil.CapturedSCIMIdentities(captured, len(ids))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list SCIM identities for group", err)
-	}
 	out := ListOutput{Identities: make([]Output, 0, len(ids))}
-	for i, id := range ids {
-		out.Identities = append(out.Identities, toOutput(id, extras[i]))
+	for _, id := range ids {
+		out.Identities = append(out.Identities, toOutput(id))
 	}
 	return out, nil
 }
@@ -109,16 +104,11 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	if in.UID == "" {
 		return Output{}, toolutil.ErrFieldRequired("uid")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	id, _, err := client.GL().GroupSCIM.GetSCIMIdentity(in.GroupID.String(), in.UID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("get SCIM identity", err, hintVerifyUID)
 	}
-	extra, err := toolutil.CapturedSCIMIdentity(captured)
-	if err != nil {
-		return Output{}, toolutil.WrapErr("get SCIM identity", err)
-	}
-	return toOutput(id, extra), nil
+	return toOutput(id), nil
 }
 
 // Update modifies a SCIM identity.

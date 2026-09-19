@@ -1788,12 +1788,13 @@ func TestDeployKeys_OmitTheProjectListsGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestDeployKeys_UnreadableCapturedFields verifies every handler answering
-// with a deploy key reports a decode failure rather than a key missing what
-// GitLab sent. client-go carries usage_type on both of its deploy key structs
-// as of v3.12.0, so its decoder reaches the number GitLab sent there before
-// the read beside it does, and either refusal is what this asserts.
-func TestDeployKeys_UnreadableCapturedFields(t *testing.T) {
+// TestDeployKeys_UnreadableFields verifies every handler answering with a
+// deploy key reports a decode failure rather than a key missing what GitLab
+// sent. client-go carries usage_type on both of its deploy key structs as of
+// v3.12.0, so the SDK's decoder is what refuses it; the capture that survives
+// in this package reads the two project lists, which client-go models only on
+// InstanceDeployKey.
+func TestDeployKeys_UnreadableFields(t *testing.T) {
 	const poisoned = `{"id":1,"title":"my-key","key":"ssh-rsa AAAA","usage_type":7}`
 	cases := make([]testutil.CapturedCase, 0, len(deployKeyCalls))
 	for _, keyCall := range deployKeyCalls {

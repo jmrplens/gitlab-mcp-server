@@ -145,9 +145,9 @@ type WikiPageOutput struct {
 	WikiPageMetaID int64  `json:"wiki_page_meta_id,omitempty"`
 }
 
-// toWikiPageOutput mirrors the wiki page read off the captured answer,
-// returning nil when the event is about something else.
-func toWikiPageOutput(w *toolutil.EventWikiPageOutput) *WikiPageOutput {
+// toWikiPageOutput mirrors the wiki page an event names, returning nil when
+// the event is about something else.
+func toWikiPageOutput(w *gl.EventWikiPage) *WikiPageOutput {
 	if w == nil {
 		return nil
 	}
@@ -183,22 +183,17 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().Events.ListCurrentUserContributionEvents(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListContributionEventsOutput{}, toolutil.WrapErrWithStatusHint("user_contribution_event_list", err, http.StatusForbidden, "verify your token has read_api scope")
-	}
-	extras, err := toolutil.CapturedEvents(captured, len(events))
-	if err != nil {
-		return ListContributionEventsOutput{}, toolutil.WrapErr("user_contribution_event_list", err)
 	}
 
 	out := ListContributionEventsOutput{
 		Events:     make([]ContributionEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for i, e := range events {
-		out.Events = append(out.Events, toContributionEventOutput(e, extras[i]))
+	for _, e := range events {
+		out.Events = append(out.Events, toContributionEventOutput(e))
 	}
 
 	enrichContributionEventURLs(ctx, client, out.Events)
@@ -207,9 +202,8 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 }
 
 // toContributionEventOutput converts the GitLab API response to the tool
-// output format, filling from the decoded event and from what the capture
-// read beside it.
-func toContributionEventOutput(e *gl.ContributionEvent, extra toolutil.EventExtra) ContributionEventOutput {
+// output format.
+func toContributionEventOutput(e *gl.ContributionEvent) ContributionEventOutput {
 	o := ContributionEventOutput{
 		ID:             e.ID,
 		ProjectID:      e.ProjectID,
@@ -223,9 +217,9 @@ func toContributionEventOutput(e *gl.ContributionEvent, extra toolutil.EventExtr
 		PushData:       toContributionPushDataOutput(e.PushData),
 		Note:           toNoteOutput(e.Note),
 		Author:         toBasicUserOutput(e.Author),
-		WikiPage:       toWikiPageOutput(extra.WikiPage),
-		Imported:       extra.Imported,
-		ImportedFrom:   extra.ImportedFrom,
+		WikiPage:       toWikiPageOutput(e.WikiPage),
+		Imported:       e.Imported,
+		ImportedFrom:   e.ImportedFrom,
 	}
 	if e.CreatedAt != nil {
 		o.CreatedAt = e.CreatedAt.Format(time.RFC3339)
@@ -442,22 +436,17 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectEventsOutput{}, toolutil.WrapErrWithStatusHint("project_event_list", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
-	}
-	extras, err := toolutil.CapturedEvents(captured, len(events))
-	if err != nil {
-		return ListProjectEventsOutput{}, toolutil.WrapErr("project_event_list", err)
 	}
 
 	out := ListProjectEventsOutput{
 		Events:     make([]ProjectEventOutput, 0, len(events)),
 		Pagination: toolutil.PaginationFromResponse(resp),
 	}
-	for i, e := range events {
-		out.Events = append(out.Events, toProjectEventOutput(e, extras[i]))
+	for _, e := range events {
+		out.Events = append(out.Events, toProjectEventOutput(e))
 	}
 
 	enrichProjectEventURLs(ctx, client, out.Events)
@@ -468,9 +457,8 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 // Converters.
 
 // toProjectEventOutput converts the GitLab API response to the tool output
-// format, filling from the decoded event and from what the capture read
-// beside it.
-func toProjectEventOutput(e *gl.ProjectEvent, extra toolutil.EventExtra) ProjectEventOutput {
+// format.
+func toProjectEventOutput(e *gl.ProjectEvent) ProjectEventOutput {
 	return ProjectEventOutput{
 		ID:             e.ID,
 		ProjectID:      e.ProjectID,
@@ -485,9 +473,9 @@ func toProjectEventOutput(e *gl.ProjectEvent, extra toolutil.EventExtra) Project
 		AuthorUsername: e.AuthorUsername,
 		Note:           toProjectEventNoteOutput(e.Note),
 		PushData:       toProjectPushDataOutput(e.PushData),
-		WikiPage:       toWikiPageOutput(extra.WikiPage),
-		Imported:       extra.Imported,
-		ImportedFrom:   extra.ImportedFrom,
+		WikiPage:       toWikiPageOutput(e.WikiPage),
+		Imported:       e.Imported,
+		ImportedFrom:   e.ImportedFrom,
 	}
 }
 

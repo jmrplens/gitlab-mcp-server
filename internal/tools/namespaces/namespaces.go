@@ -225,7 +225,9 @@ func Search(ctx context.Context, client *gitlabclient.Client, input SearchInput)
 // Converters.
 
 // toOutput converts the GitLab API response to the tool output format,
-// filling from the decoded namespace and from what the capture read beside it.
+// filling from the decoded namespace and, for the three limit fields, from
+// what the capture read beside it: client-go models those as plain int64, so
+// the null that means "no limit" would reach a caller as a limit of zero.
 func toOutput(ns *gl.Namespace, extra toolutil.NamespaceExtra) Output {
 	o := Output{
 		ID:                               ns.ID,
@@ -236,27 +238,33 @@ func toOutput(ns *gl.Namespace, extra toolutil.NamespaceExtra) Output {
 		ParentID:                         ns.ParentID,
 		WebURL:                           ns.WebURL,
 		MembersCountWithDescendants:      ns.MembersCountWithDescendants,
-		ProjectsCount:                    extra.ProjectsCount,
-		RootRepositorySize:               extra.RootRepositorySize,
+		ProjectsCount:                    ns.ProjectsCount,
+		RootRepositorySize:               ns.RootRepositorySize,
 		SharedRunnersMinutesLimit:        extra.SharedRunnersMinutesLimit,
 		ExtraSharedRunnersMinutesLimit:   extra.ExtraSharedRunnersMinutesLimit,
 		AdditionalPurchasedStorageSize:   extra.AdditionalPurchasedStorageSize,
-		AdditionalPurchasedStorageEndsOn: extra.AdditionalPurchasedStorageEndsOn,
+		AdditionalPurchasedStorageEndsOn: isoDate(ns.AdditionalPurchasedStorageEndsOn),
 		BillableMembersCount:             ns.BillableMembersCount,
 		Plan:                             ns.Plan,
 		Trial:                            ns.Trial,
 		MaxSeatsUsed:                     ns.MaxSeatsUsed,
 		SeatsInUse:                       ns.SeatsInUse,
-		MaxSeatsUsedChangedAt:            toolutil.FormatTimePtr(extra.MaxSeatsUsedChangedAt),
-		EndDate:                          extra.EndDate,
+		MaxSeatsUsedChangedAt:            toolutil.FormatTimePtr(ns.MaxSeatsUsedChangedAt),
+		EndDate:                          isoDate(ns.EndDate),
 	}
 	if ns.AvatarURL != nil {
 		o.AvatarURL = *ns.AvatarURL
 	}
-	if ns.TrialEndsOn != nil {
-		o.TrialEndsOn = time.Time(*ns.TrialEndsOn).Format("2006-01-02")
-	}
+	o.TrialEndsOn = isoDate(ns.TrialEndsOn)
 	return o
+}
+
+// isoDate renders a date-only GitLab field, empty when the instance sent none.
+func isoDate(d *gl.ISOTime) string {
+	if d == nil {
+		return ""
+	}
+	return time.Time(*d).Format("2006-01-02")
 }
 
 // Formatters.

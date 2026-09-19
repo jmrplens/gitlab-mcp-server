@@ -100,7 +100,8 @@ func timeStr(t *time.Time) string {
 }
 
 // toOutput converts the GitLab API response to the tool output format,
-// filling from the decoded key and from what the capture read beside it.
+// filling from the decoded key and, for the two project lists, from what the
+// capture read beside it: client-go models those only on InstanceDeployKey.
 func toOutput(k *gl.ProjectDeployKey, extra toolutil.DeployKeyExtra) Output {
 	return Output{
 		ID:                         k.ID,
@@ -111,8 +112,8 @@ func toOutput(k *gl.ProjectDeployKey, extra toolutil.DeployKeyExtra) Output {
 		CreatedAt:                  timeStr(k.CreatedAt),
 		CanPush:                    k.CanPush,
 		ExpiresAt:                  timeStr(k.ExpiresAt),
-		LastUsedAt:                 timeStr(extra.LastUsedAt),
-		UsageType:                  extra.UsageType,
+		LastUsedAt:                 timeStr(k.LastUsedAt),
+		UsageType:                  k.UsageType,
 		ProjectsWithWriteAccess:    capturedProjectSummaries(extra.ProjectsWithWriteAccess),
 		ProjectsWithReadonlyAccess: capturedProjectSummaries(extra.ProjectsWithReadonlyAccess),
 	}
@@ -173,9 +174,8 @@ func capturedProjectSummaries(projects []toolutil.DeployKeyProjectOutput) []Proj
 	return out
 }
 
-// toInstanceOutput converts the GitLab API response to the tool output format,
-// filling from the decoded key and from what the capture read beside it.
-func toInstanceOutput(k *gl.InstanceDeployKey, extra toolutil.DeployKeyExtra) InstanceOutput {
+// toInstanceOutput converts the GitLab API response to the tool output format.
+func toInstanceOutput(k *gl.InstanceDeployKey) InstanceOutput {
 	out := InstanceOutput{
 		ID:                k.ID,
 		Title:             k.Title,
@@ -184,8 +184,8 @@ func toInstanceOutput(k *gl.InstanceDeployKey, extra toolutil.DeployKeyExtra) In
 		FingerprintSHA256: k.FingerprintSHA256,
 		CreatedAt:         timeStr(k.CreatedAt),
 		ExpiresAt:         timeStr(k.ExpiresAt),
-		LastUsedAt:        timeStr(extra.LastUsedAt),
-		UsageType:         extra.UsageType,
+		LastUsedAt:        timeStr(k.LastUsedAt),
+		UsageType:         k.UsageType,
 	}
 	for _, p := range k.ProjectsWithWriteAccess {
 		out.ProjectsWithWriteAccess = append(out.ProjectsWithWriteAccess, toProjectSummary(p))
@@ -439,20 +439,15 @@ func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInpu
 		opts.Public = input.Public
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	keys, resp, err := client.GL().DeployKeys.ListAllDeployKeys(opts, gl.WithContext(ctx))
 	if err != nil {
 		return InstanceListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_all", err, http.StatusForbidden,
 			"listing all instance deploy keys requires admin token")
 	}
-	extras, err := toolutil.CapturedDeployKeys(captured, len(keys))
-	if err != nil {
-		return InstanceListOutput{}, toolutil.WrapErr("deploy_key_list_all", err)
-	}
 
 	out := InstanceListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
-	for i, k := range keys {
-		out.DeployKeys = append(out.DeployKeys, toInstanceOutput(k, extras[i]))
+	for _, k := range keys {
+		out.DeployKeys = append(out.DeployKeys, toInstanceOutput(k))
 	}
 	return out, nil
 }
@@ -479,18 +474,13 @@ func AddInstance(ctx context.Context, client *gitlabclient.Client, input AddInst
 		opts.ExpiresAt = &t
 	}
 
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	key, _, err := client.GL().DeployKeys.AddInstanceDeployKey(opts, gl.WithContext(ctx))
 	if err != nil {
 		return InstanceOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_add_instance", err, http.StatusForbidden,
 			"creating instance-level deploy keys requires admin token; key must be unique")
 	}
-	extra, err := toolutil.CapturedDeployKey(captured)
-	if err != nil {
-		return InstanceOutput{}, toolutil.WrapErr("deploy_key_add_instance", err)
-	}
 
-	return toInstanceOutput(key, extra), nil
+	return toInstanceOutput(key), nil
 }
 
 // ListUserProject lists deploy keys for a specific user's projects.

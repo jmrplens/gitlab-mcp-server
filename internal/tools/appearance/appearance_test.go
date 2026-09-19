@@ -574,9 +574,9 @@ func newAppearanceRouteClient(t *testing.T) *gitlabclient.Client {
 }
 
 // TestFormatGetMarkdown_SiteName verifies the site name reaches the rendered
-// card. It is the one appearance field the SDK does not model and the handler
-// reads off the captured response, so a formatter that dropped it would leave
-// the whole captured read with nothing to show for itself.
+// card. It was the one appearance field the SDK did not model, read off the
+// captured response until client-go v3.12.0 carried it, and a formatter that
+// dropped it would publish an appearance the caller cannot name.
 func TestFormatGetMarkdown_SiteName(t *testing.T) {
 	got := markdownText(t, FormatGetMarkdown(GetOutput{Appearance: Item{SiteName: "Example GitLab", Title: "GitLab CE"}}))
 	want := "## Application Appearance\n\n" +
@@ -589,14 +589,13 @@ func TestFormatGetMarkdown_SiteName(t *testing.T) {
 	}
 }
 
-// TestAppearance_UnreadableCapturedSiteName verifies that both appearance
-// handlers return an error rather than a half-filled result when GitLab sends
-// site_name as something that is not a string. client-go models site_name on
-// its own Appearance as of v3.12.0, so its decoder reaches the bad value
-// before the read of the captured response does; either refusal is what this
-// asserts, because a handler that swallowed one would publish an appearance
-// with no site name and no complaint.
-func TestAppearance_UnreadableCapturedSiteName(t *testing.T) {
+// TestAppearance_UnreadableSiteName verifies that both appearance handlers
+// return an error rather than a half-filled result when GitLab sends site_name
+// as something that is not a string. client-go models site_name on its own
+// Appearance as of v3.12.0, so the SDK's decoder is what refuses it now that
+// the captured read is retired; a handler that swallowed the refusal would
+// publish an appearance with no site name and no complaint.
+func TestAppearance_UnreadableSiteName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"title":"GitLab CE","site_name":42}`)
 	}))
