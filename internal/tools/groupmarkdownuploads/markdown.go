@@ -7,10 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// hintActionDeleteByID is the canonical catalog ID of the route that removes
-// one of the uploads this list shows.
-const hintActionDeleteByID = "group." + actionGroupUploadDeleteByID
-
 func init() {
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
 }
@@ -33,7 +29,7 @@ func FormatListMarkdownString(o ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, o.Pagination, false,
-		toolutil.HintAction(hintActionDeleteByID, "remove one of these uploads"),
+		toolutil.HintAction(idGroupUploadDeleteByID, "remove one of these uploads"),
 	)
 	return b.String()
 }

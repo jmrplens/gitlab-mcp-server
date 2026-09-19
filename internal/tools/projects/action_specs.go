@@ -28,11 +28,12 @@ const (
 	actionProjectListStarrers     = "project.list_starrers"
 	actionProjectListInvGroups    = "project.list_invited_groups"
 	actionProjectListForks        = "project.list_forks"
-	actionProjectGetPushRules     = "project.get_push_rules"
-	actionProjectEditPushRule     = "project.edit_push_rule"
-	actionProjectDeletePushRule   = "project.delete_push_rule"
+	actionProjectGetPushRules     = "project.push_rule_get"
+	actionProjectEditPushRule     = "project.push_rule_edit"
+	actionProjectDeletePushRule   = "project.push_rule_delete"
 	actionProjectCreateForkRel    = "project.create_fork_relation"
-	actionProjectAddPushRule      = "project.add_push_rule"
+	actionProjectAddPushRule      = "project.push_rule_add"
+	actionProjectMembers          = "project.members"
 	actionGroupGet                = "group.get"
 	statusSuccess                 = "success"
 	tagWebhook                    = "webhook"
@@ -450,7 +451,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 	"gitlab_project_list_users": {
 		usage:       "List the users who are members of a project. Send project_id and optionally search by name or username.",
 		aliases:     []string{"list project users", "project user accounts", "enumerate project users"},
-		related:     []string{actionProjectGet, "member.list", "project.list_groups"},
+		related:     []string{actionProjectGet, actionProjectMembers, "project.list_groups"},
 		description: "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_project_members_list.",
 	},
 	"gitlab_project_list_groups": {
