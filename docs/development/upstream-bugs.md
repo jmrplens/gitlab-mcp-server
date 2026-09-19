@@ -123,6 +123,7 @@ readable without opening the tracker:
 | 48 | go-sdk | [Two listens on one URI leave a session receiving neither](#a-sessions-second-listen-on-a-uri-overwrites-the-firsts-subscription-and-its-close-deletes-both) | No | No | No | No | Partial |
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
+| 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -2609,3 +2610,60 @@ field on `RequestExtra`, would close it.
 - **Blocking**: no. One Conditionally Required attribute is omitted; the span is
   otherwise complete and the metric does not carry the attribute at all.
 - **Workaround**: none possible. Nothing in the public API exposes the value.
+
+### A WithOptions delegation sends null as the request body
+
+`Client.NewRequestToURL` decides whether a request carries a body with
+`if opt != nil`, where `opt` is an `any`. A typed nil pointer held in an
+interface is not equal to `nil`, so any caller that reaches it with a nil
+`*SomeOptions` marshals that pointer instead of sending nothing, and
+`json.Marshal` of a nil pointer is the four bytes `null`.
+
+v3.12.0 reached it from inside the SDK for the first time. It gave two methods
+a `WithOptions` sibling and made the old name delegate to it with a nil options
+pointer:
+
+```go
+func (s *DraftNotesService) PublishAllDraftNotes(pid any, mergeRequest int64, options ...RequestOptionFunc) (*Response, error) {
+	return s.PublishAllDraftNotesWithOptions(pid, mergeRequest, nil, options...)
+}
+```
+
+The sibling passes that nil through `withAPIOpts(opt)`, so
+`POST /projects/:id/merge_requests/:iid/draft_notes/bulk_publish` went from a
+body-less request under v3.0.0 to one carrying `null` with `Content-Length: 4`.
+Measured against an `httptest` server with both versions:
+
+| Method                            | v3.0.0                         | v3.12.0                            |
+| --------------------------------- | ------------------------------ | ---------------------------------- |
+| `DraftNotes.PublishAllDraftNotes` | body `""`, `Content-Length: 0` | body `"null"`, `Content-Length: 4` |
+| `Jobs.GetJobArtifactsWithOptions` | query `""`                     | query `""`                         |
+
+`GetJobArtifacts` took the same delegation and is unharmed only by accident:
+its request is a GET, so the nil goes to `query.Values`, which returns early on
+a nil pointer, and the empty `RawQuery` adds no `?`. The defect is confined to
+the methods whose verb makes `NewRequestToURL` take the marshalling branch.
+
+Nothing is expected to break at GitLab, which is why it is not blocking:
+`Grape::Middleware::Formatter` sets the form hash only `if body.is_a?(Hash)`,
+and `null` parses to `nil`, so the endpoint sees the same empty parameter set
+either way. That is read from Grape's formatter rather than measured against a
+live instance, so it is the reason this is not urgent and not a claim that the
+bytes are identical. It is still a request the SDK did not mean to send, and it
+will reach any future delegation of the same shape on a POST, PUT or PATCH.
+
+The fix is a nil-pointer check where the decision is made, in
+`NewRequestToURL`, rather than at each delegation, since the next one will be
+written the same way.
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none taken. Reaching the body-less shape again would mean
+  calling `PublishAllDraftNotesWithOptions`, which is marked `Deprecated:`
+  upstream and would trip `staticcheck` SA1019 under this repository's
+  `checks: all`, to buy bytes GitLab ignores.
+  `TestDraftNotePublishAll_SendsNoPublishParameters` in
+  `internal/tools/mrdraftnotes` pins what the call sends instead, and accepts
+  either spelling of an empty body so an upstream fix does not fail the suite.
