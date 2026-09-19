@@ -260,3 +260,86 @@ func TestProtectedEnvironmentMeta_PerToolDiscovery(t *testing.T) {
 		t.Errorf("unknown tool Aliases = %v, want only the tool name", def.Aliases)
 	}
 }
+
+// TestProtectedEnvironmentActionMeta_EveryEntry_FillsAllThreeFields is the
+// property decorateProtectedEnvironmentMeta assigns unconditionally on: it
+// used to guard each field against being empty, and because no entry ever is,
+// no test could tell a guard that fired from one that did not. Asserting the
+// map directly puts that where it can fail — an entry added without aliases
+// or without related actions is reported here instead of silently keeping the
+// shared defaults that R-META exists to replace.
+func TestProtectedEnvironmentActionMeta_EveryEntry_FillsAllThreeFields(t *testing.T) {
+	for tool, meta := range protectedEnvironmentActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			if meta.usage == "" {
+				t.Error("empty usage")
+			}
+			if len(meta.aliases) < 2 {
+				t.Errorf("aliases = %v, want at least two natural-language phrases", meta.aliases)
+			}
+			if len(meta.related) < 2 {
+				t.Errorf("related = %v, want at least two cross-links", meta.related)
+			}
+		})
+	}
+}
+
+// TestProtectedEnvironmentMeta_RelatedActions_AreCanonicalCatalogIDs pins the
+// cross-links each tool publishes, spelled out rather than counted. Nothing in
+// the repository checks a related action against the catalog, and these
+// actions are merged into the gitlab_environment group, so a deployment action
+// is environment.deployment_list and never deployment.list — which is what
+// this list carried until a model following the hint would have been answered
+// "unknown action".
+func TestProtectedEnvironmentMeta_RelatedActions_AreCanonicalCatalogIDs(t *testing.T) {
+	want := map[string][]string{
+		"gitlab_protected_environment_list":      {"environment.protected_get", "environment.list", "environment.deployment_list"},
+		"gitlab_protected_environment_get":       {"environment.protected_list", "environment.protected_update", "environment.protected_unprotect"},
+		"gitlab_protected_environment_protect":   {"environment.protected_get", "environment.protected_update", "environment.protected_unprotect"},
+		"gitlab_protected_environment_update":    {"environment.protected_get", "environment.protected_protect", "environment.protected_unprotect"},
+		"gitlab_protected_environment_unprotect": {"environment.protected_list", "environment.protected_protect"},
+	}
+	for tool, related := range want {
+		t.Run(tool, func(t *testing.T) {
+			if got := protectedEnvironmentOptions(tool).RelatedActions; !slices.Equal(got, related) {
+				t.Errorf("RelatedActions = %v, want %v", got, related)
+			}
+		})
+	}
+	// The shared default reaches only a tool the map does not name, and it
+	// crosses the same group, so it is held to the same spelling.
+	if got := protectedEnvironmentOptions("gitlab_unknown_tool").RelatedActions; !slices.Equal(got,
+		[]string{"environment.list", "environment.get", "environment.deployment_list"}) {
+		t.Errorf("default RelatedActions = %v", got)
+	}
+}
+
+// TestProtectedEnvironmentMeta_HintsAndSpecsShareOneSetOfActionIDs holds the
+// canonical IDs the card and the listing build their hints from to the same
+// constants the specs publish. The two lived in separate blocks, one per file,
+// which is how a spelling drifts on one side of a package only.
+func TestProtectedEnvironmentMeta_HintsAndSpecsShareOneSetOfActionIDs(t *testing.T) {
+	want := map[string]string{
+		"list":      actionEnvProtectedList,
+		"get":       actionEnvProtectedGet,
+		"protect":   actionEnvProtectedProtect,
+		"update":    actionEnvProtectedUpdate,
+		"unprotect": actionEnvProtectedUnprotect,
+	}
+	specs := ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler()))
+	byName := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byName[spec.Name] = spec
+	}
+	for suffix, id := range want {
+		t.Run(suffix, func(t *testing.T) {
+			name := "protected_" + suffix
+			if _, ok := byName[name]; !ok {
+				t.Fatalf("no spec named %q", name)
+			}
+			if id != "environment."+name {
+				t.Errorf("constant = %q, want %q", id, "environment."+name)
+			}
+		})
+	}
+}
