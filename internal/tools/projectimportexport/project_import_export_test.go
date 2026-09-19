@@ -448,7 +448,7 @@ func TestFormatExportStatusMarkdown(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Status**: finished\n\n" +
 		"---\n💡 **Next steps:**\n" +
-		"- Use action 'projectimportexport.export_download' to download the archive once the export status is 'finished'\n"
+		"- Use action 'project.export_download' to download the archive once the export status is 'finished'\n"
 	if md != want {
 		t.Errorf("FormatExportStatusMarkdown()\n got: %q\nwant: %q", md, want)
 	}
@@ -657,7 +657,7 @@ func TestFormatExportStatusMarkdown_AllFields(t *testing.T) {
 		"- **API URL**: [https://api.example.com](https://api.example.com)\n" +
 		"- **Web URL**: [https://web.example.com](https://web.example.com)\n\n" +
 		"---\n💡 **Next steps:**\n" +
-		"- Use action 'projectimportexport.export_download' to download the archive once the export status is 'finished'\n"
+		"- Use action 'project.export_download' to download the archive once the export status is 'finished'\n"
 	if md != want {
 		t.Errorf("FormatExportStatusMarkdown()\n got: %q\nwant: %q", md, want)
 	}
@@ -676,7 +676,7 @@ func TestFormatExportStatusMarkdown_HostileStatus(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Status**: finished&#124;x ## injected\n\n" +
 		"---\n💡 **Next steps:**\n" +
-		"- Use action 'projectimportexport.export_download' to download the archive once the export status is 'finished'\n"
+		"- Use action 'project.export_download' to download the archive once the export status is 'finished'\n"
 	if md != want {
 		t.Errorf("FormatExportStatusMarkdown()\n got: %q\nwant: %q", md, want)
 	}
