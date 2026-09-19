@@ -396,8 +396,15 @@ jobs:
           output=$(pnpm audit --audit-level=high 2>&1)
           status=$?
           printf '%s\n' "$output"
+          # The first six shapes are the endpoint never answering. The last two
+          # are it answering with something that is not an answer: pnpm reports
+          # ERR_PNPM_AUDIT_BAD_RESPONSE for any non-JSON or error status, and
+          # npm's own maintenance window returns a 503 with a status-page link.
+          # Both say exactly as much about these dependencies as a timeout does,
+          # which is nothing, and failing on them teaches people that a red
+          # audit means the registry rather than the tree.
           if [ "$status" -ne 0 ] && printf '%s' "$output" |
-              grep -qE 'TimeoutError|operation was aborted|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|socket hang up'; then
+              grep -qE 'TimeoutError|operation was aborted|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|socket hang up|ERR_PNPM_AUDIT_BAD_RESPONSE|responded with 5[0-9][0-9]'; then
             echo "::warning title=Dependency audit did not run::the npm advisories endpoint did not answer, so this run says nothing about the dependencies"
             exit 0
           fi
