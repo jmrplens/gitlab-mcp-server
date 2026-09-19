@@ -543,7 +543,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		usage:       "Update GitLab application (instance) settings such as sign-up restrictions, default visibility, CI/CD defaults, rate limits, and feature toggles. Send only the keys to change. Requires administrator access.",
 		aliases:     []string{"update application settings", "change instance settings", "configure gitlab settings", "edit admin settings"},
 		related:     []string{actionSettingsGet, "admin.appearance_update", actionMetadataGet},
-		description: "Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.",
+		description: "Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: gitlab_get_settings, gitlab_update_appearance.",
 	},
 	"gitlab_list_broadcast_messages": {
 		usage:       "List all broadcast messages shown to users across the instance, including active and scheduled banners and notifications.",
