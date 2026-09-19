@@ -248,7 +248,10 @@ func TestDetach_IdentifierForms_DecideWhatReachesGitLab(t *testing.T) {
 		{"digits at both ends of the range", "90", "gid://gitlab/Security::ScanProfile/90"},
 		{"surrounding whitespace trimmed off", "  42  ", "gid://gitlab/Security::ScanProfile/42"},
 		{"global ID with a numeric tail", "gid://gitlab/Security::ScanProfile/109", "gid://gitlab/Security::ScanProfile/109"},
-		{"tail taken from the last slash wherever it sits", "gid:///5", "gid:///5"},
+		{"a global ID with no authority and no type", "gid:///5", ""},
+		{"a global ID whose authority is not gitlab", "gid://elsewhere/Security::ScanProfile/5", ""},
+		{"a global ID carrying an id but no type", "gid://gitlab/5", ""},
+		{"a global ID whose type is the empty string", "gid://gitlab//5", ""},
 		{"a character below the digits", "4-2", ""},
 	}
 	for _, tc := range tests {

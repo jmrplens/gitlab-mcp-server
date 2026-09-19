@@ -19,6 +19,11 @@ import (
 // [gl.SecurityScanProfileGID].
 const gidPrefix = "gid://"
 
+// gidAuthority is the authority every global ID GitLab issues carries, as in
+// gid://gitlab/Security::ScanProfile/90. It is what distinguishes a global ID
+// from a string that merely starts like one.
+const gidAuthority = "gitlab"
+
 // AttachInput holds parameters for attaching a security scan profile to
 // projects and/or groups.
 type AttachInput struct {
@@ -104,18 +109,54 @@ func validateTargets(profileID string, projectIDs, groupIDs []int64) error {
 func validateDetachIdentifier(identifier string) error {
 	tail := strings.TrimSpace(identifier)
 	if rest, ok := strings.CutPrefix(tail, gidPrefix); ok {
-		if i := strings.LastIndex(rest, "/"); i >= 0 {
-			tail = rest[i+1:]
+		// A global ID is gid://gitlab/<Type>/<id>, and all three parts carry
+		// meaning. Reading only the text after the last slash accepted
+		// "gid:///5", which has no authority and no type: it passed here and
+		// went on the wire unchanged, and GitLab answered a malformed-id error
+		// naming nothing the caller could act on. That opaque failure is the
+		// one this guard exists to turn into a local one, so the authority and
+		// the type are required rather than assumed. The type is not compared
+		// against Security::ScanProfile: a global ID for the wrong resource is
+		// a different question, and nothing in the detach contract establishes
+		// how it should answer.
+		authority, typeAndID, found := strings.Cut(rest, "/")
+		if !found || authority != gidAuthority {
+			return errDetachIdentifier
+		}
+		// A global ID with no type leaves an empty tail on purpose, so the
+		// digit check below is the one place an identifier is refused for
+		// being empty. Refusing it here instead would make that check
+		// unreachable from this function, and deleting it in turn would make
+		// isAllDigits("") answer true, since a loop over no runes finds
+		// nothing to object to.
+		//
+		// The index must be past the start, not merely present: at zero the
+		// type is the empty string, which is "gid://gitlab//5". That carries
+		// an authority and a separator and still names no resource, so GitLab
+		// answers the same malformed-id error as a global ID with no type at
+		// all, and it is refused here for the same reason.
+		if i := strings.LastIndex(typeAndID, "/"); i > 0 {
+			tail = typeAndID[i+1:]
 		} else {
 			tail = ""
 		}
 	}
 	if !isAllDigits(tail) {
-		return errors.New("detach requires the persisted profile's numeric ID " +
-			"(from gitlab_list_project_scan_profile_statuses), not a scan-type name")
+		return errDetachIdentifier
 	}
 	return nil
 }
+
+// errDetachIdentifier is what every rejection in [validateDetachIdentifier]
+// answers, so the ways an identifier can be wrong cannot drift into several
+// wordings of the same advice.
+//
+// The message is one literal rather than two joined with a plus. A package
+// level declaration carries no coverage counter, so a mutation testing run
+// files the arithmetic mutant on that plus as not covered rather than not
+// viable, and no test can ever kill it: subtracting one string from another
+// does not compile.
+var errDetachIdentifier = errors.New("detach requires the persisted profile's numeric ID (from gitlab_list_project_scan_profile_statuses), not a scan-type name")
 
 // isAllDigits reports whether s is non-empty and consists solely of ASCII
 // digits.
