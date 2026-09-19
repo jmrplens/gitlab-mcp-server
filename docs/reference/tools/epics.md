@@ -71,7 +71,7 @@ Get a single group epic by its IID via the Work Items GraphQL API. Returns title
 | Annotation | **Read** |
 | ---------- | -------- |
 
-> **No `status` and no `iteration_id`.** An Epic work item carries neither the STATUS nor the ITERATION widget, so both keys were null on every response and they are no longer published. Issues and tasks do carry them: reach those through the `work_item.get` action (`gitlab_get_work_item` with `GITLAB_MCP_TOOL_SURFACE=individual`).
+> **No `status` and no `iteration_id`.** An Epic work item carries neither the STATUS nor the ITERATION widget, so both keys were null on every response and they are no longer published. Issues and tasks do carry them: reach those through the `issue.work_item_get` action (`gitlab_get_work_item` with `GITLAB_MCP_TOOL_SURFACE=individual`).
 
 ### `gitlab_epic_get_links`
 
@@ -96,7 +96,7 @@ Update an existing group epic via the Work Items GraphQL API. Can modify title, 
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-> **No `status`, `iteration_id` or `crm_contact_ids`.** The work item mutation accepts all three for the types that carry the STATUS, ITERATION and CRM_CONTACTS widgets, and an Epic carries none of them, so GitLab refuses each on an epic. They stay available on the `work_item.*` actions, where the caller chooses the type.
+> **No `status`, `iteration_id` or `crm_contact_ids`.** The work item mutation accepts all three for the types that carry the STATUS, ITERATION and CRM_CONTACTS widgets, and an Epic carries none of them, so GitLab refuses each on an epic. They stay available on the `issue.work_item_*` actions, where the caller chooses the type.
 
 ### `gitlab_epic_delete`
 

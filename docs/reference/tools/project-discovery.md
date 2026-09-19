@@ -41,6 +41,8 @@ Supports both HTTPS and SSH remote URL formats:
 - **SSH shorthand**: `git@gitlab.example.com:group/subgroup/project.git`
 - **SSH protocol**: `ssh://git@gitlab.example.com/group/project.git`
 
+The `.git` suffix and a trailing slash are both optional, so a URL copied from a browser address bar (`https://gitlab.example.com/group/project/`) resolves too. What is still refused is a bare project path with no scheme and no user prefix, such as `group/project`: that is already a valid `project_id` and needs no discovery.
+
 | Annotation | **Read** |
 | ---------- | -------- |
 

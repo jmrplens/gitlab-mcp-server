@@ -261,27 +261,27 @@ Más allá de ejecutar el servidor en pipelines, GitLab MCP Server proporciona h
 
 ### Pipelines
 
-El dominio `pipeline` gestiona el ciclo de vida completo de los pipelines. Sus acciones son IDs `pipeline.<acción>` para `gitlab_execute_action` en la superficie dinámica predeterminada (las acciones de programaciones llevan `pipeline_schedule.` en su lugar, como se indica más abajo) y los valores de `action` de la meta-herramienta `gitlab_pipeline` con `GITLAB_MCP_TOOL_SURFACE=meta`:
+El dominio `pipeline` gestiona el ciclo de vida completo de los pipelines. Sus acciones son IDs `pipeline.<acción>` para `gitlab_execute_action` en la superficie dinámica predeterminada y los valores de `action` de la meta-herramienta `gitlab_pipeline` con `GITLAB_MCP_TOOL_SURFACE=meta`:
 
-| Acción                | Descripción                                                                                                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list`                | Listar pipelines con filtrado por estado, ref                                                                                                                                 |
-| `get`                 | Obtener detalles y estado del pipeline                                                                                                                                        |
-| `create`              | Disparar un nuevo pipeline con variables                                                                                                                                      |
-| `cancel`              | Cancelar un pipeline en ejecución                                                                                                                                             |
-| `retry`               | Reintentar un pipeline fallido                                                                                                                                                |
-| `delete`              | Eliminar un pipeline                                                                                                                                                          |
-| `variables`           | Listar variables del pipeline                                                                                                                                                 |
-| `test_report`         | Obtener el informe de tests de un pipeline                                                                                                                                    |
-| `wait`                | **Esperar a la finalización** del pipeline con polling                                                                                                                        |
-| `latest`              | Obtener el último pipeline de una ref                                                                                                                                         |
-| `test_report_summary` | Obtener el resumen del informe de tests de un pipeline                                                                                                                        |
-| `update_metadata`     | Actualizar los metadatos de un pipeline (nombre)                                                                                                                              |
-| `trigger_*`           | Gestión de tokens de trigger de pipeline (list, get, create, update, delete, run)                                                                                             |
-| `schedule_*`          | CRUD de programaciones de pipeline (list, get, create, update, delete, run, take ownership, list triggered pipelines); prefijo `pipeline_schedule.` en la superficie dinámica |
-| `schedule_*_variable` | CRUD de variables de programación (create, edit, delete); mismo prefijo en la superficie dinámica                                                                             |
+| Acción                | Descripción                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `list`                | Listar pipelines con filtrado por estado, ref                                                                         |
+| `get`                 | Obtener detalles y estado del pipeline                                                                                |
+| `create`              | Disparar un nuevo pipeline con variables                                                                              |
+| `cancel`              | Cancelar un pipeline en ejecución                                                                                     |
+| `retry`               | Reintentar un pipeline fallido                                                                                        |
+| `delete`              | Eliminar un pipeline                                                                                                  |
+| `variables`           | Listar variables del pipeline                                                                                         |
+| `test_report`         | Obtener el informe de tests de un pipeline                                                                            |
+| `wait`                | **Esperar a la finalización** del pipeline con polling                                                                |
+| `latest`              | Obtener el último pipeline de una ref                                                                                 |
+| `test_report_summary` | Obtener el resumen del informe de tests de un pipeline                                                                |
+| `update_metadata`     | Actualizar los metadatos de un pipeline (nombre)                                                                      |
+| `trigger_*`           | Gestión de tokens de trigger de pipeline (list, get, create, update, delete, run)                                     |
+| `schedule_*`          | CRUD de programaciones de pipeline (list, get, create, update, delete, run, take ownership, list triggered pipelines) |
+| `schedule_*_variable` | CRUD de variables de programación (create, edit, delete)                                                              |
 
-Las filas de programaciones pertenecen al dominio `pipeline_schedule`, así que en la superficie dinámica sus IDs se leen `pipeline_schedule.schedule_list`, `pipeline_schedule.schedule_run`, `pipeline_schedule.schedule_take_ownership`, `pipeline_schedule.schedule_list_triggered_pipelines`, `pipeline_schedule.schedule_create_variable`, `pipeline_schedule.schedule_edit_variable`, etc.; en la superficie meta son valores de `action` de `gitlab_pipeline` como el resto de la tabla.
+Las filas de programaciones pertenecen al mismo grupo `gitlab_pipeline` que el resto, así que en la superficie dinámica sus IDs se leen `pipeline.schedule_list`, `pipeline.schedule_run`, `pipeline.schedule_take_ownership`, `pipeline.schedule_list_triggered_pipelines`, `pipeline.schedule_create_variable`, `pipeline.schedule_edit_variable`, etc.; en la superficie meta son valores de `action` de `gitlab_pipeline` como el resto de la tabla.
 
 :::tip[Esperar pipeline]
 La acción `wait` consulta un pipeline hasta que alcanza un estado terminal (success, failed, canceled). Esto es especialmente útil en scripts CI que necesitan bloquearse hasta que un pipeline disparado termine.
