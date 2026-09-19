@@ -5,14 +5,17 @@ package releaselinks
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -1247,6 +1250,212 @@ func TestReleaseLinkDescriptions_RMeta(t *testing.T) {
 			desc := byTool[name].IndividualTool.Description
 			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
 				t.Errorf("%s description = %q, want Returns:/See also: form", name, desc)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers actually send GitLab.
+//
+// Every assertion above reads the response the mock chose, so a handler that
+// builds the wrong request body still passes: the mock answers the same bytes
+// whatever it was asked. These three capture the body instead and compare the
+// whole object, which is what an optional-field guard, a swapped assignment and
+// a defaulted link type are all visible in.
+// ---------------------------------------------------------------------------.
+
+// captureJSONBodies answers every request at path with body and records each
+// request body it saw, in order. The recording is read after the handler under
+// test has returned, so nothing asserts off the server's goroutine.
+func captureJSONBodies(t *testing.T, method, path, response string, status int) (*gitlabclient.Client, *[]string) {
+	t.Helper()
+	bodies := make([]string, 0, 2)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			raw = nil
+		}
+		bodies = append(bodies, string(raw))
+		testutil.RespondJSON(w, status, response)
+	}))
+	return client, &bodies
+}
+
+// decodeBody reads one captured body as a JSON object, so a comparison is over
+// the keys GitLab receives rather than over a substring of the encoding.
+func decodeBody(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("decode request body %q: %v", body, err)
+	}
+	return decoded
+}
+
+// TestReleaseLinkUpdate_SendsOnlyTheFieldsTheCallerSet asserts that Update puts
+// each optional field under its own GitLab key and sends no key for a field the
+// caller left empty.
+//
+// Both halves are the same defect seen from two sides. An inverted `!= ""`
+// guard drops the value the caller did set, which GitLab ignores in silence,
+// and sends an empty string for the one they never mentioned, which GitLab
+// applies — an update of the name alone would blank the URL. The last case
+// gives all five distinct values so no assignment can read its neighbour's
+// field either.
+func TestReleaseLinkUpdate_SendsOnlyTheFieldsTheCallerSet(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{"name only", UpdateInput{Name: "renamed"}, map[string]any{"name": "renamed"}},
+		{"url only", UpdateInput{URL: "https://example.com/v2"}, map[string]any{"url": "https://example.com/v2"}},
+		{"filepath only", UpdateInput{FilePath: "/legacy/path"}, map[string]any{"filepath": "/legacy/path"}},
+		{"direct asset path only", UpdateInput{DirectAssetPath: "/direct/path"}, map[string]any{"direct_asset_path": "/direct/path"}},
+		{"link type only", UpdateInput{LinkType: "runbook"}, map[string]any{"link_type": "runbook"}},
+		{"nothing optional", UpdateInput{}, map[string]any{}},
+		{
+			"every field, each a different value",
+			UpdateInput{Name: "renamed", URL: "https://example.com/v2", FilePath: "/legacy/path", DirectAssetPath: "/direct/path", LinkType: "runbook"},
+			map[string]any{
+				"name":              "renamed",
+				"url":               "https://example.com/v2",
+				"filepath":          "/legacy/path",
+				"direct_asset_path": "/direct/path",
+				"link_type":         "runbook",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, bodies := captureJSONBodies(t, http.MethodPut, pathReleaseLinkByID, releaseLinkActionJSON, http.StatusOK)
+			input := tt.input
+			input.ProjectID, input.TagName, input.LinkID = "42", testTagV120, 10
+			if _, err := Update(context.Background(), client, input); err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+			if len(*bodies) != 1 {
+				t.Fatalf("len(bodies) = %d, want 1", len(*bodies))
+			}
+			if got := decodeBody(t, (*bodies)[0]); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReleaseLinkCreate_SendsEachFieldUnderItsOwnKey asserts that Create sends
+// every field under the key client-go spells for it, and that the link type is
+// sent only when there is one to send.
+//
+// The type is the interesting half: GitLab defaults an absent link_type to
+// "other", so a handler that always sends the key would pin "" on an ordinary
+// asset, and one that never sends it would silently stop labeling generic
+// package assets as packages. The rest of the object is compared whole, so
+// name and url — and direct_asset_path and filepath, which are two spellings of
+// one idea — cannot be assigned from each other.
+func TestReleaseLinkCreate_SendsEachFieldUnderItsOwnKey(t *testing.T) {
+	const genericPackageURL = "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/bin"
+
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{
+			"every field, each a different value",
+			CreateInput{Name: "Binary", URL: "https://example.com/bin", DirectAssetPath: "/direct/bin", FilePath: "/legacy/bin", LinkType: "image"},
+			map[string]any{
+				"name":              "Binary",
+				"url":               "https://example.com/bin",
+				"direct_asset_path": "/direct/bin",
+				"filepath":          "/legacy/bin",
+				"link_type":         "image",
+			},
+		},
+		{
+			"ordinary url and no type sends no link_type",
+			CreateInput{Name: "Docs", URL: "https://docs.example.com"},
+			map[string]any{"name": "Docs", "url": "https://docs.example.com"},
+		},
+		{
+			"generic package url and no type is labeled package",
+			CreateInput{Name: "Pkg", URL: genericPackageURL},
+			map[string]any{"name": "Pkg", "url": genericPackageURL, "link_type": "package"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, bodies := captureJSONBodies(t, http.MethodPost, pathReleaseLinks, releaseLinkActionJSON, http.StatusCreated)
+			input := tt.input
+			input.ProjectID, input.TagName = "42", testTagV120
+			if _, err := Create(context.Background(), client, input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			if len(*bodies) != 1 {
+				t.Fatalf("len(bodies) = %d, want 1", len(*bodies))
+			}
+			if got := decodeBody(t, (*bodies)[0]); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReleaseLinkCreateBatch_SendsEachEntryUnderItsOwnKeys asserts that a batch
+// builds one request per entry, from that entry's own values, with the same
+// link-type defaulting a single create gets.
+//
+// The batch loop is a second copy of the create body, so it can drift from the
+// one above without any assertion here noticing: it used to be driven only by
+// tests that checked a substring per body, which a swap between two entries
+// leaves intact.
+func TestReleaseLinkCreateBatch_SendsEachEntryUnderItsOwnKeys(t *testing.T) {
+	const genericPackageURL = "https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/bin"
+
+	client, bodies := captureJSONBodies(t, http.MethodPost, pathReleaseLinks, releaseLinkActionJSON, http.StatusCreated)
+	out, err := CreateBatch(context.Background(), client, CreateBatchInput{
+		ProjectID: "42",
+		TagName:   testTagV120,
+		Links: []LinkEntry{
+			{Name: "Binary", URL: "https://example.com/bin", DirectAssetPath: "/direct/bin", FilePath: "/legacy/bin", LinkType: "image"},
+			{Name: "Docs", URL: "https://docs.example.com"},
+			{Name: "Pkg", URL: genericPackageURL},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateBatch() unexpected error: %v", err)
+	}
+	if len(out.Created) != 3 {
+		t.Fatalf("len(out.Created) = %d, want 3", len(out.Created))
+	}
+
+	want := []map[string]any{
+		{
+			"name":              "Binary",
+			"url":               "https://example.com/bin",
+			"direct_asset_path": "/direct/bin",
+			"filepath":          "/legacy/bin",
+			"link_type":         "image",
+		},
+		{"name": "Docs", "url": "https://docs.example.com"},
+		{"name": "Pkg", "url": genericPackageURL, "link_type": "package"},
+	}
+	if len(*bodies) != len(want) {
+		t.Fatalf("len(bodies) = %d, want %d", len(*bodies), len(want))
+	}
+	for i, wantBody := range want {
+		t.Run(wantBody["name"].(string), func(t *testing.T) {
+			if got := decodeBody(t, (*bodies)[i]); !reflect.DeepEqual(got, wantBody) {
+				t.Errorf("body[%d] = %v, want %v", i, got, wantBody)
 			}
 		})
 	}

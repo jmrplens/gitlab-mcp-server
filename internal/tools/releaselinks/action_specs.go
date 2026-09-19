@@ -5,10 +5,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs of this package's own actions, named both by the
+// RelatedActions below and by the hints markdown.go writes. Asset links are
+// projected under the release domain, so every surface resolves
+// "release.link_list"; a "release_link.list" constant sat in this block until
+// the mutation sweep, five characters from the real ID, naming an action no
+// catalog holds and answering a model "unknown action" the moment one of these
+// two files reached for it.
+const (
+	actionLinkCreate      = "release.link_create"
+	actionLinkCreateBatch = "release.link_create_batch"
+	actionLinkGet         = "release.link_get"
+	actionLinkList        = "release.link_list"
+	actionLinkUpdate      = "release.link_update"
+	actionLinkDelete      = "release.link_delete"
+)
+
+// The IDs other domains own that this package's RelatedActions point at.
 const (
 	actionReleaseCreate     = "release.create"
-	actionReleaseLinkList   = "release_link.list"
-	actionReleaseLinkListID = "release.link_list"
+	actionReleaseGet        = "release.get"
+	actionReleaseUpdate     = "release.update"
+	actionPackageList       = "package.list"
 	actionPackagePublish    = "package.publish"
 	actionPackagePublishDir = "package.publish_directory"
 )
@@ -44,7 +62,7 @@ func releaseLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute releaselinks domain action.", Tags: []string{"release", "asset", "link"},
-		RelatedActions: []string{"release.get", "release.update", "package.list"},
+		RelatedActions: []string{actionReleaseGet, actionReleaseUpdate, actionPackageList},
 		OpenWorld:      true,
 		OwnerPackage:   "releaselinks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -60,22 +78,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if actionName == "link_delete" {
 		options.Usage = "Delete a release asset link by link_id. Use to detach a downloadable asset from a release. The underlying file or package is not removed."
 		options.Aliases = []string{"delete release link", "remove release asset link", "detach release download"}
-		options.RelatedActions = []string{"release.link_get", actionReleaseLinkListID, "release.get"}
-	}
-	if actionName == "link_create_batch" {
-		options.Usage = "Create MULTIPLE release asset links in one call. Provide the release tag_name and a links array, each entry with a name and an absolute url. Use this instead of repeated link_create when attaching several assets at once, for example one link per file uploaded by package.publish_directory."
-		options.Aliases = []string{"create multiple release links", "batch create release asset links", "add several release links at once", "link multiple package files to a release", "create release asset links in one call", "attach multiple assets to release", "link each uploaded file to release"}
-		options.RelatedActions = []string{"release.link_create", actionReleaseCreate, actionPackagePublishDir, actionPackagePublish}
-		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
-			"links": {
-				SemanticRole: "release_asset_link_batch",
-				ValueSource:  "An array of {name, url} objects, one per asset. For package assets, use the absolute URLs returned by package publish actions. Do not construct package registry URLs manually.",
-				CommonConfusions: []string{
-					"Do not call link_create once per asset when several are requested; pass them all in the links array of link_create_batch.",
-					"Do not put a single name/url at top level; each link goes inside the links array.",
-				},
-			},
-		}
+		options.RelatedActions = []string{actionLinkGet, actionLinkList, actionReleaseGet}
 	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {
@@ -85,7 +88,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
 		}
-		options.RelatedActions = []string{actionReleaseCreate, actionReleaseLinkListID, actionPackagePublish, actionPackagePublishDir}
+		options.RelatedActions = []string{actionReleaseCreate, actionLinkList, actionPackagePublish, actionPackagePublishDir}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"url": {
 				SemanticRole: "release_asset_absolute_url",
@@ -120,7 +123,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if actionName == "link_create_batch" {
 		options.Usage = "Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets."
 		options.Aliases = []string{"batch release links", "release package asset links", "link package files to release", "create multiple release assets"}
-		options.RelatedActions = []string{actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, actionReleaseLinkListID}
+		options.RelatedActions = []string{actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, actionLinkList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_links",
@@ -144,9 +147,12 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			}),
 		}
 	}
-	if description := releaseLinkDescriptions[actionName]; description != "" {
-		options.IndividualTool.Description = description
-	}
+	// Unguarded: a missing entry assigns the empty string the field already
+	// holds, so the guard that used to stand here could never be observed
+	// false. The property it was standing in for — that every action this
+	// package declares has a description — is pinned by
+	// TestReleaseLinkDescriptions_RMeta instead.
+	options.IndividualTool.Description = releaseLinkDescriptions[actionName]
 	return options
 }
 
