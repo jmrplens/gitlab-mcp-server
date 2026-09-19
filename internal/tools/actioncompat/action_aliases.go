@@ -42,6 +42,7 @@ const (
 	actionPipelineScheduleUpdate         = "pipeline.schedule_update"
 	actionProjectProtectedEnvProtect     = "environment.protected_protect"
 	actionProjectProtectedEnvUpdate      = "environment.protected_update"
+	actionProjectBadgeAdd                = "project.badge_add"
 	actionProjectHookAdd                 = "project.hook_add"
 	actionProjectMemberAdd               = "project.member_add"
 	actionProjectMemberDelete            = "project.member_delete"
@@ -85,7 +86,8 @@ func ActionAliases() []ActionAlias {
 
 func defaultActionAliases() []ActionAlias {
 	return []ActionAlias{
-		compatActionAlias("badge.create", "project.badge_add"),
+		compatActionAlias("badge.add", actionProjectBadgeAdd),
+		compatActionAlias("badge.create", actionProjectBadgeAdd),
 		compatActionAlias("badge.delete", "project.badge_delete"),
 		compatActionAlias("broadcast_message.create", "admin.broadcast_message_create"),
 		compatActionAlias("broadcast_message.delete", "admin.broadcast_message_delete"),
@@ -116,7 +118,10 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("feature_flags.feature_flag_user_lists_list", actionFeatureFlagUserListList),
 		compatActionAlias("gitlab_issue.create", "issue.create"),
 		compatActionAlias("gitlab_issue.delete", "issue.delete"),
+		compatActionAlias("group.custom_emoji_list", "custom_emoji.list"),
 		compatActionAlias("group.custom_member_roles_list", "member_role.list_group"),
+		compatActionAlias("epic_discussion_note_update", actionGroupEpicDiscussionUpdateNote),
+		compatActionAlias("epic_discussion_note_delete", actionGroupEpicDiscussionDeleteNote),
 		compatActionAlias("group.epic_discussion_note_update", actionGroupEpicDiscussionUpdateNote),
 		compatActionAlias("group.epic_discussion_note_delete", actionGroupEpicDiscussionDeleteNote),
 		compatActionAlias("issue.note.create", "issue.note_create"),
@@ -152,12 +157,18 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("merge_request.time_estimate", "merge_request.time_estimate_set"),
 		compatActionAlias("merge_request.time_spent_add", actionMergeRequestSpentTimeAdd),
 		compatActionAlias("merge_request.time_spent_set", actionMergeRequestSpentTimeAdd),
+		compatActionAlias("milestone.create", "project.milestone_create"),
+		compatActionAlias("milestone.delete", "project.milestone_delete"),
+		compatActionAlias("milestone.get", "project.milestone_get"),
+		compatActionAlias("milestone.list", "project.milestone_list"),
+		compatActionAlias("milestone.update", "project.milestone_update"),
 		compatActionAlias("mr_review.draft_notes_publish", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("mr_review.publish", actionMRReviewDraftNotePublishAll),
 		compatActionAlias("package.files", "package.file_list"),
 		compatActionAlias("package.list_generic", actionPackageList),
 		compatActionAlias("personal_snippet.raw", "snippet.content"),
 		compatActionAlias("project.releases.list", "release.list"),
+		compatActionAlias("hook.add", actionProjectHookAdd),
 		compatActionAlias("project.hook_create", actionProjectHookAdd),
 		compatActionAlias("project.hooks.list", "project.hook_list"),
 		compatActionAlias("project.member_remove", actionProjectMemberDelete),
@@ -180,6 +191,7 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("terraform_state.lock", actionAdminTerraformStateLock),
 		compatActionAlias("terraform_state.unlock", actionAdminTerraformStateUnlock),
 		compatActionAlias("terraform_state.version_delete", actionAdminTerraformVersionDelete),
+		unsearchableActionAlias("me", "user.current", "Canonicalization compatibility alias; omitted from search because an ordinary English pronoun ranks half the catalog."),
 		unsearchableActionAlias("repository_tree", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		unsearchableActionAlias("repository_tree.list", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		compatActionAlias("repository_file.create", "repository.file_create"),

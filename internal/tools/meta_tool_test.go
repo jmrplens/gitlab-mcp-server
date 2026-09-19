@@ -14,6 +14,8 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -153,26 +155,27 @@ func TestMetaCatalog_GroupBoardListAsksForTheIssueBoardsOnEveryTier(t *testing.T
 	}
 }
 
-// sameHandlerActionAliases lists the aliases of the meta alias table whose name
-// is also an action of its own because both names are registered with one
-// handler, so rewriting one into the other changes nothing a caller can see.
+// sameHandlerActionAliases lists the compatibility aliases whose spelling the
+// catalog also registers as an action of its own, because one handler was given
+// both names. The dispatcher leaves such a call alone by design, and nothing is
+// lost by that: the name the caller used runs the handler the alias points at.
 var sameHandlerActionAliases = map[string]string{
 	// user.me is user.current registered under a friendlier name: both route
 	// to users.Current.
-	"me": "current",
+	"me": "user.current",
 }
 
-// TestActionAliasTable_SpellsNoActionOfItsOwn verifies that no entry of the
-// meta alias table is the name of a different action, on any licensing tier.
+// TestActionAliases_SpellNoActionOfTheirOwn verifies that no compatibility
+// alias is the name of a different action, on any licensing tier.
 //
 // An alias is another spelling of one action. A name the catalog routes as an
 // action of its own, or a canonical ID, is not a spelling of anything else:
 // rewriting it runs a handler the caller did not name, which is what
 // group_board_list did on a licensed instance until the dispatcher stopped
 // rewriting routed names. The dispatcher guard keeps the meta surface safe
-// either way; this keeps the table honest for the evaluator, which applies it
+// either way; this keeps the table honest for the readers that apply it
 // without knowing the catalog.
-func TestActionAliasTable_SpellsNoActionOfItsOwn(t *testing.T) {
+func TestActionAliases_SpellNoActionOfTheirOwn(t *testing.T) {
 	for _, tier := range []edition.Tier{edition.Free, edition.Premium, edition.Ultimate} {
 		t.Run(tier.String(), func(t *testing.T) {
 			catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: tier, IncludeMCP: true})
@@ -185,11 +188,65 @@ func TestActionAliasTable_SpellsNoActionOfItsOwn(t *testing.T) {
 				names[action.Name] = struct{}{}
 			}
 			for name := range names {
-				target, ok := toolutil.ActionAliasTarget(name)
+				target, ok := actioncompat.NormalizeActionAlias(name)
 				if !ok || target == name || sameHandlerActionAliases[name] == target {
 					continue
 				}
 				t.Errorf("alias %q -> %q: %q is an action of its own", name, target, name)
+			}
+		})
+	}
+}
+
+// TestActionAliases_EveryAliasResolvesOnTheGroupThatOwnsIt drives every
+// compatibility alias through the meta dispatcher's own resolver, against the
+// route map of the catalog group that really owns its canonical action.
+//
+// It exists because a table nothing can reach reads as coverage. The alias
+// table the meta surface consulted until this test was written was keyed by
+// legacy spelling and valued by canonical ID, while a group's route map is
+// keyed by bare action names, so about ninety of its ninety-three entries
+// could never match: `milestone.get` was listed and resolved on no surface.
+// Holding each entry to firing on a real group is what makes that class of
+// silence fail here instead of in a client.
+func TestActionAliases_EveryAliasResolvesOnTheGroupThatOwnsIt(t *testing.T) {
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Tier: edition.Ultimate, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(ultimate) error = %v", err)
+	}
+	catalog, err = dynamic.AddStandaloneCatalog(catalog, nil, dynamic.StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+	}
+
+	type owner struct {
+		tool   string
+		action string
+	}
+	owners := make(map[string]owner)
+	routesByTool := make(map[string]toolutil.ActionMap)
+	for _, group := range catalog.Groups() {
+		routesByTool[group.ToolName] = group.ActionMap()
+		for _, action := range group.ActionsInOrder() {
+			owners[string(action.ID)] = owner{tool: group.ToolName, action: action.Name}
+		}
+	}
+
+	for _, alias := range actioncompat.ActionAliases() {
+		t.Run(alias.Alias, func(t *testing.T) {
+			target, known := owners[alias.Canonical]
+			if !known {
+				t.Fatalf("alias %q targets %q, which no catalog group builds at Ultimate", alias.Alias, alias.Canonical)
+			}
+			want := target.action
+			// A spelling the same tool already routes runs its own handler
+			// rather than being rewritten, which is the guard that stopped
+			// group_board_list mis-routing.
+			if sameHandlerActionAliases[alias.Alias] == alias.Canonical {
+				want = alias.Alias
+			}
+			if got := toolutil.NormalizeActionAlias(alias.Alias, routesByTool[target.tool]); got != want {
+				t.Fatalf("%s: NormalizeActionAlias(%q) = %q, want %q", target.tool, alias.Alias, got, want)
 			}
 		})
 	}

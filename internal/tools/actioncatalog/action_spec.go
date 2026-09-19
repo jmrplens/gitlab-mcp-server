@@ -3,6 +3,7 @@ package actioncatalog
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -34,6 +35,9 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 		// The content kind travels on the route for the same reason: it is
 		// what the dispatcher annotates the result with.
 		route.ContentKind = spec.ContentKind
+		// And so do the historical spellings, because the meta dispatcher
+		// resolves one out of the group's route map and never sees the spec.
+		route.CompatibilityAliases = compatibilityAliasNames(spec.Compatibility.ActionAliases)
 		actions = append(actions, Action{
 			Name:                   spec.Name,
 			Route:                  route,
@@ -61,6 +65,30 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 		})
 	}
 	return actions, errors.Join(errs...)
+}
+
+// compatibilityAliasNames returns the alias spellings of a compatibility
+// policy, lowercased and without blanks, in declaration order.
+//
+// The target is dropped rather than carried: a spec's alias may only target
+// the action declaring it (validateActionAliasSpecs refuses anything else), so
+// the name the route is filed under is already the target.
+func compatibilityAliasNames(aliases []toolutil.ActionAliasSpec) []string {
+	if len(aliases) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		name := strings.ToLower(strings.TrimSpace(alias.Alias))
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return names
 }
 
 // GroupFromSpecs builds a catalog group from canonical action specs.
