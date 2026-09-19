@@ -106,7 +106,7 @@ readable without opening the tracker:
 | 31 | client-go | [Six response structs miss a field GitLab sends on every object](#six-response-structs-miss-a-field-gitlab-sends-on-every-object) | No | No | No | No | Yes |
 | 32 | client-go | [No token struct carries the granular fields, and the impersonation and resource ones carry less still](#no-token-struct-carries-the-granular-fields-and-the-impersonation-and-resource-ones-carry-less-still) | No | No | No | No | Yes |
 | 33 | client-go | [The four Sidekiq routes carry a leading slash](#the-four-sidekiq-routes-carry-a-leading-slash-and-send-a-double-slash) | No | No | No | No | None |
-| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 2 open | **12 of 14; 11 released, v3.1.0 to v3.10.0** | No | Yes |
+| 34 | client-go | [Response structs that miss a field GitLab sends unconditionally](#response-structs-that-miss-a-field-gitlab-sends-unconditionally) | Yes | Yes, 2 open | **12 of 14; all 12 released, v3.1.0 to v3.11.0** | No | Retired for the 12; the 2 open ones keep theirs |
 | 35 | client-go | [The Geo structs model a fraction of a site and its status, and the repair method names the wrong entity](#the-geo-structs-model-a-fraction-of-a-site-and-its-status-and-the-repair-method-names-the-wrong-entity) | No | No | No | No | Partial |
 | 36 | client-go | [The merge request structs miss six keys, unevenly, and two methods name an entity they do not answer with](#the-merge-request-structs-miss-six-keys-unevenly-and-two-methods-name-an-entity-they-do-not-answer-with) | No | No | No | No | Partial |
 | 37 | client-go | [The User struct models one user entity and GitLab serves six](#the-user-struct-models-one-user-entity-and-gitlab-serves-six) | No | No | No | No | Yes |
@@ -133,6 +133,17 @@ what the e2e rebuild found, the first from the EE port and the second from the
 CE coverage that closed the gap against the old suite's baseline. Row 47 was
 added on the 14th and is the first entry not found from this codebase, on the
 terms the next paragraph sets out.
+
+Every `client-go` row was then re-read against the **v3.12.0** source on
+2026-09-19, when the pin moved there, rather than against the tracker: for each
+one the struct, the method or the route it names was opened in the module cache
+and compared with what the row claims. Only row 34 changed, and only for the
+twelve of its fourteen that had merged. Rows 5, 6, 7, 19, 20, 22, 25, 26, 27,
+28, 29, 30, 31, 32, 33, 35, 36, 37, 40, 41, 42, 43, 44 and 45 are unchanged,
+which the diff of the two versions says structurally as well: twenty-one
+non-test files differ between v3.0.0 and v3.12.0, no exported symbol was
+removed or renamed, no field changed its Go type or its `omitempty`, and no
+route a service method builds changed.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -911,14 +922,15 @@ of change whose test is one assertion on the built URL.
   **v3.6.0**, both on 2026-09-11; then `!3044` (`LicenseTemplate.Popular`) in
   **v3.7.0** and `!3041` (`Topic.OrganizationID`) in **v3.9.0**, merged on
   2026-09-12 and 2026-09-13; then `!3050` (`Imported`, `ImportedFrom` and
-  `WikiPage` on both event structs) in **v3.10.0** on 2026-09-14.
-  `!3051` (the eight `Namespace` fields) was merged the same day and is in no
-  tag: v3.10.0 was cut at 20:17 and the merge landed at 20:36, nineteen
-  minutes later. Do not read a merge as a release: `!3040` sat merged and in no
-  tag for hours, so the version is read from which tags contain the merge
-  commit rather than from the newest tag. Ten releases in six days is why: the
-  newest tag was wrong for five of the first six, `!3044` is in three tags
-  while `!3041` is in one, and `!3051` is in none.
+  `WikiPage` on both event structs) in **v3.10.0** on 2026-09-14; and finally
+  `!3051` (the eight `Namespace` fields) in **v3.11.0** on 2026-09-16. `!3051`
+  was merged on the 14th, nineteen minutes after v3.10.0 was cut, and this
+  register recorded it as in no tag until the next release carried it. Do not
+  read a merge as a release: `!3040` sat merged and in no tag for hours, so the
+  version is read from which tags contain the merge commit rather than from the
+  newest tag. Eleven releases in eight days is why: the newest tag was wrong
+  for five of the first six, and `!3044` is in three tags while `!3041` is in
+  one.
 - **What review asked for, and what it cost**: `!3051` was merged on the
   second push. A maintainer asked for the five numeric fields as plain `int64`
   rather than pointers, on the convention that a response struct uses
@@ -931,12 +943,40 @@ of change whose test is one assertion on the built URL.
   zero. It is only sent to a caller allowed `:update_subscription_limit`, who
   is reading the namespace to set those limits rather than to enforce one.
 - **Blocking**: no.
-- **Workaround**: yes. Each field is read from the captured response beside
-  the SDK's decode, through the readers in `internal/toolutil/sent_shapes.go`.
-  Each retires when its merge request lands and the pin moves.
-  The pin is deliberately **not** moved once per merge: several of these will
-  land in quick succession, so the bump and the workarounds it retires are
-  taken together rather than one release at a time.
+- **Workaround**: retired for the twelve that merged, at the **v3.12.0** pin.
+  Each field was read from the captured response beside the SDK's decode,
+  through the readers in `internal/toolutil/sent_shapes.go`; the pin was
+  deliberately not moved once per merge, since these landed in quick
+  succession, so the bump and the workarounds it retires were taken together.
+  Ten packages now read the field straight off the SDK struct and their capture
+  is gone (`appearance`, `broadcastmessages`, `clusteragents`, `events`,
+  `groupscim`, `groupserviceaccounts`, `licensetemplates`, `securefiles`,
+  `snippets`, `topics`), and with them the shapes and readers they used.
+  Two retire only in part, each for a reason the merge request could not carry:
+
+  - `deploykeys` takes `last_used_at` and `usage_type` from the SDK on both
+    structs, and keeps a capture for `projects_with_write_access` and
+    `projects_with_readonly_access`, which client-go models on
+    `InstanceDeployKey` alone. That half was never `!3049`'s: the bullet below
+    records why `ProjectDeployKey` must not gain them.
+  - `namespaces` takes `projects_count`, `root_repository_size`,
+    `additional_purchased_storage_ends_on`, `max_seats_used_changed_at` and
+    `end_date` from the SDK, and keeps a capture for the three limits
+    `shared_runners_minutes_limit`, `extra_shared_runners_minutes_limit` and
+    `additional_purchased_storage_size`. Review asked for those as plain
+    `int64` rather than pointers, so the SDK cannot tell a null from a zero,
+    and a null `shared_runners_minutes_limit` is exactly how GitLab says there
+    is no limit. Reading them from the struct would publish "no limit" as
+    "limited to zero minutes", which is the one way this bump could have made
+    the surface less true rather than more.
+
+  The two open merge requests keep their workarounds whole: `systemhooks`
+  still reads the seven `Hook` fields of `!3048` off the capture, and
+  `packages` the `Package` fields of `!3052`. Both were checked against the
+  v3.12.0 source rather than against the tracker, and neither struct carries
+  them. `projectserviceaccounts` keeps its read of `public_email` too, since
+  `!3047` added the pair to `GroupServiceAccount` and `ProjectServiceAccount`
+  was outside it.
 
 **What**: one field per struct, each exposed by the rendering entity with no
 condition at all, so every response of every endpoint that renders it carries
@@ -1015,8 +1055,13 @@ the field and the SDK drops it. Every entity reference is to the tag
   `internal/tools/groupserviceaccounts` reads it from the capture. Two gaps
   next to it are not covered by that merge request and are worth a second:
   `ProjectServiceAccount` and the instance-scope `ServiceAccount` are both
-  missing `public_email` too, and no scope wraps
-  `GET /…/service_accounts/:user_id` at all.
+  missing `public_email` still. The second half of that lead is closed:
+  `GroupsService.GetServiceAccount` and
+  `ProjectsService.GetProjectServiceAccount` wrap
+  `GET /…/service_accounts/:user_id` as of **v3.12.0**
+  ([!3056](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3056),
+  somebody else's), which this server does not yet publish an action for. That
+  is new surface for the 1:1 review (R-ACTION) rather than a workaround.
 
 **How we found it**: the sent dimension of the 1:1 audit
 (`shapes.typed.unsurfaced` in `go run ./cmd/audit_1to1/ -scope=paths`), whose

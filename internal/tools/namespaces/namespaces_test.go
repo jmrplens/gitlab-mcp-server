@@ -986,12 +986,13 @@ func TestNamespaces_OmitTheFieldsGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestNamespaces_UnreadableCapturedFields verifies every handler answering
-// with a namespace reports a decode failure rather than a namespace missing
-// what GitLab sent. client-go models projects_count on its own Namespace as of
-// v3.12.0, so its decoder reaches the string GitLab sent there before the read
-// beside it does, and either refusal is what this asserts.
-func TestNamespaces_UnreadableCapturedFields(t *testing.T) {
+// TestNamespaces_UnreadableFields verifies every handler answering with a
+// namespace reports a decode failure rather than a namespace missing what
+// GitLab sent. client-go models projects_count on its own Namespace as of
+// v3.12.0, so the SDK's decoder is what refuses the string GitLab sent there;
+// the capture that survives in this package reads the three limits, whose
+// null the SDK's plain int64 cannot tell from a limit of zero.
+func TestNamespaces_UnreadableFields(t *testing.T) {
 	const poisoned = `{"id":1,"name":"group1","path":"group1","kind":"group","full_path":"group1",` +
 		`"projects_count":"many"}`
 	cases := make([]testutil.CapturedCase, 0, len(namespaceCalls))

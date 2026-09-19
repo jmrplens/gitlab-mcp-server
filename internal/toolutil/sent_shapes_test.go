@@ -195,17 +195,6 @@ func readTheSentPackage(v any) bool {
 		version.Pipeline.User != nil && version.Pipeline.User.Username == "alice"
 }
 
-// readTheSentNamespace reports whether the namespace reader decoded all eight
-// keys, which is more than a table cell holds comfortably.
-func readTheSentNamespace(v any) bool {
-	e, _ := v.(NamespaceExtra)
-	return e.ProjectsCount == 12 && e.RootRepositorySize == 34567 &&
-		e.SharedRunnersMinutesLimit != nil && *e.SharedRunnersMinutesLimit == 400 &&
-		e.ExtraSharedRunnersMinutesLimit != nil && e.AdditionalPurchasedStorageSize != nil &&
-		e.AdditionalPurchasedStorageEndsOn == "2027-03-31" &&
-		e.MaxSeatsUsedChangedAt != nil && e.EndDate == "2027-01-31"
-}
-
 // tailReaderCases is the table itself, out here rather than inside the test, so
 // that the test is the loop it runs and nothing else.
 //
@@ -230,42 +219,6 @@ func tailReaderCases() []capturedReaderCase {
 	}
 	return []capturedReaderCase{
 		{
-			name: "topic",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedTopic(c) },
-			body: `{"id":1,"organization_id":7}`,
-			want: func(v any) bool { e, _ := v.(TopicExtra); return e.OrganizationID == 7 },
-		},
-		{
-			name: "appearance",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedAppearance(c) },
-			body: `{"title":"GitLab","site_name":"Example GitLab"}`,
-			want: func(v any) bool { e, _ := v.(AppearanceExtra); return e.SiteName == "Example GitLab" },
-		},
-		{
-			name: "broadcast message",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedBroadcastMessage(c) },
-			body: `{"id":1,"color":"#e75e40"}`,
-			want: func(v any) bool { e, _ := v.(BroadcastMessageExtra); return e.Color == "#e75e40" },
-		},
-		{
-			name: "cluster agent",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedClusterAgent(c) },
-			body: `{"id":1,"is_receptive":true}`,
-			want: func(v any) bool { e, _ := v.(ClusterAgentExtra); return e.IsReceptive },
-		},
-		{
-			name: "license template",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedLicenseTemplate(c) },
-			body: `{"key":"mit","popular":true}`,
-			want: func(v any) bool { e, _ := v.(LicenseTemplateExtra); return e.Popular },
-		},
-		{
-			name: "secure file",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSecureFile(c) },
-			body: `{"id":1,"file_extension":"jks"}`,
-			want: func(v any) bool { e, _ := v.(SecureFileExtra); return e.FileExtension == "jks" },
-		},
-		{
 			name: "pipeline trigger",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedPipelineTrigger(c) },
 			body: `{"id":1,"expires_at":"2026-05-05T00:00:00.000Z"}`,
@@ -285,12 +238,6 @@ func tailReaderCases() []capturedReaderCase {
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedMergeRequestDiff(c) },
 			body: `{"id":1,"patch_id_sha":"abc123"}`,
 			want: func(v any) bool { e, _ := v.(MergeRequestDiffExtra); return e.PatchIDSHA == "abc123" },
-		},
-		{
-			name: "SCIM identity",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSCIMIdentity(c) },
-			body: `{"user_id":1,"extern_uid":"uid-1"}`,
-			want: func(v any) bool { e, _ := v.(SCIMIdentityExtra); return e.ExternUID == "uid-1" },
 		},
 		{
 			name: "feature",
@@ -425,11 +372,8 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "service account",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedServiceAccount(c) },
-			body: `{"id":1,"public_email":"svc@example","unconfirmed_email":"new@example"}`,
-			want: func(v any) bool {
-				e, _ := v.(ServiceAccountExtra)
-				return e.PublicEmail == "svc@example" && e.UnconfirmedEmail == "new@example"
-			},
+			body: `{"id":1,"public_email":"svc@example"}`,
+			want: func(v any) bool { e, _ := v.(ServiceAccountExtra); return e.PublicEmail == "svc@example" },
 		},
 		{
 			name: "runner manager",
@@ -483,36 +427,26 @@ func tailReaderCases() []capturedReaderCase {
 		{
 			name: "deploy key",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedDeployKey(c) },
-			body: `{"id":1,"last_used_at":"2026-04-07T08:09:10Z","usage_type":"auth_and_signing",` +
+			body: `{"id":1,` +
 				`"projects_with_write_access":[{"id":11,"path_with_namespace":"group/writer","created_at":"2026-01-02T03:04:05Z"}],` +
 				`"projects_with_readonly_access":[{"id":12,"path_with_namespace":"group/reader"}]}`,
 			want: func(v any) bool {
 				e, _ := v.(DeployKeyExtra)
-				return e.LastUsedAt != nil && e.UsageType == "auth_and_signing" &&
-					len(e.ProjectsWithWriteAccess) == 1 && e.ProjectsWithWriteAccess[0].ID == 11 &&
+				return len(e.ProjectsWithWriteAccess) == 1 && e.ProjectsWithWriteAccess[0].ID == 11 &&
 					e.ProjectsWithWriteAccess[0].CreatedAt != nil &&
 					len(e.ProjectsWithReadonlyAccess) == 1 && e.ProjectsWithReadonlyAccess[0].ID == 12
 			},
 		},
 		{
-			name: "event",
-			read: first(func(c *gitlabclient.ResponseCapture, n int) (any, error) { return CapturedEvents(c, n) }),
-			body: `[{"id":1,"imported":true,"imported_from":"github",` +
-				`"wiki_page":{"format":"markdown","slug":"home","title":"Home","wiki_page_meta_id":77}}]`,
-			want: func(v any) bool {
-				e, _ := v.([]EventExtra)
-				return len(e) == 1 && e[0].Imported && e[0].ImportedFrom == "github" &&
-					e[0].WikiPage != nil && e[0].WikiPage.Slug == "home" && e[0].WikiPage.WikiPageMetaID == 77
-			},
-		},
-		{
 			name: "namespace",
 			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedNamespace(c) },
-			body: `{"id":1,"projects_count":12,"root_repository_size":34567,` +
-				`"shared_runners_minutes_limit":400,"extra_shared_runners_minutes_limit":50,` +
-				`"additional_purchased_storage_size":10240,"additional_purchased_storage_ends_on":"2027-03-31",` +
-				`"max_seats_used_changed_at":"2026-05-06T07:08:09Z","end_date":"2027-01-31"}`,
-			want: readTheSentNamespace,
+			body: `{"id":1,"shared_runners_minutes_limit":400,` +
+				`"extra_shared_runners_minutes_limit":50,"additional_purchased_storage_size":10240}`,
+			want: func(v any) bool {
+				e, _ := v.(NamespaceExtra)
+				return e.SharedRunnersMinutesLimit != nil && *e.SharedRunnersMinutesLimit == 400 &&
+					e.ExtraSharedRunnersMinutesLimit != nil && e.AdditionalPurchasedStorageSize != nil
+			},
 		},
 		{
 			name: "package",
@@ -522,18 +456,6 @@ func tailReaderCases() []capturedReaderCase {
 				`"tags":[{"id":3,"package_id":9,"name":"stable"}],` +
 				`"pipeline":{"id":77,"iid":4,"sha":"abc123","user":{"id":5,"username":"alice"}}}]}]`,
 			want: readTheSentPackage,
-		},
-		{
-			name: "snippet",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedSnippet(c) },
-			body: `{"id":42,"imported":true,"imported_from":"github",` +
-				`"ssh_url_to_repo":"git@example:snippets/42.git","http_url_to_repo":"https://example/snippets/42.git"}`,
-			want: func(v any) bool {
-				e, _ := v.(SnippetExtra)
-				return e.Imported && e.ImportedFrom == "github" &&
-					e.SSHURLToRepo == "git@example:snippets/42.git" &&
-					e.HTTPURLToRepo == "https://example/snippets/42.git"
-			},
 		},
 		{
 			name: "access request",
@@ -626,26 +548,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		name string
 		read func(*gitlabclient.ResponseCapture, int) (int, error)
 	}{
-		{"topics", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedTopics(c, n)
-			return len(x), e
-		}},
-		{"broadcast messages", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedBroadcastMessages(c, n)
-			return len(x), e
-		}},
-		{"cluster agents", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedClusterAgents(c, n)
-			return len(x), e
-		}},
-		{"license templates", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedLicenseTemplates(c, n)
-			return len(x), e
-		}},
-		{"secure files", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedSecureFiles(c, n)
-			return len(x), e
-		}},
 		{"pipeline triggers", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedPipelineTriggers(c, n)
 			return len(x), e
@@ -656,10 +558,6 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 		}},
 		{"merge request versions", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedMergeRequestDiffs(c, n)
-			return len(x), e
-		}},
-		{"SCIM identities", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedSCIMIdentities(c, n)
 			return len(x), e
 		}},
 		{"runner managers", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
@@ -750,20 +648,12 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 			x, e := CapturedDeployKeys(c, n)
 			return len(x), e
 		}},
-		{"events", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedEvents(c, n)
-			return len(x), e
-		}},
 		{"namespaces", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedNamespaces(c, n)
 			return len(x), e
 		}},
 		{"packages", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
 			x, e := CapturedPackages(c, n)
-			return len(x), e
-		}},
-		{"snippets", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedSnippets(c, n)
 			return len(x), e
 		}},
 		{"access requests", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

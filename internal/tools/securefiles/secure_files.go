@@ -66,9 +66,8 @@ type SecureFileItem struct {
 }
 
 // newSecureFileItem maps a gl.SecureFile into the output mirror, copying every
-// SDK field including the nested certificate metadata, plus what the capture
-// read beside the decode.
-func newSecureFileItem(f *gl.SecureFile, extra toolutil.SecureFileExtra) SecureFileItem {
+// SDK field including the nested certificate metadata.
+func newSecureFileItem(f *gl.SecureFile) SecureFileItem {
 	item := SecureFileItem{
 		ID:                f.ID,
 		Name:              f.Name,
@@ -76,7 +75,7 @@ func newSecureFileItem(f *gl.SecureFile, extra toolutil.SecureFileExtra) SecureF
 		ChecksumAlgorithm: f.ChecksumAlgorithm,
 		CreatedAt:         f.CreatedAt,
 		ExpiresAt:         f.ExpiresAt,
-		FileExtension:     extra.FileExtension,
+		FileExtension:     f.FileExtension,
 	}
 	if f.Metadata != nil {
 		item.Metadata = &SecureFileMetadata{
@@ -117,18 +116,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Sort != "" {
 		opts.Sort = input.Sort
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	files, resp, err := client.GL().SecureFiles.ListProjectSecureFiles(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
-	extras, err := toolutil.CapturedSecureFiles(captured, len(files))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("gitlab_list_secure_files", err)
-	}
 	items := make([]SecureFileItem, 0, len(files))
-	for i, f := range files {
-		items = append(items, newSecureFileItem(f, extras[i]))
+	for _, f := range files {
+		items = append(items, newSecureFileItem(f))
 	}
 	return ListOutput{
 		Files:      items,
@@ -149,16 +143,11 @@ func Show(ctx context.Context, client *gitlabclient.Client, input ShowInput) (Se
 	if input.FileID <= 0 {
 		return SecureFileItem{}, toolutil.ErrRequiredInt64("gitlab_show_secure_file", "file_id")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	f, _, err := client.GL().SecureFiles.ShowSecureFileDetails(string(input.ProjectID), input.FileID, gl.WithContext(ctx))
 	if err != nil {
 		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_show_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
 	}
-	extra, err := toolutil.CapturedSecureFile(captured)
-	if err != nil {
-		return SecureFileItem{}, toolutil.WrapErr("gitlab_show_secure_file", err)
-	}
-	return newSecureFileItem(f, extra), nil
+	return newSecureFileItem(f), nil
 }
 
 // Create.
@@ -182,16 +171,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	opts := &gl.CreateSecureFileOptions{
 		Name: new(input.Name),
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	f, _, err := client.GL().SecureFiles.CreateSecureFile(string(input.ProjectID), reader, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_secure_file", err, http.StatusBadRequest, "check file content is valid base64 and name is unique within the project")
 	}
-	extra, err := toolutil.CapturedSecureFile(captured)
-	if err != nil {
-		return SecureFileItem{}, toolutil.WrapErr("gitlab_create_secure_file", err)
-	}
-	return newSecureFileItem(f, extra), nil
+	return newSecureFileItem(f), nil
 }
 
 // Remove.

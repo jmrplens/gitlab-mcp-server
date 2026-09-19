@@ -818,13 +818,12 @@ func TestFormatMessageMarkdown_Color(t *testing.T) {
 	}
 }
 
-// TestBroadcastMessages_UnreadableCapturedColor verifies that every broadcast
-// message handler reading the color off the captured answer returns an error
-// rather than a half-filled message when GitLab sends color as something that
-// is not a string. client-go models color on its own BroadcastMessage as of
-// v3.12.0, so its decoder reaches the bad value before the captured read
-// does, and either refusal is what this asserts.
-func TestBroadcastMessages_UnreadableCapturedColor(t *testing.T) {
+// TestBroadcastMessages_UnreadableColor verifies that every broadcast message
+// handler returns an error rather than a half-filled message when GitLab sends
+// color as something that is not a string. client-go models color on its own
+// BroadcastMessage as of v3.12.0, so the SDK's decoder is what refuses it now
+// that the captured read is retired.
+func TestBroadcastMessages_UnreadableColor(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
 	poisoned := func(body string) *gitlabclient.Client {

@@ -867,7 +867,7 @@ func TestFormatListMarkdown_NoProjectColumn(t *testing.T) {
 
 // TestConvertSnippet_NilFiles verifies ConvertSnippet when nil files.
 func TestConvertSnippet_NilFiles(t *testing.T) {
-	s := convertSnippet(&snippetFixtureNoFiles, toolutil.SnippetExtra{})
+	s := convertSnippet(&snippetFixtureNoFiles)
 	if len(s.Files) != 0 {
 		t.Errorf("expected no files, got %d", len(s.Files))
 	}

@@ -142,7 +142,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestToOutput_Nil(t *testing.T) {
-	out := toOutput(nil, toolutil.SCIMIdentityExtra{})
+	out := toOutput(nil)
 	if out.ExternUID != "" {
 		t.Errorf("expected empty ExternUID, got %q", out.ExternUID)
 	}
