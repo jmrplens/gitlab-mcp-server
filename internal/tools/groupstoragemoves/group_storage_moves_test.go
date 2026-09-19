@@ -892,7 +892,7 @@ func TestGroupStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *test
 		{
 			name:   "get_for_group",
 			status: http.StatusNotFound,
-			hint:   "requires admin + Premium/Ultimate; verify group_id + id combination with gitlab_get_group_storage_move_for_group",
+			hint:   "requires admin + Premium/Ultimate; verify the group_id + id pair with gitlab_retrieve_group_storage_moves, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion",
 			call: func(c *gitlabclient.Client) error {
 				_, err := GetForGroup(context.Background(), c, GroupMoveInput{GroupID: 10, ID: 1})
 				return err

@@ -5,13 +5,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// discoverProjectDescription is what a model reads before calling
+// gitlab_discover_project.
+//
+// The "NOT for" clause names canonical action IDs rather than tool names, and
+// that is not a style choice. This tool is registered on all three surfaces
+// while a tool name belongs to one, and the only part of a description anything
+// projects per surface is the "See also" clause: rewriteSeeAlso in
+// internal/resources turns the names there into whatever the active surface
+// calls them, which is why that clause stays in individual tool names here and
+// everywhere else. Prose outside it is carried verbatim, so the meta spellings
+// this paragraph used to hold (gitlab_search action=projects, gitlab_project
+// action=list_user_projects, gitlab_server action=health_check) named nothing a
+// model on the individual surface could call, in the one description whose
+// whole job is to send a model somewhere else. A canonical ID resolves on every
+// surface, and cmd/audit_action_ids reads the dotted IDs a description spells,
+// so one of these going stale is reported rather than silent.
 const discoverProjectDescription = "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. " +
 	"Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\n" +
 	"When to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. " +
 	"If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. " +
 	"Do not synthesize, guess, or add .git to a project path to create a remote URL.\n" +
-	"NOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), " +
-	"verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\n" +
+	"NOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), " +
+	"verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.\n\n" +
 	"IMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. " +
 	"Supported formats (a URL scheme or git@ user prefix is required):\n" +
 	"- HTTPS: https://gitlab.example.com/group/project.git\n" +
