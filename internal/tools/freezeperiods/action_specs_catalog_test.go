@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
@@ -83,7 +83,7 @@ func TestFreezePeriodRelatedActions_EveryPublishedID_ResolvesInTheCatalog(t *tes
 func TestFreezePeriodHints_EveryPublishedID_ResolvesInTheCatalog(t *testing.T) {
 	catalog := ultimateCatalog(t)
 
-	hinted := testutil.HintedActionIDs(t, outputPkgPath)
+	hinted := hints.HintedActionIDs(t, outputPkgPath)
 	if len(hinted) == 0 {
 		t.Fatalf("no formatter of %s wrote a hint; the fixture no longer reaches the guidance block", outputPkgPath)
 	}

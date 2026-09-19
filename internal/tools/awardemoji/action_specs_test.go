@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 )
@@ -89,7 +89,7 @@ func TestAwardEmojiRelatedActions_EveryPublishedID_ResolvesInTheCatalog(t *testi
 func TestAwardEmojiHints_EveryPublishedID_ResolvesInTheCatalog(t *testing.T) {
 	catalog := ultimateCatalog(t)
 
-	for outputType, ids := range testutil.HintedActionIDs(t, outputPkgPath) {
+	for outputType, ids := range hints.HintedActionIDs(t, outputPkgPath) {
 		t.Run(outputType, func(t *testing.T) {
 			for _, id := range ids {
 				assertResolves(t, catalog, outputType, id)

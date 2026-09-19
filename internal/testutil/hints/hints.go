@@ -1,9 +1,15 @@
-// markdown_hints.go collects the canonical action IDs a package's Markdown
+// Package hints collects the canonical action IDs a package's Markdown
 // invites a model to call, by rendering the package's own formatters rather
 // than by reading its constants: a hint spelled as a literal at the call site
 // is published exactly like one behind a constant, and a test that reads only
 // the constants cannot see it.
-package testutil
+//
+// It sits beside [testutil] rather than inside it because it needs
+// [toolutil], and internal/toolutil's own tests use testutil. A non-test
+// import of toolutil from testutil closes that loop and every package in it
+// fails to build its tests with "import cycle not allowed in test", which is
+// what happened the first time this helper was written.
+package hints
 
 import (
 	"reflect"
@@ -14,6 +20,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -29,9 +36,9 @@ var hintActionPattern = regexp.MustCompile(`Use action '([^']+)'`)
 // A type whose rendering names no action is left out of the result rather than
 // recorded empty, since plenty of formatters write no guidance at all; the
 // caller decides whether finding nothing at all is a failure. The fixture is
-// [FixtureMultiPage] because a list formatter writes its guidance only once it
-// has rows, and the zero value would render an empty-collection message with
-// no hints in it.
+// [testutil.FixtureMultiPage] because a list formatter writes its guidance
+// only once it has rows, and the zero value would render an empty-collection
+// message with no hints in it.
 //
 // Registration happens in each package's init, so the caller must already
 // import whatever registers the formatters it expects to see.
@@ -55,7 +62,7 @@ func HintedActionIDs(tb testing.TB, pkgPath string) map[string][]string {
 // its guidance names, sorted and deduplicated so a failure reads the same way
 // on every run.
 func hintedActionIDsForType(outputType reflect.Type) []string {
-	result := toolutil.MarkdownForResult(FillFixture(outputType, FixtureOptions{State: FixtureMultiPage}).Interface())
+	result := toolutil.MarkdownForResult(testutil.FillFixture(outputType, testutil.FixtureOptions{State: testutil.FixtureMultiPage}).Interface())
 	if result == nil {
 		return nil
 	}

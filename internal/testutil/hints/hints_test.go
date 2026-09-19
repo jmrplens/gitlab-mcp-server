@@ -1,7 +1,7 @@
 // markdown_hints_test.go exercises the hint collector against formatters this
 // file registers itself, so the expectations are fixed by the test rather than
 // by whatever the domain packages happen to publish today.
-package testutil
+package hints
 
 import (
 	"reflect"
@@ -14,7 +14,7 @@ import (
 
 // hintsFixturePkgPath is this package, which is where the output types below
 // are declared and so the path HintedActionIDs is asked for.
-const hintsFixturePkgPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+const hintsFixturePkgPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
 
 // hintsListOutput stands in for a list output whose guidance names actions, one
 // of them twice so the deduplication is exercised and both out of order so the
