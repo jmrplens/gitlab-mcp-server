@@ -4,9 +4,13 @@ package protectedpackages
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -414,6 +418,165 @@ func TestDelete_CancelledContext(t *testing.T) {
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, RuleID: 1})
 	if err == nil {
 		t.Fatal("expected context error")
+	}
+}
+
+// Request body tests.
+//
+// Everything above asserts what a handler returns, which is decoded from the
+// fixture and so says nothing about the request that was built. The `!= ""`
+// guard on each optional field is invisible from that side: inverted, the
+// caller's value never leaves the process while a field they left alone is
+// sent as an empty string, and GitLab is told to blank it.
+
+// captureRuleRequestBody drives one call against a mock that answers every
+// rules request with the shared fixture and hands back the JSON object the
+// handler put on the wire, so an assertion is about what GitLab receives
+// rather than about what the input struct held.
+func captureRuleRequestBody(t *testing.T, call func(client *gitlabclient.Client)) map[string]any {
+	t.Helper()
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		if err = json.Unmarshal(raw, &body); err != nil {
+			t.Errorf("decode request body %q: %v", raw, err)
+		}
+		testutil.RespondJSON(w, http.StatusOK, ruleJSON)
+	}))
+	call(client)
+	return body
+}
+
+// TestCreate_SendsEachFieldTheCallerSetUnderItsOwnKey verifies a create request
+// carries every field the caller supplied under the key client-go spells for
+// it. The four values are deliberately distinct, so a converter reading a
+// neighbour's field (the pattern sent as the type, the push level sent as the
+// delete level) fails here instead of silently protecting the wrong thing.
+func TestCreate_SendsEachFieldTheCallerSetUnderItsOwnKey(t *testing.T) {
+	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
+		if _, err := Create(context.Background(), client, CreateInput{
+			ProjectID:                   testProjectID,
+			PackageNamePattern:          "@scope/pkg*",
+			PackageType:                 "npm",
+			MinimumAccessLevelForPush:   "maintainer",
+			MinimumAccessLevelForDelete: "owner",
+		}); err != nil {
+			t.Errorf("Create() error: %v", err)
+		}
+	})
+	want := map[string]any{
+		"package_name_pattern":            "@scope/pkg*",
+		"package_type":                    "npm",
+		"minimum_access_level_for_push":   "maintainer",
+		"minimum_access_level_for_delete": "owner",
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("create body = %#v, want %#v", body, want)
+	}
+}
+
+// TestCreate_OmitsAnAccessLevelTheCallerLeftUnset verifies a create request
+// leaves out an access level nobody asked for rather than sending it empty.
+// The key's absence is the assertion: GitLab reads a present empty string as a
+// value, so sending one would set a level the caller never chose.
+func TestCreate_OmitsAnAccessLevelTheCallerLeftUnset(t *testing.T) {
+	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
+		if _, err := Create(context.Background(), client, CreateInput{
+			ProjectID:          testProjectID,
+			PackageNamePattern: "mylib*",
+			PackageType:        "pypi",
+		}); err != nil {
+			t.Errorf("Create() error: %v", err)
+		}
+	})
+	want := map[string]any{
+		"package_name_pattern": "mylib*",
+		"package_type":         "pypi",
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("create body = %#v, want %#v", body, want)
+	}
+}
+
+// TestUpdate_SendsOnlyTheFieldsTheCallerNamed verifies a partial update carries
+// the renamed pattern and type and neither access level. An update is where an
+// inverted guard costs the most: the two levels a caller did not mention must
+// not arrive at all, or GitLab rewrites them.
+func TestUpdate_SendsOnlyTheFieldsTheCallerNamed(t *testing.T) {
+	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
+		if _, err := Update(context.Background(), client, UpdateInput{
+			ProjectID:          testProjectID,
+			RuleID:             1,
+			PackageNamePattern: "@scope/new-pkg*",
+			PackageType:        "maven",
+		}); err != nil {
+			t.Errorf("Update() error: %v", err)
+		}
+	})
+	want := map[string]any{
+		"package_name_pattern": "@scope/new-pkg*",
+		"package_type":         "maven",
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("update body = %#v, want %#v", body, want)
+	}
+}
+
+// TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty verifies an update that
+// changes only the access levels sends JSON null for the pattern and type, not
+// "". client-go's option struct tags those two without omitempty, so a nil
+// pointer is always spelled out; the guard is what keeps it null, and null is
+// a field GitLab leaves alone where "" is a pattern that matches nothing.
+func TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty(t *testing.T) {
+	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
+		if _, err := Update(context.Background(), client, UpdateInput{
+			ProjectID:                   testProjectID,
+			RuleID:                      1,
+			MinimumAccessLevelForPush:   "maintainer",
+			MinimumAccessLevelForDelete: "owner",
+		}); err != nil {
+			t.Errorf("Update() error: %v", err)
+		}
+	})
+	want := map[string]any{
+		"package_name_pattern":            nil,
+		"package_type":                    nil,
+		"minimum_access_level_for_push":   "maintainer",
+		"minimum_access_level_for_delete": "owner",
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("update body = %#v, want %#v", body, want)
+	}
+}
+
+// TestList_FillsPaginationFromTheResponse verifies the pagination block is read
+// off the response headers rather than left at its zero value. Nothing else
+// looks: every other list assertion reads the rules, so the whole block could
+// vanish and the suite would stay green while a caller lost the way to ask for
+// the next page.
+func TestList_FillsPaginationFromTheResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathRules {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSONWithPagination(w, http.StatusOK, "["+ruleJSON+"]",
+			testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "11", TotalPages: "3", NextPage: "3", PrevPage: "1"})
+	}))
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	want := toolutil.PaginationOutput{
+		Page: 2, PerPage: 5, TotalItems: 11, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true,
+	}
+	if out.Pagination != want {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 

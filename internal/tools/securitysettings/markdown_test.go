@@ -3,6 +3,7 @@
 package securitysettings
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -81,6 +82,53 @@ func TestFormatProjectMarkdown_NoTimestamps(t *testing.T) {
 	}
 	if strings.Contains(got, "Created") || strings.Contains(got, "Updated") {
 		t.Error("expected no time row when GitLab sent no timestamp")
+	}
+}
+
+// projectCardFlagRows names every flag row of the project card, in the order
+// FormatProjectMarkdown writes them, beside the field each one must read.
+var projectCardFlagRows = []struct {
+	label string
+	set   func(*ProjectOutput)
+}{
+	{"Secret Push Protection", func(o *ProjectOutput) { o.SecretPushProtectionEnabled = true }},
+	{"Continuous Vulnerability Scans", func(o *ProjectOutput) { o.ContinuousVulnerabilityScansEnabled = true }},
+	{"Container Scanning for Registry", func(o *ProjectOutput) { o.ContainerScanningForRegistryEnabled = true }},
+	{"Auto-fix SAST", func(o *ProjectOutput) { o.AutoFixSAST = true }},
+	{"Auto-fix DAST", func(o *ProjectOutput) { o.AutoFixDAST = true }},
+	{"Auto-fix Dependency Scanning", func(o *ProjectOutput) { o.AutoFixDependencyScanning = true }},
+	{"Auto-fix Container Scanning", func(o *ProjectOutput) { o.AutoFixContainerScanning = true }},
+}
+
+// TestFormatProjectMarkdown_OneFlagAtATime_EachRowReadsItsOwnField validates
+// that every flag row carries the setting its label names, by turning one on
+// at a time and comparing the whole render.
+//
+// The all-fields case above cannot tell them apart, because a block of flags
+// has no fixture where no two values agree: its SAST and DAST rows are both
+// off, and its scans and push-protection rows both on, so three pairs could
+// exchange the field they read and the golden string would not move.
+func TestFormatProjectMarkdown_OneFlagAtATime_EachRowReadsItsOwnField(t *testing.T) {
+	for on, row := range projectCardFlagRows {
+		t.Run(row.label, func(t *testing.T) {
+			out := ProjectOutput{ProjectID: 9}
+			row.set(&out)
+
+			var want strings.Builder
+			want.WriteString("## Project Security Settings (Project 9)\n\n- **Project ID**: 9\n")
+			for i, r := range projectCardFlagRows {
+				mark := "❌"
+				if i == on {
+					mark = "✅"
+				}
+				fmt.Fprintf(&want, "- **%s**: %s\n", r.label, mark)
+			}
+			want.WriteString(projectHints)
+
+			if got := FormatProjectMarkdown(out); got != want.String() {
+				t.Errorf("FormatProjectMarkdown() =\n%s\nwant:\n%s", got, want.String())
+			}
+		})
 	}
 }
 

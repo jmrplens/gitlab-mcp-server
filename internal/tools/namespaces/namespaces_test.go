@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1043,5 +1044,141 @@ func TestFormatMarkdownString_SentFields(t *testing.T) {
 		namespaceCardHint
 	if bare != wantBare {
 		t.Errorf("FormatMarkdownString() for a namespace GitLab sent none of them for\n got: %q\nwant: %q", bare, wantBare)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The fields the SDK's own Namespace does model
+// ---------------------------------------------------------------------------.
+
+// namespaceDistinctJSON is one namespace whose every value differs from every
+// other, which is what lets a swapped assignment in the converter be seen: the
+// other fixtures here spell name, path and full_path the same, so a converter
+// reading the path into the name published the right string by accident.
+const namespaceDistinctJSON = `{"id":77,"name":"Platform Team","path":"platform","kind":"group",` +
+	`"full_path":"acme/platform","parent_id":12,` +
+	`"avatar_url":"https://gitlab.example.com/uploads/avatar.png",` +
+	`"web_url":"https://gitlab.example.com/groups/acme/platform",` +
+	`"members_count_with_descendants":34,"billable_members_count":21,` +
+	`"plan":"ultimate","trial":true,"trial_ends_on":"2027-02-28",` +
+	`"max_seats_used":19,"seats_in_use":17}`
+
+// TestNamespaces_PublishEveryFieldTheSDKDecodes verifies every handler
+// answering with a namespace carries each field of the SDK's own Namespace to
+// the field of the output that names it. Neither the mutation nor the
+// condition gate can see a straight-line assignment, so the whole converted
+// value is compared rather than the handful of fields a scenario happens to
+// read: with it, dropping the web URL, the seat counts, the plan or the trial
+// flag, or reading the path into the name, fails here.
+func TestNamespaces_PublishEveryFieldTheSDKDecodes(t *testing.T) {
+	maxSeats, inUse := int64(19), int64(17)
+	want := Output{
+		ID: 77, Name: "Platform Team", Path: "platform", Kind: "group",
+		FullPath: "acme/platform", ParentID: 12,
+		AvatarURL:                   "https://gitlab.example.com/uploads/avatar.png",
+		WebURL:                      "https://gitlab.example.com/groups/acme/platform",
+		MembersCountWithDescendants: 34, BillableMembersCount: 21,
+		Plan: "ultimate", Trial: true, TrialEndsOn: "2027-02-28",
+		MaxSeatsUsed: &maxSeats, SeatsInUse: &inUse,
+	}
+	for _, namespaceCall := range namespaceCalls {
+		t.Run(namespaceCall.name, func(t *testing.T) {
+			got, err := namespaceCall.call(namespaceClient(t, namespaceBodyFor(namespaceCall.list, namespaceDistinctJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", namespaceCall.name, err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("%s published\n got: %+v\nwant: %+v", namespaceCall.name, got, want)
+			}
+		})
+	}
+}
+
+// TestNamespaces_PageBlockComesFromTheResponseHeaders verifies the two
+// handlers that answer with a page fill it from the response GitLab sent
+// rather than leaving it empty. A caller reading a zeroed block cannot tell a
+// single page from the first of several, and no assertion here looked at it.
+func TestNamespaces_PageBlockComesFromTheResponseHeaders(t *testing.T) {
+	want := toolutil.PaginationOutput{
+		Page: 3, PerPage: 5, TotalItems: 37, TotalPages: 8,
+		NextPage: 4, PrevPage: 2, HasMore: true,
+	}
+	for _, testCase := range []struct {
+		name string
+		call func(client *gitlabclient.Client) (ListOutput, error)
+	}{
+		{name: "list", call: func(client *gitlabclient.Client) (ListOutput, error) {
+			return List(context.Background(), client, ListInput{})
+		}},
+		{name: "search", call: func(client *gitlabclient.Client) (ListOutput, error) {
+			return Search(context.Background(), client, SearchInput{Query: "platform"})
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSONWithPagination(w, http.StatusOK, "["+namespaceDistinctJSON+"]",
+					testutil.PaginationHeaders{
+						Page: "3", PerPage: "5", Total: "37", TotalPages: "8",
+						NextPage: "4", PrevPage: "2",
+					})
+			}))
+			out, err := testCase.call(client)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.Pagination != want {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
+			}
+		})
+	}
+}
+
+// TestSearch_SendsTheQueryAsTheSearchParameter verifies the search handler
+// puts the caller's query on the request. A handler that sent none would ask
+// GitLab for every namespace and answer with a page of results that look
+// plausible and match nothing the caller asked about.
+func TestSearch_SendsTheQueryAsTheSearchParameter(t *testing.T) {
+	var sent string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent = r.URL.Query().Get("search")
+		testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
+	}))
+	if _, err := Search(t.Context(), client, SearchInput{Query: "platform"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if sent != "platform" {
+		t.Errorf("search = %q, want the query the caller gave", sent)
+	}
+}
+
+// TestGet_ArrayFallback_EscapesTheIdIntoThePath verifies the array fallback
+// escapes the identifier before it becomes a request path, so an id carrying a
+// percent sign reaches GitLab as one segment rather than failing to build.
+//
+// That escaping is also why the fallback's request-construction error is
+// unreachable: url.PathUnescape is the only way NewRequest fails for a GET,
+// and gl.PathEscape leaves no escape sequence for it to reject. Drop the
+// escaping and this test reports the error the guard would return.
+func TestGet_ArrayFallback_EscapesTheIdIntoThePath(t *testing.T) {
+	const hostileID = "acme/%zz sub"
+	var paths []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.EscapedPath())
+		testutil.RespondJSON(w, http.StatusOK, "["+namespaceDistinctJSON+"]")
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{ID: hostileID})
+	if err != nil {
+		t.Fatalf("Get(%q) through the array fallback: %v", hostileID, err)
+	}
+	if out.ID != 77 {
+		t.Errorf("ID = %d, want the namespace the fallback read", out.ID)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("requests = %v, want the get and its array fallback", paths)
+	}
+	const wantPath = "/api/v4/namespaces/acme%2F%25zz%20sub"
+	if paths[1] != wantPath {
+		t.Errorf("fallback path = %q, want %q", paths[1], wantPath)
 	}
 }

@@ -4,11 +4,13 @@ package runners
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -40,6 +42,116 @@ func TestDecorateRunnerMeta_UnknownToolIsNoOp(t *testing.T) {
 // ignores a nil ListOptions pointer.
 func TestApplyRunnerListOptions_NilIsNoOp(t *testing.T) {
 	applyRunnerListOptions(nil, runnerListRequest{OrderBy: "id", Sort: "asc"})
+}
+
+// TestRunnerActionMeta_EveryEntry_CarriesAllFourFields pins the invariant
+// decorateRunnerMeta assigns on: an entry missing a field would silently
+// replace a spec's usage or description with an empty string, which reads to a
+// model as a tool that explains nothing about itself.
+func TestRunnerActionMeta_EveryEntry_CarriesAllFourFields(t *testing.T) {
+	for tool, meta := range runnerActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			if meta.usage == "" {
+				t.Error("usage is empty")
+			}
+			if len(meta.aliases) == 0 {
+				t.Error("aliases are empty")
+			}
+			if len(meta.related) == 0 {
+				t.Error("related actions are empty")
+			}
+			if meta.description == "" {
+				t.Error("description is empty")
+			}
+		})
+	}
+}
+
+// TestActionSpecs_EveryDecoratedTool_PublishesItsMetadataEntry drives the
+// registered specs and holds each of the four decorated fields to the map. The
+// discovery metadata is the only thing a model reads before choosing a runner
+// tool, and until this existed a spec could have kept the generic "Use to
+// execute runners domain action." usage and the bare one-element alias list
+// with nothing failing.
+func TestActionSpecs_EveryDecoratedTool_PublishesItsMetadataEntry(t *testing.T) {
+	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
+
+	for tool, meta := range runnerActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("runnerActionMeta names %q, which no spec registers", tool)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want %q", spec.Usage, meta.usage)
+			}
+			if wantAliases := append([]string{tool}, meta.aliases...); !slices.Equal(spec.Aliases, wantAliases) {
+				t.Errorf("Aliases = %v, want %v", spec.Aliases, wantAliases)
+			}
+			if !slices.Equal(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %v, want %v", spec.RelatedActions, meta.related)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("Description = %q, want %q", spec.IndividualTool.Description, meta.description)
+			}
+		})
+	}
+}
+
+// TestRunnerActionMeta_RelatedActions_NameToolsThisPackageRegisters checks
+// every cross-link against the tools the specs really register. Nothing in the
+// repository validates these strings, so a misspelled one passes every gate and
+// answers a model "unknown tool" the moment it follows the hint.
+func TestRunnerActionMeta_RelatedActions_NameToolsThisPackageRegisters(t *testing.T) {
+	byTool := runnerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerActionHandler())))
+
+	for tool, meta := range runnerActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			for _, related := range meta.related {
+				if _, ok := byTool[related]; !ok {
+					t.Errorf("related action %q names no registered runner tool", related)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds holds the
+// canonical IDs the Markdown hints are built from to the actions their owning
+// packages declare. The hints are what a model follows next, and an ID the
+// catalog does not hold is a dead end nothing else here would report.
+func TestMarkdownHints_ActionConstants_NameActionsTheCatalogHolds(t *testing.T) {
+	client := testutil.NewTestClient(t, runnerActionHandler())
+	runnerActions := make(map[string]struct{})
+	for _, spec := range ActionSpecs(client) {
+		runnerActions["runner."+spec.Name] = struct{}{}
+	}
+	jobActions := make(map[string]struct{})
+	for _, spec := range jobs.ActionSpecs(client) {
+		jobActions["job."+spec.Name] = struct{}{}
+	}
+
+	tests := []struct {
+		action string
+		known  map[string]struct{}
+	}{
+		{actionRunnerGet, runnerActions},
+		{actionRunnerJobs, runnerActions},
+		{actionRunnerList, runnerActions},
+		{actionRunnerUpdate, runnerActions},
+		{actionRunnerRemove, runnerActions},
+		{actionRunnerRegister, runnerActions},
+		{actionRunnerVerify, runnerActions},
+		{actionRunnerListManagers, runnerActions},
+		{actionJobGet, jobActions},
+	}
+	for _, tt := range tests {
+		t.Run(tt.action, func(t *testing.T) {
+			if _, ok := tt.known[tt.action]; !ok {
+				t.Errorf("hint names %q, which no action spec declares", tt.action)
+			}
+		})
+	}
 }
 
 // TestActionSpecs_CallRunnerRoutes exercises runner tools through their canonical routes.

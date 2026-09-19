@@ -4,6 +4,7 @@ package securitysettings
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -88,6 +89,100 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestActionSpecs_RelatedActions_NameTheSecuritySettingsSiblings verifies each
+// tool publishes the canonical action IDs a model should reach for next, and
+// asserts the whole list rather than that one entry is present.
+//
+// Nothing in the repository checks that an ID here names an action the catalog
+// holds: the discovery audit only counts an empty list, so a misspelling ships
+// green and answers the model "unknown action" the moment it follows the hint.
+func TestActionSpecs_RelatedActions_NameTheSecuritySettingsSiblings(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specByTool := securitySettingsSpecsByTool(append(ProjectActionSpecs(client), GroupActionSpecs(client)...))
+
+	tests := []struct {
+		tool    string
+		related []string
+	}{
+		{"gitlab_get_project_security_settings", []string{"project.get", "project.security_settings_update"}},
+		{"gitlab_update_project_secret_push_protection", []string{"project.security_settings_get"}},
+		{"gitlab_update_group_secret_push_protection", []string{"group.get", "project.security_settings_get"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			if got := specByTool[tt.tool].RelatedActions; !slices.Equal(got, tt.related) {
+				t.Errorf("RelatedActions = %v, want %v", got, tt.related)
+			}
+		})
+	}
+}
+
+// TestMarkdownActionConstants_NameTheActionsThisPackageRegisters verifies the
+// three IDs the cards build their hints from are the domain of the catalog
+// group each spec joins plus the spec's own name.
+//
+// They are two blocks of literals (the constants in markdown.go and the
+// action names in this file) with nothing between them, so renaming an action
+// would leave a card pointing a model at an ID the catalog no longer holds.
+// The domains stay literal because they are the group the aggregation appends
+// each set to, gitlab_project and gitlab_group, which this package cannot see.
+func TestMarkdownActionConstants_NameTheActionsThisPackageRegisters(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specByTool := securitySettingsSpecsByTool(append(ProjectActionSpecs(client), GroupActionSpecs(client)...))
+
+	tests := []struct {
+		constant string
+		domain   string
+		tool     string
+	}{
+		{actionProjectGet, "project", "gitlab_get_project_security_settings"},
+		{actionProjectUpdate, "project", "gitlab_update_project_secret_push_protection"},
+		{actionGroupUpdate, "group", "gitlab_update_group_secret_push_protection"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.constant, func(t *testing.T) {
+			spec, ok := specByTool[tt.tool]
+			if !ok {
+				t.Fatalf("no ActionSpec registers %s", tt.tool)
+			}
+			if want := tt.domain + "." + spec.Name; tt.constant != want {
+				t.Errorf("markdown hint constant %q, want %q", tt.constant, want)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_Edition_EveryActionIsUltimate verifies both scopes declare
+// the tier secret push protection actually needs. The catalog aggregation
+// overwrites this field, so a wrong value here is invisible at runtime and
+// stays wrong until the day that overwrite goes away.
+func TestActionSpecs_Edition_EveryActionIsUltimate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for tool, spec := range securitySettingsSpecsByTool(append(ProjectActionSpecs(client), GroupActionSpecs(client)...)) {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Edition != "ultimate" {
+				t.Errorf("Edition = %q, want %q", spec.Edition, "ultimate")
+			}
+		})
+	}
+}
+
+// securitySettingsSpecsByTool indexes the package's specs by the individual
+// tool name each projects.
+func securitySettingsSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
 }
 
 // TestActionSpecs_CallRoutes verifies all registered security settings routes execute successfully.

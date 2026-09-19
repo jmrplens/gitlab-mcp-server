@@ -5,7 +5,10 @@ package runnercontrollertokens
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -13,8 +16,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// sampleTokenJSON is the one runner controller token the handler tests answer
+// with. No two of its values agree, timestamps included: while last_used_at
+// and updated_at carried the same instant, the converter could read either
+// from the other's key and every assertion about both still passed.
 const (
-	sampleTokenJSON = `{"id":10,"runner_controller_id":1,"description":"my-token","token":"glrt-abc123","last_used_at":"2026-01-15T10:00:00Z","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-15T10:00:00Z"}`
+	sampleTokenJSON = `{"id":10,"runner_controller_id":1,"description":"my-token","token":"glrt-abc123","last_used_at":"2026-01-15T10:00:00Z","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-02-20T18:30:00Z"}`
 	errUnexpected   = "unexpected error: %v"
 	errExpValid     = "expected validation error, got nil"
 	errExpAPIErr    = "expected API error, got nil"
@@ -61,6 +68,30 @@ func TestList_WithPagination(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
+	}
+}
+
+// TestList_Pagination_ReadFromGitLabsHeaders pins every field of the block a
+// caller pages with, from headers whose values all differ. Nothing asserted it
+// before: List could have returned an empty pagination block and the suite
+// stayed green, leaving a model holding one page with no way to learn there
+// are more, which is the whole reason the field is published.
+func TestList_Pagination_ReadFromGitLabsHeaders(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+sampleTokenJSON+`]`,
+			testutil.PaginationHeaders{Page: "2", PerPage: "20", Total: "41", TotalPages: "3", NextPage: "3", PrevPage: "1"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ControllerID: 1})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	want := toolutil.PaginationOutput{
+		Page: 2, PerPage: 20, TotalItems: 41, TotalPages: 3,
+		NextPage: 3, PrevPage: 1, HasMore: true,
+	}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -179,6 +210,12 @@ func TestList_ContextCancelled(t *testing.T) {
 }
 
 // TestGet_Success verifies that Get returns token details.
+//
+// Every published field is compared at once, against a fixture in which no two
+// values agree, so a converter reading a neighbour's key is a failure rather
+// than a coincidence. The three timestamps are the reason: they are the only
+// fields the converter formats, and until this compared them nothing in the
+// package asserted that any of the three arrived at all.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, sampleTokenJSON)
@@ -188,11 +225,36 @@ func TestGet_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
 	}
-	if out.ID != 10 || out.Token != "glrt-abc123" {
-		t.Errorf("token mismatch: %+v", out)
+	want := Output{
+		ID: 10, RunnerControllerID: 1, Description: "my-token", Token: "glrt-abc123",
+		LastUsedAt: "2026-01-15T10:00:00Z",
+		CreatedAt:  "2026-01-01T00:00:00Z",
+		UpdatedAt:  "2026-02-20T18:30:00Z",
 	}
-	if out.RunnerControllerID != 1 {
-		t.Errorf("controller ID = %d, want 1", out.RunnerControllerID)
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("token = %+v, want %+v", out, want)
+	}
+}
+
+// TestGet_TimestampsGitLabDidNotSend_StayEmpty drives a token whose three
+// timestamps GitLab left null, which is what a freshly minted token answers
+// for last_used_at. Every timestamp in the converter is behind a nil check,
+// and no test had ever taken the other side of one: an inverted check would
+// have dereferenced the nil pointer in production and nothing would have said
+// so here.
+func TestGet_TimestampsGitLabDidNotSend_StayEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":11,"runner_controller_id":2,"description":"fresh","token":"glrt-zzz","last_used_at":null,"created_at":null,"updated_at":null}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ControllerID: 2, TokenID: 11})
+	if err != nil {
+		t.Fatalf(errUnexpected, err)
+	}
+	want := Output{ID: 11, RunnerControllerID: 2, Description: "fresh", Token: "glrt-zzz"}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("token = %+v, want %+v", out, want)
 	}
 }
 
@@ -275,6 +337,48 @@ func TestCreate_DefaultDescription(t *testing.T) {
 	}
 	if out.ID != 10 {
 		t.Errorf("expected ID 10, got %d", out.ID)
+	}
+}
+
+// TestCreate_DescriptionReachesGitLabOnlyWhenGiven reads the request body the
+// handler actually sent, in both states of the guard around the optional
+// description. Nothing looked at that body before, so the guard could have
+// been inverted, the caller's description dropped and an empty one sent in
+// its place, with every existing Create test still passing, because the mock
+// answers the same fixture whatever it is asked.
+func TestCreate_DescriptionReachesGitLabOnlyWhenGiven(t *testing.T) {
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{"description given", CreateInput{ControllerID: 1, Description: "my-token"}, map[string]any{"description": "my-token"}},
+		{"description omitted", CreateInput{ControllerID: 1}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				raw, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					t.Errorf("read request body: %v", readErr)
+					testutil.RespondJSON(w, http.StatusCreated, sampleTokenJSON)
+					return
+				}
+				if decodeErr := json.Unmarshal(raw, &body); decodeErr != nil {
+					t.Errorf("decode request body %q: %v", raw, decodeErr)
+				}
+				testutil.RespondJSON(w, http.StatusCreated, sampleTokenJSON)
+			}))
+
+			if _, err := Create(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(errUnexpected, err)
+			}
+			if !reflect.DeepEqual(body, tt.want) {
+				t.Errorf("request body = %v, want %v", body, tt.want)
+			}
+		})
 	}
 }
 
@@ -485,6 +589,15 @@ func TestRevoke_ContextCancelled(t *testing.T) {
 const rctStoreHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 	"- Store the token securely. It cannot be retrieved later\n"
 
+// rctListHints is the guidance a list ends with, written out as a model reads
+// it rather than built from the constant the formatter uses, so the action ID
+// quoted here is an independent claim about what the catalog holds. It is the
+// one thing in the document a model acts on, and a misspelled domain answers
+// "unknown action": the ID used to name this package instead of the
+// gitlab_runner group these actions are registered in.
+const rctListHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'runner.controller_token_get' to read one of these tokens in full\n"
+
 // TestFormatOutputMarkdown pins the whole card in both states: the minted
 // token with its storage advice, and the same type answering a get with
 // neither the token nor the timestamps GitLab did not send.
@@ -563,15 +676,13 @@ func TestFormatListMarkdown(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	}
 
-	listHints := "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'runnercontrollertokens.controller_token_get' to read one of these tokens in full\n"
 	want := "## Runner Controller Tokens (2)\n\n" +
 		"| ID | Controller | Description | Last Used | Created At |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
 		"| 10 | 1 | tok-1 |  | 1 Jan 2026 00:00 UTC |\n" +
 		"| 11 | 1 | tok-2 |  |  |\n\n" +
 		"2 items total\n" +
-		listHints
+		rctListHints
 	if got := FormatListMarkdown(out); got != want {
 		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
@@ -591,13 +702,11 @@ func TestFormatListMarkdown_Keyset(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{HasMore: true},
 	}
 
-	listHints := "\n---\n\U0001F4A1 **Next steps:**\n" +
-		"- Use action 'runnercontrollertokens.controller_token_get' to read one of these tokens in full\n"
 	want := "## Runner Controller Tokens (1 shown, more available)\n\n" +
 		"| ID | Controller | Description | Last Used | Created At |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
 		"| 10 | 1 | tok-1 |  |  |\n" +
-		listHints
+		rctListHints
 	if got := FormatListMarkdown(out); got != want {
 		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}

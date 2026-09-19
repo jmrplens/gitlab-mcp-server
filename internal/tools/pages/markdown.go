@@ -6,14 +6,22 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical catalog action IDs the hints name. Pages is a set of routes on the
-// project catalog group, so their domain is "project".
+// Canonical catalog action IDs, the one spelling this package has for them.
+// Pages is a set of routes on the project catalog group, so their domain is
+// "project": "pages.domain_list" names nothing the catalog holds, and a model
+// handed one of those as a related action is answered "unknown action". The
+// hints and the ActionSpec metadata read the same constants so the two cannot
+// drift apart again.
 const (
-	actionPagesGet      = "project.pages_get"
-	actionDomainGet     = "project.pages_domain_get"
-	actionDomainList    = "project.pages_domain_list"
-	actionDomainUpdate  = "project.pages_domain_update"
-	actionDomainListAll = "project.pages_domain_list_all"
+	actionPagesGet       = "project.pages_get"
+	actionPagesUpdate    = "project.pages_update"
+	actionPagesUnpublish = "project.pages_unpublish"
+	actionDomainListAll  = "project.pages_domain_list_all"
+	actionDomainList     = "project.pages_domain_list"
+	actionDomainGet      = "project.pages_domain_get"
+	actionDomainCreate   = "project.pages_domain_create"
+	actionDomainUpdate   = "project.pages_domain_update"
+	actionDomainDelete   = "project.pages_domain_delete"
 )
 
 // FormatPagesMarkdown renders a project's Pages settings as a card, with the

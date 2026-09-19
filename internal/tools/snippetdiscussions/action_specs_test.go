@@ -138,6 +138,65 @@ func TestDecorateSnippetDiscussionMeta_DefaultFallback(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata holds every snippet discussion spec to the
+// R-META surface a model reads, and its related actions to the catalog's own
+// spelling. Nothing else in this repository checks a related-action id: a
+// mistyped one passes every gate and answers "unknown action" the moment a
+// model follows the hint.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	byTool := snippetDiscussionsSpecsByTool(t, specs)
+
+	own := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		own["snippet."+spec.Name] = true
+	}
+
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			assertSnippetDiscussionMetadata(t, spec)
+			assertSnippetDiscussionRelatedActions(t, spec, own)
+		})
+	}
+}
+
+// assertSnippetDiscussionMetadata checks that one spec carries the discovery
+// surface a model is served rather than the defensive fallback.
+func assertSnippetDiscussionMetadata(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute snippetdiscussions domain action.") {
+		t.Errorf("Usage must be action-specific, got %q", spec.Usage)
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("expected natural-language aliases, got %v", spec.Aliases)
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Error("expected ParameterGuidance, got none")
+	}
+	if desc := spec.IndividualTool.Description; !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("IndividualTool.Description must carry Returns:/See also:, got %q", desc)
+	}
+}
+
+// assertSnippetDiscussionRelatedActions checks each related action against the
+// catalog ids this package really registers. The six snippet.discussion_* ids
+// are matched against own; the two cross-domain ones can only be held to the
+// namespace, since their specs live in other packages.
+func assertSnippetDiscussionRelatedActions(t *testing.T, spec toolutil.ActionSpec, own map[string]bool) {
+	t.Helper()
+	if len(spec.RelatedActions) == 0 {
+		t.Fatal("expected RelatedActions, got none")
+	}
+	for _, related := range spec.RelatedActions {
+		if !strings.HasPrefix(related, "snippet.") {
+			t.Errorf("RelatedAction %q is not a canonical snippet.* id", related)
+		}
+		if strings.HasPrefix(related, "snippet.discussion_") && !own[related] {
+			t.Errorf("RelatedAction %q names no spec this package registers", related)
+		}
+	}
+}
+
 func snippetDiscussionsActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

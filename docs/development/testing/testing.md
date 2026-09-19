@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 16,944 |
-| Unit test functions                                   | 15,747 |
+| Total test functions                                  | 17,135 |
+| Unit test functions                                   | 15,938 |
 | E2E test functions                                    |  1,197 |
 | cmd test functions                                    |  2,763 |
 | Test files (internal/)                                |    582 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,114 | 71.5% |
+| `TestFunc_Scenario` (2-part)           | 12,186 | 71.1% |
 | `TestFunc` (no underscore)             |    904 |  5.3% |
-| `TestFunc_Scenario_Expected` (3+ part) |  3,926 | 23.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,045 | 23.6% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,166 |        183 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            366 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |          9,452 |        383 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |          9,643 |        383 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,197 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,763 |        200 | server entry point and developer command utilities                                              |
-| **Total**               |     **16,944** |  **1,166** |                                                                                                 |
+| **Total**               |     **17,135** |  **1,166** |                                                                                                 |
 
 ### Core Packages
 
@@ -100,11 +100,11 @@
 | jobs              |   154 |    99.9% |    17 |
 | packages          |   150 |    99.0% |     9 |
 | commits           |   134 |    99.9% |    13 |
+| runners           |   128 |   100.0% |    19 |
 | search            |   128 |   100.0% |    10 |
 | awardemoji        |   122 |   100.0% |    24 |
 | pipelines         |   121 |    99.8% |    12 |
 | resourceevents    |   120 |    99.3% |    17 |
-| runners           |   117 |    99.7% |    19 |
 | workitems         |   116 |    99.5% |     6 |
 | snippets          |   107 |    99.1% |    15 |
 | accesstokens      |   103 |   100.0% |    18 |
@@ -115,7 +115,7 @@
 | pipelineschedules |    94 |    99.0% |    11 |
 | files             |    92 |   100.0% |     8 |
 | mrapprovals       |    86 |    99.4% |     7 |
-| integrations      |    79 |    99.5% |    12 |
+| repository        |    81 |   100.0% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -232,60 +232,60 @@
 | members                 |        68 |          2 |   100.0% |         6 |
 | mergerequests           |       263 |          3 |    99.8% |        30 |
 | mergetrains             |        18 |          2 |   100.0% |         4 |
-| metadata                |         8 |          1 |   100.0% |         1 |
-| milestones              |        71 |          1 |    99.7% |         7 |
+| metadata                |         9 |          1 |   100.0% |         1 |
+| milestones              |        76 |          1 |   100.0% |         7 |
 | modelregistry           |         7 |          3 |   100.0% |         1 |
 | mrapprovals             |        86 |          3 |    99.4% |         7 |
-| mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
-| mrchanges               |        38 |          1 |    98.4% |         4 |
-| mrcontextcommits        |        23 |          1 |   100.0% |         3 |
-| mrdiscussions           |        60 |          1 |   100.0% |         7 |
-| mrdraftnotes            |        73 |          2 |   100.0% |         7 |
-| mrnotes                 |        50 |          2 |   100.0% |         5 |
-| namespaces              |        46 |          1 |    99.5% |         4 |
-| notifications           |        26 |          1 |   100.0% |         6 |
+| mrapprovalsettings      |        12 |          2 |   100.0% |         4 |
+| mrchanges               |        40 |          1 |   100.0% |         4 |
+| mrcontextcommits        |        24 |          1 |   100.0% |         3 |
+| mrdiscussions           |        66 |          1 |   100.0% |         7 |
+| mrdraftnotes            |        76 |          2 |   100.0% |         7 |
+| mrnotes                 |        51 |          2 |   100.0% |         5 |
+| namespaces              |        50 |          1 |    99.5% |         4 |
+| notifications           |        31 |          1 |   100.0% |         6 |
 | orbit                   |        69 |          4 |   100.0% |         6 |
 | packages                |       150 |          6 |    99.0% |         9 |
-| pages                   |        54 |          2 |   100.0% |         9 |
+| pages                   |        61 |          2 |   100.0% |         9 |
 | pipelines               |       121 |          4 |    99.8% |        12 |
 | pipelineschedules       |        94 |          2 |    99.0% |        11 |
 | pipelinetriggers        |        65 |          2 |   100.0% |         6 |
-| planlimits              |        12 |          2 |   100.0% |         2 |
-| projectaliases          |        28 |          2 |   100.0% |         4 |
-| projectdiscovery        |        21 |          1 |   100.0% |         1 |
-| projectimportexport     |        43 |          1 |    99.5% |         5 |
-| projectiterations       |        16 |          1 |   100.0% |         1 |
-| projectmirrors          |        67 |          2 |   100.0% |         7 |
+| planlimits              |        16 |          2 |   100.0% |         2 |
+| projectaliases          |        31 |          2 |   100.0% |         4 |
+| projectdiscovery        |        22 |          1 |   100.0% |         1 |
+| projectimportexport     |        48 |          1 |    99.5% |         5 |
+| projectiterations       |        21 |          1 |   100.0% |         1 |
+| projectmirrors          |        72 |          2 |   100.0% |         7 |
 | projects                |       412 |          7 |   100.0% |        57 |
-| projectserviceaccounts  |        14 |          2 |   100.0% |         8 |
-| projectstatistics       |         8 |          2 |   100.0% |         1 |
-| projectstoragemoves     |        20 |          2 |   100.0% |         6 |
-| projecttemplates        |        19 |          1 |   100.0% |         2 |
-| protectedenvs           |        44 |          2 |    99.5% |         5 |
-| protectedpackages       |        34 |          2 |   100.0% |         4 |
-| releaselinks            |        61 |          2 |   100.0% |         6 |
+| projectserviceaccounts  |        21 |          2 |   100.0% |         8 |
+| projectstatistics       |        12 |          2 |   100.0% |         1 |
+| projectstoragemoves     |        21 |          2 |   100.0% |         6 |
+| projecttemplates        |        23 |          1 |   100.0% |         2 |
+| protectedenvs           |        47 |          2 |   100.0% |         5 |
+| protectedpackages       |        43 |          2 |   100.0% |         4 |
+| releaselinks            |        67 |          2 |   100.0% |         6 |
 | releases                |        68 |          1 |    99.2% |         6 |
-| repository              |        71 |          1 |   100.0% |         9 |
+| repository              |        81 |          1 |   100.0% |         9 |
 | repositorysubmodules    |        56 |          4 |   100.0% |         3 |
 | resourceevents          |       120 |          3 |    99.3% |        17 |
-| resourcegroups          |        16 |          1 |    98.8% |         4 |
-| runnercontrollers       |        33 |          2 |   100.0% |         5 |
-| runnercontrollerscopes  |        35 |          2 |   100.0% |         5 |
-| runnercontrollertokens  |        43 |          2 |   100.0% |         5 |
-| runners                 |       117 |          2 |    99.7% |        19 |
+| resourcegroups          |        19 |          1 |   100.0% |         4 |
+| runnercontrollers       |        39 |          2 |   100.0% |         5 |
+| runnercontrollerscopes  |        40 |          2 |   100.0% |         5 |
+| runnercontrollertokens  |        48 |          2 |   100.0% |         5 |
+| runners                 |       128 |          2 |   100.0% |        19 |
 | search                  |       128 |          1 |   100.0% |        10 |
-| securefiles             |        31 |          2 |    98.3% |         4 |
-| securityattributes      |        27 |          1 |    99.7% |         5 |
-| securitycategories      |        19 |          1 |   100.0% |         3 |
-| securityfindings        |        24 |          1 |   100.0% |         1 |
-| securityscanprofiles    |        19 |          1 |   100.0% |         3 |
-| securitysettings        |        33 |          3 |   100.0% |         3 |
-| settings                |        21 |          1 |    95.9% |         2 |
-| sidekiq                 |        19 |          2 |   100.0% |         4 |
-| snippetdiscussions      |        37 |          2 |   100.0% |         6 |
-| snippetnotes            |        49 |          2 |   100.0% |         5 |
+| securefiles             |        37 |          2 |   100.0% |         4 |
+| securityattributes      |        35 |          1 |   100.0% |         5 |
+| securitycategories      |        24 |          1 |   100.0% |         3 |
+| securityfindings        |        25 |          1 |   100.0% |         1 |
+| securityscanprofiles    |        21 |          1 |   100.0% |         3 |
+| securitysettings        |        40 |          3 |   100.0% |         3 |
+| settings                |        28 |          1 |    95.9% |         2 |
+| sidekiq                 |        22 |          2 |   100.0% |         4 |
+| snippetdiscussions      |        41 |          2 |   100.0% |         6 |
+| snippetnotes            |        56 |          2 |   100.0% |         5 |
 | snippets                |       107 |          3 |    99.1% |        15 |
-| snippetstoragemoves     |        42 |          2 |   100.0% |         6 |
+| snippetstoragemoves     |        48 |          2 |   100.0% |         6 |
 | surfaces                |        16 |          1 |   100.0% |         0 |
 | systemhooks             |        39 |          3 |    99.6% |         8 |
 | tags                    |        79 |          2 |   100.0% |         9 |
@@ -303,7 +303,7 @@
 | wikis                   |        63 |          2 |    99.5% |         6 |
 | workitems               |       116 |          3 |    99.5% |         6 |
 | workitemsavedviews      |        55 |          4 |   100.0% |         7 |
-| **Total**               | **9,452** |    **383** |          | **1,187** |
+| **Total**               | **9,643** |    **383** |          | **1,187** |
 
 </details>
 
@@ -518,11 +518,11 @@
 | mergerequests           |    99.8% |
 | mergetrains             |   100.0% |
 | metadata                |   100.0% |
-| milestones              |    99.7% |
+| milestones              |   100.0% |
 | modelregistry           |   100.0% |
 | mrapprovals             |    99.4% |
 | mrapprovalsettings      |   100.0% |
-| mrchanges               |    98.4% |
+| mrchanges               |   100.0% |
 | mrcontextcommits        |   100.0% |
 | mrdiscussions           |   100.0% |
 | mrdraftnotes            |   100.0% |
@@ -546,21 +546,21 @@
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |
-| protectedenvs           |    99.5% |
+| protectedenvs           |   100.0% |
 | protectedpackages       |   100.0% |
 | releaselinks            |   100.0% |
 | releases                |    99.2% |
 | repository              |   100.0% |
 | repositorysubmodules    |   100.0% |
 | resourceevents          |    99.3% |
-| resourcegroups          |    98.8% |
+| resourcegroups          |   100.0% |
 | runnercontrollers       |   100.0% |
 | runnercontrollerscopes  |   100.0% |
 | runnercontrollertokens  |   100.0% |
-| runners                 |    99.7% |
+| runners                 |   100.0% |
 | search                  |   100.0% |
-| securefiles             |    98.3% |
-| securityattributes      |    99.7% |
+| securefiles             |   100.0% |
+| securityattributes      |   100.0% |
 | securitycategories      |   100.0% |
 | securityfindings        |   100.0% |
 | securityscanprofiles    |   100.0% |

@@ -144,6 +144,37 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	t.Error("expected text content in cancellation result")
 }
 
+// TestProjectAliasOptions_UnknownTool_KeepsTheNeutralCopy verifies that a tool
+// name no case names falls through to the shared usage with no per-action copy
+// at all. The copy is selected by string literal, so this is the branch that
+// decides what a renamed or newly added tool inherits: nothing, which leaves
+// the gap visible, rather than whichever case it happened to land beside.
+func TestProjectAliasOptions_UnknownTool_KeepsTheNeutralCopy(t *testing.T) {
+	opts := projectAliasOptions("gitlab_unlisted_project_alias_tool")
+
+	if want := "Manage project aliases in a namespace."; opts.Usage != want {
+		t.Errorf("Usage = %q, want %q", opts.Usage, want)
+	}
+	if opts.Aliases != nil {
+		t.Errorf("Aliases = %v, want none", opts.Aliases)
+	}
+	if opts.RelatedActions != nil {
+		t.Errorf("RelatedActions = %v, want none", opts.RelatedActions)
+	}
+	if opts.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", opts.ParameterGuidance)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty", opts.IndividualTool.Description)
+	}
+	if opts.IndividualTool.Name != "gitlab_unlisted_project_alias_tool" {
+		t.Errorf("IndividualTool.Name = %q, want the name it was given", opts.IndividualTool.Name)
+	}
+	if opts.OwnerPackage != "projectaliases" || opts.Edition != "premium" {
+		t.Errorf("OwnerPackage/Edition = %q/%q, want projectaliases/premium", opts.OwnerPackage, opts.Edition)
+	}
+}
+
 func projectAliasesActionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {

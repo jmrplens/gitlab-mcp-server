@@ -5,16 +5,22 @@ package projectstatistics
 
 import (
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
-// TestGet verifies Get.
+// TestGet reads the whole answer back: the total, and every day with its own
+// date and count. No two numbers in the fixture agree, so a converter reading
+// a neighbour's key changes what is asserted here. The earlier version checked
+// the total and the length alone, and emptying both DayStat fields left the
+// suite green.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/projects/1/statistics")
-		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2026-01-01"}]}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2026-01-01"},{"count":7,"date":"2026-02-03"}]}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := Get(t.Context(), client, GetInput{ProjectID: "1"})
@@ -22,21 +28,50 @@ func TestGet(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if out.TotalFetches != 42 {
-		t.Errorf("TotalFetches = %d", out.TotalFetches)
+		t.Errorf("TotalFetches = %d, want 42", out.TotalFetches)
 	}
-	if len(out.Days) != 1 {
-		t.Fatalf("Days len = %d", len(out.Days))
+	want := []DayStat{{Date: "2026-01-01", Count: 5}, {Date: "2026-02-03", Count: 7}}
+	if !reflect.DeepEqual(out.Days, want) {
+		t.Errorf("Days = %+v, want %+v", out.Days, want)
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error checks that a project GitLab will not serve is refused with
+// the hint that routes the caller to the tool which verifies the id.
+//
+// The hint is keyed on one status, so a wrong code drops the only actionable
+// part of the refusal while leaving an error that still looks correct.
 func TestGet_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	_, err := Get(t.Context(), client, GetInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "Suggestion: verify project_id with gitlab_project_get") {
+		t.Errorf("404 refusal %q carries no project lookup hint", err)
+	}
+}
+
+// TestGet_Forbidden_CarriesNoProjectLookupHint is the other side of that
+// status: a 403 means the caller lacks the Reporter access this endpoint
+// needs, not that the id is wrong, so sending them to look the project up
+// would point them at the wrong thing. GitLab's own message is what says
+// which it was, so the refusal has to keep it.
+func TestGet_Forbidden_CarriesNoProjectLookupHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"insufficient access to project statistics"}`)
+	}))
+	_, err := Get(t.Context(), client, GetInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "Suggestion:") {
+		t.Errorf("403 refusal %q carries a hint keyed to another status", err)
+	}
+	if !strings.Contains(err.Error(), "({message: insufficient access to project statistics})") {
+		t.Errorf("403 refusal %q does not lift GitLab's own message out of the cause", err)
 	}
 }
 
@@ -70,14 +105,20 @@ func TestFormatMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestGet_MissingProjectID verifies Get returns error for empty project_id.
+// TestGet_MissingProjectID refuses an empty project_id before any request is
+// made, naming both the tool and the parameter. Both halves matter: the
+// message is what a model reads to correct its call, and an empty id would
+// otherwise be sent as /projects//statistics, which GitLab answers with
+// something about a route rather than about the argument.
 func TestGet_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(t.Context(), client, GetInput{})
 	if err == nil {
 		t.Fatal("expected error for missing project_id")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "gitlab_get_project_statistics") || !strings.Contains(msg, "project_id") {
+		t.Errorf("refusal %q does not name both the tool and the parameter", msg)
 	}
 }
 

@@ -340,3 +340,47 @@ func projectMirrorSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 	}
 	return byTool
 }
+
+// TestMirrorOptions_EveryRegisteredToolCarriesDiscoveryMetadata asserts that
+// mirrorActionMeta answers for every tool the package registers. The lookup
+// that reads it falls through silently, so an eighth mirror action added
+// without an entry would register with the placeholder usage and none of the
+// aliases, related actions or description a model discovers it by.
+func TestMirrorOptions_EveryRegisteredToolCarriesDiscoveryMetadata(t *testing.T) {
+	byTool := projectMirrorSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, projectMirrorActionHandler())))
+	for toolName := range byTool {
+		t.Run(toolName, func(t *testing.T) {
+			if _, ok := mirrorActionMeta[toolName]; !ok {
+				t.Fatalf("mirrorActionMeta has no entry for %q", toolName)
+			}
+			if got := mirrorOptions(toolName); got.Usage == mirrorPlaceholderUsage {
+				t.Errorf("Usage for %q is the placeholder, want the metadata's own usage", toolName)
+			}
+		})
+	}
+	for toolName := range mirrorActionMeta {
+		if _, ok := byTool[toolName]; !ok {
+			t.Errorf("mirrorActionMeta describes %q, which no spec registers", toolName)
+		}
+	}
+}
+
+// TestMirrorOptions_ToolWithoutMetadata_KeepsTheBaseOptions covers the other
+// side of that lookup: a name it does not answer for still yields options a
+// surface can register, rather than an empty or half-built spec. It is what
+// makes the fall-through above a degradation and not a crash.
+func TestMirrorOptions_ToolWithoutMetadata_KeepsTheBaseOptions(t *testing.T) {
+	got := mirrorOptions("gitlab_unregistered_mirror_tool")
+	if got.Usage != mirrorPlaceholderUsage {
+		t.Errorf("Usage = %q, want the placeholder %q", got.Usage, mirrorPlaceholderUsage)
+	}
+	if got.IndividualTool.Name != "gitlab_unregistered_mirror_tool" {
+		t.Errorf("IndividualTool.Name = %q, want the name it was given", got.IndividualTool.Name)
+	}
+	if got.OwnerPackage != "projectmirrors" {
+		t.Errorf("OwnerPackage = %q, want projectmirrors", got.OwnerPackage)
+	}
+	if len(got.Aliases) == 0 || got.Aliases[0] != "gitlab_unregistered_mirror_tool" {
+		t.Errorf("Aliases = %v, want the tool name as the first alias", got.Aliases)
+	}
+}

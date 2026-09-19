@@ -41,6 +41,59 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_RelatedActionsNameActionsTheCatalogHolds asserts that every
+// related action a Pages spec publishes is a canonical ID this package really
+// registers.
+//
+// Pages is a set of routes on the gitlab_project catalog group, so its IDs
+// carry the "project." domain. The metadata used to spell all nine of them
+// "pages.domain_list" and the like, which name nothing: a model following one
+// is answered "unknown action", and nothing outside this test checks it.
+// Every Pages relation is to a sibling Pages action, so the set the entries are
+// held against is this package's own.
+func TestActionSpecs_RelatedActionsNameActionsTheCatalogHolds(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, pagesActionHandler()))
+
+	registered := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		registered["project."+spec.Name] = true
+	}
+
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			if len(spec.RelatedActions) == 0 {
+				t.Fatalf("%s publishes no related actions", spec.Name)
+			}
+			for _, related := range spec.RelatedActions {
+				if !registered[related] {
+					t.Errorf("%s relates to %q, which no Pages action is registered under", spec.Name, related)
+				}
+			}
+		})
+	}
+}
+
+// TestActionSpecs_ProjectGuidance_OnlyTheInstanceWideListingTakesNoProject
+// asserts which Pages actions publish project_id guidance, in both directions.
+//
+// The instance-wide listing reaches GET /pages/domains and its input struct has
+// no project field at all, so guidance naming one would send a model looking
+// for an argument that does not exist; every other action is project-scoped and
+// is unusable without it.
+func TestActionSpecs_ProjectGuidance_OnlyTheInstanceWideListingTakesNoProject(t *testing.T) {
+	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))
+
+	for toolName, spec := range byTool {
+		t.Run(toolName, func(t *testing.T) {
+			_, got := spec.ParameterGuidance[argProjectID]
+			want := toolName != "gitlab_pages_domain_list_all"
+			if got != want {
+				t.Errorf("%s defines project_id guidance = %v, want %v", toolName, got, want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every Pages tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))

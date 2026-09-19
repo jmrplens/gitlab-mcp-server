@@ -6,6 +6,7 @@ package mrdiscussions
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -1470,5 +1471,305 @@ func TestLineRangeOutput_NilAndEmpty(t *testing.T) {
 	}
 	if got := toolutil.NewLineRangeOutput(&gl.LineRange{}); got != nil {
 		t.Errorf("toolutil.NewLineRangeOutput(empty) = %+v, want nil", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What an optional input does to the request GitLab receives
+//
+// Every assertion above this line reads the response, and the response is the
+// mock's own fixture: a guard around an optional field can be inverted, the
+// caller's value dropped and an empty one sent in its place, without any of
+// them noticing. These read the body the handler actually sent.
+// ---------------------------------------------------------------------------.
+
+// discussionCreatedBody is the smallest 201 the create endpoint can answer
+// with, for the tests whose assertions are all about the request.
+const discussionCreatedBody = `{"id":"req-1","individual_note":false,"notes":[]}`
+
+// decodedBody reads the JSON body of a mocked request. It reports rather than
+// aborting, because it runs on the httptest server's goroutine.
+func decodedBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decoding the request body: %v", err)
+	}
+	return body
+}
+
+// assertJSONField asserts what a JSON object says about one key: a nil want
+// means the key must be absent, which is the half that catches an unset input
+// being sent as an empty value.
+func assertJSONField(t *testing.T, obj map[string]any, key string, want any) {
+	t.Helper()
+	got, present := obj[key]
+	switch {
+	case want == nil && present:
+		t.Errorf("%q = %v, want it absent from %v", key, got, obj)
+	case want == nil:
+	case !present:
+		t.Errorf("%q missing from %v, want %v", key, obj, want)
+	case got != want:
+		t.Errorf("%q = %v, want %v", key, got, want)
+	}
+}
+
+// createWithAssertions drives Create against a mock that hands the decoded
+// request body to check. The diff listing answers 404 so the position
+// pre-check skips and the position reaching GitLab is the one the caller
+// spelled.
+func createWithAssertions(t *testing.T, in CreateInput, check func(body map[string]any)) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathMR1Discussions {
+			http.NotFound(w, r)
+			return
+		}
+		check(decodedBody(t, r))
+		testutil.RespondJSON(w, http.StatusCreated, discussionCreatedBody)
+	}))
+	if _, err := Create(context.Background(), client, in); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+}
+
+// TestCreate_CommitID_SentOnlyWhenTheCallerSetIt asserts that an anchored
+// discussion carries the SHA it was given and an unanchored one carries no
+// commit_id at all. Inverting that guard swaps the two, which anchors every
+// discussion to nothing and leaves the anchor the caller asked for unsent.
+func TestCreate_CommitID_SentOnlyWhenTheCallerSetIt(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		commitID string
+		want     any
+	}{
+		{name: "anchored to a commit", commitID: "c0ffee1234", want: "c0ffee1234"},
+		{name: "not anchored", commitID: "", want: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			createWithAssertions(t, CreateInput{
+				ProjectID: testProjectID,
+				MRIID:     1,
+				Body:      testRefactoringComment,
+				CommitID:  tc.commitID,
+			}, func(body map[string]any) {
+				assertJSONField(t, body, "commit_id", tc.want)
+			})
+		})
+	}
+}
+
+// TestUpdateNote_OptionalFields_SentOnlyWhenTheCallerSetThem asserts that a
+// note edit carries exactly the fields the caller asked to change. Both guards
+// are invisible from the response: inverted, an edit sends an empty body and a
+// resolution request sends nothing, and GitLab's answer still parses.
+//
+// The unresolving case is here because false is the value an omitempty tag is
+// most likely to swallow, and losing it turns "unresolve this" into a no-op.
+func TestUpdateNote_OptionalFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
+	resolve, unresolve := true, false
+	for _, tc := range []struct {
+		name         string
+		body         string
+		resolved     *bool
+		wantBody     any
+		wantResolved any
+	}{
+		{name: "body only", body: testUpdatedComment, wantBody: testUpdatedComment},
+		{name: "resolving only", resolved: &resolve, wantResolved: true},
+		{name: "unresolving only", resolved: &unresolve, wantResolved: false},
+		{name: "both", body: testUpdatedComment, resolved: &resolve, wantBody: testUpdatedComment, wantResolved: true},
+		{name: "neither"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathMR1Discussion1Note {
+					http.NotFound(w, r)
+					return
+				}
+				body := decodedBody(t, r)
+				assertJSONField(t, body, "body", tc.wantBody)
+				assertJSONField(t, body, "resolved", tc.wantResolved)
+				testutil.RespondJSON(w, http.StatusOK, `{"id":300,"body":"Updated comment"}`)
+			}))
+			if _, err := UpdateNote(context.Background(), client, UpdateNoteInput{
+				ProjectID:    testProjectID,
+				MRIID:        1,
+				DiscussionID: testDiscussionID,
+				NoteID:       300,
+				Body:         tc.body,
+				Resolved:     tc.resolved,
+			}); err != nil {
+				t.Fatalf("UpdateNote() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem asserts that every
+// optional field of a diff position reaches GitLab exactly when it was given.
+// GitLab reads a position as a whole and refuses the ones it cannot resolve,
+// so a coordinate silently replaced by an unset one is the difference between
+// a comment landing where it was meant to and a 400 nobody can explain.
+func TestCreate_PositionFields_SentOnlyWhenTheCallerSetThem(t *testing.T) {
+	base := DiffPosition{BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222", NewPath: "design.png"}
+	full := base
+	full.OldPath, full.OldLine, full.NewLine = "old.png", 7, 42
+	full.PositionType, full.Width, full.Height, full.X, full.Y = "image", 100, 200, 10.5, 20.5
+
+	for _, tc := range []struct {
+		name     string
+		position DiffPosition
+		want     map[string]any
+	}{
+		{
+			name:     "every optional field set",
+			position: full,
+			want: map[string]any{
+				"old_path": "old.png", "old_line": float64(7), "new_line": float64(42),
+				"width": float64(100), "height": float64(200), "x": 10.5, "y": 20.5,
+			},
+		},
+		{
+			name:     "none set",
+			position: base,
+			want: map[string]any{
+				"old_path": nil, "old_line": nil, "new_line": nil,
+				"width": nil, "height": nil, "x": nil, "y": nil,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			createWithAssertions(t, CreateInput{
+				ProjectID: testProjectID,
+				MRIID:     1,
+				Body:      testRefactoringComment,
+				Position:  &tc.position,
+			}, func(body map[string]any) {
+				pos, ok := body["position"].(map[string]any)
+				if !ok {
+					t.Errorf("position missing from the request body %v", body)
+					return
+				}
+				assertJSONField(t, pos, "new_path", "design.png")
+				for key, want := range tc.want {
+					assertJSONField(t, pos, key, want)
+				}
+			})
+		})
+	}
+}
+
+// TestCreate_LineRange_SentWheneverEitherEndpointIsGiven asserts that a
+// multi-line range survives with one endpoint named and is dropped only when
+// neither is. Requiring both would silently turn a range comment into a
+// single-line one, and each endpoint's own fields are asserted here for the
+// same reason the position fields are: nothing in the response mentions them.
+func TestCreate_LineRange_SentWheneverEitherEndpointIsGiven(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		lineRange          DiffLineRangeInput
+		wantRange          bool
+		wantStart, wantEnd map[string]any
+	}{
+		{
+			name:      "start alone",
+			lineRange: DiffLineRangeInput{Start: &DiffLinePositionInput{LineCode: "code-a", Type: "old", OldLine: 5}},
+			wantRange: true,
+			wantStart: map[string]any{"line_code": "code-a", "type": "old", "old_line": float64(5), "new_line": nil},
+		},
+		{
+			name:      "end alone, spelling only the line it names",
+			lineRange: DiffLineRangeInput{End: &DiffLinePositionInput{NewLine: 6}},
+			wantRange: true,
+			wantEnd:   map[string]any{"new_line": float64(6), "line_code": nil, "type": nil, "old_line": nil},
+		},
+		{
+			name:      "neither endpoint",
+			lineRange: DiffLineRangeInput{},
+			wantRange: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			createWithAssertions(t, CreateInput{
+				ProjectID: testProjectID,
+				MRIID:     1,
+				Body:      testRefactoringComment,
+				Position: &DiffPosition{
+					BaseSHA: "base000", StartSHA: "start111", HeadSHA: "head222",
+					NewPath: "main.go", LineRange: &tc.lineRange,
+				},
+			}, func(body map[string]any) {
+				pos, ok := body["position"].(map[string]any)
+				if !ok {
+					t.Errorf("position missing from the request body %v", body)
+					return
+				}
+				lr, ok := pos["line_range"].(map[string]any)
+				if ok != tc.wantRange {
+					t.Errorf("line_range present = %t, want %t (position %v)", ok, tc.wantRange, pos)
+					return
+				}
+				if !tc.wantRange {
+					return
+				}
+				assertEndpoint(t, lr, "start", tc.wantStart)
+				assertEndpoint(t, lr, "end", tc.wantEnd)
+			})
+		})
+	}
+}
+
+// assertEndpoint asserts one endpoint of a line range: absent when want is
+// nil, and carrying exactly the fields want names otherwise.
+func assertEndpoint(t *testing.T, lineRange map[string]any, key string, want map[string]any) {
+	t.Helper()
+	endpoint, present := lineRange[key].(map[string]any)
+	if want == nil {
+		if present {
+			t.Errorf("%q = %v, want it absent from %v", key, endpoint, lineRange)
+		}
+		return
+	}
+	if !present {
+		t.Errorf("%q missing from %v", key, lineRange)
+		return
+	}
+	for field, value := range want {
+		assertJSONField(t, endpoint, field, value)
+	}
+}
+
+// TestFormatNoteMarkdown_InternalFlag_ShownAsAnInternalNote asserts that
+// GitLab's own internal flag reaches the card. The card folds internal and
+// confidential into one row because they are the same restriction under two
+// entity spellings, and only the confidential half was ever rendered here, so
+// the internal one could have dropped out of the fold unnoticed.
+func TestFormatNoteMarkdown_InternalFlag_ShownAsAnInternalNote(t *testing.T) {
+	n := NoteOutput{ID: 3, Body: "team only", Author: &toolutil.NoteUserOutput{Username: "u"}, CreatedAt: "2026-01-01T00:00:00Z", Internal: true}
+	want := "## Discussion Note #3\n\n" +
+		"- **Author**: @u\n" +
+		"- **Created**: 1 Jan 2026 00:00 UTC\n" +
+		"- **Internal note**\n" +
+		"- **Body**: team only\n" + noteHints
+	if got := FormatNoteMarkdown(n); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NilNote_IsSkipped asserts that a hole in a thread's
+// note slice is passed over and the notes around it still render. Notes is a
+// slice of pointers, so the guard is the only thing between a formatter and a
+// nil dereference that would take the whole tool call down.
+func TestFormatOutputMarkdown_NilNote_IsSkipped(t *testing.T) {
+	d := Output{ID: "holed", Notes: []*NoteOutput{
+		nil,
+		{ID: 9, Body: "here", Author: &toolutil.NoteUserOutput{Username: "z"}, CreatedAt: "2026-01-01T00:00:00Z"},
+	}}
+	want := "## Discussion holed\n\n" +
+		"- **@z** (1 Jan 2026 00:00 UTC, note 9):\n  > here\n" + threadHints
+	if got := FormatOutputMarkdown(d); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }

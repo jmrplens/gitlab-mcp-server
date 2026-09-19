@@ -7,14 +7,38 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// catalogDomain is the domain half of every canonical action ID this package
+// contributes. These specs are aggregated by internal/tools/runners into the
+// gitlab_runner catalog group, so the domain is "runner" and never this
+// package's own name: an ID spelled any other way is one gitlab_execute_action
+// refuses, and nothing outside this package checks a hint or a related action.
+const catalogDomain = "runner"
+
+// The action names this package registers. Every ID quoted to a model is built
+// from one of these through [canonicalID], so markdown.go's hints and the
+// RelatedActions below cannot drift apart or from the specs themselves.
+const (
+	actionNameTokenList   = "controller_token_list"
+	actionNameTokenGet    = "controller_token_get"
+	actionNameTokenCreate = "controller_token_create"
+	actionNameTokenRotate = "controller_token_rotate"
+	actionNameTokenRevoke = "controller_token_revoke"
+)
+
+// canonicalID qualifies one of the action names above with [catalogDomain],
+// giving the ID gitlab_execute_action accepts and gitlab_find_action returns.
+func canonicalID(actionName string) string {
+	return catalogDomain + "." + actionName
+}
+
 // ActionSpecs returns canonical specs for runner controller token actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		runnerControllerTokenReadSpec("controller_token_list", toolutil.RouteAction(client, List), "gitlab_runner_controller_token_list"),
-		runnerControllerTokenReadSpec("controller_token_get", toolutil.RouteAction(client, Get), "gitlab_runner_controller_token_get"),
-		runnerControllerTokenCreateSpec("controller_token_create", toolutil.RouteAction(client, Create), "gitlab_runner_controller_token_create"),
-		runnerControllerTokenUpdateSpec("controller_token_rotate", toolutil.RouteAction(client, Rotate), "gitlab_runner_controller_token_rotate"),
-		runnerControllerTokenDeleteSpec("controller_token_revoke", toolutil.DestructiveAction(client, revokeOutput), "gitlab_runner_controller_token_revoke"),
+		runnerControllerTokenReadSpec(actionNameTokenList, toolutil.RouteAction(client, List), "gitlab_runner_controller_token_list"),
+		runnerControllerTokenReadSpec(actionNameTokenGet, toolutil.RouteAction(client, Get), "gitlab_runner_controller_token_get"),
+		runnerControllerTokenCreateSpec(actionNameTokenCreate, toolutil.RouteAction(client, Create), "gitlab_runner_controller_token_create"),
+		runnerControllerTokenUpdateSpec(actionNameTokenRotate, toolutil.RouteAction(client, Rotate), "gitlab_runner_controller_token_rotate"),
+		runnerControllerTokenDeleteSpec(actionNameTokenRevoke, toolutil.DestructiveAction(client, revokeOutput), "gitlab_runner_controller_token_revoke"),
 	}
 }
 
@@ -90,31 +114,31 @@ var runnerControllerTokenActionMeta = map[string]runnerControllerTokenActionMeta
 	"gitlab_runner_controller_token_list": {
 		usage:       "List every authentication token issued for a runner controller (admin-only). Use when the prompt asks to audit, enumerate, or review the tokens belonging to a known runner controller before rotating or revoking one.",
 		aliases:     []string{"list runner controller tokens", "show tokens for a runner controller", "audit runner controller authentication tokens"},
-		related:     []string{"controller_token_get", "controller_token_create", "controller_token_revoke"},
+		related:     []string{canonicalID(actionNameTokenGet), canonicalID(actionNameTokenCreate), canonicalID(actionNameTokenRevoke)},
 		description: "List runner controller tokens for a controller (admin-only). Returns: each token's id, runner controller id, description, last-used time, and timestamps, with pagination metadata. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_create, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_get": {
 		usage:       "Retrieve a single runner controller token by its id (admin-only). Use after a list result or when the prompt already names a concrete runner controller token id.",
 		aliases:     []string{"get runner controller token", "show runner controller token", "fetch a runner controller token"},
-		related:     []string{"controller_token_list", "controller_token_rotate", "controller_token_revoke"},
+		related:     []string{canonicalID(actionNameTokenList), canonicalID(actionNameTokenRotate), canonicalID(actionNameTokenRevoke)},
 		description: "Get one runner controller token by id (admin-only). Returns: the token's id, runner controller id, description, last-used time, and timestamps. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_create": {
 		usage:       "Create a new authentication token for a runner controller (admin-only). Use when provisioning a runner controller or adding an additional credential. The secret token value is returned only once at creation.",
 		aliases:     []string{"create runner controller token", "mint a runner controller token", "issue a new runner controller authentication token"},
-		related:     []string{"controller_token_list", "controller_token_rotate", "controller_token_revoke"},
+		related:     []string{canonicalID(actionNameTokenList), canonicalID(actionNameTokenRotate), canonicalID(actionNameTokenRevoke)},
 		description: "Create a runner controller token (admin-only). Returns: the new token including its one-time secret value, id, runner controller id, and description. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_rotate, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_rotate": {
 		usage:       "Rotate a runner controller token, invalidating the old secret and issuing a fresh one (admin-only). Use to roll a credential without changing the token id. The new secret value is returned only once.",
 		aliases:     []string{"rotate runner controller token", "roll runner controller token secret", "regenerate a runner controller authentication token"},
-		related:     []string{"controller_token_get", "controller_token_list", "controller_token_revoke"},
+		related:     []string{canonicalID(actionNameTokenGet), canonicalID(actionNameTokenList), canonicalID(actionNameTokenRevoke)},
 		description: "Rotate a runner controller token (admin-only). Returns: the token with its newly issued one-time secret value and unchanged id. See also: gitlab_runner_controller_token_get, gitlab_runner_controller_token_list, gitlab_runner_controller_token_revoke.",
 	},
 	"gitlab_runner_controller_token_revoke": {
 		usage:       "Permanently revoke a runner controller token (admin-only). Destructive and irreversible. Confirm controller_id and token_id before calling, as any runner controller using the token will lose access.",
 		aliases:     []string{"revoke runner controller token", "delete runner controller token", "invalidate a runner controller authentication token"},
-		related:     []string{"controller_token_list", "controller_token_get", "controller_token_rotate"},
+		related:     []string{canonicalID(actionNameTokenList), canonicalID(actionNameTokenGet), canonicalID(actionNameTokenRotate)},
 		description: "Revoke a runner controller token permanently (admin-only). Returns: a success confirmation that the runner controller token was deleted. See also: gitlab_runner_controller_token_list, gitlab_runner_controller_token_get, gitlab_runner_controller_token_rotate.",
 	},
 }

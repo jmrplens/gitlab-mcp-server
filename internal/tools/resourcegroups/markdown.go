@@ -7,18 +7,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. They are the IDs the catalog builds
-// from the group that owns these actions, gitlab_pipeline, so a hint names
-// what every surface resolves.
-const (
-	hintActionResourceGroupGet          = "pipeline.resource_group_get"
-	hintActionResourceGroupEdit         = "pipeline.resource_group_edit"
-	hintActionResourceGroupList         = "pipeline.resource_group_list"
-	hintActionResourceGroupUpcomingJobs = "pipeline.resource_group_upcoming_jobs"
-	hintActionJobGet                    = "job.get"
-	hintActionJobTrace                  = "job.trace"
-)
-
 // FormatListMarkdown renders a project's resource groups as a Markdown table.
 //
 // The two next steps are named separately: reading one group and changing its
@@ -39,8 +27,8 @@ func FormatListMarkdown(out ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction(hintActionResourceGroupGet, "see one resource group in full"),
-		toolutil.HintAction(hintActionResourceGroupEdit, "change a group's process mode"),
+		toolutil.HintAction(actionResourceGroupGet, "see one resource group in full"),
+		toolutil.HintAction(actionResourceGroupEdit, "change a group's process mode"),
 	)
 	return b.String()
 }
@@ -55,8 +43,8 @@ func FormatGroupMarkdown(g ResourceGroupItem) string {
 	c.Field("Key", g.Key)
 	c.Field("Process Mode", g.ProcessMode)
 	c.End(
-		toolutil.HintAction(hintActionResourceGroupUpcomingJobs, "see the jobs waiting on this group"),
-		toolutil.HintAction(hintActionResourceGroupEdit, "change its process mode"),
+		toolutil.HintAction(actionResourceGroupUpcomingJobs, "see the jobs waiting on this group"),
+		toolutil.HintAction(actionResourceGroupEdit, "change its process mode"),
 	)
 	return b.String()
 }
@@ -79,9 +67,9 @@ func FormatJobsMarkdown(out ListUpcomingJobsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		toolutil.HintAction(hintActionJobGet, "see one of these jobs in full"),
-		toolutil.HintAction(hintActionJobTrace, "read a job's log"),
-		toolutil.HintAction(hintActionResourceGroupList, "see the other resource groups of this project"),
+		toolutil.HintAction(actionJobGet, "see one of these jobs in full"),
+		toolutil.HintAction(actionJobTrace, "read a job's log"),
+		toolutil.HintAction(actionResourceGroupList, "see the other resource groups of this project"),
 	)
 	return b.String()
 }

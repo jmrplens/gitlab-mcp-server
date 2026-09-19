@@ -419,6 +419,48 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata_IsPerAction verifies that each context
+// commit action publishes its own Usage, aliases, related actions and
+// "Returns: … See also: …" description, and that a tool name
+// contextCommitOptions does not know falls through carrying none of them
+// rather than a sibling's. An action added without its own case would
+// register and still be unreachable from a model's own words.
+func TestActionSpecs_DiscoveryMetadata_IsPerAction(t *testing.T) {
+	byTool := newMRContextCommitsSpecsByTool(t)
+
+	usages := make(map[string]string, len(byTool))
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if spec.Usage == "" {
+				t.Error("empty Usage: nothing tells a model when to reach for this action")
+			}
+			if len(spec.Aliases) < 2 {
+				t.Errorf("Aliases = %v, want the tool name plus natural-language phrasings", spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Error("empty RelatedActions: the result can hint at no next step")
+			}
+			if !strings.Contains(spec.IndividualTool.Description, "Returns:") ||
+				!strings.Contains(spec.IndividualTool.Description, "See also:") {
+				t.Errorf("description not in 'Returns: … See also: …' form: %q", spec.IndividualTool.Description)
+			}
+			usages[spec.Usage] = tool
+		})
+	}
+	if len(usages) != len(byTool) {
+		t.Errorf("%d actions publish only %d distinct Usage strings", len(byTool), len(usages))
+	}
+
+	unknown := contextCommitOptions("gitlab_unknown_mr_context_commits")
+	if unknown.Usage != "" || unknown.Aliases != nil || unknown.RelatedActions != nil ||
+		unknown.IndividualTool.Description != "" {
+		t.Errorf("an unknown tool inherited metadata: %+v", unknown)
+	}
+	if unknown.OwnerPackage != "mrcontextcommits" {
+		t.Errorf("unknown tool OwnerPackage = %q, want mrcontextcommits", unknown.OwnerPackage)
+	}
+}
+
 // TestActionSpecs_CallAllRoutes validates all MR context commit routes.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newMRContextCommitsSpecsByTool(t)

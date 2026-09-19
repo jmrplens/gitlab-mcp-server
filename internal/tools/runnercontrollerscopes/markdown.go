@@ -8,17 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The canonical catalog IDs the hints name. A scope action is projected under
-// the runner domain, so the ID every surface resolves carries that prefix,
-// which the bare action names in action_specs.go do not.
-const (
-	hintActionScopeList           = "runner." + actionScopeList
-	hintActionScopeAddInstance    = "runner." + actionScopeAddInstance
-	hintActionScopeAddRunner      = "runner." + actionScopeAddRunner
-	hintActionScopeRemoveInstance = "runner." + actionScopeRemoveInstance
-	hintActionScopeRemoveRunner   = "runner." + actionScopeRemoveRunner
-)
-
 // FormatScopesMarkdown renders every scope a runner controller holds: the card
 // of one controller's scoping, with each kind of scope as a nested collection
 // under a heading of its own.
@@ -44,8 +33,8 @@ func FormatScopesMarkdown(out ScopesOutput) string {
 		}
 	}
 	c.End(
-		toolutil.HintAction(hintActionScopeAddInstance, "grant this controller the instance-level scope"),
-		toolutil.HintAction(hintActionScopeAddRunner, "scope this controller to one more runner"),
+		toolutil.HintAction(catalogScopeAddInstance, "grant this controller the instance-level scope"),
+		toolutil.HintAction(catalogScopeAddRunner, "scope this controller to one more runner"),
 	)
 	return b.String()
 }
@@ -58,8 +47,8 @@ func FormatInstanceScopeMarkdown(out InstanceScopeOutput) string {
 	c.Time("Created", out.CreatedAt)
 	c.Time("Updated", out.UpdatedAt)
 	c.End(
-		toolutil.HintAction(hintActionScopeList, "see every scope this controller holds"),
-		toolutil.HintAction(hintActionScopeRemoveInstance, "revoke the instance-level scope"),
+		toolutil.HintAction(catalogScopeList, "see every scope this controller holds"),
+		toolutil.HintAction(catalogScopeRemoveInstance, "revoke the instance-level scope"),
 	)
 	return b.String()
 }
@@ -73,8 +62,8 @@ func FormatRunnerScopeMarkdown(out RunnerScopeOutput) string {
 	c.Time("Created", out.CreatedAt)
 	c.Time("Updated", out.UpdatedAt)
 	c.End(
-		toolutil.HintAction(hintActionScopeList, "see every scope this controller holds"),
-		toolutil.HintAction(hintActionScopeRemoveRunner, "remove this runner from the controller's scope"),
+		toolutil.HintAction(catalogScopeList, "see every scope this controller holds"),
+		toolutil.HintAction(catalogScopeRemoveRunner, "remove this runner from the controller's scope"),
 	)
 	return b.String()
 }

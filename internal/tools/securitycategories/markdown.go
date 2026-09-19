@@ -7,11 +7,21 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
+// Canonical action IDs, the one form every surface resolves. Both the card's
+// hints and the ActionSpec metadata read this block rather than spelling an ID
+// of their own: nothing in the repository checks that a related action or a
+// hint names an action the catalog holds, so two copies of one ID can drift
+// and the first a model learns of it is "unknown action".
 const (
+	actionCategoryCreate         = "security_category.create"
 	actionCategoryUpdate         = "security_category.update"
+	actionCategoryDelete         = "security_category.delete"
 	actionAttributeCreate        = "security_attribute.create"
+	actionAttributeUpdate        = "security_attribute.update"
+	actionAttributeDelete        = "security_attribute.delete"
 	actionAttributeProjectUpdate = "security_attribute.project_update"
+	actionGroupGet               = "group.get"
+	actionProjectGet             = "project.get"
 )
 
 // The states GitLab's SecurityCategoryEditableState enum takes. They decide

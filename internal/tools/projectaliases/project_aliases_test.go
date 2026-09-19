@@ -4,9 +4,12 @@ package projectaliases
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -180,6 +183,37 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_RequestBody_CarriesTheNameAndProjectIDTheCallerGave holds the POST
+// body to the caller's own values. Nothing asserted them: the alias in the
+// reply is a fixture this test writes, so a handler that sent an empty name or
+// a zero project_id would create the wrong alias, or none at all, while every
+// assertion about what came back still passed.
+func TestCreate_RequestBody_CarriesTheNameAndProjectIDTheCallerGave(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := map[string]any{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+			testutil.RespondJSON(w, http.StatusCreated, `{}`)
+			return
+		}
+		if got := body["name"]; got != "alias-to-create" {
+			t.Errorf("name sent = %v, want %q", got, "alias-to-create")
+		}
+		if got := body["project_id"]; got != float64(77) {
+			t.Errorf("project_id sent = %v, want 77", got)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":5,"project_id":77,"name":"alias-to-create"}`)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Name: "alias-to-create", ProjectID: 77})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+	if out.ID != 5 {
+		t.Errorf("ID = %d, want 5", out.ID)
+	}
+}
+
 // TestCreate_MissingName verifies that Create rejects input with empty name.
 func TestCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -291,6 +325,99 @@ func TestDelete_ContextCancelled(t *testing.T) {
 	err := Delete(ctx, client, DeleteInput{Name: "test"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+// --- Error hints ---
+
+// TestProjectAliases_Failure_HintsOnTheStatusEachHandlerKeysOn drives every
+// handler into the status it attaches its hint to, and List into one it does
+// not. Each pairing is a literal argument, which both coverage gates are blind
+// to, and only the four tests asserting `err != nil` stood over them: keyed to
+// the wrong status the hint silently disappears, leaving an administrator told
+// nothing but that the call failed.
+func TestProjectAliases_Failure_HintsOnTheStatusEachHandlerKeysOn(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		call     func(context.Context, *gitlabclient.Client) error
+		wantOp   string
+		wantHint string
+	}{
+		{
+			name:   "list forbidden names the admin requirement",
+			status: http.StatusForbidden,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := List(ctx, c, ListInput{})
+				return err
+			},
+			wantOp:   "list project aliases",
+			wantHint: "project aliases require administrator access",
+		},
+		{
+			name:   "list not found carries no hint",
+			status: http.StatusNotFound,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := List(ctx, c, ListInput{})
+				return err
+			},
+			wantOp: "list project aliases",
+		},
+		{
+			name:   "get not found points back at the list action",
+			status: http.StatusNotFound,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Get(ctx, c, GetInput{Name: "missing-alias"})
+				return err
+			},
+			wantOp:   "get project alias",
+			wantHint: "verify the alias name with gitlab_list_project_aliases",
+		},
+		{
+			name:   "create bad request names the project_id and the collision",
+			status: http.StatusBadRequest,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{Name: "dup-alias", ProjectID: 9})
+				return err
+			},
+			wantOp:   "create project alias",
+			wantHint: "verify the project_id exists and alias name is unique",
+		},
+		{
+			name:   "delete not found points back at the list action",
+			status: http.StatusNotFound,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				return Delete(ctx, c, DeleteInput{Name: "missing-alias"})
+			},
+			wantOp:   "delete project alias",
+			wantHint: "verify the alias name with gitlab_list_project_aliases",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+			}))
+
+			err := tt.call(context.Background(), client)
+			if err == nil {
+				t.Fatalf("expected an error for status %d, got nil", tt.status)
+			}
+			if !strings.Contains(err.Error(), tt.wantOp+":") {
+				t.Errorf("error %q does not name the operation %q", err, tt.wantOp)
+			}
+			switch tt.wantHint {
+			case "":
+				if strings.Contains(err.Error(), "Suggestion:") {
+					t.Errorf("error %q carries a hint on a status the handler does not key on", err)
+				}
+			default:
+				if !strings.Contains(err.Error(), "Suggestion: "+tt.wantHint) {
+					t.Errorf("error %q does not suggest %q", err, tt.wantHint)
+				}
+			}
+		})
 	}
 }
 

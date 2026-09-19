@@ -62,6 +62,55 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_CrossLinks_NameActionsThisPackageDefines verifies that every
+// canonical ID constant, every RelatedActions entry, and both IDs the markdown
+// hints name, are the catalog ID of one of this package's own six actions.
+//
+// Nothing else checks these strings: audit_discovery_completeness only counts
+// an empty related list, so a misspelled entry, or the individual tool name in
+// place of the action ID, passes every gate and answers a model "unknown
+// action" the moment it follows the hint. The domain is the one
+// buildStorageMoveActionSpecs registers this package under, so a rename of
+// either half is caught here rather than at a caller.
+func TestActionSpecs_CrossLinks_NameActionsThisPackageDefines(t *testing.T) {
+	const catalogDomain = "storage_move."
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+
+	ids := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		ids[catalogDomain+spec.Name] = struct{}{}
+	}
+
+	declared := []string{
+		actionRetrieveAllSnippet, actionRetrieveSnippet, actionGetSnippet,
+		actionGetSnippetForSnippet, actionScheduleSnippet, actionScheduleAllSnippet,
+	}
+	for _, id := range declared {
+		t.Run("constant/"+id, func(t *testing.T) {
+			if _, ok := ids[id]; !ok {
+				t.Errorf("constant %q names no action this package defines", id)
+			}
+		})
+	}
+	if len(ids) != len(declared) {
+		t.Errorf("the package defines %d actions but declares %d canonical IDs", len(ids), len(declared))
+	}
+
+	for _, spec := range specs {
+		t.Run("related/"+spec.Name, func(t *testing.T) {
+			for _, related := range spec.RelatedActions {
+				if _, ok := ids[related]; !ok {
+					t.Errorf("%s: related action %q is not a canonical ID of this package", spec.IndividualTool.Name, related)
+				}
+			}
+		})
+	}
+}
+
 // TestActionSpecs_CallRoutes verifies all registered snippet storage move routes execute successfully.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()

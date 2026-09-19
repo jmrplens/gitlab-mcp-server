@@ -6,19 +6,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical catalog action IDs the hints name. The catalog domain is
-// storage_move, the group all three storage-move packages register under.
-const (
-	hintActionRetrieveAll = "storage_move.retrieve_all_snippet"
-	hintActionSchedule    = "storage_move.schedule_snippet"
-)
-
 // FormatOutputMarkdown renders one snippet storage move as the shared card.
+//
+// The hints name the canonical action IDs declared in action_specs.go, the
+// same strings the specs cross-link with, so a reader following one reaches an
+// action gitlab_execute_action holds.
 func FormatOutputMarkdown(o Output) string {
 	return toolutil.FormatStorageMoveDetailMarkdown(
 		storageMoveMarkdown(o), "Snippet Storage Move",
-		toolutil.HintAction(hintActionRetrieveAll, "see every snippet storage move on the instance"),
-		toolutil.HintAction(hintActionSchedule, "schedule another move for this snippet"),
+		toolutil.HintAction(actionRetrieveAllSnippet, "see every snippet storage move on the instance"),
+		toolutil.HintAction(actionScheduleSnippet, "schedule another move for this snippet"),
 	)
 }
 
@@ -34,7 +31,7 @@ func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Schedule All Snippet Storage Moves")
 	c.Field("Result", o.Message)
-	c.End(toolutil.HintAction(hintActionRetrieveAll, "watch the scheduled moves progress"))
+	c.End(toolutil.HintAction(actionRetrieveAllSnippet, "watch the scheduled moves progress"))
 	return b.String()
 }
 

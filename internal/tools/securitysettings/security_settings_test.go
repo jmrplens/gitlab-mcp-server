@@ -4,7 +4,9 @@ package securitysettings
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -453,6 +455,143 @@ func TestUpdateProject_DisableProtection(t *testing.T) {
 	}
 	if out.SecretPushProtectionEnabled {
 		t.Error("expected secret_push_protection_enabled to be false after disabling")
+	}
+}
+
+// TestUpdateProject_RequestBody_CarriesTheValueTheCallerAskedFor validates
+// that the PUT body sends secret_push_protection_enabled as the caller set it,
+// both when switching protection on and when switching it off.
+//
+// The response is what GitLab now holds rather than what we asked for, so a
+// flag that arrived inverted or never arrived at all would leave every
+// assertion about the output passing while the project was left carrying the
+// opposite of the request.
+func TestUpdateProject_RequestBody_CarriesTheValueTheCallerAskedFor(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "enable", want: true},
+		{name: "disable", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPut)
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+				}
+				if got, sent := body["secret_push_protection_enabled"]; !sent || got != tc.want {
+					t.Errorf("secret_push_protection_enabled sent as %v (present %t), want %t (body %v)", got, sent, tc.want, body)
+				}
+				testutil.RespondJSON(w, http.StatusOK, projectSecurityJSON)
+			}))
+
+			if _, err := UpdateProject(context.Background(), client, UpdateProjectInput{
+				ProjectID:                   toolutil.StringOrInt("42"),
+				SecretPushProtectionEnabled: tc.want,
+			}); err != nil {
+				t.Fatalf("UpdateProject() error: %v", err)
+			}
+		})
+	}
+}
+
+// TestUpdateGroup_RequestBody_ExcludesOnlyTheProjectsTheCallerNamed validates
+// that projects_to_exclude reaches GitLab exactly when the caller supplied
+// ids, carries them as given, and that the flag beside it is the caller's own.
+//
+// GitLab answers the same body whether the exclusion list was sent or not, so
+// the guard around it cannot be seen in the output: a list dropped on the way
+// out would enforce protection on the very projects the caller asked to leave
+// alone, and an empty one sent in its place is a request we never meant to
+// make.
+func TestUpdateGroup_RequestBody_ExcludesOnlyTheProjectsTheCallerNamed(t *testing.T) {
+	cases := []struct {
+		name     string
+		exclude  []int64
+		enabled  bool
+		wantSent bool
+		want     []any
+	}{
+		{name: "none named", exclude: nil, enabled: true},
+		{name: "empty list", exclude: []int64{}, enabled: false},
+		{name: "two named", exclude: []int64{7, 11}, enabled: true, wantSent: true, want: []any{float64(7), float64(11)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPut)
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+				}
+				if got, sent := body["secret_push_protection_enabled"]; !sent || got != tc.enabled {
+					t.Errorf("secret_push_protection_enabled sent as %v (present %t), want %t (body %v)", got, sent, tc.enabled, body)
+				}
+				got, sent := body["projects_to_exclude"]
+				switch {
+				case sent != tc.wantSent:
+					t.Errorf("projects_to_exclude present in the request = %t, want %t (body %v)", sent, tc.wantSent, body)
+				case sent && !reflect.DeepEqual(got, tc.want):
+					t.Errorf("projects_to_exclude sent as %v, want %v", got, tc.want)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"secret_push_protection_enabled":true}`)
+			}))
+
+			if _, err := UpdateGroup(context.Background(), client, UpdateGroupInput{
+				GroupID:                     toolutil.StringOrInt("mygroup"),
+				SecretPushProtectionEnabled: tc.enabled,
+				ProjectsToExclude:           tc.exclude,
+			}); err != nil {
+				t.Fatalf("UpdateGroup() error: %v", err)
+			}
+		})
+	}
+}
+
+// TestGetProject_OneFlagAtATime_EachSettingReadsItsOwnField validates that
+// every boolean GitLab sends lands on the field named after it, by driving one
+// flag at a time and comparing the whole output against one carrying only that
+// field.
+//
+// A block of flags has no fixture where no two values agree, so a converter
+// reading a neighbour's key passes any response whose flags happen to match;
+// the two fixtures above set auto_fix_dast and auto_fix_sast alike, and
+// continuous scans alongside secret push protection, so four of the seven
+// could be swapped in pairs with nothing failing.
+func TestGetProject_OneFlagAtATime_EachSettingReadsItsOwnField(t *testing.T) {
+	cases := []struct {
+		key  string
+		want ProjectOutput
+	}{
+		{key: "auto_fix_container_scanning", want: ProjectOutput{ProjectID: 7, AutoFixContainerScanning: true}},
+		{key: "auto_fix_dast", want: ProjectOutput{ProjectID: 7, AutoFixDAST: true}},
+		{key: "auto_fix_dependency_scanning", want: ProjectOutput{ProjectID: 7, AutoFixDependencyScanning: true}},
+		{key: "auto_fix_sast", want: ProjectOutput{ProjectID: 7, AutoFixSAST: true}},
+		{key: "continuous_vulnerability_scans_enabled", want: ProjectOutput{ProjectID: 7, ContinuousVulnerabilityScansEnabled: true}},
+		{key: "container_scanning_for_registry_enabled", want: ProjectOutput{ProjectID: 7, ContainerScanningForRegistryEnabled: true}},
+		{key: "secret_push_protection_enabled", want: ProjectOutput{ProjectID: 7, SecretPushProtectionEnabled: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			body := `{"project_id":7,"` + tc.key + `":true}`
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/projects/7/security_settings")
+				testutil.RespondJSON(w, http.StatusOK, body)
+			}))
+
+			out, err := GetProject(context.Background(), client, GetProjectInput{
+				ProjectID: toolutil.StringOrInt("7"),
+			})
+			if err != nil {
+				t.Fatalf("GetProject() error: %v", err)
+			}
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("GetProject() = %+v, want %+v", out, tc.want)
+			}
+		})
 	}
 }
 

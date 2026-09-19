@@ -5,9 +5,11 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -534,7 +536,11 @@ func TestRepositoryArchive_Success(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_DefaultFormat verifies RepositoryArchive when default format.
+// TestRepositoryArchive_DefaultFormat pins the whole address of the plainest
+// request: no format asked for means tar.gz, and neither a ref nor a
+// subdirectory means no query string at all, not an empty one. A bare "?" is
+// what an unguarded join leaves behind, and the address is handed to a caller
+// to fetch rather than used here, so nothing downstream would report it.
 func TestRepositoryArchive_DefaultFormat(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -547,12 +553,16 @@ func TestRepositoryArchive_DefaultFormat(t *testing.T) {
 	if out.Format != "tar.gz" {
 		t.Errorf("Archive Format = %q, want %q", out.Format, "tar.gz")
 	}
+	want := client.GL().BaseURL().String() + "projects/42/repository/archive.tar.gz"
+	if out.URL != want {
+		t.Errorf("Archive URL = %q, want %q", out.URL, want)
+	}
 }
 
 // TestRepositoryArchive_EscapesPathAndQuery pins that the address this action
-// hands back is built by escaping its two caller-supplied parts: a full
-// project path carries the separators that would end the segment early, and a
-// ref may carry any of "?", "#", "&" or a space, each of which built a
+// hands back is built by escaping every caller-supplied part: a full project
+// path carries the separators that would end the segment early, and a ref or a
+// subdirectory may carry any of "?", "#", "&" or a space, each of which built a
 // different address than the one asked for.
 func TestRepositoryArchive_EscapesPathAndQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -563,13 +573,14 @@ func TestRepositoryArchive_EscapesPathAndQuery(t *testing.T) {
 		ProjectID: "group/sub/project",
 		SHA:       "feature/a b?c",
 		Format:    "zip",
+		Path:      "dir/a&b",
 	})
 	if err != nil {
 		t.Fatalf("Archive() unexpected error: %v", err)
 	}
 
 	base := client.GL().BaseURL().String()
-	want := base + "projects/group%2Fsub%2Fproject/repository/archive.zip?sha=feature%2Fa+b%3Fc"
+	want := base + "projects/group%2Fsub%2Fproject/repository/archive.zip?path=dir%2Fa%26b&sha=feature%2Fa+b%3Fc"
 	if out.URL != want {
 		t.Errorf("Archive URL = %q, want %q", out.URL, want)
 	}
@@ -926,13 +937,25 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryAddChangelog_WithOptions verifies RepositoryAddChangelog when with options.
+// TestRepositoryAddChangelog_WithOptions pins that every optional field the
+// caller supplied reaches GitLab's request body under its own key, with a
+// distinct value per field so a key read from a neighbor would show. Each one
+// is behind its own `!= ""` guard, and a guard read the wrong way round drops
+// the caller's branch, range or commit message while leaving the call
+// successful: GitLab then writes the changelog to the default branch over the
+// whole history, and the answer this action returns is still `success`.
 func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
+	var body map[string]any
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
-			body, _ := io.ReadAll(r.Body)
-			if !strings.Contains(string(body), `"date":"2026-03-01"`) {
-				t.Errorf("expected body to contain date=2026-03-01, got %q", string(body))
+			raw, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				t.Errorf("reading changelog request body: %v", readErr)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			if decodeErr := json.Unmarshal(raw, &body); decodeErr != nil {
+				t.Errorf("changelog request body %q is not JSON: %v", raw, decodeErr)
 			}
 			w.WriteHeader(http.StatusOK)
 			return
@@ -946,14 +969,33 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 		Branch:     "develop",
 		ConfigFile: ".changelog.yml",
 		Date:       "2026-03-01T10:00:00Z",
-		File:       "CHANGELOG.md",
+		File:       "NOTES.md",
 		From:       "v1.0.0",
-		To:         "v2.0.0",
+		To:         "v1.9.9",
 		Message:    "Update changelog",
-		Trailer:    "Changelog",
+		Trailer:    "Changes",
 	})
 	if err != nil {
 		t.Fatalf("AddChangelog() unexpected error: %v", err)
+	}
+
+	want := map[string]string{
+		"version":     "2.0.0",
+		"branch":      "develop",
+		"config_file": ".changelog.yml",
+		"date":        "2026-03-01",
+		"file":        "NOTES.md",
+		"from":        "v1.0.0",
+		"to":          "v1.9.9",
+		"message":     "Update changelog",
+		"trailer":     "Changes",
+	}
+	for key, exp := range want {
+		t.Run(key, func(t *testing.T) {
+			if got, _ := body[key].(string); got != exp {
+				t.Errorf("request body %s = %q, want %q (body %v)", key, got, exp, body)
+			}
+		})
 	}
 	if !out.Success {
 		t.Error("AddChangelog Success = false, want true")
@@ -963,13 +1005,57 @@ func TestRepositoryAddChangelog_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryGenerateChangelogData_WithOptions verifies RepositoryGenerateChangelogData when with options.
+// TestRepositoryAddChangelog_WithoutOptions is the other side of those guards:
+// with only the two required fields supplied, no optional key is sent at all.
+// An empty `branch` or `file` is not the same request as an absent one:
+// GitLab reads it as a branch or path named "" rather than as its default.
+func TestRepositoryAddChangelog_WithoutOptions(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("reading changelog request body: %v", readErr)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if decodeErr := json.Unmarshal(raw, &body); decodeErr != nil {
+			t.Errorf("changelog request body %q is not JSON: %v", raw, decodeErr)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	if _, err := AddChangelog(context.Background(), client, AddChangelogInput{
+		ProjectID: "42",
+		Version:   "2.0.0",
+	}); err != nil {
+		t.Fatalf("AddChangelog() unexpected error: %v", err)
+	}
+
+	for _, key := range []string{"branch", "config_file", "date", "file", "from", "to", "message", "trailer"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := body[key]; ok {
+				t.Errorf("request body carries %s = %v, want it absent (body %v)", key, body[key], body)
+			}
+		})
+	}
+}
+
+// TestRepositoryGenerateChangelogData_WithOptions pins that every optional
+// field reaches the query under its own name, each with a distinct value. The
+// range is the whole point of this preview: with `from` or `to` silently
+// dropped GitLab renders the notes for a different range, and the caller reads
+// a plausible changelog for commits they never asked about.
 func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/changelog" {
-			if got := r.URL.Query().Get("date"); got != "2026-03-01" {
-				t.Errorf("expected date=2026-03-01, got %q", got)
-			}
+			assertQueryParams(t, r.URL.Query(), map[string]string{
+				"version":     "2.0.0",
+				"config_file": ".changelog.yml",
+				"date":        "2026-03-01",
+				"from":        "v1.0.0",
+				"to":          "v1.9.9",
+				"trailer":     "Changes",
+			})
 			testutil.RespondJSON(w, http.StatusOK, `{"notes":"## 2.0.0\n\n- feat: stuff\n"}`)
 			return
 		}
@@ -982,8 +1068,8 @@ func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 		ConfigFile: ".changelog.yml",
 		Date:       "2026-03-01T10:00:00Z",
 		From:       "v1.0.0",
-		To:         "v2.0.0",
-		Trailer:    "Changelog",
+		To:         "v1.9.9",
+		Trailer:    "Changes",
 	})
 	if err != nil {
 		t.Fatalf("GenerateChangelogData() unexpected error: %v", err)
@@ -993,7 +1079,39 @@ func TestRepositoryGenerateChangelogData_WithOptions(t *testing.T) {
 	}
 }
 
-// TestRepositoryArchive_WithPath verifies RepositoryArchive when with path.
+// TestRepositoryGenerateChangelogData_WithoutOptions is the other side of those
+// guards: with only the required fields supplied, no optional name appears in
+// the query, since an empty `from` asks GitLab for a range starting at a ref
+// named "" rather than for its own default.
+func TestRepositoryGenerateChangelogData_WithoutOptions(t *testing.T) {
+	var query url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, `{"notes":"notes"}`)
+	}))
+
+	if _, err := GenerateChangelogData(context.Background(), client, GenerateChangelogInput{
+		ProjectID: "42",
+		Version:   "2.0.0",
+	}); err != nil {
+		t.Fatalf("GenerateChangelogData() unexpected error: %v", err)
+	}
+
+	for _, key := range []string{"config_file", "date", "from", "to", "trailer"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := query[key]; ok {
+				t.Errorf("query carries %s=%q, want it absent", key, query.Get(key))
+			}
+		})
+	}
+}
+
+// TestRepositoryArchive_WithPath pins that the subdirectory the caller names
+// reaches the address, beside the ref. GitLab archives the subdirectory
+// "path" names and the whole repository without it, so while this action
+// dropped the input it published, a caller asking for one directory was handed
+// the address of the entire repository. That is a wrong answer that downloads,
+// so nothing downstream could report it.
 func TestRepositoryArchive_WithPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1003,16 +1121,40 @@ func TestRepositoryArchive_WithPath(t *testing.T) {
 		ProjectID: "42",
 		SHA:       "main",
 		Format:    "zip",
-		Path:      "src/",
+		Path:      "src",
 	})
 	if err != nil {
 		t.Fatalf("Archive() unexpected error: %v", err)
 	}
-	if !strings.Contains(out.URL, "sha=main") {
-		t.Errorf("URL should contain sha=main, got %q", out.URL)
+	query, err := url.ParseQuery(strings.TrimPrefix(out.URL[strings.Index(out.URL, "?"):], "?"))
+	if err != nil {
+		t.Fatalf("Archive URL %q has no parseable query: %v", out.URL, err)
+	}
+	if got := query.Get("path"); got != "src" {
+		t.Errorf("archive query path = %q, want %q (URL %q)", got, "src", out.URL)
+	}
+	if got := query.Get("sha"); got != "main" {
+		t.Errorf("archive query sha = %q, want %q (URL %q)", got, "main", out.URL)
 	}
 	if out.Format != "zip" {
 		t.Errorf("Format = %q, want %q", out.Format, "zip")
+	}
+}
+
+// TestRepositoryArchive_NoPath pins the other side of that guard: with no
+// subdirectory asked for, no "path" is sent, because an empty one would ask
+// GitLab for a directory named "" rather than for the whole repository.
+func TestRepositoryArchive_NoPath(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+
+	out, err := Archive(context.Background(), client, ArchiveInput{ProjectID: "42", SHA: "main", Format: "zip"})
+	if err != nil {
+		t.Fatalf("Archive() unexpected error: %v", err)
+	}
+	if strings.Contains(out.URL, "path=") {
+		t.Errorf("archive URL should carry no path, got %q", out.URL)
 	}
 }
 
@@ -1159,6 +1301,33 @@ func TestFormatCompareMarkdown(t *testing.T) {
 
 	if got != want {
 		t.Errorf("compare mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatCompareMarkdown_CommitsWithoutDiffs pins that a comparison whose
+// commits touched no file renders the commits and no Changed Files section at
+// all. GitLab answers this shape for a merge commit and for a range already
+// merged into the target, and every other fixture here carries a diff, so an
+// empty table heading with nothing under it would have read as a rendering
+// fault rather than as an empty result.
+func TestFormatCompareMarkdown_CommitsWithoutDiffs(t *testing.T) {
+	got := FormatCompareMarkdown(CompareOutput{
+		Commits: []commits.Output{{ShortID: "abc1", Title: "chore: merge", AuthorName: "Alice"}},
+		WebURL:  "https://gitlab.example.com/-/compare/main...develop",
+	})
+
+	want := "## Repository Compare\n\n" +
+		"- **Commits**: 1\n" +
+		"- **Changed Files**: 0\n" +
+		"- **URL**: [https://gitlab.example.com/-/compare/main...develop](https://gitlab.example.com/-/compare/main...develop)\n" +
+		"\n### Commits\n\n" +
+		"| Short ID | Title | Author |\n" +
+		"| --- | --- | --- |\n" +
+		"| `abc1` | chore: merge | Alice |\n" +
+		compareHints
+
+	if got != want {
+		t.Errorf("compare-without-diffs mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
@@ -1688,5 +1857,211 @@ func TestDecodeBlobEnvelope_InvalidBase64PassesThroughRaw(t *testing.T) {
 	got := decodeBlobEnvelope(raw)
 	if string(got) != string(raw) {
 		t.Fatalf("decodeBlobEnvelope() = %q, want the original envelope bytes unchanged: %q", got, raw)
+	}
+}
+
+// TestDecodeBlobEnvelope_OtherEncodingPassesThroughRaw pins the encoding half
+// of that guard: a body that parses as the envelope but declares an encoding
+// other than base64 is handed back untouched. A blob whose own bytes happen to
+// be JSON naming a "content" and an "encoding" is the case, and decoding its
+// content as base64 anyway would replace the file with a fragment of itself.
+func TestDecodeBlobEnvelope_OtherEncodingPassesThroughRaw(t *testing.T) {
+	for _, encoding := range []string{"text", "", "BASE64"} {
+		t.Run("encoding="+encoding, func(t *testing.T) {
+			raw := []byte(`{"content":"aGVsbG8=","encoding":"` + encoding + `"}`)
+			if got := decodeBlobEnvelope(raw); string(got) != string(raw) {
+				t.Errorf("decodeBlobEnvelope() = %q, want the original bytes unchanged: %q", got, raw)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Converters: each output field comes from its own response key
+// ---------------------------------------------------------------------------.
+
+// TestRepositoryTree_NodeFieldsComeFromTheirOwnKeys pins every tree-entry field
+// to the response key it is named for. The fixtures elsewhere in this file give
+// an entry the same string for "name" and "path" and assert neither "id" nor
+// "mode", so a converter reading a neighbor's key was invisible to the whole
+// suite as well as to both coverage gates, which score branches and see nothing
+// of a straight-line assignment.
+func TestRepositoryTree_NodeFieldsComeFromTheirOwnKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoTree {
+			testutil.RespondJSON(w, http.StatusOK,
+				`[{"id":"blob-sha-1","name":"entry-name","type":"blob","path":"dir/entry-path","mode":"100755"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Tree(context.Background(), client, TreeInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("Tree() unexpected error: %v", err)
+	}
+	if len(out.Tree) != 1 {
+		t.Fatalf("len(Tree) = %d, want 1", len(out.Tree))
+	}
+	want := TreeNodeOutput{ID: "blob-sha-1", Name: "entry-name", Type: "blob", Path: "dir/entry-path", Mode: "100755"}
+	if out.Tree[0] != want {
+		t.Errorf("Tree[0] = %+v, want %+v", out.Tree[0], want)
+	}
+}
+
+// TestRepositoryContributors_FieldsComeFromTheirOwnKeys pins every contributor
+// field to its own response key. The existing fixtures assert only name and
+// commits, and give both line counters values no assertion reads, so additions
+// and deletions could be exchanged with each other or with the commit count
+// and nothing in the suite would say so.
+func TestRepositoryContributors_FieldsComeFromTheirOwnKeys(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/contributors" {
+			testutil.RespondJSON(w, http.StatusOK,
+				`[{"name":"Ada","email":"ada@example.com","commits":3,"additions":11,"deletions":7}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Contributors(context.Background(), client, ContributorsInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("Contributors() unexpected error: %v", err)
+	}
+	if len(out.Contributors) != 1 {
+		t.Fatalf("len(Contributors) = %d, want 1", len(out.Contributors))
+	}
+	want := ContributorOutput{Name: "Ada", Email: "ada@example.com", Commits: 3, Additions: 11, Deletions: 7}
+	if out.Contributors[0] != want {
+		t.Errorf("Contributors[0] = %+v, want %+v", out.Contributors[0], want)
+	}
+}
+
+// TestRepositoryCompare_FlagsComeFromTheirOwnKeys drives the two comparison
+// flags one at a time, because that is the only fixture that tells them apart:
+// every other fixture in this file answers with both false, and setting both
+// true would hide an exchange just as completely. It is also what GitLab really
+// answers, since a comparison is either the same ref or a timeout, never both.
+// The two render different cards, so reading one for the other tells a caller
+// their refs are identical when the comparison merely gave up.
+func TestRepositoryCompare_FlagsComeFromTheirOwnKeys(t *testing.T) {
+	cases := []struct {
+		name            string
+		body            string
+		wantTimeout     bool
+		wantSameRefTrue bool
+	}{
+		{"timeout only", `{"commits":[],"diffs":[],"compare_timeout":true,"compare_same_ref":false,"web_url":"u"}`, true, false},
+		{"same ref only", `{"commits":[],"diffs":[],"compare_timeout":false,"compare_same_ref":true,"web_url":"u"}`, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathRepoCompare {
+					testutil.RespondJSON(w, http.StatusOK, tc.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := Compare(context.Background(), client, CompareInput{ProjectID: "42", From: "main", To: "develop"})
+			if err != nil {
+				t.Fatalf("Compare() unexpected error: %v", err)
+			}
+			if out.CompareTimeout != tc.wantTimeout {
+				t.Errorf("CompareTimeout = %t, want %t", out.CompareTimeout, tc.wantTimeout)
+			}
+			if out.CompareSameRef != tc.wantSameRefTrue {
+				t.Errorf("CompareSameRef = %t, want %t", out.CompareSameRef, tc.wantSameRefTrue)
+			}
+		})
+	}
+}
+
+// TestRepositoryMergeBase_RefsReachTheRequest pins that the refs the caller
+// named are the refs GitLab is asked about. Nothing else in the suite reads the
+// merge-base request, so a handler sending a fixed or empty ref list would keep
+// answering with whatever commit the mock returned.
+func TestRepositoryMergeBase_RefsReachTheRequest(t *testing.T) {
+	var refs []string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/merge_base" {
+			refs = r.URL.Query()["refs[]"]
+			testutil.RespondJSON(w, http.StatusOK, `{"id":"mb1","short_id":"mb","title":"base"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := MergeBase(context.Background(), client, MergeBaseInput{
+		ProjectID: "42",
+		Refs:      []string{"release/9.1", "feature/x"},
+	}); err != nil {
+		t.Fatalf("MergeBase() unexpected error: %v", err)
+	}
+	if !slices.Equal(refs, []string{"release/9.1", "feature/x"}) {
+		t.Errorf("refs[] sent = %v, want [release/9.1 feature/x]", refs)
+	}
+}
+
+// TestActionSpecs_RelatedActionsAreCanonicalIDs holds every related-action this
+// package publishes to the one constant block markdown.go declares, and pins
+// each constant's literal spelling. Nothing in the repository compares such an
+// ID with the catalog (audit_discovery_completeness only counts an empty
+// related list), so a misspelling ships and answers a model "unknown action"
+// the moment it follows the hint. The specs already carried one: "commit.list"
+// for the listing the catalog calls repository.commit_list.
+func TestActionSpecs_RelatedActionsAreCanonicalIDs(t *testing.T) {
+	// Verified against `gitlab-mcp-server --tool-search --tier ultimate`: each
+	// of these is an action the catalog really holds.
+	canonical := map[string]string{
+		"actionTree":              "repository.tree",
+		"actionCompare":           "repository.compare",
+		"actionBlob":              "repository.blob",
+		"actionRawBlob":           "repository.raw_blob",
+		"actionMergeBase":         "repository.merge_base",
+		"actionChangelogAdd":      "repository.changelog_add",
+		"actionChangelogGenerate": "repository.changelog_generate",
+		"actionFileGet":           "repository.file_get",
+		"actionCommitGet":         "repository.commit_get",
+		"actionCommitList":        "repository.commit_list",
+		"actionBranchList":        "branch.list",
+		"actionTagList":           "tag.list",
+		"actionTagCreate":         "tag.create",
+		"actionReleaseCreate":     "release.create",
+		"actionReleaseList":       "release.list",
+	}
+	declared := map[string]string{
+		"actionTree": actionTree, "actionCompare": actionCompare, "actionBlob": actionBlob,
+		"actionRawBlob": actionRawBlob, "actionMergeBase": actionMergeBase,
+		"actionChangelogAdd": actionChangelogAdd, "actionChangelogGenerate": actionChangelogGenerate,
+		"actionFileGet": actionFileGet, "actionCommitGet": actionCommitGet, "actionCommitList": actionCommitList,
+		"actionBranchList": actionBranchList, "actionTagList": actionTagList, "actionTagCreate": actionTagCreate,
+		"actionReleaseCreate": actionReleaseCreate, "actionReleaseList": actionReleaseList,
+	}
+	known := make(map[string]bool, len(canonical))
+	for name, want := range canonical {
+		t.Run(name, func(t *testing.T) {
+			if declared[name] != want {
+				t.Errorf("%s = %q, want %q", name, declared[name], want)
+			}
+		})
+		known[want] = true
+	}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if len(spec.RelatedActions) == 0 {
+				t.Fatal("RelatedActions is empty")
+			}
+			for _, id := range spec.RelatedActions {
+				if !known[id] {
+					t.Errorf("RelatedActions names %q, which is not one of this package's canonical IDs", id)
+				}
+			}
+		})
 	}
 }

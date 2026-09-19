@@ -10,13 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name that the specs do not already spell.
-const (
-	actionEnvProtectedList    = "environment.protected_list"
-	actionEnvProtectedProtect = "environment.protected_protect"
-	actionEnvProtectedUpdate  = "environment.protected_update"
-)
-
 // FormatOutputMarkdown renders one protected environment as the card of a
 // single object: the approvals it needs, then the deploy access levels and the
 // approval rules as nested collections.

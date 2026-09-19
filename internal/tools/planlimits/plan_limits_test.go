@@ -4,7 +4,10 @@
 package planlimits
 
 import (
+	"encoding/json"
 	"net/http"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -15,16 +18,33 @@ import (
 const fmtUnexpErr = "unexpected error: %v"
 
 // planLimitJSON identifies the plan limit JSON constant used by this package.
+//
+// No two limits share a value on purpose. GitLab really does serve the same
+// number for several package formats, and a fixture that copies that makes a
+// converter reading maven out of pypi indistinguishable from a correct one.
 const planLimitJSON = `{
 	"conan_max_file_size": 3221225472,
 	"generic_packages_max_file_size": 5368709120,
 	"helm_max_file_size": 5242880,
-	"maven_max_file_size": 3221225472,
+	"maven_max_file_size": 2147483648,
 	"npm_max_file_size": 524288000,
-	"nuget_max_file_size": 524288000,
-	"pypi_max_file_size": 3221225472,
+	"nuget_max_file_size": 419430400,
+	"pypi_max_file_size": 1610612736,
 	"terraform_module_max_file_size": 1073741824
 }`
+
+// wantPlanLimits is planLimitJSON read as the output it has to produce: the
+// answer to "which GitLab key did this field come from", one row per field.
+var wantPlanLimits = PlanLimitItem{
+	ConanMaxFileSize:           3221225472,
+	GenericPackagesMaxFileSize: 5368709120,
+	HelmMaxFileSize:            5242880,
+	MavenMaxFileSize:           2147483648,
+	NPMMaxFileSize:             524288000,
+	NugetMaxFileSize:           419430400,
+	PyPiMaxFileSize:            1610612736,
+	TerraformModuleMaxFileSize: 1073741824,
+}
 
 // TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
@@ -70,6 +90,30 @@ func TestGet_WithPlanName(t *testing.T) {
 	}
 }
 
+// TestGet_EveryLimit_CarriesTheValueOfItsOwnKey verifies that each limit in
+// the output is the one GitLab sent under the matching key.
+//
+// The converter is eight straight-line assignments and no branch, so a field
+// read out of a neighbour's key answers plausibly and wrongly; only a fixture
+// where no two limits agree can tell the two apart.
+func TestGet_EveryLimit_CarriesTheValueOfItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/application/plan_limits" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PlanLimitItem != wantPlanLimits {
+		t.Errorf("Get() limits = %+v, want %+v", out.PlanLimitItem, wantPlanLimits)
+	}
+}
+
 // TestGet_Error verifies Get when error.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -102,6 +146,92 @@ func TestChange_Success(t *testing.T) {
 	}
 	if out.HelmMaxFileSize != 5242880 {
 		t.Fatalf("expected helm_max_file_size 5242880, got %d", out.HelmMaxFileSize)
+	}
+}
+
+// TestChange_EverySetLimit_ReachesGitLabUnderItsOwnKey verifies that the plan
+// name and every limit the caller set are sent under their own keys, and that
+// what GitLab answers comes back as the action's output.
+//
+// Nothing else guards the request: the options are eight straight-line
+// assignments, so a limit routed to a neighbour's field, or left out, changes
+// what the instance is told without changing what the caller is shown.
+func TestChange_EverySetLimit_ReachesGitLabUnderItsOwnKey(t *testing.T) {
+	limits := map[string]int64{
+		"conan_max_file_size":            11,
+		"generic_packages_max_file_size": 22,
+		"helm_max_file_size":             33,
+		"maven_max_file_size":            44,
+		"npm_max_file_size":              55,
+		"nuget_max_file_size":            66,
+		"pypi_max_file_size":             77,
+		"terraform_module_max_file_size": 88,
+	}
+	wantBody := map[string]any{"plan_name": "silver"}
+	for key, value := range limits {
+		wantBody[key] = float64(value)
+	}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/application/plan_limits" || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the request body: %v", err)
+		} else if !reflect.DeepEqual(body, wantBody) {
+			t.Errorf("PUT body = %v, want %v", body, wantBody)
+		}
+		testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
+	}))
+
+	out, err := Change(t.Context(), client, ChangeInput{
+		PlanName:                   "silver",
+		ConanMaxFileSize:           new(limits["conan_max_file_size"]),
+		GenericPackagesMaxFileSize: new(limits["generic_packages_max_file_size"]),
+		HelmMaxFileSize:            new(limits["helm_max_file_size"]),
+		MavenMaxFileSize:           new(limits["maven_max_file_size"]),
+		NPMMaxFileSize:             new(limits["npm_max_file_size"]),
+		NugetMaxFileSize:           new(limits["nuget_max_file_size"]),
+		PyPiMaxFileSize:            new(limits["pypi_max_file_size"]),
+		TerraformModuleMaxFileSize: new(limits["terraform_module_max_file_size"]),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PlanLimitItem != wantPlanLimits {
+		t.Errorf("Change() limits = %+v, want %+v", out.PlanLimitItem, wantPlanLimits)
+	}
+}
+
+// TestChange_LimitsLeftUnset_AreOmittedFromTheRequest verifies that a limit
+// the caller did not name is absent from the PUT body rather than sent as
+// zero.
+//
+// Zero is not "leave this alone" to GitLab but "allow nothing", so sending one
+// for every unnamed format would forbid every upload of it while the caller
+// asked to change one number.
+func TestChange_LimitsLeftUnset_AreOmittedFromTheRequest(t *testing.T) {
+	wantBody := map[string]any{"plan_name": "default", "helm_max_file_size": float64(5242880)}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/application/plan_limits" || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the request body: %v", err)
+		} else if !reflect.DeepEqual(body, wantBody) {
+			t.Errorf("PUT body = %v, want %v", body, wantBody)
+		}
+		testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
+	}))
+
+	size := int64(5242880)
+	if _, err := Change(t.Context(), client, ChangeInput{PlanName: "default", HelmMaxFileSize: &size}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
@@ -267,6 +397,31 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if specByTool["gitlab_get_plan_limits"].ParameterGuidance["plan_name"].SemanticRole == "" {
 		t.Fatal("gitlab_get_plan_limits should define plan_name parameter guidance")
+	}
+}
+
+// TestActionSpecs_Usage_NamesEachActionsOwnOperation verifies that the read
+// and the update action each describe their own operation instead of sharing
+// one sentence.
+//
+// Both usages come out of one helper and one condition, and the usage is what
+// a model reads to choose between them: swap the two and every surface still
+// registers, still routes and still answers, while telling the model that
+// reading the limits writes them.
+func TestActionSpecs_Usage_NamesEachActionsOwnOperation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	specByTool := planLimitSpecsByTool(ActionSpecs(client))
+
+	get := specByTool["gitlab_get_plan_limits"].Usage
+	change := specByTool["gitlab_change_plan_limits"].Usage
+	if get == change {
+		t.Fatalf("both plan limit actions publish the usage %q", get)
+	}
+	if !strings.HasPrefix(get, "Get ") {
+		t.Errorf("plan_limits_get Usage = %q, want it to describe a read", get)
+	}
+	if !strings.HasPrefix(change, "Update ") {
+		t.Errorf("plan_limits_change Usage = %q, want it to describe an update", change)
 	}
 }
 

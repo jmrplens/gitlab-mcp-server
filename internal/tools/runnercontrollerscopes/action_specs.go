@@ -17,6 +17,25 @@ const (
 	actionScopeRemoveRunner   = "controller_scope_remove_runner"
 )
 
+// runnerDomain is the catalog domain internal/tools/runners aggregates these
+// specs into. An ActionSpec carries the bare name above, and every surface
+// resolves the domain-qualified form below, so anything that hands a model an
+// action ID reads the prefixed constant.
+const runnerDomain = "runner."
+
+// The canonical catalog IDs the bare names project to. Both readers of an
+// action ID take them from here: the RelatedActions cross-links and the
+// markdown next-step hints. A bare name resolves to nothing on any surface,
+// and nothing in the repository checks these strings, so keeping one block is
+// what keeps a hint from answering a model "unknown action".
+const (
+	catalogScopeList           = runnerDomain + actionScopeList
+	catalogScopeAddInstance    = runnerDomain + actionScopeAddInstance
+	catalogScopeRemoveInstance = runnerDomain + actionScopeRemoveInstance
+	catalogScopeAddRunner      = runnerDomain + actionScopeAddRunner
+	catalogScopeRemoveRunner   = runnerDomain + actionScopeRemoveRunner
+)
+
 // ActionSpecs returns canonical specs for runner controller scope actions.
 //
 // These admin-only actions manage which runners a runner controller is
@@ -51,7 +70,7 @@ func listScopeMeta() scopeActionMeta {
 	return scopeActionMeta{
 		usage:   "List the instance-level and runner-level scopes assigned to a runner controller to see which runners it may operate.",
 		aliases: []string{"show runner controller scopes", "list runner controller scope assignments", "which runners is this runner controller scoped to"},
-		related: []string{actionScopeAddInstance, actionScopeAddRunner, actionScopeRemoveInstance, actionScopeRemoveRunner},
+		related: []string{catalogScopeAddInstance, catalogScopeAddRunner, catalogScopeRemoveInstance, catalogScopeRemoveRunner},
 		description: "List every scope assigned to a runner controller (admin only). " +
 			"Returns: instance-level scopings with timestamps and runner-level scopings with runner IDs and timestamps. " +
 			"See also: gitlab_runner_controller_scope_add_instance, gitlab_runner_controller_scope_add_runner, gitlab_runner_controller_scope_remove_runner.",
@@ -64,7 +83,7 @@ func addInstanceScopeMeta() scopeActionMeta {
 	return scopeActionMeta{
 		usage:   "Grant a runner controller the instance-level scope so it may operate the entire shared instance runner fleet.",
 		aliases: []string{"add instance scope to runner controller", "grant runner controller instance-wide scope", "scope runner controller to all instance runners"},
-		related: []string{actionScopeRemoveInstance, actionScopeList, actionScopeAddRunner},
+		related: []string{catalogScopeRemoveInstance, catalogScopeList, catalogScopeAddRunner},
 		description: "Grant a runner controller the instance-level scope (admin only). " +
 			"Returns: the created instance-level scoping with created/updated timestamps. " +
 			"See also: gitlab_runner_controller_scope_remove_instance, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_runner.",
@@ -77,7 +96,7 @@ func removeInstanceScopeMeta() scopeActionMeta {
 	return scopeActionMeta{
 		usage:   "Revoke a runner controller's instance-level scope so it can no longer operate the shared instance runner fleet.",
 		aliases: []string{"remove instance scope from runner controller", "revoke runner controller instance-wide scope", "unscope runner controller from all instance runners"},
-		related: []string{actionScopeAddInstance, actionScopeList, actionScopeRemoveRunner},
+		related: []string{catalogScopeAddInstance, catalogScopeList, catalogScopeRemoveRunner},
 		description: "Revoke a runner controller's instance-level scope (admin only, destructive). " +
 			"Returns: a success confirmation naming the removed instance-level scope. " +
 			"See also: gitlab_runner_controller_scope_add_instance, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_runner.",
@@ -90,7 +109,7 @@ func addRunnerScopeMeta() scopeActionMeta {
 	return scopeActionMeta{
 		usage:   "Scope a runner controller to one specific instance runner by runner ID so it may operate only that runner.",
 		aliases: []string{"add runner scope to runner controller", "scope runner controller to a specific runner", "grant runner controller access to one instance runner"},
-		related: []string{actionScopeRemoveRunner, actionScopeList, actionScopeAddInstance},
+		related: []string{catalogScopeRemoveRunner, catalogScopeList, catalogScopeAddInstance},
 		description: "Scope a runner controller to a specific instance runner by runner ID (admin only). " +
 			"Returns: the created runner-level scoping with the runner ID and created/updated timestamps. " +
 			"See also: gitlab_runner_controller_scope_remove_runner, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_add_instance.",
@@ -103,7 +122,7 @@ func removeRunnerScopeMeta() scopeActionMeta {
 	return scopeActionMeta{
 		usage:   "Remove a specific runner from a runner controller's scope by runner ID so the controller can no longer operate that runner.",
 		aliases: []string{"remove runner scope from runner controller", "unscope runner controller from a specific runner", "revoke runner controller access to one instance runner"},
-		related: []string{actionScopeAddRunner, actionScopeList, actionScopeRemoveInstance},
+		related: []string{catalogScopeAddRunner, catalogScopeList, catalogScopeRemoveInstance},
 		description: "Remove a specific runner from a runner controller's scope by runner ID (admin only, destructive). " +
 			"Returns: a success confirmation naming the removed runner scope. " +
 			"See also: gitlab_runner_controller_scope_add_runner, gitlab_runner_controller_scope_list, gitlab_runner_controller_scope_remove_instance.",

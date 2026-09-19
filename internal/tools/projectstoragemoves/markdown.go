@@ -6,14 +6,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical catalog action IDs the hints name. The catalog domain is
-// storage_move, the group all three storage-move packages register under, which
-// is not this package's name.
-const (
-	hintActionRetrieveAll = "storage_move.retrieve_all_project"
-	hintActionSchedule    = "storage_move.schedule_project"
-)
-
 // FormatOutputMarkdown renders one project storage move as a card, through the
 // renderer the group and snippet storage-move packages already share.
 //
@@ -24,8 +16,8 @@ const (
 func FormatOutputMarkdown(o Output) string {
 	return toolutil.FormatStorageMoveDetailMarkdown(
 		storageMoveMarkdown(o), "Project Storage Move",
-		toolutil.HintAction(hintActionRetrieveAll, "see every project storage move on the instance"),
-		toolutil.HintAction(hintActionSchedule, "schedule another move for this project"),
+		toolutil.HintAction(actionRetrieveAll, "see every project storage move on the instance"),
+		toolutil.HintAction(actionSchedule, "schedule another move for this project"),
 	)
 }
 
@@ -41,7 +33,7 @@ func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
 	var b strings.Builder
 	c := toolutil.NewCard(&b, "Schedule All Project Storage Moves")
 	c.Field("Result", o.Message)
-	c.End(toolutil.HintAction(hintActionRetrieveAll, "watch the scheduled moves progress"))
+	c.End(toolutil.HintAction(actionRetrieveAll, "watch the scheduled moves progress"))
 	return b.String()
 }
 

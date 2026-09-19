@@ -4,10 +4,13 @@ package snippetnotes
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -488,6 +491,106 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
+// Required-identifier tests.
+
+// assertNames verifies that err is non-nil and names the parameter the caller
+// left out, rather than being any error at all.
+func assertNames(t *testing.T, err error, param string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected an error naming %q, got nil", param)
+	}
+	if !strings.Contains(err.Error(), param) {
+		t.Errorf("error %q does not name %q", err.Error(), param)
+	}
+}
+
+// missingIDValues are the two values an absent identifier takes: the zero a
+// caller really reaches by omitting the field, and a negative one.
+var missingIDValues = []struct {
+	name string
+	id   int64
+}{{"Zero", 0}, {"Negative", -1}}
+
+// TestSnippetIDRequired_Validation holds every handler to refusing a missing or
+// negative snippet_id itself, before a request leaves for GitLab.
+//
+// Zero is the value a caller really reaches, since an omitted snippet_id
+// arrives here as the zero value, and it is the one the old assertions could
+// not see: they only asked that some error came back, and a guard written
+// "< 0" instead of "<= 0" still produced one: GitLab's 404 for snippet 0,
+// which tells the caller nothing about the parameter it forgot. The mock
+// refuses every request, so reaching the network is itself a failure.
+func TestSnippetIDRequired_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	handlers := []struct {
+		name string
+		call func(snippetID int64) error
+	}{
+		{"List", func(id int64) error {
+			_, e := List(ctx, client, ListInput{ProjectID: testProjectID, SnippetID: id})
+			return e
+		}},
+		{"Get", func(id int64) error {
+			_, e := Get(ctx, client, GetInput{ProjectID: testProjectID, SnippetID: id, NoteID: 100})
+			return e
+		}},
+		{"Create", func(id int64) error {
+			_, e := Create(ctx, client, CreateInput{ProjectID: testProjectID, SnippetID: id, Body: "x"})
+			return e
+		}},
+		{"Update", func(id int64) error {
+			_, e := Update(ctx, client, UpdateInput{ProjectID: testProjectID, SnippetID: id, NoteID: 100, Body: "x"})
+			return e
+		}},
+		{"Delete", func(id int64) error {
+			return Delete(ctx, client, DeleteInput{ProjectID: testProjectID, SnippetID: id, NoteID: 100})
+		}},
+	}
+
+	for _, h := range handlers {
+		for _, id := range missingIDValues {
+			t.Run(h.name+"_"+id.name, func(t *testing.T) {
+				assertNames(t, h.call(id.id), "snippet_id")
+			})
+		}
+	}
+}
+
+// TestNoteIDRequired_Validation holds the three handlers that address one note
+// to refusing a missing or negative note_id before any request is made, for
+// the reason TestSnippetIDRequired_Validation states: note IDs start at 1, so
+// the zero value is what an omitted note_id looks like here.
+func TestNoteIDRequired_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	handlers := []struct {
+		name string
+		call func(noteID int64) error
+	}{
+		{"Get", func(id int64) error {
+			_, e := Get(ctx, client, GetInput{ProjectID: testProjectID, SnippetID: 1, NoteID: id})
+			return e
+		}},
+		{"Update", func(id int64) error {
+			_, e := Update(ctx, client, UpdateInput{ProjectID: testProjectID, SnippetID: 1, NoteID: id, Body: "x"})
+			return e
+		}},
+		{"Delete", func(id int64) error {
+			return Delete(ctx, client, DeleteInput{ProjectID: testProjectID, SnippetID: 1, NoteID: id})
+		}},
+	}
+
+	for _, h := range handlers {
+		for _, id := range missingIDValues {
+			t.Run(h.name+"_"+id.name, func(t *testing.T) {
+				assertNames(t, h.call(id.id), "note_id")
+			})
+		}
+	}
+}
+
 // Markdown tests.
 
 // The two guidance sections a snippet note result ends with, so each
@@ -580,19 +683,6 @@ func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	if got != want {
 		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && containsSubstring(s, substr)
-}
-
-func containsSubstring(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }
 
 // toOutput coverage tests.
@@ -850,7 +940,7 @@ func TestCreate_CreatedAt(t *testing.T) {
 				http.Error(w, "read body", http.StatusInternalServerError)
 				return
 			}
-			if !contains(string(raw), "2026-01-15T10:00:00Z") {
+			if !strings.Contains(string(raw), "2026-01-15T10:00:00Z") {
 				t.Errorf("request body missing created_at: %s", raw)
 			}
 			testutil.RespondJSON(w, http.StatusCreated, noteJSON)
@@ -902,5 +992,112 @@ func TestFormatOutputMarkdown_WithUpdatedAt(t *testing.T) {
 		noteHintsBlock
 	if got != want {
 		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestList_PaginationBlock_MirrorsTheResponseHeaders pins the page block a
+// caller reads against the headers GitLab answered with.
+//
+// Nothing asserted it before: the tests that send page and per_page check the
+// query string and drop the response, so List could have published an empty
+// block (no page, no total, no next page) and stayed green, leaving a model
+// with a page of notes and no way to learn there are more. Every header here
+// carries a different number so a block filled from the wrong one is visible.
+func TestList_PaginationBlock_MirrorsTheResponseHeaders(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers testutil.PaginationHeaders
+		want    toolutil.PaginationOutput
+	}{
+		{
+			name:    "MiddlePage",
+			headers: testutil.PaginationHeaders{Page: "3", PerPage: "7", Total: "52", TotalPages: "8", NextPage: "4", PrevPage: "2"},
+			want: toolutil.PaginationOutput{
+				Page: 3, PerPage: 7, TotalItems: 52, TotalPages: 8, NextPage: 4, PrevPage: 2, HasMore: true,
+			},
+		},
+		{
+			// GitLab sends no X-Next-Page on the last page, which is the only
+			// thing that makes has_more false.
+			name:    "LastPage",
+			headers: testutil.PaginationHeaders{Page: "8", PerPage: "7", Total: "52", TotalPages: "8", PrevPage: "6"},
+			want: toolutil.PaginationOutput{
+				Page: 8, PerPage: 7, TotalItems: 52, TotalPages: 8, PrevPage: 6,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Path != pathSnippetNotes {
+					http.NotFound(w, r)
+					return
+				}
+				testutil.RespondJSONWithPagination(w, http.StatusOK, "["+noteJSON+"]", tt.headers)
+			}))
+			out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, SnippetID: 1})
+			if err != nil {
+				t.Fatalf("List() error: %v", err)
+			}
+			if out.Pagination != tt.want {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, tt.want)
+			}
+		})
+	}
+}
+
+// TestCreateAndUpdate_EscapedNewlines_ReachGitLabAsRealNewlines pins what the
+// body handed to GitLab is, not just that one was sent.
+//
+// A model writing a multi-line comment routinely puts the two characters
+// backslash-n in the JSON string rather than an escape, and both handlers run
+// the body through NormalizeText so GitLab stores a real line break. Dropping
+// that call from either handler left the whole suite green, which is how a
+// note could ship with "\n" printed in its text.
+func TestCreateAndUpdate_EscapedNewlines_ReachGitLabAsRealNewlines(t *testing.T) {
+	const typed = `first line\nsecond line`
+	const wantSent = "first line\nsecond line"
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(client *gitlabclient.Client) error
+	}{
+		{"Create", http.MethodPost, pathSnippetNotes, func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, SnippetID: 1, Body: typed})
+			return err
+		}},
+		{"Update", http.MethodPut, pathSnippetNote100, func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{ProjectID: testProjectID, SnippetID: 1, NoteID: 100, Body: typed})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tt.method || r.URL.Path != tt.path {
+					http.NotFound(w, r)
+					return
+				}
+				var sent struct {
+					Body string `json:"body"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+					t.Errorf("decode request body: %v", err)
+					http.Error(w, "bad body", http.StatusBadRequest)
+					return
+				}
+				if sent.Body != wantSent {
+					t.Errorf("body sent = %q, want %q", sent.Body, wantSent)
+				}
+				testutil.RespondJSON(w, http.StatusOK, noteJSON)
+			}))
+			if err := tt.call(client); err != nil {
+				t.Fatalf("%s() error: %v", tt.name, err)
+			}
+		})
 	}
 }

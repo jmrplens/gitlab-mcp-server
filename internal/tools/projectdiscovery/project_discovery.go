@@ -83,10 +83,15 @@ func ParseRemoteURL(rawURL string) (string, error) {
 }
 
 // cleanPath normalizes a URL path into a GitLab path_with_namespace.
+//
+// The trailing slash goes before the ".git", because a URL copied from a
+// browser carries both: trimming ".git" first leaves the slash in front of it
+// unreachable, so "group/project.git/" resolved to "group/project.git" and
+// GitLab answered 404 for a project that exists.
 func cleanPath(p string) string {
 	p = strings.TrimPrefix(p, "/")
-	p = strings.TrimSuffix(p, ".git")
 	p = strings.TrimSuffix(p, "/")
+	p = strings.TrimSuffix(p, ".git")
 	return p
 }
 

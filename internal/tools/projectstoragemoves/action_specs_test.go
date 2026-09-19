@@ -3,7 +3,9 @@
 package projectstoragemoves
 
 import (
+	"maps"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -32,6 +34,47 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "projectstoragemoves" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+	}
+}
+
+// TestActionSpecs_ActionIDs_NameTheActionsThisPackageDeclares holds every
+// canonical ID this package quotes to the actions it really registers under the
+// storage_move catalog domain, in both directions.
+//
+// Nothing else checks these: the discovery audit only counts an empty
+// RelatedActions, so a wrong spelling passes every gate and answers a model
+// "unknown action" the moment it follows the hint. This package shipped all six
+// spelled from its own package name, and the markdown hints kept a second,
+// correct copy beside them. That is why the one block is now shared and why
+// this asserts the set rather than a sample.
+func TestActionSpecs_ActionIDs_NameTheActionsThisPackageDeclares(t *testing.T) {
+	// The domain is named here rather than read from the source, so the
+	// comparison has an oracle of its own: storage_move is the catalog group
+	// all three storage-move packages register under.
+	const wantDomain = "storage_move"
+
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+
+	declared := make(map[string]bool, len(specs))
+	for _, spec := range specs {
+		declared[wantDomain+"."+spec.Name] = true
+	}
+	quoted := map[string]bool{
+		actionRetrieveAll: true, actionRetrieveOne: true, actionGet: true,
+		actionGetForProject: true, actionSchedule: true, actionScheduleAll: true,
+	}
+	if !maps.Equal(quoted, declared) {
+		t.Errorf("quoted action IDs %v, declared %v", slices.Sorted(maps.Keys(quoted)), slices.Sorted(maps.Keys(declared)))
+	}
+
+	for _, spec := range specs {
+		t.Run(spec.Name, func(t *testing.T) {
+			for _, related := range spec.RelatedActions {
+				if !quoted[related] {
+					t.Errorf("RelatedActions names %q, which is not one of this package's action IDs", related)
+				}
+			}
+		})
 	}
 }
 

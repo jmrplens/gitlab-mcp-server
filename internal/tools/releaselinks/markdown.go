@@ -8,18 +8,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// The canonical catalog IDs the hints name that the specs do not already
-// spell. The asset-link actions are projected under the release domain, so the
-// ID every surface resolves is "release.link_list" and not the
-// "release_link.list" the cross-link constant in action_specs.go spells.
-const (
-	hintActionLinkList        = "release.link_list"
-	hintActionLinkGet         = "release.link_get"
-	hintActionLinkUpdate      = "release.link_update"
-	hintActionLinkDelete      = "release.link_delete"
-	hintActionLinkCreate      = "release.link_create"
-	hintActionLinkCreateBatch = "release.link_create_batch"
-)
+// The hints below name canonical catalog IDs through the one block in
+// action_specs.go, which the RelatedActions there read too. This file used to
+// keep a second copy of the same six strings, and a copy is how a hint and a
+// cross-link drift apart without either being obviously wrong.
 
 // linkColumns are the columns every collection of asset links shares, so the
 // batch result and the listing cannot drift apart.
@@ -50,8 +42,8 @@ func FormatOutputMarkdown(l Output) string {
 	c.URL(l.URL)
 	c.Link("Direct Asset URL", l.DirectAssetURL, l.DirectAssetURL)
 	c.End(
-		toolutil.HintAction(hintActionLinkUpdate, "change this link's name, URL or type"),
-		toolutil.HintAction(hintActionLinkDelete, "remove this link from the release"),
+		toolutil.HintAction(actionLinkUpdate, "change this link's name, URL or type"),
+		toolutil.HintAction(actionLinkDelete, "remove this link from the release"),
 	)
 	return b.String()
 }
@@ -69,8 +61,8 @@ func FormatDeletedMarkdown(l DeletedOutput) string {
 	c.URL(l.URL)
 	c.Note("The link is removed from the release. The file or package it pointed at is untouched.")
 	c.End(
-		toolutil.HintAction(hintActionLinkList, "see the links the release still has"),
-		toolutil.HintAction(hintActionLinkCreate, "link another asset to the release"),
+		toolutil.HintAction(actionLinkList, "see the links the release still has"),
+		toolutil.HintAction(actionLinkCreate, "link another asset to the release"),
 	)
 	return b.String()
 }
@@ -98,7 +90,7 @@ func FormatBatchMarkdown(out CreateBatchOutput) string {
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, len(out.Created) > 0,
 		toolutil.HintPreserveLinks,
-		toolutil.HintAction(hintActionLinkList, "see every link the release now has"),
+		toolutil.HintAction(actionLinkList, "see every link the release now has"),
 	)
 	return b.String()
 }
@@ -115,9 +107,9 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString(linkRow(l))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionLinkGet, "see one link on its own"),
-		toolutil.HintAction(hintActionLinkCreate, "add a new release asset link"),
-		toolutil.HintAction(hintActionLinkCreateBatch, "add several asset links in one call"),
+		toolutil.HintAction(actionLinkGet, "see one link on its own"),
+		toolutil.HintAction(actionLinkCreate, "add a new release asset link"),
+		toolutil.HintAction(actionLinkCreateBatch, "add several asset links in one call"),
 	)
 	return b.String()
 }

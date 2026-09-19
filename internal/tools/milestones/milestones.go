@@ -431,13 +431,11 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	items := make([]IssueItem, len(issues))
 	for i, issue := range issues {
 		items[i] = IssueItem{
-			ID:    issue.ID,
-			IID:   issue.IID,
-			Title: issue.Title,
-			State: issue.State,
-		}
-		if issue.WebURL != "" {
-			items[i].WebURL = issue.WebURL
+			ID:     issue.ID,
+			IID:    issue.IID,
+			Title:  issue.Title,
+			State:  issue.State,
+			WebURL: issue.WebURL,
 		}
 		if issue.CreatedAt != nil {
 			items[i].CreatedAt = issue.CreatedAt.Format(time.RFC3339)

@@ -433,14 +433,25 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 	}
 	baseURL := client.GL().BaseURL().String()
 	pid := string(input.ProjectID)
-	// The project id is a path segment and the ref is a query value, and both
-	// are the caller's own text: a full project path carries the separators
-	// that end a segment, and a ref may carry any of "?", "#", "&" or a space,
-	// each of which built a different address than the one asked for.
+	// The project id is a path segment and the ref and subdirectory are query
+	// values, and all three are the caller's own text: a full project path
+	// carries the separators that end a segment, and a ref or path may carry
+	// any of "?", "#", "&" or a space, each of which built a different address
+	// than the one asked for.
 	archiveURL := fmt.Sprintf("%sprojects/%s/repository/archive.%s",
 		baseURL, url.PathEscape(pid), url.PathEscape(format))
+	query := url.Values{}
 	if input.SHA != "" {
-		archiveURL += "?" + url.Values{"sha": {input.SHA}}.Encode()
+		query.Set("sha", input.SHA)
+	}
+	// GitLab archives the subdirectory named by "path" and the whole repository
+	// without it, so dropping the caller's path handed back the address of a
+	// different archive than the one asked for, silently and with a 200.
+	if input.Path != "" {
+		query.Set("path", input.Path)
+	}
+	if len(query) > 0 {
+		archiveURL += "?" + query.Encode()
 	}
 	return ArchiveOutput{
 		ProjectID: pid,

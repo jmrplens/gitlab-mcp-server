@@ -5,11 +5,26 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog identity of these two actions. The domain is the
+// catalog group these specs are aggregated into (`gitlab_template`, in
+// internal/tools/action_specs.go) and never the owning package, which is what
+// RelatedActions used to name: a model following `projecttemplates.…` is told
+// the action does not exist, and nothing in the tree validates the spelling.
+const (
+	actionNameList    = "project_template_list"
+	actionNameGet     = "project_template_get"
+	actionList        = "template.project_template_list"
+	actionGet         = "template.project_template_get"
+	actionProjectGet  = "project.get"
+	actionProjectList = "project.list"
+	actionProjectNew  = "project.create"
+)
+
 // ActionSpecs returns canonical specs for project template actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		projectTemplateSpec("project_template_list", toolutil.RouteAction(client, List), "gitlab_list_project_templates"),
-		projectTemplateSpec("project_template_get", toolutil.RouteAction(client, Get), "gitlab_get_project_template"),
+		projectTemplateSpec(actionNameList, toolutil.RouteAction(client, List), "gitlab_list_project_templates"),
+		projectTemplateSpec(actionNameGet, toolutil.RouteAction(client, Get), "gitlab_get_project_template"),
 	}
 }
 
@@ -45,7 +60,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 			toolutil.SchemaEnumOverride("template_type", "dockerfiles", "gitignores", "gitlab_ci_ymls", "licenses", "issues", "merge_requests"),
 		},
 	}
-	if actionName == "project_template_get" {
+	if actionName == actionNameGet {
 		opts.Usage = "Get one project-scoped template (license, gitignore, Dockerfile, .gitlab-ci.yml) by template_type and key, returning its full rendered content."
 		opts.Aliases = []string{
 			individualTool,
@@ -54,7 +69,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 			"get gitignore template",
 			"read dockerfile template",
 		}
-		opts.RelatedActions = []string{"projecttemplates.project_template_list", "project.create", "project.get"}
+		opts.RelatedActions = []string{actionList, actionProjectNew, actionProjectGet}
 		opts.IndividualTool.Description = "Returns: one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_project_create."
 		opts.ParameterGuidance["key"] = toolutil.ParameterGuidance{
 			SemanticRole:   "template_key",
@@ -73,7 +88,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		"list dockerfile templates",
 		"ci yaml templates",
 	}
-	opts.RelatedActions = []string{"projecttemplates.project_template_get", "project.create", "project.list"}
+	opts.RelatedActions = []string{actionGet, actionProjectNew, actionProjectList}
 	opts.IndividualTool.Description = "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_project_create."
 	opts.ParameterGuidance["type"] = toolutil.ParameterGuidance{
 		SemanticRole:   "template_type_filter",

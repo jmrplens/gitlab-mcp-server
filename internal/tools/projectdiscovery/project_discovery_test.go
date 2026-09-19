@@ -20,20 +20,26 @@ import (
 
 // Test constants shared across project discovery tests.
 const (
-	pathProject     = "/api/v4/projects/"
-	fmtResolveErr   = "Resolve() unexpected error: %v"
-	fmtWantField    = "%s = %v, want %v"
+	pathProject   = "/api/v4/projects/"
+	fmtResolveErr = "Resolve() unexpected error: %v"
+	fmtWantField  = "%s = %v, want %v"
+	// No two values here agree, deliberately: every field of ResolveOutput is a
+	// straight assignment, which neither coverage gate scores, so only a fixture
+	// telling the sources apart catches one read from the wrong field. While
+	// "name" and "path" both said "my-project", Resolve could fill Name from
+	// project.Path with the whole suite green. The namespace is a renamed one so
+	// GitLab's path_with_namespace and our own ExtractedPath cannot be confused.
 	testProjectJSON = `{
 		"id": 42,
-		"name": "my-project",
+		"name": "My Project",
 		"path": "my-project",
-		"path_with_namespace": "group/subgroup/my-project",
-		"web_url": "https://gitlab.example.com/group/subgroup/my-project",
+		"path_with_namespace": "group/subgroup/renamed-project",
+		"web_url": "https://gitlab.example.com/group/subgroup/renamed-project",
 		"default_branch": "main",
 		"description": "A test project",
 		"visibility": "private",
-		"http_url_to_repo": "https://gitlab.example.com/group/subgroup/my-project.git",
-		"ssh_url_to_repo": "git@gitlab.example.com:group/subgroup/my-project.git"
+		"http_url_to_repo": "https://gitlab.example.com/group/subgroup/renamed-project.git",
+		"ssh_url_to_repo": "git@gitlab.example.com:group/subgroup/renamed-project.git"
 	}`
 )
 
@@ -88,6 +94,20 @@ func TestParseRemoteURL_ValidURLs(t *testing.T) {
 		{
 			name:     "HTTPS with trailing slash",
 			url:      "https://gitlab.example.com/group/project/",
+			wantPath: "group/project",
+		},
+		{
+			// Both endings at once, which is what a URL copied from a browser
+			// looks like. The two trims have to run in the order that reaches
+			// the ".git" behind the slash, or GitLab is asked for a project
+			// literally named "project.git" and answers 404.
+			name:     "HTTPS with .git and a trailing slash",
+			url:      "https://gitlab.example.com/group/project.git/",
+			wantPath: "group/project",
+		},
+		{
+			name:     "SSH shorthand with .git and a trailing slash",
+			url:      "git@gitlab.example.com:group/project.git/",
 			wantPath: "group/project",
 		},
 		{
@@ -183,8 +203,10 @@ func TestParseRemoteURL_TruncatedSSH(t *testing.T) {
 	}
 }
 
-// TestResolve_Success verifies that Resolve parses the remote URL and returns
-// the matching GitLab project from the API.
+// TestResolve_Success verifies that Resolve parses the remote URL, looks the
+// project up under the path it parsed, and returns what the instance answered.
+// PathWithNamespace and ExtractedPath are asserted apart because they come from
+// different places: the first is GitLab's, the second is ours.
 func TestResolve_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -209,8 +231,8 @@ func TestResolve_Success(t *testing.T) {
 	if out.ID != 42 {
 		t.Errorf(fmtWantField, "ID", out.ID, 42)
 	}
-	if out.PathWithNamespace != "group/subgroup/my-project" {
-		t.Errorf(fmtWantField, "PathWithNamespace", out.PathWithNamespace, "group/subgroup/my-project")
+	if out.PathWithNamespace != "group/subgroup/renamed-project" {
+		t.Errorf(fmtWantField, "PathWithNamespace", out.PathWithNamespace, "group/subgroup/renamed-project")
 	}
 	if out.DefaultBranch != "main" {
 		t.Errorf(fmtWantField, "DefaultBranch", out.DefaultBranch, "main")
@@ -464,8 +486,10 @@ func TestResolve_APIError(t *testing.T) {
 	}
 }
 
-// TestResolve_AllOutputFields verifies that every field in ResolveOutput
-// is correctly populated from the GitLab API response.
+// TestResolve_AllOutputFields verifies that every field of ResolveOutput reads
+// its own source. The fixture gives no two fields the same value, so a field
+// filled from the one beside it fails here, which nothing else can see: an
+// assignment carries no branch for either coverage gate to score.
 func TestResolve_AllOutputFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, testProjectJSON)
@@ -484,15 +508,15 @@ func TestResolve_AllOutputFields(t *testing.T) {
 		want  any
 	}{
 		{"ID", out.ID, int64(42)},
-		{"Name", out.Name, "my-project"},
+		{"Name", out.Name, "My Project"},
 		{"Path", out.Path, "my-project"},
-		{"PathWithNamespace", out.PathWithNamespace, "group/subgroup/my-project"},
-		{"WebURL", out.WebURL, "https://gitlab.example.com/group/subgroup/my-project"},
+		{"PathWithNamespace", out.PathWithNamespace, "group/subgroup/renamed-project"},
+		{"WebURL", out.WebURL, "https://gitlab.example.com/group/subgroup/renamed-project"},
 		{"DefaultBranch", out.DefaultBranch, "main"},
 		{"Description", out.Description, "A test project"},
 		{"Visibility", out.Visibility, "private"},
-		{"HTTPURLToRepo", out.HTTPURLToRepo, "https://gitlab.example.com/group/subgroup/my-project.git"},
-		{"SSHURLToRepo", out.SSHURLToRepo, "git@gitlab.example.com:group/subgroup/my-project.git"},
+		{"HTTPURLToRepo", out.HTTPURLToRepo, "https://gitlab.example.com/group/subgroup/renamed-project.git"},
+		{"SSHURLToRepo", out.SSHURLToRepo, "git@gitlab.example.com:group/subgroup/renamed-project.git"},
 		{"ExtractedPath", out.ExtractedPath, "group/subgroup/my-project"},
 	}
 	for _, c := range checks {
@@ -501,6 +525,37 @@ func TestResolve_AllOutputFields(t *testing.T) {
 				t.Errorf(fmtWantField, c.field, c.got, c.want)
 			}
 		})
+	}
+}
+
+// TestResolve_RenamedProject_ReportsBothPaths verifies that the lookup uses the
+// path parsed from the remote URL while the output reports GitLab's own
+// path_with_namespace beside it. GitLab keeps a redirect after a rename, so an
+// unchanged remote still resolves, and the caller needs both spellings: the one
+// it asked under, and the one every later call should use.
+func TestResolve_RenamedProject_ReportsBothPaths(t *testing.T) {
+	var asked string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The escaped form, because the project path travels as one encoded
+		// segment and the decoded one cannot be told from a nested route.
+		asked = r.URL.EscapedPath()
+		testutil.RespondJSON(w, http.StatusOK, testProjectJSON)
+	}))
+
+	out, err := Resolve(context.Background(), client, ResolveInput{
+		RemoteURL: "git@gitlab.example.com:group/subgroup/my-project.git",
+	})
+	if err != nil {
+		t.Fatalf(fmtResolveErr, err)
+	}
+	if want := pathProject + "group%2Fsubgroup%2Fmy-project"; asked != want {
+		t.Errorf("looked the project up at %q, want %q", asked, want)
+	}
+	if out.ExtractedPath != "group/subgroup/my-project" {
+		t.Errorf(fmtWantField, "ExtractedPath", out.ExtractedPath, "group/subgroup/my-project")
+	}
+	if out.PathWithNamespace != "group/subgroup/renamed-project" {
+		t.Errorf(fmtWantField, "PathWithNamespace", out.PathWithNamespace, "group/subgroup/renamed-project")
 	}
 }
 
@@ -589,7 +644,7 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	if !ok {
 		t.Fatalf("Route.Handler result = %T, want ResolveOutput", result)
 	}
-	if out.Name != "my-project" {
+	if out.Name != "My Project" {
 		t.Errorf("Route.Handler response missing project name, got: %s", out.Name)
 	}
 }

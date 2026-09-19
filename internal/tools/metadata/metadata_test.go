@@ -4,6 +4,7 @@
 package metadata
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -47,6 +48,72 @@ func TestGet(t *testing.T) {
 	}
 	if out.KAS.Version != "16.8.0-rc1" {
 		t.Errorf("KAS.Version = %q, want 16.8.0-rc1", out.KAS.Version)
+	}
+}
+
+// TestGet_FieldsDistinguishable_EachOneIsCarriedFromItsOwnSource drives the
+// handler with a response no two values of which agree, so a field filled from
+// its neighbor is visible. Nothing used to assert either KAS address, and every
+// fixture set Enterprise and KAS.Enabled both true, so swapping the two
+// addresses or reading Enterprise off KAS.Enabled left the whole suite green.
+// The proxy address is what a kubectl configuration points at, and publishing
+// the agent's websocket endpoint in its place is breakage no reader can see.
+func TestGet_FieldsDistinguishable_EachOneIsCarriedFromItsOwnSource(t *testing.T) {
+	// The two flags take opposite values in each case, so neither can be read
+	// off the other in either direction.
+	cases := []struct {
+		name       string
+		enterprise bool
+		kasEnabled bool
+	}{
+		{name: "enterprise instance with the agent server off", enterprise: true, kasEnabled: false},
+		{name: "community instance with the agent server on", enterprise: false, kasEnabled: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// GitLab spells the two KAS addresses in camel case on this
+			// endpoint, and client-go decodes them under those names only.
+			body := fmt.Sprintf(`{
+				"version": "17.4.2",
+				"revision": "9f8e7d6c",
+				"kas": {
+					"enabled": %t,
+					"externalUrl": "wss://kas.example.com",
+					"externalK8sProxyUrl": "https://kas.example.com/k8s-proxy",
+					"version": "17.4.2-kas"
+				},
+				"enterprise": %t
+			}`, tc.kasEnabled, tc.enterprise)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, body)
+			}))
+
+			out, err := Get(t.Context(), client, GetInput{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.Version != "17.4.2" {
+				t.Errorf("Version = %q, want 17.4.2", out.Version)
+			}
+			if out.Revision != "9f8e7d6c" {
+				t.Errorf("Revision = %q, want 9f8e7d6c", out.Revision)
+			}
+			if out.Enterprise != tc.enterprise {
+				t.Errorf("Enterprise = %v, want %v", out.Enterprise, tc.enterprise)
+			}
+			if out.KAS.Enabled != tc.kasEnabled {
+				t.Errorf("KAS.Enabled = %v, want %v", out.KAS.Enabled, tc.kasEnabled)
+			}
+			if out.KAS.Version != "17.4.2-kas" {
+				t.Errorf("KAS.Version = %q, want 17.4.2-kas", out.KAS.Version)
+			}
+			if out.KAS.ExternalURL != "wss://kas.example.com" {
+				t.Errorf("KAS.ExternalURL = %q, want wss://kas.example.com", out.KAS.ExternalURL)
+			}
+			if out.KAS.ExternalK8SProxyURL != "https://kas.example.com/k8s-proxy" {
+				t.Errorf("KAS.ExternalK8SProxyURL = %q, want https://kas.example.com/k8s-proxy", out.KAS.ExternalK8SProxyURL)
+			}
+		})
 	}
 }
 
@@ -99,8 +166,11 @@ func TestFormatGetMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// covCovMetaJSON identifies the cov cov meta JSON constant used by this package.
-const covCovMetaJSON = `{"version":"17.0.0","revision":"abc123","kas":{"enabled":true,"external_url":"https://kas.example.com","external_k8s_proxy_url":"https://k8s.example.com","version":"17.0.0"},"enterprise":true}`
+// covCovMetaJSON is the metadata response body the route and lookup tests are
+// answered with. The two KAS addresses are spelled in camel case because that
+// is what GitLab sends and the only spelling client-go decodes; written in
+// snake case they decoded to empty, which no test here noticed.
+const covCovMetaJSON = `{"version":"17.0.0","revision":"abc123","kas":{"enabled":true,"externalUrl":"https://kas.example.com","externalK8sProxyUrl":"https://k8s.example.com","version":"17.0.0"},"enterprise":true}`
 
 // TestGet_APIError_Coverage verifies the API error path for metadata lookup.
 func TestGet_APIError_Coverage(t *testing.T) {

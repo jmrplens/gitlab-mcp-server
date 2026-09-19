@@ -2,8 +2,10 @@ package mrapprovalsettings
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -378,6 +380,168 @@ func TestUpdateProjectSettings(t *testing.T) {
 			}
 			if tt.validate != nil {
 				tt.validate(t, out)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What reaches GitLab, and where the answer lands
+// ---------------------------------------------------------------------------
+
+// decodeSettingsRequestBody reads the JSON body of an update request. It is
+// called from the mock's own goroutine, so it reports and returns rather than
+// aborting the test.
+func decodeSettingsRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return nil
+	}
+	return body
+}
+
+// assertOnlyFieldSent holds an update body to the one field the caller named:
+// present and true, with nothing beside it. The absence half carries as much as
+// the presence half, because the SDK's options are pointers with omitempty, so
+// "the caller said nothing about this setting" and "the caller asked for it to
+// be off" are the same request unless the key stays off the wire.
+func assertOnlyFieldSent(t *testing.T, body map[string]any, want string) {
+	t.Helper()
+	if body[want] != true {
+		t.Errorf("%s sent = %v, want true", want, body[want])
+	}
+	for key, value := range body {
+		if key != want {
+			t.Errorf("body also carries %s = %v, want %s alone", key, value, want)
+		}
+	}
+}
+
+// TestUpdateGroupSettings_OneFieldSet_SendsThatFieldAlone holds each optional
+// input of the group update to the GitLab name it travels under, one field per
+// subtest.
+//
+// Nothing else here reads the request body, so a setting wired to the wrong
+// option or left out of the options struct is invisible: the handler still
+// returns whatever the mock answers. Dropping RequireReauthenticationToApprove
+// passed the whole suite before this existed, which means a caller asking to
+// require reauthentication would have been silently ignored.
+func TestUpdateGroupSettings_OneFieldSet_SendsThatFieldAlone(t *testing.T) {
+	yes := true
+	tests := []struct {
+		name  string
+		input GroupUpdateInput
+	}{
+		{"allow_author_approval", GroupUpdateInput{GroupID: "mygroup", AllowAuthorApproval: &yes}},
+		{"allow_committer_approval", GroupUpdateInput{GroupID: "mygroup", AllowCommitterApproval: &yes}},
+		{"allow_overrides_to_approver_list_per_merge_request", GroupUpdateInput{GroupID: "mygroup", AllowOverridesToApproverListPerMergeRequest: &yes}},
+		{"retain_approvals_on_push", GroupUpdateInput{GroupID: "mygroup", RetainApprovalsOnPush: &yes}},
+		{"require_reauthentication_to_approve", GroupUpdateInput{GroupID: "mygroup", RequireReauthenticationToApprove: &yes}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				assertOnlyFieldSent(t, decodeSettingsRequestBody(t, r), tt.name)
+				testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+			}))
+			if _, err := UpdateGroupSettings(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("UpdateGroupSettings: %v", err)
+			}
+			if got := calls.Load(); got != 1 {
+				t.Errorf("requests = %d, want 1", got)
+			}
+		})
+	}
+}
+
+// TestUpdateProjectSettings_OneFieldSet_SendsThatFieldAlone is the project half
+// of the same property, and carries the one setting only projects have:
+// selective_code_owner_removals is absent from the group options struct, so it
+// is the field a copy-paste between the two handlers would lose.
+func TestUpdateProjectSettings_OneFieldSet_SendsThatFieldAlone(t *testing.T) {
+	yes := true
+	tests := []struct {
+		name  string
+		input ProjectUpdateInput
+	}{
+		{"allow_author_approval", ProjectUpdateInput{ProjectID: "42", AllowAuthorApproval: &yes}},
+		{"allow_committer_approval", ProjectUpdateInput{ProjectID: "42", AllowCommitterApproval: &yes}},
+		{"allow_overrides_to_approver_list_per_merge_request", ProjectUpdateInput{ProjectID: "42", AllowOverridesToApproverListPerMergeRequest: &yes}},
+		{"retain_approvals_on_push", ProjectUpdateInput{ProjectID: "42", RetainApprovalsOnPush: &yes}},
+		{"require_reauthentication_to_approve", ProjectUpdateInput{ProjectID: "42", RequireReauthenticationToApprove: &yes}},
+		{"selective_code_owner_removals", ProjectUpdateInput{ProjectID: "42", SelectiveCodeOwnerRemovals: &yes}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int64
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				assertOnlyFieldSent(t, decodeSettingsRequestBody(t, r), tt.name)
+				testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+			}))
+			if _, err := UpdateProjectSettings(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("UpdateProjectSettings: %v", err)
+			}
+			if got := calls.Load(); got != 1 {
+				t.Errorf("requests = %d, want 1", got)
+			}
+		})
+	}
+}
+
+// distinctSettingsJSON names each setting's inherited_from after the setting
+// itself, so no two of the seven are interchangeable.
+const distinctSettingsJSON = `{
+	"allow_author_approval":{"value":true,"locked":false,"inherited_from":"allow_author_approval"},
+	"allow_committer_approval":{"value":true,"locked":false,"inherited_from":"allow_committer_approval"},
+	"allow_overrides_to_approver_list_per_merge_request":{"value":true,"locked":false,"inherited_from":"allow_overrides_to_approver_list_per_merge_request"},
+	"retain_approvals_on_push":{"value":true,"locked":false,"inherited_from":"retain_approvals_on_push"},
+	"selective_code_owner_removals":{"value":true,"locked":false,"inherited_from":"selective_code_owner_removals"},
+	"require_password_to_approve":{"value":true,"locked":false,"inherited_from":"require_password_to_approve"},
+	"require_reauthentication_to_approve":{"value":true,"locked":false,"inherited_from":"require_reauthentication_to_approve"}
+}`
+
+// TestGetProjectSettings_EachSetting_LandsInTheFieldNamedAfterIt holds the
+// converter every one of the four handlers shares to reading each setting from
+// the source that carries its name.
+//
+// The ordinary fixture leaves five of the seven at the same (false, false, "")
+// triple, so a converter reading require_password_to_approve into
+// RequireReauthenticationToApprove and back answers exactly what every other
+// assertion in this file expects. inherited_from is the discriminator because
+// it is the one cell of a setting that is not a boolean.
+func TestGetProjectSettings_EachSetting_LandsInTheFieldNamedAfterIt(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, distinctSettingsJSON)
+	}))
+	out, err := GetProjectSettings(context.Background(), client, ProjectGetInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("GetProjectSettings: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		got  SettingOutput
+	}{
+		{"allow_author_approval", out.AllowAuthorApproval},
+		{"allow_committer_approval", out.AllowCommitterApproval},
+		{"allow_overrides_to_approver_list_per_merge_request", out.AllowOverridesToApproverListPerMergeRequest},
+		{"retain_approvals_on_push", out.RetainApprovalsOnPush},
+		{"selective_code_owner_removals", out.SelectiveCodeOwnerRemovals},
+		{"require_password_to_approve", out.RequirePasswordToApprove},
+		{"require_reauthentication_to_approve", out.RequireReauthenticationToApprove},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got.InheritedFrom != tt.name {
+				t.Errorf("read from %q, want %q", tt.got.InheritedFrom, tt.name)
 			}
 		})
 	}

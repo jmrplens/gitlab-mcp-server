@@ -5,6 +5,7 @@ package projectimportexport
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -20,6 +21,55 @@ import (
 )
 
 const errExpNonNilResult = "expected non-nil result"
+
+// scheduleExportBody is the JSON document client-go POSTs for a scheduled
+// export. Every field is a pointer so a test can tell "GitLab was sent an
+// empty value" from "GitLab was sent nothing", which is the difference an
+// inverted guard around an optional field produces.
+type scheduleExportBody struct {
+	Description *string `json:"description"`
+	Upload      struct {
+		URL        *string `json:"url"`
+		HTTPMethod *string `json:"http_method"`
+	} `json:"upload"`
+}
+
+// captureScheduleExport answers a scheduled export and hands the decoded
+// request body to assert, so a caller states what GitLab was really sent
+// rather than what the handler was asked to send. Until this existed nothing
+// in this package read a request body, so the guards around description and
+// upload could each invert and drop the caller's value without a test noticing.
+func captureScheduleExport(t *testing.T, assert func(scheduleExportBody)) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/export" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var body scheduleExportBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode schedule-export body: %v", err)
+			http.Error(w, "undecodable body", http.StatusInternalServerError)
+			return
+		}
+		assert(body)
+		w.WriteHeader(http.StatusAccepted)
+	})
+}
+
+// wantString reports the pointed-to value under name, or fails the test when
+// the key was absent, which is the shape an inverted `!= ""` guard leaves
+// behind.
+func wantString(t *testing.T, name string, got *string, want string) {
+	t.Helper()
+	if got == nil {
+		t.Errorf("%s absent from the request, want %q", name, want)
+		return
+	}
+	if *got != want {
+		t.Errorf("%s = %q, want %q", name, *got, want)
+	}
+}
 
 // TestScheduleExport_Success verifies that ScheduleExport calls the correct
 // API endpoint and returns a success message.
@@ -58,23 +108,28 @@ func TestScheduleExport_APIError(t *testing.T) {
 	}
 }
 
-// TestGetExportStatus_Success verifies that GetExportStatus returns
-// correctly mapped export status fields.
+// TestGetExportStatus_Success verifies that every published export-status field
+// carries the attribute GitLab sent for it, web_url included.
+//
+// No two values in the fixture agree, which is the point: the previous one
+// spelled name and path alike and asserted three fields, so a converter reading
+// description off path_with_namespace, or dropping web_url entirely, passed.
 func TestGetExportStatus_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id": 1,
-				"description": "test",
-				"name": "my-project",
-				"name_with_namespace": "group / my-project",
-				"path": "my-project",
-				"path_with_namespace": "group/my-project",
+				"id": 7,
+				"description": "archived before the namespace move",
+				"name": "Export Name",
+				"name_with_namespace": "Export Group / Export Name",
+				"path": "export-path",
+				"path_with_namespace": "export-group/export-path",
 				"created_at": "2026-01-01T00:00:00Z",
 				"export_status": "finished",
+				"message": "after export action failed",
 				"_links": {
-					"api_url": "https://gitlab.example.com/api/v4/projects/1/export/download",
-					"web_url": "https://gitlab.example.com/group/my-project/export"
+					"api_url": "https://gitlab.example.com/api/v4/projects/7/export/download",
+					"web_url": "https://gitlab.example.com/export-group/export-path/export"
 				}
 			}`)
 			return
@@ -87,17 +142,26 @@ func TestGetExportStatus_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetExportStatus() error: %v", err)
 	}
-	if out.ID != 1 {
-		t.Errorf("ID = %d, want 1", out.ID)
+	if out.ID != 7 {
+		t.Errorf("ID = %d, want 7", out.ID)
 	}
-	if out.ExportStatus != "finished" {
-		t.Errorf("ExportStatus = %q, want %q", out.ExportStatus, "finished")
-	}
-	if out.Name != "my-project" {
-		t.Errorf("Name = %q, want %q", out.Name, "my-project")
-	}
-	if out.APIURL == "" {
-		t.Error("expected non-empty API URL")
+	for _, tc := range []struct{ field, got, want string }{
+		{"Description", out.Description, "archived before the namespace move"},
+		{"Name", out.Name, "Export Name"},
+		{"NameWithNamespace", out.NameWithNamespace, "Export Group / Export Name"},
+		{"Path", out.Path, "export-path"},
+		{"PathWithNamespace", out.PathWithNamespace, "export-group/export-path"},
+		{"CreatedAt", out.CreatedAt, "2026-01-01T00:00:00Z"},
+		{"ExportStatus", out.ExportStatus, "finished"},
+		{"Message", out.Message, "after export action failed"},
+		{"APIURL", out.APIURL, "https://gitlab.example.com/api/v4/projects/7/export/download"},
+		{"WebURL", out.WebURL, "https://gitlab.example.com/export-group/export-path/export"},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)
+			}
+		})
 	}
 }
 
@@ -256,22 +320,28 @@ func TestImportFromFile_InvalidBase64_Error(t *testing.T) {
 	}
 }
 
-// TestGetImportStatus_Success verifies that GetImportStatus returns correctly
-// mapped import status fields.
+// TestGetImportStatus_Success verifies that every published import-status field
+// carries the attribute GitLab sent for it, the documented `created_at` (which
+// gl.ImportStatus mistags as `create_at`) included.
+//
+// The fixture spells no two values alike and the import is a failed one, so
+// import_error and correlation_id (the two fields a caller reads to find out
+// why) are exercised rather than left empty and vacuously right.
 func TestGetImportStatus_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/import" && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id": 42,
-				"description": "imported",
-				"name": "imported-project",
-				"name_with_namespace": "group / imported-project",
-				"path": "imported-project",
-				"path_with_namespace": "group/imported-project",
+				"description": "restored from last week's archive",
+				"name": "Imported Name",
+				"name_with_namespace": "Import Group / Imported Name",
+				"path": "imported-path",
+				"path_with_namespace": "import-group/imported-path",
 				"created_at": "2026-03-01T10:00:00Z",
-				"import_status": "finished",
-				"import_type": "file",
-				"correlation_id": "abc-123"
+				"import_status": "failed",
+				"import_type": "gitlab_project",
+				"correlation_id": "01JQZ9V7KX",
+				"import_error": "relation import failed: merge_requests"
 			}`)
 			return
 		}
@@ -286,13 +356,23 @@ func TestGetImportStatus_Success(t *testing.T) {
 	if out.ID != 42 {
 		t.Errorf("ID = %d, want 42", out.ID)
 	}
-	if out.ImportStatus != "finished" {
-		t.Errorf("ImportStatus = %q, want %q", out.ImportStatus, "finished")
-	}
-	// The documented `created_at` attribute (which gl.ImportStatus mistags as
-	// `create_at`) must now be surfaced via the raw-decode superset.
-	if out.CreatedAt != "2026-03-01T10:00:00Z" {
-		t.Errorf("CreatedAt = %q, want documented created_at to be surfaced", out.CreatedAt)
+	for _, tc := range []struct{ field, got, want string }{
+		{"Description", out.Description, "restored from last week's archive"},
+		{"Name", out.Name, "Imported Name"},
+		{"NameWithNamespace", out.NameWithNamespace, "Import Group / Imported Name"},
+		{"Path", out.Path, "imported-path"},
+		{"PathWithNamespace", out.PathWithNamespace, "import-group/imported-path"},
+		{"CreatedAt", out.CreatedAt, "2026-03-01T10:00:00Z"},
+		{"ImportStatus", out.ImportStatus, "failed"},
+		{"ImportType", out.ImportType, "gitlab_project"},
+		{"CorrelationID", out.CorrelationID, "01JQZ9V7KX"},
+		{"ImportError", out.ImportError, "relation import failed: merge_requests"},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)
+			}
+		})
 	}
 }
 
@@ -447,21 +527,22 @@ func TestImportFromFile_FilePathOpenError(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_WithUpload verifies ScheduleExport sends Description and Upload fields.
+// TestScheduleExport_WithUpload verifies the deprecated flat upload_url and
+// upload_http_method reach GitLab under the nested names the API documents,
+// alongside the description. The three values are deliberately unlike each
+// other, so a field read from a neighbour's source is a failure rather than a
+// coincidence.
 func TestScheduleExport_WithUpload(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		wantString(t, "description", body.Description, "nightly archive before the migration")
+		wantString(t, "upload.url", body.Upload.URL, "https://archive.example.com/incoming/one.tar.gz")
+		wantString(t, "upload.http_method", body.Upload.HTTPMethod, "PUT")
+	}))
 
 	out, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
 		ProjectID:   "1",
-		Description: "Test export",
-		UploadURL:   "https://example.com/upload",
+		Description: "nightly archive before the migration",
+		UploadURL:   "https://archive.example.com/incoming/one.tar.gz",
 		UploadHTTP:  "PUT",
 	})
 	if err != nil {
@@ -469,6 +550,22 @@ func TestScheduleExport_WithUpload(t *testing.T) {
 	}
 	if out.Message == "" {
 		t.Error("expected non-empty message")
+	}
+}
+
+// TestScheduleExport_NoDescription_SendsNoDescription verifies an unset
+// description leaves the key out of the body rather than sending an empty one:
+// GitLab reads description as an override of the project's own, so an empty
+// string sent by mistake would blank it in the archive.
+func TestScheduleExport_NoDescription_SendsNoDescription(t *testing.T) {
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		if body.Description != nil {
+			t.Errorf("description = %q, want the key to be absent", *body.Description)
+		}
+	}))
+
+	if _, err := ScheduleExport(t.Context(), client, ScheduleExportInput{ProjectID: "1"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -819,22 +916,20 @@ func TestActionSpecs_ImportFileError(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_NestedUpload verifies that the structured Upload input is
-// mapped onto the SDK upload options, including the HTTP method.
+// TestScheduleExport_NestedUpload verifies the structured upload input reaches
+// GitLab whole: the URL under url and the method under http_method, each from
+// its own source. The two carry unlike values on purpose, so swapping them in
+// the handler is a failure and not an indistinguishable pair.
 func TestScheduleExport_NestedUpload(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		wantString(t, "upload.url", body.Upload.URL, "https://archive.example.com/incoming/two.tar.gz")
+		wantString(t, "upload.http_method", body.Upload.HTTPMethod, "POST")
+	}))
 
 	out, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
 		ProjectID: "1",
 		Upload: &ScheduleExportUploadInput{
-			URL:        "https://example.com/upload",
+			URL:        "https://archive.example.com/incoming/two.tar.gz",
 			HTTPMethod: "POST",
 		},
 	})
@@ -846,23 +941,66 @@ func TestScheduleExport_NestedUpload(t *testing.T) {
 	}
 }
 
-// TestScheduleExport_NestedUploadNoMethod verifies the nested upload path works
-// when only the URL is supplied (HTTP method left empty).
+// TestScheduleExport_NestedUploadNoMethod verifies that supplying only the URL
+// sends no http_method at all, leaving GitLab its documented PUT default. An
+// empty one sent in its place is not the same request: it names a method the
+// API does not accept.
 func TestScheduleExport_NestedUploadNoMethod(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v4/projects/1/export" && r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusAccepted)
-			return
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		wantString(t, "upload.url", body.Upload.URL, "https://archive.example.com/incoming/three.tar.gz")
+		if body.Upload.HTTPMethod != nil {
+			t.Errorf("upload.http_method = %q, want the key to be absent", *body.Upload.HTTPMethod)
 		}
-		http.NotFound(w, r)
-	})
-	client := testutil.NewTestClient(t, handler)
+	}))
 
 	_, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
 		ProjectID: "1",
-		Upload:    &ScheduleExportUploadInput{URL: "https://example.com/upload"},
+		Upload:    &ScheduleExportUploadInput{URL: "https://archive.example.com/incoming/three.tar.gz"},
 	})
 	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestScheduleExport_NoUpload_SendsNoDestination verifies that a caller naming
+// no upload destination has none sent. The archive then stays on the instance
+// for gitlab_download_project_export, which is the whole difference between the
+// two ways this action is used.
+func TestScheduleExport_NoUpload_SendsNoDestination(t *testing.T) {
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		if body.Upload.URL != nil {
+			t.Errorf("upload.url = %q, want the key to be absent", *body.Upload.URL)
+		}
+	}))
+
+	if _, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID:   "1",
+		Description: "no destination",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestScheduleExport_NestedUploadOverridesFlatFields pins the precedence the
+// deprecated aliases are documented to have: when both shapes are supplied the
+// nested one decides, flat and all. Nothing asserted it, so the fallback could
+// have won and a caller's structured destination would have been ignored for
+// a field they left behind.
+func TestScheduleExport_NestedUploadOverridesFlatFields(t *testing.T) {
+	client := testutil.NewTestClient(t, captureScheduleExport(t, func(body scheduleExportBody) {
+		wantString(t, "upload.url", body.Upload.URL, "https://nested.example.com/wins.tar.gz")
+		wantString(t, "upload.http_method", body.Upload.HTTPMethod, "POST")
+	}))
+
+	if _, err := ScheduleExport(t.Context(), client, ScheduleExportInput{
+		ProjectID:  "1",
+		UploadURL:  "https://flat.example.com/ignored.tar.gz",
+		UploadHTTP: "PUT",
+		Upload: &ScheduleExportUploadInput{
+			URL:        "https://nested.example.com/wins.tar.gz",
+			HTTPMethod: "POST",
+		},
+	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -932,6 +1070,93 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 	}
 	if out.ID != 99 {
 		t.Errorf("ID = %d, want 99", out.ID)
+	}
+}
+
+// TestImportFromFile_ForwardsDestination verifies that namespace, name, path
+// and overwrite reach GitLab in the multipart body, each from its own input.
+//
+// These four decide where the project lands and whether an existing one is
+// replaced, and nothing read them off the wire: every guard around them could
+// invert, sending nothing for a caller who named a namespace and an empty
+// value for one who did not, with the whole suite still green.
+func TestImportFromFile_ForwardsDestination(t *testing.T) {
+	wantParams := map[string]string{
+		"namespace": "destination-group",
+		"name":      "Restored Project",
+		"path":      "restored-path",
+		"overwrite": "true",
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/import" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("parse multipart: %v", err)
+			http.Error(w, "parse multipart", http.StatusInternalServerError)
+			return
+		}
+		for key, want := range wantParams {
+			t.Run(key, func(t *testing.T) {
+				if got := testutil.FormValue(form, key); got != want {
+					t.Errorf("%s = %q, want %q", key, got, want)
+				}
+			})
+		}
+		testutil.RespondJSON(w, http.StatusCreated,
+			`{"id":51,"name":"Restored Project","path":"restored-path","import_status":"scheduled"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	overwrite := true
+	out, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
+		Namespace:     "destination-group",
+		Name:          "Restored Project",
+		Path:          "restored-path",
+		Overwrite:     &overwrite,
+	})
+	if err != nil {
+		t.Fatalf("ImportFromFile() error: %v", err)
+	}
+	if out.ID != 51 {
+		t.Errorf("ID = %d, want 51", out.ID)
+	}
+}
+
+// TestImportFromFile_NoDestination_SendsNone verifies that the fields a caller
+// left unset are absent from the body rather than sent empty. GitLab reads an
+// omitted namespace as "the caller's own", so an empty string in its place
+// names a namespace that does not exist and the import is refused.
+func TestImportFromFile_NoDestination_SendsNone(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/import" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		form, err := testutil.ReadMultipartForm(r, 1<<20)
+		if err != nil {
+			t.Errorf("parse multipart: %v", err)
+			http.Error(w, "parse multipart", http.StatusInternalServerError)
+			return
+		}
+		for _, key := range []string{"namespace", "name", "path", "overwrite"} {
+			t.Run(key, func(t *testing.T) {
+				if _, ok := form.Value[key]; ok {
+					t.Errorf("%s = %q, want the field to be absent", key, testutil.FormValue(form, key))
+				}
+			})
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":52,"import_status":"scheduled"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("archive")),
+	}); err != nil {
+		t.Fatalf("ImportFromFile() error: %v", err)
 	}
 }
 
