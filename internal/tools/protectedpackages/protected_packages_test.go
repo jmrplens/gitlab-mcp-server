@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -530,8 +531,17 @@ func TestUpdate_SendsOnlyTheFieldsTheCallerNamed(t *testing.T) {
 // TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty verifies an update that
 // changes only the access levels sends JSON null for the pattern and type, not
 // "". client-go's option struct tags those two without omitempty, so a nil
-// pointer is always spelled out; the guard is what keeps it null, and null is
-// a field GitLab leaves alone where "" is a pattern that matches nothing.
+// pointer is always spelled out; the guard is what keeps it null rather than a
+// pattern matching nothing. GitLab reads either as blank and refuses the call,
+// which is why Update answers the 422 with a hint naming both fields.
+//
+// The assertion pins an upstream shape rather than a decision of this
+// repository (docs/development/upstream-bugs.md,
+// "UpdatePackageProtectionRulesOptions sends two explicit nulls on every
+// partial update"). It is expected to go red when client-go adds omitempty,
+// and that is the alarm it exists to raise: the day it does, the two keys
+// leave the body, the register entry is marked merged and this test asserts
+// their absence instead.
 func TestUpdate_LeavesAnUnnamedPatternNullRatherThanEmpty(t *testing.T) {
 	body := captureRuleRequestBody(t, func(client *gitlabclient.Client) {
 		if _, err := Update(context.Background(), client, UpdateInput{
@@ -708,6 +718,53 @@ func TestUpdate_APIError(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", RuleID: 1})
 	if err == nil {
 		t.Fatal("expected error for 500")
+	}
+}
+
+// TestUpdate_AnswersEachRefusalWithItsOwnHint verifies the two refusals Update
+// distinguishes carry the hint that answers them. A 422 is GitLab rejecting the
+// rule the two nulls describe, so the hint names the fields a caller has to
+// send whatever it meant to change; a 404 is a rule that is not there, so the
+// hint points at the listing. One hint for both would be wrong for one of them
+// whichever way it was written, and a branch that swallowed the 422 would look
+// identical to the caller of this package until the message was read.
+func TestUpdate_AnswersEachRefusalWithItsOwnHint(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{
+			name:   "422 names the two fields every update has to carry",
+			status: http.StatusUnprocessableEntity,
+			body:   `{"message":{"package_type":["can't be blank"]}}`,
+			want:   "send package_name_pattern and package_type on every update",
+		},
+		{
+			name:   "404 keeps the rule id hint",
+			status: http.StatusNotFound,
+			body:   `{"message":"404 Not found"}`,
+			want:   "verify rule_id with gitlab_list_package_protection_rules",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, tc.body)
+			}))
+			_, err := Update(context.Background(), client, UpdateInput{
+				ProjectID:                 testProjectID,
+				RuleID:                    1,
+				MinimumAccessLevelForPush: "maintainer",
+			})
+			if err == nil {
+				t.Fatalf("Update() error = nil, want the %d to be reported", tc.status)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Update() error = %q, want it to carry %q", err, tc.want)
+			}
+		})
 	}
 }
 
