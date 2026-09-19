@@ -9,13 +9,28 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes, to its related-action
+// lists and to the hints its Markdown writes alike. A project milestone is an
+// action of the project catalog group, so the ID a model is handed carries that
+// prefix; spelling it "milestone.get" names nothing and is answered with
+// "unknown action". One block, read from both files, because the two used to
+// be kept apart and drifted.
 const (
-	actionMilestoneGet           = "milestone.get"
-	actionMilestoneList          = "milestone.list"
-	actionMilestoneMergeRequests = "milestone.merge_requests"
-	actionMilestoneIssues        = "milestone.issues"
-	actionIssueList              = "issue.list"
-	paramMilestoneIID            = "milestone_iid"
+	actionMilestoneList          = "project.milestone_list"
+	actionMilestoneGet           = "project.milestone_get"
+	actionMilestoneCreate        = "project.milestone_create"
+	actionMilestoneUpdate        = "project.milestone_update"
+	actionMilestoneDelete        = "project.milestone_delete"
+	actionMilestoneIssues        = "project.milestone_issues"
+	actionMilestoneMergeRequests = "project.milestone_merge_requests"
+
+	actionProjectGet       = "project.get"
+	actionIssueList        = "issue.list"
+	actionIssueGet         = "issue.get"
+	actionMergeRequestList = "merge_request.list"
+	actionMergeRequestGet  = "merge_request.get"
+
+	paramMilestoneIID = "milestone_iid"
 )
 
 // ActionSpecs returns canonical specs for project milestone actions
@@ -93,7 +108,7 @@ func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 func milestoneOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute milestones domain action.", Tags: []string{"project", "milestone"},
-		RelatedActions: []string{"project.get", actionIssueList},
+		RelatedActions: []string{actionProjectGet, actionIssueList},
 		OpenWorld:      true,
 		OwnerPackage:   "milestones",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -124,12 +139,12 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 	case "milestone_create":
 		options.Usage = "Create a milestone in a project with title and optional description/start/due dates."
 		options.Aliases = []string{"create milestone", "new milestone", "add milestone"}
-		options.RelatedActions = []string{actionMilestoneGet, "milestone.update", actionIssueList}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneUpdate, actionIssueList}
 		options.IndividualTool.Description = "Create a new milestone in a project with title and optional description, start date, and due date. Returns: the created milestone with IID, state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list."
 	case "milestone_update":
 		options.Usage = "Update an existing milestone's title, description, dates, or state (close/activate) by milestone_iid."
 		options.Aliases = []string{"update milestone", "edit milestone", "close milestone", "reopen milestone"}
-		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, "milestone.delete"}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneList, actionMilestoneDelete}
 		options.IndividualTool.Description = "Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID. Returns: the updated milestone with state, dates, and web URL. See also: gitlab_milestone_get, gitlab_milestone_delete, gitlab_milestone_list."
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state_event", map[string]any{"enum": []any{"close", "activate"}}),
@@ -137,7 +152,7 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 	case "milestone_delete":
 		options.Usage = "Delete a milestone from a project by milestone_iid. Requires Maintainer or Owner role."
 		options.Aliases = []string{"delete milestone", "remove milestone", "destroy milestone", "drop milestone"}
-		options.RelatedActions = []string{actionMilestoneGet, "milestone.update", actionMilestoneList}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneUpdate, actionMilestoneList}
 		options.IndividualTool.Description = "Delete a milestone permanently from a project by milestone IID. Returns: a success confirmation naming the milestone and project. See also: gitlab_milestone_get, gitlab_milestone_update, gitlab_milestone_list."
 	case "milestone_issues":
 		options.Usage = "List the issues assigned to a milestone by milestone_iid, with ordering and pagination."
@@ -147,7 +162,7 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 	case "milestone_merge_requests":
 		options.Usage = "List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone merge requests", "MRs in milestone", "show milestone merge requests"}
-		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, "merge_request.list"}
+		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, actionMergeRequestList}
 		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list."
 	}
 

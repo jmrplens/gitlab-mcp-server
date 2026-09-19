@@ -10,17 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name, the one form every surface resolves.
-const (
-	actionGet           = "milestone.get"
-	actionCreate        = "milestone.create"
-	actionUpdate        = "milestone.update"
-	actionIssues        = "milestone.issues"
-	actionMergeRequests = "milestone.merge_requests"
-	actionIssueGet      = "issue.get"
-	actionMRGet         = "merge_request.get"
-)
-
 type milestoneNotFoundOutput struct {
 	Identifier string
 }
@@ -56,8 +45,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, v.Pagination, true,
-		toolutil.HintAction(actionGet, "read one milestone by its IID"),
-		toolutil.HintAction(actionCreate, "add a new milestone to the project"),
+		toolutil.HintAction(actionMilestoneGet, "read one milestone by its IID"),
+		toolutil.HintAction(actionMilestoneCreate, "add a new milestone to the project"),
 	)
 	return b.String()
 }
@@ -89,9 +78,9 @@ func FormatMarkdown(v Output) string {
 	c.Time("Updated", v.UpdatedAt)
 	c.Text("Description", v.Description)
 	c.End(
-		toolutil.HintAction(actionIssues, "list the issues in this milestone"),
-		toolutil.HintAction(actionMergeRequests, "list the merge requests in this milestone"),
-		toolutil.HintAction(actionUpdate, "change this milestone's dates or state"),
+		toolutil.HintAction(actionMilestoneIssues, "list the issues in this milestone"),
+		toolutil.HintAction(actionMilestoneMergeRequests, "list the merge requests in this milestone"),
+		toolutil.HintAction(actionMilestoneUpdate, "change this milestone's dates or state"),
 	)
 	return b.String()
 }
@@ -115,7 +104,7 @@ func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
 	}
 	toolutil.WriteListFooter(&b, v.Pagination, true,
 		toolutil.HintAction(actionIssueGet, "read one of these issues in full"),
-		toolutil.HintAction(actionMergeRequests, "see the merge requests in this milestone instead"),
+		toolutil.HintAction(actionMilestoneMergeRequests, "see the merge requests in this milestone instead"),
 	)
 	return b.String()
 }
@@ -156,8 +145,8 @@ func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, v.Pagination, true,
-		toolutil.HintAction(actionMRGet, "read one of these merge requests in full"),
-		toolutil.HintAction(actionIssues, "see the issues in this milestone instead"),
+		toolutil.HintAction(actionMergeRequestGet, "read one of these merge requests in full"),
+		toolutil.HintAction(actionMilestoneIssues, "see the issues in this milestone instead"),
 	)
 	return b.String()
 }
