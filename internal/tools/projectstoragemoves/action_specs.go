@@ -5,14 +5,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs for cross-linking project storage move actions.
+// Canonical action IDs for cross-linking project storage move actions, and the
+// only block naming them: the markdown hints read these too. The domain is
+// storage_move, the catalog group all three storage-move packages register
+// under, and never this package's own name — an ID spelled from the package
+// answers a model "unknown action" the moment it follows the hint, and nothing
+// in the repository validates one.
 const (
-	actionRetrieveAll   = "projectstoragemoves.retrieve_all_project"
-	actionRetrieveOne   = "projectstoragemoves.retrieve_project"
-	actionGet           = "projectstoragemoves.get_project"
-	actionGetForProject = "projectstoragemoves.get_project_for_project"
-	actionSchedule      = "projectstoragemoves.schedule_project"
-	actionScheduleAll   = "projectstoragemoves.schedule_all_project"
+	actionRetrieveAll   = "storage_move.retrieve_all_project"
+	actionRetrieveOne   = "storage_move.retrieve_project"
+	actionGet           = "storage_move.get_project"
+	actionGetForProject = "storage_move.get_project_for_project"
+	actionSchedule      = "storage_move.schedule_project"
+	actionScheduleAll   = "storage_move.schedule_all_project"
 )
 
 // guidanceProjectID describes the project_id parameter shared by the

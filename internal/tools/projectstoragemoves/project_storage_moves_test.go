@@ -4,6 +4,9 @@ package projectstoragemoves
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -14,6 +17,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// No two values in this fixture agree, deliberately. GitLab really does send
+// the same string for a project's name and path, and while the fixture did too
+// the converter could read either key into the other field and every assertion
+// still passed; the same goes for the move's created_at and the project's.
 const storageMoveJSON = `{
 	"id": 1,
 	"created_at": "2026-01-15T10:30:00Z",
@@ -23,7 +30,7 @@ const storageMoveJSON = `{
 	"project": {
 		"id": 42,
 		"description": "demo project",
-		"name": "my-project",
+		"name": "My Project",
 		"name_with_namespace": "Group / my-project",
 		"path": "my-project",
 		"path_with_namespace": "group/my-project",
@@ -50,8 +57,8 @@ func assertFullMove(t *testing.T, out ListOutput) {
 	if m.ID != 1 {
 		t.Errorf("ID = %d, want 1", m.ID)
 	}
-	if m.CreatedAt.IsZero() {
-		t.Error("expected non-zero CreatedAt")
+	if want := mustParseTime("2026-01-15T10:30:00Z"); !m.CreatedAt.Equal(want) {
+		t.Errorf("CreatedAt = %v, want %v", m.CreatedAt, want)
 	}
 	if out.Pagination.Page != 1 {
 		t.Errorf("Pagination.Page = %d, want 1", out.Pagination.Page)
@@ -63,12 +70,15 @@ func assertFullMove(t *testing.T, out ListOutput) {
 		t.Errorf("Project.ID = %d, want 42", m.Project.ID)
 	}
 	assertStr(t, "Project.Description", m.Project.Description, "demo project")
-	assertStr(t, "Project.Name", m.Project.Name, "my-project")
+	assertStr(t, "Project.Name", m.Project.Name, "My Project")
 	assertStr(t, "Project.NameWithNamespace", m.Project.NameWithNamespace, "Group / my-project")
 	assertStr(t, "Project.Path", m.Project.Path, "my-project")
 	assertStr(t, "Project.PathWithNamespace", m.Project.PathWithNamespace, "group/my-project")
-	if m.Project.CreatedAt == nil || m.Project.CreatedAt.IsZero() {
-		t.Error("expected non-nil/non-zero Project.CreatedAt")
+	if m.Project.CreatedAt == nil {
+		t.Fatal("expected non-nil Project.CreatedAt")
+	}
+	if want := mustParseTime("2025-12-01T08:00:00Z"); !m.Project.CreatedAt.Equal(want) {
+		t.Errorf("Project.CreatedAt = %v, want %v", m.Project.CreatedAt, want)
 	}
 }
 
@@ -77,6 +87,33 @@ func assertStr(t *testing.T, field, got, want string) {
 	if got != want {
 		t.Errorf("%s = %q, want %q", field, got, want)
 	}
+}
+
+// assertRequestBody compares the whole JSON body of a scheduling request with
+// what the handler is meant to send, keys and values alike. It runs on the
+// httptest goroutine, so it reports and never aborts. Nothing asserted the
+// bodies before, which left the one thing these two actions do — naming the
+// shards — readable from no test at all.
+func assertRequestBody(t *testing.T, r *http.Request, want map[string]any) {
+	t.Helper()
+	var got map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+		t.Errorf("decoding %s body: %v", r.URL.Path, err)
+		return
+	}
+	if !maps.Equal(normalizeBody(got), normalizeBody(want)) {
+		t.Errorf("request body = %v, want %v", got, want)
+	}
+}
+
+// normalizeBody renders each value as text so a body of scalars compares with
+// maps.Equal, which needs a comparable value type.
+func normalizeBody(m map[string]any) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
 }
 
 // TestRetrieveAll validates the RetrieveAll function covering success with
@@ -125,6 +162,26 @@ func TestRetrieveAll(t *testing.T) {
 				if out.Moves[0].ErrorMessage != "destination storage is full" {
 					t.Errorf("ErrorMessage = %q, want why the move failed", out.Moves[0].ErrorMessage)
 				}
+			},
+		},
+		{
+			// The captured error_message is read off a second decode of the
+			// same body, so it is paired with its move by position alone. On a
+			// one-move page every index agrees; two moves whose messages differ
+			// are what says the pairing follows the list rather than its head.
+			name:  "pairs each move with its own error message",
+			input: ListInput{},
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`,`+storageMoveNoProjectJSON+`]`)
+			},
+			wantMoves: 2,
+			validate: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if out.Moves[0].ID != 1 || out.Moves[1].ID != 2 {
+					t.Fatalf("move IDs = %d, %d, want 1, 2", out.Moves[0].ID, out.Moves[1].ID)
+				}
+				assertStr(t, "Moves[0].ErrorMessage", out.Moves[0].ErrorMessage, "")
+				assertStr(t, "Moves[1].ErrorMessage", out.Moves[1].ErrorMessage, "destination storage is full")
 			},
 		},
 		{
@@ -280,16 +337,20 @@ func TestRetrieveForProject(t *testing.T) {
 		validate  func(t *testing.T, out ListOutput)
 	}{
 		{
-			name:  "returns moves for project",
+			// The project-scoped listing publishes a pagination block and pairs
+			// each move with its own captured message exactly as the
+			// instance-wide one does; both are asserted here because each is
+			// filled by a statement of this handler's own.
+			name:  "returns moves for project with pagination",
 			input: ListForProjectInput{ProjectID: 42},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository_storage_moves")
-				testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+storageMoveJSON+`]`, testutil.PaginationHeaders{
-					Page: "1", PerPage: "20", Total: "1", TotalPages: "1",
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+storageMoveJSON+`,`+storageMoveNoProjectJSON+`]`, testutil.PaginationHeaders{
+					Page: "3", PerPage: "20", Total: "41", TotalPages: "3",
 				})
 			},
-			wantMoves: 1,
+			wantMoves: 2,
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if out.Moves[0].Project == nil {
@@ -297,6 +358,11 @@ func TestRetrieveForProject(t *testing.T) {
 				}
 				if out.Moves[0].Project.ID != 42 {
 					t.Errorf("Project.ID = %d, want 42", out.Moves[0].Project.ID)
+				}
+				assertStr(t, "Moves[0].ErrorMessage", out.Moves[0].ErrorMessage, "")
+				assertStr(t, "Moves[1].ErrorMessage", out.Moves[1].ErrorMessage, "destination storage is full")
+				if out.Pagination.Page != 3 || out.Pagination.PerPage != 20 || out.Pagination.TotalPages != 3 {
+					t.Errorf("Pagination = %+v, want page 3 of 3 at 20 per page", out.Pagination)
 				}
 			},
 		},
@@ -390,8 +456,11 @@ func TestGet(t *testing.T) {
 				if out.Project == nil {
 					t.Fatal("expected non-nil project")
 				}
-				if out.Project.Name != "my-project" {
-					t.Errorf("Project.Name = %q, want %q", out.Project.Name, "my-project")
+				if out.Project.Name != "My Project" {
+					t.Errorf("Project.Name = %q, want %q", out.Project.Name, "My Project")
+				}
+				if out.Project.Path != "my-project" {
+					t.Errorf("Project.Path = %q, want %q", out.Project.Path, "my-project")
 				}
 			},
 		},
@@ -560,6 +629,7 @@ func TestSchedule(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/repository_storage_moves")
+				assertRequestBody(t, r, map[string]any{"destination_storage_name": "storage2"})
 				testutil.RespondJSON(w, http.StatusCreated, storageMoveJSON)
 			},
 			validate: func(t *testing.T, out Output) {
@@ -575,7 +645,10 @@ func TestSchedule(t *testing.T) {
 		{
 			name:  "schedules move without destination (auto-select)",
 			input: ScheduleInput{ProjectID: 42},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				// An unset destination must be absent rather than sent empty:
+				// GitLab picks a shard by weight only when the key is missing.
+				assertRequestBody(t, r, map[string]any{})
 				testutil.RespondJSON(w, http.StatusCreated, storageMoveNoProjectJSON)
 			},
 			validate: func(t *testing.T, out Output) {
@@ -656,6 +729,13 @@ func TestScheduleAll(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodPost)
 				testutil.AssertRequestPath(t, r, "/api/v4/project_repository_storage_moves")
+				// Which shard is drained and which receives is the whole
+				// meaning of this bulk call, and the two names reach GitLab
+				// only through this handler's own assignments.
+				assertRequestBody(t, r, map[string]any{
+					"source_storage_name":      "default",
+					"destination_storage_name": "storage2",
+				})
 				w.WriteHeader(http.StatusAccepted)
 			},
 			validate: func(t *testing.T, out ScheduleAllOutput) {
@@ -671,7 +751,8 @@ func TestScheduleAll(t *testing.T) {
 		{
 			name:  "schedules all without optional params",
 			input: ScheduleAllInput{},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				assertRequestBody(t, r, map[string]any{})
 				w.WriteHeader(http.StatusAccepted)
 			},
 			validate: func(t *testing.T, out ScheduleAllOutput) {
