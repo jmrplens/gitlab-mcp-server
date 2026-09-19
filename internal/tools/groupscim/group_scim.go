@@ -38,9 +38,11 @@ type DeleteInput struct {
 }
 
 // Output represents a SCIM identity.
-// ExternUID is spelled the way GitLab spells it. The SDK struct declares the
-// key as external_uid and GitLab sends extern_uid, so the SDK's own field
-// never decodes and this output used to publish it always empty.
+// ExternUID is spelled the way GitLab spells it. The SDK struct declared the
+// key as external_uid until client-go v3.12.0, a key GitLab never sends, so
+// the SDK's own field never decoded and this output used to publish it always
+// empty; the capture read below is what filled it. v3.12.0 corrected the tag
+// to extern_uid, so both decoders now read the same key and agree.
 type Output struct {
 	toolutil.HintableOutput
 	ExternUID string `json:"extern_uid"`
