@@ -5,9 +5,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes. Group label actions are
+// projected into the gitlab_group catalog group, so every surface resolves
+// "group.group_label_get" and never the bare "group_label.get" the domain
+// reads like.
 const (
-	actionGroupLabelGet  = "group_label.get"
-	actionGroupLabelList = "group_label.list"
+	actionGroupLabelGet         = "group.group_label_get"
+	actionGroupLabelList        = "group.group_label_list"
+	actionGroupLabelCreate      = "group.group_label_create"
+	actionGroupLabelUpdate      = "group.group_label_update"
+	actionGroupLabelDelete      = "group.group_label_delete"
+	actionGroupLabelSubscribe   = "group.group_label_subscribe"
+	actionGroupLabelUnsubscribe = "group.group_label_unsubscribe"
+	actionGroupGet              = "group.get"
 )
 
 // ActionSpecs returns canonical specs for group label actions.
@@ -51,7 +61,7 @@ func groupLabelDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 func groupLabelOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute grouplabels domain action.", Tags: []string{"group", "label"},
-		RelatedActions: []string{"group.get", "group.issues"},
+		RelatedActions: []string{actionGroupGet, "group.issues"},
 		OpenWorld:      true,
 		OwnerPackage:   "grouplabels",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -94,25 +104,25 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 	"gitlab_group_label_list": {
 		usage:       "List labels defined in a group. Use filters such as search, with_counts, include_ancestor_groups, include_descendant_groups, only_group_labels, archived, order_by, sort, and pagination when the prompt asks for a group's labels.",
 		aliases:     []string{"list group labels", "show group labels", "find labels in group"},
-		related:     []string{actionGroupLabelGet, "group_label.create", "group.get"},
+		related:     []string{actionGroupLabelGet, actionGroupLabelCreate, actionGroupGet},
 		description: "List labels in a group with filtering and pagination. Returns: matching labels with color, text color, description, issue and merge request counts, priority, subscription state, and pagination metadata. See also: gitlab_group_label_get, gitlab_group_label_create, gitlab_group_get.",
 	},
 	"gitlab_group_label_get": {
 		usage:       "Get one group label by its numeric ID or name. Use after a list result or when the prompt names a concrete group label.",
 		aliases:     []string{"get group label", "show group label details", "fetch group label"},
-		related:     []string{actionGroupLabelList, "group_label.update", "group_label.delete"},
+		related:     []string{actionGroupLabelList, actionGroupLabelUpdate, actionGroupLabelDelete},
 		description: "Get a single group label by ID or name. Returns: the label with color, text color, description, issue and merge request counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.",
 	},
 	"gitlab_group_label_create": {
 		usage:       "Create a new label in a group. Provide group_id, a unique name, and a hex color. Add description, priority, or archived only when requested.",
 		aliases:     []string{"create group label", "add group label", "new group label"},
-		related:     []string{actionGroupLabelList, actionGroupLabelGet, "group_label.update"},
+		related:     []string{actionGroupLabelList, actionGroupLabelGet, actionGroupLabelUpdate},
 		description: "Create a new group label. Returns: the created label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.",
 	},
 	"gitlab_group_label_update": {
 		usage:       "Update an existing group label. Provide at least one of new_name, color, description, priority, or archived to change the label.",
 		aliases:     []string{"update group label", "edit group label", "rename group label"},
-		related:     []string{actionGroupLabelGet, actionGroupLabelList, "group_label.delete"},
+		related:     []string{actionGroupLabelGet, actionGroupLabelList, actionGroupLabelDelete},
 		description: "Update a group label. Returns: the updated label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.",
 	},
 	"gitlab_group_label_delete": {
@@ -124,13 +134,13 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 	"gitlab_group_label_subscribe": {
 		usage:       "Subscribe the authenticated user to a group label to receive notifications for issues and merge requests carrying it.",
 		aliases:     []string{"subscribe to group label", "follow group label", "watch group label", "get notifications for group label"},
-		related:     []string{actionGroupLabelGet, "group_label.unsubscribe"},
+		related:     []string{actionGroupLabelGet, actionGroupLabelUnsubscribe},
 		description: "Subscribe to a group label's notifications. Returns: the label with the updated subscription state. See also: gitlab_group_label_get, gitlab_group_label_unsubscribe.",
 	},
 	"gitlab_group_label_unsubscribe": {
 		usage:       "Unsubscribe the authenticated user from a group label so notifications for it stop.",
 		aliases:     []string{"unsubscribe from group label", "unfollow group label", "unwatch group label", "stop group label notifications"},
-		related:     []string{actionGroupLabelGet, "group_label.subscribe"},
+		related:     []string{actionGroupLabelGet, actionGroupLabelSubscribe},
 		description: "Unsubscribe from a group label's notifications. Returns: a success confirmation. See also: gitlab_group_label_get, gitlab_group_label_subscribe.",
 	},
 }

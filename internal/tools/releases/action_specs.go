@@ -9,13 +9,30 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes, to related actions and to
+// result hints alike. Both readers take them from here so the two cannot drift:
+// the asset-link actions are projected under the release domain, so every
+// surface resolves "release.link_list" and never "release_link.list".
 const (
-	actionReleaseGet      = "release.get"
-	actionReleaseList     = "release.list"
-	actionReleaseLinkList = "release_link.list"
-	paramTagName          = "tag_name"
-	roleGitTag            = "git_tag"
-	hintReleaseTagName    = "Release tag name from list output or task context."
+	actionReleaseGet            = "release.get"
+	actionReleaseList           = "release.list"
+	actionReleaseCreate         = "release.create"
+	actionReleaseUpdate         = "release.update"
+	actionReleaseDelete         = "release.delete"
+	actionReleaseLinkList       = "release.link_list"
+	actionReleaseLinkCreate     = "release.link_create"
+	actionReleaseLinkCreateBulk = "release.link_create_batch"
+	actionPackagePublishAndLink = "package.publish_and_link"
+	actionTagList               = "tag.list"
+	actionTagCreate             = "tag.create"
+	actionTagDelete             = "tag.delete"
+	actionChangelogAdd          = "repository.changelog_add"
+)
+
+const (
+	paramTagName       = "tag_name"
+	roleGitTag         = "git_tag"
+	hintReleaseTagName = "Release tag name from list output or task context."
 )
 
 // ActionSpecs returns canonical specs for release actions.
@@ -73,7 +90,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 	case "list":
 		options.Usage = "List releases for one project. Use this when the task asks for recent releases, release history, or release notes discovery."
 		options.Aliases = []string{"list releases", "show project releases", "find releases"}
-		options.RelatedActions = []string{actionReleaseGet, "tag.list", actionReleaseLinkList}
+		options.RelatedActions = []string{actionReleaseGet, actionTagList, actionReleaseLinkList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -88,7 +105,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 	case "get":
 		options.Usage = "Get a release by project_id and tag_name. Use this when a specific tag is known and detailed release notes/assets are needed."
 		options.Aliases = []string{"get release", "show release details", "lookup release"}
-		options.RelatedActions = []string{actionReleaseList, "release.update", "release.delete", actionReleaseLinkList}
+		options.RelatedActions = []string{actionReleaseList, actionReleaseUpdate, actionReleaseDelete, actionReleaseLinkList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,
@@ -113,7 +130,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 	case "create":
 		options.Usage = "Create a release for a tag (and optionally ref when creating a new tag). Use this for publishing release notes and lifecycle artifacts."
 		options.Aliases = []string{"create release", "publish release", "new release"}
-		options.RelatedActions = []string{"tag.create", "release_link.create", "repository.changelog_add"}
+		options.RelatedActions = []string{actionTagCreate, actionReleaseLinkCreate, actionChangelogAdd}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:   roleGitTag,
@@ -131,7 +148,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 	case "update":
 		options.Usage = "Update a release identified by project_id and tag_name. Use this to edit the title, notes, release date, or associated milestones."
 		options.Aliases = []string{"update release", "edit release", "modify release"}
-		options.RelatedActions = []string{actionReleaseGet, actionReleaseList, "release_link.create", "release.delete"}
+		options.RelatedActions = []string{actionReleaseGet, actionReleaseList, actionReleaseLinkCreate, actionReleaseDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,
@@ -144,7 +161,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 	case "delete":
 		options.Usage = "Delete a release identified by project_id and tag_name. Use this to remove a release record. The underlying Git tag is not deleted."
 		options.Aliases = []string{"delete release", "remove release", "destroy release"}
-		options.RelatedActions = []string{actionReleaseGet, actionReleaseList, "tag.delete"}
+		options.RelatedActions = []string{actionReleaseGet, actionReleaseList, actionTagDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramTagName: {
 				SemanticRole:     roleGitTag,

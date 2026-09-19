@@ -8,21 +8,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name: the one form every surface resolves,
-// where an individual tool name is a name two of the three surfaces do not
-// register. Epics are routes on the group catalog group, so every ID is
-// namespaced under the group domain, which is what a caller passes to
-// gitlab_execute_action and what the meta and individual surfaces resolve to
-// their own names.
-const (
-	hintActionEpicGet      = "group.epic_get"
-	hintActionEpicList     = "group.epic_list"
-	hintActionEpicCreate   = "group.epic_create"
-	hintActionEpicUpdate   = "group.epic_update"
-	hintActionEpicGetLinks = "group.epic_get_links"
-	hintActionEpicNoteList = "group.epic_note_list"
-)
-
 // userName returns the username of a nested user object, or "" when nil.
 func userName(u *BasicUserOutput) string {
 	if u == nil {
@@ -121,9 +106,9 @@ func FormatOutputMarkdown(e Output) string {
 	writeLinkedItems(c, e.LinkedItems)
 	writeChildren(c, e.Children)
 	c.End(
-		toolutil.HintAction(hintActionEpicUpdate, "modify this epic"),
-		toolutil.HintAction(hintActionEpicGetLinks, "see child epics"),
-		toolutil.HintAction(hintActionEpicNoteList, "see comments on this epic"),
+		toolutil.HintAction(actionEpicUpdate, "modify this epic"),
+		toolutil.HintAction(actionEpicGetLinks, "see child epics"),
+		toolutil.HintAction(actionEpicNoteList, "see comments on this epic"),
 	)
 	return b.String()
 }
@@ -184,8 +169,8 @@ func FormatListMarkdown(out ListOutput) string {
 		toolutil.WriteGraphQLPagination(&b, *out.Pagination, len(out.Epics))
 	}
 	toolutil.WriteListFooter(&b, offset, true,
-		toolutil.HintAction(hintActionEpicGet, "see full details of one epic"),
-		toolutil.HintAction(hintActionEpicCreate, "add a new epic"),
+		toolutil.HintAction(actionEpicGet, "see full details of one epic"),
+		toolutil.HintAction(actionEpicCreate, "add a new epic"),
 	)
 	return b.String()
 }
@@ -208,8 +193,8 @@ func FormatLinksMarkdown(out LinksOutput) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, true,
-		toolutil.HintAction(hintActionEpicGet, "see one child epic in full"),
-		toolutil.HintAction(hintActionEpicList, "list the group's epics"),
+		toolutil.HintAction(actionEpicGet, "see one child epic in full"),
+		toolutil.HintAction(actionEpicList, "list the group's epics"),
 	)
 	return b.String()
 }
