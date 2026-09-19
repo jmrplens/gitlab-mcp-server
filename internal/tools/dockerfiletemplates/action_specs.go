@@ -5,6 +5,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs for the two Dockerfile template actions. The specs
+// below are aggregated into the gitlab_template catalog group, so the domain
+// is "template" and not this package's name; RelatedActions publish these
+// IDs, and a model is answered "unknown action" for anything else.
+const (
+	actionDockerfileList = "template.dockerfile_list"
+	actionDockerfileGet  = "template.dockerfile_get"
+)
+
 // ActionSpecs returns canonical specs for Dockerfile template actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -31,7 +40,7 @@ func dockerfileTemplateOptions(actionName, individualTool string) toolutil.Actio
 			ParameterGuidance: map[string]toolutil.ParameterGuidance{
 				"key": {SemanticRole: "template_key", ValueSource: "Template key returned by dockerfile template list output.", ExampleBinding: `params.key:"Go"`},
 			},
-			RelatedActions: []string{"dockerfiletemplates.dockerfile_list", "repository.file_create"},
+			RelatedActions: []string{actionDockerfileList, "repository.file_create"},
 			OpenWorld:      true,
 			OwnerPackage:   "dockerfiletemplates",
 			IndividualTool: toolutil.IndividualToolSpec{
@@ -50,7 +59,7 @@ func dockerfileTemplateOptions(actionName, individualTool string) toolutil.Actio
 		},
 		Tags:           []string{"template", "dockerfile"},
 		Usage:          "Browse the catalog of GitLab-provided Dockerfile templates to discover template keys before fetching one for container image scaffolding.",
-		RelatedActions: []string{"dockerfiletemplates.dockerfile_get", "repository.file_create"},
+		RelatedActions: []string{actionDockerfileGet, "repository.file_create"},
 		OpenWorld:      true,
 		OwnerPackage:   "dockerfiletemplates",
 		IndividualTool: toolutil.IndividualToolSpec{

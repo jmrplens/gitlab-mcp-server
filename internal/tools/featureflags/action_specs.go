@@ -5,12 +5,24 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// Canonical catalog IDs this package publishes, read both by the
+// RelatedActions metadata below and by the HintAction calls in markdown.go,
+// which kept a second block of its own until these two drifted apart: this one
+// spelled the domain "feature_flag" and the action "get", which names no
+// action, while the hints had the right "feature_flags.feature_flag_get".
+// The specs are aggregated into the gitlab_feature_flags catalog group, so the
+// domain is plural and each action keeps its "feature_flag_" prefix.
+// actionFeatureFlagUserListGet is owned by the ffuserlists package, which is
+// merged into the same group.
+// TestFeatureFlagActionSpecs_PublishedActionIDs_NameCatalogActions holds every
+// ID here against the catalog.
 const (
-	actionFeatureFlagList   = "feature_flag.list"
-	actionFeatureFlagGet    = "feature_flag.get"
-	actionFeatureFlagCreate = "feature_flag.create"
-	actionFeatureFlagUpdate = "feature_flag.update"
-	actionFeatureFlagDelete = "feature_flag.delete"
+	actionFeatureFlagList        = "feature_flags.feature_flag_list"
+	actionFeatureFlagGet         = "feature_flags.feature_flag_get"
+	actionFeatureFlagCreate      = "feature_flags.feature_flag_create"
+	actionFeatureFlagUpdate      = "feature_flags.feature_flag_update"
+	actionFeatureFlagDelete      = "feature_flags.feature_flag_delete"
+	actionFeatureFlagUserListGet = "feature_flags.ff_user_list_get"
 )
 
 // ActionSpecs returns canonical specs for feature flag actions exposed as MCP
