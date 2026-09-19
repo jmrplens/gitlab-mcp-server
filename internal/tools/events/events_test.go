@@ -465,7 +465,7 @@ func TestCovtoContributionEventOutput_NilCreatedAt(t *testing.T) {
 		CreatedAt:      nil,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e, toolutil.EventExtra{})
+	out := toContributionEventOutput(e)
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt, got %q", out.CreatedAt)
 	}
@@ -492,7 +492,7 @@ func TestCovtoContributionEventOutput_WithDate(t *testing.T) {
 		CreatedAt:      &ts,
 		AuthorUsername: "covUser",
 	}
-	out := toContributionEventOutput(e, toolutil.EventExtra{})
+	out := toContributionEventOutput(e)
 	if !strings.Contains(out.CreatedAt, "2026-03-07") {
 		t.Errorf("expected date in CreatedAt, got %q", out.CreatedAt)
 	}
@@ -558,7 +558,7 @@ func TestCovtoProject_EventOutputFieldMapping(t *testing.T) {
 		CreatedAt:      "2026-03-07T12:34:56Z",
 		AuthorUsername: "covUser",
 	}
-	out := toProjectEventOutput(e, toolutil.EventExtra{})
+	out := toProjectEventOutput(e)
 	if out.ID != 101 || out.ProjectID != 202 || out.ActionName != "covAction" {
 		t.Errorf("field mapping failed: %+v", out)
 	}
@@ -899,7 +899,7 @@ func TestToContributionEventOutput_FullMirror(t *testing.T) {
 		Author: gl.BasicUser{ID: 5, Username: "u", Name: "User", State: "active", CreatedAt: &ts, AvatarURL: "a", WebURL: "w"},
 	}
 
-	out := toContributionEventOutput(e, toolutil.EventExtra{})
+	out := toContributionEventOutput(e)
 	assertTrue(t, out.PushData != nil && out.PushData.CommitCount == 3 && out.PushData.CommitTitle == "fix", "push_data")
 	assertTrue(t, out.Author != nil && out.Author.ID == 5 && out.Author.CreatedAt != "", "author")
 	assertContributionNote(t, out.Note)
@@ -929,7 +929,7 @@ func assertTrue(t *testing.T, cond bool, label string) {
 // TestToContributionEventOutput_EmptySubObjects verifies that zero-valued sub
 // objects are omitted (nil) so the output stays clean.
 func TestToContributionEventOutput_EmptySubObjects(t *testing.T) {
-	out := toContributionEventOutput(&gl.ContributionEvent{ID: 1}, toolutil.EventExtra{})
+	out := toContributionEventOutput(&gl.ContributionEvent{ID: 1})
 	if out.PushData != nil {
 		t.Errorf("expected nil push_data, got %+v", out.PushData)
 	}
@@ -1024,7 +1024,7 @@ func TestToProjectEventOutput_FullMirror(t *testing.T) {
 		},
 	}
 
-	out := toProjectEventOutput(e, toolutil.EventExtra{})
+	out := toProjectEventOutput(e)
 	assertTrue(t, out.Author != nil && out.Author.ID == 5, "author")
 	assertTrue(t, out.PushData != nil && out.PushData.CommitTitle == "ct", "push_data")
 	assertTrue(t, out.Note != nil && out.Note.NoteableType == "Issue" && out.Note.Author != nil && out.Note.Author.Email == "n@e" && out.Note.CreatedAt != "", "note")
@@ -1033,7 +1033,7 @@ func TestToProjectEventOutput_FullMirror(t *testing.T) {
 // TestToProjectEventOutput_EmptySubObjects verifies zero-valued ProjectEvent sub
 // objects are omitted.
 func TestToProjectEventOutput_EmptySubObjects(t *testing.T) {
-	out := toProjectEventOutput(&gl.ProjectEvent{ID: 1}, toolutil.EventExtra{})
+	out := toProjectEventOutput(&gl.ProjectEvent{ID: 1})
 	if out.PushData != nil || out.Note != nil || out.Author != nil {
 		t.Errorf("expected nil sub-objects, got %+v", out)
 	}
@@ -1216,12 +1216,11 @@ func TestEvents_OmitTheWikiPageGitLabDidNotSend(t *testing.T) {
 	}
 }
 
-// TestEvents_UnreadableCapturedFields verifies both event handlers report a
-// decode failure rather than an event missing what GitLab sent. client-go
-// carries the imported flag on both of its event structs as of v3.12.0, so
-// its decoder reaches the string GitLab sent there before the read beside it
-// does, and either refusal is what this asserts.
-func TestEvents_UnreadableCapturedFields(t *testing.T) {
+// TestEvents_UnreadableFields verifies both event handlers report a decode
+// failure rather than an event missing what GitLab sent. client-go carries the
+// imported flag on both of its event structs as of v3.12.0, so the SDK's
+// decoder is what refuses it now that the captured read is retired.
+func TestEvents_UnreadableFields(t *testing.T) {
 	const poisoned = `[{"id":1,"project_id":42,"action_name":"created","imported":"yes"}]`
 	cases := make([]testutil.CapturedCase, 0, len(eventCalls))
 	for _, eventCall := range eventCalls {

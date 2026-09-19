@@ -21,15 +21,14 @@ type TopicItem struct {
 	AvatarURL          string `json:"avatar_url,omitempty"`
 }
 
-// topicToItem converts the GitLab API response to the tool output format,
-// filling from the decoded topic and from what the capture read beside it.
-func topicToItem(t *gl.Topic, extra toolutil.TopicExtra) TopicItem {
+// topicToItem converts the GitLab API response to the tool output format.
+func topicToItem(t *gl.Topic) TopicItem {
 	return TopicItem{
 		ID:                 t.ID,
 		Name:               t.Name,
 		Title:              t.Title,
 		Description:        t.Description,
-		OrganizationID:     extra.OrganizationID,
+		OrganizationID:     t.OrganizationID,
 		TotalProjectsCount: t.TotalProjectsCount,
 		AvatarURL:          t.AvatarURL,
 	}
@@ -66,19 +65,14 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.Search != "" {
 		opts.Search = new(input.Search)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	topics, resp, err := client.GL().Topics.ListTopics(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_topics", err, http.StatusForbidden,
 			"topic listing is public on most instances; search filter is case-insensitive substring; without_projects=true returns orphaned topics (admin-managed)")
 	}
-	extras, err := toolutil.CapturedTopics(captured, len(topics))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErr("list_topics", err)
-	}
 	items := make([]TopicItem, 0, len(topics))
-	for i, t := range topics {
-		items = append(items, topicToItem(t, extras[i]))
+	for _, t := range topics {
+		items = append(items, topicToItem(t))
 	}
 	return ListOutput{
 		Topics:     items,
@@ -104,17 +98,12 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if input.TopicID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("get_topic", "topic_id")
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	topic, _, err := client.GL().Topics.GetTopic(input.TopicID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_topic", err, http.StatusNotFound,
 			"verify topic id (numeric) with gitlab_list_topics; topic ids are instance-wide. Names are unique per instance")
 	}
-	extra, err := toolutil.CapturedTopic(captured)
-	if err != nil {
-		return GetOutput{}, toolutil.WrapErr("get_topic", err)
-	}
-	return GetOutput{Topic: topicToItem(topic, extra)}, nil
+	return GetOutput{Topic: topicToItem(topic)}, nil
 }
 
 // Create.
@@ -143,17 +132,12 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	topic, _, err := client.GL().Topics.CreateTopic(opts, gl.WithContext(ctx))
 	if err != nil {
 		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_topic", err, http.StatusForbidden,
 			"requires administrator access; name must be unique on the instance; title is the human-readable display name; avatar must be a valid file upload")
 	}
-	extra, err := toolutil.CapturedTopic(captured)
-	if err != nil {
-		return CreateOutput{}, toolutil.WrapErr("create_topic", err)
-	}
-	return CreateOutput{Topic: topicToItem(topic, extra)}, nil
+	return CreateOutput{Topic: topicToItem(topic)}, nil
 }
 
 // Update.
@@ -187,17 +171,12 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Description != "" {
 		opts.Description = new(input.Description)
 	}
-	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	topic, _, err := client.GL().Topics.UpdateTopic(input.TopicID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return UpdateOutput{}, toolutil.WrapErrWithStatusHint("update_topic", err, http.StatusForbidden,
 			"requires administrator access; verify id with gitlab_list_topics; renaming may break existing project associations. Prefer updating title and description")
 	}
-	extra, err := toolutil.CapturedTopic(captured)
-	if err != nil {
-		return UpdateOutput{}, toolutil.WrapErr("update_topic", err)
-	}
-	return UpdateOutput{Topic: topicToItem(topic, extra)}, nil
+	return UpdateOutput{Topic: topicToItem(topic)}, nil
 }
 
 // Delete.
