@@ -8,11 +8,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The action names this package's specs carry. They are not action IDs: the
+// catalog prefixes each with the group it aggregates this package into.
 const (
-	actionUpload               = "upload"
-	actionUploadList           = "upload_list"
-	actionUploadDelete         = "upload_delete"
-	actionUploadDeleteBySecret = "upload_delete_by_secret"
+	specUpload               = "upload"
+	specUploadList           = "upload_list"
+	specUploadDelete         = "upload_delete"
+	specUploadDeleteBySecret = "upload_delete_by_secret"
+)
+
+// The canonical catalog action IDs this package publishes as related actions.
+// Upload actions are aggregated into the project group
+// (internal/tools/action_specs.go), so an ID is the group prefix plus the spec
+// name; the bare spec names were published here as IDs and named nothing the
+// catalog holds, so a model following one was answered "unknown action".
+// Deriving each ID from the name its spec carries is what keeps the two from
+// drifting apart again.
+const (
+	uploadGroup = "project."
+
+	actionUpload               = uploadGroup + specUpload
+	actionUploadList           = uploadGroup + specUploadList
+	actionUploadDelete         = uploadGroup + specUploadDelete
+	actionUploadDeleteBySecret = uploadGroup + specUploadDeleteBySecret
 	actionProjectGet           = "project.get"
 )
 
@@ -20,22 +38,22 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_project_upload — upload a file (path or base64) to a project's markdown upload area.
-		uploadCreateSpec(actionUpload, toolutil.RouteActionWithRequest(client, Upload), "gitlab_project_upload",
+		uploadCreateSpec(specUpload, toolutil.RouteActionWithRequest(client, Upload), "gitlab_project_upload",
 			"Use to upload a file into a project's Markdown attachments store and obtain a Markdown-embeddable reference.",
 			"Upload a file (via local file_path or base64 content) to a project's Markdown attachments store. Returns: the upload's id (GitLab 17.3+), alt text, relative and full URLs, full path, and a Markdown embed reference. See also: gitlab_project_upload_list, gitlab_project_upload_delete, gitlab_project_get.",
 			[]string{actionUploadList, actionProjectGet}),
 		// gitlab_project_upload_list — list existing markdown uploads for a project.
-		uploadReadSpec(actionUploadList, toolutil.RouteAction(client, List), "gitlab_project_upload_list",
+		uploadReadSpec(specUploadList, toolutil.RouteAction(client, List), "gitlab_project_upload_list",
 			"Use to enumerate files uploaded into a project's Markdown attachments store.",
 			"List all Markdown uploads in a project. Returns: each upload's id, filename, size, creation time, and uploader (id, username, name), plus pagination metadata. See also: gitlab_project_upload, gitlab_project_upload_delete, gitlab_project_get.",
 			[]string{actionUpload, actionUploadDelete, actionProjectGet}),
 		// gitlab_project_upload_delete — delete a markdown upload by ID (destructive).
-		uploadDeleteSpec(actionUploadDelete, toolutil.DestructiveAction(client, deleteOutput), "gitlab_project_upload_delete",
+		uploadDeleteSpec(specUploadDelete, toolutil.DestructiveAction(client, deleteOutput), "gitlab_project_upload_delete",
 			"Use to permanently remove a project Markdown upload identified by its numeric upload ID.",
-			"Delete a project Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_project_upload_list, gitlab_project_upload, gitlab_project_get.",
-			[]string{actionUploadList, actionProjectGet}),
+			"Delete a project Markdown upload by its numeric upload ID. Returns: a success confirmation. See also: gitlab_project_upload_list, gitlab_project_upload_delete_by_secret, gitlab_project_get.",
+			[]string{actionUploadList, actionUploadDeleteBySecret, actionProjectGet}),
 		// gitlab_project_upload_delete_by_secret — delete a markdown upload by its secret and filename (destructive).
-		uploadDeleteSpec(actionUploadDeleteBySecret, toolutil.DestructiveAction(client, deleteBySecretOutput), "gitlab_project_upload_delete_by_secret",
+		uploadDeleteSpec(specUploadDeleteBySecret, toolutil.DestructiveAction(client, deleteBySecretOutput), "gitlab_project_upload_delete_by_secret",
 			"Use to permanently remove a project Markdown upload identified by the secret and filename from its /uploads/<secret>/<filename> URL when the numeric upload ID is unknown.",
 			"Delete a project Markdown upload by its 32-character secret and filename (the /uploads/<secret>/<filename> reference). Returns: a success confirmation. See also: gitlab_project_upload_delete, gitlab_project_upload_list, gitlab_project_upload.",
 			[]string{actionUploadList, actionUploadDelete, actionProjectGet}),

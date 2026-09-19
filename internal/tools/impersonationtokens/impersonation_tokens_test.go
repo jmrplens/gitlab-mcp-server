@@ -392,14 +392,14 @@ const (
 	tokHintsOpening = "\n---\n\U0001F4A1 **Next steps:**\n"
 
 	tokCardHints = tokHintsOpening +
-		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke this token\n"
+		"- Use action 'user.revoke_impersonation_token' to revoke this token\n"
 
 	tokListHints = tokHintsOpening +
-		"- Use action 'impersonationtokens.get_impersonation_token' to read one of these tokens in full\n" +
-		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke one of these tokens\n"
+		"- Use action 'user.get_impersonation_token' to read one of these tokens in full\n" +
+		"- Use action 'user.revoke_impersonation_token' to revoke one of these tokens\n"
 
 	tokRevokeHints = tokHintsOpening +
-		"- Use action 'impersonationtokens.list_impersonation_tokens' to list the tokens this user has left\n"
+		"- Use action 'user.list_impersonation_tokens' to list the tokens this user has left\n"
 )
 
 // TestFormatListMarkdownString_Empty pins the whole response of a list with no
@@ -780,7 +780,7 @@ func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 		"- **Token**: `glpat-secret`\n" +
 		tokHintsOpening +
 		"- Store the token securely. It cannot be retrieved later\n" +
-		"- Use action 'impersonationtokens.revoke_impersonation_token' to revoke this token\n"
+		"- Use action 'user.revoke_impersonation_token' to revoke this token\n"
 
 	if got := FormatMarkdownString(out); got != want {
 		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
