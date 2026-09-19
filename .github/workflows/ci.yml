@@ -16,8 +16,8 @@
 #   docker (×2) ─── docker-build
 #   cross_platform (×3) ─── cross_platform_summary
 #   generated · golangci-lint · govulncheck · markdown · site-lint · hadolint
-#   server-json-schema · supply-chain · docs-audit ─── checks
-#                                                          └──► ci
+#   server-json-schema · supply-chain · docs-audit · em-dash ─── checks
+#                                                                   └──► ci
 #
 # Every edge joins neighbouring columns, and that is deliberate. GitHub draws
 # a job with no parent and no child at the end of the first column, in one box
@@ -850,6 +850,40 @@ jobs:
       - name: Test the installer and packaging scripts
         run: python3 -m unittest discover -s scripts -p "*_test.py" -v
 
+  # Nothing written in this repository uses an em dash (U+2014), and until this
+  # job existed nothing noticed. Eleven of the forty-two commits of one sweep
+  # added one, and a late commit had to take fifty-one of them back out of the
+  # diff by hand.
+  #
+  # The added lines only. The tree already carries thousands of em dashes in
+  # prose written before the rule, so a whole-tree check would be red on its
+  # first run and switched off on its second. The comparison is net over the
+  # branch rather than per commit, so a branch that adds one and cleans it up
+  # at its tip passes, which is the granularity a stack needs.
+  #
+  # The other surface, the pull request title and body, is judged at the end of
+  # the "Checks" job instead, for a reason recorded there.
+  em-dash:
+    name: "✒️ Em dash"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # The whole history, like the Docker job above: the gate compares
+          # this branch with its merge base, which a shallow clone has no
+          # commits to compute.
+          fetch-depth: 0
+      - name: Check the lines this change adds
+        env:
+          # On a pull request, the commit the branch grew from, which for a
+          # stacked pull request is the stack's base rather than the layer
+          # below, since GitHub tests a stacked layer as the stack merged into
+          # that base. On a push to main, the commit that was there before.
+          EM_DASH_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: make check-em-dash
+
   # One node for the jobs that depend on nothing. They are fanned in here
   # rather than straight into "ci" for the graph's sake, explained at the top
   # of the file: this node lands below the matrix summaries, because its
@@ -862,6 +896,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
+    # A job-level block replaces the workflow-level one, so contents is
+    # restated. pull-requests is for the description step below, which asks the
+    # API what the description says right now.
+    permissions:
+      contents: read
+      pull-requests: read
     # Everything that can fail a change is listed, the test jobs included: the
     # verdict used to take only the analysis jobs, so a failing unit suite, a
     # compile error on another platform, or a red Windows leg could sit under
@@ -878,6 +918,7 @@ jobs:
       - server-json-schema
       - supply-chain
       - docs-audit
+      - em-dash
       - coverage
       - compile
       - typecheck
@@ -887,7 +928,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-          sparse-checkout: .github/scripts
+          # Cone mode, so the repository root comes with it and the Makefile
+          # target below is reachable without the rest of the tree.
+          sparse-checkout: |
+            .github/scripts
+            scripts
       - name: Decide
         env:
           RESULTS: ${{ toJSON(needs) }}
@@ -896,6 +941,30 @@ jobs:
           # skipped by design rather than failed.
           MAY_SKIP: docker-build
         run: bash .github/scripts/needs-verdict.sh
+      # The other half of the em dash gate, and the half no later commit can
+      # fix: this repository squash merges, so the pull request title and body
+      # become the commit message on main, and editing the pull request after
+      # the merge does not reach the commit. The same step refuses a generated
+      # block a review bot injected into the body, which is the failure that
+      # prompted all of this: the block was stripped before merging, the bot
+      # put it back, and the merge carried it into main's history.
+      #
+      # It is checked apart from the diff because it is not part of the commit
+      # and can change after the diff was judged, so two properties matter.
+      # It reads the description from the API at the moment it runs rather than
+      # from the workflow event payload, which is a snapshot taken when the run
+      # was queued and would not show a block reinjected since. And it runs
+      # here, in the last job before the verdict, so that a reinjection during
+      # the run is still caught. A reinjection after the run finishes is only
+      # caught by the next run, which is what re-running CI before a merge is
+      # for. always(), so a failure elsewhere neither hides it nor costs the
+      # verdict above its printout.
+      - name: Check the pull request description
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: make check-pr-description
 
   # Every job above runs on Linux, and until this one existed that was the only
   # platform any test in this repository had ever seen, while the project ships
