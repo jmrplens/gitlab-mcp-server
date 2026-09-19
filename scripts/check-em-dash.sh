@@ -297,11 +297,17 @@ edit the description:
 
     gh pr edit <number>
 
-The bot reinjects the block after an edit, which is why this step reads the
-description live instead of trusting the workflow event payload, and why it
-runs at the end of the pipeline rather than at the start. Strip it before the
-merge: a squash merge copies the description into main's history, and editing
-the pull request afterwards does not reach the commit.
+This should not be reachable. `.coderabbit.yaml` sets
+high_level_summary_in_walkthrough, which puts the summary in the walkthrough
+comment and leaves the description alone, so a block appearing here means that
+setting stopped working, the bot changed where it writes, or another bot is
+writing now. Fix the configuration rather than the description: stripping a
+block by hand loses a race that runs on every review, since the bot writes it
+again on the next one.
+
+It matters because a squash merge copies the description into main's history,
+where editing the pull request afterwards does not reach the commit. That is
+how pull request 832 carried one in permanently.
 EOF
   fi
 
