@@ -20,10 +20,30 @@ const (
 	actionMRMilestoneGet     = "merge_request.event_mr_milestone_get"
 	actionMRLabelList        = "merge_request.event_mr_label_list"
 	actionMRLabelGet         = "merge_request.event_mr_label_get"
-	domainResourceEvents     = "resourceevents"
-	tagResourceEvent         = "resource_event"
-	usageDefault             = "Use to execute resourceevents domain action."
-	editionPremium           = "premium"
+
+	// Epic events are routes on the group catalog group, not on a domain of
+	// their own: buildGroupActionSpecs in internal/tools/action_specs.go
+	// aggregates EpicActionSpecs below, so a spec registered as
+	// event_epic_label_list is published as group.event_epic_label_list. The
+	// two entries here used to be written under an "epic" domain the catalog
+	// does not have, along with epic.get and epic.list, and all four resolved
+	// to nothing. The IDs are concatenated from the same constants the specs
+	// are built from, so renaming an action moves both at once.
+	domainGroup = "group."
+
+	specEpicLabelList = "event_epic_label_list"
+	specEpicLabelGet  = "event_epic_label_get"
+
+	actionEpicLabelList = domainGroup + specEpicLabelList
+	actionEpicLabelGet  = domainGroup + specEpicLabelGet
+	actionEpicGet       = domainGroup + "epic_get"
+	actionEpicList      = domainGroup + "epic_list"
+	actionGroupGet      = domainGroup + "get"
+
+	domainResourceEvents = "resourceevents"
+	tagResourceEvent     = "resource_event"
+	usageDefault         = "Use to execute resourceevents domain action."
+	editionPremium       = "premium"
 )
 
 // IssueActionSpecs returns canonical specs for issue resource event actions.
@@ -96,8 +116,8 @@ func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions 
 // Epic label events are a GitLab Premium/Ultimate (Edition: editionPremium) feature.
 func EpicActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		epicEventReadSpec("event_epic_label_list", toolutil.RouteAction(client, ListGroupEpicLabelEvents), "gitlab_list_group_epic_label_events"),
-		epicEventReadSpec("event_epic_label_get", toolutil.RouteAction(client, GetGroupEpicLabelEvent), "gitlab_get_group_epic_label_event"),
+		epicEventReadSpec(specEpicLabelList, toolutil.RouteAction(client, ListGroupEpicLabelEvents), "gitlab_list_group_epic_label_events"),
+		epicEventReadSpec(specEpicLabelGet, toolutil.RouteAction(client, GetGroupEpicLabelEvent), "gitlab_get_group_epic_label_event"),
 	}
 }
 
@@ -182,13 +202,13 @@ var eventActionMeta = map[string]eventActionMetaEntry{
 		usage:       "List the label-change audit events for one group epic (when each label was added or removed and by whom). Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"list epic label events", "epic label history", "label changes on epic", "group epic label events"},
 		description: "List label events for a group epic (Premium/Ultimate). Returns: label events with action, the label object, the acting user, and pagination metadata. See also: gitlab_get_group_epic_label_event, gitlab_epic_get.",
-		related:     []string{"epic.event_epic_label_get", "epic.get", "epic.list", "group.get"},
+		related:     []string{actionEpicLabelGet, actionEpicGet, actionEpicList, actionGroupGet},
 	},
 	"gitlab_get_group_epic_label_event": {
 		usage:       "Fetch one group epic label-change event by id (a single add/remove of a label). Requires GitLab Premium/Ultimate.",
 		aliases:     []string{"get epic label event", "show epic label change", "group epic label event"},
 		description: "Get a single label event for a group epic (Premium/Ultimate). Returns: the event with action, the label object, and the acting user. See also: gitlab_list_group_epic_label_events, gitlab_epic_get.",
-		related:     []string{"epic.event_epic_label_list", "epic.get", "epic.list", "group.get"},
+		related:     []string{actionEpicLabelList, actionEpicGet, actionEpicList, actionGroupGet},
 	},
 	"gitlab_issue_milestone_event_list": {
 		usage:       "List the milestone-change audit events for one issue (when the milestone was assigned or removed and by whom).",

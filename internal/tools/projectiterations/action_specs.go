@@ -5,10 +5,29 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The name this spec registers under, and the canonical catalog IDs it names:
+// its own, the sibling actions its RelatedActions point a model at, and the
+// two the hints in markdown.go name. One block, because the ID the spec
+// publishes and the ID a hint names are the same string and used to be written
+// in two files; the milestone entry here was "milestone.list_project", under a
+// domain the catalog does not have, and resolved to nothing.
+const (
+	// domainIssue is the catalog group this spec is aggregated into, by
+	// buildIssueActionSpecs in internal/tools/action_specs.go.
+	domainIssue = "issue."
+
+	specListProject = "iteration_list_project"
+
+	actionListProject   = domainIssue + specListProject
+	actionListGroup     = domainIssue + "iteration_list_group"
+	actionIssueList     = domainIssue + "list"
+	actionMilestoneList = "project.milestone_list"
+)
+
 // IssueActionSpecs returns canonical specs for project iteration actions exposed through gitlab_issue.
 func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		issueIterationReadSpec("iteration_list_project", toolutil.RouteAction(client, List), "gitlab_list_project_iterations", "projectiterations"),
+		issueIterationReadSpec(specListProject, toolutil.RouteAction(client, List), "gitlab_list_project_iterations", "projectiterations"),
 	}
 }
 
@@ -21,7 +40,7 @@ func issueIterationReadSpec(name string, route toolutil.ActionRoute, individualT
 		},
 		Usage:          "List the iterations (time-boxed sprints) scoped to one project, including those inherited from ancestor groups when include_ancestors is set. Use this when the prompt asks for a project's sprints, current iteration, or upcoming cadences. Filter by state (opened, upcoming, current, closed, all) and search by title. Iterations are a Premium/Ultimate feature: a 404 usually means the instance or project tier lacks iteration support, not that the project is missing.",
 		Tags:           []string{"issue", "iteration", "sprint"},
-		RelatedActions: []string{"issue.iteration_list_group", "issue.list", "milestone.list_project"},
+		RelatedActions: []string{actionListGroup, actionIssueList, actionMilestoneList},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:     "scope_project",

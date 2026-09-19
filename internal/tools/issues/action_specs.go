@@ -8,19 +8,81 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The names these specs register under, and the canonical catalog IDs they are
+// published as.
+//
+// A spec is registered under its bare name and the catalog publishes it under
+// the group it is aggregated into, so the ID a model calls is domainIssue plus
+// that name. Every ID naming an action of this package is concatenated from
+// the constant its spec is built from, so the two cannot drift apart; the ones
+// naming another package's action are written out, with the domain constant
+// where the action sits on this same catalog group. markdown.go used to keep a
+// second block of its own, and the two disagreed: it had issue.note_list while
+// the RelatedActions here said issue.notes_list, which resolves to no action.
 const (
-	actionIssueList         = "issue.list"
-	actionSearchIssues      = "search.issues"
-	actionIssueGet          = "issue.get"
-	actionIssueUpdate       = "issue.update"
-	actionIssueTimeStatsGet = "issue.time_stats_get"
-	actionIssueTimeEstSet   = "issue.time_estimate_set"
-	actionIssueSpentTimeAdd = "issue.spent_time_add"
-	toolIssueListGroup      = "gitlab_issue_list_group"
-	paramStateEvent         = "state_event"
-	roleScopeProject        = "scope_project"
-	paramProjectID          = "project_id"
-	domainIssues            = "issues"
+	// domainIssue is the catalog group these specs are aggregated into, by
+	// buildIssueActionSpecs in internal/tools/action_specs.go.
+	domainIssue = "issue."
+
+	specCreate            = "create"
+	specGet               = "get"
+	specGetByID           = "get_by_id"
+	specList              = "list"
+	specListAll           = "list_all"
+	specListGroup         = "list_group"
+	specUpdate            = "update"
+	specDelete            = "delete"
+	specReorder           = "reorder"
+	specMove              = "move"
+	specSubscribe         = "subscribe"
+	specUnsubscribe       = "unsubscribe"
+	specCreateTodo        = "create_todo"
+	specTimeEstimateSet   = "time_estimate_set"
+	specTimeEstimateReset = "time_estimate_reset"
+	specSpentTimeAdd      = "spent_time_add"
+	specSpentTimeReset    = "spent_time_reset"
+	specTimeStatsGet      = "time_stats_get"
+	specParticipants      = "participants"
+	specMRsClosing        = "mrs_closing"
+	specMRsRelated        = "mrs_related"
+	// specGroupIssues is the group-scoped listing, which is a route on the
+	// gitlab_group catalog group rather than on gitlab_issue.
+	specGroupIssues = "issues"
+
+	actionIssueCreate         = domainIssue + specCreate
+	actionIssueGet            = domainIssue + specGet
+	actionIssueList           = domainIssue + specList
+	actionIssueListGroup      = domainIssue + specListGroup
+	actionIssueUpdate         = domainIssue + specUpdate
+	actionIssueDelete         = domainIssue + specDelete
+	actionIssueSubscribe      = domainIssue + specSubscribe
+	actionIssueUnsubscribe    = domainIssue + specUnsubscribe
+	actionIssueTimeEstSet     = domainIssue + specTimeEstimateSet
+	actionIssueTimeEstReset   = domainIssue + specTimeEstimateReset
+	actionIssueSpentTimeAdd   = domainIssue + specSpentTimeAdd
+	actionIssueSpentTimeReset = domainIssue + specSpentTimeReset
+	actionIssueTimeStatsGet   = domainIssue + specTimeStatsGet
+	actionIssueMRsClosing     = domainIssue + specMRsClosing
+	actionIssueMRsRelated     = domainIssue + specMRsRelated
+
+	// Actions of other packages. The two note actions are routes the
+	// issuenotes package registers on this same catalog group; the rest
+	// belong to other groups entirely.
+	actionIssueNoteList   = domainIssue + "note_list"
+	actionIssueNoteCreate = domainIssue + "note_create"
+	actionGroupGet        = "group.get"
+	actionSearchIssues    = "search.issues"
+	actionTodoMarkDone    = "user.todo_mark_done"
+	actionMRGet           = "merge_request.get"
+	// The merge request diff is a route on the mr_review group, not on
+	// merge_request: "merge_request.changes_get" resolved to nothing.
+	actionMRChangesGet = "mr_review.changes_get"
+
+	toolIssueListGroup = "gitlab_issue_list_group"
+	paramStateEvent    = "state_event"
+	roleScopeProject   = "scope_project"
+	paramProjectID     = "project_id"
+	ownerPackage       = "issues"
 )
 
 // ActionSpecs returns canonical specs for issue lifecycle actions exposed
@@ -30,49 +92,49 @@ const (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_issue_create — open a new issue in a project.
-		issueCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_issue_create"),
+		issueCreateSpec(specCreate, toolutil.RouteAction(client, Create), "gitlab_issue_create"),
 		// gitlab_issue_get — fetch a single issue by IID (returns a structured not-found result on 404).
-		issueReadSpec("get", toolutil.RouteAction(client, getWithEmbeddedResource), "gitlab_issue_get"),
+		issueReadSpec(specGet, toolutil.RouteAction(client, getWithEmbeddedResource), "gitlab_issue_get"),
 		// gitlab_issue_get_by_id — fetch a single issue by its global database ID.
-		issueReadSpec("get_by_id", toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
+		issueReadSpec(specGetByID, toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
 		// gitlab_issue_list — list project issues with optional filtering and pagination.
-		issueReadSpec("list", toolutil.RouteAction(client, List), "gitlab_issue_list"),
+		issueReadSpec(specList, toolutil.RouteAction(client, List), "gitlab_issue_list"),
 		// gitlab_issue_list_all — list issues visible to the caller across all projects.
-		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
+		issueReadSpec(specListAll, toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
 		// gitlab_issue_list_group — list issues across a group and its projects.
-		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
+		issueReadSpec(specListGroup, toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
 		// gitlab_issue_update — update issue fields; supports close/reopen via state_event.
 		issueUpdateActionSpec(client),
 		// gitlab_issue_delete — permanently delete an issue (destructive, requires confirmation).
-		issueDeleteSpec("delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_delete"),
+		issueDeleteSpec(specDelete, toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_delete"),
 		// gitlab_issue_reorder — move an issue before/after another issue in the list.
-		issueUpdateSpec("reorder", toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
+		issueUpdateSpec(specReorder, toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
 		// gitlab_issue_move — move an issue to a different project.
-		issueUpdateSpec("move", toolutil.RouteAction(client, Move), "gitlab_issue_move"),
+		issueUpdateSpec(specMove, toolutil.RouteAction(client, Move), "gitlab_issue_move"),
 		// gitlab_issue_subscribe — subscribe the caller to issue notifications.
-		issueUpdateSpec("subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_issue_subscribe"),
+		issueUpdateSpec(specSubscribe, toolutil.RouteAction(client, Subscribe), "gitlab_issue_subscribe"),
 		// gitlab_issue_unsubscribe — remove the caller's subscription from the issue.
-		issueUpdateSpec("unsubscribe", toolutil.RouteAction(client, Unsubscribe), "gitlab_issue_unsubscribe"),
+		issueUpdateSpec(specUnsubscribe, toolutil.RouteAction(client, Unsubscribe), "gitlab_issue_unsubscribe"),
 		// gitlab_issue_create_todo — add a to-do item for the caller on this issue.
-		issueCreateSpec("create_todo", toolutil.RouteAction(client, CreateTodo), "gitlab_issue_create_todo"),
+		issueCreateSpec(specCreateTodo, toolutil.RouteAction(client, CreateTodo), "gitlab_issue_create_todo"),
 		// gitlab_issue_time_estimate_set — set the time estimate (e.g. "3h30m").
-		issueUpdateSpec("time_estimate_set", toolutil.RouteAction(client, SetTimeEstimate), "gitlab_issue_time_estimate_set"),
+		issueUpdateSpec(specTimeEstimateSet, toolutil.RouteAction(client, SetTimeEstimate), "gitlab_issue_time_estimate_set"),
 		// gitlab_issue_time_estimate_reset — clear the time estimate.
-		issueUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_issue_time_estimate_reset"),
+		issueUpdateSpec(specTimeEstimateReset, toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_issue_time_estimate_reset"),
 		// gitlab_issue_spent_time_add — log time spent on the issue.
 		// Additive rather than an update: GitLab adds the duration to what is
 		// already logged, so two identical calls leave twice the time.
-		issueAdditiveSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_issue_spent_time_add"),
+		issueAdditiveSpec(specSpentTimeAdd, toolutil.RouteAction(client, AddSpentTime), "gitlab_issue_spent_time_add"),
 		// gitlab_issue_spent_time_reset — clear total spent time for the issue.
-		issueUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_issue_spent_time_reset"),
+		issueUpdateSpec(specSpentTimeReset, toolutil.RouteAction(client, ResetSpentTime), "gitlab_issue_spent_time_reset"),
 		// gitlab_issue_time_stats_get — read time tracking totals for the issue.
-		issueReadSpec("time_stats_get", toolutil.RouteAction(client, GetTimeStats), "gitlab_issue_time_stats_get"),
+		issueReadSpec(specTimeStatsGet, toolutil.RouteAction(client, GetTimeStats), "gitlab_issue_time_stats_get"),
 		// gitlab_issue_participants — list users participating in the issue.
-		issueReadSpec("participants", toolutil.RouteAction(client, GetParticipants), "gitlab_issue_participants"),
+		issueReadSpec(specParticipants, toolutil.RouteAction(client, GetParticipants), "gitlab_issue_participants"),
 		// gitlab_issue_mrs_closing — list MRs that will close this issue on merge.
-		issueReadSpec("mrs_closing", toolutil.RouteAction(client, ListMRsClosing), "gitlab_issue_mrs_closing"),
+		issueReadSpec(specMRsClosing, toolutil.RouteAction(client, ListMRsClosing), "gitlab_issue_mrs_closing"),
 		// gitlab_issue_mrs_related — list MRs related to this issue (broader than closing).
-		issueReadSpec("mrs_related", toolutil.RouteAction(client, ListMRsRelated), "gitlab_issue_mrs_related"),
+		issueReadSpec(specMRsRelated, toolutil.RouteAction(client, ListMRsRelated), "gitlab_issue_mrs_related"),
 	}
 }
 
@@ -107,7 +169,7 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		// gitlab_issue_list_group — list issues across a group's projects.
-		groupIssueReadSpec(domainIssues, toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
+		groupIssueReadSpec(specGroupIssues, toolutil.RouteAction(client, ListGroup), toolIssueListGroup),
 	}
 }
 
@@ -153,7 +215,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 		options.EmbeddedResource = "gitlab://project/{project_id}/issue/{issue_iid}"
 		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number. Prefer issue.get over issue.list when the target issue is already known."
 		options.Aliases = []string{"get issue", "show issue details", "fetch issue"}
-		options.RelatedActions = []string{actionIssueList, actionIssueUpdate, "issue.delete", "issue.notes_list"}
+		options.RelatedActions = []string{actionIssueList, actionIssueUpdate, actionIssueDelete, actionIssueNoteList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramProjectID: {
 				SemanticRole:     roleScopeProject,
@@ -172,7 +234,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	case "gitlab_issue_list":
 		options.Usage = "List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project."
 		options.Aliases = []string{"list project issues", "find issues in project", "show project issues"}
-		options.RelatedActions = []string{actionIssueGet, "issue.create", actionSearchIssues}
+		options.RelatedActions = []string{actionIssueGet, actionIssueCreate, actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramProjectID: {
 				SemanticRole:     roleScopeProject,
@@ -197,7 +259,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	case "gitlab_issue_list_all":
 		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
-		options.RelatedActions = []string{actionIssueList, "issue.list_group", actionSearchIssues}
+		options.RelatedActions = []string{actionIssueList, actionIssueListGroup, actionSearchIssues}
 		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
 		options.InputSchemaOverrides = issueListEnumOverrides()
 	case toolIssueListGroup:
@@ -257,7 +319,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	toolIssueListGroup: {
 		usage:   "List issues across a group and its subgroups and projects. Use when work is scoped to a group rather than a single project.",
 		aliases: []string{"issues in a group", "group-scoped issue list", "list a group's issues", "issues across subgroups"},
-		related: []string{actionIssueList, "group.get", actionSearchIssues},
+		related: []string{actionIssueList, actionGroupGet, actionSearchIssues},
 	},
 	"gitlab_issue_delete": {
 		usage:       "Permanently delete an issue. Destructive and irreversible. Confirm project_id and issue_iid before calling.",
@@ -280,13 +342,13 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_subscribe": {
 		usage:       "Subscribe the authenticated user to notifications for an issue.",
 		aliases:     []string{"subscribe to issue", "follow issue", "watch issue", "get notifications for issue"},
-		related:     []string{actionIssueGet, "issue.unsubscribe"},
+		related:     []string{actionIssueGet, actionIssueUnsubscribe},
 		description: "Subscribe to an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_unsubscribe.",
 	},
 	"gitlab_issue_unsubscribe": {
 		usage:       "Unsubscribe the authenticated user from an issue's notifications.",
 		aliases:     []string{"unsubscribe from issue", "unfollow issue", "unwatch issue", "stop issue notifications"},
-		related:     []string{actionIssueGet, "issue.subscribe"},
+		related:     []string{actionIssueGet, actionIssueSubscribe},
 		description: "Unsubscribe from an issue's notifications. Returns: the issue with the updated subscription state. See also: gitlab_issue_get, gitlab_issue_subscribe.",
 	},
 	"gitlab_issue_create_todo": {
@@ -298,7 +360,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_time_estimate_set": {
 		usage:       "Set the time estimate for an issue using a human duration such as 3h30m or 1d.",
 		aliases:     []string{"set issue estimate", "estimate issue time", "set time estimate", "add issue estimate"},
-		related:     []string{"issue.time_estimate_reset", actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
+		related:     []string{actionIssueTimeEstReset, actionIssueSpentTimeAdd, actionIssueTimeStatsGet},
 		description: "Set an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_time_estimate_reset": {
@@ -310,7 +372,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_spent_time_add": {
 		usage:       "Log time spent on an issue using a human duration such as 2h or 30m. Logged values accumulate across calls.",
 		aliases:     []string{"log issue time", "add spent time", "record time on issue", "log time on issue"},
-		related:     []string{"issue.spent_time_reset", actionIssueTimeEstSet, actionIssueTimeStatsGet},
+		related:     []string{actionIssueSpentTimeReset, actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Add spent time to an issue. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_reset, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_reset": {
@@ -322,25 +384,25 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 	"gitlab_issue_time_stats_get": {
 		usage:       "Read the time tracking totals (estimate and time spent) for an issue.",
 		aliases:     []string{"get issue time stats", "show issue time tracking", "issue time tracking totals", "issue time summary"},
-		related:     []string{actionIssueTimeEstSet, "issue.time_estimate_reset", actionIssueSpentTimeAdd, "issue.spent_time_reset"},
+		related:     []string{actionIssueTimeEstSet, actionIssueTimeEstReset, actionIssueSpentTimeAdd, actionIssueSpentTimeReset},
 		description: "Read an issue's time tracking totals. Returns: estimate and spent time in seconds and human-readable form. See also: gitlab_issue_time_estimate_set, gitlab_issue_spent_time_add.",
 	},
 	"gitlab_issue_participants": {
 		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers).",
 		aliases:     []string{"list issue participants", "who is on this issue", "show issue participants", "issue participant list"},
-		related:     []string{actionIssueGet, "issue.notes_list"},
+		related:     []string{actionIssueGet, actionIssueNoteList},
 		description: "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.",
 	},
 	"gitlab_issue_mrs_closing": {
 		usage:       "List merge requests that will close this issue when merged (those referencing it with a closing keyword).",
 		aliases:     []string{"list mrs closing issue", "merge requests that close issue", "mrs closing this issue", "merge requests that will close this issue"},
-		related:     []string{actionIssueGet, "merge_request.get", "issue.mrs_related"},
+		related:     []string{actionIssueGet, actionMRGet, actionIssueMRsRelated},
 		description: "List MRs that close this issue on merge. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_related.",
 	},
 	"gitlab_issue_mrs_related": {
 		usage:       "List merge requests related to this issue (those mentioning it), a broader set than the closing MRs.",
 		aliases:     []string{"list mrs related to issue", "merge requests mentioning issue", "mrs related to issue", "merge requests that mention issue"},
-		related:     []string{actionIssueGet, "merge_request.get", "issue.mrs_closing"},
+		related:     []string{actionIssueGet, actionMRGet, actionIssueMRsClosing},
 		description: "List MRs related to this issue. Returns: related merge requests with state, author, and branches. See also: gitlab_issue_get, gitlab_issue_mrs_closing.",
 	},
 }
@@ -408,7 +470,7 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
 	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen. Dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
-	options.RelatedActions = []string{actionIssueGet, "issue.delete", actionIssueList}
+	options.RelatedActions = []string{actionIssueGet, actionIssueDelete, actionIssueList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramStateEvent: {
 			SemanticRole:     "issue_state_transition",
@@ -429,7 +491,7 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			"enum": []any{"issue", "incident", "test_case", "task"},
 		}),
 	}
-	return toolutil.NewUpdateActionSpec("update", toolutil.RouteAction(client, Update), options)
+	return toolutil.NewUpdateActionSpec(specUpdate, toolutil.RouteAction(client, Update), options)
 }
 
 // issueDeleteSpec builds a destructive [toolutil.ActionSpec] for an issue
@@ -446,7 +508,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"issue"},
 		OpenWorld:      true,
-		OwnerPackage:   domainIssues,
+		OwnerPackage:   ownerPackage,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }
@@ -459,7 +521,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 	if individualTool == toolIssueListGroup {
 		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project."
 		options.Aliases = []string{"list group issues", "show issues in group", "find issues across group"}
-		options.RelatedActions = []string{actionIssueList, "group.get", actionSearchIssues}
+		options.RelatedActions = []string{actionIssueList, actionGroupGet, actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"group_id": {
 				SemanticRole:     "scope_group",
@@ -481,7 +543,7 @@ func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"group", "issue"},
 		OpenWorld:      true,
-		OwnerPackage:   domainIssues,
+		OwnerPackage:   ownerPackage,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

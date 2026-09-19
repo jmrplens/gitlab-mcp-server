@@ -9,20 +9,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs the hints name. A hint names the ID every surface
-// resolves — the dynamic surface executes it, and the meta and individual
-// surfaces resolve it to their own tool names — so a hint written this way is
-// never a name the serving surface does not register, which is what the mix of
-// tool names and bare action words in these hints used to be.
-const (
-	hintActionIssueCreate     = "issue.create"
-	hintActionIssueNoteList   = "issue.note_list"
-	hintActionIssueNoteCreate = "issue.note_create"
-	hintActionIssueMRsRelated = "issue.mrs_related"
-	hintActionTodoMarkDone    = "user.todo_mark_done"
-	hintActionMRGet           = "merge_request.get"
-	hintActionMRChangesGet    = "merge_request.changes_get"
-)
+// The hints below name the canonical action IDs declared in action_specs.go.
+// A hint names the ID every surface resolves: the dynamic surface executes it,
+// and the meta and individual surfaces resolve it to their own tool names, so
+// a hint written this way is never a name the serving surface does not
+// register, which is what the mix of tool names and bare action words in these
+// hints used to be. They were a second block of constants here until the two
+// files disagreed about how an issue's notes are listed.
 
 // FormatTodoMarkdown renders a to-do item as the card of one object.
 func FormatTodoMarkdown(t TodoOutput) string {
@@ -35,7 +28,7 @@ func FormatTodoMarkdown(t TodoOutput) string {
 	c.Time("Created", t.CreatedAt)
 	c.URL(t.TargetURL)
 	c.End(
-		toolutil.HintAction(hintActionTodoMarkDone, "mark this todo as completed"),
+		toolutil.HintAction(actionTodoMarkDone, "mark this todo as completed"),
 		toolutil.HintAction(actionIssueGet, "view the referenced issue"),
 	)
 	return b.String()
@@ -189,7 +182,7 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	}
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
 		toolutil.HintAction(actionIssueGet, "view the issue details"),
-		toolutil.HintAction(hintActionIssueNoteCreate, "notify participants"),
+		toolutil.HintAction(actionIssueNoteCreate, "notify participants"),
 	)
 	return b.String()
 }
@@ -217,8 +210,8 @@ func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
 		))
 	}
 	toolutil.WriteListFooter(&b, out.Pagination, true,
-		toolutil.HintAction(hintActionMRGet, "view one merge request in full"),
-		toolutil.HintAction(hintActionMRChangesGet, "see its diff"),
+		toolutil.HintAction(actionMRGet, "view one merge request in full"),
+		toolutil.HintAction(actionMRChangesGet, "see its diff"),
 	)
 	return b.String()
 }
@@ -266,9 +259,9 @@ func FormatMarkdown(i Output) string {
 	c.Text("Description", i.Description)
 	c.Note(toolutil.RichContentHint(toolutil.DetectRichContent(i.Description), i.WebURL))
 	c.End(
-		toolutil.HintAction(hintActionIssueNoteList, "see comments on this issue"),
+		toolutil.HintAction(actionIssueNoteList, "see comments on this issue"),
 		toolutil.HintAction(actionIssueUpdate, "change title, labels, assignees, or milestone"),
-		toolutil.HintAction(hintActionIssueMRsRelated, "find linked MRs"),
+		toolutil.HintAction(actionIssueMRsRelated, "find linked MRs"),
 	)
 	return b.String()
 }
@@ -295,8 +288,8 @@ func formatGetMarkdownResult(out getOutput) *mcp.CallToolResult {
 func FormatListMarkdown(out ListOutput) string {
 	return formatIssueList(out, "Issues",
 		toolutil.HintAction(actionIssueGet, "see one issue's full details and description"),
-		toolutil.HintAction(hintActionIssueCreate, "create a new issue"),
-		toolutil.HintAction(hintActionIssueNoteCreate, "add a comment"),
+		toolutil.HintAction(actionIssueCreate, "create a new issue"),
+		toolutil.HintAction(actionIssueNoteCreate, "add a comment"),
 	)
 }
 
@@ -305,7 +298,7 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatListGroupMarkdown(out ListGroupOutput) string {
 	return formatIssueList(ListOutput{Issues: out.Issues, Pagination: out.Pagination}, "Group Issues",
 		toolutil.HintAction(actionIssueGet, "view one issue in full"),
-		toolutil.HintAction(hintActionIssueCreate, "open a new issue"),
+		toolutil.HintAction(actionIssueCreate, "open a new issue"),
 	)
 }
 
