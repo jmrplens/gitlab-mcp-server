@@ -196,9 +196,14 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 	},
 }
 
+// mirrorPlaceholderUsage is the usage a mirror action carries before
+// mirrorActionMeta replaces it. A registered action still wearing it is one
+// whose discovery metadata was never written.
+const mirrorPlaceholderUsage = "Use to execute projectmirrors domain action."
+
 func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute projectmirrors domain action.", Tags: []string{"project", "mirror"},
+		Aliases: []string{individualTool}, Usage: mirrorPlaceholderUsage, Tags: []string{"project", "mirror"},
 		RelatedActions: []string{actionPullMirrorGet, "repository.commit_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "projectmirrors",

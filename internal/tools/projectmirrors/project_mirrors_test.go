@@ -4,6 +4,7 @@ package projectmirrors
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -1087,5 +1088,258 @@ func TestEdit_WithHostKeys(t *testing.T) {
 	}
 	if !strings.Contains(capturedBody, "host_keys") {
 		t.Errorf("request body missing host_keys field; body=%q", capturedBody)
+	}
+}
+
+// Field-routing tests.
+
+// distinctMirrorJSON is a mirror in which no two values agree: three different
+// timestamps, five different non-empty strings, and a bool triple chosen so
+// that every pairwise swap of the three flags shows up in one of the two cases
+// below. The shared mirrorJSON cannot serve here — it sends one instant as both
+// last_successful_update_at and last_update_at, and the empty string as both
+// mirror_branch_regex and last_error, so a converter reading either field from
+// its neighbor produces exactly the same output.
+const distinctMirrorJSON = `{
+	"id": 77,
+	"enabled": true,
+	"url": "https://example.com/distinct-repo.git",
+	"update_status": "failed",
+	"last_error": "remote hung up unexpectedly",
+	"only_protected_branches": false,
+	"keep_divergent_refs": true,
+	"mirror_branch_regex": "^release/",
+	"auth_method": "ssh_public_key",
+	"last_successful_update_at": "2026-03-01T01:02:03Z",
+	"last_update_at": "2026-03-02T04:05:06Z",
+	"last_update_started_at": "2026-03-03T07:08:09Z"
+}`
+
+// assertDistinctMirrorScalars holds every non-flag field of the distinct
+// fixture to the value it was sent under, so a converter reading one from its
+// neighbor is named rather than merely failing.
+func assertDistinctMirrorScalars(t *testing.T, out Output) {
+	t.Helper()
+	fields := []struct {
+		field string
+		got   string
+		want  string
+	}{
+		{field: "URL", got: out.URL, want: "https://example.com/distinct-repo.git"},
+		{field: "UpdateStatus", got: out.UpdateStatus, want: "failed"},
+		{field: "LastError", got: out.LastError, want: "remote hung up unexpectedly"},
+		{field: "MirrorBranchRegex", got: out.MirrorBranchRegex, want: "^release/"},
+		{field: "AuthMethod", got: out.AuthMethod, want: "ssh_public_key"},
+		{field: "LastSuccessfulUpdateAt", got: out.LastSuccessfulUpdateAt, want: "2026-03-01T01:02:03Z"},
+		{field: "LastUpdateAt", got: out.LastUpdateAt, want: "2026-03-02T04:05:06Z"},
+		{field: "LastUpdateStartedAt", got: out.LastUpdateStartedAt, want: "2026-03-03T07:08:09Z"},
+	}
+	for _, f := range fields {
+		if f.got != f.want {
+			t.Errorf("%s = %q, want %q", f.field, f.got, f.want)
+		}
+	}
+	if out.ID != 77 {
+		t.Errorf("ID = %d, want 77", out.ID)
+	}
+}
+
+// TestGet_EveryFieldArrivesUnderItsOwnName pins which source field each
+// published field is read from. Both gates score branches, so a converter that
+// reads a value from the wrong neighbor is invisible to them; only an
+// assertion naming each field against a fixture where no two values agree can
+// catch it. The second case exists for the flags alone: three bools take two
+// values, so one pair always agrees, and enabled differs from keep_divergent
+// there to make that last swap observable.
+func TestGet_EveryFieldArrivesUnderItsOwnName(t *testing.T) {
+	tests := []struct {
+		name                  string
+		body                  string
+		enabled               bool
+		onlyProtectedBranches bool
+		keepDivergentRefs     bool
+	}{
+		{name: "enabled and divergent refs kept", body: distinctMirrorJSON, enabled: true, onlyProtectedBranches: false, keepDivergentRefs: true},
+		{
+			name: "disabled and protected only",
+			body: strings.NewReplacer(
+				`"enabled": true`, `"enabled": false`,
+				`"only_protected_branches": false`, `"only_protected_branches": true`,
+			).Replace(distinctMirrorJSON),
+			enabled: false, onlyProtectedBranches: true, keepDivergentRefs: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathMirror42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MirrorID: 42})
+			if err != nil {
+				t.Fatalf("Get() error: %v", err)
+			}
+
+			assertDistinctMirrorScalars(t, out)
+			if out.Enabled != tt.enabled {
+				t.Errorf("Enabled = %t, want %t", out.Enabled, tt.enabled)
+			}
+			if out.OnlyProtectedBranches != tt.onlyProtectedBranches {
+				t.Errorf("OnlyProtectedBranches = %t, want %t", out.OnlyProtectedBranches, tt.onlyProtectedBranches)
+			}
+			if out.KeepDivergentRefs != tt.keepDivergentRefs {
+				t.Errorf("KeepDivergentRefs = %t, want %t", out.KeepDivergentRefs, tt.keepDivergentRefs)
+			}
+		})
+	}
+}
+
+// decodeMirrorRequest reads the JSON body a mirror write sent GitLab. The
+// options struct omits every unset optional field, so a key's absence is the
+// assertion that the handler declined to send it.
+func decodeMirrorRequest(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var sent map[string]any
+	if err := json.Unmarshal([]byte(body), &sent); err != nil {
+		t.Fatalf("request body is not JSON: %v (body=%q)", err, body)
+	}
+	return sent
+}
+
+// TestAdd_OptionalAttributes_ReachGitLabOnlyWhenSupplied pins both directions of
+// the three `!= ""` / `> 0` guards Add builds its request with. Inverting one
+// sends an empty value for an attribute the caller set and nothing for one they
+// did not, and loosening `> 0` to `>= 0` sends host_keys on every call; neither
+// changes the response a mock returns, so only reading the request catches it.
+func TestAdd_OptionalAttributes_ReachGitLabOnlyWhenSupplied(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      AddInput
+		want    map[string]any
+		absent  []string
+		wantKey string
+	}{
+		{
+			name: "every optional attribute supplied",
+			in: AddInput{
+				ProjectID:         testProjectID,
+				URL:               "https://example.com/repo.git",
+				MirrorBranchRegex: "^release/",
+				AuthMethod:        "ssh_public_key",
+				HostKeys:          []string{"ssh-ed25519 AAAAC3Nz"},
+			},
+			want: map[string]any{
+				"url":                 "https://example.com/repo.git",
+				"mirror_branch_regex": "^release/",
+				"auth_method":         "ssh_public_key",
+			},
+			wantKey: "host_keys",
+		},
+		{
+			name:   "no optional attribute supplied",
+			in:     AddInput{ProjectID: testProjectID, URL: "https://example.com/repo.git"},
+			want:   map[string]any{"url": "https://example.com/repo.git"},
+			absent: []string{"mirror_branch_regex", "auth_method", "host_keys"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && r.URL.Path == pathMirrors {
+					b, _ := io.ReadAll(r.Body)
+					capturedBody = string(b)
+					testutil.RespondJSON(w, http.StatusCreated, mirrorJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			if _, err := Add(context.Background(), client, tt.in); err != nil {
+				t.Fatalf("Add() error: %v", err)
+			}
+			assertMirrorRequest(t, capturedBody, tt.want, tt.absent, tt.wantKey, "ssh-ed25519 AAAAC3Nz")
+		})
+	}
+}
+
+// TestEdit_OptionalAttributes_ReachGitLabOnlyWhenSupplied is Add's assertion for
+// the PUT. Edit builds its own copy of the same three guards, so a fix applied
+// to one leaves the other sending an attribute the caller never set.
+func TestEdit_OptionalAttributes_ReachGitLabOnlyWhenSupplied(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      EditInput
+		want    map[string]any
+		absent  []string
+		wantKey string
+	}{
+		{
+			name: "every optional attribute supplied",
+			in: EditInput{
+				ProjectID:         testProjectID,
+				MirrorID:          42,
+				MirrorBranchRegex: "^hotfix/",
+				AuthMethod:        "password",
+				HostKeys:          []string{"ssh-rsa AAAAB3Nz"},
+			},
+			want:    map[string]any{"mirror_branch_regex": "^hotfix/", "auth_method": "password"},
+			wantKey: "host_keys",
+		},
+		{
+			name:   "no optional attribute supplied",
+			in:     EditInput{ProjectID: testProjectID, MirrorID: 42},
+			absent: []string{"mirror_branch_regex", "auth_method", "host_keys"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedBody string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPut && r.URL.Path == pathMirror42 {
+					b, _ := io.ReadAll(r.Body)
+					capturedBody = string(b)
+					testutil.RespondJSON(w, http.StatusOK, mirrorJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			if _, err := Edit(context.Background(), client, tt.in); err != nil {
+				t.Fatalf("Edit() error: %v", err)
+			}
+			assertMirrorRequest(t, capturedBody, tt.want, tt.absent, tt.wantKey, "ssh-rsa AAAAB3Nz")
+		})
+	}
+}
+
+// assertMirrorRequest holds one mirror write's body to the keys it must carry
+// with the caller's own values, and to the keys it must not carry at all.
+func assertMirrorRequest(t *testing.T, body string, want map[string]any, absent []string, hostKeysField, hostKey string) {
+	t.Helper()
+	sent := decodeMirrorRequest(t, body)
+	for key, wantValue := range want {
+		if got, ok := sent[key]; !ok || got != wantValue {
+			t.Errorf("request %s = %v (present=%t), want %v", key, got, ok, wantValue)
+		}
+	}
+	for _, key := range absent {
+		if got, ok := sent[key]; ok {
+			t.Errorf("request carries %s = %v, want the key omitted", key, got)
+		}
+	}
+	if hostKeysField == "" {
+		return
+	}
+	keys, ok := sent[hostKeysField].([]any)
+	if !ok {
+		t.Fatalf("request %s = %v, want a list of host keys", hostKeysField, sent[hostKeysField])
+	}
+	if len(keys) != 1 || keys[0] != hostKey {
+		t.Errorf("request %s = %v, want [%q]", hostKeysField, keys, hostKey)
 	}
 }
