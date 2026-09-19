@@ -5,7 +5,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// The canonical catalog IDs this package publishes to a model. Both
+// gitignore actions are aggregated into the shared "template" group rather
+// than a group named after this package, so the domain is "template" and
+// never "gitignoretemplates".
 const (
+	actionGitignoreGet         = "template.gitignore_get"
+	actionGitignoreList        = "template.gitignore_list"
 	actionProjectCreate        = "project.create"
 	actionRepositoryFileCreate = "repository.file_create"
 )
@@ -34,13 +40,13 @@ func gitignoreTemplateOptions(actionName, individualTool string) toolutil.Action
 	}
 	if actionName == "gitignore_list" {
 		opts.Aliases = []string{individualTool, "list dedicated gitignore templates", "show available .gitignore presets", "browse gitignore boilerplate"}
-		opts.RelatedActions = []string{"gitignoretemplates.gitignore_get", actionRepositoryFileCreate, actionProjectCreate}
+		opts.RelatedActions = []string{actionGitignoreGet, actionRepositoryFileCreate, actionProjectCreate}
 		opts.IndividualTool.Description = "List available .gitignore templates with order_by, sort, and offset or keyset pagination. Returns: each template's key and name, plus pagination metadata. See also: gitlab_get_gitignore_template, gitlab_file_create."
 	}
 	if actionName == "gitignore_get" {
 		opts.Aliases = []string{individualTool, "get dedicated gitignore template", "fetch .gitignore template content", "show gitignore preset for language"}
 		opts.Usage = "Get one .gitignore template by key for repository bootstrap workflows."
-		opts.RelatedActions = []string{"gitignoretemplates.gitignore_list", actionRepositoryFileCreate, actionProjectCreate}
+		opts.RelatedActions = []string{actionGitignoreList, actionRepositoryFileCreate, actionProjectCreate}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key": {SemanticRole: "template_key", ValueSource: "Template key returned by gitignore template list output.", ExampleBinding: `params.key:"Go"`},
 		}

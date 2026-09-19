@@ -235,7 +235,7 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 
 // namespaceCardHint is the guidance section every namespace card ends with.
 const namespaceCardHint = "---\n💡 **Next steps:**\n" +
-	"- Use action 'namespace.get' to use this namespace ID with the project and group actions\n"
+	"- Use action 'group.projects' to list the projects in this namespace when its kind is group\n"
 
 // TestFormatMarkdownString verifies the whole card of a namespace carrying
 // nothing but the fields GitLab always sends.
@@ -411,7 +411,7 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 		"| 1 | ns1 | group | `ns1` |\n" +
 		"| 2 | ns2 | user | `users/ns2` |\n\n" +
 		"---\n💡 **Next steps:**\n" +
-		"- Use action 'namespace.get' to view details of one namespace\n"
+		"- Use action 'user.namespace_get' to view details of one namespace\n"
 	if s != want {
 		t.Errorf("FormatListMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
@@ -430,7 +430,7 @@ func TestFormatListMarkdownString_CountsTheTotalGitLabSent(t *testing.T) {
 		"| 1 | ns1 | group | `ns1` |\n\n" +
 		"Page 1 of 45 | 45 items total | 1 per page\n\n" +
 		"---\n💡 **Next steps:**\n" +
-		"- Use action 'namespace.get' to view details of one namespace\n"
+		"- Use action 'user.namespace_get' to view details of one namespace\n"
 	if s != want {
 		t.Errorf("FormatListMarkdownString()\n got: %q\nwant: %q", s, want)
 	}
