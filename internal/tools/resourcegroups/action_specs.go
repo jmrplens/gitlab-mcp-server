@@ -115,7 +115,7 @@ func resourceGroupMetaFor(actionName string) resourceGroupMeta {
 			related: []string{actionResourceGroupGet, actionResourceGroupList, actionJobList},
 			description: "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, " +
 				"status, and stage, ordered as they will run under the resource group's process mode. " +
-				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
+				"See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.",
 		}
 	default: // specResourceGroupList
 		return resourceGroupMeta{

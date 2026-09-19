@@ -1128,7 +1128,7 @@ func TestSnippetStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *te
 		{
 			name:   "get_for_snippet",
 			status: http.StatusNotFound,
-			hint:   "requires admin; verify snippet_id + id combination with gitlab_get_snippet_storage_move_for_snippet",
+			hint:   "requires admin; verify the snippet_id + id pair with gitlab_retrieve_snippet_storage_moves, which lists this snippet's own moves; a move id belonging to another snippet answers 404 here, and the record may have been pruned after completion",
 			call: func(c *gitlabclient.Client) error {
 				_, err := GetForSnippet(context.Background(), c, SnippetMoveInput{SnippetID: 55, ID: 1})
 				return err
