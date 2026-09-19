@@ -30,13 +30,12 @@ const (
 	testEmailAddr        = "test@example.com"
 	testCRLURL           = "https://example.com/crl"
 
-	errCancelledCtx    = "expected error for canceled context"
-	descMaintainers    = "Maintainers"
-	fmtUnexpectedError = "unexpected error: %v"
-	argProjectID       = "project_id"
-	argTagName         = "tag_name"
-	fmtNameWant        = "out.Name = %q, want %q"
-	fmtListUnexpErr    = "List() unexpected error: %v"
+	errCancelledCtx = "expected error for canceled context"
+	descMaintainers = "Maintainers"
+	argProjectID    = "project_id"
+	argTagName      = "tag_name"
+	fmtNameWant     = "out.Name = %q, want %q"
+	fmtListUnexpErr = "List() unexpected error: %v"
 )
 
 // TestTagCreate_Success verifies that Create creates an annotated tag and

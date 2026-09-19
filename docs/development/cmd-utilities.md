@@ -21,6 +21,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                                                                                                                                                                      | `make audit-edition-tier`                                                                                                                                               |
 | `audit_graphql_documents`      | Catalog & metadata audits     | Every raw GraphQL document in the source is one the pinned GitLab schema accepts; `-live` judges by what an instance serves now and reports the drift under our own documents                                                                                                                                                                             | `make check-graphql-documents`, `make check-graphql-documents-live`                                                                                                     |
 | `audit_graphql_shapes`         | Catalog & metadata audits     | Every struct a GraphQL response is decoded into can hold what its document selects and declares nothing the document never selects; `-report` writes the reverse, what the schema offers there and no document of the decoding package selects                                                                                                            | `make check-graphql-shapes`, `make audit-graphql-shapes`, `make audit-graphql-sent`                                                                                     |
+| `audit_dead_consts`            | Catalog & metadata audits     | Every unexported constant in `internal/` and `cmd/` is one something reads, which `staticcheck`'s `unused` cannot answer for a member of a const group                                                                                                                                                                                                    | `make check-dead-consts`                                                                                                                                                |
 | `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                                                                                                                                                                                | `make check-readonly-graphql`                                                                                                                                           |
 | `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                                                                                                                                                                           | `make audit-surface-quality`                                                                                                                                            |
 | `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                                                                                                                                                                        | `make check-gateway-chars`                                                                                                                                              |
@@ -369,6 +370,55 @@ Every wrong ID with its file, its line, the string and the closest real ID, grou
 #### Make targets
 
 - `make audit-action-ids`: the report plus `plan/action-ids.json`.
+
+### audit_dead_consts
+
+Reports every unexported constant in this repository that nothing reads.
+
+`staticcheck`'s `unused`, which `golangci-lint` runs as a gate on every push, treats a const group as one unit: a declaration whose first member is read is read, and the rest of it is never judged. Measured against the pinned toolchain, a package holding `const deadConst = "never used"` on its own is reported and the same constant written as the second member of a group whose first member is used produces no issue at all. The configuration cannot change that either, since `golangci-lint` v2's schema does not accept `unused`'s `constants-are-used` setting.
+
+That would be a narrow gap in another codebase and is a wide one here, because the group is the prevailing shape: every domain under `internal/tools/` writes its canonical action IDs as one const block, and about fifty of them write their assertion messages and fixture strings as another. A cross-link written down and never published leaves its ID in that block, reading like a live cross-reference to anyone who opens the file. The first run of this rule found twenty-five such constants, every one of them inside a group the linter had already looked at and passed.
+
+It loads `./internal/...` and `./cmd/...` through `cmd/internal/goprogram` with the **test variants included**, and judges a constant by the type checker's `Uses` map rather than by a text search, so a name that also appears in a comment, a string or another package does not make it look read. Test files are loaded because a constant a test reads is read: forty-odd packages hand their action-ID block to the catalog test through an `export_test.go`, and a rule that skipped those files would report the live half of every one of them. That is also this rule's one blind spot, and it is worth knowing where it falls: a block exported wholesale is read wholesale, so an ID such a list carries and the package publishes nowhere is invisible here. Reading the block is what finds that.
+
+Exported constants are out of scope. One may be read from anywhere, including the end-to-end packages behind their own build tags, so a run over these patterns could not tell a dead one from one it never looked at. The platforms go the other way: a package carrying a `GOOS`-constrained file is read again under each operating system this project builds for, because a constant only the Windows half of a package reads is read, and failing a Linux run over it would be failing over code doing its job. Only the packages whose files the first load actually left out are re-read.
+
+A constant that is kept although nothing reads it is declared in `cmd/audit_dead_consts/declarations.go` with the reason keeping it is right, and a declaration that excuses nothing is reported like every stale declaration in this repository. The stale judgement is scoped to the packages the run loaded, so pointing the command at one package does not condemn the whole table.
+
+#### Usage
+
+```bash
+# Report
+go run ./cmd/audit_dead_consts/
+
+# Report, naming the platform loads the run made
+go run ./cmd/audit_dead_consts/ -v
+
+# Gate
+go run ./cmd/audit_dead_consts/ -check
+
+# One package
+go run ./cmd/audit_dead_consts/ ./internal/tools/issues
+```
+
+#### Flags
+
+| Flag     | Type     | Default | Description                                       |
+| -------- | -------- | ------- | ------------------------------------------------- |
+| `-dir`   | `string` | `.`     | Repository root the patterns are resolved against |
+| `-check` | `bool`   | `false` | Exit non-zero when a constant is never read       |
+| `-v`     | `bool`   | `false` | Name the platform loads the run made              |
+
+Positional arguments are package patterns; with none, `./internal/...` and `./cmd/...`.
+
+#### Output
+
+Every unread constant with its file, its line and whether it was declared on its own or inside a group the linter cannot see, then the stale declarations, then a summary naming how many constants were judged in how many packages. Exits `1` under `-check` on any finding, and `1` whenever the source could not be loaded.
+
+#### Make targets
+
+- `make audit-dead-consts`: the report.
+- `make check-dead-consts`: CI gate, also step 4 of `make analyze`.
 
 ### audit_dynamic_aliases
 
@@ -1939,6 +1989,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | `brand-check`                            | `gen_brand --check`                                              | The committed brand assets match the geometry                                                                                                                                                      | Non-zero on drift                                                                                                                                                |
 | `check-icon-webp`                        | `gen_icon_webp --check`                                          | The committed WebP icons match `icons.go` (needs `rsvg-convert` and `cwebp`, so not run in CI)                                                                                                     | Non-zero on drift                                                                                                                                                |
 | `check-readonly-graphql`                 | `audit_readonly_graphql`                                         | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                         | Non-zero on any finding, or if the audit cannot be run                                                                                                           |
+| `check-dead-consts`                      | `audit_dead_consts`                                              | Every unexported constant in `internal/` and `cmd/` is read by something, and every entry of its declaration table excuses one                                                                     | Non-zero on any unread constant or stale declaration, or if the source cannot be loaded                                                                          |
 | `check-graphql-schema`                   | `gen_graphql_schema --check`                                     | The committed GitLab schema parses and its provenance record decodes                                                                                                                               | Non-zero if either file is missing or unusable                                                                                                                   |
 | `check-graphql-documents`                | `audit_graphql_documents`                                        | Every raw GraphQL document in the source is one the pinned GitLab schema accepts                                                                                                                   | Non-zero on any refusal, or if no documents are found                                                                                                            |
 | `check-graphql-shapes`                   | `audit_graphql_shapes`                                           | Every struct a GraphQL response is decoded into can hold what its document selects, and declares nothing it never selects                                                                          | Non-zero on any disagreement, anything unpaired, a mutation payload whose errors no field of the decoder reads, a stale sent declaration, or if no call is found |

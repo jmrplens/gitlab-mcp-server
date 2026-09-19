@@ -44,7 +44,6 @@ const (
 	errExpiresAtEmpty    = "ExpiresAt should be populated"
 	fmtTokenWant         = "Token = %q, want %q"
 	fmtDescWant          = "Description = %q, want %q"
-	testVersion          = "0.0.1"
 	tcBadDate            = "bad date"
 	testDescTest         = "description test"
 	testDescFullGroup    = "Full group token"

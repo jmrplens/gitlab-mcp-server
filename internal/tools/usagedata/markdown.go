@@ -12,7 +12,6 @@ import (
 const (
 	actionServicePing       = "admin.usage_data_service_ping"
 	actionNonSQLMetrics     = "admin.usage_data_non_sql_metrics"
-	actionQueries           = "admin.usage_data_queries"
 	actionMetricDefinitions = "admin.usage_data_metric_definitions"
 	actionTrackEvents       = "admin.usage_data_track_events"
 )

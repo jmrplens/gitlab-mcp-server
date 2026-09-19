@@ -5,11 +5,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// Canonical action IDs for the security-finding domain (catalog group
-// gitlab_security_finding → base domain "security_finding") plus the sibling
-// vulnerability and project domains used for cross-links.
+// Canonical action IDs of the sibling vulnerability and project domains, which
+// are what this package cross-links to. Its own security_finding.list is not
+// here: an action does not name itself among its related actions, and the
+// cross-link in the other direction is declared by internal/tools/vulnerabilities.
 const (
-	actionSecurityFindingList = "security_finding.list"
 	actionVulnList            = "vulnerability.list"
 	actionVulnPipelineSummary = "vulnerability.pipeline_security_summary"
 	actionVulnSeverityCount   = "vulnerability.severity_count"

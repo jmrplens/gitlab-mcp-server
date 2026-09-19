@@ -34,8 +34,6 @@ const (
 	fmtOutShortIDWant     = "out.ShortID = %q, want %q"
 	testFileMainGo        = "main.go"
 	testCIURL             = "https://ci.example.com"
-	errExpShortID         = "expected short ID"
-	errExpHeader          = "expected header"
 	testReviewer          = "reviewer1"
 	argProjectID          = "project_id"
 	testSHA               = "abc123"

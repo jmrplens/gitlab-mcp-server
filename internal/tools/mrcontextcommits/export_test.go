@@ -15,7 +15,6 @@ func PublishedActionIDs() []string {
 		actionContextCommitsCreate,
 		actionContextCommitsDelete,
 		actionMergeRequestGet,
-		actionMergeRequestList,
 		actionMergeRequestCommits,
 		actionCommitGet,
 		actionCommitList,
