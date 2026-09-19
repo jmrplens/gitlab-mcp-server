@@ -42,6 +42,14 @@ over the tree:
 [gobco]: https://github.com/rillig/gobco
 [gremlins]: https://github.com/go-gremlins/gremlins
 
+Running both over a package and answering what they report is a procedure this
+project repeats, and the brief a run of it is driven from lives in
+[plan/mutation-sweep-brief.md](../../../plan/mutation-sweep-brief.md). That
+document is working material rather than reference: it addresses one agent
+sweeping one package, it names paths on the maintainer's own machine, and it
+will be retired when the sweep finishes. What is durable about the procedure is
+written here instead, and this section is where a reader should start.
+
 ### What they cost, and why the figures are not generated
 
 Measured on an 8-core machine, September 2026, one package at a time:
@@ -136,8 +144,10 @@ whether anything earlier in the run stops the binary from getting there.
 
 ### Reading a survivor
 
-Not every survivor is a gap. Three kinds cannot be killed by any test and
-should be recorded rather than chased:
+Not every survivor is a gap. Six kinds cannot be killed by any test: four are
+recorded and left alone, one is deleted rather than recorded, and one is kept
+with the property behind it asserted instead. Read all six: the ones a sweep
+most often meets are not the first ones listed.
 
 - **A boundary whose two sides agree at the boundary.** Flipping `>` to `>=`
   where both branches assign the same value at the boundary changes nothing.
@@ -174,6 +184,29 @@ should be recorded rather than chased:
 - **A tool artifact.** Mutations inside package-level constant initializers
   and `switch { case … }` expressions are reported as not covered because
   neither carries a statement counter, not because no test reaches them.
+- **An error branch that cannot fail for the type in hand.** `json.Marshal` of
+  a struct carrying no channel, function or cycle cannot return an error, and
+  `json.Unmarshal` of that marshaller's own output into a `map[string]any`
+  cannot either, so the four `err != nil` arms in `internal/tools/settings`
+  (`settings.go:35`, `:40`, `:84` and `:89`) are never true whatever a test
+  sends. Both halves of that were established rather than assumed: deleting all
+  four leaves the suite green, and inverting them to `err == nil` fails four
+  existing tests, so the arm that runs is exercised and the arm that returns is
+  unreachable. What decides it is where the value came from, which is why the
+  two arms above them, on the same round trip applied to the caller's own map
+  (`:68` and `:73`), are reachable and have tests. This is not the guard the
+  previous bullet describes: no second check is producing the same answer, the
+  branch is the only reader of a returned error, and deleting it is what
+  `errcheck` refuses. So the remedy differs too. Keep the check and assert the
+  property that makes it unreachable, which here is that the round trip
+  publishes what GitLab sent, key for key. The shape recurs wherever a package
+  round-trips a struct through `encoding/json`, but it is a claim about the
+  concrete type and never about the pattern: these four are reachable only
+  through `*gl.Settings`, whose fields marshal and whose document is an object.
+  A type that declares `MarshalJSON`, that can hold a `NaN` or an `Inf`, or
+  that marshals to something other than an object can make the same branch
+  fail, so name the type and say why its values cannot before filing one of
+  these.
 
 **Read the tool artifacts, do not wave them through.** "Reached" is not
 "asserted", and the tool that reports these can tell you neither. Of the 100 not-covered
