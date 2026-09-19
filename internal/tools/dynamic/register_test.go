@@ -648,10 +648,25 @@ func customCatalogForDynamicTest(t *testing.T) *actioncatalog.Catalog {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_custom"})
 	group.SetAction(actioncatalog.Action{Name: "inspect", Aliases: []string{"custom.lookup"}, Tags: []string{"bespoke"}, Route: customCatalogRouteForDynamicTest()})
+	// The cross-link target belongs in the catalog: a related action the
+	// catalog does not hold is one this session cannot run, and
+	// Registry.publishedRelatedActions drops it rather than publishing a dead
+	// end. Without it this fixture would assert the route metadata survives by
+	// asserting a link that no longer should.
+	group.SetAction(actioncatalog.Action{Name: "audit", Route: customCatalogSiblingRouteForDynamicTest()})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
 	return catalog
+}
+
+func customCatalogSiblingRouteForDynamicTest() toolutil.ActionRoute {
+	return toolutil.ActionRoute{
+		Handler: func(_ context.Context, params map[string]any) (any, error) {
+			return map[string]any{"target": params["target"]}, nil
+		},
+		InputSchema: map[string]any{"type": "object", "required": []any{"target"}, "properties": map[string]any{"target": map[string]any{"type": "string"}}},
+	}.WithUsage("Use to audit what custom.inspect reported.")
 }
 
 func customCatalogRouteForDynamicTest() toolutil.ActionRoute {
@@ -5823,12 +5838,12 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 		t.Fatalf("dedupeActionAliases() = %+v, want one normalized alias", aliases)
 	}
 
-	description := describeEntry(actionEntry{ID: "missing.action", Tool: "gitlab_missing", Domain: "missing", Action: "action", Route: toolutil.ActionRoute{OutputSchema: map[string]any{"type": "object"}}})
+	registry := NewRegistry(testRoutes(t))
+	description := registry.describeEntry(actionEntry{ID: "missing.action", Tool: "gitlab_missing", Domain: "missing", Action: "action", Route: toolutil.ActionRoute{OutputSchema: map[string]any{"type": "object"}}})
 	if description.InputSchema["additionalProperties"] != true || description.OutputSchema["type"] != "object" {
 		t.Fatalf("describeEntry(fallback) = %+v, want fallback input schema and cloned output schema", description)
 	}
-	registry := NewRegistry(testRoutes(t))
-	if got := describeEntry(registry.entries[0]); got.InputSchema["type"] == "" || got.Example.Tool != executeActionToolName {
+	if got := registry.describeEntry(registry.entries[0]); got.InputSchema["type"] == "" || got.Example.Tool != executeActionToolName {
 		t.Fatalf("describeEntry(success) = %+v, want schema and dynamic execute example", got)
 	}
 	if got := compactSchemaJSON(nil); got != "" {
@@ -8373,6 +8388,162 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 			t.Errorf("Execute() error text = %q, want the unknown-action message when nothing was withheld", text)
 		}
 	})
+}
+
+// crossLinkCatalog builds a catalog whose one described action points at every
+// kind of cross-link target: a sibling the catalog holds, that same sibling
+// under an alias, an action a filter took away, and an action nothing here has
+// ever heard of.
+func crossLinkCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	route := func() toolutil.ActionRoute {
+		return toolutil.ActionRoute{
+			Handler:     func(context.Context, map[string]any) (any, error) { return map[string]any{}, nil },
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		}
+	}
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget"})
+	group.SetAction(actioncatalog.Action{
+		Name: "inspect",
+		Route: route().WithRelatedActions(
+			"widget.audit",
+			"widget.lookup",
+			"widget.repair",
+			"widget.hidden",
+			"widget.retired",
+		),
+	})
+	group.SetAction(actioncatalog.Action{Name: "audit", Route: route()})
+	group.SetAction(actioncatalog.Action{Name: "repair", Aliases: []string{"widget.lookup"}, Route: route()})
+	// An action whose every cross-link is one this session cannot be told
+	// about, so the published list is empty rather than one short.
+	group.SetAction(actioncatalog.Action{Name: "orphan", Route: route().WithRelatedActions("widget.retired")})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	return catalog
+}
+
+// crossLinks is the related-action list one session is shown for widget.inspect.
+func crossLinks(t *testing.T, registry *Registry) []string {
+	t.Helper()
+	_, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "widget.inspect"})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if described.Count != 1 {
+		t.Fatalf("Describe() count = %d, want 1", described.Count)
+	}
+	return described.Actions[0].RelatedActions
+}
+
+// TestDescribe_RelatedActions_CanonicalizeWhatResolvesAndDropWhatCannotBeExplained
+// pins the rule a cross-link is published under, which is about what a model
+// gets back when it follows one.
+//
+// The curated lists are written against the whole catalog and every session
+// sees a narrower one, so a Free instance used to be handed links to Premium
+// actions and an --exclude-tools deployment links to actions it had removed.
+// Following one answers "unknown action" plus near-miss suggestions, which
+// reads as a spelling correction and teaches a model the capability is absent.
+// An action a filter withheld is the exception: asking for that one produces a
+// message naming the narrowing, which is worth more than silence.
+func TestDescribe_RelatedActions_CanonicalizeWhatResolvesAndDropWhatCannotBeExplained(t *testing.T) {
+	t.Run("nothing withheld", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t))
+		want := []string{"widget.audit", "widget.repair"}
+		if got := crossLinks(t, registry); !slices.Equal(got, want) {
+			t.Fatalf("RelatedActions = %v, want %v: an alias published under its canonical ID, once, and the two dead links gone", got, want)
+		}
+	})
+
+	t.Run("withheld by token scope", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions([]string{"widget.hidden"}, nil))
+		want := []string{"widget.audit", "widget.repair", "widget.hidden"}
+		if got := crossLinks(t, registry); !slices.Equal(got, want) {
+			t.Fatalf("RelatedActions = %v, want %v: a scope-withheld link stays, since asking for it explains the narrowing", got, want)
+		}
+	})
+
+	t.Run("withheld by the operator", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions(nil, []string{"widget.hidden"}))
+		want := []string{"widget.audit", "widget.repair", "widget.hidden"}
+		if got := crossLinks(t, registry); !slices.Equal(got, want) {
+			t.Fatalf("RelatedActions = %v, want %v: an operator-withheld link stays for the same reason", got, want)
+		}
+	})
+
+	t.Run("an action no filter reported stays dropped", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t), WithWithheldActions([]string{"widget.hidden"}, nil))
+		if got := crossLinks(t, registry); slices.Contains(got, "widget.retired") {
+			t.Fatalf("RelatedActions = %v, must not carry widget.retired: nothing here could answer for it", got)
+		}
+	})
+
+	t.Run("an action with no cross-links publishes none", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t))
+		_, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "widget.audit"})
+		if err != nil {
+			t.Fatalf("Describe() error = %v", err)
+		}
+		if got := described.Actions[0].RelatedActions; len(got) != 0 {
+			t.Fatalf("RelatedActions = %v, want none", got)
+		}
+	})
+
+	t.Run("an action whose every cross-link is dropped publishes none", func(t *testing.T) {
+		registry := newCatalogRegistry(crossLinkCatalog(t))
+		_, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "widget.orphan"})
+		if err != nil {
+			t.Fatalf("Describe() error = %v", err)
+		}
+		if got := described.Actions[0].RelatedActions; len(got) != 0 {
+			t.Fatalf("RelatedActions = %v, want none: its one link is an action nothing here could answer for", got)
+		}
+	})
+}
+
+// TestFind_RelatedActions_AreTheSameOnesDescribeWouldPublish holds the other
+// discovery tool to the same rule. Find renders its results through a separate
+// assembly, and a filter applied to one of the two would leave the surface
+// telling a model two different things about the same action.
+func TestFind_RelatedActions_AreTheSameOnesDescribeWouldPublish(t *testing.T) {
+	registry := newCatalogRegistry(crossLinkCatalog(t))
+	_, found, err := registry.Find(t.Context(), nil, FindInput{Query: "widget inspect", Limit: 5})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	for _, result := range found.Results {
+		if result.ID != "widget.inspect" {
+			continue
+		}
+		if want := crossLinks(t, registry); !slices.Equal(result.RelatedActions, want) {
+			t.Fatalf("Find() RelatedActions = %v, want the described %v", result.RelatedActions, want)
+		}
+		return
+	}
+	t.Fatalf("Find() results = %+v, want widget.inspect among them", found.Results)
+}
+
+// TestSearch_RelatedActions_AreTheSameOnesDescribeWouldPublish holds the third
+// assembly, the catalog search the meta surface registers, to the rule too.
+func TestSearch_RelatedActions_AreTheSameOnesDescribeWouldPublish(t *testing.T) {
+	registry := newCatalogRegistry(crossLinkCatalog(t))
+	_, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "widget inspect", Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	for _, result := range output.Results {
+		if result.ID != "widget.inspect" {
+			continue
+		}
+		if want := crossLinks(t, registry); !slices.Equal(result.RelatedActions, want) {
+			t.Fatalf("Search() RelatedActions = %v, want the described %v", result.RelatedActions, want)
+		}
+		return
+	}
+	t.Fatalf("Search() results = %+v, want widget.inspect among them", output.Results)
 }
 
 // TestWithheldKeySet_NormalizesKeysAndDropsBlankOnes verifies how the withheld

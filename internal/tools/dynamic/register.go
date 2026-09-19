@@ -674,7 +674,7 @@ func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input Sea
 			Destructive:    entry.Destructive,
 			RequiredParams: append([]string(nil), entry.RequiredParams...),
 			Usage:          usageHintForEntry(entry),
-			RelatedActions: relatedActionsForEntry(entry),
+			RelatedActions: r.publishedRelatedActions(entry),
 			Score:          match.score,
 			LowConfidence:  match.lowConfidence,
 			AmbiguousWith:  append([]string(nil), match.ambiguousWith...),
@@ -709,7 +709,7 @@ func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input Des
 		if !ok {
 			return toolutil.ErrorResult(r.unknownActionMessage("catalog describe", id)), DescribeOutput{}, nil
 		}
-		descriptions = append(descriptions, describeEntry(entry))
+		descriptions = append(descriptions, r.describeEntry(entry))
 	}
 
 	output := DescribeOutput{Count: len(descriptions), Actions: descriptions}
@@ -753,7 +753,7 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 	}
 	results := make([]FindResult, 0, len(matches))
 	for _, match := range matches {
-		description := describeEntry(match.entry)
+		description := r.describeEntry(match.entry)
 		result := FindResult{
 			ID:             description.ID,
 			Tool:           description.Tool,
@@ -2289,6 +2289,11 @@ func normalizedLimit(limit int) int {
 
 // describeEntry renders one action as a find or describe result.
 //
+// It hangs off the registry rather than standing on its own because of the
+// cross-links: which of an action's related IDs this session may be told about
+// is a property of the session, and [Registry.publishedRelatedActions] is what
+// knows it.
+//
 // The two schemas are handed out as they are, not copied. Both are frozen:
 // the input schema is the process-shared derivation [dynamicInputSchema]
 // returns, and the output schema belongs to the route of a catalog shared by
@@ -2297,7 +2302,7 @@ func normalizedLimit(limit int) int {
 // still reach every pooled server; the honest form is to share the map and say
 // that nothing may write into it. A caller that needs to mutate one copies it
 // with [toolutil.CloneSchemaMap].
-func describeEntry(entry actionEntry) ActionDescription {
+func (r *Registry) describeEntry(entry actionEntry) ActionDescription {
 	inputSchema := dynamicInputSchema(entry)
 	return ActionDescription{
 		ID:             entry.ID,
@@ -2308,7 +2313,7 @@ func describeEntry(entry actionEntry) ActionDescription {
 		Destructive:    entry.Destructive,
 		RequiredParams: append([]string(nil), entry.RequiredParams...),
 		Usage:          usageHintForEntry(entry),
-		RelatedActions: relatedActionsForEntry(entry),
+		RelatedActions: r.publishedRelatedActions(entry),
 		ParamGuidance:  cloneParameterGuidance(entry.Route.ParameterGuidance),
 		InputSchema:    inputSchema,
 		OutputSchema:   entry.Route.OutputSchema,
@@ -2564,6 +2569,87 @@ func relatedActionsForEntry(entry actionEntry) []string {
 		return append([]string(nil), entry.RelatedActions...)
 	}
 	return append([]string(nil), actionUXMetadataByID[entry.ID].RelatedActions...)
+}
+
+// publishedRelatedActions is the cross-link list one session is shown: the
+// curated IDs of [relatedActionsForEntry], spelled canonically, with the ones
+// this session could be told nothing useful about removed.
+//
+// The curated lists are written against the whole catalog, and every session
+// sees a narrower one. Nothing used to reconcile the two, so a Free instance
+// was handed cross-links to Premium actions it does not serve; the same holds
+// for an action --exclude-tools removed, for one a narrow credential cannot
+// reach, and for one read-only mode withdrew. What a model does with such a
+// link is call it, and what it gets back decides whether the link cost it
+// anything, so the rule is drawn there rather than at "is it in the catalog":
+//
+//   - It resolves here. Published, as the canonical ID rather than as written,
+//     which is the spelling [Registry.Find] lists and the only one a model can
+//     look back up; an alias resolves for execute and is findable under no name.
+//   - It does not resolve, but the registry knows why. Published as written, so
+//     that asking for it produces [Registry.withheldActionMessage] naming the
+//     narrowing. That message is worth more than silence: it tells the caller
+//     the capability exists and what to widen, and dropping the link would
+//     leave a model concluding the server cannot do it at all.
+//   - Neither. Dropped. Nothing here can say more than "unknown action", whose
+//     near-miss suggestions read as a spelling correction, and a model that
+//     believes one concludes the capability is missing. That is the tier case,
+//     since the tier filter runs before the catalog is built and so never
+//     reaches the withheld lists, and the --exclude-tools case, where naming
+//     the action would contradict the exclusion as well as mislead.
+//
+// A published list therefore shrinks with the surface instead of pointing off
+// it, and the entry's own order is kept: the curation is a workflow order, and
+// re-sorting it would lose the only thing it says.
+func (r *Registry) publishedRelatedActions(entry actionEntry) []string {
+	related := relatedActionsForEntry(entry)
+	if len(related) == 0 {
+		return nil
+	}
+	published := make([]string, 0, len(related))
+	seen := make(map[string]struct{}, len(related))
+	for _, id := range related {
+		spelling, ok := r.publishableRelatedAction(id)
+		if !ok {
+			continue
+		}
+		if _, duplicate := seen[spelling]; duplicate {
+			continue
+		}
+		seen[spelling] = struct{}{}
+		published = append(published, spelling)
+	}
+	if len(published) == 0 {
+		return nil
+	}
+	return published
+}
+
+// publishableRelatedAction resolves one cross-link to the spelling it should be
+// published under, or reports that it should not be published at all.
+func (r *Registry) publishableRelatedAction(id string) (string, bool) {
+	if target, resolved := r.resolveAction(id); resolved {
+		return target.ID, true
+	}
+	if r.actionWithheld(id) {
+		return id, true
+	}
+	return "", false
+}
+
+// actionWithheld reports whether the catalog carried this action and one of
+// the deployment's filters took it away, under either cause.
+//
+// [Registry.withheldActionMessage] keeps the two causes apart because only one
+// of them is something the caller can act on. Here the question is narrower:
+// whether asking for the action produces an answer that explains itself.
+func (r *Registry) actionWithheld(action string) bool {
+	key := strings.ToLower(strings.TrimSpace(action))
+	if _, byScope := r.withheldByScope[key]; byScope {
+		return true
+	}
+	_, byOperator := r.withheldByOperator[key]
+	return byOperator
 }
 
 func cloneParameterGuidance(guidance map[string]toolutil.ParameterGuidance) map[string]toolutil.ParameterGuidance {

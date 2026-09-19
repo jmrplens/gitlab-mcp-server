@@ -332,6 +332,26 @@ spec wraps a route, route-local aliases, tags, usage, related actions, and
 parameter guidance become defaults; explicit `ActionSpecOptions` values may add
 or override the metadata for that spec.
 
+### Cross-links
+
+`RelatedActions` carries **canonical action IDs**, never individual tool names.
+Both resolve for `gitlab_execute_action`, because an individual tool name is
+registered as an alias of its action, and only the canonical ID is published by
+the discovery tools this field reaches a model through, so a tool name written
+here is a cross-link a model can follow once and can never look up.
+`cmd/audit_action_ids` reports one as a finding and names the canonical ID
+beside it; an alias spelled inside a `Usage` line or a description is prose and
+is reported apart, since naming an alias can be the substance of the sentence.
+
+Write the list against the whole catalog and do not try to gate it by tier.
+What one session is shown is narrowed for it at registration:
+`Registry.publishedRelatedActions` in `internal/tools/dynamic` drops a
+cross-link this session cannot run and cannot be told anything useful about,
+which is an action above the resolved tier or one `--exclude-tools` removed,
+and keeps one a filter withheld, because asking for that one is answered with
+the narrowing rather than with `unknown action`. A cross-link that resolves is
+published under its canonical ID whatever spelling it was written in.
+
 ## When Adding A GitLab Action
 
 1. Add or update the typed handler in the appropriate domain package.

@@ -145,19 +145,29 @@ func TestActionSpecs_EveryToolCarriesItsOwnDiscoveryMetadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_RelatedActionsNameRegisteredTools holds every cross-link to
-// the set this package registers. Nothing in the repository validates these
-// strings, so a misspelled one is a dead end a model follows once and abandons.
-func TestActionSpecs_RelatedActionsNameRegisteredTools(t *testing.T) {
+// TestActionSpecs_RelatedActionsNameRegisteredActions holds every cross-link to
+// the canonical action IDs this package registers. A misspelled one is a dead
+// end a model follows once and abandons.
+//
+// The canonical IDs rather than the individual tool names: the discovery tools
+// that publish this field hand out canonical IDs, so a tool name written here
+// would be a cross-link a model cannot look up in any listing it is shown.
+func TestActionSpecs_RelatedActionsNameRegisteredActions(t *testing.T) {
 	byTool := runnerControllerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerActionHandler())))
+	actions := make(map[string]string, len(byTool))
+	for tool, spec := range byTool {
+		actions["runner."+spec.Name] = tool
+	}
 
 	for tool, spec := range byTool {
 		t.Run(tool, func(t *testing.T) {
 			for _, related := range spec.RelatedActions {
-				if _, ok := byTool[related]; !ok {
+				named, ok := actions[related]
+				if !ok {
 					t.Errorf("%s names related action %q, which this package does not register", tool, related)
+					continue
 				}
-				if related == tool {
+				if named == tool {
 					t.Errorf("%s names itself as a related action", tool)
 				}
 			}
