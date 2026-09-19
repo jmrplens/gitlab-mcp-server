@@ -19,14 +19,17 @@ import (
 
 const mrNoteJSON = `{"id":200,"body":"comment","author":{"id":1,"username":"jmrplens"},"created_at":"2026-03-02T12:00:00Z","updated_at":"2026-03-02T12:00:00Z","system":false}`
 
+// genericMRNoteUsage is the placeholder mrNoteOptions fills before
+// decorateMRNoteMeta runs, and the shape cmd/audit_discovery_completeness
+// reports as an undecorated action.
+const genericMRNoteUsage = "Use to execute mrnotes domain action."
+
 // TestActionSpecs_DiscoveryMetadata guards the 1:1 audit R-META metadata: every
 // merge request note action must have a non-generic Usage, natural-language
 // aliases, canonical RelatedActions, parameter guidance, and a "Returns: …
 // See also: …" individual-tool description.
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	byTool := mrNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, mrNotesActionHandler())))
-
-	const genericUsage = "Use to execute mrnotes domain action."
 
 	tests := []struct {
 		tool         string
@@ -41,10 +44,16 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 		{"gitlab_mr_note_delete", "delete mr comment", actionMRNoteGet, []string{"project_id", "merge_request_iid", "note_id"}},
 	}
 
+	// The table is written by hand, so a sixth action would be registered and
+	// checked by nothing. Hold it to what ActionSpecs actually returns.
+	if len(tests) != len(byTool) {
+		t.Errorf("table covers %d tools, ActionSpecs registers %d", len(tests), len(byTool))
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
 			spec := byTool[tt.tool]
-			if spec.Usage == "" || spec.Usage == genericUsage {
+			if spec.Usage == "" || spec.Usage == genericMRNoteUsage {
 				t.Errorf("Usage = %q, want action-specific", spec.Usage)
 			}
 			if !slices.Contains(spec.Aliases, tt.wantAlias) {
@@ -63,6 +72,35 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMRNoteOptions_UnknownTool_KeepsTheGenericDefaults states what a tool name
+// decorateMRNoteMeta does not name is left with: the placeholder Usage, the bare
+// name as the only alias, and no related actions, guidance or individual-tool
+// description. Nothing ties that switch's five string literals to the names
+// ActionSpecs hands it, so a rename on one side alone makes a case unreachable,
+// and this is what makes the generic Usage the guard above reads a real sentinel
+// rather than a value the switch happens never to leave in place.
+func TestMRNoteOptions_UnknownTool_KeepsTheGenericDefaults(t *testing.T) {
+	const renamed = "gitlab_mr_note_renamed"
+
+	options := mrNoteOptions(renamed)
+
+	if options.Usage != genericMRNoteUsage {
+		t.Errorf("Usage = %q, want the generic placeholder %q", options.Usage, genericMRNoteUsage)
+	}
+	if !slices.Equal(options.Aliases, []string{renamed}) {
+		t.Errorf("Aliases = %v, want only %q", options.Aliases, renamed)
+	}
+	if options.RelatedActions != nil {
+		t.Errorf("RelatedActions = %v, want none", options.RelatedActions)
+	}
+	if options.ParameterGuidance != nil {
+		t.Errorf("ParameterGuidance = %v, want none", options.ParameterGuidance)
+	}
+	if options.IndividualTool.Description != "" {
+		t.Errorf("IndividualTool.Description = %q, want empty", options.IndividualTool.Description)
 	}
 }
 
