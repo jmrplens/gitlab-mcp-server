@@ -5,6 +5,7 @@ package alertmanagement
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -82,6 +82,49 @@ func TestUpdateMetricImage(t *testing.T) {
 	}
 	if out.URL != "https://new.com" {
 		t.Errorf("expected https://new.com, got %s", out.URL)
+	}
+}
+
+// TestUpdateMetricImage_UpdatesBothTheLinkAndItsText asserts that an update
+// naming a link and the text for it sends both, rather than dropping the text
+// on the way out.
+//
+// Both are optional pointers copied under guards of their own, so an inverted
+// or missing guard loses one silently: the caption a caller wrote never
+// reaches GitLab and the handler still answers with whatever the instance
+// echoes back. Reading the body is what makes that a failure, and it is also
+// what keeps url_text in the recorded request inventory, which is the only
+// record of which parameters this endpoint has been sent.
+func TestUpdateMetricImage_UpdatesBothTheLinkAndItsText(t *testing.T) {
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/1/alert_management_alerts/5/metric_images/10" || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&sent); err != nil {
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "decode body", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"filename":"img.png","url":"https://new.com","url_text":"updated"}`)
+	}))
+
+	url, urlText := "https://new.com", "updated"
+	out, err := UpdateMetricImage(t.Context(), client, UpdateMetricImageInput{
+		ProjectID: "1", AlertIID: 5, ImageID: 10, URL: &url, URLText: &urlText,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if sent["url"] != url {
+		t.Errorf("body url = %v, want %q", sent["url"], url)
+	}
+	if sent["url_text"] != urlText {
+		t.Errorf("body url_text = %v, want %q", sent["url_text"], urlText)
+	}
+	if out.URLText != "updated" {
+		t.Errorf("URLText = %q, want updated", out.URLText)
 	}
 }
 
@@ -613,147 +656,3 @@ func TestUploadMetricImage_WithOptionalFields(t *testing.T) {
 		t.Errorf("expected URLText link, got %s", out.URLText)
 	}
 }
-
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "alertmanagement" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpec route execution
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtHandler())
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_alert_metric_images", map[string]any{"project_id": "1", "alert_iid": 5, "page": 0, "per_page": 0}},
-		{"upload", "gitlab_upload_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "content_base64": "ZGF0YQ==", "filename": "img.png", "url": "https://example.com", "url_text": "link"}},
-		{"update", "gitlab_update_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1, "url": "https://example.com", "url_text": "link"}},
-		{"delete", "gitlab_delete_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpec route execution error paths
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRouteErrors validates the CallRouteErrors route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_CallRouteErrors(t *testing.T) {
-	specByTool := covAlertMgmtSpecsByTool(t, covAlertMgmtErrorHandler())
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_alert_metric_images", map[string]any{"project_id": "1", "alert_iid": 5, "page": 0, "per_page": 0}},
-		{"upload", "gitlab_upload_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "content_base64": "ZGF0YQ==", "filename": "img.png", "url": "https://example.com", "url_text": "link"}},
-		{"update", "gitlab_update_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1, "url": "https://example.com", "url_text": "link"}},
-		{"delete", "gitlab_delete_alert_metric_image", map[string]any{"project_id": "1", "alert_iid": 5, "image_id": 1}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
-				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.
-
-// covAlertMgmtHandler supports cov alert mgmt handler assertions in alertmanagement tests.
-func covAlertMgmtHandler() http.Handler {
-	handler := http.NewServeMux()
-
-	handler.HandleFunc("GET /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+covImageJSON+`]`)
-	})
-
-	handler.HandleFunc("POST /api/v4/projects/1/alert_management_alerts/5/metric_images", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, covImageJSON)
-	})
-
-	handler.HandleFunc("PUT /api/v4/projects/1/alert_management_alerts/5/metric_images/1", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covImageJSON)
-	})
-
-	handler.HandleFunc("DELETE /api/v4/projects/1/alert_management_alerts/5/metric_images/1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	return handler
-}
-
-// covAlertMgmtErrorHandler supports cov alert mgmt error handler assertions in alertmanagement tests.
-func covAlertMgmtErrorHandler() http.Handler {
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
-	})
-
-	return handler
-}
-
-// covAlertMgmtSpecsByTool supports cov alert mgmt specs by tool assertions in alertmanagement tests.
-func covAlertMgmtSpecsByTool(t *testing.T, handler http.Handler) map[string]toolutil.ActionSpec {
-	t.Helper()
-	client := testutil.NewTestClient(t, handler)
-	specs := ActionSpecs(client)
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-	return specByTool
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------.

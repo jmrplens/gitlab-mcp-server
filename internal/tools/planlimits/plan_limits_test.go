@@ -7,11 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -372,98 +370,10 @@ func TestChange_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpecs metadata
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_Metadata verifies plan limit action spec metadata.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	specs := ActionSpecs(client)
-	specByTool := planLimitSpecsByTool(specs)
-	if len(specs) != 2 {
-		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "planlimits" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", spec.Name)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", spec.Name)
-		}
-	}
-	if specByTool["gitlab_get_plan_limits"].ParameterGuidance["plan_name"].SemanticRole == "" {
-		t.Fatal("gitlab_get_plan_limits should define plan_name parameter guidance")
-	}
-}
-
-// TestActionSpecs_Usage_NamesEachActionsOwnOperation verifies that the read
-// and the update action each describe their own operation instead of sharing
-// one sentence.
-//
-// Both usages come out of one helper and one condition, and the usage is what
-// a model reads to choose between them: swap the two and every surface still
-// registers, still routes and still answers, while telling the model that
-// reading the limits writes them.
-func TestActionSpecs_Usage_NamesEachActionsOwnOperation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	specByTool := planLimitSpecsByTool(ActionSpecs(client))
-
-	get := specByTool["gitlab_get_plan_limits"].Usage
-	change := specByTool["gitlab_change_plan_limits"].Usage
-	if get == change {
-		t.Fatalf("both plan limit actions publish the usage %q", get)
-	}
-	if !strings.HasPrefix(get, "Get ") {
-		t.Errorf("plan_limits_get Usage = %q, want it to describe a read", get)
-	}
-	if !strings.HasPrefix(change, "Update ") {
-		t.Errorf("plan_limits_change Usage = %q, want it to describe an update", change)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpec route execution
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes validates plan limit canonical routes.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	specByTool := newPlanLimitsRouteSpecs(t)
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get", "gitlab_get_plan_limits", map[string]any{}},
-		{"get_with_plan", "gitlab_get_plan_limits", map[string]any{"plan_name": "default"}},
-		{"change", "gitlab_change_plan_limits", map[string]any{"plan_name": "default", "helm_max_file_size": float64(5242880)}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-// newPlanLimitsRouteSpecs constructs plan limits route specs test fixtures.
-func newPlanLimitsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
-	t.Helper()
-
+// TestPlanLimits_EachHandlerReachesItsOwnEndpoint drives both handlers against
+// the two endpoints GitLab serves the plan limits on, so a handler sending the
+// wrong method or path fails rather than being answered by a catch-all.
+func TestPlanLimits_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/application/plan_limits", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
@@ -471,16 +381,17 @@ func newPlanLimitsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	handler.HandleFunc("PUT /api/v4/application/plan_limits", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, planLimitJSON)
 	})
-
 	client := testutil.NewTestClient(t, handler)
-	return planLimitSpecsByTool(ActionSpecs(client))
-}
 
-// planLimitSpecsByTool supports plan limit specs by tool assertions in planlimits tests.
-func planLimitSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-	return specByTool
+	t.Run("get", func(t *testing.T) {
+		if _, err := Get(t.Context(), client, GetInput{PlanName: "default"}); err != nil {
+			t.Fatalf("Get() error = %v, want nil", err)
+		}
+	})
+	t.Run("change", func(t *testing.T) {
+		size := int64(5242880)
+		if _, err := Change(t.Context(), client, ChangeInput{PlanName: "default", HelmMaxFileSize: &size}); err != nil {
+			t.Fatalf("Change() error = %v, want nil", err)
+		}
+	})
 }

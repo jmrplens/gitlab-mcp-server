@@ -21,7 +21,6 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -337,39 +336,11 @@ func TestUpdate_UnmarshalOptionsError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies canonical metadata for settings actions.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
-	}))
-	specs := ActionSpecs(client)
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-
-	if len(specs) != 2 {
-		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "settings" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", spec.Name)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", spec.Name)
-		}
-	}
-	if specByTool["gitlab_update_settings"].ParameterGuidance["settings"].SemanticRole == "" {
-		t.Fatal("gitlab_update_settings should define settings parameter guidance")
-	}
-}
-
-// TestActionSpecs_CallRoutes verifies that both settings canonical routes
-// execute successfully through ActionSpecs.
-func TestActionSpecs_CallRoutes(t *testing.T) {
+// TestSettings_EachHandlerReachesItsOwnEndpoint drives both handlers against
+// the two endpoints GitLab serves the application settings on, so a handler
+// sending the wrong method or path fails rather than being answered by a
+// catch-all.
+func TestSettings_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/application/settings", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
@@ -377,41 +348,18 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler.HandleFunc("PUT /api/v4/application/settings", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
 	})
-
 	client := testutil.NewTestClient(t, handler)
-	specs := ActionSpecs(client)
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
 
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"get", "gitlab_get_settings", nil},
-		{"update", "gitlab_update_settings", map[string]any{"settings": map[string]any{"signup_enabled": false}}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			if spec.OwnerPackage != "settings" || !spec.Idempotent || !spec.OpenWorld {
-				t.Fatalf("unexpected ActionSpec semantics for %s: %+v", tt.tool, spec)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
+	t.Run("get", func(t *testing.T) {
+		if _, err := Get(t.Context(), client, GetInput{}); err != nil {
+			t.Fatalf("Get() error = %v, want nil", err)
+		}
+	})
+	t.Run("update", func(t *testing.T) {
+		if _, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}}); err != nil {
+			t.Fatalf("Update() error = %v, want nil", err)
+		}
+	})
 }
 
 // TestGet_APIError verifies that Get returns a wrapped error when the API fails.

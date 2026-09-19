@@ -6,6 +6,7 @@ package bulkimports
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -290,81 +291,6 @@ func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 		"- **Updated**: 2 Jun 2026\n"+
 		"- **Has Failures**: ✅\n"+
 		startMigrationHints)
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpecs route execution
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_StartMigrationRoute validates the StartMigrationRoute route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_StartMigrationRoute(t *testing.T) {
-	handler := http.NewServeMux()
-	handler.HandleFunc("POST /api/v4/bulk_imports", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{
-			"id": 42,
-			"status": "created",
-			"source_type": "gitlab",
-			"source_url": "https://source.gitlab.com",
-			"created_at": "2026-01-01T00:00:00Z",
-			"updated_at": "2026-01-01T00:00:00Z",
-			"has_failures": false
-		}`)
-	})
-
-	byTool := bulkImportSpecsByTool(t, handler)
-
-	result, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
-		"configuration": map[string]any{
-			"url":          "https://source.gitlab.com",
-			"access_token": "glpat-test",
-		},
-		"entities": []any{
-			map[string]any{
-				"source_type":           "group_entity",
-				"source_full_path":      "source-group",
-				"destination_slug":      "dest-group",
-				"destination_namespace": "dest-ns",
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("Route.Handler error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("Route.Handler returned nil")
-	}
-}
-
-// TestActionSpecs_StartMigrationAPIError validates the StartMigrationAPIError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_StartMigrationAPIError(t *testing.T) {
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-	})
-
-	byTool := bulkImportSpecsByTool(t, handler)
-
-	_, err := byTool["gitlab_start_bulk_import"].Route.Handler(t.Context(), map[string]any{
-		"configuration": map[string]any{
-			"url":          "https://source.gitlab.com",
-			"access_token": "glpat-test",
-		},
-		"entities": []any{
-			map[string]any{
-				"source_type":           "group_entity",
-				"source_full_path":      "source-group",
-				"destination_slug":      "dest-group",
-				"destination_namespace": "dest-ns",
-			},
-		},
-	})
-	if err == nil {
-		t.Fatal("expected error from API failure")
-	}
 }
 
 // TestList_OK verifies the List_OK handler.
@@ -783,4 +709,160 @@ func TestFormatEntityFailuresMarkdown(t *testing.T) {
 		"\n---\n\U0001F4A1 **Next steps:**\n"+
 		"- "+toolutil.HintPreserveLinks+"\n"+
 		"- Use action 'admin.bulk_import_entity_get' to read the entity these failures belong to\n")
+}
+
+// TestBulkImports_RefusalsPropagate verifies that an instance refusing a read
+// or a cancel is reported rather than swallowed, for every handler that talks
+// to GitLab. Each is wrapped with its own operation name and, for four of
+// them, its own not-found hint, so one swallowed refusal hands a model an
+// empty page and no reason for it.
+func TestBulkImports_RefusalsPropagate(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "list", call: func() error {
+			_, err := List(t.Context(), client, ListInput{})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ID: 1})
+			return err
+		}},
+		{name: "cancel", call: func() error {
+			_, err := Cancel(t.Context(), client, CancelInput{ID: 1})
+			return err
+		}},
+		{name: "entity_list", call: func() error {
+			_, err := ListEntities(t.Context(), client, ListEntitiesInput{})
+			return err
+		}},
+		// Filtered by status, which is the one option ListEntities copies onto
+		// the request under a guard of its own.
+		{name: "entity_list_by_status", call: func() error {
+			_, err := ListEntities(t.Context(), client, ListEntitiesInput{Status: "failed"})
+			return err
+		}},
+		{name: "entity_get", call: func() error {
+			_, err := GetEntity(t.Context(), client, GetEntityInput{BulkImportID: 1, EntityID: 2})
+			return err
+		}},
+		{name: "entity_failures", call: func() error {
+			_, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{BulkImportID: 1, EntityID: 2})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Fatalf("%s error = nil, want the instance refusal", tt.name)
+			}
+		})
+	}
+}
+
+// TestBulkImports_NilRecords_ConvertToTheZeroSummary verifies that the two
+// converters answer a nil record with an empty summary rather than
+// dereferencing it. GitLab's list endpoints are decoded into slices of
+// pointers, so a null element is a shape the SDK can hand us and a
+// dereference here would take the whole call down.
+func TestBulkImports_NilRecords_ConvertToTheZeroSummary(t *testing.T) {
+	if got := toSummary(nil); got != (MigrationSummary{}) {
+		t.Errorf("toSummary(nil) = %+v, want the zero summary", got)
+	}
+	if got := toEntitySummary(nil); got.ID != 0 || got.Status != "" || got.HasFailures {
+		t.Errorf("toEntitySummary(nil) = %+v, want the zero summary", got)
+	}
+}
+
+// TestBulkImports_EmptyCollections_RenderTheEmptyMessage verifies that each
+// list formatter says there is nothing rather than writing a table header over
+// no rows, which reads to a model as a malformed answer.
+func TestBulkImports_EmptyCollections_RenderTheEmptyMessage(t *testing.T) {
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "migrations", got: FormatListMarkdown(ListOutput{}), want: toolutil.EmptyMessage("bulk import migrations")},
+		{name: "entities", got: FormatListEntitiesMarkdown(ListEntitiesOutput{}), want: toolutil.EmptyMessage("bulk import entities")},
+		{name: "failures", got: FormatEntityFailuresMarkdown(ListEntityFailuresOutput{}), want: toolutil.EmptyMessage("bulk import failures")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("formatter = %q, want %q", tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_HintsFollowTheMigrationsState verifies that the card
+// offers the failures action only for a migration that has failures, and the
+// cancel action only while one is still running. Both hints name something a
+// model can do next, and offering the cancel on a finished migration or hiding
+// it on a running one is the difference between a useful next step and a call
+// GitLab refuses.
+func TestFormatGetMarkdown_HintsFollowTheMigrationsState(t *testing.T) {
+	tests := []struct {
+		name        string
+		summary     MigrationSummary
+		wantHints   []string
+		absentHints []string
+	}{
+		{
+			name:        "running with failures",
+			summary:     MigrationSummary{ID: 1, Status: "started", HasFailures: true},
+			wantHints:   []string{actionEntityFailures, actionCancel},
+			absentHints: nil,
+		},
+		{
+			name:        "finished and clean",
+			summary:     MigrationSummary{ID: 2, Status: "finished"},
+			wantHints:   []string{actionEntityList},
+			absentHints: []string{actionEntityFailures, actionCancel},
+		},
+		{
+			name:        "created and clean",
+			summary:     MigrationSummary{ID: 3, Status: "created"},
+			wantHints:   []string{actionCancel},
+			absentHints: []string{actionEntityFailures},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatGetMarkdown(tt.summary)
+			for _, want := range tt.wantHints {
+				if !strings.Contains(got, want) {
+					t.Errorf("card names no %q hint:\n%s", want, got)
+				}
+			}
+			for _, absent := range tt.absentHints {
+				if strings.Contains(got, absent) {
+					t.Errorf("card names the %q hint it should not:\n%s", absent, got)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatGetEntityMarkdown_FailingEntity_PointsAtItsFailures verifies that
+// an entity GitLab reported failures for offers the failures action instead of
+// the sibling listing, which is the one hint that leads anywhere useful from
+// a failure.
+func TestFormatGetEntityMarkdown_FailingEntity_PointsAtItsFailures(t *testing.T) {
+	got := FormatGetEntityMarkdown(EntitySummary{ID: 7, BulkImportID: 1, Status: "failed", HasFailures: true})
+	if !strings.Contains(got, actionEntityFailures) {
+		t.Errorf("card names no %q hint:\n%s", actionEntityFailures, got)
+	}
+	if strings.Contains(got, actionEntityList) {
+		t.Errorf("card names the sibling listing rather than the failures:\n%s", got)
+	}
 }

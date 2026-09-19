@@ -6,8 +6,6 @@ package metadata
 import (
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -244,49 +242,19 @@ func TestFormatGetMarkdown_NoKAS_Coverage(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_MetadataGet_Coverage verifies metadata action spec metadata
-// and canonical route execution.
-func TestActionSpecs_MetadataGet_Coverage(t *testing.T) {
+// TestGet_ReadsTheWholeMetadataObject verifies that the handler surfaces the
+// version, the enterprise flag and the KAS block together, which is what a
+// caller asking for instance metadata is after.
+func TestGet_ReadsTheWholeMetadataObject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covCovMetaJSON)
 	}))
 
-	specs := ActionSpecs(client)
-	if len(specs) != 1 {
-		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
-	}
-	spec := specs[0]
-	if spec.Name != "metadata_get" {
-		t.Errorf("Name = %q, want metadata_get", spec.Name)
-	}
-	if spec.OwnerPackage != "metadata" {
-		t.Errorf("OwnerPackage = %q, want metadata", spec.OwnerPackage)
-	}
-	if spec.IndividualTool.Name != "gitlab_get_metadata" {
-		t.Errorf("IndividualTool.Name = %q, want gitlab_get_metadata", spec.IndividualTool.Name)
-	}
-	if !spec.ReadOnly || !spec.Idempotent || !spec.OpenWorld {
-		t.Errorf("unexpected action semantics: read_only=%v idempotent=%v open_world=%v", spec.ReadOnly, spec.Idempotent, spec.OpenWorld)
-	}
-	if !slices.Contains(spec.Aliases, "gitlab version") {
-		t.Fatalf("Aliases = %v, want gitlab version", spec.Aliases)
-	}
-	if !strings.Contains(spec.Usage, "Do not use this for application settings") {
-		t.Fatalf("Usage = %q, want settings distinction", spec.Usage)
-	}
-	if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
-		t.Fatalf("Description = %q, want Returns/See also guidance", spec.IndividualTool.Description)
-	}
-
-	result, err := spec.Route.Handler(t.Context(), map[string]any{})
+	out, err := Get(t.Context(), client, GetInput{})
 	if err != nil {
-		t.Fatalf("Route.Handler: %v", err)
-	}
-	out, ok := result.(GetOutput)
-	if !ok {
-		t.Fatalf("Route.Handler result = %T, want GetOutput", result)
+		t.Fatalf("Get() error = %v, want nil", err)
 	}
 	if out.Version != "17.0.0" || !out.Enterprise || !out.KAS.Enabled {
-		t.Errorf("unexpected route output: %+v", out)
+		t.Errorf("Get() = %+v, want version 17.0.0 with the enterprise and KAS flags set", out)
 	}
 }

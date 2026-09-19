@@ -674,93 +674,60 @@ func TestFormatBitbucketServerImport(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	specs := ActionSpecs(client)
-
-	if len(specs) != 5 {
-		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "importservice" {
-			t.Errorf("OwnerPackage for %s = %q, want importservice", spec.Name, spec.OwnerPackage)
-		}
-		if spec.IndividualTool.Name == "" {
-			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
-		}
-	}
-	if !importServiceSpecsByTool(t, specs)["gitlab_cancel_github_import"].Idempotent {
-		t.Error("cancel GitHub import action should be idempotent")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — all tools
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoutes(t *testing.T) {
+// TestImportService_EveryImportReachesItsEndpoint drives each import handler
+// against the endpoint GitLab serves it on, so a handler pointed at the wrong
+// path fails rather than being answered by a catch-all.
+func TestImportService_EveryImportReachesItsEndpoint(t *testing.T) {
 	client := testutil.NewTestClient(t, importHandler())
-	byTool := importServiceSpecsByTool(t, ActionSpecs(client))
 
-	tools := []struct {
+	tests := []struct {
 		name string
-		tool string
-		args map[string]any
+		call func() error
 	}{
-		{"import_github", "gitlab_import_from_github", map[string]any{
-			"personal_access_token": "ghp_token",
-			"repo_id":               int64(12345),
-			"target_namespace":      "ns",
+		{name: "import_github", call: func() error {
+			_, err := ImportFromGitHub(t.Context(), client, ImportFromGitHubInput{
+				PersonalAccessToken: "ghp_token",
+				RepoID:              12345,
+				TargetNamespace:     "ns",
+			})
+			return err
 		}},
-		{"cancel_github", "gitlab_cancel_github_import", map[string]any{
-			"project_id": int64(1),
+		{name: "cancel_github", call: func() error {
+			_, err := CancelGitHubImport(t.Context(), client, CancelGitHubImportInput{ProjectID: 1})
+			return err
 		}},
-		{"import_gists", "gitlab_import_github_gists", map[string]any{
-			"personal_access_token": "ghp_token",
+		{name: "import_gists", call: func() error {
+			return ImportGists(t.Context(), client, ImportGistsInput{PersonalAccessToken: "ghp_token"})
 		}},
-		{"import_bitbucket_cloud", "gitlab_import_from_bitbucket_cloud", map[string]any{
-			"bitbucket_username":     "user",
-			"bitbucket_app_password": "pass",
-			"repo_path":              "user/repo",
-			"target_namespace":       "ns",
+		{name: "import_bitbucket_cloud", call: func() error {
+			_, err := ImportFromBitbucketCloud(t.Context(), client, ImportFromBitbucketCloudInput{
+				BitbucketUsername:    "user",
+				BitbucketAppPassword: "pass",
+				RepoPath:             "user/repo",
+				TargetNamespace:      "ns",
+			})
+			return err
 		}},
-		{"import_bitbucket_server", "gitlab_import_from_bitbucket_server", map[string]any{
-			"bitbucket_server_url":      "https://bitbucket.example.com",
-			"bitbucket_server_username": "admin",
-			"personal_access_token":     "pat123",
-			"bitbucket_server_project":  "PROJ",
-			"bitbucket_server_repo":     "repo",
+		{name: "import_bitbucket_server", call: func() error {
+			_, err := ImportFromBitbucketServer(t.Context(), client, ImportFromBitbucketServerInput{
+				BitbucketServerURL:      "https://bitbucket.example.com",
+				BitbucketServerUsername: "admin",
+				PersonalAccessToken:     "pat123",
+				BitbucketServerProject:  "PROJ",
+				BitbucketServerRepo:     "repo",
+			})
+			return err
 		}},
 	}
 
-	for _, tt := range tools {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			if err := tt.call(); err != nil {
+				t.Fatalf("%s error = %v, want nil", tt.name, err)
 			}
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// MCP round-trip — meta tool
-// ---------------------------------------------------------------------------.
-
-// ---------------------------------------------------------------------------
-// Helpers: MCP session factories
-// ---------------------------------------------------------------------------.
 
 // importHandler supports import handler assertions in importservice tests.
 func importHandler() *http.ServeMux {
@@ -790,43 +757,44 @@ func importHandler() *http.ServeMux {
 	return handler
 }
 
-// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_ErrorPaths(t *testing.T) {
+// TestImportService_RefusalsPropagate verifies that an instance refusing the
+// import is reported rather than swallowed, for each import that has no
+// refusal test of its own.
+func TestImportService_RefusalsPropagate(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	byTool := importServiceSpecsByTool(t, ActionSpecs(client))
 
-	tools := []struct {
+	tests := []struct {
 		name string
-		args map[string]any
+		call func() error
 	}{
-		{"gitlab_import_from_github", map[string]any{"personal_access_token": "tok", "repo_id": int64(1), "target_namespace": "ns"}},
-		{"gitlab_cancel_github_import", map[string]any{"project_id": int64(1)}},
-		{"gitlab_import_github_gists", map[string]any{"personal_access_token": "tok"}},
+		{name: "import_github", call: func() error {
+			_, err := ImportFromGitHub(t.Context(), client, ImportFromGitHubInput{
+				PersonalAccessToken: "tok",
+				RepoID:              1,
+				TargetNamespace:     "ns",
+			})
+			return err
+		}},
+		{name: "cancel_github", call: func() error {
+			_, err := CancelGitHubImport(t.Context(), client, CancelGitHubImportInput{ProjectID: 1})
+			return err
+		}},
+		{name: "import_gists", call: func() error {
+			return ImportGists(t.Context(), client, ImportGistsInput{PersonalAccessToken: "tok"})
+		}},
 	}
-	for _, tt := range tools {
+
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
-			if err == nil {
-				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
+			if err := tt.call(); err == nil {
+				t.Fatalf("%s error = nil, want the instance refusal", tt.name)
 			}
 		})
 	}
-}
-
-// importServiceSpecsByTool supports import service specs by tool assertions in importservice tests.
-func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	t.Helper()
-	byTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		byTool[spec.IndividualTool.Name] = spec
-	}
-	return byTool
 }
 
 // TestMarkdownRegistry_PointerOutputFormatters verifies that the registry

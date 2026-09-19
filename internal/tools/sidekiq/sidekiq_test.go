@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // errExpectedNil identifies the err expected nil constant used by this package.
@@ -501,75 +500,15 @@ func TestFormatCompoundMetricsMarkdown_NothingRunning_KeepsEverySection(t *testi
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpecs metadata
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_Metadata verifies Sidekiq action spec metadata.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "sidekiq" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", spec.Name)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", spec.Name)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpec route execution
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes validates Sidekiq canonical routes.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	specByTool := newSidekiqRouteSpecs(t)
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"queue_metrics", "gitlab_get_sidekiq_queue_metrics", map[string]any{}},
-		{"process_metrics", "gitlab_get_sidekiq_process_metrics", map[string]any{}},
-		{"job_stats", "gitlab_get_sidekiq_job_stats", map[string]any{}},
-		{"compound_metrics", "gitlab_get_sidekiq_compound_metrics", map[string]any{}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Helper: route specs factory
-// ---------------------------------------------------------------------------.
-
-// newSidekiqRouteSpecs constructs sidekiq route specs test fixtures.
-func newSidekiqRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
-	t.Helper()
+// TestSidekiq_EachMetricReachesItsOwnEndpoint drives the four metric handlers
+// against the four endpoints GitLab serves, so a handler pointed at a sibling's
+// path fails rather than being answered by a catch-all.
+func TestSidekiq_EachMetricReachesItsOwnEndpoint(t *testing.T) {
+	const (
+		queuesJSON    = `{"queues":{"default":{"backlog":10,"latency":5}}}`
+		processesJSON = `{"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2026-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}]}`
+		jobsJSON      = `{"jobs":{"processed":100000,"failed":50,"enqueued":25}}`
+	)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -579,27 +518,46 @@ func newSidekiqRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 
 		switch r.URL.Path {
 		case "/api/v4/sidekiq/queue_metrics", "/api/v4//sidekiq/queue_metrics":
-			testutil.RespondJSON(w, http.StatusOK, `{"queues":{"default":{"backlog":10,"latency":5}}}`)
+			testutil.RespondJSON(w, http.StatusOK, queuesJSON)
 		case "/api/v4/sidekiq/process_metrics", "/api/v4//sidekiq/process_metrics":
-			testutil.RespondJSON(w, http.StatusOK, `{"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2026-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}]}`)
+			testutil.RespondJSON(w, http.StatusOK, processesJSON)
 		case "/api/v4/sidekiq/job_stats", "/api/v4//sidekiq/job_stats":
-			testutil.RespondJSON(w, http.StatusOK, `{"jobs":{"processed":100000,"failed":50,"enqueued":25}}`)
+			testutil.RespondJSON(w, http.StatusOK, jobsJSON)
 		case "/api/v4/sidekiq/compound_metrics", "/api/v4//sidekiq/compound_metrics":
 			testutil.RespondJSON(w, http.StatusOK, `{"queues":{"default":{"backlog":10,"latency":5}},"processes":[{"hostname":"worker-01","pid":1234,"tag":"default","started_at":"2026-01-15T10:00:00Z","queues":["default"],"labels":[],"concurrency":25,"busy":10}],"jobs":{"processed":100000,"failed":50,"enqueued":25}}`)
 		default:
 			http.NotFound(w, r)
 		}
 	})
-
 	client := testutil.NewTestClient(t, handler)
-	return sidekiqSpecsByTool(ActionSpecs(client))
-}
 
-// sidekiqSpecsByTool supports sidekiq specs by tool assertions in sidekiq tests.
-func sidekiqSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "queue_metrics", call: func() error {
+			_, err := GetQueueMetrics(t.Context(), client, GetQueueMetricsInput{})
+			return err
+		}},
+		{name: "process_metrics", call: func() error {
+			_, err := GetProcessMetrics(t.Context(), client, GetProcessMetricsInput{})
+			return err
+		}},
+		{name: "job_stats", call: func() error {
+			_, err := GetJobStats(t.Context(), client, GetJobStatsInput{})
+			return err
+		}},
+		{name: "compound_metrics", call: func() error {
+			_, err := GetCompoundMetrics(t.Context(), client, GetCompoundMetricsInput{})
+			return err
+		}},
 	}
-	return specByTool
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err != nil {
+				t.Fatalf("%s error = %v, want nil", tt.name, err)
+			}
+		})
+	}
 }

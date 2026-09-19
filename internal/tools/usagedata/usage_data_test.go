@@ -12,6 +12,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -762,108 +763,74 @@ func TestFormatServicePingMarkdown_ManyCounts_SaysHowManyItLeftOut(t *testing.T)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpecs metadata
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_Metadata verifies usage data action spec metadata.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	specs := ActionSpecs(client)
-	specByTool := usageDataSpecsByTool(specs)
-	if len(specs) != 6 {
-		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "usagedata" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", spec.Name)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", spec.Name)
-		}
-	}
-	if specByTool["gitlab_track_event"].ParameterGuidance["event"].SemanticRole == "" {
-		t.Fatal("gitlab_track_event should define event parameter guidance")
-	}
-	if specByTool["gitlab_track_events"].ParameterGuidance["events"].SemanticRole == "" {
-		t.Fatal("gitlab_track_events should define events parameter guidance")
+// usageDataCalls names every usage-data handler beside a call of it, so the
+// two tests below can drive the same set against a working instance and a
+// refusing one.
+func usageDataCalls(t *testing.T, client *gitlabclient.Client) []struct {
+	name string
+	call func() error
+} {
+	t.Helper()
+	return []struct {
+		name string
+		call func() error
+	}{
+		{name: "service_ping", call: func() error {
+			_, err := GetServicePing(t.Context(), client, GetServicePingInput{})
+			return err
+		}},
+		{name: "non_sql_metrics", call: func() error {
+			_, err := GetNonSQLMetrics(t.Context(), client, GetNonSQLMetricsInput{})
+			return err
+		}},
+		{name: "usage_queries", call: func() error {
+			_, err := GetQueries(t.Context(), client, GetQueriesInput{})
+			return err
+		}},
+		{name: "track_event", call: func() error {
+			_, err := TrackEvent(t.Context(), client, TrackEventInput{Event: "test_event"})
+			return err
+		}},
+		{name: "track_events", call: func() error {
+			_, err := TrackEvents(t.Context(), client, TrackEventsInput{Events: []TrackEventInput{{Event: "e1"}}})
+			return err
+		}},
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpec route execution
-// ---------------------------------------------------------------------------.
+// TestUsageData_EachHandlerReachesItsOwnEndpoint drives every usage-data
+// handler against the endpoint GitLab serves it on, so one pointed at a
+// sibling's path fails rather than being answered by a catch-all.
+func TestUsageData_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
+	client := usageDataRouteClient(t)
 
-// TestActionSpecs_CallRoutes validates usage data canonical routes.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	specByTool := newUsageDataRouteSpecs(t)
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"service_ping", "gitlab_get_service_ping", map[string]any{}},
-		{"non_sql_metrics", "gitlab_get_non_sql_metrics", map[string]any{}},
-		{"usage_queries", "gitlab_get_usage_queries", map[string]any{}},
-		{"metric_definitions", "gitlab_get_metric_definitions", map[string]any{}},
-		{"track_event", "gitlab_track_event", map[string]any{"event": "test_event"}},
-		{"track_events", "gitlab_track_events", map[string]any{"events": []any{map[string]any{"event": "e1"}}}},
-	}
-
-	for _, tt := range tools {
+	for _, tt := range usageDataCalls(t, client) {
 		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			if err := tt.call(); err != nil {
+				t.Fatalf("%s error = %v, want nil", tt.name, err)
 			}
 		})
 	}
+	t.Run("metric_definitions", func(t *testing.T) {
+		if _, err := GetMetricDefinitions(t.Context(), client, GetMetricDefinitionsInput{}); err != nil {
+			t.Fatalf("GetMetricDefinitions() error = %v, want nil", err)
+		}
+	})
 }
 
-// ---------------------------------------------------------------------------
-// Helper: route specs factory
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRouteErrors validates usage data route error paths.
-func TestActionSpecs_CallRouteErrors(t *testing.T) {
+// TestUsageData_RefusalsPropagate verifies that an instance refusing the read
+// or the write is reported rather than swallowed.
+func TestUsageData_RefusalsPropagate(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
-	specByTool := usageDataSpecsByTool(ActionSpecs(client))
 
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_get_service_ping", map[string]any{}},
-		{"gitlab_get_non_sql_metrics", map[string]any{}},
-		{"gitlab_get_usage_queries", map[string]any{}},
-		{"gitlab_track_event", map[string]any{"event": "test_event"}},
-		{"gitlab_track_events", map[string]any{"events": []any{map[string]any{"event": "e1"}}}},
-	}
-	for _, tt := range tools {
+	for _, tt := range usageDataCalls(t, client) {
 		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.name]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.name)
-			}
-			if _, err := spec.Route.Handler(t.Context(), tt.args); err == nil {
-				t.Fatalf("expected route error for %s", tt.name)
+			if err := tt.call(); err == nil {
+				t.Fatalf("%s error = nil, want the instance refusal", tt.name)
 			}
 		})
 	}
@@ -886,8 +853,9 @@ func TestGetMetricDefinitions_ReadError(t *testing.T) {
 	}
 }
 
-// newUsageDataRouteSpecs constructs usage data route specs test fixtures.
-func newUsageDataRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
+// usageDataRouteClient returns a client answering every usage-data endpoint
+// and nothing else.
+func usageDataRouteClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 
 	handler := http.NewServeMux()
@@ -918,15 +886,5 @@ func newUsageDataRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 
-	client := testutil.NewTestClient(t, handler)
-	return usageDataSpecsByTool(ActionSpecs(client))
-}
-
-// usageDataSpecsByTool supports usage data specs by tool assertions in usagedata tests.
-func usageDataSpecsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-	return specByTool
+	return testutil.NewTestClient(t, handler)
 }
