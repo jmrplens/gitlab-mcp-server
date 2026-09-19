@@ -145,30 +145,33 @@ func TestActionSpecs_EveryToolCarriesItsOwnDiscoveryMetadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_RelatedActionsNameRegisteredActions holds every cross-link to
-// the canonical action IDs this package registers. A misspelled one is a dead
-// end a model follows once and abandons.
+// TestActionSpecs_RelatedActionsNameCanonicalActionIDs holds every cross-link
+// to the canonical IDs this package declares.
 //
-// The canonical IDs rather than the individual tool names: the discovery tools
-// that publish this field hand out canonical IDs, so a tool name written here
-// would be a cross-link a model cannot look up in any listing it is shown.
-func TestActionSpecs_RelatedActionsNameRegisteredActions(t *testing.T) {
-	byTool := runnerControllerSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, runnerControllerActionHandler())))
-	actions := make(map[string]string, len(byTool))
-	for tool, spec := range byTool {
-		actions["runner."+spec.Name] = tool
+// It used to hold them to the individual tool names instead, and passed,
+// because every spec here declares its tool name as an alias: the cross-links
+// resolved when a model followed one and could be found in no listing, since
+// gitlab_find_action publishes IDs. `make check-action-ids` is the gate that
+// holds the whole tree to this now.
+func TestActionSpecs_RelatedActionsNameCanonicalActionIDs(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, runnerControllerActionHandler()))
+	declared := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		declared[runnerGroup+spec.Name] = struct{}{}
 	}
 
-	for tool, spec := range byTool {
-		t.Run(tool, func(t *testing.T) {
+	for _, spec := range specs {
+		own := runnerGroup + spec.Name
+		t.Run(own, func(t *testing.T) {
 			for _, related := range spec.RelatedActions {
-				named, ok := actions[related]
-				if !ok {
-					t.Errorf("%s names related action %q, which this package does not register", tool, related)
-					continue
+				if _, ok := declared[related]; !ok {
+					t.Errorf("%s names related action %q, which this package does not declare", own, related)
 				}
-				if named == tool {
-					t.Errorf("%s names itself as a related action", tool)
+				if related == own {
+					t.Errorf("%s names itself as a related action", own)
+				}
+				if strings.HasPrefix(related, "gitlab_") {
+					t.Errorf("%s names %q, an individual tool name rather than a catalog ID", own, related)
 				}
 			}
 		})

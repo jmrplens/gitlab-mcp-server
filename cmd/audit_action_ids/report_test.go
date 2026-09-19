@@ -8,24 +8,18 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 )
 
-// stubOracle is a small ID set, so the classification rules are exercised on
+// stubCatalog is a small ID set, so the classification rules are exercised on
 // values written here rather than on whatever the catalog happens to hold.
-func stubOracle() *oracle {
-	ids := &oracle{
-		ids:     map[string]struct{}{},
-		aliases: map[string]string{},
-		domains: map[string]struct{}{},
-	}
-	for _, id := range []string{"demo.get", "demo.list", "demo.create", "other.get"} {
-		ids.ids[id] = struct{}{}
-		domain, _, _ := strings.Cut(id, ".")
-		ids.domains[domain] = struct{}{}
-	}
-	ids.addAlias("demo.fetch", "demo.get")
-	ids.finish()
-	return ids
+func stubCatalog(extraIDs ...string) *actionids.IDs {
+	ids := append([]string{"demo.get", "demo.list", "demo.create", "other.get"}, extraIDs...)
+	return actionids.New(ids, map[string]string{
+		"demo.fetch":  "demo.get",
+		"issue.close": "issue.update",
+	})
 }
 
 // TestClassify_FourOutcomes_AreKeptApart holds the split the whole report
@@ -41,7 +35,7 @@ func TestClassify_FourOutcomes_AreKeptApart(t *testing.T) {
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 4, Kind: kindUsage, Value: "Dynamic execute also accepts demo.fetch.", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 5, Kind: kindRelated, Expr: "helper(x)"},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	if report.Summary.Findings != 2 {
 		t.Fatalf("findings = %+v, want the structured alias and the dead ID", report.Findings)
@@ -78,7 +72,7 @@ func TestClassify_ProseTokens_NeedACatalogDomain(t *testing.T) {
 	usage := "Clone from github.com, read params.note_id, then call demo.get and demo.gone."
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 1, Kind: kindUsage, Value: usage, Resolved: true},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	if report.Summary.Judged != 2 {
 		t.Errorf("judged = %d, want only the two demo tokens", report.Summary.Judged)
@@ -96,7 +90,7 @@ func TestClassify_ProseTokenRepeated_IsJudgedOnce(t *testing.T) {
 			Package: "p", File: "p/a.go", Line: 1, Kind: kindDescription,
 			Value: "See demo.gone. Then see demo.gone again.", Resolved: true,
 		},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	if len(report.Findings) != 1 {
 		t.Errorf("findings = %+v, want one row for the repeated token", report.Findings)
@@ -112,10 +106,7 @@ func TestClassify_DeclaredProseToken_IsExcusedAndNotJudged(t *testing.T) {
 	if !exemptProse(declared) {
 		t.Fatalf("%s is expected to be the declared prose exemption", declared)
 	}
-	ids := stubOracle()
-	ids.ids["project.get"] = struct{}{}
-	ids.domains["project"] = struct{}{}
-	ids.finish()
+	ids := stubCatalog("project.get")
 
 	report := classify([]site{
 		{
@@ -123,7 +114,7 @@ func TestClassify_DeclaredProseToken_IsExcusedAndNotJudged(t *testing.T) {
 			Value: "The remote ends in project.git.", Resolved: true,
 		},
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindRelated, Value: declared, Resolved: true},
-	}, ids)
+	}, ids, true)
 
 	if len(report.Findings) != 1 || report.Findings[0].Kind != kindRelated {
 		t.Errorf("findings = %+v, want the cross-link only", report.Findings)
@@ -131,22 +122,88 @@ func TestClassify_DeclaredProseToken_IsExcusedAndNotJudged(t *testing.T) {
 	if report.Summary.Judged != 1 {
 		t.Errorf("judged = %d, want the excused prose token left uncounted", report.Summary.Judged)
 	}
-	if report.Summary.Stale != 0 {
-		t.Errorf("stale exemptions = %v, want none: the entry excused a token", report.StaleExemptions)
+	if slices.ContainsFunc(report.StaleExemptions, func(entry string) bool {
+		return strings.HasPrefix(entry, declared+" ")
+	}) {
+		t.Errorf("stale declarations = %v, want the used entry left out", report.StaleExemptions)
 	}
 }
 
-// TestClassify_UnusedExemption_IsReportedStale holds every declaration table
-// here to the same rule: one that has stopped describing the tree is itself a
-// finding, or a reader goes on trusting it.
-func TestClassify_UnusedExemption_IsReportedStale(t *testing.T) {
-	report := classify(nil, stubOracle())
+// TestClassify_AliasNamedInProse_IsExcusedOnlyThere holds the one shape the
+// canonical-ID demand would be wrong for, and the structural limit on it. A
+// Usage line whose subject is the alias may name it; the same spelling written
+// as a cross-link is still refused, because that field publishes IDs a model
+// calls rather than sentences it reads.
+func TestClassify_AliasNamedInProse_IsExcusedOnlyThere(t *testing.T) {
+	const alias = "issue.close"
+	if !exemptAliasMention(alias) {
+		t.Fatalf("%s is expected to be a declared alias mention", alias)
+	}
 
-	if !slices.Contains(report.StaleExemptions, "project.git") {
-		t.Errorf("stale exemptions = %v, want the unused entry named", report.StaleExemptions)
+	report := classify([]site{
+		{
+			Package: "p", File: "p/a.go", Line: 1, Kind: kindUsage,
+			Value: "Dynamic execute also accepts the issue.close alias.", Resolved: true,
+		},
+		{Package: "p", File: "p/a.go", Line: 2, Kind: kindRelated, Value: alias, Resolved: true},
+	}, stubCatalog(), true)
+
+	if len(report.AliasRefs) != 0 {
+		t.Errorf("alias references = %+v, want the declared prose mention excused", report.AliasRefs)
+	}
+	if len(report.Findings) != 1 || report.Findings[0].Kind != kindRelated {
+		t.Fatalf("findings = %+v, want the cross-link only", report.Findings)
+	}
+	if report.Findings[0].Canonical != "issue.update" {
+		t.Errorf("finding = %+v, want issue.update named as the fix", report.Findings[0])
+	}
+	if report.Clean() {
+		t.Error("a run holding an alias cross-link reported itself clean")
+	}
+}
+
+// TestClassify_UnusedDeclaration_IsReportedStale holds every declaration table
+// here to the same rule: one that has stopped describing the tree is itself a
+// finding, or a reader goes on trusting it. Both tables are named in the same
+// list, each row saying which map to open.
+func TestClassify_UnusedDeclaration_IsReportedStale(t *testing.T) {
+	report := classify(nil, stubCatalog(), true)
+
+	for _, want := range []string{"project.git", "proseExemptions", "issue.close", "declaredAliasMentions"} {
+		t.Run(want, func(t *testing.T) {
+			if !slices.ContainsFunc(report.StaleExemptions, func(entry string) bool {
+				return strings.Contains(entry, want)
+			}) {
+				t.Errorf("stale declarations = %v, want %q named", report.StaleExemptions, want)
+			}
+		})
 	}
 	if report.Summary.Stale != len(report.StaleExemptions) {
 		t.Errorf("stale count = %d, want %d", report.Summary.Stale, len(report.StaleExemptions))
+	}
+	if report.Clean() {
+		t.Error("a run holding a stale declaration reported itself clean")
+	}
+}
+
+// TestClassify_NarrowedRun_LeavesTheDeclarationsUnjudged holds the one thing a
+// run over part of the tree may not answer. Every declaration excuses nothing
+// there, so reporting them stale would be a statement about the patterns; the
+// report says they were not judged instead, and the run stays clean.
+func TestClassify_NarrowedRun_LeavesTheDeclarationsUnjudged(t *testing.T) {
+	report := classify(nil, stubCatalog(), false)
+
+	if len(report.StaleExemptions) != 0 || report.Summary.Stale != 0 {
+		t.Errorf("stale declarations = %v, want none from a narrowed run", report.StaleExemptions)
+	}
+	if !report.Clean() {
+		t.Error("a narrowed run over nothing reported itself unclean")
+	}
+
+	var out bytes.Buffer
+	writeReport(&out, report, false)
+	if !strings.Contains(out.String(), "declaration tables were not judged") {
+		t.Errorf("summary = %q, want the narrowed run to say what it did not judge", out.String())
 	}
 }
 
@@ -158,7 +215,7 @@ func TestClassify_Findings_AreOrderedByPosition(t *testing.T) {
 		{Package: "a", File: "a/b.go", Line: 9, Kind: kindRelated, Value: "demo.gone", Resolved: true},
 		{Package: "a", File: "a/b.go", Line: 2, Kind: kindRelated, Value: "demo.zzz", Resolved: true},
 		{Package: "a", File: "a/b.go", Line: 2, Kind: kindRelated, Value: "demo.aaa", Resolved: true},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	var order []string
 	for _, finding := range report.Findings {
@@ -175,93 +232,68 @@ func TestClassify_Findings_AreOrderedByPosition(t *testing.T) {
 func TestClassify_EmptyValue_IsNotJudged(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 1, Kind: kindRelated, Value: "  ", Resolved: true},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	if report.Summary.Judged != 0 || len(report.Findings) != 0 {
 		t.Errorf("judged %d, findings %+v, want a blank entry passed over", report.Summary.Judged, report.Findings)
 	}
 }
 
-// TestClosestID_FarFromEverything_SuggestsNothing holds the bound on a
-// suggestion. Past a third of the length the nearest ID is an accident of the
-// alphabet, and naming it would send a reader after the wrong fix.
-func TestClosestID_FarFromEverything_SuggestsNothing(t *testing.T) {
-	sorted := []string{"demo.create", "demo.get", "demo.list"}
-	if got := closestID("demo.gt", sorted); got != "demo.get" {
-		t.Errorf("closestID for a near miss = %q, want demo.get", got)
-	}
-	if got := closestID("unrelated.something_entirely_else", sorted); got != "" {
-		t.Errorf("closestID for a distant ID = %q, want nothing", got)
-	}
-}
-
-// TestEditDistance_KnownPairs_AreTheLevenshteinDistance holds the measure the
-// suggestion is ranked by.
-func TestEditDistance_KnownPairs_AreTheLevenshteinDistance(t *testing.T) {
-	cases := []struct {
-		left, right string
-		want        int
-	}{
-		{"", "", 0},
-		{"abc", "abc", 0},
-		{"abc", "abd", 1},
-		{"abc", "", 3},
-		{"", "abc", 3},
-		{"kitten", "sitting", 3},
-	}
-	for _, tc := range cases {
-		t.Run(tc.left+"/"+tc.right, func(t *testing.T) {
-			if got := editDistance(tc.left, tc.right); got != tc.want {
-				t.Errorf("editDistance(%q, %q) = %d, want %d", tc.left, tc.right, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings holds what the two
-// report modes say. The quiet one is the work list; the verbose one adds the
-// aliases named in prose and the sites that could not be folded, which are the
-// audit's own blind spot rather than a clean answer.
-//
-// The two alias rows are both here on purpose, because each is printed with a
-// verb of its own: the one written into a cross-link is a finding and is read
-// as a spelling to correct, the one written into a sentence is not.
-func TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings(t *testing.T) {
+// TestWriteReport_EverythingTheGateRefuses_IsPrintedWithoutVerbose holds that
+// the quiet report is the whole failure. Three of the four refusals used to be
+// hidden behind -v, which would have made a red gate say nothing about why.
+func TestWriteReport_EverythingTheGateRefuses_IsPrintedWithoutVerbose(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 5, Kind: kindUsage, Value: "Execute also accepts demo.fetch.", Resolved: true},
 		{Package: "p", File: "p/a.go", Line: 4, Kind: kindRelated, Expr: "helper(x)"},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	var quiet bytes.Buffer
 	writeReport(&quiet, report, false)
-	if !strings.Contains(quiet.String(), "demo.gone") {
-		t.Error("the quiet report left out the finding")
+	for _, want := range []string{"demo.gone", "demo.fetch", "helper(x)", "declarations that excuse nothing"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(quiet.String(), want) {
+				t.Errorf("the quiet report left out %q", want)
+			}
+		})
 	}
-	if strings.Contains(quiet.String(), "helper(x)") {
-		t.Error("the quiet report printed the unresolved bucket")
+	if strings.Contains(quiet.String(), "judged by kind") {
+		t.Error("the quiet report printed the breakdown -v is for")
 	}
-	if strings.Contains(quiet.String(), "alias of") {
-		t.Error("the quiet report printed the prose alias bucket")
+	// The prose alias is refused too, so the quiet report has to name it: it
+	// is the one refusal whose row only ever appeared under -v, which is what
+	// would have let a red gate print nothing about it.
+	if !strings.Contains(quiet.String(), "alias of") {
+		t.Error("the quiet report left out the prose alias bucket, which fails the gate")
 	}
 
 	var loud bytes.Buffer
 	writeReport(&loud, report, true)
-	for _, want := range []string{
-		"demo.gone",
-		`"demo.fetch" is an alias, not the catalog ID demo.get`,
-		"aliases named in prose",
-		`"demo.fetch" alias of demo.get`,
-		"helper(x)",
-		"exemptions that excuse nothing",
-		"judged by kind",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(loud.String(), want) {
-				t.Errorf("the verbose report left out %q", want)
-			}
-		})
+	if !strings.Contains(loud.String(), "judged by kind") {
+		t.Error("the verbose report left out the breakdown by kind")
+	}
+}
+
+// TestWriteReport_CleanRunVerbose_NamesTheAliasHeadingAnyway holds the one
+// thing -v still decides: on a clean run it prints the alias heading, so a
+// reader can see the bucket was looked at and was empty.
+func TestWriteReport_CleanRunVerbose_NamesTheAliasHeadingAnyway(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/a.go", Line: 1, Kind: kindRelated, Value: "demo.get", Resolved: true},
+	}, stubCatalog(), true)
+
+	var quiet, loud bytes.Buffer
+	writeReport(&quiet, report, false)
+	writeReport(&loud, report, true)
+
+	const heading = "registered aliases, not catalog IDs"
+	if strings.Contains(quiet.String(), heading) {
+		t.Error("the quiet report printed an empty alias heading")
+	}
+	if !strings.Contains(loud.String(), heading) {
+		t.Error("the verbose report left out the alias heading")
 	}
 }
 
@@ -271,7 +303,7 @@ func TestWriteReport_Verbose_AddsTheBucketsThatAreNotFindings(t *testing.T) {
 func TestWriteReport_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 1, Kind: kindRelated, Value: "demo.get", Resolved: true},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	var out bytes.Buffer
 	writeReport(&out, report, false)
@@ -286,7 +318,7 @@ func TestWriteReport_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	report := classify([]site{
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
-	}, stubOracle())
+	}, stubCatalog(), true)
 
 	path := filepath.Join(t.TempDir(), "nested", "action-ids.json")
 	if err := writeJSON(path, report); err != nil {

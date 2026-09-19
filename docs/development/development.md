@@ -30,7 +30,7 @@ gitlab-mcp-server/
 │   ├── audit_dead_consts/       # Every unexported constant is one something reads, which unused cannot say inside a const group
 │   ├── audit_discovery_completeness/ # Discovery metadata audit with cluster-aware severity (META-001)
 │   ├── audit_doc_coverage/      # docs/reference/tools/*.md vs catalog coverage gaps (DOC-002)
-│   ├── audit_doc_tool_names/    # Every gitlab_* name the docs mention is a registered tool
+│   ├── audit_doc_tool_names/    # Every gitlab_* name and every domain.action ID the docs mention is one the server serves
 │   ├── audit_dynamic_aliases/   # Dynamic alias collision governance
 │   ├── audit_e2e_coverage/      # What the e2e suite dispatched, the catalog actions it never reached, and the push-time gate over the typed action ids
 │   ├── audit_edition_tier/      # Doc-grounded Free/Premium/Ultimate tier audit
@@ -56,7 +56,7 @@ gitlab-mcp-server/
 │   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections
 │   ├── godoc_tool/              # Go doc auditor + fixer (audit/fix subcommands)
-│   └── internal/                # Shared helpers for the commands above (apidocs, auditshared, docgen, mcpsurface)
+│   └── internal/                # Shared helpers for the commands above (actionids, apidocs, auditshared, docgen, mcpsurface)
 ├── internal/
 │   ├── config/                  # Environment variable loading and validation
 │   ├── gitlab/                  # GitLab API client wrapper with TLS support

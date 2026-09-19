@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
@@ -70,6 +72,19 @@ var stubRegistry = map[string]struct{}{
 	"gitlab_find_action":  {},
 	"gitlab_orbit_status": {},
 }
+
+// stubIDs is the small catalog the scan tests judge dotted tokens against, so
+// a case states which IDs exist rather than depending on what the tree
+// happens to publish today.
+func stubIDs() *actionids.IDs {
+	return actionids.New(
+		[]string{"issue.list", "issue.get", "issue.update", "project.get"},
+		map[string]string{"project.fetch": "project.get"},
+	)
+}
+
+// newStubScan is a scan over the two small sets above.
+func newStubScan() *docScan { return newDocScan(stubRegistry, stubIDs()) }
 
 // TestRegisteredToolNames_AllSurfaces_UnionOfRegisteredNames verifies the
 // registry is the union of what the three surfaces advertise: the dynamic
@@ -140,24 +155,99 @@ func TestScanFile_Tokens_ReportsOnlyUnregisteredNames(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeDoc(t, t.TempDir(), "guide.md", tc.content)
-			findings := map[string][]string{}
-			n, err := scanFile(path, stubRegistry, findings)
-			if err != nil {
+			scan := newStubScan()
+			if err := scan.scanFile(path); err != nil {
 				t.Fatalf("scanFile: %v", err)
 			}
-			if n != 1 {
-				t.Errorf("scanned = %d, want 1", n)
+			if scan.files != 1 {
+				t.Errorf("scanned = %d, want 1", scan.files)
 			}
-			if len(findings) != len(tc.want) {
-				t.Fatalf("findings = %v, want names %v", findings, tc.want)
+			if len(scan.tools) != len(tc.want) {
+				t.Fatalf("findings = %v, want names %v", scan.tools, tc.want)
 			}
 			for _, name := range tc.want {
-				files := findings[name]
+				files := scan.tools[name]
 				if len(files) != 1 || files[0] != filepath.ToSlash(path) {
 					t.Errorf("findings[%s] = %v, want [%s]", name, files, filepath.ToSlash(path))
 				}
 			}
 		})
+	}
+}
+
+// TestScanFile_DottedTokens_ReportsOnlyIDsTheCatalogLacks verifies the other
+// half of the same read: which dotted tokens a page offers as action IDs, and
+// which of the four things that are not one each shape is.
+//
+// The two file-name cases are the ones that decide whether this rule is usable
+// at all. Every documentation page writes file names, and the candidate test
+// admits one whenever its stem is a catalog domain, so without the tail rule
+// the report was 75 tokens of which about fifty were issue.rb and project.svg.
+func TestScanFile_DottedTokens_ReportsOnlyIDsTheCatalogLacks(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{name: "canonical_id", content: "Call `issue.list` first.", want: nil},
+		{name: "neither_half_known", content: "See github.com and go.mod.", want: nil},
+		{name: "file_name_under_a_domain", content: "Edit `issue.rb` and `project.svg`.", want: nil},
+		{name: "meta_surface_entry", content: "Read `gitlab://tools/gitlab_issue.get`.", want: nil},
+		{name: "declared_exception", content: "It emits `user.id` and `user.name`.", want: nil},
+		{name: "family_prefix", content: "The `issue.work_item_*` actions.", want: nil},
+		{name: "invented_domain", content: "Call `work_item.get` for one.", want: []string{"work_item.get"}},
+		{name: "invented_action", content: "Call `issue.listt` for many.", want: []string{"issue.listt"}},
+		{name: "registered_alias", content: "Call `project.fetch` to read one.", want: []string{"project.fetch"}},
+		{
+			name:    "repeated_mention_counted_once_per_file",
+			content: "`work_item.get` and again `work_item.get`",
+			want:    []string{"work_item.get"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeDoc(t, t.TempDir(), "guide.md", tc.content)
+			scan := newStubScan()
+			if err := scan.scanFile(path); err != nil {
+				t.Fatalf("scanFile: %v", err)
+			}
+			if len(scan.actions) != len(tc.want) {
+				t.Fatalf("action findings = %v, want %v", scan.actions, tc.want)
+			}
+			for _, token := range tc.want {
+				finding, found := scan.actions[token]
+				if !found {
+					t.Fatalf("action findings = %v, want %q named", scan.actions, token)
+				}
+				if len(finding.Files) != 1 || finding.Files[0] != filepath.ToSlash(path) {
+					t.Errorf("findings[%s].Files = %v, want [%s]", token, finding.Files, filepath.ToSlash(path))
+				}
+			}
+		})
+	}
+}
+
+// TestScanFile_RegisteredAlias_IsNamedAsAnAlias holds the half of a finding
+// that decides what the fix is. An alias resolves when a model follows it and
+// appears in no listing, so the row has to say what it stands for rather than
+// read as a dead end.
+func TestScanFile_RegisteredAlias_IsNamedAsAnAlias(t *testing.T) {
+	path := writeDoc(t, t.TempDir(), "guide.md", "Call `project.fetch`.")
+	scan := newStubScan()
+	if err := scan.scanFile(path); err != nil {
+		t.Fatalf("scanFile: %v", err)
+	}
+
+	finding := scan.actions["project.fetch"]
+	if finding.Canonical != "project.get" {
+		t.Errorf("Canonical = %q, want project.get", finding.Canonical)
+	}
+	if got := finding.describe("project.fetch"); !strings.Contains(got, "registered alias of project.get") {
+		t.Errorf("describe = %q, want the canonical ID named", got)
+	}
+	dead := idFinding{}
+	if got := dead.describe("issue.gone"); got != "issue.gone names no action" {
+		t.Errorf("describe of a dead ID = %q", got)
 	}
 }
 
@@ -169,13 +259,12 @@ func TestScanFile_HistoricalDocs_SkippedWithoutReading(t *testing.T) {
 	t.Chdir(root)
 	writeDoc(t, root, "docs/development/adr/adr-0001-example.md", "Decided on gitlab_list_issues.")
 
-	findings := map[string][]string{}
-	n, err := scanFile("docs/development/adr/adr-0001-example.md", stubRegistry, findings)
-	if err != nil {
+	scan := newStubScan()
+	if err := scan.scanFile("docs/development/adr/adr-0001-example.md"); err != nil {
 		t.Fatalf("scanFile: %v", err)
 	}
-	if n != 0 || len(findings) != 0 {
-		t.Errorf("scanFile on a historical doc = (%d, %v), want (0, none)", n, findings)
+	if scan.files != 0 || len(scan.tools) != 0 {
+		t.Errorf("scanFile on a historical doc = (%d, %v), want (0, none)", scan.files, scan.tools)
 	}
 }
 
@@ -183,8 +272,7 @@ func TestScanFile_HistoricalDocs_SkippedWithoutReading(t *testing.T) {
 // but not read surfaces as an error instead of a silently clean scan.
 func TestScanFile_UnreadableFile_ReturnsError(t *testing.T) {
 	path := danglingLink(t, t.TempDir(), "docs/broken.md")
-	findings := map[string][]string{}
-	if _, err := scanFile(path, stubRegistry, findings); err == nil {
+	if err := newStubScan().scanFile(path); err == nil {
 		t.Fatal("scanFile on a dangling symlink returned nil error")
 	}
 }
@@ -263,8 +351,8 @@ func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := tc.setup(t, t.TempDir())
-			findings := map[string][]string{}
-			n, err := scanRoot(root, stubRegistry, findings)
+			scan := newStubScan()
+			err := scan.scanRoot(root)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("scanRoot(%s) returned nil error", root)
@@ -274,15 +362,15 @@ func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 			if err != nil {
 				t.Fatalf("scanRoot(%s): %v", root, err)
 			}
-			if n != tc.wantScanned {
-				t.Errorf("scanned = %d, want %d", n, tc.wantScanned)
+			if scan.files != tc.wantScanned {
+				t.Errorf("scanned = %d, want %d", scan.files, tc.wantScanned)
 			}
-			if len(findings) != len(tc.wantNames) {
-				t.Fatalf("findings = %v, want names %v", findings, tc.wantNames)
+			if len(scan.tools) != len(tc.wantNames) {
+				t.Fatalf("findings = %v, want names %v", scan.tools, tc.wantNames)
 			}
 			for _, name := range tc.wantNames {
-				if len(findings[name]) != 1 {
-					t.Errorf("findings[%s] = %v, want exactly one file", name, findings[name])
+				if len(scan.tools[name]) != 1 {
+					t.Errorf("findings[%s] = %v, want exactly one file", name, scan.tools[name])
 				}
 			}
 		})
@@ -298,18 +386,40 @@ func TestScanDocs_Roots_AggregatesAcrossRoots(t *testing.T) {
 	writeDoc(t, root, "docs/other.md", "gitlab_issue_list only")
 	readme := writeDoc(t, root, "README.md", "gitlab_list_issues and gitlab_get_issue")
 
-	findings, scanned, err := scanDocs([]string{filepath.Join(root, "docs"), readme, filepath.Join(root, "absent.md")}, stubRegistry)
-	if err != nil {
+	scan := newStubScan()
+	if err := scan.scanDocs([]string{filepath.Join(root, "docs"), readme, filepath.Join(root, "absent.md")}); err != nil {
 		t.Fatalf("scanDocs: %v", err)
 	}
-	if scanned != 3 {
-		t.Errorf("scanned = %d, want 3", scanned)
+	if scan.files != 3 {
+		t.Errorf("scanned = %d, want 3", scan.files)
 	}
-	if got := findings["gitlab_list_issues"]; len(got) != 2 {
+	if got := scan.tools["gitlab_list_issues"]; len(got) != 2 {
 		t.Errorf("gitlab_list_issues files = %v, want two", got)
 	}
-	if got := findings["gitlab_get_issue"]; len(got) != 1 || got[0] != filepath.ToSlash(readme) {
+	if got := scan.tools["gitlab_get_issue"]; len(got) != 1 || got[0] != filepath.ToSlash(readme) {
 		t.Errorf("gitlab_get_issue files = %v, want [%s]", got, filepath.ToSlash(readme))
+	}
+}
+
+// TestScanDocs_OneDottedToken_MergesTheFilesThatSpellIt holds the same
+// aggregation for the ID half: one wrong spelling that spread over three pages
+// is one row naming three files, which is what makes a report say how far a
+// mistake spread.
+func TestScanDocs_OneDottedToken_MergesTheFilesThatSpellIt(t *testing.T) {
+	root := t.TempDir()
+	writeDoc(t, root, "docs/a.md", "Call `work_item.get`.")
+	writeDoc(t, root, "docs/b.md", "Call `work_item.get` here too.")
+	writeDoc(t, root, "docs/c.md", "Only `issue.get` here.")
+
+	scan := newStubScan()
+	if err := scan.scanDocs([]string{filepath.Join(root, "docs")}); err != nil {
+		t.Fatalf("scanDocs: %v", err)
+	}
+	if got := scan.actions["work_item.get"].Files; len(got) != 2 {
+		t.Errorf("work_item.get files = %v, want the two pages that spell it", got)
+	}
+	if len(scan.actions) != 1 {
+		t.Errorf("action findings = %v, want only the one wrong spelling", scan.actions)
 	}
 }
 
@@ -337,7 +447,19 @@ func TestRun_Findings_ReportsSortedAndReturnsExitCode(t *testing.T) {
 			},
 			collect:  okRegistry,
 			wantCode: 0,
-			wantOut:  "audit_doc_tool_names: 4 registered tool names, 1 documentation files scanned\nno documentation names an unregistered tool\n",
+			wantOut:  "no documentation names an unregistered tool or an action the catalog does not have\n",
+		},
+		{
+			name: "action_id_the_catalog_lacks",
+			setup: func(t *testing.T, root string) []string {
+				t.Helper()
+				return []string{writeDoc(t, root, "docs/a.md", "Call `work_item.get` to read one.")}
+			},
+			collect:  okRegistry,
+			check:    true,
+			wantCode: 1,
+			wantOut:  "1 action ID(s) the catalog does not publish:\n  work_item.get",
+			wantErr:  "and 1 action ID(s) the catalog does not publish",
 		},
 		{
 			name: "findings_without_check",
@@ -368,7 +490,7 @@ func TestRun_Findings_ReportsSortedAndReturnsExitCode(t *testing.T) {
 			check:    true,
 			wantCode: 1,
 			wantOut:  "  gitlab_list_issues                     1 file(s)\n",
-			wantErr:  "\nERROR: the documentation names 1 tool(s) the server does not register\n",
+			wantErr:  "ERROR: the documentation names 1 tool(s) the server does not register",
 		},
 		{
 			name: "scan_failure",
@@ -423,7 +545,7 @@ func TestRun_RepositoryDocs_NameOnlyRegisteredTools(t *testing.T) {
 	if got != 0 {
 		t.Fatalf("run(-check) on the repository docs = %d, want 0\nstdout:\n%s\nstderr:\n%s", got, out.String(), errOut.String())
 	}
-	if !strings.Contains(out.String(), "no documentation names an unregistered tool") {
+	if !strings.Contains(out.String(), "no documentation names an unregistered tool or an action the catalog does not have") {
 		t.Errorf("stdout = %q, want the all-clear line", out.String())
 	}
 	if !strings.Contains(out.String(), "documentation files scanned") || strings.Contains(out.String(), " 0 documentation files scanned") {
@@ -477,6 +599,118 @@ func TestAllowed_EveryEntryStillExcusesSomething(t *testing.T) {
 		if _, ok := mentioned[token]; !ok {
 			t.Errorf("allowed[%q] (%s) excuses no token any scanned document carries; delete the entry", token, reason)
 		}
+	}
+}
+
+// TestAllowedIDs_EveryEntry_CarriesAReasonAndIsNotAnID holds the dotted table
+// to two things the file-name and meta-entry rules above it cannot be held to,
+// because those name classes and this names instances.
+//
+// A reason, because an entry is one person's judgement that a token which
+// looks like an action ID is not one, and without the sentence the next reader
+// cannot tell it from an oversight. And that the token really is not an ID:
+// an entry naming an action the catalog publishes would silence a correct
+// mention and, worse, would go on silencing it if the action were renamed.
+func TestAllowedIDs_EveryEntry_CarriesAReasonAndIsNotAnID(t *testing.T) {
+	ids, err := actionids.Build()
+	if err != nil {
+		t.Fatalf("build the action catalog: %v", err)
+	}
+
+	for token, reason := range allowedIDs {
+		t.Run(token, func(t *testing.T) {
+			if !strings.Contains(token, ".") {
+				t.Errorf("%q is not a dotted token, so the ID rule never reaches it", token)
+			}
+			if len(strings.TrimSpace(reason)) < 20 {
+				t.Errorf("reason for %q is %q, want a sentence a reviewer can judge", token, reason)
+			}
+			if ids.IsID(token) {
+				t.Errorf("%q is a canonical catalog ID; excusing it hides a correct mention", token)
+			}
+		})
+	}
+}
+
+// TestFileNameTails_NoTailIsAnActionName holds the class rule to the property
+// that makes it safe to state as a class. A tail that were also an action name
+// would excuse every wrong spelling ending in it, which is the one way a rule
+// this broad could hide a real finding.
+func TestFileNameTails_NoTailIsAnActionName(t *testing.T) {
+	ids, err := actionids.Build()
+	if err != nil {
+		t.Fatalf("build the action catalog: %v", err)
+	}
+
+	for tail := range fileNameTails {
+		t.Run(tail, func(t *testing.T) {
+			if ids.HasMember(tail) {
+				t.Errorf("%q is the right half of a catalog action ID, so the file-name rule would excuse a wrong domain under it", tail)
+			}
+		})
+	}
+}
+
+// TestExemptID_EachShape_IsExcusedAndOnlyTheTableIsTracked holds the three
+// exemptions apart, and holds that only the instance table is tracked: a class
+// rule has no entry to go stale, so counting its uses would only invite a
+// stale-declaration report about a rule.
+func TestExemptID_EachShape_IsExcusedAndOnlyTheTableIsTracked(t *testing.T) {
+	cases := []struct {
+		name         string
+		token        string
+		wantDeclared bool
+		wantTracked  bool
+	}{
+		{name: "declared_instance", token: "user.id", wantDeclared: true, wantTracked: true},
+		{name: "file_name_tail", token: "issue.rb", wantDeclared: true},
+		{name: "meta_surface_entry", token: "gitlab_issue.get", wantDeclared: true},
+		{name: "undeclared", token: "work_item.get"},
+		{name: "not_dotted", token: "issue"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			declared, tracked := exemptID(tc.token)
+			if declared != tc.wantDeclared || tracked != tc.wantTracked {
+				t.Errorf("exemptID(%q) = (%t, %t), want (%t, %t)", tc.token, declared, tracked, tc.wantDeclared, tc.wantTracked)
+			}
+		})
+	}
+}
+
+// TestStaleAllowedIDs_UnusedEntry_IsReported holds both directions of the
+// stale check, since one that reported everything or nothing would pass a test
+// written only one way.
+func TestStaleAllowedIDs_UnusedEntry_IsReported(t *testing.T) {
+	used := map[string]struct{}{}
+	for token := range allowedIDs {
+		used[token] = struct{}{}
+	}
+	if stale := staleAllowedIDs(used); len(stale) != 0 {
+		t.Errorf("stale = %v, want none when every entry excused something", stale)
+	}
+
+	stale := staleAllowedIDs(map[string]struct{}{})
+	if len(stale) != len(allowedIDs) {
+		t.Errorf("stale = %v, want every entry when none excused anything", stale)
+	}
+	if !slices.IsSorted(stale) {
+		t.Errorf("stale = %v, want a stable order", stale)
+	}
+}
+
+// TestSortedTokens_Findings_LeadWithTheWidestSpread holds the report order: a
+// spelling that reached five pages is the one to fix first, and two of equal
+// spread are ordered by name so the report does not move between runs.
+func TestSortedTokens_Findings_LeadWithTheWidestSpread(t *testing.T) {
+	got := sortedTokens(map[string]idFinding{
+		"zebra.get":  {Files: []string{"a.md"}},
+		"alpha.get":  {Files: []string{"a.md"}},
+		"spread.get": {Files: []string{"a.md", "b.md"}},
+	})
+	want := []string{"spread.get", "alpha.get", "zebra.get"}
+	if !slices.Equal(got, want) {
+		t.Errorf("sortedTokens = %v, want %v", got, want)
 	}
 }
 

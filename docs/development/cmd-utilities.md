@@ -14,8 +14,8 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_catalog_first`          | Catalog & metadata audits     | Source-discovered ActionSpec catalog-first coverage inventory                                                                                                                                                                                                                                                                                             | `make audit-catalog-first`                                                                                                                                              |
 | `audit_discovery_completeness` | Catalog & metadata audits     | Extended META-001 model-discovery metadata quality auditor                                                                                                                                                                                                                                                                                                | `make audit-discovery`                                                                                                                                                  |
 | `audit_doc_coverage`           | Catalog & metadata audits     | Per-doc-file gaps vs the action catalog (DOC-002)                                                                                                                                                                                                                                                                                                         | `make audit-doc-coverage`                                                                                                                                               |
-| `audit_action_ids`             | Catalog & metadata audits     | Every canonical action ID the server publishes to a model, in a cross-link, a hint, a usage line or a description, is one the catalog has                                                                                                                                                                                                                 | `make audit-action-ids`                                                                                                                                                 |
-| `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name the documentation mentions is one some surface registers                                                                                                                                                                                                                                                                       | `make check-doc-tool-names`                                                                                                                                             |
+| `audit_action_ids`             | Catalog & metadata audits     | Every canonical action ID the server publishes to a model, in a cross-link, a hint, a usage line or a description, is one the catalog has                                                                                                                                                                                                                 | `make audit-action-ids`, `make check-action-ids`                                                                                                                        |
+| `audit_doc_tool_names`         | Catalog & metadata audits     | Every `gitlab_*` tool name and every `domain.action` ID the documentation mentions is one the server serves                                                                                                                                                                                                                                               | `make check-doc-tool-names`                                                                                                                                             |
 | `audit_dynamic_aliases`        | Catalog & metadata audits     | Dynamic-toolset alias governance (collisions, ambiguity)                                                                                                                                                                                                                                                                                                  | `make audit-dynamic-aliases`                                                                                                                                            |
 | `audit_e2e_coverage`           | Catalog & metadata audits     | What the e2e suite covered, from the calls it recorded and the actions the server dispatched: every runtime x surface x mode x action classified, the levels L1 to L3, the non-tool capabilities; `-static` is the push gate over typed action ids, and `-record`/`-check-record`/`-check-record-page` commit the per-runtime summary and gate it offline | `make audit-e2e-coverage`, `make audit-e2e-gaps`, `make check-e2e-static`, `make e2e-coverage-record`, `make check-e2e-coverage-record`, `make check-e2e-coverage-page` |
 | `audit_edition_tier`           | Catalog & metadata audits     | Doc-grounded licensing tier (Free/Premium/Ultimate) vs binary gating                                                                                                                                                                                                                                                                                      | `make audit-edition-tier`                                                                                                                                               |
@@ -167,7 +167,7 @@ This rule reads the request instead, out of `docs/development/request-inventory.
 
   It **reports and does not gate**, because a finding is a surface change and the findings are not uniform: `request_paginates` on each says whether the action already offers `page` and `per_page`, so an output-only edit is told from one that has to widen the input first. Its declaration table gates, on the terms every declaration table here is held to: a claim that has stopped matching anything is reported stale and fails the run.
 
-- **Is a param sent that the caller never asked to send.** The sixth check, and the first of the two that read values. The recorder writes down that a body carried `package_name_pattern` and nothing about what was in it, so a field this server sends as `null` on every call reads exactly like one a caller filled in, and every dimension of this audit was green on `package_protection_rule.update` while it did precisely that.
+- **Is a param sent that the caller never asked to send.** The sixth check, and the first of the two that read values. The recorder writes down that a body carried `package_name_pattern` and nothing about what was in it, so a field this server sends as `null` on every call reads exactly like one a caller filled in, and every dimension of this audit was green on `package.protection_rule_update` while it did precisely that.
 
   Two records already here answer it between them. client-go's own source says which option struct a service method is given and which json keys `encoding/json` writes whatever the handler set (no `omitempty` and no `omitzero`), read through embedded option structs (whose fields are promoted) and through nested ones (named the way Grape declares a nested param, so `PositionOptions.PositionType` is `position[position_type]` and the members of a list are tried under `actions[][action]` as well as `actions[action]`). The live record says which params GitLab declares on the route receiving them and which of those it requires. A key written unconditionally whose param GitLab **requires** is correct; one whose param GitLab lets a caller **leave out** is a value nobody can decline to send.
 
@@ -316,7 +316,11 @@ A JSON backlog with per-file findings.
 
 ### audit_doc_tool_names
 
-Checks every `gitlab_*` tool name the documentation mentions against the names the server actually registers. `audit_doc_coverage` compares `domain.action` IDs, so a page can name a tool no surface has ever registered and still audit clean; that is how a verb-first spelling of the issue list survived in guides while the individual surface projects `gitlab_issue_list`, and every copy-pasted example answered `unknown tool`. The name set is built in memory from the same registration paths the server uses, across the individual, meta and dynamic surfaces at the Ultimate tier, so it needs no network and cannot drift from the catalog.
+Checks every name the documentation teaches a reader to call against what the server really serves: the `gitlab_*` tool names against the names it registers, and the `domain.action` IDs against the catalog it builds. `audit_doc_coverage` asks which actions are documented rather than whether the documented ones exist, so a page can name a tool no surface has ever registered and still audit clean; that is how a verb-first spelling of the issue list survived in guides while the individual surface projects `gitlab_issue_list`, and every copy-pasted example answered `unknown tool`. The name set is built in memory from the same registration paths the server uses, across the individual, meta and dynamic surfaces at the Ultimate tier, so it needs no network and cannot drift from the catalog.
+
+**The ID rule exists because the tool rule alone left the other half of every such sentence unjudged.** A page teaching a call names the tool on the individual surface and the canonical ID on the dynamic one, and the tool regex cannot see an ID at all: it matches `gitlab_[a-z0-9_]+` and an ID carries no such prefix. Eight IDs across five pages were wrong that way, among them a whole `pipeline_schedule.` family the CI/CD page asserted in both languages while the catalog spells it `pipeline.schedule_*`; each of those pages paired the wrong ID with the right tool name, so this command was green over all of them. What counts as an ID is `cmd/internal/actionids`, shared with `audit_action_ids`, so a spelling cannot be a cross-link in the code and prose in the docs.
+
+Three shapes pass the dotted-token test and are not IDs, and only the last is a table of instances: a file name whose stem is a catalog domain (`issue.rb`, `pipeline.svg`), judged by its last segment, since a page writes file names and a file name's tail is not an action; a meta-surface manifest entry, whose left half the tool rule already checks (`gitlab_merge_request.create` is what `gitlab://tools/{id}` publishes on that surface); and the declarations in `cmd/audit_doc_tool_names/ids.go`, which are telemetry and protocol attributes (`user.id`, `resources.subscribe`), paths into a document or a data file (`stats.tools`, `result.content`) and names belonging to somebody else's software (`gotest.tools`). Without the file-name class rule the report was 75 tokens of which about fifty were `issue.rb` and `project.svg`; enumerating those one by one would have filled the table with entries a reader learns to skip.
 
 The roots scanned are `docs/`, `site/src/content/docs/`, `README.md`, `llms-install.md`, `CLAUDE.md` and `npm/gitlab-mcp-server/README.md`; the npm launcher's README is in the list because it is published to a registry, where a wrong name is not fixable without republishing a version. Tokens that look like tool names but are not (the evaluator's bridge tools, for example) are listed in the source with the reason for each exemption.
 
@@ -332,13 +336,13 @@ go run ./cmd/audit_doc_tool_names/ --check
 
 #### Flags
 
-| Flag     | Type   | Default | Description                                                 |
-| -------- | ------ | ------- | ----------------------------------------------------------- |
-| `-check` | `bool` | `false` | Exit non-zero when the docs name a tool that does not exist |
+| Flag     | Type   | Default | Description                                                                 |
+| -------- | ------ | ------- | --------------------------------------------------------------------------- |
+| `-check` | `bool` | `false` | Exit non-zero when the docs name a tool or an action ID that does not exist |
 
 #### Output
 
-The number of registered names and of documentation files scanned, then each unregistered name with the files that mention it. Exits `1` under `-check` when any is found, and `1` whenever the documentation tree cannot be scanned.
+The number of registered names, of catalog action IDs and of documentation files scanned, then each unregistered tool name with the files that mention it, then each action ID the catalog does not publish, with the nearest one it does and, when the token is a registered alias, what it stands for. Exits `1` under `-check` when any is found, and `1` whenever the catalog cannot be built or the documentation tree cannot be scanned.
 
 #### Make targets
 
@@ -351,13 +355,17 @@ Holds every canonical action ID this repository publishes to a model against the
 
 Three kinds of string reach a model as an ID it is invited to call next, and all three are read: the `RelatedActions` list of an `ActionSpec`, which the dynamic find and execute results carry; the first argument of `toolutil.HintAction`, which a Markdown formatter writes into the result; and a dotted ID spelled inside a `Usage` line or an individual tool's `Description`. The source is loaded through `cmd/internal/goprogram` and constants are folded by the type checker rather than matched as text, which is the whole reason for the loader: the IDs are written as package-local constants, about fifty packages keep them in a metadata table with a lowercase `related` field copied onto the options, one keeps its table as a map to an anonymous struct, several hand the list in as a parameter, and two build an ID by concatenating a domain constant onto a name. A scan over literals reports the bare prefix as a finding and passes the folded value in silence, which is how a regex over `runnercontrollertokens` produced five phantoms that were never there. A value the walk cannot fold is named in an unresolved bucket rather than passed over, since a site the audit could not see must not be reported clean.
 
-The IDs are judged against the catalog this tree builds at the Ultimate tier, twice: once against a self-managed stub instance and once against GitLab.com, with the union as the oracle. Orbit registers only for GitLab.com, so a single self-managed build reports its six IDs as phantoms and a fixer deletes six working cross-links. The standalone dynamic actions are added the way `cmd/server` adds them, because `gitlab_execute_action` takes those IDs too.
+The IDs are judged against `cmd/internal/actionids`, the reader `audit_doc_tool_names` shares so that one spelling cannot be a cross-link here and prose there: the catalog this tree builds at the Ultimate tier, twice, once against a self-managed stub instance and once against GitLab.com, with the union as the oracle. Orbit registers only for GitLab.com, so a single self-managed build reports its six IDs as phantoms and a fixer deletes six working cross-links. The standalone dynamic actions are added the way `cmd/server` adds them, because `gitlab_execute_action` takes those IDs too.
 
-Two limits are worth knowing before a clean run is read for more than it is. It answers whether an ID **resolves**, never whether it is the **right** ID: the catalog has both `snippet.get` and `snippet.project_get`, so a project-snippet action cross-linked to the first is silent here. And an ID that is a **registered alias** rather than a catalog ID is reported apart, under `alias`, and is not counted a finding: `gitlab_execute_action` resolves an alias while `gitlab_find_action` publishes canonical IDs, and which of those two facts should decide is a question for the layer that fixes the cross-links.
+`-check` refuses four things, and the first two are the rule itself.
 
-A dotted token in prose is only taken as an ID when its left half names a catalog domain, which is what turns away `github.com`, `gitlab.com` and every `params.note_id` an example binding writes. The tokens that pass that test and are still not IDs are declared in `cmd/audit_action_ids/declarations.go` with a reason each, and an entry that excuses nothing is reported like every stale declaration in this repository.
+A published ID that resolves to nothing is a cross-link a model cannot follow. A published ID that resolves **only as a registered alias** is refused as well, which is the demand this gate exists to make: not that the ID resolve, but that it be the canonical one. `gitlab_execute_action` resolves an alias, so such a link does work when it is followed, and that is exactly what kept the class invisible; `gitlab_find_action` publishes canonical IDs, so a model that looks the name up in a listing does not find it. The sixty spellings that were sitting in that bucket were individual tool names in a `RelatedActions` list (`gitlab_runner_get` for `runner.get`), which is a third naming scheme in a field documented as carrying catalog IDs, and demanding mere resolvability would have left every one of them in place.
 
-It **reports and does not gate**. The findings are spread over packages no single change touches, so a gate that failed today would fail on code the change introducing it never went near; the fixes land in later layers, and the flag that turns this into a gate belongs to the layer that can pass it.
+A declaration that excuses nothing is a finding, on the terms every declaration table here is held to. And a site the type checker could not fold is a finding too: it is the audit's own blind spot rather than a defect of the tree, and it fails anyway, because a gate whose blind spot is silent is one any future site can step into: an ID assembled at run time would be reported unreadable and pass, which is the shape every wrong ID would then take. The remedy is to spell the ID as a constant, which every site in the tree does today. That rule caught its first case immediately: the layer that turned the gate on rewrote the two generated runner reset-token entries to take their siblings as a struct, and the two IDs inside it stopped being foldable.
+
+The limit worth knowing before a clean run is read for more than it is: it answers whether an ID **resolves**, never whether it is the **right** ID. The catalog has both `snippet.get` and `snippet.project_get`, so a project-snippet action cross-linked to the first is silent here.
+
+A dotted token in prose is only taken as an ID when one of its halves is one the catalog uses, which turns away `github.com`, `gitlab.com` and every `params.note_id` an example binding writes. The tokens that pass that test and are still not IDs are declared in `cmd/audit_action_ids/declarations.go` with a reason each, in two tables: one for a token that is not an action ID at all, and one for the prose that names a **registered alias on purpose**, which is the single shape the canonical-ID demand would be wrong for (the `gitlab_issue_update` usage line exists to tell a model that dynamic execute accepts `issue.close`). Only a prose site consults the second, so a cross-link naming one of those is still a finding. Both are judged only by a run over the whole tree: over one package every entry excuses nothing, and reporting them all stale would be an answer about the patterns rather than about the declarations.
 
 #### Usage
 
@@ -365,7 +373,10 @@ It **reports and does not gate**. The findings are spread over packages no singl
 # Report, with the work list
 go run ./cmd/audit_action_ids/
 
-# Also the alias references and the sites that could not be folded
+# The gate
+go run ./cmd/audit_action_ids/ -check -json ''
+
+# Also what a clean run judged, by kind
 go run ./cmd/audit_action_ids/ -v
 
 # One package, without touching the tree's work list
@@ -374,21 +385,23 @@ go run ./cmd/audit_action_ids/ -json "" ./internal/tools/issues
 
 #### Flags
 
-| Flag    | Type     | Default                | Description                                                            |
-| ------- | -------- | ---------------------- | ---------------------------------------------------------------------- |
-| `-dir`  | `string` | `.`                    | Repository root the patterns are resolved against                      |
-| `-json` | `string` | `plan/action-ids.json` | Write the work list here; empty writes none                            |
-| `-v`    | `bool`   | `false`                | Also print the alias references and the sites that could not be folded |
+| Flag     | Type     | Default                | Description                                                              |
+| -------- | -------- | ---------------------- | ------------------------------------------------------------------------ |
+| `-check` | `bool`   | `false`                | Exit non-zero when any published ID is not a canonical catalog ID        |
+| `-dir`   | `string` | `.`                    | Repository root the patterns are resolved against                        |
+| `-json`  | `string` | `plan/action-ids.json` | Write the work list here; empty writes none                              |
+| `-v`     | `bool`   | `false`                | Also print the alias heading of a clean run and what was judged, by kind |
 
 Positional arguments are package patterns; with none, `./internal/tools/...`.
 
 #### Output
 
-Every wrong ID with its file, its line, the string and the closest real ID, grouped by the package that has to act on it, then a summary naming how many IDs were judged against how many catalog IDs. Exits `1` only for a run that could not be made: a catalog that would not build, source that did not type-check, or a work list that could not be written.
+Every wrong ID with its file, its line, the string and the closest real ID, grouped by the package that has to act on it, then the alias references, the sites nothing could fold, the stale declarations and a summary naming how many IDs were judged against how many catalog IDs. Without `-check` it exits `1` only for a run that could not be made: a catalog that would not build, source that did not type-check, or a work list that could not be written.
 
 #### Make targets
 
 - `make audit-action-ids`: the report plus `plan/action-ids.json`.
+- `make check-action-ids`: CI gate, and step 10 of `make analyze`.
 
 ### audit_dead_consts
 

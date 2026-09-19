@@ -362,6 +362,9 @@ func analyzeSpec(spec toolutil.ActionSpec, projected map[string]string, clusterM
 	if weakAliases(spec, minAliases) {
 		addFlag("weak_aliases")
 	}
+	// Whether the entries name anything is not asked here and never was:
+	// `make check-action-ids` holds every one of them to the catalog, which is
+	// what this audit's own sibling matcher now relies on.
 	if len(spec.RelatedActions) == 0 {
 		addFlag("empty_related")
 	}
@@ -615,41 +618,38 @@ func usageHasSignal(usage string) bool {
 // suffixes — they are the verbs that distinguish operations on a single
 // resource.
 
-// siblingMatches reports whether the related-action name (possibly
-// cross-package prefixed with "." separator) refers to any cluster sibling
-// (which use "_" separator). Accepts:
-//   - exact lowercase match
-//   - tail match after the last "." ("pages.domain_list" -> "domain_list")
-//   - separator-normalized match: replace "." with "_" in the related name
-//     ("pages.domain_list" -> "pages_domain_list") and compare to siblings
+// siblingMatches reports whether a related action names a cluster sibling.
+//
+// A RelatedActions entry is a canonical catalog ID ("pages.domain_list") and a
+// cluster sibling is the bare action name the group routes it under
+// ("domain_list"), so three forms are accepted: the name itself, the tail
+// after the last dot, and the dot replaced by an underscore, which is the
+// spelling a sibling takes when the domain is part of the action name.
+//
+// A fourth used to be accepted and is gone. "A sibling name is contained
+// anywhere in the related name" was written to be defensive about
+// RelatedActions values that did not conform, and it is exactly as generous as
+// that sounds: with a sibling named "list", every related ID carrying the
+// letters l-i-s-t matched, so "project.list_forks" counted as a cross-link to
+// it. What made the tolerance look harmless was that nothing held those values
+// to the catalog at all; `make check-action-ids` does now, so an entry
+// reaching here is a canonical ID and there is nothing left to be defensive
+// about. A tolerance kept past its reason reports a package complete on the
+// strength of a substring.
 func siblingMatches(related string, siblings map[string]struct{}) bool {
 	if _, ok := siblings[related]; ok {
 		return true
 	}
-	if idx := strings.LastIndex(related, "."); idx >= 0 {
-		tail := related[idx+1:]
-		if _, ok := siblings[tail]; ok {
-			return true
-		}
-		// Also accept the cross-package form: take only the resource portion
-		// (skip the owner package) and the local-action portion to form a
-		// candidate sibling key. "pages.domain_list" -> "pages_domain_list".
-		head := related[:idx]
-		candidate := head + "_" + tail
-		if _, ok := siblings[candidate]; ok {
-			return true
-		}
+	idx := strings.LastIndex(related, ".")
+	if idx < 0 {
+		return false
 	}
-	// Fallback: a sibling name is contained in the related name (covers
-	// cases where the related name embeds a sibling as a substring, e.g.
-	// the related name "page_domain_list" or "do_main_list" — defensive
-	// against non-conformant RelatedActions values).
-	for sibling := range siblings {
-		if strings.Contains(related, sibling) {
-			return true
-		}
+	tail := related[idx+1:]
+	if _, ok := siblings[tail]; ok {
+		return true
 	}
-	return false
+	_, ok := siblings[related[:idx]+"_"+tail]
+	return ok
 }
 
 func hasNonCRUDVariantSuffix(name string) bool {

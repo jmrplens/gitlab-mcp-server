@@ -45,23 +45,62 @@ func TestExemptProse_UndeclaredToken_IsNotExcused(t *testing.T) {
 	}
 }
 
-// TestStaleProseExemptions_UsedEntry_IsNotReported holds both directions of
-// the stale check, since a check that reported everything or nothing would
-// pass a test written only one way.
-func TestStaleProseExemptions_UsedEntry_IsNotReported(t *testing.T) {
-	used := map[string]struct{}{}
-	for token := range proseExemptions {
-		used[token] = struct{}{}
+// TestDeclaredAliasMentions_EveryEntry_CarriesAReason holds the second table
+// to the same standard, and to one more of its own: an entry has to name a
+// dotted spelling, since the site it excuses is a prose token.
+func TestDeclaredAliasMentions_EveryEntry_CarriesAReason(t *testing.T) {
+	for token, reason := range declaredAliasMentions {
+		t.Run(token, func(t *testing.T) {
+			if !strings.Contains(token, ".") {
+				t.Errorf("%q is not an action-ID-shaped token, so no prose site can name it", token)
+			}
+			if len(strings.TrimSpace(reason)) < 20 {
+				t.Errorf("reason for %q is %q, want a sentence a reviewer can judge", token, reason)
+			}
+		})
 	}
-	if stale := staleProseExemptions(used); len(stale) != 0 {
+}
+
+// TestExemptAliasMention_UndeclaredToken_IsNotExcused holds that the alias
+// table excuses what it names and nothing else, which is what keeps the
+// canonical-ID demand a rule rather than a suggestion.
+func TestExemptAliasMention_UndeclaredToken_IsNotExcused(t *testing.T) {
+	if exemptAliasMention("issue.no_such_alias") {
+		t.Error("an undeclared alias mention was excused")
+	}
+	if exemptAliasMention("") {
+		t.Error("the empty token was excused")
+	}
+}
+
+// TestStaleDeclarations_UsedEntry_IsNotReported holds both directions of the
+// stale check, over both tables, since a check that reported everything or
+// nothing would pass a test written only one way.
+func TestStaleDeclarations_UsedEntry_IsNotReported(t *testing.T) {
+	usedExemptions := map[string]struct{}{}
+	for token := range proseExemptions {
+		usedExemptions[token] = struct{}{}
+	}
+	usedAliases := map[string]struct{}{}
+	for token := range declaredAliasMentions {
+		usedAliases[token] = struct{}{}
+	}
+	if stale := staleDeclarations(usedExemptions, usedAliases); len(stale) != 0 {
 		t.Errorf("stale = %v, want none when every entry excused something", stale)
 	}
 
-	stale := staleProseExemptions(map[string]struct{}{})
-	if len(stale) != len(proseExemptions) {
-		t.Errorf("stale = %v, want every entry when none excused anything", stale)
+	stale := staleDeclarations(map[string]struct{}{}, map[string]struct{}{})
+	if len(stale) != len(proseExemptions)+len(declaredAliasMentions) {
+		t.Errorf("stale = %v, want every entry of both tables when none excused anything", stale)
 	}
 	if !slices.IsSorted(stale) {
 		t.Errorf("stale = %v, want a stable order", stale)
+	}
+	for _, entry := range stale {
+		t.Run(entry, func(t *testing.T) {
+			if !strings.Contains(entry, "proseExemptions") && !strings.Contains(entry, "declaredAliasMentions") {
+				t.Errorf("%q names no table, so a reader is not told which map to open", entry)
+			}
+		})
 	}
 }
