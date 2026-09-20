@@ -332,6 +332,14 @@ func applyCursorOptions(opts *gl.ListWorkItemsOptions, cursor toolutil.GraphQLCu
 
 // applyScopeFilters sets the filters that decide which work items of the
 // namespace are in scope at all: state, text search, type and hierarchy.
+//
+// A list filter is handed over as the caller gave it, and only the scalar ones
+// are guarded. buildListWorkItemsQuery declares a GraphQL variable for a list
+// filter only when its own len is above zero, so a nil slice and an empty one
+// build byte-identical requests and a guard here would be a copy of that
+// decision rather than a decision of its own. The scalars are the other shape:
+// a pointer to "" is a variable GitLab receives and, for the enum-valued ones,
+// refuses.
 func applyScopeFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
 	if input.State != "" {
 		opts.State = &input.State
@@ -339,12 +347,8 @@ func applyScopeFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
 	if input.Search != "" {
 		opts.Search = &input.Search
 	}
-	if len(input.In) > 0 {
-		opts.In = input.In
-	}
-	if len(input.Types) > 0 {
-		opts.Types = upperEach(input.Types)
-	}
+	opts.In = input.In
+	opts.Types = upperEach(input.Types)
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
 	}
@@ -366,9 +370,7 @@ func applyPeopleFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
 	if input.AuthorUsername != "" {
 		opts.AuthorUsername = &input.AuthorUsername
 	}
-	if len(input.AssigneeUsernames) > 0 {
-		opts.AssigneeUsernames = input.AssigneeUsernames
-	}
+	opts.AssigneeUsernames = input.AssigneeUsernames
 	if input.AssigneeWildcardID != "" {
 		opts.AssigneeWildcardID = &input.AssigneeWildcardID
 	}
@@ -392,41 +394,25 @@ func applyPeopleFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
 // wrapping it applies on create and update, so ids and parent_ids have to
 // arrive as full global IDs and iids as the plain numbers.
 func applyIdentifierFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
-	if len(input.IDs) > 0 {
-		opts.IDs = input.IDs
-	}
-	if len(input.IIDs) > 0 {
-		opts.IIDs = input.IIDs
-	}
-	if len(input.ParentIDs) > 0 {
-		opts.ParentIDs = input.ParentIDs
-	}
+	opts.IDs = input.IDs
+	opts.IIDs = input.IIDs
+	opts.ParentIDs = input.ParentIDs
 }
 
 // applyPlanningFilters sets the filters over the planning widgets: labels,
 // milestone, release, iteration, weight and health status.
 func applyPlanningFilters(opts *gl.ListWorkItemsOptions, input ListInput) {
-	if len(input.LabelName) > 0 {
-		opts.LabelName = input.LabelName
-	}
-	if len(input.MilestoneTitle) > 0 {
-		opts.MilestoneTitle = input.MilestoneTitle
-	}
+	opts.LabelName = input.LabelName
+	opts.MilestoneTitle = input.MilestoneTitle
 	if input.MilestoneWildcardID != "" {
 		opts.MilestoneWildcardID = &input.MilestoneWildcardID
 	}
-	if len(input.ReleaseTag) > 0 {
-		opts.ReleaseTag = input.ReleaseTag
-	}
+	opts.ReleaseTag = input.ReleaseTag
 	if input.ReleaseTagWildcardID != "" {
 		opts.ReleaseTagWildcardID = &input.ReleaseTagWildcardID
 	}
-	if len(input.IterationID) > 0 {
-		opts.IterationID = input.IterationID
-	}
-	if len(input.IterationCadenceID) > 0 {
-		opts.IterationCadenceID = input.IterationCadenceID
-	}
+	opts.IterationID = input.IterationID
+	opts.IterationCadenceID = input.IterationCadenceID
 	if input.IterationWildcardID != "" {
 		opts.IterationWildcardID = &input.IterationWildcardID
 	}
@@ -666,7 +652,10 @@ func buildCreateOptions(input CreateInput) (*gl.CreateWorkItemOptions, error) {
 		}
 		opts.CreatedAt = createdAt
 	}
-	if input.LinkedItems != nil && len(input.LinkedItems.WorkItemIDs) > 0 {
+	// Only the nil check is ours: client-go folds the linked items into a
+	// widget of its own on the same non-empty-length condition, so a second
+	// copy of that length test here decided nothing a caller could see.
+	if input.LinkedItems != nil {
 		opts.LinkedItems = &gl.CreateWorkItemOptionsLinkedItems{
 			LinkType:    &input.LinkedItems.LinkType,
 			WorkItemIDs: input.LinkedItems.WorkItemIDs,
@@ -687,15 +676,12 @@ func applyCreateCore(opts *gl.CreateWorkItemOptions, input CreateInput) {
 		status := mapStatusToID(input.Status)
 		opts.Status = &status
 	}
-	if len(input.AssigneeIDs) > 0 {
-		opts.AssigneeIDs = input.AssigneeIDs
-	}
-	if len(input.LabelIDs) > 0 {
-		opts.LabelIDs = input.LabelIDs
-	}
-	if len(input.CRMContactIDs) > 0 {
-		opts.CRMContactIDs = input.CRMContactIDs
-	}
+	// The three id lists are handed over as the caller gave them, for the
+	// reason applyScopeFilters states: client-go builds each one's widget only
+	// when its own len is above zero.
+	opts.AssigneeIDs = input.AssigneeIDs
+	opts.LabelIDs = input.LabelIDs
+	opts.CRMContactIDs = input.CRMContactIDs
 	if input.CreateSource != "" {
 		opts.CreateSource = new(input.CreateSource)
 	}
@@ -841,12 +827,11 @@ func buildUpdateOptions(input UpdateInput) (*gl.UpdateWorkItemOptions, error) {
 	if input.ParentID != nil {
 		opts.ParentID = input.ParentID
 	}
-	if len(input.AddLabelIDs) > 0 {
-		opts.AddLabelIDs = input.AddLabelIDs
-	}
-	if len(input.RemoveLabelIDs) > 0 {
-		opts.RemoveLabelIDs = input.RemoveLabelIDs
-	}
+	// Both label lists go over as given: client-go builds the labels widget
+	// only when one of them has entries, so guarding them here was a copy of
+	// its decision.
+	opts.AddLabelIDs = input.AddLabelIDs
+	opts.RemoveLabelIDs = input.RemoveLabelIDs
 	if err := applyWorkItemDates(input.StartDate, input.DueDate, &opts.StartDate, &opts.DueDate); err != nil {
 		return nil, err
 	}
