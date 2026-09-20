@@ -8354,6 +8354,46 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 	}
 }
 
+// TestBuildUpdateOpts_EachDeprecatedToggle_BridgesToItsOwnAccessLevel sets
+// one of the four bool toggles at a time and holds exactly one access level
+// to it, the other three staying nil. Driven together, two toggles carrying
+// the same value cannot tell a swap of their targets apart, and the only
+// other test of this bridge held the levels to non-nil: swapping the wiki
+// and jobs lines in applyUpdateAccessLevelOpts passed the suite.
+func TestBuildUpdateOpts_EachDeprecatedToggle_BridgesToItsOwnAccessLevel(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		level string
+	}{
+		{name: "IssuesEnabled", input: UpdateInput{ProjectID: "1", IssuesEnabled: new(false)}, level: "IssuesAccessLevel"},
+		{name: "MergeRequestsEnabled", input: UpdateInput{ProjectID: "1", MergeRequestsEnabled: new(false)}, level: "MergeRequestsAccessLevel"},
+		{name: "WikiEnabled", input: UpdateInput{ProjectID: "1", WikiEnabled: new(false)}, level: "WikiAccessLevel"},
+		{name: "JobsEnabled", input: UpdateInput{ProjectID: "1", JobsEnabled: new(false)}, level: "BuildsAccessLevel"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := buildUpdateOpts(tc.input)
+			levels := map[string]*gl.AccessControlValue{
+				"IssuesAccessLevel":        opts.IssuesAccessLevel,
+				"MergeRequestsAccessLevel": opts.MergeRequestsAccessLevel,
+				"WikiAccessLevel":          opts.WikiAccessLevel,
+				"BuildsAccessLevel":        opts.BuildsAccessLevel,
+			}
+			for name, got := range levels {
+				t.Run(name, func(t *testing.T) {
+					switch {
+					case name == tc.level && (got == nil || *got != gl.DisabledAccessControl):
+						t.Errorf("%s = %v, want %s from %s", name, got, gl.DisabledAccessControl, tc.name)
+					case name != tc.level && got != nil:
+						t.Errorf("%s = %s, want nil: only %s was set", name, *got, tc.name)
+					}
+				})
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 1:1 audit (P2/P3): fork + user-scoped + keyset filter coverage
 // ---------------------------------------------------------------------------.
