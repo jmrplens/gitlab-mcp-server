@@ -207,9 +207,11 @@ func TestSortedKeys_ASet_IsRenderedInOneOrder(t *testing.T) {
 // over, so narrowing it is a visible change rather than a quiet one.
 func TestDefaultPatterns_CoverTheRepositorysOwnSource(t *testing.T) {
 	for _, want := range []string{"./internal/...", "./cmd/..."} {
-		if !slices.Contains(defaultPatterns, want) {
-			t.Fatalf("defaultPatterns = %v, want it to include %q", defaultPatterns, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(defaultPatterns, want) {
+				t.Fatalf("defaultPatterns = %v, want it to include %q", defaultPatterns, want)
+			}
+		})
 	}
 }
 
@@ -217,8 +219,10 @@ func TestDefaultPatterns_CoverTheRepositorysOwnSource(t *testing.T) {
 // package half nothing re-reads, and its constants read as dead.
 func TestBuildPlatforms_AreTheOnesThisProjectShips(t *testing.T) {
 	for _, want := range []string{"linux", "darwin", "windows"} {
-		if !slices.Contains(buildPlatforms, want) {
-			t.Fatalf("buildPlatforms = %v, want it to include %q", buildPlatforms, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(buildPlatforms, want) {
+				t.Fatalf("buildPlatforms = %v, want it to include %q", buildPlatforms, want)
+			}
+		})
 	}
 }
