@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"slices"
@@ -118,6 +119,36 @@ func TestMRApprovalState_EmptyRules(t *testing.T) {
 	}
 	if len(out.Rules) != 0 {
 		t.Errorf("expected 0 rules, got %d", len(out.Rules))
+	}
+}
+
+// TestMRApprovalState_NullRuleEntry_IsSkipped verifies that a null element in
+// the rules array is dropped rather than dereferenced.
+//
+// The nil guard in the loop is the only thing standing between a null GitLab
+// sends and a panic in the converter, and nothing exercised it until this
+// fixture: every other state fixture sends a well-formed array.
+func TestMRApprovalState_NullRuleEntry_IsSkipped(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_state" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"approval_rules_overwritten": false,
+				"rules": [null, {"id": 11, "name": "Kept", "rule_type": "regular"}, null]
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := State(context.Background(), client, StateInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("Rules count = %d, want only the one non-null entry", len(out.Rules))
+	}
+	if out.Rules[0].ID != 11 || out.Rules[0].Name != "Kept" {
+		t.Errorf("surviving rule = %+v, want the id 11 rule named Kept", out.Rules[0])
 	}
 }
 
@@ -275,6 +306,30 @@ func TestMRApprovalRules_Empty(t *testing.T) {
 	}
 	if len(out.Rules) != 0 {
 		t.Errorf("expected 0 rules, got %d", len(out.Rules))
+	}
+}
+
+// TestMRApprovalRules_NullRuleEntry_IsSkipped is the same assertion for the
+// list route: a null element is dropped rather than dereferenced.
+func TestMRApprovalRules_NullRuleEntry_IsSkipped(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testApprovalRulesPath {
+			testutil.RespondJSON(w, http.StatusOK,
+				`[null, {"id": 12, "name": "Kept", "rule_type": "regular"}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+
+	out, err := Rules(context.Background(), client, RulesInput{ProjectID: "42", MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Rules) != 1 {
+		t.Fatalf("Rules count = %d, want only the one non-null entry", len(out.Rules))
+	}
+	if out.Rules[0].ID != 12 || out.Rules[0].Name != "Kept" {
+		t.Errorf("surviving rule = %+v, want the id 12 rule named Kept", out.Rules[0])
 	}
 }
 
@@ -537,6 +592,159 @@ const ruleResponse = `{
 	"approved_by": [], "eligible_approvers": [{"name": "Alice"}],
 	"users": [{"name": "Alice"}], "groups": [{"name": "Security"}]
 }`
+
+// assertRuleRequestBody holds the JSON object a rule mutation sent to the keys
+// the caller named: want maps a key to the raw JSON it must carry, and absent
+// names the keys that must not appear at all. It runs on the httptest
+// goroutine, so it reports with t.Errorf and never aborts.
+func assertRuleRequestBody(t *testing.T, body []byte, want map[string]string, absent ...string) {
+	t.Helper()
+	var sent map[string]json.RawMessage
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Errorf("request body is not a JSON object: %v (%s)", err, body)
+		return
+	}
+	for key, value := range want {
+		raw, ok := sent[key]
+		if !ok {
+			t.Errorf("request body omits %q; sent %s", key, body)
+			continue
+		}
+		if string(raw) != value {
+			t.Errorf("request body %q = %s, want %s", key, raw, value)
+		}
+	}
+	for _, key := range absent {
+		if raw, ok := sent[key]; ok {
+			t.Errorf("request body carries %q = %s, which the caller never named; sent %s", key, raw, body)
+		}
+	}
+}
+
+// ruleBodyHandler answers an approval-rule mutation with one canned rule and
+// holds the request body it received to want/absent, so a test asserts what
+// reached GitLab rather than what the mock chose to answer.
+func ruleBodyHandler(t *testing.T, method, path string, want map[string]string, absent ...string) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			t.Errorf("unexpected request %s %s, want %s %s", r.Method, r.URL.Path, method, path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read the request body: %v", err)
+			http.Error(w, "read the request body", http.StatusInternalServerError)
+			return
+		}
+		assertRuleRequestBody(t, body, want, absent...)
+		testutil.RespondJSON(w, http.StatusOK, ruleResponse)
+	})
+}
+
+// TestCreateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem asserts
+// what the create request carries, not what the canned answer says.
+//
+// The three guards around approval_project_rule_id, user_ids and group_ids are
+// the only thing deciding whether a caller's source rule and approvers reach
+// GitLab, and no assertion about the response can see them: the mock answers
+// the same rule whether the field was sent, sent empty, or omitted. Inverting
+// any of them silently drops the caller's approvers while sending a null for
+// the ones they never named.
+func TestCreateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  CreateRuleInput
+		want   map[string]string
+		absent []string
+	}{
+		{
+			name: "named",
+			input: CreateRuleInput{
+				ProjectID: "42", MRIID: 1, Name: testSecurityTeam, ApprovalsRequired: 2,
+				ApprovalProjectRuleID: 99,
+				UserIDs:               []int64{100, 101},
+				GroupIDs:              []int64{200},
+			},
+			want: map[string]string{
+				"name":                     `"` + testSecurityTeam + `"`,
+				"approvals_required":       "2",
+				"approval_project_rule_id": "99",
+				"user_ids":                 "[100,101]",
+				"group_ids":                "[200]",
+			},
+		},
+		{
+			name: "unnamed",
+			input: CreateRuleInput{
+				ProjectID: "42", MRIID: 1, Name: testSecurityTeam, ApprovalsRequired: 2,
+			},
+			want: map[string]string{
+				"name":               `"` + testSecurityTeam + `"`,
+				"approvals_required": "2",
+			},
+			absent: []string{"approval_project_rule_id", "user_ids", "group_ids"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t,
+				ruleBodyHandler(t, http.MethodPost, testApprovalRulesPath, tc.want, tc.absent...))
+			if _, err := CreateRule(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("CreateRule() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestUpdateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem is the
+// same assertion for the update path, where every field but the three that
+// name the rule is optional.
+//
+// An inverted name guard is the worst of the four: it renames the rule to the
+// empty string for a caller who only wanted to change its approvers.
+func TestUpdateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem(t *testing.T) {
+	approvals := int64(4)
+	cases := []struct {
+		name   string
+		input  UpdateRuleInput
+		want   map[string]string
+		absent []string
+	}{
+		{
+			name: "named",
+			input: UpdateRuleInput{
+				ProjectID: "42", MRIID: 1, ApprovalRuleID: 5,
+				Name:              testUpdatedRule,
+				ApprovalsRequired: &approvals,
+				UserIDs:           []int64{10, 11},
+				GroupIDs:          []int64{20},
+			},
+			want: map[string]string{
+				"name":               `"` + testUpdatedRule + `"`,
+				"approvals_required": "4",
+				"user_ids":           "[10,11]",
+				"group_ids":          "[20]",
+			},
+		},
+		{
+			name:   "unnamed",
+			input:  UpdateRuleInput{ProjectID: "42", MRIID: 1, ApprovalRuleID: 5},
+			want:   map[string]string{},
+			absent: []string{"name", "approvals_required", "user_ids", "group_ids"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t,
+				ruleBodyHandler(t, http.MethodPut, testApprovalRulesPath+"/5", tc.want, tc.absent...))
+			if _, err := UpdateRule(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("UpdateRule() unexpected error: %v", err)
+			}
+		})
+	}
+}
 
 // TestMRApprovalRuleCreate_Success verifies MRApprovalRuleCreate when success.
 func TestMRApprovalRuleCreate_Success(t *testing.T) {
@@ -969,7 +1177,10 @@ func TestCreateRule_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateRule_WithApprovalProjectRuleID verifies CreateRule when with approval project rule ID.
+// TestCreateRule_WithApprovalProjectRuleID verifies that naming a source rule
+// still yields the created rule. Its mock discards the request body, so it says
+// nothing about whether approval_project_rule_id was sent; that is
+// [TestCreateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem].
 func TestCreateRule_WithApprovalProjectRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules" {
@@ -1030,7 +1241,10 @@ func TestUpdateRule_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateRule_AllOptionalFields verifies UpdateRule when all optional fields.
+// TestUpdateRule_AllOptionalFields verifies that an update naming every
+// optional field reads the answer back in full. Its mock discards the request
+// body, so it says nothing about which of those fields were sent; that is
+// [TestUpdateRule_OptionalFields_ReachGitLabOnlyWhenTheCallerNamesThem].
 func TestUpdateRule_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/merge_requests/1/approval_rules/5" {
@@ -1421,6 +1635,62 @@ func TestFormatRuleMarkdown_Minimal(t *testing.T) {
 		"- **Approvals Required**: 0\n" +
 		"- **Overridden**: ❌\n" + ruleHints
 	if got := FormatRuleMarkdown(r); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatRuleMarkdown_EntriesThatRenderNothing_AreDropped verifies that an
+// approver or group the card cannot name leaves no trace in the row.
+//
+// Three shapes reach the renderer from a real instance and none had a fixture:
+// a null element in an array, a user object with neither a handle nor a name,
+// and a group carrying no full path. Without the skips each would print an
+// empty cell between two commas, which reads as an approver whose name GitLab
+// withheld rather than as nobody.
+func TestFormatRuleMarkdown_EntriesThatRenderNothing_AreDropped(t *testing.T) {
+	r := RuleOutput{
+		ID:                4,
+		Name:              "Mixed",
+		RuleType:          "regular",
+		ApprovalsRequired: 1,
+		Users: []*BasicUserOutput{
+			nil,
+			{},
+			{Name: "Zoe", Username: "zoe", WebURL: "https://gitlab.example.com/zoe"},
+		},
+		Groups: []*GroupOutput{nil, {Name: "Fallback"}, {}},
+	}
+	want := "## Approval Rule: Mixed\n\n" +
+		"- **ID**: 4\n" +
+		"- **Type**: regular\n" +
+		"- **Approvals Required**: 1\n" +
+		"- **Overridden**: ❌\n" +
+		"- **Users**: [@zoe](https://gitlab.example.com/zoe)\n" +
+		"- **Groups**: Fallback\n" + ruleHints
+	if got := FormatRuleMarkdown(r); got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatRulesMarkdown_NilEligibleApprover_AsksForNoLinks verifies that a
+// null element in eligible_approvers neither renders a cell nor counts as a
+// link the model is told to preserve.
+//
+// The link question is asked of every approver, so a null one deciding it
+// would attach the preserve-links instruction to a table that has no link in
+// it at all.
+func TestFormatRulesMarkdown_NilEligibleApprover_AsksForNoLinks(t *testing.T) {
+	out := RulesOutput{
+		Rules: []RuleOutput{
+			{
+				ID: 13, Name: "Sparse", RuleType: "regular", ApprovalsRequired: 1,
+				EligibleApprovers: []*BasicUserOutput{nil},
+			},
+		},
+	}
+	want := "## MR Approval Rules (1)\n\n" + rulesTableHead +
+		"| 13 | Sparse | regular | 1 |  |\n" + rulesHints
+	if got := FormatRulesMarkdown(out); got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
