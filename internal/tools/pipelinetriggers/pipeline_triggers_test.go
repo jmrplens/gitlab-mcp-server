@@ -5,8 +5,10 @@ package pipelinetriggers
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -338,6 +340,51 @@ func TestUpdateTrigger_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateTrigger_Description_IsSentOnlyWhenGiven pins both sides of the
+// guard around the optional description: the caller's new label has to reach
+// GitLab, and an omitted one must not be sent as an empty string, which would
+// erase the label on the token being renamed. Nothing read the request body
+// before, so inverting that guard failed no test.
+func TestUpdateTrigger_Description_IsSentOnlyWhenGiven(t *testing.T) {
+	t.Run("given", func(t *testing.T) {
+		body := updateTriggerRequestBody(t, "nightly deploy")
+		if body["description"] != "nightly deploy" {
+			t.Errorf("request body = %v, want description %q", body, "nightly deploy")
+		}
+	})
+	t.Run("omitted", func(t *testing.T) {
+		body := updateTriggerRequestBody(t, "")
+		if _, ok := body["description"]; ok {
+			t.Errorf("request body = %v, want no description key", body)
+		}
+	})
+}
+
+// updateTriggerRequestBody drives UpdateTrigger against a mock that records the
+// JSON body of the PUT, and returns that body decoded.
+func updateTriggerRequestBody(t *testing.T, description string) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("reading request body: %v", readErr)
+		}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Errorf("decoding request body %q: %v", raw, err)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"description":"nightly deploy","token":"abc123"}`)
+	}))
+	if _, err := UpdateTrigger(context.Background(), client, UpdateInput{
+		ProjectID: "1", TriggerID: 10, Description: description,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	return body
+}
+
 // TestUpdateTrigger_MissingTriggerID verifies UpdateTrigger when missing trigger ID.
 func TestUpdateTrigger_MissingTriggerID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
@@ -441,8 +488,8 @@ func TestRunTrigger_FullPipeline(t *testing.T) {
 			"ref":"main","name":"deploy","sha":"abc","before_sha":"def","tag":true,
 			"yaml_errors":"","duration":42,"queued_duration":3,"coverage":"88.5",
 			"web_url":"https://gl/p/1/-/pipelines/99",
-			"user":{"id":7,"username":"bot","name":"Bot","state":"active"},
-			"detailed_status":{"icon":"status_running","text":"running","label":"running","group":"running","tooltip":"running","has_details":true,"details_path":"/p","favicon":"/f","illustration":{"image":"/img"}},
+			"user":{"id":7,"username":"bot","name":"Bot","state":"active","avatar_url":"https://gl/a.png","web_url":"https://gl/bot"},
+			"detailed_status":{"icon":"status_running","text":"Running","label":"running pipeline","group":"in-progress","tooltip":"running for 2 minutes","has_details":true,"details_path":"/p","favicon":"/f","illustration":{"image":"/img"}},
 			"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z",
 			"started_at":"2026-01-01T01:00:00Z","finished_at":"2026-01-01T02:00:00Z",
 			"committed_at":"2026-01-01T00:30:00Z"
@@ -460,26 +507,59 @@ func TestRunTrigger_FullPipeline(t *testing.T) {
 	if out.BeforeSHA != "def" || !out.Tag || out.Duration != 42 || out.QueuedDuration != 3 || out.Coverage != "88.5" {
 		t.Errorf("additive fields not mapped: %+v", out)
 	}
-	if out.User == nil || out.User.Username != "bot" {
-		t.Fatalf("user object not mapped: %+v", out.User)
+	wantUser := &BasicUserOutput{
+		ID: 7, Username: "bot", Name: "Bot", State: "active",
+		AvatarURL: "https://gl/a.png", WebURL: "https://gl/bot",
+	}
+	if !reflect.DeepEqual(out.User, wantUser) {
+		t.Errorf("user = %+v, want %+v", out.User, wantUser)
 	}
 	assertDetailedStatusRunning(t, out.DetailedStatus)
-	if out.StartedAt == "" || out.FinishedAt == "" || out.CommittedAt == "" || out.UpdatedAt == "" {
-		t.Errorf("timestamps not mapped: %+v", out)
-	}
+	assertPipelineTimestamps(t, out)
 }
 
 // assertDetailedStatusRunning verifies the triggered-pipeline detailed_status
 // object and its nested illustration sub-object were mapped from the API
-// response. Extracted from TestRunTrigger_FullPipeline to keep that test below
+// response, field by field. The five strings differ from each other because
+// the fixture that repeated one value across them made any permutation of the
+// five pass. Extracted from TestRunTrigger_FullPipeline to keep that test below
 // the gocyclo complexity threshold.
 func assertDetailedStatusRunning(t *testing.T, ds *DetailedStatusOutput) {
 	t.Helper()
-	if ds == nil || ds.Label != "running" {
-		t.Fatalf("detailed_status not mapped: %+v", ds)
+	want := &DetailedStatusOutput{
+		Icon: "status_running", Text: "Running", Label: "running pipeline",
+		Group: "in-progress", Tooltip: "running for 2 minutes",
+		HasDetails: true, DetailsPath: "/p", Favicon: "/f",
+		Illustration: &IllustrationOutput{Image: "/img"},
 	}
-	if ds.Illustration == nil || ds.Illustration.Image != "/img" {
-		t.Fatalf("detailed_status illustration not mapped: %+v", ds.Illustration)
+	if !reflect.DeepEqual(ds, want) {
+		t.Errorf("detailed_status = %+v, want %+v", ds, want)
+	}
+}
+
+// assertPipelineTimestamps verifies each of the triggered pipeline's five
+// instants reaches the key it belongs to. The fixture gives all five distinct
+// values, since asserting only that they are non-empty accepted any
+// rearrangement, and a pipeline reported as finished before it started is a
+// state a model will act on.
+func assertPipelineTimestamps(t *testing.T, out RunOutput) {
+	t.Helper()
+	for _, tc := range []struct {
+		key  string
+		got  string
+		want string
+	}{
+		{"created_at", out.CreatedAt, "2026-01-01T00:00:00Z"},
+		{"updated_at", out.UpdatedAt, "2026-01-02T00:00:00Z"},
+		{"started_at", out.StartedAt, "2026-01-01T01:00:00Z"},
+		{"finished_at", out.FinishedAt, "2026-01-01T02:00:00Z"},
+		{"committed_at", out.CommittedAt, "2026-01-01T00:30:00Z"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.key, tc.got, tc.want)
+			}
+		})
 	}
 }
 
@@ -549,10 +629,17 @@ func TestDecoratePipelineTriggerMeta_UnknownTool(t *testing.T) {
 }
 
 // TestRunTrigger_WithInputs verifies RunTrigger forwards typed pipeline inputs
-// of every supported value kind without error.
+// of every supported value kind to GitLab. It reads the request body because
+// the guard that copies the inputs onto the SDK options can be inverted without
+// failing anything that only inspects the answer: the pipeline still starts,
+// with none of the inputs the caller asked for.
 func TestRunTrigger_WithInputs(t *testing.T) {
+	var body map[string]any
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %v", err)
+		}
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":101,"sha":"def","ref":"main","status":"created"}`)
 	})
 	client := testutil.NewTestClient(t, mux)
@@ -573,6 +660,49 @@ func TestRunTrigger_WithInputs(t *testing.T) {
 	}
 	if out.ID != 101 {
 		t.Errorf("id = %d, want 101", out.ID)
+	}
+	want := map[string]any{
+		"environment": "production",
+		"replicas":    float64(3),
+		"debug":       false,
+		"regions":     []any{"us-east", "eu-west"},
+	}
+	if got := body["inputs"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("inputs sent = %#v, want %#v", got, want)
+	}
+}
+
+// TestRunTrigger_NoVariablesOrInputs_SendsNeitherKey pins what an unset
+// optional map means on the wire: no key at all, rather than an empty object
+// GitLab would have to interpret. It is the property behind the two length
+// guards, whose boundaries are otherwise unobservable because an empty map and
+// an absent one serialize identically.
+func TestRunTrigger_NoVariablesOrInputs_SendsNeitherKey(t *testing.T) {
+	var body map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/projects/1/trigger/pipeline", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding request body: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"sha":"def","ref":"main","status":"created"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	if _, err := RunTrigger(context.Background(), client, RunInput{
+		ProjectID: "1",
+		Ref:       "main",
+		Token:     "tok123",
+		Variables: map[string]string{},
+		Inputs:    map[string]any{},
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, key := range []string{"variables", "inputs"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := body[key]; ok {
+				t.Errorf("request body = %v, want no %s key", body, key)
+			}
+		})
 	}
 }
 
@@ -967,6 +1097,30 @@ func TestRunTrigger_APIError(t *testing.T) {
 	}
 }
 
+// TestRunTrigger_RefusedCredential_CarriesTheRevokedTokenHint verifies both
+// statuses GitLab refuses a trigger token with reach the hint that says the
+// token is the problem. A test asserting only that an error came back cannot
+// tell that hint from the generic one, which is what let the disjunction
+// collapse to a conjunction no status can satisfy.
+func TestRunTrigger_RefusedCredential_CarriesTheRevokedTokenHint(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"401 Unauthorized"}`)
+			}))
+			_, err := RunTrigger(context.Background(), client, RunInput{
+				ProjectID: "1", Ref: "main", Token: "revoked",
+			})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), "revoked") {
+				t.Errorf("error = %v, want the revoked-token hint", err)
+			}
+		})
+	}
+}
+
 // TestRunTrigger_BadRequest verifies RunTrigger returns ref and CI lint guidance for 400 responses.
 func TestRunTrigger_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1152,6 +1306,24 @@ func TestFormatRunOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
+// TestFormatRunOutputMarkdown_NoStatus_OmitsTheStatusRow pins the card of a
+// pipeline GitLab answered without a status: the row is left out rather than
+// printed as a bare emoji with nothing after it. No test drove that branch, so
+// the guard around it was only ever evaluated one way.
+func TestFormatRunOutputMarkdown_NoStatus_OmitsTheStatusRow(t *testing.T) {
+	got := FormatRunOutputMarkdown(RunOutput{ID: 77, SHA: "abc", Ref: "main"})
+
+	want := "## Pipeline Triggered\n\n" +
+		"- **Pipeline ID**: 77\n" +
+		"- **SHA**: `abc`\n" +
+		"- **Ref**: main\n" +
+		ptRunCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatTriggerMarkdown_ExpiresAt pins that the expiry reaches the card.
 // It is read off the captured response because the SDK does not model it, and
 // a trigger shown without it reads as one that never expires.
@@ -1212,7 +1384,11 @@ func TestPipelineTriggers_UnreadableCapturedExpiresAt(t *testing.T) {
 	})
 }
 
-// TestGet_WithAllTimestamps verifies convertTrigger covers UpdatedAt and LastUsed nil guards.
+// TestGet_WithAllTimestamps verifies convertTrigger covers the UpdatedAt and
+// LastUsed nil guards, and that each of the four instants lands on its own key.
+// The four values differ from each other on purpose: asserting only that they
+// are non-empty accepts any permutation of them, and a card that dates a
+// token's last use from its creation reads as a token nobody has used.
 func TestGet_WithAllTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -1228,13 +1404,52 @@ func TestGet_WithAllTimestamps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.UpdatedAt == "" {
-		t.Error("expected UpdatedAt to be set")
+	for _, tc := range []struct {
+		key  string
+		got  string
+		want string
+	}{
+		{"created_at", out.CreatedAt, "2026-01-15T10:00:00Z"},
+		{"updated_at", out.UpdatedAt, "2026-02-01T12:00:00Z"},
+		{"last_used", out.LastUsed, "2026-03-01T08:30:00Z"},
+		{"expires_at", out.ExpiresAt, "2026-12-31T23:59:59Z"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.key, tc.got, tc.want)
+			}
+		})
 	}
-	if out.LastUsed == "" {
-		t.Error("expected LastUsed to be set")
+}
+
+// TestGetTrigger_Owner_MapsEveryFieldToItsOwnKey pins the whole owner object a
+// get answers with, from a payload in which no two values agree. Only the id
+// and the name were ever read, so the other seven were free to carry each
+// other's values: an avatar address published as the profile address, or an
+// e-mail published as a display name, would have passed.
+func TestGetTrigger_Owner_MapsEveryFieldToItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":10,"description":"deploy","token":"abc",
+			"owner":{
+				"id":7,"username":"release-bot","name":"Release Bot","state":"active",
+				"avatar_url":"https://gl/avatar.png","web_url":"https://gl/release-bot",
+				"email":"bot@example.com","created_at":"2025-05-04T09:08:07Z",
+				"bot":true,"locked":false
+			}
+		}`)
+	}))
+	out, err := GetTrigger(context.Background(), client, GetInput{ProjectID: "42", TriggerID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ExpiresAt == "" {
-		t.Error("expected ExpiresAt to be set from the captured answer")
+	want := &UserOutput{
+		ID: 7, Username: "release-bot", Name: "Release Bot", State: "active",
+		AvatarURL: "https://gl/avatar.png", WebURL: "https://gl/release-bot",
+		Email: "bot@example.com", CreatedAt: "2025-05-04T09:08:07Z",
+		Bot: true, Locked: false,
+	}
+	if !reflect.DeepEqual(out.Owner, want) {
+		t.Errorf("owner = %+v, want %+v", out.Owner, want)
 	}
 }
