@@ -1376,6 +1376,17 @@ func environmentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 // flux_resource_path) and nested objects (cluster_agent, last_deployment with
 // its deployable+pipeline+user+commit+runner) as documented in
 // doc/api/environments.md "Retrieve an environment".
+//
+// The deployment, the job that ran it and that job's pipeline each carry a ref,
+// a status and a SHA of their own. GitLab sends one branch and one commit on
+// all three, and a fixture that copies that cannot tell a field taken from the
+// object beside it from the right one: while the three refs were all "main" and
+// the three statuses all "success", the pipeline block of deployableOutput
+// could take either off the job, deploymentOutput could take either off the job
+// below it, and the pipeline SHA could come from the job's commit, with every
+// assertion here still green. The statuses are a real GitLab state, a manual
+// deploy job blocking its deployment while the pipeline runs; the refs are
+// three branches, which GitLab would never send, and the SHAs are unrelated.
 const envFullJSON = `{
 	"id":7,"name":"production","slug":"production","state":"available","tier":"production",
 	"description":"Prod","external_url":"https://prod.example.com",
@@ -1387,16 +1398,16 @@ const envFullJSON = `{
 		"config_project":{"id":99,"description":"Agent cfg","name":"cfg","name_with_namespace":"grp / cfg","path":"cfg","path_with_namespace":"grp/cfg","created_at":"2025-11-01T00:00:00Z"}
 	},
 	"last_deployment":{
-		"id":501,"iid":12,"ref":"main","sha":"abc123","status":"success",
+		"id":501,"iid":12,"ref":"main","sha":"aa11bb22cc33dd44","status":"blocked",
 		"created_at":"2026-06-15T11:00:00Z",
 		"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","avatar_url":"https://av","web_url":"https://u"},
 		"deployable":{
-			"id":900,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,
+			"id":900,"status":"manual","stage":"deploy","name":"deploy-prod","ref":"release/1.4","tag":false,
 			"coverage":88.5,"created_at":"2026-06-15T10:55:00Z","started_at":"2026-06-15T10:56:00Z",
 			"finished_at":"2026-06-15T11:00:00Z","duration":240,
 			"user":{"id":4,"name":"Deployer","username":"deployer","state":"active","web_url":"https://u","created_at":"2025-01-01T00:00:00Z","bio":"bio text","location":"Earth","public_email":"d@x","organization":"Acme"},
 			"commit":{"id":"abc123def","short_id":"abc123","title":"Deploy fix","message":"Deploy fix\n","author_name":"Dev","author_email":"dev@x","authored_date":"2026-06-15T10:00:00Z","committer_name":"Dev","committer_email":"dev@x","committed_date":"2026-06-15T10:00:00Z","created_at":"2026-06-15T10:00:00Z","parent_ids":["p1"]},
-			"pipeline":{"id":700,"sha":"abc123","ref":"main","status":"success","web_url":"https://pipe"},
+			"pipeline":{"id":700,"sha":"9f1c2d3e4","ref":"hotfix/tls","status":"running","web_url":"https://pipe"},
 			"runner":{"id":55,"description":"shared-runner","name":"runner-1","is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}
 		}
 	}
@@ -1454,7 +1465,10 @@ func assertLastDeployment(t *testing.T, ld *DeploymentOutput) {
 	if ld == nil {
 		t.Fatal("LastDeployment is nil")
 	}
-	wantLD := DeploymentOutput{ID: 501, IID: 12, Ref: "main", SHA: "abc123", Status: "success"}
+	// The ref, the SHA and the status are the deployment's own, and each differs
+	// from the value the job below it carries, so reading one of them off the
+	// job is a failure here rather than a coincidence.
+	wantLD := DeploymentOutput{ID: 501, IID: 12, Ref: "main", SHA: "aa11bb22cc33dd44", Status: "blocked"}
 	if ld.ID != wantLD.ID || ld.IID != wantLD.IID || ld.Ref != wantLD.Ref || ld.SHA != wantLD.SHA || ld.Status != wantLD.Status {
 		t.Errorf("LastDeployment = %#v", ld)
 	}
@@ -1479,14 +1493,16 @@ func assertDeployable(t *testing.T, dep *DeployableOutput) {
 	if dep == nil {
 		t.Fatal("Deployable is nil")
 	}
-	if dep.ID != 900 || dep.Status != "success" || dep.Stage != "deploy" || dep.Name != "deploy-prod" {
+	if dep.ID != 900 || dep.Status != "manual" || dep.Stage != "deploy" || dep.Name != "deploy-prod" {
 		t.Errorf("Deployable identity = %#v", dep)
 	}
 	// The ref and the tag flag say which commit the job ran for and whether it
 	// was a tag: nothing read either, so the ref could have been filled from
-	// the status beside it and the flag inverted unnoticed.
-	if dep.Ref != "main" || dep.Tag {
-		t.Errorf("Deployable ref/tag = %q/%v, want main/false", dep.Ref, dep.Tag)
+	// the status beside it and the flag inverted unnoticed. The ref and the
+	// status are the job's own and differ from the deployment's and from the
+	// pipeline's, so neither can be taken off the object beside it.
+	if dep.Ref != "release/1.4" || dep.Tag {
+		t.Errorf("Deployable ref/tag = %q/%v, want release/1.4/false", dep.Ref, dep.Tag)
 	}
 	if dep.Coverage != 88.5 || dep.Duration != 240 {
 		t.Errorf("Deployable metrics = %#v", dep)
@@ -1519,9 +1535,12 @@ func assertDeployableCommit(t *testing.T, c *DeployableCommitOutput) {
 }
 
 // assertDeployablePipeline validates the documented deployable.pipeline subset.
+// The SHA, the ref and the status are the pipeline's own: the job around it
+// carries a ref and a status of its own and its commit a SHA of its own, so
+// each of these three is read from the pipeline or the assertion fails.
 func assertDeployablePipeline(t *testing.T, p *DeployablePipelineOutput) {
 	t.Helper()
-	if p == nil || p.ID != 700 || p.WebURL != "https://pipe" || p.SHA != "abc123" || p.Ref != "main" || p.Status != "success" {
+	if p == nil || p.ID != 700 || p.WebURL != "https://pipe" || p.SHA != "9f1c2d3e4" || p.Ref != "hotfix/tls" || p.Status != "running" {
 		t.Errorf("Deployable.Pipeline = %#v", p)
 	}
 }
@@ -1653,18 +1672,17 @@ func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
 // TestEnvironmentCreate_NewOptionFields verifies that Create forwards the
 // additive cluster_agent_id, kubernetes_namespace, flux_resource_path, and
 // auto_stop_setting options to the GitLab API.
+//
+// The body is recorded by recordingHandler, which reads it whole and fails the
+// test when that read errors. What it replaces here was a single r.Body.Read
+// into a ContentLength-sized buffer with both the count and the error thrown
+// away: a short read left the tail of the buffer as NUL bytes, so the
+// assertions below answered about that padding rather than about the request.
+// The path is part of the assertion now too, since the handler refuses any
+// other, and the method was all the hand-rolled mock checked.
 func TestEnvironmentCreate_NewOptionFields(t *testing.T) {
-	var body string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			buf := make([]byte, r.ContentLength)
-			_, _ = r.Body.Read(buf)
-			body = string(buf)
-			testutil.RespondJSON(w, http.StatusCreated, envFullJSON)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
-	}))
+	handler, body := recordingHandler(t, http.MethodPost, "/api/v4/projects/42/environments", http.StatusCreated, envFullJSON)
+	client := testutil.NewTestClient(t, handler)
 
 	agentID := int64(11)
 	out, err := Create(context.Background(), client, CreateInput{
@@ -1680,8 +1698,8 @@ func TestEnvironmentCreate_NewOptionFields(t *testing.T) {
 	}
 	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
 		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(body, want) {
-				t.Errorf("request body %q missing %q", body, want)
+			if !strings.Contains(*body, want) {
+				t.Errorf("request body %q missing %q", *body, want)
 			}
 		})
 	}
@@ -1692,19 +1710,12 @@ func TestEnvironmentCreate_NewOptionFields(t *testing.T) {
 
 // TestEnvironmentUpdate_NewOptionFields verifies that Update forwards the
 // additive cluster_agent_id, kubernetes_namespace, flux_resource_path, and
-// auto_stop_setting options to the GitLab API.
+// auto_stop_setting options to the GitLab API. Like its create sibling it
+// records through recordingHandler, which reads the body whole and holds the
+// route, rather than the truncating single read it replaced.
 func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
-	var body string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			buf := make([]byte, r.ContentLength)
-			_, _ = r.Body.Read(buf)
-			body = string(buf)
-			testutil.RespondJSON(w, http.StatusOK, envFullJSON)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
-	}))
+	handler, body := recordingHandler(t, http.MethodPut, "/api/v4/projects/42/environments/7", http.StatusOK, envFullJSON)
+	client := testutil.NewTestClient(t, handler)
 
 	agentID := int64(11)
 	_, err := Update(context.Background(), client, UpdateInput{
@@ -1720,8 +1731,8 @@ func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
 	}
 	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
 		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(body, want) {
-				t.Errorf("request body %q missing %q", body, want)
+			if !strings.Contains(*body, want) {
+				t.Errorf("request body %q missing %q", *body, want)
 			}
 		})
 	}
