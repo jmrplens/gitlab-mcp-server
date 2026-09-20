@@ -251,18 +251,18 @@ func TestFuzzyTokenScoreWithReason_DefensiveBranches(t *testing.T) {
 	}
 }
 
-// TestFuzzyScoreEntryWithExplanation_EmptyTerms verifies the FuzzyScoreEntryWithExplanation_EmptyTerms handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestFuzzyScoreEntryWithExplanation_EmptyTerms verifies that an empty term
+// list scores zero with no reasons, rather than dividing by the term count.
 func TestFuzzyScoreEntryWithExplanation_EmptyTerms(t *testing.T) {
 	if score, explanation := fuzzyScoreEntryWithExplanation(actionEntry{}, nil); score != 0 || len(explanation.Reasons) != 0 {
 		t.Fatalf("fuzzyScoreEntryWithExplanation(empty) = %d, %+v; want zero result", score, explanation)
 	}
 }
 
-// TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore verifies the FuzzyScoreEntryWithExplanation_MatchesNonExplanationScore handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore verifies that
+// the explaining fuzzy scorer answers the same positive score as the silent
+// one for a typo query, and that its explanation carries that total, the
+// matched term count and at least one reason.
 func TestFuzzyScoreEntryWithExplanation_MatchesNonExplanationScore(t *testing.T) {
 	entry := actionEntry{
 		ID:           "merge_request.list",
