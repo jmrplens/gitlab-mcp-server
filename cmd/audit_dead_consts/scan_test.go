@@ -46,9 +46,9 @@ func scanFixture(t *testing.T, files map[string]string) []Constant {
 	return scanFixtureAs(t, files, nil)
 }
 
-// scanFixtureAs is [scanFixture] with the platforms a package holding a file
+// scanFixtureAs is [scanFixture] with the targets a package holding a file
 // this one excludes is re-read under.
-func scanFixtureAs(t *testing.T, files map[string]string, platforms []string) []Constant {
+func scanFixtureAs(t *testing.T, files map[string]string, targets []target) []Constant {
 	t.Helper()
 	root := repoRoot(t)
 	overlay := map[string][]byte{}
@@ -56,10 +56,10 @@ func scanFixtureAs(t *testing.T, files map[string]string, platforms []string) []
 		overlay[filepath.Join(root, filepath.FromSlash(fixtureDir), name)] = []byte(source)
 	}
 	report, err := audit(auditConfig{
-		dir:       root,
-		patterns:  []string{"./" + fixtureDir},
-		overlay:   overlay,
-		platforms: platforms,
+		dir:      root,
+		patterns: []string{"./" + fixtureDir},
+		overlay:  overlay,
+		targets:  targets,
 	})
 	if err != nil {
 		t.Fatalf("audit fixture: %v", err)
@@ -287,10 +287,21 @@ var otherPlatform = func() string {
 	return "windows"
 }()
 
-// platformFixture is a package whose only reader of one constant sits behind a
-// build constraint this platform does not satisfy.
-var platformFixture = map[string]string{
-	"fixture.go": `package fixture
+// otherArch is an architecture this test is not running on, among the two
+// the project ships for, so the pair with the host's operating system is one
+// the toolchain builds.
+var otherArch = func() string {
+	if runtime.GOARCH == "arm64" {
+		return "amd64"
+	}
+	return "arm64"
+}()
+
+// constrainedFixture is a package whose only reader of one constant sits
+// behind the build constraint given, which this host does not satisfy.
+func constrainedFixture(constraint string) map[string]string {
+	return map[string]string{
+		"fixture.go": `package fixture
 
 const (
 	usedConst     = "used"
@@ -299,21 +310,32 @@ const (
 
 func Live() string { return usedConst }
 `,
-	"fixture_" + otherPlatform + ".go": `//go:build ` + otherPlatform + `
+		"fixture_" + constraint + ".go": `//go:build ` + constraint + `
 
 package fixture
 
 // Elsewhere is the only reader of platformConst, and this file is compiled
-// nowhere but on the platform its name and constraint carry.
+// nowhere but where its name and constraint say.
 func Elsewhere() string { return platformConst }
 `,
+	}
 }
+
+// platformFixture is [constrainedFixture] for another operating system.
+var platformFixture = constrainedFixture(otherPlatform)
 
 // TestScan_ConstantReadOnlyByAnotherPlatformsFile_IsNotReported is why the
 // packages a load left files out of are read again. Reporting this constant
 // would fail a build over code doing its job on another operating system.
 func TestScan_ConstantReadOnlyByAnotherPlatformsFile_IsNotReported(t *testing.T) {
-	assertDead(t, scanFixtureAs(t, platformFixture, []string{otherPlatform}))
+	assertDead(t, scanFixtureAs(t, platformFixture, []target{{otherPlatform, runtime.GOARCH}}))
+}
+
+// TestScan_ConstantReadOnlyByAnotherArchitecturesFile_IsNotReported is the
+// same for a file constrained to an architecture: a reload that set only the
+// operating system kept the host's architecture and never saw it.
+func TestScan_ConstantReadOnlyByAnotherArchitecturesFile_IsNotReported(t *testing.T) {
+	assertDead(t, scanFixtureAs(t, constrainedFixture(otherArch), []target{{runtime.GOOS, otherArch}}))
 }
 
 // TestScan_PlatformNotReadAgain_ReportsTheConstantAsDead is the same fixture
@@ -321,6 +343,43 @@ func TestScan_ConstantReadOnlyByAnotherPlatformsFile_IsNotReported(t *testing.T)
 // rather than only that the first passes.
 func TestScan_PlatformNotReadAgain_ReportsTheConstantAsDead(t *testing.T) {
 	assertDead(t, scanFixtureAs(t, platformFixture, nil), "platformConst")
+}
+
+// TestScan_ArchitectureNotReadAgain_ReportsTheConstantAsDead is the
+// architecture half of that pair: with the host's operating system alone in
+// the list, the arm64 or amd64 file is never loaded and its read never seen.
+func TestScan_ArchitectureNotReadAgain_ReportsTheConstantAsDead(t *testing.T) {
+	assertDead(t, scanFixtureAs(t, constrainedFixture(otherArch), []target{{runtime.GOOS, runtime.GOARCH}}), "platformConst")
+}
+
+// TestScan_LocalConstantSharingAName_IsKeyedApartFromThePackageLevelOne holds
+// the declaration table to the constant's identity: a declaration that
+// excuses the package-level constant leaves a function-local one of the same
+// name reported, and the finding says which function it sits in.
+func TestScan_LocalConstantSharingAName_IsKeyedApartFromThePackageLevelOne(t *testing.T) {
+	original := unreadOnPurpose
+	t.Cleanup(func() { unreadOnPurpose = original })
+	unreadOnPurpose = map[string]string{fixtureDir + ":shared": "the package-level one is kept on purpose in this test"}
+
+	found := scanFixtureAs(t, map[string]string{"fixture.go": `package fixture
+
+const shared = "package level, declared unread on purpose"
+
+type walker struct{}
+
+func (w *walker) Walk() {
+	const shared = "local, not declared, and unread"
+}
+
+func Live() {}
+`}, nil)
+	assertDead(t, found, "shared")
+	if got := found[0].Func; got != "walker.Walk" {
+		t.Fatalf("Func = %q, want the enclosing method %q", got, "walker.Walk")
+	}
+	if got := declarationKey(found[0]); got != fixtureDir+":walker.Walk.shared" {
+		t.Fatalf("declarationKey = %q, want the function between package and name", got)
+	}
 }
 
 // TestAudit_PlatformLoadThatFails_StopsTheRun: a platform whose load cannot be
@@ -333,10 +392,10 @@ func TestAudit_PlatformLoadThatFails_StopsTheRun(t *testing.T) {
 		overlay[filepath.Join(root, filepath.FromSlash(fixtureDir), name)] = []byte(source)
 	}
 	_, err := audit(auditConfig{
-		dir:       root,
-		patterns:  []string{"./" + fixtureDir},
-		overlay:   overlay,
-		platforms: []string{"notanoperatingsystem"},
+		dir:      root,
+		patterns: []string{"./" + fixtureDir},
+		overlay:  overlay,
+		targets:  []target{{"notanoperatingsystem", runtime.GOARCH}},
 	})
 	if err == nil {
 		t.Fatal("audit error = nil, want the platform load failure")
