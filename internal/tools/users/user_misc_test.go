@@ -6,7 +6,9 @@ package users
 import (
 	"context"
 	"encoding/base64"
+	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,6 +153,83 @@ func TestUploadCurrentUserAvatar_UnauthorizedError(t *testing.T) {
 		Filename: "avatar.png", ContentBase64: content,
 	}); err == nil {
 		t.Fatal("expected API error, got nil")
+	}
+}
+
+// TestUploadCurrentUserAvatar_RefusedImageCarriesTheFormatHint verifies that
+// both statuses GitLab refuses an image with reach the format-and-size hint,
+// and that another failure does not. Asserting only that an error came back
+// would pass with the two operands collapsed into one, which is what would
+// send a 400 to the credentials hint instead.
+func TestUploadCurrentUserAvatar_RefusedImageCarriesTheFormatHint(t *testing.T) {
+	const formatHint = "avatar must be JPG/PNG/GIF"
+
+	tests := []struct {
+		name     string
+		status   int
+		wantHint bool
+	}{
+		{"unprocessable", http.StatusUnprocessableEntity, true},
+		{"bad request", http.StatusBadRequest, true},
+		{"unauthorized", http.StatusUnauthorized, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			content := base64.StdEncoding.EncodeToString([]byte("fake"))
+
+			_, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+				Filename: "avatar.png", ContentBase64: content,
+			})
+			if err == nil {
+				t.Fatal("expected API error, got nil")
+			}
+			if got := strings.Contains(err.Error(), formatHint); got != tt.wantHint {
+				t.Errorf("error %q carries the format hint = %v, want %v", err, got, tt.wantHint)
+			}
+		})
+	}
+}
+
+// TestUploadCurrentUserAvatar_ACapturedFieldTheTypeCannotHold_IsReported
+// verifies the failure the captured response adds here too: the upload reads
+// the instance-user keys beside the SDK's decode, and a body those keys cannot
+// hold is reported rather than answered with a user missing them.
+func TestUploadCurrentUserAvatar_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"username":"alice","followers":"not-a-number"}`)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake"))
+
+	_, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("UploadCurrentUserAvatar() error = %v, want the capture's decode failure", err)
+	}
+}
+
+// TestUploadCurrentUserAvatar_AnAnswerWithNeitherIdentityNorAvatarGetsNoHint
+// verifies the recovery hint is attached to the answer it describes and not to
+// any response that happens to lack an identifier: GitLab 19 sends avatar_url
+// alone, and an answer carrying nothing at all is not that shape.
+func TestUploadCurrentUserAvatar_AnAnswerWithNeitherIdentityNorAvatarGetsNoHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake"))
+
+	out, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	})
+	if err != nil {
+		t.Fatalf("UploadCurrentUserAvatar() unexpected error: %v", err)
+	}
+	if len(out.NextSteps) != 0 {
+		t.Errorf("NextSteps = %v, want none when GitLab sent no avatar URL", out.NextSteps)
 	}
 }
 
@@ -346,41 +425,60 @@ func TestCreateUserRunner_Success(t *testing.T) {
 	}
 }
 
-// TestCreateUserRunner_AllOptions verifies that all optional fields are passed.
-func TestCreateUserRunner_AllOptions(t *testing.T) {
-	groupID := int64(5)
-	projectID := int64(10)
-	paused := true
-	locked := false
-	runUntagged := true
-	maxTimeout := int64(3600)
+// TestCreateUserRunner_EachOptionReachesTheRequest drives one runner option at
+// a time and compares the whole body against the required runner_type plus
+// that one. Three of the options are flags, so a case that sets them all at
+// once cannot tell paused from run_untagged; one at a time can, and the empty
+// case holds the tag list to being absent rather than sent as an empty array.
+//
+// The test this replaced set every option and asserted only the returned ID,
+// while its own mock discarded the body: the comment claimed the fields were
+// passed and nothing checked that any of them left the process.
+func TestCreateUserRunner_EachOptionReachesTheRequest(t *testing.T) {
+	five := int64(5)
+	ten := int64(10)
+	yes := true
+	no := false
+	timeout := int64(3600)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/user/runners" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"token":"glrt-xyz"}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := CreateUserRunner(context.Background(), client, CreateUserRunnerInput{
-		RunnerType:      "group_type",
-		GroupID:         &groupID,
-		ProjectID:       &projectID,
-		Description:     "test runner",
-		Paused:          &paused,
-		Locked:          &locked,
-		RunUntagged:     &runUntagged,
-		TagList:         []string{"docker", "linux"},
-		AccessLevel:     "ref_protected",
-		MaximumTimeout:  &maxTimeout,
-		MaintenanceNote: "Maintenance note",
-	})
-	if err != nil {
-		t.Fatalf("CreateUserRunner() unexpected error: %v", err)
+	tests := []struct {
+		name  string
+		input CreateUserRunnerInput
+		want  map[string]any
+	}{
+		{"group_id", CreateUserRunnerInput{GroupID: &five}, map[string]any{"group_id": float64(5)}},
+		{"project_id", CreateUserRunnerInput{ProjectID: &ten}, map[string]any{"project_id": float64(10)}},
+		{"description", CreateUserRunnerInput{Description: "build runner"}, map[string]any{"description": "build runner"}},
+		{"paused", CreateUserRunnerInput{Paused: &yes}, map[string]any{"paused": true}},
+		{"locked", CreateUserRunnerInput{Locked: &no}, map[string]any{"locked": false}},
+		{"run_untagged", CreateUserRunnerInput{RunUntagged: &yes}, map[string]any{"run_untagged": true}},
+		{"tag_list", CreateUserRunnerInput{TagList: []string{"docker", "linux"}}, map[string]any{"tag_list": []any{"docker", "linux"}}},
+		{"access_level", CreateUserRunnerInput{AccessLevel: "ref_protected"}, map[string]any{"access_level": "ref_protected"}},
+		{"maximum_timeout", CreateUserRunnerInput{MaximumTimeout: &timeout}, map[string]any{"maximum_timeout": float64(3600)}},
+		{"maintenance_note", CreateUserRunnerInput{MaintenanceNote: "quarterly"}, map[string]any{"maintenance_note": "quarterly"}},
+		{"nothing", CreateUserRunnerInput{}, map[string]any{}},
 	}
-	if out.ID != 102 {
-		t.Errorf("ID = %d, want 102", out.ID)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/runners", &got, http.StatusCreated,
+				`{"id":102,"token":"glrt-xyz"}`))
+
+			input := tt.input
+			input.RunnerType = "group_type"
+			out, err := CreateUserRunner(context.Background(), client, input)
+			if err != nil {
+				t.Fatalf("CreateUserRunner() unexpected error: %v", err)
+			}
+			if out.ID != 102 {
+				t.Errorf("ID = %d, want 102", out.ID)
+			}
+
+			want := map[string]any{"runner_type": "group_type"}
+			maps.Copy(want, tt.want)
+			assertSent(t, "runner body", got.body, want)
+		})
 	}
 }
 
@@ -472,25 +570,59 @@ func TestDeleteUserIdentity_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetUserActivities_WithFromFilter verifies that the From date filter is applied.
-func TestGetUserActivities_WithFromFilter(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/activities" {
-			testutil.RespondJSON(w, http.StatusOK, `[{"username":"user1","last_activity_on":"2026-06-15"}]`)
-			return
-		}
-		http.NotFound(w, r)
+// TestGetUserActivities_TheFromFilterReachesTheQuery verifies that the
+// from-date and the ordering are asked of GitLab, and that an unset filter is
+// not invented. The fixture answers the same list either way, so the query the
+// handler built is the only place the answer can be read: the test this
+// replaced asserted the response and would have passed with the filter
+// dropped, which is what its comment claimed to check.
+func TestGetUserActivities_TheFromFilterReachesTheQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		input GetUserActivitiesInput
+		want  url.Values
+	}{
+		{"from", GetUserActivitiesInput{From: "2026-01-01"}, url.Values{"from": {"2026-01-01"}}},
+		{"order_by and sort", GetUserActivitiesInput{OrderBy: "id", Sort: "desc"}, url.Values{"order_by": {"id"}, "sort": {"desc"}}},
+		{"nothing", GetUserActivitiesInput{}, url.Values{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/activities", &got, http.StatusOK,
+				`[{"username":"user1","last_activity_on":"2026-06-15"}]`))
+
+			out, err := GetUserActivities(context.Background(), client, tt.input)
+			if err != nil {
+				t.Fatalf("GetUserActivities() unexpected error: %v", err)
+			}
+			if len(out.Activities) != 1 || out.Activities[0].LastActivityOn != "2026-06-15" {
+				t.Errorf("activities = %+v, want the one fixture entry", out.Activities)
+			}
+			assertSent(t, "activities query", got.query, tt.want)
+		})
+	}
+}
+
+// TestGetUserActivities_AnActivityWithoutADateLeavesItEmpty verifies the
+// absent side of the timestamp guard: last_activity_on is the whole point of
+// this endpoint, and an entry without one must publish nothing rather than the
+// zero day as the date a user was last seen.
+func TestGetUserActivities_AnActivityWithoutADateLeavesItEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"username":"user1"}]`)
 	}))
 
-	out, err := GetUserActivities(context.Background(), client, GetUserActivitiesInput{From: "2026-01-01"})
+	out, err := GetUserActivities(context.Background(), client, GetUserActivitiesInput{})
 	if err != nil {
 		t.Fatalf("GetUserActivities() unexpected error: %v", err)
 	}
 	if len(out.Activities) != 1 {
 		t.Fatalf("got %d activities, want 1", len(out.Activities))
 	}
-	if out.Activities[0].LastActivityOn != "2026-06-15" {
-		t.Errorf("LastActivityOn = %q, want %q", out.Activities[0].LastActivityOn, "2026-06-15")
+	if out.Activities[0].LastActivityOn != "" {
+		t.Errorf("LastActivityOn = %q, want empty when GitLab sent none", out.Activities[0].LastActivityOn)
 	}
 }
 
@@ -520,25 +652,39 @@ func TestGetUserActivities_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetUserMemberships_WithTypeFilter verifies that the Type filter parameter is applied.
-func TestGetUserMemberships_WithTypeFilter(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/memberships" {
-			testutil.RespondJSON(w, http.StatusOK, `[{"source_id":1,"source_name":"grp","source_type":"Namespace","access_level":40}]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+// TestGetUserMemberships_TheTypeFilterReachesTheQuery verifies that the
+// membership type and the ordering are asked of GitLab. The fixture answers
+// with a Namespace membership whether or not the filter was sent, so reading
+// the response — which is what the test this replaced did under a comment
+// claiming otherwise — proves nothing about the request.
+func TestGetUserMemberships_TheTypeFilterReachesTheQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		input GetUserMembershipsInput
+		want  url.Values
+	}{
+		{"type", GetUserMembershipsInput{Type: "Namespace"}, url.Values{"type": {"Namespace"}}},
+		{"order_by and sort", GetUserMembershipsInput{OrderBy: "id", Sort: "asc"}, url.Values{"order_by": {"id"}, "sort": {"asc"}}},
+		{"nothing", GetUserMembershipsInput{}, url.Values{}},
+	}
 
-	out, err := GetUserMemberships(context.Background(), client, GetUserMembershipsInput{UserID: 42, Type: "Namespace"})
-	if err != nil {
-		t.Fatalf("GetUserMemberships() unexpected error: %v", err)
-	}
-	if len(out.Memberships) != 1 {
-		t.Fatalf("got %d memberships, want 1", len(out.Memberships))
-	}
-	if out.Memberships[0].SourceType != "Namespace" {
-		t.Errorf("SourceType = %q, want %q", out.Memberships[0].SourceType, "Namespace")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/users/42/memberships", &got, http.StatusOK,
+				`[{"source_id":1,"source_name":"grp","source_type":"Namespace","access_level":40}]`))
+
+			input := tt.input
+			input.UserID = 42
+			out, err := GetUserMemberships(context.Background(), client, input)
+			if err != nil {
+				t.Fatalf("GetUserMemberships() unexpected error: %v", err)
+			}
+			if len(out.Memberships) != 1 || out.Memberships[0].SourceType != "Namespace" {
+				t.Errorf("memberships = %+v, want the one fixture entry", out.Memberships)
+			}
+			assertSent(t, "memberships query", got.query, tt.want)
+		})
 	}
 }
 

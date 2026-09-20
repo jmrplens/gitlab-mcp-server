@@ -111,7 +111,11 @@ type ModifyInput struct {
 	Provider            string `json:"provider,omitempty" jsonschema:"External provider name (use with extern_uid)"`
 	ExternUID           string `json:"extern_uid,omitempty" jsonschema:"External UID for the provider"`
 	ThemeID             *int64 `json:"theme_id,omitempty" jsonschema:"GitLab theme ID for the user's UI"`
-	Locked              *bool  `json:"locked,omitempty" jsonschema:"Lock or unlock the user account"`
+	// There is deliberately no locked field. GitLab's PUT /users/:id declares
+	// no locked parameter and the instance publishes no lock or unlock route
+	// at all, so the one this input used to offer reached neither the SDK
+	// options nor the wire: a caller who set it was answered with a user whose
+	// lock state had not moved.
 }
 
 // Modify modifies an existing GitLab user (admin only).

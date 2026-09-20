@@ -4,10 +4,12 @@ package users
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -443,6 +445,94 @@ func TestAddSSHKey_WithExpiresAtAndUsageType(t *testing.T) {
 	}
 	if out.ExpiresAt == "" {
 		t.Error("expected non-empty ExpiresAt")
+	}
+}
+
+// TestAddSSHKey_EachOptionReachesTheRequest drives one optional field at a time
+// and compares the whole body against the two required keys plus that one. The
+// expiry is the reason to compare rather than read the response: the fixture
+// answers with an expiry whether or not one was asked for, so the test above
+// passes with the option dropped. The unparsable case is the other half — a
+// date the handler could not read must be sent as nothing rather than as the
+// year 1, which is an expiry GitLab would honor.
+func TestAddSSHKey_EachOptionReachesTheRequest(t *testing.T) {
+	tests := []struct {
+		name  string
+		input AddSSHKeyInput
+		want  map[string]any
+	}{
+		{"expires_at", AddSSHKeyInput{ExpiresAt: "2026-01-15"}, map[string]any{"expires_at": "2026-01-15"}},
+		{"usage_type", AddSSHKeyInput{UsageType: "signing"}, map[string]any{"usage_type": "signing"}},
+		{"unparsable expires_at", AddSSHKeyInput{ExpiresAt: "not-a-date"}, map[string]any{}},
+		{"nothing", AddSSHKeyInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/keys", &got, http.StatusCreated, sshKeyJSON))
+
+			input := tt.input
+			input.Title, input.Key = "my-key", "ssh-rsa AAAA"
+			if _, err := AddSSHKey(context.Background(), client, input); err != nil {
+				t.Fatalf("AddSSHKey() unexpected error: %v", err)
+			}
+
+			want := map[string]any{"title": "my-key", "key": "ssh-rsa AAAA"}
+			maps.Copy(want, tt.want)
+			assertSent(t, "add key body", got.body, want)
+		})
+	}
+}
+
+// TestSSHKeyHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the
+// one failure the captured response adds to each key handler: GitLab's answer
+// decodes for the SDK and not for the key fields read beside it, and every
+// handler reports it rather than returning a key whose last_used_at is
+// silently empty. One case per handler, because each reads the capture on a
+// line of its own and a handler that forgot to would look identical from
+// outside.
+func TestSSHKeyHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	const object = `{"id":1,"title":"my-key","last_used_at":"whenever"}`
+
+	tests := []struct {
+		name     string
+		response string
+		call     func(client *gitlabclient.Client) error
+	}{
+		{"list for user", `[` + object + `]`, func(c *gitlabclient.Client) error {
+			_, err := ListSSHKeysForUser(context.Background(), c, ListSSHKeysForUserInput{UserID: 42})
+			return err
+		}},
+		{"get", object, func(c *gitlabclient.Client) error {
+			_, err := GetSSHKey(context.Background(), c, GetSSHKeyInput{KeyID: 1})
+			return err
+		}},
+		{"get for user", object, func(c *gitlabclient.Client) error {
+			_, err := GetSSHKeyForUser(context.Background(), c, GetSSHKeyForUserInput{UserID: 42, KeyID: 1})
+			return err
+		}},
+		{"add", object, func(c *gitlabclient.Client) error {
+			_, err := AddSSHKey(context.Background(), c, AddSSHKeyInput{Title: "my-key", Key: "ssh-rsa AAAA"})
+			return err
+		}},
+		{"add for user", object, func(c *gitlabclient.Client) error {
+			_, err := AddSSHKeyForUser(context.Background(), c, AddSSHKeyForUserInput{UserID: 42, Title: "my-key", Key: "ssh-rsa AAAA"})
+			return err
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.response)
+			}))
+
+			err := tt.call(client)
+			if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+				t.Errorf("error = %v, want the capture's decode failure", err)
+			}
+		})
 	}
 }
 

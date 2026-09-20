@@ -4,7 +4,9 @@ package users
 
 import (
 	"context"
+	"maps"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -304,6 +306,165 @@ func TestCreateCurrentUserPAT_WithDescription(t *testing.T) {
 	}
 	if out.LastUsedAt == "" {
 		t.Error("expected non-empty LastUsedAt")
+	}
+}
+
+// TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey compares a whole
+// listed account against one built by hand, with a value no other field
+// shares. The converter assigns five fields in a row and nothing branches, so
+// no mutation gate can see one read from its neighbor: measured here, swapping
+// username with name left the whole suite green while it showed every service
+// account under the wrong one.
+func TestListServiceAccounts_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{
+			"id":7,"username":"build-bot","name":"Build Bot",
+			"email":"bot@x.test","unconfirmed_email":"pending@x.test"
+		}]`)
+	}))
+
+	out, err := ListServiceAccounts(context.Background(), client, ListServiceAccountsInput{})
+	if err != nil {
+		t.Fatalf("ListServiceAccounts() unexpected error: %v", err)
+	}
+	if len(out.Accounts) != 1 {
+		t.Fatalf("got %d accounts, want 1", len(out.Accounts))
+	}
+	want := ServiceAccountOutput{
+		ID:               7,
+		Username:         "build-bot",
+		Name:             "Build Bot",
+		Email:            "bot@x.test",
+		UnconfirmedEmail: "pending@x.test",
+	}
+	if out.Accounts[0] != want {
+		t.Errorf("account = %+v, want %+v", out.Accounts[0], want)
+	}
+}
+
+// TestCreateServiceAccount_EachOptionReachesTheRequest drives one field at a
+// time and compares the whole body. Every field here is optional, so a body
+// that carried none of them would still be a request GitLab accepts, and a
+// handler that dropped one would answer with the fixture's account and look
+// like it worked.
+func TestCreateServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
+	tests := []struct {
+		name  string
+		input CreateServiceAccountInput
+		want  map[string]any
+	}{
+		{"name", CreateServiceAccountInput{Name: "Build Bot"}, map[string]any{"name": "Build Bot"}},
+		{"username", CreateServiceAccountInput{Username: "build-bot"}, map[string]any{"username": "build-bot"}},
+		{"email", CreateServiceAccountInput{Email: "bot@x.test"}, map[string]any{"email": "bot@x.test"}},
+		{"nothing", CreateServiceAccountInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/service_accounts", &got, http.StatusCreated, userJSON))
+
+			if _, err := CreateServiceAccount(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("CreateServiceAccount() unexpected error: %v", err)
+			}
+			assertSent(t, "create service account body", got.body, tt.want)
+		})
+	}
+}
+
+// TestUpdateInstanceServiceAccount_EachOptionReachesTheRequest drives one field
+// at a time, for the reason the create sibling gives: a PATCH sends only what
+// the caller asked to change, so the body is exactly that key and a builder
+// that wrote the username into the name is visible here.
+func TestUpdateInstanceServiceAccount_EachOptionReachesTheRequest(t *testing.T) {
+	const response = `{"id":5,"username":"svc-updated","name":"Updated Service","email":"updated@example.com"}`
+
+	tests := []struct {
+		name  string
+		input UpdateServiceAccountInput
+		want  map[string]any
+	}{
+		{"name", UpdateServiceAccountInput{Name: "Updated Service"}, map[string]any{"name": "Updated Service"}},
+		{"username", UpdateServiceAccountInput{Username: "svc-updated"}, map[string]any{"username": "svc-updated"}},
+		{"email", UpdateServiceAccountInput{Email: "updated@example.com"}, map[string]any{"email": "updated@example.com"}},
+		{"nothing", UpdateServiceAccountInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/service_accounts/5", &got, http.StatusOK, response))
+
+			input := tt.input
+			input.ServiceAccountID = 5
+			if _, err := UpdateInstanceServiceAccount(context.Background(), client, input); err != nil {
+				t.Fatalf("UpdateInstanceServiceAccount() unexpected error: %v", err)
+			}
+			assertSent(t, "update service account body", got.body, tt.want)
+		})
+	}
+}
+
+// TestListServiceAccounts_OrderAndSortReachTheQuery verifies that the ordering
+// is asked of GitLab. The fixture answers the same list however it was asked,
+// so the query is the only place the answer can be read.
+func TestListServiceAccounts_OrderAndSortReachTheQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ListServiceAccountsInput
+		want  url.Values
+	}{
+		{"order_by", ListServiceAccountsInput{OrderBy: "username"}, url.Values{"order_by": {"username"}}},
+		{"sort", ListServiceAccountsInput{Sort: "desc"}, url.Values{"sort": {"desc"}}},
+		{"nothing", ListServiceAccountsInput{}, url.Values{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/service_accounts", &got, http.StatusOK, `[]`))
+
+			if _, err := ListServiceAccounts(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("ListServiceAccounts() unexpected error: %v", err)
+			}
+			assertSent(t, "list service accounts query", got.query, tt.want)
+		})
+	}
+}
+
+// TestCreateCurrentUserPAT_EachOptionReachesTheRequest drives the two optional
+// fields one at a time beside the required name and scopes. The expiry is the
+// one that matters most: a token created without the expiry the caller asked
+// for is a credential that outlives its purpose, and the response carries
+// whatever the fixture says either way.
+func TestCreateCurrentUserPAT_EachOptionReachesTheRequest(t *testing.T) {
+	const response = `{"id":11,"name":"my-pat","active":true,"token":"glpat-x","scopes":["api"],"revoked":false,"user_id":1}`
+
+	tests := []struct {
+		name  string
+		input CreateCurrentUserPATInput
+		want  map[string]any
+	}{
+		{"description", CreateCurrentUserPATInput{Description: "Automation token"}, map[string]any{"description": "Automation token"}},
+		{"expires_at", CreateCurrentUserPATInput{ExpiresAt: "2026-12-31"}, map[string]any{"expires_at": "2026-12-31"}},
+		{"nothing", CreateCurrentUserPATInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/personal_access_tokens", &got, http.StatusCreated, response))
+
+			input := tt.input
+			input.Name, input.Scopes = "my-pat", []string{"api"}
+			if _, err := CreateCurrentUserPAT(context.Background(), client, input); err != nil {
+				t.Fatalf("CreateCurrentUserPAT() unexpected error: %v", err)
+			}
+
+			want := map[string]any{"name": "my-pat", "scopes": []any{"api"}}
+			maps.Copy(want, tt.want)
+			assertSent(t, "create pat body", got.body, want)
+		})
 	}
 }
 
