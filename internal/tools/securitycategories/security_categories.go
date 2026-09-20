@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	namespaceGIDType         = "Namespace"
-	securityAttributeGIDType = "Security::Attribute"
-	securityCategoryGIDType  = "Security::Category"
+	namespaceGIDType        = "Namespace"
+	securityCategoryGIDType = "Security::Category"
 
 	securityCategoryCreateMutation = `
 		mutation CreateSecurityCategory($input: SecurityCategoryCreateInput!) {

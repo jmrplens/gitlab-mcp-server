@@ -59,12 +59,12 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 	switch individualTool {
 	case "gitlab_list_project_aliases":
 		usage = "List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to. Pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page. It returns the full set."
-		related = []string{relatedProjectAliasGet}
+		related = []string{relatedProjectAliasGet, relatedProjectAliasCreate}
 		aliases = []string{"list project aliases", "show all project aliases", "enumerate project aliases"}
 		description = "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias."
 	case "gitlab_get_project_alias":
 		usage = "Get details (id, project_id, name) for one project alias by its `name` (the path-style alias string, e.g. `e2e-enterprise-alias`). The name must come from a prior project_alias.list response or be supplied verbatim by the prompt. This action does not search or accept partial names."
-		related = []string{relatedProjectAliasList}
+		related = []string{relatedProjectAliasList, relatedProjectAliasCreate}
 		aliases = []string{"get project alias details", "resolve project alias", "look up project alias"}
 		guidance = map[string]toolutil.ParameterGuidance{
 			"name": {
@@ -93,7 +93,7 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 		description = "Create a project alias mapping a unique name to a numeric project_id (admin-only). Returns: the created alias with id, project_id, and name. See also: gitlab_list_project_aliases, gitlab_get_project_alias, gitlab_delete_project_alias."
 	case "gitlab_delete_project_alias":
 		usage = "Delete a project alias by its `name`. The name must be an exact existing alias string. Pass the name from a prior project_alias.list response."
-		related = []string{relatedProjectAliasList, relatedProjectAliasGet}
+		related = []string{relatedProjectAliasList, relatedProjectAliasGet, relatedProjectAliasCreate}
 		aliases = []string{"delete project alias", "remove project alias", "unregister project alias"}
 		guidance = map[string]toolutil.ParameterGuidance{
 			"name": {

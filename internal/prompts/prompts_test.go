@@ -1731,7 +1731,6 @@ const (
 	msgExpectedAPIErr             = "expected error for API failure"
 	msgExpectedMissingProjectID   = "expected error for missing project_id"
 	promptSummarizePipelineStatus = "summarize_pipeline_status"
-	msgHandlerNoCallMissingArgs   = "handler should not be called with missing args"
 )
 
 // Prompt API error tests.

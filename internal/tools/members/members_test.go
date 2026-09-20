@@ -20,7 +20,6 @@ import (
 
 // Test endpoint paths and format strings for project member operation tests.
 const (
-	errNoReachAPI              = "should not reach API"
 	pathProjectMembers         = "/api/v4/projects/42/members/all"
 	fmtMembersListErr          = "List() unexpected error: %v"
 	fmtOutMembers0UsernameWant = "out.Members[0].Username = %q, want %q"

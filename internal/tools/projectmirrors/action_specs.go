@@ -132,7 +132,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_get_project_mirror": {
 		Usage:   "Get one push mirror by project_id plus mirror_id, including its enabled state, auth method, branch filtering, and last-update status and error. Use after listing mirrors when the target mirror_id is already known.",
 		Aliases: []string{"get project mirror", "show remote mirror", "fetch push mirror"},
-		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey, actionMirrorForcePush},
+		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey, actionMirrorForcePush, actionMirrorDelete},
 		Guidance: map[string]toolutil.ParameterGuidance{
 			"project_id": projectIDGuidance,
 			"mirror_id":  mirrorIDGuidance,

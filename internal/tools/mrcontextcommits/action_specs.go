@@ -19,7 +19,6 @@ const (
 	actionContextCommitsDelete = "merge_request.context_commits_delete"
 
 	actionMergeRequestGet     = "merge_request.get"
-	actionMergeRequestList    = "merge_request.list"
 	actionMergeRequestCommits = "merge_request.commits"
 
 	actionCommitGet  = "repository.commit_get"

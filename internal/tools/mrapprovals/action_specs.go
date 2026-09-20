@@ -46,11 +46,9 @@ const (
 	actionApprovalState      = "merge_request.approval_state"
 	actionApprovalRules      = "merge_request.approval_rules"
 	actionApprovalConfig     = "merge_request.approval_config"
-	actionApprovalReset      = "merge_request.approval_reset"
 	actionApprovalRuleCreate = "merge_request.approval_rule_create"
 	actionApprovalRuleUpdate = "merge_request.approval_rule_update"
 	actionApprovalRuleDelete = "merge_request.approval_rule_delete"
-	actionMRGet              = "merge_request.get"
 	actionMRApprove          = "merge_request.approve"
 	actionMRUnapprove        = "merge_request.unapprove"
 )
