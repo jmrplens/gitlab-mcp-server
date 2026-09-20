@@ -5,8 +5,10 @@ package tags
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -84,6 +86,72 @@ func TestTagCreate_InvalidRef(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Create() expected error for invalid ref, got nil")
+	}
+}
+
+// decodeJSONBody reads a request body as a JSON object, reporting on the test
+// goroutine and answering deterministically when it cannot, since an httptest
+// handler may not abort the test.
+func decodeJSONBody(t *testing.T, w http.ResponseWriter, r *http.Request) map[string]any {
+	t.Helper()
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode request body: %v", err)
+		http.Error(w, "undecodable request body", http.StatusBadRequest)
+		return nil
+	}
+	return body
+}
+
+// TestTagCreate_RequestBody pins what Create asks GitLab to do: the tag name,
+// the ref it points at, and the annotated message, each read back from the
+// request body.
+//
+// No test read that body before, so all three could be read off one another —
+// creating a tag named after its own ref, annotated with the ref — and the
+// suite stayed green; the message guard was a live mutant for the same reason.
+// The message is given with a literal backslash-n because that is what an MCP
+// client's double-escaped input looks like, and it must arrive as a newline.
+func TestTagCreate_RequestBody(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{
+			name:  "an annotated tag carries the caller's message",
+			input: CreateInput{ProjectID: "42", TagName: testTagName, Ref: "release-branch", Message: `Ship it\nand the line after`},
+			want:  map[string]any{"tag_name": testTagName, "ref": "release-branch", "message": "Ship it\nand the line after"},
+		},
+		{
+			name:  "a lightweight tag sends no message at all",
+			input: CreateInput{ProjectID: "42", TagName: testTagV100, Ref: "9f8e7d6"},
+			want:  map[string]any{"tag_name": testTagV100, "ref": "9f8e7d6"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathRepoTags {
+					http.NotFound(w, r)
+					return
+				}
+				body = decodeJSONBody(t, w, r)
+				if body == nil {
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"name":"v1.2.0","target":"abc123def456"}`)
+			}))
+
+			if _, err := Create(context.Background(), client, c.input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(body, c.want) {
+				t.Errorf("request body = %#v, want %#v", body, c.want)
+			}
+		})
 	}
 }
 
@@ -232,6 +300,12 @@ func TestTagGet_Success(t *testing.T) {
 
 // TestTagGet_SuccessEnrichedFields verifies that Get maps the full nested commit
 // object, the release note, and CreatedAt from the tag payload.
+//
+// No two values in the fixture agree and every timestamp is asserted by value,
+// because the converter is straight-line assignment that no mutation or
+// condition gate can judge: while the author and the committer shared a name
+// and an email, and the commit's authored and created dates were the same
+// instant, reading either field off its neighbor failed nothing.
 func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTags+"/v2.0.0" {
@@ -241,10 +315,10 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 				"target":"aaa111",
 				"commit":{
 					"id":"aaa111bbb222","short_id":"aaa111b","title":"feat",
-					"message":"feat: new feature","author_name":"Dev","author_email":"dev@example.com",
-					"committer_name":"Dev","committer_email":"dev@example.com",
+					"message":"feat: new feature","author_name":"Ada Author","author_email":"ada@example.com",
+					"committer_name":"Cid Committer","committer_email":"cid@example.com",
 					"authored_date":"2026-06-15T08:00:00Z","committed_date":"2026-06-15T08:10:00Z",
-					"created_at":"2026-06-15T08:00:00Z","web_url":"https://gitlab.example.com/-/commit/aaa111bbb222",
+					"created_at":"2026-06-15T07:50:00Z","web_url":"https://gitlab.example.com/-/commit/aaa111bbb222",
 					"parent_ids":["zzz000"],"project_id":42,"status":"success",
 					"trailers":{"Signed-off-by":"Dev"},"extended_trailers":{"Signed-off-by":"Dev"},
 					"stats":{"additions":3,"deletions":1,"total":4}
@@ -272,12 +346,21 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 		t.Fatal("out.Release is nil, want release object")
 	}
 	stringChecks := map[string][2]string{
+		"Name":                  {out.Name, "v2.0.0"},
+		"Target":                {out.Target, "aaa111"},
+		"Message":               {out.Message, "Annotated tag"},
+		"CreatedAt":             {out.CreatedAt, "2026-06-15T08:30:00Z"},
 		"Commit.ID":             {out.Commit.ID, "aaa111bbb222"},
-		"Commit.Message":        {out.Commit.Message, "feat: new feature"},
 		"Commit.ShortID":        {out.Commit.ShortID, "aaa111b"},
-		"Commit.AuthorEmail":    {out.Commit.AuthorEmail, "dev@example.com"},
-		"Commit.CommitterName":  {out.Commit.CommitterName, "Dev"},
-		"Commit.CommitterEmail": {out.Commit.CommitterEmail, "dev@example.com"},
+		"Commit.Title":          {out.Commit.Title, "feat"},
+		"Commit.Message":        {out.Commit.Message, "feat: new feature"},
+		"Commit.AuthorName":     {out.Commit.AuthorName, "Ada Author"},
+		"Commit.AuthorEmail":    {out.Commit.AuthorEmail, "ada@example.com"},
+		"Commit.CommitterName":  {out.Commit.CommitterName, "Cid Committer"},
+		"Commit.CommitterEmail": {out.Commit.CommitterEmail, "cid@example.com"},
+		"Commit.AuthoredDate":   {out.Commit.AuthoredDate, "2026-06-15T08:00:00Z"},
+		"Commit.CommittedDate":  {out.Commit.CommittedDate, "2026-06-15T08:10:00Z"},
+		"Commit.CreatedAt":      {out.Commit.CreatedAt, "2026-06-15T07:50:00Z"},
 		"Release.TagName":       {out.Release.TagName, "v2.0.0"},
 		"Release.Desc":          {out.Release.Description, "Second major release"},
 	}
@@ -288,17 +371,8 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 			}
 		})
 	}
-	for field, ts := range map[string]string{
-		"AuthoredDate":  out.Commit.AuthoredDate,
-		"CommittedDate": out.Commit.CommittedDate,
-		"CommitCreated": out.Commit.CreatedAt,
-		"CreatedAt":     out.CreatedAt,
-	} {
-		t.Run(field, func(t *testing.T) {
-			if ts == "" {
-				t.Errorf("%s is empty, want timestamp", field)
-			}
-		})
+	if !out.Protected {
+		t.Error("out.Protected = false, want true")
 	}
 	if len(out.Commit.ParentIDs) != 1 || out.Commit.ParentIDs[0] != "zzz000" {
 		t.Errorf("out.Commit.ParentIDs = %v, want [zzz000]", out.Commit.ParentIDs)
@@ -339,11 +413,11 @@ func TestTagGet_CommitSubsetIgnoresUndocumentedFields(t *testing.T) {
 	}
 }
 
-// TestTagGet_EmptyProjectID verifies Get returns an error for empty project_id.
+// TestTagGet_EmptyProjectID verifies Get refuses an empty project_id before it
+// reaches GitLab: the mock fails the test if any request arrives, so the
+// refusal cannot be something the server answered.
 func TestTagGet_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Get(context.Background(), client, GetInput{TagName: testTagV100})
 	if err == nil {
@@ -373,7 +447,15 @@ func TestTagGet_APIError(t *testing.T) {
 // pathRepoTagSig identifies the path repo tag sig constant used by this package.
 const pathRepoTagSig = "/api/v4/projects/42/repository/tags/v1.0.0/signature"
 
-// TestTagGetSignature_Success verifies TagGetSignature when success.
+// TestTagGetSignature_Success pins the whole signature GetSignature builds: the
+// certificate and its issuer carry different ids, subjects and key identifiers,
+// and the output is compared as one value.
+//
+// Four of the twelve fields were asserted before, which left the certificate's
+// own subject readable off its key identifier and the issuer's off the
+// certificate's — straight-line assignment no gate can judge — and left the
+// serial number, which GitLab sends as a number and this package prints, unread
+// by anything driving the handler.
 func TestTagGetSignature_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoTagSig {
@@ -381,14 +463,14 @@ func TestTagGetSignature_Success(t *testing.T) {
 				"signature_type": "X509",
 				"verification_status": "verified",
 				"x509_certificate": {
-					"id": 1,
+					"id": 11,
 					"subject": "CN=Test",
 					"subject_key_identifier": "abc123",
 					"email": "test@example.com",
 					"serial_number": 12345,
 					"certificate_status": "good",
 					"x509_issuer": {
-						"id": 2,
+						"id": 22,
 						"subject": "CN=Issuer",
 						"subject_key_identifier": "def456",
 						"crl_url": "https://example.com/crl"
@@ -407,36 +489,75 @@ func TestTagGetSignature_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSignature() unexpected error: %v", err)
 	}
-	if out.SignatureType != "X509" {
-		t.Errorf("out.SignatureType = %q, want %q", out.SignatureType, "X509")
+
+	want := SignatureOutput{
+		SignatureType:      "X509",
+		VerificationStatus: "verified",
+		X509Certificate: X509CertificateOutput{
+			ID:                   11,
+			Subject:              "CN=Test",
+			SubjectKeyIdentifier: "abc123",
+			Email:                testEmailAddr,
+			SerialNumber:         "12345",
+			CertificateStatus:    "good",
+			X509Issuer: X509IssuerOutput{
+				ID:                   22,
+				Subject:              "CN=Issuer",
+				SubjectKeyIdentifier: "def456",
+				CrlURL:               testCRLURL,
+			},
+		},
 	}
-	if out.VerificationStatus != "verified" {
-		t.Errorf("out.VerificationStatus = %q, want %q", out.VerificationStatus, "verified")
-	}
-	if out.X509Certificate.Email != testEmailAddr {
-		t.Errorf("out.X509Certificate.Email = %q, want %q", out.X509Certificate.Email, testEmailAddr)
-	}
-	if out.X509Certificate.X509Issuer.CrlURL != testCRLURL {
-		t.Errorf("out.X509Certificate.X509Issuer.CrlURL = %q, want %q", out.X509Certificate.X509Issuer.CrlURL, testCRLURL)
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("signature = %#v, want %#v", out, want)
 	}
 }
 
-// TestTagGetSignature_EmptyProjectID verifies TagGetSignature when empty project ID.
-func TestTagGetSignature_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
+// TestTagGetSignature_NoSerialNumber pins that a certificate GitLab sent no
+// serial number for publishes an empty one rather than the "<nil>" that
+// formatting a nil big.Int would print.
+//
+// The guard that decides it had only ever been evaluated true, so both gates
+// reported it: inverting it changed nothing any test could see.
+func TestTagGetSignature_NoSerialNumber(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoTagSig {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"signature_type": "X509",
+				"verification_status": "unverified",
+				"x509_certificate": {"id": 11, "subject": "CN=Test", "serial_number": null}
+			}`)
+			return
+		}
+		http.NotFound(w, r)
 	}))
+
+	out, err := GetSignature(context.Background(), client, SignatureInput{ProjectID: "42", TagName: testTagV100})
+	if err != nil {
+		t.Fatalf("GetSignature() unexpected error: %v", err)
+	}
+	if out.X509Certificate.SerialNumber != "" {
+		t.Errorf("SerialNumber = %q, want empty", out.X509Certificate.SerialNumber)
+	}
+	if out.X509Certificate.Subject != "CN=Test" {
+		t.Errorf("Subject = %q, want %q", out.X509Certificate.Subject, "CN=Test")
+	}
+}
+
+// TestTagGetSignature_EmptyProjectID verifies GetSignature refuses an empty
+// project_id before reaching GitLab.
+func TestTagGetSignature_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetSignature(context.Background(), client, SignatureInput{TagName: testTagV100})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestTagGetSignature_EmptyTagName verifies TagGetSignature when empty tag name.
+// TestTagGetSignature_EmptyTagName verifies GetSignature refuses an empty
+// tag_name before reaching GitLab.
 func TestTagGetSignature_EmptyTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetSignature(context.Background(), client, SignatureInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpEmptyTagName)
@@ -481,11 +602,10 @@ func TestTagListProtected_Success(t *testing.T) {
 	}
 }
 
-// TestTagListProtected_EmptyProjectID verifies TagListProtected when empty project ID.
+// TestTagListProtected_EmptyProjectID verifies ListProtectedTags refuses an
+// empty project_id before reaching GitLab.
 func TestTagListProtected_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListProtectedTags(context.Background(), client, ListProtectedTagsInput{})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
@@ -511,22 +631,60 @@ func TestTagGetProtected_Success(t *testing.T) {
 	}
 }
 
-// TestTagGetProtected_EmptyProjectID verifies TagGetProtected when empty project ID.
-func TestTagGetProtected_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
+// TestTagGetProtected_MapsEachAccessLevelIdentifier pins that every identifier
+// on a create access level arrives under its own name, with the rule id, the
+// access level and the three principal ids all different numbers.
+//
+// The converter is straight-line assignment, so no mutation or condition gate
+// can judge it, and the only fixture that reached it through a handler left
+// user, group and deploy key at zero: reading any of the five off its
+// neighbor failed nothing.
+func TestTagGetProtected_MapsEachAccessLevelIdentifier(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathProtectedTags+"/v*" {
+			testutil.RespondJSON(w, http.StatusOK, `{"name":"v*","create_access_levels":[
+				{"id":71,"access_level":40,"access_level_description":"Maintainers","user_id":5,"group_id":10,"deploy_key_id":3}
+			]}`)
+			return
+		}
+		http.NotFound(w, r)
 	}))
+
+	out, err := GetProtectedTag(context.Background(), client, GetProtectedTagInput{ProjectID: "42", TagName: "v*"})
+	if err != nil {
+		t.Fatalf("GetProtectedTag() unexpected error: %v", err)
+	}
+
+	want := ProtectedTagOutput{
+		Name: "v*",
+		CreateAccessLevels: []TagAccessLevelOutput{{
+			ID:                     71,
+			AccessLevel:            40,
+			AccessLevelDescription: descMaintainers,
+			UserID:                 5,
+			GroupID:                10,
+			DeployKeyID:            3,
+		}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("protected tag = %#v, want %#v", out, want)
+	}
+}
+
+// TestTagGetProtected_EmptyProjectID verifies GetProtectedTag refuses an empty
+// project_id before reaching GitLab.
+func TestTagGetProtected_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetProtectedTag(context.Background(), client, GetProtectedTagInput{TagName: "v*"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestTagGetProtected_EmptyTagName verifies TagGetProtected when empty tag name.
+// TestTagGetProtected_EmptyTagName verifies GetProtectedTag refuses an empty
+// tag_name before reaching GitLab.
 func TestTagGetProtected_EmptyTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetProtectedTag(context.Background(), client, GetProtectedTagInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpEmptyTagName)
@@ -585,22 +743,20 @@ func TestTagProtect_TagNameMapsToSDKName(t *testing.T) {
 	}
 }
 
-// TestTagProtect_EmptyProjectID verifies TagProtect when empty project ID.
+// TestTagProtect_EmptyProjectID verifies ProtectTag refuses an empty
+// project_id before reaching GitLab.
 func TestTagProtect_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProtectTag(context.Background(), client, ProtectTagInput{TagName: "v*"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestTagProtect_EmptyName verifies TagProtect when empty name.
+// TestTagProtect_EmptyName verifies ProtectTag refuses an empty tag_name
+// before reaching GitLab.
 func TestTagProtect_EmptyName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProtectTag(context.Background(), client, ProtectTagInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpEmptyTagName)
@@ -623,22 +779,20 @@ func TestTagUnprotect_Success(t *testing.T) {
 	}
 }
 
-// TestTagUnprotect_EmptyProjectID verifies TagUnprotect when empty project ID.
+// TestTagUnprotect_EmptyProjectID verifies UnprotectTag refuses an empty
+// project_id before reaching GitLab.
 func TestTagUnprotect_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := UnprotectTag(context.Background(), client, UnprotectTagInput{TagName: "v*"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestTagUnprotect_EmptyTagName verifies TagUnprotect when empty tag name.
+// TestTagUnprotect_EmptyTagName verifies UnprotectTag refuses an empty
+// tag_name before reaching GitLab.
 func TestTagUnprotect_EmptyTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := UnprotectTag(context.Background(), client, UnprotectTagInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpEmptyTagName)
@@ -761,22 +915,21 @@ func TestTagUnprotect_CancelledContext(t *testing.T) {
 // Empty ProjectID for Create and Delete
 // ---------------------------------------------------------------------------.
 
-// TestTagCreate_EmptyProjectID verifies TagCreate when empty project ID.
+// TestTagCreate_EmptyProjectID verifies Create refuses an empty project_id
+// before reaching GitLab.
 func TestTagCreate_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{TagName: "v0", Ref: "main"})
 	if err == nil {
 		t.Fatal("expected error for empty project_id")
 	}
 }
 
-// TestTagDelete_EmptyProjectID verifies TagDelete when empty project ID.
+// TestTagDelete_EmptyProjectID verifies Delete refuses an empty project_id
+// before reaching GitLab, which for a destructive action is the difference
+// between refusing and deleting from somewhere else.
 func TestTagDelete_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{TagName: "v0"})
 	if err == nil {
 		t.Fatal("expected error for empty project_id")
@@ -869,43 +1022,91 @@ func TestTagUnprotect_APIError(t *testing.T) {
 // ProtectTag with AllowedToCreate granular permissions
 // ---------------------------------------------------------------------------.
 
-// TestTagProtect_WithAllowedToCreate verifies TagProtect when with allowed to create.
-func TestTagProtect_WithAllowedToCreate(t *testing.T) {
-	var capturedBody string
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read request body: %v", err)
-				http.Error(w, "read request body", http.StatusInternalServerError)
-				return
-			}
-			capturedBody = string(body)
-			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[{"id":1,"access_level":30,"access_level_description":"Developers + Maintainers","user_id":5}]}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := ProtectTag(context.Background(), client, ProtectTagInput{
-		ProjectID: "42",
-		TagName:   "v*",
-		AllowedToCreate: []TagPermission{
-			{UserID: 5, AccessLevel: 30},
-			{GroupID: 10},
-			{DeployKeyID: 3},
+// TestTagProtect_RequestBody pins the protection rule ProtectTag asks GitLab
+// for, body and all, with one case per principal a permission entry can name.
+//
+// Driving one field at a time is what makes the four guards distinguishable: a
+// permission entry is a block of ids, so an entry carrying all of them at once
+// has no fixture where no two values agree, and the assertion this replaces —
+// that the body mentioned each field name somewhere — passed with every guard
+// inverted, because another entry in the same list supplied each name. The
+// empty cases matter as much: an optional field GitLab was not asked about
+// must be absent rather than sent as zero.
+func TestTagProtect_RequestBody(t *testing.T) {
+	cases := []struct {
+		name  string
+		input ProtectTagInput
+		want  map[string]any
+	}{
+		{
+			name:  "a role rule",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", CreateAccessLevel: 30},
+			want:  map[string]any{"name": "v*", "create_access_level": float64(30)},
 		},
-	})
-	if err != nil {
-		t.Fatalf("ProtectTag() unexpected error: %v", err)
+		{
+			name:  "no access level named at all",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*"},
+			want:  map[string]any{"name": "v*"},
+		},
+		{
+			name:  "one user",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", AllowedToCreate: []TagPermission{{UserID: 5}}},
+			want:  map[string]any{"name": "v*", "allowed_to_create": []any{map[string]any{"user_id": float64(5)}}},
+		},
+		{
+			name:  "one group",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", AllowedToCreate: []TagPermission{{GroupID: 10}}},
+			want:  map[string]any{"name": "v*", "allowed_to_create": []any{map[string]any{"group_id": float64(10)}}},
+		},
+		{
+			name:  "one deploy key",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", AllowedToCreate: []TagPermission{{DeployKeyID: 3}}},
+			want:  map[string]any{"name": "v*", "allowed_to_create": []any{map[string]any{"deploy_key_id": float64(3)}}},
+		},
+		{
+			name:  "one access level",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", AllowedToCreate: []TagPermission{{AccessLevel: 40}}},
+			want:  map[string]any{"name": "v*", "allowed_to_create": []any{map[string]any{"access_level": float64(40)}}},
+		},
+		{
+			name: "several principals at once",
+			input: ProtectTagInput{ProjectID: "42", TagName: "v*", AllowedToCreate: []TagPermission{
+				{UserID: 5, AccessLevel: 30},
+				{GroupID: 10},
+				{DeployKeyID: 3},
+			}},
+			want: map[string]any{"name": "v*", "allowed_to_create": []any{
+				map[string]any{"user_id": float64(5), "access_level": float64(30)},
+				map[string]any{"group_id": float64(10)},
+				map[string]any{"deploy_key_id": float64(3)},
+			}},
+		},
 	}
-	if out.Name != "v*" {
-		t.Errorf(fmtNameWant, out.Name, "v*")
-	}
-	for _, want := range []string{"allowed_to_create", "user_id", "group_id", "deploy_key_id"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(capturedBody, want) {
-				t.Errorf("request body missing field %q", want)
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathProtectedTags {
+					http.NotFound(w, r)
+					return
+				}
+				body = decodeJSONBody(t, w, r)
+				if body == nil {
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[]}`)
+			}))
+
+			out, err := ProtectTag(context.Background(), client, c.input)
+			if err != nil {
+				t.Fatalf("ProtectTag() unexpected error: %v", err)
+			}
+			if out.Name != "v*" {
+				t.Errorf(fmtNameWant, out.Name, "v*")
+			}
+			if !reflect.DeepEqual(body, c.want) {
+				t.Errorf("request body = %#v, want %#v", body, c.want)
 			}
 		})
 	}
@@ -1163,21 +1364,28 @@ func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 // TestFormatListMarkdownString pins the whole tag listing. The commit column
 // is the commit a tag resolves to rather than the tag object's own id, which
 // for an annotated tag is a SHA no other action accepts.
+//
+// The third row is a tag GitLab answered with a commit object carrying no id:
+// the column falls back to the target, which is the only other SHA there is.
+// That half of the fallback had never been taken, so the condition deciding it
+// was only ever evaluated one way.
 func TestFormatListMarkdownString(t *testing.T) {
 	got := FormatListMarkdownString(ListOutput{
 		Tags: []Output{
 			{Name: testTagV100, Target: "abc", Protected: true, Commit: &CommitOutput{ID: "c0ffee1"}},
 			{Name: "v0.9.0", Target: "def", Protected: false},
+			{Name: "v0.8.0", Target: "beef42", Protected: false, Commit: &CommitOutput{Title: "no id sent"}},
 		},
-		Pagination: toolutil.PaginationOutput{TotalItems: 2},
+		Pagination: toolutil.PaginationOutput{TotalItems: 3},
 	})
 
-	want := "## Tags (2)\n\n" +
+	want := "## Tags (3)\n\n" +
 		"| Name | Commit | Protected |\n" +
 		"| --- | --- | --- |\n" +
 		"| v1.0.0 | `c0ffee1` | ✅ |\n" +
 		"| v0.9.0 | `def` | ❌ |\n" +
-		"\n2 items total\n" +
+		"| v0.8.0 | `beef42` | ❌ |\n" +
+		"\n3 items total\n" +
 		tagListHints
 
 	if got != want {

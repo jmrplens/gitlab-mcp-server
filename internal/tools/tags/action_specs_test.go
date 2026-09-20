@@ -112,7 +112,11 @@ func TestTagCreate_InvalidRef_Register(t *testing.T) {
 	}
 }
 
-// TestTagList_PagePerPage covers the page/per_page optional branches in List.
+// TestTagList_PagePerPage drives List with offset pagination set and asserts
+// only that the call succeeds. It names no branch of List, which has none:
+// the query parameters it produces are asserted by
+// TestTagList_PaginationQueryParamsAndMetadata, which reads them off the
+// request.
 func TestTagList_PagePerPage(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -200,5 +204,40 @@ func TestTagSpec_IdempotentNonDestructive(t *testing.T) {
 	}
 	if spec.Destructive {
 		t.Errorf("expected non-destructive spec for idempotent non-destructive route")
+	}
+	if !spec.Idempotent {
+		t.Errorf("expected idempotent spec for an idempotent route")
+	}
+}
+
+// TestTagSpec_DestructiveNonIdempotent covers the mirror of the case above: a
+// destructive route the caller did not declare idempotent takes neither the
+// delete arm nor the update arm, and the spec still has to carry the route's
+// own destructive flag.
+//
+// That matters because the flag is what every surface reads to decide whether
+// a call needs confirmation, and nothing else here re-derives it. No spec in
+// the table is shaped this way, so `idempotent` was only ever evaluated true
+// on the arm that reads it and the condition gate reported it; asserting the
+// combination is what makes it evaluate both ways.
+func TestTagSpec_DestructiveNonIdempotent(t *testing.T) {
+	route := toolutil.ActionRoute{
+		// The test builds a spec from the route and never dispatches it, so a
+		// handler that is reached reports the premise broken rather than
+		// answering nothing.
+		Handler: func(_ context.Context, _ map[string]any) (any, error) {
+			return nil, errors.New("the tagSpec fixture's handler was invoked; this test only builds the spec")
+		},
+		Destructive: true,
+	}
+	spec := tagSpec("custom", route, "gitlab_tag_custom", false, false)
+	if !spec.Destructive {
+		t.Errorf("expected destructive spec for a destructive route")
+	}
+	if spec.Idempotent {
+		t.Errorf("expected non-idempotent spec for a route not declared idempotent")
+	}
+	if spec.ReadOnly {
+		t.Errorf("expected non-readonly spec")
 	}
 }
