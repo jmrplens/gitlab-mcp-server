@@ -1166,7 +1166,8 @@ func applyCreateAccessLevels(opts *gl.CreateProjectOptions, input CreateInput) {
 }
 
 // createAccessLevel resolves an access level from its string form, falling back
-// to the deprecated boolean toggle when the explicit access level is unset.
+// to the deprecated boolean toggle when the explicit access level is unset. The
+// create and the update options resolve theirs the same way.
 func createAccessLevel(level string, toggle *bool) *gl.AccessControlValue {
 	if level != "" {
 		return new(gl.AccessControlValue(level))
@@ -1441,18 +1442,6 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 	if input.OnlyAllowMergeIfAllDiscussionsAreResolved != nil {
 		opts.OnlyAllowMergeIfAllDiscussionsAreResolved = input.OnlyAllowMergeIfAllDiscussionsAreResolved
 	}
-	if input.IssuesEnabled != nil {
-		opts.IssuesAccessLevel = boolToAccessLevel(input.IssuesEnabled)
-	}
-	if input.MergeRequestsEnabled != nil {
-		opts.MergeRequestsAccessLevel = boolToAccessLevel(input.MergeRequestsEnabled)
-	}
-	if input.WikiEnabled != nil {
-		opts.WikiAccessLevel = boolToAccessLevel(input.WikiEnabled)
-	}
-	if input.JobsEnabled != nil {
-		opts.BuildsAccessLevel = boolToAccessLevel(input.JobsEnabled)
-	}
 	applyUpdateFeatureOpts(opts, input)
 	return opts
 }
@@ -1652,10 +1641,10 @@ func applyUpdateComplianceOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 // applyUpdateAccessLevelOpts applies the additive string-based access-level
 // transformations.
 func applyUpdateAccessLevelOpts(opts *gl.EditProjectOptions, input UpdateInput) {
-	opts.IssuesAccessLevel = updateAccessLevel(input.IssuesAccessLevel, input.IssuesEnabled, opts.IssuesAccessLevel)
-	opts.MergeRequestsAccessLevel = updateAccessLevel(input.MergeRequestsAccessLevel, input.MergeRequestsEnabled, opts.MergeRequestsAccessLevel)
-	opts.WikiAccessLevel = updateAccessLevel(input.WikiAccessLevel, input.WikiEnabled, opts.WikiAccessLevel)
-	opts.BuildsAccessLevel = updateAccessLevel(input.BuildsAccessLevel, input.JobsEnabled, opts.BuildsAccessLevel)
+	opts.IssuesAccessLevel = createAccessLevel(input.IssuesAccessLevel, input.IssuesEnabled)
+	opts.MergeRequestsAccessLevel = createAccessLevel(input.MergeRequestsAccessLevel, input.MergeRequestsEnabled)
+	opts.WikiAccessLevel = createAccessLevel(input.WikiAccessLevel, input.WikiEnabled)
+	opts.BuildsAccessLevel = createAccessLevel(input.BuildsAccessLevel, input.JobsEnabled)
 	setAccessLevel(&opts.RepositoryAccessLevel, input.RepositoryAccessLevel)
 	setAccessLevel(&opts.ForkingAccessLevel, input.ForkingAccessLevel)
 	setAccessLevel(&opts.AnalyticsAccessLevel, input.AnalyticsAccessLevel)
@@ -1676,19 +1665,6 @@ func setAccessLevel(target **gl.AccessControlValue, level string) {
 	if level != "" {
 		*target = new(gl.AccessControlValue(level))
 	}
-}
-
-// updateAccessLevel resolves the access level for a feature, preferring the
-// explicit string, then the existing value (set by the deprecated bool bridge),
-// and falling back to the bool toggle.
-func updateAccessLevel(level string, toggle *bool, existing *gl.AccessControlValue) *gl.AccessControlValue {
-	if level != "" {
-		return new(gl.AccessControlValue(level))
-	}
-	if existing != nil {
-		return existing
-	}
-	return boolToAccessLevel(toggle)
 }
 
 func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {

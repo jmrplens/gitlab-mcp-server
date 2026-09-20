@@ -50,9 +50,7 @@ func FormatMarkdown(p Output) string {
 	c.Count("Forks", p.ForksCount)
 	c.Count("Stars", p.StarCount)
 	c.Count("Open Issues", p.OpenIssuesCount)
-	if len(p.Topics) > 0 {
-		c.Field("Topics", strings.Join(p.Topics, ", "))
-	}
+	c.Field("Topics", strings.Join(p.Topics, ", "))
 	c.Time("Created", p.CreatedAt)
 	c.URL(p.WebURL)
 	c.Code("HTTP Clone", p.HTTPURLToRepo)

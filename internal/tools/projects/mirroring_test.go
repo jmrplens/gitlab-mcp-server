@@ -4,9 +4,13 @@ package projects
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -241,4 +245,86 @@ func TestFormatPullMirrorMarkdown_FullFields(t *testing.T) {
 	if md != want {
 		t.Errorf("FormatPullMirrorMarkdown()\n got: %q\nwant: %q", md, want)
 	}
+}
+
+// TestGetPullMirror_NotMirroredNeedsBothTheStatusAndTheMessage verifies that
+// GitLab's "not mirrored" refusal is recognized only as the 400 that carries
+// that text: a 400 about something else and a 404 that happens to say it are
+// not a project without a mirror, and get the project verification hint
+// instead of being told to configure mirroring.
+func TestGetPullMirror_NotMirroredNeedsBothTheStatusAndTheMessage(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"a bad request about something else", http.StatusBadRequest, `{"message":"url is blocked"}`},
+		{"a not-found that mentions mirroring", http.StatusNotFound, `{"message":"404 not mirrored project not found"}`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.status, testCase.body)
+			}))
+			_, err := GetPullMirror(context.Background(), client, GetPullMirrorInput{ProjectID: "42"})
+			if err == nil || strings.Contains(err.Error(), "configure pull mirroring first") {
+				t.Errorf("error = %v, want a refusal that does not read as an unconfigured mirror", err)
+			}
+		})
+	}
+}
+
+// TestConfigurePullMirror_SendsExactlyWhatTheCallerSet holds the configure
+// body to the caller's own settings: a call naming only the project sends an
+// empty object, and one naming every setting sends each under its own key,
+// the overwrite flag off so that the call arms nothing and needs no
+// confirmation. A flag the caller cleared has to reach GitLab as false, which
+// is what tells this from a call that never mentioned it.
+func TestConfigurePullMirror_SendsExactlyWhatTheCallerSet(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ConfigurePullMirrorInput
+		want  string
+	}{
+		{
+			name:  "project only",
+			input: ConfigurePullMirrorInput{ProjectID: "42"},
+			want:  `{}`,
+		},
+		{
+			name: "every setting",
+			input: ConfigurePullMirrorInput{
+				ProjectID: "42", Enabled: new(true), URL: mirrorSourceURL,
+				AuthUser: "mirror-user", AuthPassword: "mirror-secret", MirrorBranchRegex: "^release/",
+				MirrorTriggerBuilds: new(true), OnlyMirrorProtectedBranches: new(false), MirrorOverwritesDivergedBranches: new(false),
+			},
+			want: `{"enabled":true,"url":"` + mirrorSourceURL + `","auth_user":"mirror-user","auth_password":"mirror-secret",` +
+				`"mirror_branch_regex":"^release/","mirror_trigger_builds":true,"only_mirror_protected_branches":false,"mirror_overwrites_diverged_branches":false}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := bodyAssertingClient(t, http.MethodPut, pathProject42MirrorPull, testCase.want, http.StatusOK, pullMirrorJSON)
+			if _, err := ConfigurePullMirror(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestGetPullMirror_EachKeyIsPublishedUnderItsOwnName holds the pull mirror
+// to what GitLab sent: its four flags one at a time, and its scalars and
+// three timestamps together with no two alike.
+func TestGetPullMirror_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
+	get := func(client *gitlabclient.Client) (any, error) {
+		return GetPullMirror(t.Context(), client, GetPullMirrorInput{ProjectID: "42"})
+	}
+	assertFlagsPublishedOneAtATime(t, []reflect.Type{reflect.TypeFor[gl.ProjectPullMirrorDetails]()}, nil, nil, oneKeyJSON, get)
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.ProjectPullMirrorDetails]())
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, mustJSON(t, fixture))
+	}))
+	out, err := get(client)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, nil)
 }

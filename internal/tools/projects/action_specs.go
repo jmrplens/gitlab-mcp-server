@@ -302,7 +302,7 @@ func projectOptionsForAction(actionName, individualTool string, extraTags ...str
 	if individualTool == toolProjectDelete {
 		options.Usage = "Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested. When permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get."
 	}
-	if actionName == "list" && individualTool == toolProjectList {
+	if actionName == "list" {
 		options.Usage = "List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count. Do not use last_activity_after as an order_by value."
 		options.Aliases = []string{toolProjectList, "list projects", "show my projects", "browse repositories"}
 		options.RelatedActions = []string{actionProjectGet, actionProjectListUserProjects, "search.projects"}

@@ -81,6 +81,32 @@ func TestListTargetBranchRules_Empty(t *testing.T) {
 	}
 }
 
+// TestListTargetBranchRules_NoCreatedAt_PublishesNoTimestamp verifies that a
+// rule GitLab sends without a creation time is published without a created_at
+// key, rather than with the zero instant formatted: a model reading
+// "0001-01-01T00:00:00Z" would take it for a date.
+func TestListTargetBranchRules_NoCreatedAt_PublishesNoTimestamp(t *testing.T) {
+	handler := testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"targetBranchRules": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": {"targetBranchRules": {"nodes": [
+				{"id": "gid://gitlab/Projects::TargetBranchRule/8", "name": "hotfix/*", "targetBranch": "main"}
+			]}}}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ListTargetBranchRules(context.Background(), client, ListTargetBranchRulesInput{ProjectID: "g/p"})
+	if err != nil {
+		t.Fatalf("ListTargetBranchRules() error = %v", err)
+	}
+	if len(out.TargetBranchRules) != 1 {
+		t.Fatalf("len(TargetBranchRules) = %d, want 1", len(out.TargetBranchRules))
+	}
+	if published, ok := jsonObject(t, out.TargetBranchRules[0])["created_at"]; ok {
+		t.Errorf("created_at = %v, want no such key for a rule sent without one", published)
+	}
+}
+
 // TestListTargetBranchRules_MissingProjectID verifies project_id validation.
 func TestListTargetBranchRules_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
