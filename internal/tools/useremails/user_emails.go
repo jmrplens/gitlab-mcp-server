@@ -85,7 +85,12 @@ type DeleteForUserInput struct {
 func toOutput(e *gl.Email) Output {
 	o := Output{ID: e.ID, Email: e.Email}
 	if e.ConfirmedAt != nil {
-		o.ConfirmedAt = e.ConfirmedAt.Format("2006-01-02T15:04:05Z")
+		// toolutil.RFC3339 converts to UTC before it formats. The layout this
+		// replaced ended in a literal "Z" and converted nothing, so an
+		// instance whose time zone is not UTC had the wall-clock reading it
+		// sent published under a UTC label: GitLab's 10:00:00+01:00 was
+		// republished as 10:00:00Z, an hour away from the instant meant.
+		o.ConfirmedAt = toolutil.RFC3339(*e.ConfirmedAt)
 	}
 	return o
 }
