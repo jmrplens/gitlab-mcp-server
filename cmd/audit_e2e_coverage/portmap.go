@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
 )
 
 // replacesPrefix starts the comment line a new test carries to name the old
@@ -526,7 +528,10 @@ func walkTestFiles(dir string, recursive bool, visit func(*ast.File)) error {
 			return fmt.Errorf("walk %s: %w", dir, err)
 		}
 		if entry.IsDir() {
-			if path != dir && !recursive {
+			// A recursive walk still stops at anything that is not this
+			// repository's source: a nested worktree under the suite would
+			// otherwise contribute its own copy of every Test function.
+			if path != dir && (!recursive || sourcewalk.SkipDirBelowRoot(path)) {
 				return fs.SkipDir
 			}
 			return nil
