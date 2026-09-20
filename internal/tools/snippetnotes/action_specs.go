@@ -62,9 +62,15 @@ const genericSnippetNoteUsage = "Use to execute snippetnotes domain action."
 // Canonical action IDs referenced by snippet note RelatedActions. The snippet
 // note actions are projected under the gitlab_snippet catalog group, so their
 // base domain is "snippet".
+//
+// The snippet pair is the project snippet rather than the personal one: every
+// route in this package takes a project_id, so snippet.get and snippet.list,
+// which read the caller's own personal snippets and take no project, answer
+// about a different resource. Both IDs resolve, so nothing reports that; a
+// model following one simply lands somewhere else.
 const (
-	actionSnippetGet        = "snippet.get"
-	actionSnippetList       = "snippet.list"
+	actionSnippetGet        = "snippet.project_get"
+	actionSnippetList       = "snippet.project_list"
 	actionSnippetNoteList   = "snippet.note_list"
 	actionSnippetNoteGet    = "snippet.note_get"
 	actionSnippetNoteCreate = "snippet.note_create"
@@ -87,7 +93,7 @@ func projectIDGuidance() toolutil.ParameterGuidance {
 func snippetIDGuidance() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "snippet_id",
-		ValueSource:      "Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result.",
+		ValueSource:      "Numeric snippet ID from a prior gitlab_project_snippet_list result.",
 		ExampleBinding:   "params.snippet_id:7",
 		CommonConfusions: []string{"snippet_id is the project snippet ID, not the note_id."},
 	}
@@ -141,7 +147,7 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 				CommonConfusions: []string{"created_at is ignored unless you have administrator or project/group owner permissions."},
 			},
 		}
-		options.IndividualTool.Description = "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_snippet_get."
+		options.IndividualTool.Description = "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_project_snippet_get."
 	case "gitlab_snippet_note_list":
 		options.Usage = "List all comments (notes) on a project snippet, including system notes. Use when the task asks to read a snippet's discussion, recent comments, or activity. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"list snippet comments", "show snippet notes", "read snippet discussion", "get snippet comments"}
@@ -159,7 +165,7 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 			options.InputSchemaOverrides,
 			toolutil.SchemaEnumOverride("order_by", "created_at", "updated_at"),
 		)
-		options.IndividualTool.Description = "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get."
+		options.IndividualTool.Description = "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_project_snippet_get."
 	case "gitlab_snippet_note_get":
 		options.Usage = "Get one snippet note by params.note_id. Use when the task references a specific comment or note ID on a snippet."
 		options.Aliases = []string{"get snippet comment", "show snippet note", "fetch snippet note"}

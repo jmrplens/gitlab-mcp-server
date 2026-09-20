@@ -94,7 +94,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().Notes.ListSnippetNotes(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippetNoteList", err, http.StatusNotFound,
-			"verify project_id and snippet_id with gitlab_snippet_list; private snippets require Reporter role on the project")
+			"verify project_id and snippet_id with gitlab_project_snippet_list; private snippets require Reporter role on the project")
 	}
 	extras, err := toolutil.CapturedNotes(captured, len(notes))
 	if err != nil {
