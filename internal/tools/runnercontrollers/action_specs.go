@@ -101,31 +101,31 @@ var (
 	listControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "List every registered runner controller on the instance (admin-only, experimental API). Use to discover controller IDs and their enabled/disabled/dry_run state before getting, updating, or deleting one. Supports offset and keyset pagination for large fleets.",
 		aliases:     []string{"list runner controllers", "runner controller fleet", "registered runner controllers"},
-		related:     []string{toolControllerGet, toolControllerCreate, toolControllerUpdate, toolControllerDelete},
+		related:     []string{actionControllerGet, actionControllerCreate, actionControllerUpdate, actionControllerDelete},
 		description: "List registered runner controllers (admin-only, experimental API) with offset or keyset pagination. Returns: controllers with id, description, state, created/updated timestamps, plus pagination metadata. See also: gitlab_runner_controller_get, gitlab_runner_controller_create, gitlab_runner_controller_update.",
 	}
 	getControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "Fetch one runner controller by numeric controller_id, including its live connection status (admin-only, experimental API). Use after gitlab_runner_controller_list to inspect a specific controller before updating or deleting it.",
 		aliases:     []string{"get runner controller", "runner controller details", "runner controller connection status"},
-		related:     []string{toolControllerList, toolControllerUpdate, toolControllerDelete},
+		related:     []string{actionControllerList, actionControllerUpdate, actionControllerDelete},
 		description: "Get one runner controller by controller_id (admin-only, experimental API). Returns: the controller with id, description, state, connected flag, and created/updated timestamps. See also: gitlab_runner_controller_list, gitlab_runner_controller_update, gitlab_runner_controller_delete.",
 	}
 	createControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "Register a new runner controller with an optional description and initial state (enabled, disabled, or dry_run). admin-only, experimental API. Use to onboard a controller into the agentic runner control plane before it connects.",
 		aliases:     []string{"create runner controller", "register runner controller", "onboard runner controller"},
-		related:     []string{toolControllerGet, toolControllerUpdate, toolControllerList},
+		related:     []string{actionControllerGet, actionControllerUpdate, actionControllerList},
 		description: "Register a new runner controller (admin-only, experimental API) with optional description and state (enabled/disabled/dry_run). Returns: the created controller with id, description, state, and timestamps. See also: gitlab_runner_controller_get, gitlab_runner_controller_update, gitlab_runner_controller_list.",
 	}
 	updateControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "Update an existing runner controller's description or state (enabled, disabled, or dry_run) by controller_id. admin-only, experimental API. Use to pause (disabled), resume (enabled), or stage (dry_run) a controller in the runner control plane.",
 		aliases:     []string{"update runner controller", "edit runner controller", "set runner controller state"},
-		related:     []string{toolControllerGet, toolControllerList, toolControllerDelete},
+		related:     []string{actionControllerGet, actionControllerList, actionControllerDelete},
 		description: "Update a runner controller's description or state (enabled/disabled/dry_run) by controller_id (admin-only, experimental API). Returns: the updated controller with id, description, state, and timestamps. See also: gitlab_runner_controller_get, gitlab_runner_controller_list, gitlab_runner_controller_delete.",
 	}
 	deleteControllerMeta = runnerControllerActionMetaEntry{
 		usage:       "Permanently remove a runner controller by controller_id (destructive, admin-only, experimental API). Use to decommission a controller from the runner control plane. Verify the controller_id with gitlab_runner_controller_list first.",
 		aliases:     []string{"delete runner controller", "remove runner controller", "decommission runner controller"},
-		related:     []string{toolControllerGet, toolControllerList, toolControllerUpdate},
+		related:     []string{actionControllerGet, actionControllerList, actionControllerUpdate},
 		description: "Delete a runner controller by controller_id (destructive, admin-only, experimental API). Returns: a success confirmation. See also: gitlab_runner_controller_list, gitlab_runner_controller_get, gitlab_runner_controller_update.",
 	}
 )

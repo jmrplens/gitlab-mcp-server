@@ -14,7 +14,12 @@ import (
 // schemaVersion is the shape of the work list this writes. A later layer reads
 // the file to know which cross-links to fix, so a change to the shape has to
 // be visible to it.
-const schemaVersion = 1
+//
+// Version 2 moved an alias written into a related entry or a hint argument out
+// of alias_references and into findings, carrying its canonical target in the
+// same `canonical` field. The field set is unchanged and the counts are not:
+// a reader that compares two runs across this line is comparing two rules.
+const schemaVersion = 2
 
 // dottedToken matches an action-ID-shaped token inside prose. The shape alone
 // is far too generous, which is why every match is also held to a domain the
@@ -75,10 +80,21 @@ type Report struct {
 
 // classify holds every site against the oracle and builds the report.
 //
-// The three outcomes are deliberately kept apart. A canonical ID is silent, an
-// alias is reported without being counted a finding (gitlab_execute_action
-// resolves it, gitlab_find_action does not publish it, and which of those
-// decides is not this command's question), and anything else is a finding.
+// The three outcomes are deliberately kept apart. A canonical ID is silent,
+// anything the catalog has never heard of is a finding, and an alias is judged
+// by where it was written.
+//
+// That last rule is the one this command deferred while there was nothing to
+// settle it with. Both halves of the old reasoning are true at once:
+// gitlab_execute_action resolves an alias, and gitlab_find_action publishes
+// canonical IDs and so lists it under no name. What decides between them is
+// the site. A related entry and a hint argument are structured fields that the
+// discovery tools hand a model as the ID to call next, and an alias there is a
+// cross-link a model can follow once and can never look up, so it is a
+// finding. A Usage line or a description is prose, where naming an alias can
+// be the whole point of the sentence: issue.update's usage says that dynamic
+// execute also accepts issue.close and issue.reopen, which is true, useful,
+// and would be a defect under one rule for both. Those stay reported apart.
 func classify(sites []site, ids *oracle) Report {
 	report := Report{
 		SchemaVersion: schemaVersion,
@@ -119,7 +135,12 @@ func (r *Report) judge(at site, candidate string, ids *oracle) {
 	finding := Finding{Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, ID: candidate}
 	if canonical, isAlias := ids.alias(candidate); isAlias {
 		finding.Canonical = canonical
-		r.AliasRefs = append(r.AliasRefs, finding)
+		if isProseKind(at.Kind) {
+			r.AliasRefs = append(r.AliasRefs, finding)
+			return
+		}
+		r.Findings = append(r.Findings, finding)
+		r.Summary.ByKind[at.Kind]++
 		return
 	}
 	finding.Closest = closestID(candidate, ids.sorted)
@@ -269,10 +290,10 @@ func editDistance(left, right string) int {
 // to act on them, then the two buckets that are not findings, then what the
 // run saw.
 func writeReport(out io.Writer, report Report, verbose bool) {
-	writeGroups(out, report.Findings, "resolves to no action")
+	writeGroups(out, report.Findings, findingVerb)
 	if verbose {
-		fmt.Fprintln(out, "=== registered aliases, not catalog IDs ===")
-		writeGroups(out, report.AliasRefs, "alias of")
+		fmt.Fprintln(out, "=== aliases named in prose, not catalog IDs ===")
+		writeGroups(out, report.AliasRefs, aliasVerb)
 		writeUnresolved(out, report.Unresolved)
 	}
 	writeStale(out, report.StaleExemptions)
@@ -292,8 +313,14 @@ func writeStale(out io.Writer, stale []string) {
 	}
 }
 
-// writeGroups prints findings under one `=== package ===` heading each.
-func writeGroups(out io.Writer, findings []Finding, verb string) {
+// writeGroups prints findings under one `=== package ===` heading each, each
+// row read with the verb its own outcome deserves.
+//
+// The verb is per row rather than per list because the findings list now holds
+// two outcomes: an ID nothing resolves, and an alias written where a catalog
+// ID belongs. Printing the second under the first's verb would say a string
+// resolves to nothing while naming what it resolves to.
+func writeGroups(out io.Writer, findings []Finding, verb func(Finding) string) {
 	current := ""
 	for _, finding := range findings {
 		if finding.Package != current {
@@ -301,9 +328,21 @@ func writeGroups(out io.Writer, findings []Finding, verb string) {
 			fmt.Fprintf(out, "=== %s ===\n", current)
 		}
 		fmt.Fprintf(out, "  %s:%d %s %q %s%s\n",
-			finding.File, finding.Line, finding.Kind, finding.ID, verb, trailer(finding))
+			finding.File, finding.Line, finding.Kind, finding.ID, verb(finding), trailer(finding))
 	}
 }
+
+// findingVerb reads one finding: an alias standing in for the canonical ID, or
+// a string the catalog has never heard of.
+func findingVerb(finding Finding) string {
+	if finding.Canonical != "" {
+		return "is an alias, not the catalog ID"
+	}
+	return "resolves to no action"
+}
+
+// aliasVerb reads a row of the prose bucket, where naming an alias is allowed.
+func aliasVerb(Finding) string { return "alias of" }
 
 // trailer renders whatever a finding knows beyond the ID itself.
 func trailer(finding Finding) string {
@@ -330,7 +369,7 @@ func writeUnresolved(out io.Writer, unresolved []Unresolved) {
 
 // writeSummary prints what the run saw.
 func writeSummary(out io.Writer, summary Summary, verbose bool) {
-	fmt.Fprintf(out, "%s: %d published ID(s) resolve to nothing in %d package(s); %d alias reference(s); %d site(s) not folded; %d stale exemption(s)\n",
+	fmt.Fprintf(out, "%s: %d published ID(s) to fix in %d package(s); %d alias(es) named in prose; %d site(s) not folded; %d stale exemption(s)\n",
 		toolName, summary.Findings, summary.Packages, summary.AliasHits, summary.Unresolved, summary.Stale)
 	fmt.Fprintf(out, "  judged %d published ID(s) against %d catalog ID(s) and %d alias(es)\n",
 		summary.Judged, summary.CatalogIDs, summary.Aliases)

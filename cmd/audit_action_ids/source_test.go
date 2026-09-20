@@ -287,6 +287,72 @@ func options() toolutil.ActionSpecOptions {
 	}
 }
 
+// TestCollectSites_AListNarrowedByAProjection_IsPassedOver holds the second
+// shape the pass-through rule accepts: a call handed the value an ID list
+// hangs off, returning the subset one caller may be shown. The dynamic
+// registry narrows its cross-links that way before publishing them, and the
+// IDs it narrows are declared in the catalog and judged there.
+//
+// The negative half is what keeps the rule from being a blanket silence: a
+// call handed a value carrying no ID list has had nothing recorded for it, so
+// the list it returns lands in the unresolved bucket like any other.
+func TestCollectSites_AListNarrowedByAProjection_IsPassedOver(t *testing.T) {
+	t.Run("the value carries an ID list", func(t *testing.T) {
+		sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type entry struct {
+	ID             string
+	RelatedActions []string
+}
+
+func published(e entry) []string {
+	out := make([]string, 0, len(e.RelatedActions))
+	for _, id := range e.RelatedActions {
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func options(e entry) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(e)}
+}
+`)
+
+		if got := unresolvedExprs(sites); len(got) != 0 {
+			t.Errorf("unresolved = %v, want none: the narrowed list is declared and judged where it was written", got)
+		}
+	})
+
+	t.Run("the value carries none", func(t *testing.T) {
+		sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+type label struct {
+	Name string
+}
+
+func published(l label) []string {
+	out := make([]string, 0, 1)
+	out = append(out, l.Name)
+	return out
+}
+
+func options(l label) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: published(l)}
+}
+`)
+
+		if got := unresolvedExprs(sites); len(got) == 0 {
+			t.Error("a list built from a value carrying no action IDs was passed over silently")
+		}
+	})
+}
+
 // TestCollectSites_ShapesWithNoIDInThem_AreHandled walks the shapes that
 // carry no action ID and must not be mistaken for one: a struct literal
 // written positionally, a list taken out of a slice of lists, and a read of a

@@ -610,21 +610,59 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 }
 
 // isListCopy reports whether a call does nothing but hand back a list already
-// recorded where it was written, which is what cloneStrings(spec.RelatedActions)
-// is. Following such a call into its body finds a loop over a parameter and no
-// literal, so recognizing the copy is the difference between a quiet
-// pass-through and a site reported as unfoldable.
+// recorded where it was written. Following such a call into its body finds a
+// loop over a parameter and no literal, so recognizing the copy is the
+// difference between a quiet pass-through and a site reported as unfoldable.
+//
+// Two shapes qualify, and the second is a narrowing rather than a copy:
+// cloneStrings(spec.RelatedActions) is handed the list itself, and
+// Registry.publishedRelatedActions(entry) is handed the value it hangs off and
+// returns the subset one session may be shown. Both are judged where the IDs
+// are written, which is the whole reason this is safe: a pass-through can drop
+// an ID or respell it, and the declaration it came from is still read. What
+// neither shape can prove is that the body adds no ID of its own, so a literal
+// written inside one is a hole in this audit rather than a finding. That hole
+// was accepted for the copy and is the same size here.
 func (w *walker) isListCopy(call *ast.CallExpr) bool {
 	if len(call.Args) == 0 {
 		return false
 	}
 	for _, arg := range call.Args {
-		selector, isSelector := ast.Unparen(arg).(*ast.SelectorExpr)
-		if !isSelector || !w.isIDListRead(selector) {
+		if !w.carriesRecordedIDList(arg) {
 			return false
 		}
 	}
 	return true
+}
+
+// carriesRecordedIDList reports whether one argument of a call is an ID list
+// this walk records where it is written, or a value carrying one.
+//
+// The second half is deliberately narrow: a bare name whose type is a struct
+// of this module with an ID-list field of its own. Anything looser would
+// silence a call that was handed nothing to do with action IDs and returned a
+// list of them.
+func (w *walker) carriesRecordedIDList(arg ast.Expr) bool {
+	switch expr := ast.Unparen(arg).(type) {
+	case *ast.SelectorExpr:
+		return w.isIDListRead(expr)
+	case *ast.Ident:
+		structType, ok := w.structType(w.pkg.TypesInfo.TypeOf(expr))
+		return ok && hasIDListField(structType)
+	default:
+		return false
+	}
+}
+
+// hasIDListField reports whether a struct declares a field this walk reads as
+// a list of canonical action IDs.
+func hasIDListField(structType *types.Struct) bool {
+	for field := range structType.Fields() {
+		if _, isIDList := idListFieldNames[strings.ToLower(field.Name())]; isIDList && isStringSlice(field.Type()) {
+			return true
+		}
+	}
+	return false
 }
 
 // recordAppend records the arguments of an append: the first is the list being

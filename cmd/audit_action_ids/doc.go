@@ -43,13 +43,27 @@
 // cross-linked to the first is silent here, because the first resolves. What
 // this narrows is the field to the IDs that cannot work at all.
 //
-// An ID that is a registered alias rather than a catalog ID is reported apart,
-// under "alias", and is not counted as a finding. gitlab_execute_action
-// resolves an alias, so a hint naming one works today; gitlab_find_action
-// publishes canonical IDs, so a model that looks the name up in a listing does
-// not find it. Which of those two facts should decide is a question for the
-// layer that fixes the cross-links, and this command's job is to put both sets
-// in front of it rather than to settle it.
+// That limit is permanent, and the reason is worth stating so nobody tries to
+// close it here: the oracle is the set of IDs, and being the right ID is a
+// claim about the object an action reaches, which no set of names carries.
+// Reading each list against the parameters its own action requires is what
+// answers it, and that is a review rather than a rule. A membership check is
+// also blind to a cross-link that resolves for this tree and not for the
+// session reading it, which is why the projection filters what it publishes
+// (Registry.publishedRelatedActions in internal/tools/dynamic) instead of
+// leaving that to a gate here.
+//
+// An alias is judged by where it is written, which is the one thing this used
+// to leave open. Both facts about an alias are true: gitlab_execute_action
+// resolves one, and gitlab_find_action publishes canonical IDs and so lists it
+// under no name. In a RelatedActions entry or a HintAction argument the second
+// decides, because those are handed to a model as the ID to call next and an
+// alias there can be followed once and never looked up, so it is a finding
+// with the canonical ID named beside it as the fix. In a Usage line or a
+// description the first decides, because naming an alias can be the substance
+// of the sentence: issue.update's usage says that dynamic execute also accepts
+// issue.close and issue.reopen. Those stay reported apart, under "alias", and
+// are not counted as findings.
 //
 // # It reports and does not gate
 //
