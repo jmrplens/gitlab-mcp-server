@@ -18,6 +18,28 @@ import (
 
 const fmtContextCanceled = "context canceled: %w"
 
+// apiVersionPath is the segment client-go appends to the configured instance
+// URL, so it is what [gl.Client.BaseURL] hands back and never what a web
+// address starts from.
+const apiVersionPath = "api/v4/"
+
+// instanceRootURL returns the address the instance serves its web interface
+// at: the SDK's base URL with the API version path taken off and no trailing
+// slash.
+//
+// An upload's full_path is a path from that root rather than from the API
+// ("/-/project/1234/uploads/<secret>/<file>", per GitLab's
+// project_markdown_uploads documentation), so joining it to the base URL as it
+// comes built "<host>/api/v4/-/project/1234/uploads/…", which nothing serves.
+// That address was published as full_url, linked from the card's URL row and
+// used as the source of the inline image embed, so the link answered 404 and
+// the embed rendered nothing.
+func instanceRootURL(client *gitlabclient.Client) string {
+	base := client.GL().BaseURL()
+	base.Path = strings.TrimSuffix(base.Path, apiVersionPath)
+	return strings.TrimRight(base.String(), "/")
+}
+
 // UploadInput defines input for uploading a file to a GitLab project.
 // Exactly one of FilePath or ContentBase64 must be provided.
 type UploadInput struct {
@@ -72,12 +94,13 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 		string(input.ProjectID),
 		uploadReader,
 		input.Filename,
+		gl.WithContext(ctx),
 	)
 	if err != nil {
 		return UploadOutput{}, fmt.Errorf("upload file to project %s: %w", input.ProjectID, err)
 	}
 
-	fullURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + uploaded.FullPath
+	fullURL := instanceRootURL(client) + uploaded.FullPath
 
 	return UploadOutput{
 		ID:       uploaded.ID,
@@ -229,7 +252,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("projectUploadDelete: upload_id is required and must be positive")
 	}
 
-	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadByID(string(input.ProjectID), input.UploadID)
+	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadByID(
+		string(input.ProjectID),
+		input.UploadID,
+		gl.WithContext(ctx),
+	)
 	if err != nil {
 		return fmt.Errorf("delete upload %d from project %s: %w", input.UploadID, input.ProjectID, err)
 	}
