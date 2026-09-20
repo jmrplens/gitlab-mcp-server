@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -186,45 +187,89 @@ func TestList_Forbidden(t *testing.T) {
 	}
 }
 
-// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestList_Pagination verifies that List forwards pagination parameters to the
+// GitLab API and parses the response metadata into the
+// [toolutil.PaginationOutput] it publishes.
+//
+// The middle-page case gives each of the six headers a number no other header
+// carries, so a block filled from the wrong header cannot pass the whole-struct
+// comparison; that is what a page-2-of-2 fixture could not hold, since Page and
+// TotalPages read the same there and swapping them changed nothing. The
+// last-page case keeps the other half: with no X-Next-Page, NextPage is zero
+// and HasMore is derived false.
 func TestList_Pagination(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
-			testutil.AssertQueryParam(t, r, "page", "2")
-			testutil.AssertQueryParam(t, r, "per_page", "10")
-			testutil.RespondJSONWithPagination(
-				w, http.StatusOK,
-				`[{"tag_name":"v0.9.0","name":"Old Release"}]`,
-				testutil.PaginationHeaders{
-					Page:       "2",
-					PerPage:    "10",
-					Total:      "11",
-					TotalPages: "2",
-					PrevPage:   "1",
-				},
-			)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+	cases := []struct {
+		name    string
+		page    int
+		perPage int
+		headers testutil.PaginationHeaders
+		want    toolutil.PaginationOutput
+	}{
+		{
+			name:    "middle page",
+			page:    2,
+			perPage: 10,
+			headers: testutil.PaginationHeaders{
+				Page:       "2",
+				PerPage:    "10",
+				Total:      "45",
+				TotalPages: "5",
+				NextPage:   "3",
+				PrevPage:   "1",
+			},
+			want: toolutil.PaginationOutput{
+				Page: 2, PerPage: 10, TotalItems: 45, TotalPages: 5,
+				NextPage: 3, PrevPage: 1, HasMore: true,
+			},
+		},
+		{
+			name:    "last page",
+			page:    5,
+			perPage: 10,
+			headers: testutil.PaginationHeaders{
+				Page:       "5",
+				PerPage:    "10",
+				Total:      "45",
+				TotalPages: "5",
+				PrevPage:   "4",
+			},
+			want: toolutil.PaginationOutput{
+				Page: 5, PerPage: 10, TotalItems: 45, TotalPages: 5,
+				PrevPage: 4, HasMore: false,
+			},
+		},
+	}
 
-	out, err := List(context.Background(), client, ListInput{
-		GroupID:         "mygroup",
-		PaginationInput: inputPagination(2, 10),
-	})
-	if err != nil {
-		t.Fatalf("List() unexpected error: %v", err)
-	}
-	if len(out.Releases) != 1 {
-		t.Fatalf("len(Releases) = %d, want 1", len(out.Releases))
-	}
-	// Every header carries a value of its own, so a block filled from the wrong
-	// one cannot pass: the last page reports no next page and so HasMore false.
-	want := toolutil.PaginationOutput{Page: 2, PerPage: 10, TotalItems: 11, TotalPages: 2, PrevPage: 1}
-	if out.Pagination != want {
-		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
+					testutil.AssertQueryParam(t, r, "page", strconv.Itoa(tc.page))
+					testutil.AssertQueryParam(t, r, "per_page", strconv.Itoa(tc.perPage))
+					testutil.RespondJSONWithPagination(
+						w, http.StatusOK,
+						`[{"tag_name":"v0.9.0","name":"Old Release"}]`,
+						tc.headers,
+					)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := List(context.Background(), client, ListInput{
+				GroupID:         "mygroup",
+				PaginationInput: inputPagination(tc.page, tc.perPage),
+			})
+			if err != nil {
+				t.Fatalf("List() unexpected error: %v", err)
+			}
+			if len(out.Releases) != 1 {
+				t.Fatalf("len(Releases) = %d, want 1", len(out.Releases))
+			}
+			if out.Pagination != tc.want {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, tc.want)
+			}
+		})
 	}
 }
 
@@ -438,6 +483,19 @@ func assertFullMilestones(t *testing.T, ms []*toolutil.MilestoneOutput) {
 	if m.ID != 1 || m.IID != 2 || m.ProjectID != 3 || m.Title != "M1" || m.State != "active" ||
 		m.DueDate != "2026-02-01" || m.StartDate != "2026-01-15" || m.WebURL != "https://m" {
 		t.Errorf("Milestone not fully mapped: %+v", m)
+	}
+	// The three fields the check above leaves out, each held to the value the
+	// fixture sent for it rather than to being populated: title and description
+	// are both free text, and the two timestamps are a day apart, so a converter
+	// reading one into the other's field is visible here and nowhere else.
+	if m.Description != "d" {
+		t.Errorf("Milestone.Description = %q, want the description GitLab sent", m.Description)
+	}
+	if m.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("Milestone.CreatedAt = %q, want the created_at GitLab sent", m.CreatedAt)
+	}
+	if m.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("Milestone.UpdatedAt = %q, want the updated_at GitLab sent", m.UpdatedAt)
 	}
 	if m.IssueStats == nil || m.IssueStats.Total != 5 || m.IssueStats.Closed != 3 {
 		t.Errorf("Milestone.IssueStats not mapped: %+v", m.IssueStats)
