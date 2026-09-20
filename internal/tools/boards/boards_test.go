@@ -777,7 +777,7 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// Board CRUD — server errors & canceled contexts
+// Board CRUD: server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
 // TestListBoards_ServerError verifies that ListBoards_ServerError returns a wrapped error when the GitLab API responds with an error status.
@@ -972,7 +972,7 @@ func TestDeleteBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Board List CRUD — server errors & canceled contexts
+// Board List CRUD: server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
 // TestListBoardLists_ServerError verifies that ListBoardLists_ServerError returns a wrapped error when the GitLab API responds with an error status.
@@ -1150,7 +1150,7 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — additional coverage
+// Formatters: additional coverage
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown pins the whole column list: the counted
@@ -1583,8 +1583,8 @@ func captureBoardRequestBody(t *testing.T, path, fixture string, status int, cal
 
 // TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey drives each optional field
 // alone and pins the body as the whole object it is: the key that field maps
-// to and nothing beside it. Every guard in UpdateBoard could be inverted —
-// dropping the caller's value and sending the zero one — without a test
+// to and nothing beside it. Every guard in UpdateBoard could be inverted,
+// dropping the caller's value and sending the zero one, without a test
 // noticing, and a call setting all of them at once cannot tell two guards
 // apart, because the two visibility flags carry values drawn from the same two
 // possibilities.
@@ -1773,8 +1773,8 @@ func TestGetBoard_ProjectPathIsEscapedIntoTheRawRequest(t *testing.T) {
 
 // TestFormatListBoardListsMarkdown_ScopeFallbacks pins the Scope column for
 // every column shape the label branch leaves: an assignee list, an iteration
-// list, and the three that name nothing — an assignee GitLab sent no handle
-// for, a milestone with no title and an iteration with no title — which render
+// list, and the three that name nothing (an assignee GitLab sent no handle
+// for, a milestone with no title and an iteration with no title), which render
 // as an empty cell rather than as some other list's scope. The iteration
 // branch was reached by no test at all.
 func TestFormatListBoardListsMarkdown_ScopeFallbacks(t *testing.T) {
@@ -1851,8 +1851,8 @@ func TestFormatBoardMarkdown_LabelsWithoutNames(t *testing.T) {
 // metadata against the row it is written in: the usage sentence, the aliases
 // with the tool's own name first, the related actions and the individual-tool
 // description. Nothing asserted any of it, so the whole table could have been
-// dropped on the floor — every tool falling back to the generic sentence and
-// its own name — with the suite green.
+// dropped on the floor, every tool falling back to the generic sentence and
+// its own name, with the suite green.
 func TestBoardOptions_MetadataReachesEverySpec(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := boardSpecsByTool(t, ActionSpecs(client))

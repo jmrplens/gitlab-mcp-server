@@ -269,7 +269,7 @@ func TestDeploymentGet_Success(t *testing.T) {
 func TestDeploymentGet_NilDeployable(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
-			// deployable field is absent — zero-value DeploymentDeployable has empty Pipeline
+			// deployable field is absent: zero-value DeploymentDeployable has empty Pipeline
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z"}`)
 			return
 		}
@@ -849,7 +849,7 @@ func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
-// List — API error, missing project_id (via empty StringOrInt)
+// List: API error, missing project_id (via empty StringOrInt)
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentList_APIError asserts a refusal GitLab raised is reported with
@@ -871,7 +871,7 @@ func TestDeploymentList_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Get — API error, missing project_id
+// Get: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentGet_APIError asserts the same of the single read: the
@@ -907,7 +907,7 @@ func TestDeploymentGet_MissingProjectID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Create — API error, with optional fields (Tag + Status)
+// Create: API error, with optional fields (Tag + Status)
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentCreate_APIError asserts a 403 on create carries the hint about
@@ -1002,7 +1002,7 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Update — API error, missing project_id
+// Update: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentUpdate_APIError asserts a 403 on update is reported with the
@@ -1056,7 +1056,7 @@ func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Delete — API error, missing project_id
+// Delete: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentDelete_APIError asserts a 403 on delete carries the hint that
@@ -1106,7 +1106,7 @@ func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ApproveOrReject — canceled context
+// ApproveOrReject: canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDeploymentApproveOrReject_CancelledContext asserts a canceled context
@@ -1449,7 +1449,7 @@ func TestFormatApproveOrRejectMarkdown_HostileMessage_ReachesThePageAsText(t *te
 }
 
 // ---------------------------------------------------------------------------
-// FormatOutputMarkdown — a failed deployment, every optional field set
+// FormatOutputMarkdown: a failed deployment, every optional field set
 // ---------------------------------------------------------------------------.
 
 // TestFormatOutputMarkdown_FailedDeployment pins the card of a deployment that

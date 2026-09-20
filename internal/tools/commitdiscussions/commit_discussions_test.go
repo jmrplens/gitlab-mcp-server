@@ -294,8 +294,8 @@ func TestDeleteNote_NoteIDValidation(t *testing.T) {
 // Each of the six drives its handler with a canceled context against
 // [testutil.ForbiddenHandler], which fails the test if any request arrives.
 // They used to mock an obliging GitLab instead, so the half of the claim that
-// matters — that the refusal comes from the handler rather than from the
-// instance — was asserted by nobody: a handler that dropped its ctx.Err()
+// matters, that the refusal comes from the handler rather than from the
+// instance, was asserted by nobody: a handler that dropped its ctx.Err()
 // guard and let client-go notice the cancellation would answer an error and
 // pass.
 

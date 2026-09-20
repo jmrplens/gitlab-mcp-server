@@ -214,7 +214,7 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 // TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet pins what the PUT body
 // carries for each optional input, one at a time. Every optional field of this
 // action is behind a guard, and until now no test read the request, so a guard
-// inverted — the caller's value dropped and an unset one sent as empty — was
+// inverted, the caller's value dropped and an unset one sent as empty, was
 // invisible. Driving one field per case also tells the five guards apart: with
 // all five set at once, two swapped lines would still produce a body with all
 // five keys in it.
@@ -451,7 +451,7 @@ func TestUpdateGroupBoardList_Success(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
 			t.Errorf("decode request body: %v", err)
 		}
-		// GitLab returns the single updated list object — not an array; the
+		// GitLab returns the single updated list object, not an array; the
 		// handler bypasses the client-go wrapper that expects []*BoardList.
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}`)
 	})
@@ -653,7 +653,7 @@ const errExpCancelledCtx = "expected error for canceled context"
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
-// ListGroupBoards — API error, canceled context
+// ListGroupBoards: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestListGroupBoards_APIError verifies that ListGroupBoards returns a wrapped error when the GitLab API responds with an error status.
@@ -682,7 +682,7 @@ func TestListGroupBoards_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetGroupBoard — API error, canceled context
+// GetGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestGetGroupBoard_APIError verifies that GetGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -711,7 +711,7 @@ func TestGetGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CreateGroupBoard — API error, canceled context
+// CreateGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestCreateGroupBoard_APIError verifies that CreateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -763,7 +763,7 @@ func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateGroupBoard — API error, canceled context
+// UpdateGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestUpdateGroupBoard_APIError verifies that UpdateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -814,7 +814,7 @@ func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteGroupBoard — API error, canceled context
+// DeleteGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDeleteGroupBoard_APIError verifies that DeleteGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -843,7 +843,7 @@ func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListGroupBoardLists — API error, canceled context
+// ListGroupBoardLists: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestListGroupBoardLists_APIError verifies that ListGroupBoardLists returns a wrapped error when the GitLab API responds with an error status.
@@ -872,7 +872,7 @@ func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetGroupBoardList — API error, canceled context
+// GetGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestGetGroupBoardList_APIError verifies that GetGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -901,7 +901,7 @@ func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CreateGroupBoardList — API error, canceled context
+// CreateGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestCreateGroupBoardList_APIError verifies that CreateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -952,7 +952,7 @@ func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateGroupBoardList — API error, canceled context, fallback, empty
+// UpdateGroupBoardList: API error, canceled context, fallback, empty
 // ---------------------------------------------------------------------------.
 
 // TestUpdateGroupBoardList_APIError verifies that UpdateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -981,7 +981,7 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteGroupBoardList — API error, canceled context
+// DeleteGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDeleteGroupBoardList_APIError verifies that DeleteGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -1010,7 +1010,7 @@ func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatGroupBoardMarkdown — minimal (no optional fields)
+// Formatter coverage: FormatGroupBoardMarkdown: minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
 // TestFormatGroupBoardMarkdown_Minimal pins the whole card of a board GitLab
@@ -1033,7 +1033,7 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatListGroupBoardsMarkdown — empty
+// Formatter coverage: FormatListGroupBoardsMarkdown: empty
 // ---------------------------------------------------------------------------.
 
 // TestFormatListGroupBoardsMarkdown_Empty pins the whole render of a group
@@ -1046,7 +1046,7 @@ func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatBoardListMarkdown — minimal (no optional fields)
+// Formatter coverage: FormatBoardListMarkdown: minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
 // TestFormatBoardListMarkdown_Minimal pins the whole card of a column with no
@@ -1067,7 +1067,7 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatListBoardListsMarkdown — with data and empty
+// Formatter coverage: FormatListBoardListsMarkdown: with data and empty
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown_WithData pins the whole column list: the
@@ -1372,7 +1372,7 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 // wholeGroupBoardJSON is a board answer in which no two values agree: every
 // number, string, date and flag is distinct, including the two visibility
 // flags and the nested milestone's four timestamps. That is what makes a
-// swapped pair of assignments in the converters visible — with
+// swapped pair of assignments in the converters visible: with
 // hide_backlog_list and hide_closed_list both true, as in every other fixture
 // here, exchanging those two lines changes nothing a test can see.
 const wholeGroupBoardJSON = `{
