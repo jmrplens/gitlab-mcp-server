@@ -52,6 +52,14 @@ const (
 	testPathDiscussionSlash = "/discussions/"
 	// testDate20260101 identifies the test date 20260101 constant used by this package.
 	testDate20260101 = "2026-01-01"
+	// testPathCommitDiscussions is where every handler of this package addresses
+	// GitLab: the fixture's project and its commit, two values that are nothing
+	// alike, so a handler that exchanged one for the other addresses a thread on
+	// another commit of another project and an assertion on this path says so.
+	testPathCommitDiscussions = "/api/v4/projects/" + testProjectID + "/repository/commits/" + testCommitSHA + testPathDiscussions
+	// testPathCommitDiscussionNotes is that path narrowed to the notes of the
+	// fixture's discussion, which is where the three note handlers write.
+	testPathCommitDiscussionNotes = testPathCommitDiscussions + "/" + testDiscussionID + "/notes"
 )
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
@@ -59,7 +67,7 @@ const (
 // It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/repository/commits/"+testCommitSHA+testPathDiscussions {
+		if r.URL.Path != testPathCommitDiscussions {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
@@ -103,7 +111,7 @@ func TestList_APIError(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/repository/commits/"+testCommitSHA+testPathDiscussionSlash+testDiscussionID {
+		if r.URL.Path != testPathCommitDiscussions+"/"+testDiscussionID {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
@@ -214,11 +222,15 @@ func TestUpdateNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_Success verifies that DeleteNote succeeds when the GitLab API returns a valid response.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeleteNote_Success verifies that DeleteNote succeeds when the GitLab API
+// returns a valid response. It asserts the note the handler deleted is the one
+// the caller named: the project, the commit and the discussion are three
+// adjacent string arguments of one SDK call, so without the path a deletion
+// aimed at another commit's thread answers 204 here and reads as success.
 func TestDeleteNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
+		testutil.AssertRequestPath(t, r, testPathCommitDiscussionNotes+"/40")
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -432,11 +444,25 @@ func TestUpdateNote_APIError(t *testing.T) {
 // comes back ordered by "desc". The four below drive the handlers against a
 // mock that keeps the request and hold what GitLab received, with no two
 // values alike so an exchanged pair cannot pass for its neighbor.
+//
+// The same holds one level up, of where a request is addressed rather than
+// what it carries: the project, the commit and the discussion are adjacent
+// string arguments of one SDK call, so exchanging any two of them posts the
+// caller's text on some other commit's thread while every field of the body
+// still arrives intact. The mock therefore keeps the path beside the body, and
+// each writing handler is held to both.
 
-// captureRequestBody answers with response and keeps the request body it was
+// capturedRequest is what the mock was sent: where the handler addressed the
+// request and what it carried.
+type capturedRequest struct {
+	Path string
+	Body []byte
+}
+
+// captureRequest answers with response and keeps the path and body it was
 // sent, so a test can hold what GitLab received rather than what the handler
 // returned.
-func captureRequestBody(t *testing.T, status int, response string, into *[]byte) http.Handler {
+func captureRequest(t *testing.T, status int, response string, into *capturedRequest) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -445,7 +471,7 @@ func captureRequestBody(t *testing.T, status int, response string, into *[]byte)
 			http.Error(w, "read request body", http.StatusInternalServerError)
 			return
 		}
-		*into = body
+		*into = capturedRequest{Path: r.URL.Path, Body: body}
 		testutil.RespondJSON(w, status, response)
 	})
 }
@@ -480,8 +506,8 @@ func jsonString(t *testing.T, v any) string {
 // nine values of two types, so any two of the same type could be exchanged
 // without a test noticing.
 func TestCreate_AnInlineComment_SendsTheAnchorGitLabHangsItOn(t *testing.T) {
-	var captured []byte
-	client := testutil.NewTestClient(t, captureRequestBody(t, http.StatusCreated, `{"id":"d4","notes":[]}`, &captured))
+	var captured capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated, `{"id":"d4","notes":[]}`, &captured))
 
 	_, err := Create(t.Context(), client, CreateInput{
 		ProjectID: testProjectID,
@@ -520,7 +546,7 @@ func TestCreate_AnInlineComment_SendsTheAnchorGitLabHangsItOn(t *testing.T) {
 			EndRange:   &gl.LinePosition{LineCode: "code-end", Type: "old", OldLine: 90, NewLine: 11},
 		},
 	}
-	if got := decodeCreateSent(t, captured).Position; !reflect.DeepEqual(got, want) {
+	if got := decodeCreateSent(t, captured.Body).Position; !reflect.DeepEqual(got, want) {
 		t.Errorf("position sent = %s, want %s", jsonString(t, got), jsonString(t, want))
 	}
 }
@@ -556,8 +582,8 @@ func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var captured []byte
-			client := testutil.NewTestClient(t, captureRequestBody(t, http.StatusCreated, `{"id":"d5","notes":[]}`, &captured))
+			var captured capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated, `{"id":"d5","notes":[]}`, &captured))
 
 			_, err := Create(t.Context(), client, CreateInput{
 				ProjectID: testProjectID,
@@ -573,9 +599,9 @@ func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 
-			sent := decodeCreateSent(t, captured).Position
+			sent := decodeCreateSent(t, captured.Body).Position
 			if sent == nil {
-				t.Fatalf("no position sent, request body was %s", captured)
+				t.Fatalf("no position sent, request body was %s", captured.Body)
 			}
 			if !reflect.DeepEqual(sent.LineRange, tc.want) {
 				t.Errorf("line_range sent = %s, want %s", jsonString(t, sent.LineRange), jsonString(t, tc.want))
@@ -584,13 +610,17 @@ func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
 	}
 }
 
-// TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab asserts that each of the
-// three writing handlers sends the text and the backdate it was given. Nothing
-// read a request body here, so a handler that dropped created_at, or sent the
-// caller's text unnormalized, returned the mock's answer and passed. Each body
-// carries an escaped newline, which is what normalization turns into a real
-// one, and each case's text differs so no handler can pass on another's.
-func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
+// TestNoteWrites_TheBodyTheBackdateAndTheThread_ReachGitLab asserts that each
+// of the three writing handlers sends the text and the backdate it was given,
+// to the thread it was told to write on. Nothing read a request body here, so a
+// handler that dropped created_at, or sent the caller's text unnormalized,
+// returned the mock's answer and passed. Each body carries an escaped newline,
+// which is what normalization turns into a real one, and each case's text
+// differs so no handler can pass on another's. Nothing read the path either,
+// and the project, the commit and the discussion are adjacent string arguments
+// of the SDK call each handler makes, so a text that arrived word for word on
+// another commit's thread also passed.
+func TestNoteWrites_TheBodyTheBackdateAndTheThread_ReachGitLab(t *testing.T) {
 	const backdate = "2026-01-06T07:08:09Z"
 	cases := []struct {
 		name     string
@@ -598,6 +628,7 @@ func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
 		response string
 		sent     string
 		want     string
+		wantPath string
 		call     func(client *gitlabclient.Client, body string) error
 	}{
 		{
@@ -606,6 +637,7 @@ func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
 			response: `{"id":"d6","notes":[]}`,
 			sent:     `opening\nthread`,
 			want:     "opening\nthread",
+			wantPath: testPathCommitDiscussions,
 			call: func(client *gitlabclient.Client, body string) error {
 				_, err := Create(t.Context(), client, CreateInput{
 					ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: body, CreatedAt: backdate,
@@ -619,6 +651,7 @@ func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
 			response: `{"id":41,"body":"x"}`,
 			sent:     `replying\nbelow`,
 			want:     "replying\nbelow",
+			wantPath: testPathCommitDiscussionNotes,
 			call: func(client *gitlabclient.Client, body string) error {
 				_, err := AddNote(t.Context(), client, AddNoteInput{
 					ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID,
@@ -633,6 +666,7 @@ func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
 			response: `{"id":42,"body":"x"}`,
 			sent:     `editing\nagain`,
 			want:     "editing\nagain",
+			wantPath: testPathCommitDiscussionNotes + "/42",
 			call: func(client *gitlabclient.Client, body string) error {
 				_, err := UpdateNote(t.Context(), client, UpdateNoteInput{
 					ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID,
@@ -645,19 +679,22 @@ func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var captured []byte
-			client := testutil.NewTestClient(t, captureRequestBody(t, tc.status, tc.response, &captured))
+			var captured capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, tc.status, tc.response, &captured))
 
 			if err := tc.call(client, tc.sent); err != nil {
 				t.Fatalf(fmtUnexpErr, err)
 			}
 
+			if captured.Path != tc.wantPath {
+				t.Errorf("path written to = %q, want %q", captured.Path, tc.wantPath)
+			}
 			var sent struct {
 				Body      *string    `json:"body"`
 				CreatedAt *time.Time `json:"created_at"`
 			}
-			if err := json.Unmarshal(captured, &sent); err != nil {
-				t.Fatalf("decode request body %q: %v", captured, err)
+			if err := json.Unmarshal(captured.Body, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", captured.Body, err)
 			}
 			if sent.Body == nil || *sent.Body != tc.want {
 				t.Errorf("body sent = %s, want %q", jsonString(t, sent.Body), tc.want)
