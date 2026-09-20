@@ -134,6 +134,38 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
+// assertGraphQLVariables holds the variables of the request the mock received to
+// the whole map the handler should have sent, label naming the call that sent
+// it.
+//
+// It is the one place this package reads a request rather than a response, and
+// every handler here needs it for the same reason: each builds its variables
+// from two inputs of one type, so a pair written into each other's key is a
+// request GitLab would act on for another object while the mock, which answers
+// from a fixture, replies exactly as it did before. The pinned schema the test
+// transport validates against cannot see it either, since it judges the
+// document and the names of its variables and never the values under them.
+//
+// The whole map is compared rather than one key at a time, so a variable
+// dropped or invented fails here as well as one carrying the wrong value.
+//
+// It runs on the httptest server's goroutine, so it reports with t.Errorf and
+// leaves the caller to answer the request; a t.Fatal here would abort that
+// goroutine rather than the test.
+func assertGraphQLVariables(t *testing.T, r *http.Request, label string, want map[string]any) {
+	t.Helper()
+	var body struct {
+		Variables map[string]any `json:"variables"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("%s: decode body: %v", label, err)
+		return
+	}
+	if !reflect.DeepEqual(body.Variables, want) {
+		t.Errorf("%s variables = %v, want %v", label, body.Variables, want)
+	}
+}
+
 // TestResolveWorkItemGID_ErrorPaths verifies that ResolveWorkItemGIDPaths returns a wrapped error when the GitLab API responds with an error status.
 // Epics are work items, so the lookup is a GraphQL POST rather than a REST GET.
 // It asserts that the returned error is wrapped and contains a useful hint.
@@ -215,23 +247,12 @@ func TestListWith_UndeclaredPaginationVariable(t *testing.T) {
 // them.
 func TestList_SendsTheVariablesTheCallerNamed(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Variables map[string]any `json:"variables"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("decode body: %v", err)
-			http.Error(w, "decode body", http.StatusInternalServerError)
-			return
-		}
-		want := map[string]any{
+		assertGraphQLVariables(t, r, "List()", map[string]any{
 			"fullPath": testFullPath,
 			"iid":      "5",
 			"first":    float64(7),
 			"after":    "cursor-1",
-		}
-		if !reflect.DeepEqual(body.Variables, want) {
-			t.Errorf("variables = %v, want %v", body.Variables, want)
-		}
+		})
 		testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
 	}})
 
@@ -583,6 +604,33 @@ func assertEpicNoteAuthor(t *testing.T, label string, got, want *NoteUserOutput)
 	}
 }
 
+// TestGet_SendsTheVariablesTheCallerNamed verifies that the group path and the
+// epic IID reach GitLab under the names the document declares, beside the page
+// size Get pins for itself because it reads the whole widget and matches the
+// note locally.
+//
+// Get sends both identifiers as strings, so the two written into each other's
+// key is a document the schema still accepts and a request GitLab would answer
+// for a group named after a number. Nothing else here can see it: the matching
+// loop reads the fixture the mock replies with whatever was asked, so the note
+// is found and every assertion downstream of it holds.
+func TestGet_SendsTheVariablesTheCallerNamed(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, r *http.Request) {
+		assertGraphQLVariables(t, r, "Get()", map[string]any{
+			"fullPath": testFullPath,
+			"iid":      "5",
+			"first":    float64(toolutil.GraphQLMaxFirst),
+		})
+		testutil.RespondGraphQL(w, http.StatusOK, gqlNotesData)
+	}})
+
+	_, err := Get(context.Background(), testutil.NewTestClient(t, handler),
+		GetInput{FullPath: testFullPath, IID: 5, NoteID: 100})
+	if err != nil {
+		t.Fatalf("Get() error = %v, want nil", err)
+	}
+}
+
 // TestGet verifies the Get handler.
 // Get runs the list document and matches by note ID, so the call under test is
 // the same GraphQL POST TestList drives.
@@ -729,6 +777,35 @@ func TestGet(t *testing.T) {
 	}
 }
 
+// TestCreate_SendsTheResolvedEpicAndTheBody verifies that the createNote
+// mutation carries the work item GID the lookup resolved under noteableId and
+// the caller's text under body.
+//
+// NoteableID is a custom scalar, so both values are strings the schema accepts
+// in either position: swapped, the mutation would attach a note whose text is
+// an epic's GID to a noteable named after the caller's comment, and the mock
+// would answer with the same created note either way.
+func TestCreate_SendsTheResolvedEpicAndTheBody(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+		},
+		"createNote": func(w http.ResponseWriter, r *http.Request) {
+			assertGraphQLVariables(t, r, "Create()", map[string]any{
+				"noteableId": "gid://gitlab/WorkItem/1",
+				"body":       "New comment",
+			})
+			testutil.RespondGraphQL(w, http.StatusOK, gqlCreateNoteData)
+		},
+	})
+
+	_, err := Create(context.Background(), testutil.NewTestClient(t, handler),
+		CreateInput{FullPath: testFullPath, IID: 5, Body: "New comment"})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want nil", err)
+	}
+}
+
 // TestCreate verifies the Create handler.
 // The call under test is two GraphQL POSTs: the work item lookup that resolves
 // the epic's GID, then the createNote mutation.
@@ -868,6 +945,29 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+// TestUpdate_SendsTheNoteTheCallerNamed verifies that the updateNote mutation
+// edits the note note_id names and carries the caller's text under body.
+//
+// The input holds two identifiers of one type and only one of them belongs in
+// the GID, so a mutation built from the epic IID beside it would edit whatever
+// note happens to carry that number. The IID and the note ID differ here for
+// that reason, and the mock answers with its fixture whichever GID it was sent.
+func TestUpdate_SendsTheNoteTheCallerNamed(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, r *http.Request) {
+		assertGraphQLVariables(t, r, "Update()", map[string]any{
+			"id":   "gid://gitlab/Note/100",
+			"body": "Updated",
+		})
+		testutil.RespondGraphQL(w, http.StatusOK, gqlUpdateNoteData)
+	}})
+
+	_, err := Update(context.Background(), testutil.NewTestClient(t, handler),
+		UpdateInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "Updated"})
+	if err != nil {
+		t.Fatalf("Update() error = %v, want nil", err)
+	}
+}
+
 // TestUpdate verifies the Update handler.
 // The call under test is the updateNote GraphQL mutation, which takes the note
 // GID directly and so needs no work item lookup.
@@ -991,6 +1091,26 @@ func TestUpdate(t *testing.T) {
 				tt.validate(t, out)
 			}
 		})
+	}
+}
+
+// TestDelete_SendsTheNoteTheCallerNamed verifies that the destroyNote mutation
+// removes the note note_id names.
+//
+// It is the Update case with less around it: this handler decodes the
+// mutation's errors and no note at all, so a GID built from the epic IID beside
+// note_id destroys another note and the caller is still told the deletion
+// succeeded. The IID and the note ID differ here so the request says which of
+// them was read.
+func TestDelete_SendsTheNoteTheCallerNamed(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{"destroyNote": func(w http.ResponseWriter, r *http.Request) {
+		assertGraphQLVariables(t, r, "Delete()", map[string]any{"id": "gid://gitlab/Note/100"})
+		testutil.RespondGraphQL(w, http.StatusOK, gqlDestroyNoteData)
+	}})
+
+	if err := Delete(context.Background(), testutil.NewTestClient(t, handler),
+		DeleteInput{FullPath: testFullPath, IID: 5, NoteID: 100}); err != nil {
+		t.Fatalf("Delete() error = %v, want nil", err)
 	}
 }
 
