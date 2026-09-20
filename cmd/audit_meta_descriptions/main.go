@@ -109,19 +109,29 @@ func main() {
 	uncovered := flag.Bool("uncovered", false, "name the enumeration lines the extraction rule refused instead of only counting them")
 	flag.Parse()
 
-	// os.Exit lives here, not in run: run holds the stub client's deferred
-	// cleanup, and an exit inside it would skip that defer.
+	// os.Exit lives here, not in run: run is what the tests drive for its exit
+	// code, and an exit inside it would take the test binary with it.
 	os.Exit(run(*check, *uncovered))
 }
 
 // run performs the audit and returns the process exit code.
 func run(check, uncovered bool) int {
+	findings, lines, refused := auditServedSurface()
+	return report(findings, lines, refused, check, uncovered)
+}
+
+// auditServedSurface builds the catalog, lists the meta surface from it, and
+// returns what the comparison found. It is separate from [run] so that a test
+// can assert one rule over the real surface without reassembling this setup:
+// a test that builds its own copy of the thing under test is testing the copy.
+// The stub client's cleanup is deferred here, and the returned values hold
+// nothing of it, so the caller may exit the process on what it gets back.
+func auditServedSurface() (findings []finding, lines int, refused []skipped) {
 	client, cleanup := mcpsurface.NewStubClient()
 	defer cleanup()
 
 	catalog := cmdutil.Must(tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true}))
-	findings, lines, refused := audit(metaTools(client), catalog)
-	return report(findings, lines, refused, check, uncovered)
+	return audit(metaTools(client), catalog)
 }
 
 // metaTools lists the meta surface at the widest tier over a real tools/list
