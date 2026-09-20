@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -231,6 +232,70 @@ func TestGetGroupIntegration_Error(t *testing.T) {
 	}))
 	if _, err := GetGroupIntegration(t.Context(), client, GetGroupIntegrationInput{GroupID: testGroupPath, Slug: testSlugSlack}); err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped
+// asserts that the group id and the slug are percent-escaped into the path by
+// every raw-REST group handler, so that a value carrying a slash, a space or a
+// literal percent sign names one path segment rather than several. A dot
+// arrives literal: gl.PathEscape writes it "%2E" and this project's
+// dotUnescapeTransport puts it back, because instances behind some proxies
+// answer 403 to a %2E-encoded path.
+//
+// It is also what holds the property behind an error branch no test can enter.
+// Each of these handlers checks the error from client.GL().NewRequest, and for
+// a request with no body that call can only fail on a path whose percent
+// escapes do not decode. Since every caller-supplied segment goes through
+// gl.PathEscape, which writes a raw "%" as "%25", no input produces one. The
+// branch stays because dropping a returned error is worse than keeping an
+// unreachable arm; what is asserted instead is the escaping that makes it
+// unreachable, which is a property worth holding on its own: without it a slug
+// could walk out of its endpoint.
+func TestGroupIntegration_AwkwardIdentifiers_ReachTheEndpointPercentEscaped(t *testing.T) {
+	const (
+		awkwardGroup = "100% my group/sub.group"
+		awkwardSlug  = "custom.issue-tracker"
+		wantSuffix   = "/groups/100%25%20my%20group%2Fsub.group/integrations/custom.issue-tracker"
+	)
+
+	tests := []struct {
+		name string
+		call func(t *testing.T, client *gitlabclient.Client) error
+	}{
+		{"get", func(t *testing.T, client *gitlabclient.Client) error {
+			t.Helper()
+			_, err := GetGroupIntegration(t.Context(), client, GetGroupIntegrationInput{GroupID: awkwardGroup, Slug: awkwardSlug})
+			return err
+		}},
+		{"set", func(t *testing.T, client *gitlabclient.Client) error {
+			t.Helper()
+			_, err := SetGroupIntegration(t.Context(), client, SetGroupIntegrationInput{
+				GroupID: awkwardGroup, Slug: awkwardSlug, Config: map[string]any{"webhook": testWebhook},
+			})
+			return err
+		}},
+		{"delete", func(t *testing.T, client *gitlabclient.Client) error {
+			t.Helper()
+			return DeleteGroupIntegration(t.Context(), client, DeleteGroupIntegrationInput{GroupID: awkwardGroup, Slug: awkwardSlug})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedPath string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedPath = r.URL.EscapedPath()
+				testutil.RespondJSON(w, http.StatusOK, `{"id":3,"title":"Custom","slug":"custom","active":true}`)
+			}))
+
+			if err := tt.call(t, client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !strings.HasSuffix(capturedPath, wantSuffix) {
+				t.Errorf("request path = %q, want it to end in %q", capturedPath, wantSuffix)
+			}
+		})
 	}
 }
 

@@ -64,7 +64,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
 // The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that the route surfaces the handler's failure as an error, and
+// nothing about its content; the suggestion Delete attaches to a 403 is
+// asserted by TestIntegrationHandlers_StatusHint_OnlyAtTheStatusItNames.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	byTool := integrationSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {

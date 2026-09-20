@@ -244,6 +244,30 @@ func TestFormatSetGroupDatadogMarkdownString(t *testing.T) {
 				datadogConfigurationRows+
 				hints)
 	})
+	// The two Datadog flags are the only pair of same-typed values in this
+	// card, and every other case here sets them alike, which is the one
+	// fixture in which a card writing either of them under the other's label
+	// renders identically. This case is where they disagree.
+	t.Run("ci visibility on, trace archiving off", func(t *testing.T) {
+		properties := datadogProperties()
+		properties.ArchiveTraceEvents = false
+		assertRendered(t, formatSetGroupDatadogMarkdownString(SetGroupDatadogOutput{
+			Integration: GroupDatadogItem{ID: 1, Slug: "datadog", Active: true, Properties: properties},
+		}),
+			"## Group Datadog Integration Updated: datadog\n\n"+
+				"- **ID**: 1\n"+
+				"- **Slug**: `datadog`\n"+
+				"- **Active**: ✅\n"+
+				"- **Datadog Configuration**:\n"+
+				"  - **API URL**: https://api.datadoghq.com\n"+
+				"  - **Datadog Env**: prod\n"+
+				"  - **Datadog Service**: gitlab\n"+
+				"  - **Datadog Site**: datadoghq.com\n"+
+				"  - **Datadog Tags**: team:platform\n"+
+				"  - **Datadog CI Visibility**: ✅\n"+
+				"  - **Archive Trace Events**: ❌\n"+
+				hints)
+	})
 	t.Run("one property only", func(t *testing.T) {
 		assertRendered(t, formatSetGroupDatadogMarkdownString(SetGroupDatadogOutput{
 			Integration: GroupDatadogItem{ID: 1, Active: true, Properties: &GroupDatadogProperties{DatadogSite: "datadoghq.com"}},
