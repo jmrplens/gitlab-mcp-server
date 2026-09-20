@@ -1387,11 +1387,17 @@ func TestActionSpecs_BoardGetRoute(t *testing.T) {
 // fields documented in doc/api/boards.md (project repo URLs/timestamps,
 // milestone dates/timestamps, documented assignee identity, label details,
 // list label name/color/description, and the premium iteration list type).
+//
+// No two values inside the project object agree, and none inside the milestone
+// object does either, so a converter that read a field from a neighbour's key
+// changes what it publishes rather than reproducing it. Both are blocks of
+// straight-line assignments, which neither the mutation nor the condition gate
+// scores, so the fixture is the only thing that can tell two of them apart.
 const fullBoardJSON = `{
 	"id": 7,
 	"name": "Full",
-	"project": {"id": 10, "name": "P", "path_with_namespace": "g/p", "http_url_to_repo": "https://gl/g/p.git", "web_url": "https://gl/g/p", "created_at": "2021-01-01T00:00:00Z", "default_branch": "main"},
-	"milestone": {"id": 5, "iid": 2, "project_id": 10, "title": "v1.0", "state": "active", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z"},
+	"project": {"id": 10, "name": "project-name", "name_with_namespace": "Group / project-name", "path": "project-path", "path_with_namespace": "g/project-path", "http_url_to_repo": "https://gl/g/p.git", "ssh_url_to_repo": "git@gl:g/p.git", "web_url": "https://gl/g/p", "readme_url": "https://gl/g/p/-/blob/main/README.md", "avatar_url": "https://gl/uploads/project-avatar.png", "created_at": "2021-01-01T00:00:00Z", "last_activity_at": "2021-03-04T00:00:00Z", "default_branch": "main", "tag_list": ["tag-one"], "topics": ["topic-one"], "star_count": 11, "forks_count": 12},
+	"milestone": {"id": 5, "iid": 2, "project_id": 10, "title": "v1.0", "description": "first release", "state": "active", "web_url": "https://gl/g/p/-/milestones/2", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-03T00:00:00Z", "updated_at": "2021-01-04T00:00:00Z"},
 	"assignee": {"id": 3, "username": "alice", "name": "Alice", "state": "active", "web_url": "https://gl/alice"},
 	"weight": 2,
 	"labels": [{"id": 1, "name": "bug", "color": "#fff", "description": "bug label"}],
@@ -1404,7 +1410,9 @@ const fullBoardJSON = `{
 
 // TestConvertBoard_FullSubObjects verifies every nested sub-object converter
 // populates its canonical key with the documented field set, covering the
-// non-nil timestamp/iteration branches.
+// non-nil timestamp/iteration branches. The project and the milestone are
+// compared whole against a fixture in which no two of their values agree, so
+// each field is held to the key it is read from and not merely to being set.
 func TestConvertBoard_FullSubObjects(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
@@ -1427,28 +1435,70 @@ func TestConvertBoard_FullSubObjects(t *testing.T) {
 	assertFullBoardList(t, out.Lists[0])
 }
 
-// assertFullBoardProject checks the documented project reference subset.
+// assertFullBoardProject holds the whole documented project reference against
+// the fixture, field by field rather than by a handful of spot checks. Each
+// same-type pair carries a different value there, so a converter that read the
+// name from name_with_namespace's key, the path from path_with_namespace's, the
+// repository URL from the web one, the star count from the fork count or
+// created_at from last_activity_at changes the object a model reads.
 func assertFullBoardProject(t *testing.T, p *ProjectOutput) {
 	t.Helper()
-	if p == nil || p.WebURL != "https://gl/g/p" ||
-		p.HTTPURLToRepo != "https://gl/g/p.git" || p.CreatedAt == "" ||
-		p.DefaultBranch != "main" {
-		t.Errorf("project not fully converted: %+v", p)
+	if p == nil {
+		t.Error("project not converted: nil")
+		return
+	}
+	want := ProjectOutput{
+		ID:                10,
+		Name:              "project-name",
+		NameWithNamespace: "Group / project-name",
+		Path:              "project-path",
+		PathWithNamespace: "g/project-path",
+		HTTPURLToRepo:     "https://gl/g/p.git",
+		WebURL:            "https://gl/g/p",
+		CreatedAt:         "2021-01-01T00:00:00Z",
+		DefaultBranch:     "main",
+		TagList:           []string{"tag-one"},
+		Topics:            []string{"topic-one"},
+		SSHURLToRepo:      "git@gl:g/p.git",
+		ReadmeURL:         "https://gl/g/p/-/blob/main/README.md",
+		AvatarURL:         "https://gl/uploads/project-avatar.png",
+		StarCount:         11,
+		ForksCount:        12,
+		LastActivityAt:    "2021-03-04T00:00:00Z",
+	}
+	if !reflect.DeepEqual(*p, want) {
+		t.Errorf("project = %+v, want %+v", *p, want)
 	}
 }
 
-// assertFullBoardMilestone checks the documented milestone reference subset.
-// The fixture gives id and iid different values and both are held, since the
-// two are the identifiers a caller passes back and a converter that crossed
-// them would send every later call to another milestone.
+// assertFullBoardMilestone holds the whole documented milestone reference
+// against the fixture. The identifiers are the reason it is a whole-object
+// comparison rather than a spot check: id and iid are what a caller passes
+// back, and a converter that crossed them would send every later call to
+// another milestone. The same holds one step quieter for the pairs beside
+// them, title with description, state with web_url, start_date with due_date
+// and created_at with updated_at, each of which carries a different value here.
 func assertFullBoardMilestone(t *testing.T, m *MilestoneOutput) {
 	t.Helper()
-	if m == nil || m.ProjectID != 10 || m.StartDate == "" || m.CreatedAt == "" {
-		t.Errorf("milestone not fully converted: %+v", m)
+	if m == nil {
+		t.Error("milestone not converted: nil")
 		return
 	}
-	if m.ID != 5 || m.IID != 2 {
-		t.Errorf("milestone identity = id %d iid %d, want id 5 iid 2", m.ID, m.IID)
+	want := MilestoneOutput{
+		ID:          5,
+		IID:         2,
+		ProjectID:   10,
+		Title:       "v1.0",
+		Description: "first release",
+		State:       "active",
+		WebURL:      "https://gl/g/p/-/milestones/2",
+		StartDate:   "2021-01-01",
+		DueDate:     "2021-02-01",
+		CreatedAt:   "2021-01-03T00:00:00Z",
+		UpdatedAt:   "2021-01-04T00:00:00Z",
+	}
+	if !reflect.DeepEqual(*m, want) {
+		t.Errorf("milestone = %+v, want %+v", *m, want)
 	}
 }
 
