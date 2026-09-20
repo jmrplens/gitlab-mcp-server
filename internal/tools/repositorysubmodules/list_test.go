@@ -7,7 +7,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -554,6 +557,120 @@ func TestList_TreeRequestError(t *testing.T) {
 	}
 }
 
+// TestList_TreeListing_AsksEachParentDirectoryAtTheRequestedRef pins the two
+// query parameters the commit-SHA lookup depends on: the tree is listed once
+// per parent directory a submodule sits in, and every listing names the ref the
+// caller asked for.
+//
+// Both matter and neither was asserted. The listing is not recursive, so a
+// request that lost its path answers with the repository root and a submodule
+// under libs/ is never found; a request that lost its ref answers at the
+// default branch, so the SHAs reported are not the ones the caller's ref pins.
+func TestList_TreeListing_AsksEachParentDirectoryAtTheRequestedRef(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		asked []string
+		refs  []string
+	)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "release-3-1"
+			}`, sampleGitmodules))
+			return
+		}
+		mu.Lock()
+		asked = append(asked, r.URL.Query().Get("path"))
+		refs = append(refs, r.URL.Query().Get("ref"))
+		mu.Unlock()
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	if _, err := List(t.Context(), client, ListInput{ProjectID: "42", Ref: "release-3-1"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	slices.Sort(asked)
+	want := []string{"", ".gitlab", "libs"}
+	if !slices.Equal(asked, want) {
+		t.Errorf("tree listings asked for paths %q, want %q", asked, want)
+	}
+	for i, ref := range refs {
+		if ref != "release-3-1" {
+			t.Errorf("tree listing %d asked at ref %q, want release-3-1", i, ref)
+		}
+	}
+}
+
+// TestList_TreeNodeThatIsNotACommit_LeavesTheSubmoduleUnpinned verifies that a
+// submodule keeps an empty commit SHA when the node at its path is an ordinary
+// file, and that a commit node at some other path is not attributed to it.
+//
+// A submodule pointer is a tree node of type "commit" (mode 160000) at the
+// submodule's own path, and both halves of that are load-bearing: publishing a
+// blob's object id as the pinned commit would send a reader looking up a SHA
+// that names a file, and publishing another path's would name the wrong commit
+// with no sign that anything is wrong.
+func TestList_TreeNodeThatIsNotACommit_LeavesTheSubmoduleUnpinned(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/files/") {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"file_name": ".gitmodules", "encoding": "text",
+				"content": "[submodule \"lib\"]\n\tpath = lib\n\turl = git@host:group/lib.git\n", "ref": "main"
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id": "b10bb10b", "name": "lib", "type": "blob", "path": "lib", "mode": "100644"},
+			{"id": "f0re1gn0", "name": "other", "type": "commit", "path": "other", "mode": "160000"}
+		]`)
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Count != 1 {
+		t.Fatalf("expected 1 submodule, got %d", out.Count)
+	}
+	if got := out.Submodules[0].CommitSHA; got != "" {
+		t.Errorf("CommitSHA = %q, want empty: the node at lib is a blob and the commit node is another path", got)
+	}
+}
+
+// TestParseGitmodules_ExtraKeysAndMalformedLines_AreIgnored verifies that a
+// .gitmodules section carrying keys beyond path and url, and a line with no
+// separator at all, leaves the entry those two keys built.
+//
+// Real files carry branch, shallow and update lines, and the parser reaches
+// them through the same switch and the same ok test that the fixtures above
+// only ever drive down the path and url arms.
+func TestParseGitmodules_ExtraKeysAndMalformedLines_AreIgnored(t *testing.T) {
+	entries := parseGitmodules(`[submodule "lib"]
+	path = lib
+	url = git@gitlab.example.com:group/lib.git
+	branch = main
+	shallow = true
+	this line has no separator
+`)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	want := SubmoduleEntry{
+		Name:            "lib",
+		Path:            "lib",
+		URL:             "git@gitlab.example.com:group/lib.git",
+		ResolvedProject: "group/lib",
+	}
+	if entries[0] != want {
+		t.Errorf("entry = %+v, want %+v", entries[0], want)
+	}
+}
+
 // TestParseKeyValue_MalformedLine verifies that [parseKeyValue] returns empty
 // strings for lines without '=' separator.
 func TestParseKeyValue_MalformedLine(t *testing.T) {
@@ -563,11 +680,18 @@ func TestParseKeyValue_MalformedLine(t *testing.T) {
 	}
 }
 
-// TestEnrichSubmoduleCommitSHAs_CancelledContext verifies that
-// enrichSubmoduleCommitSHAs stops iterating directories when the
-// context is cancelled, leaving CommitSHA fields empty.
+// TestEnrichSubmoduleCommitSHAs_CancelledContext verifies that an already
+// cancelled context leaves every entry unenriched and sends GitLab nothing.
+//
+// The comment here used to say the loop "stops iterating directories", which
+// the body never established: the mock answered every listing with an empty
+// tree, so the entries would have come back with no SHA whether the loop ran or
+// not. Counting the requests is the part a reader can act on, and it is the
+// half that would notice a cancelled call being made anyway.
 func TestEnrichSubmoduleCommitSHAs_CancelledContext(t *testing.T) {
+	var requests atomic.Int64
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 
@@ -580,6 +704,9 @@ func TestEnrichSubmoduleCommitSHAs_CancelledContext(t *testing.T) {
 
 	enrichSubmoduleCommitSHAs(ctx, client, "42", "main", entries)
 
+	if got := requests.Load(); got != 0 {
+		t.Errorf("%d tree listings reached GitLab under a cancelled context, want 0", got)
+	}
 	for _, e := range entries {
 		t.Run(e.Name, func(t *testing.T) {
 			if e.CommitSHA != "" {

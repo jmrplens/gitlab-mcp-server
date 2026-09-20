@@ -83,6 +83,47 @@ func TestFormatReadMarkdown_FenceOutlivesBacktickRunsInTheContent(t *testing.T) 
 	}
 }
 
+// TestFormatReadMarkdown_FenceInfoString_IsTheTextAfterTheLastDot pins the
+// language the content fence is opened with for the three shapes a file name
+// takes: an extension, none at all, and a dotfile whose whole name follows the
+// leading dot.
+//
+// The info string is read off a name the pusher of the submodule's own
+// repository chose, so which of the three a name falls into decides what a
+// renderer is told the body is. Nothing exercised the other two: every fixture
+// carried a name with a dot in the middle, so the extensionless arm was never
+// taken and the boundary between "a dot at position zero" and "a dot later"
+// was never crossed.
+func TestFormatReadMarkdown_FenceInfoString_IsTheTextAfterTheLastDot(t *testing.T) {
+	cases := []struct {
+		name     string
+		fileName string
+		lang     string
+	}{
+		{name: "an extension", fileName: "parser.c", lang: "c"},
+		{name: "no dot at all", fileName: "Makefile", lang: ""},
+		{name: "a dotfile", fileName: ".gitignore", lang: "gitignore"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered := renderedText(t, FormatReadMarkdown(ReadOutput{
+				FileName: tc.fileName,
+				FilePath: tc.fileName,
+				Content:  "body\n",
+			}))
+			// The heading anchors the assertion to the line that OPENS the
+			// block: "```\n" on its own also matches the line that closes it,
+			// so an empty info string would read as present whatever was
+			// written above.
+			want := "### Content\n\n```" + tc.lang + "\n"
+			if !strings.Contains(rendered, want) {
+				t.Errorf("content block does not open with %q:\n%s", want, rendered)
+			}
+		})
+	}
+}
+
 // assertFenceContains checks that the rendered Markdown holds one fenced block,
 // that its fence is longer than the longest backtick run of the body, and that
 // the injected line is inside it.
