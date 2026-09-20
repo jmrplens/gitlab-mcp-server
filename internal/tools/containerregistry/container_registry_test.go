@@ -5,7 +5,9 @@ package containerregistry
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -64,11 +66,11 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies that ListProject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListProject_MissingProjectID verifies that ListProject returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestListProject_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
@@ -109,11 +111,11 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_MissingGroupID verifies that ListGroup_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListGroup_MissingGroupID verifies that ListGroup returns a validation error when group_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing group_id field.
 func TestListGroup_MissingGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListGroup(context.Background(), client, ListGroupInput{})
 	if err == nil || !strings.Contains(err.Error(), "group_id is required") {
 		t.Fatalf("expected group_id required error, got %v", err)
@@ -159,11 +161,11 @@ func TestGetRepository_Success(t *testing.T) {
 	}
 }
 
-// TestGetRepository_MissingID verifies that GetRepository_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetRepository_MissingID verifies that GetRepository returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestGetRepository_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetRepository(context.Background(), client, GetRepositoryInput{})
 	if err == nil || !strings.Contains(err.Error(), errRepoIDRequired) {
 		t.Fatalf(fmtExpectedRepoIDErr, err)
@@ -195,11 +197,11 @@ func TestDeleteRepository_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteRepository_MissingRepoID verifies that DeleteRepository_MissingRepoID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteRepository_MissingRepoID verifies that DeleteRepository returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestDeleteRepository_MissingRepoID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteRepository(context.Background(), client, DeleteRepositoryInput{
 		ProjectID: toolutil.StringOrInt("10"),
 	})
@@ -247,11 +249,11 @@ func TestListTags_Success(t *testing.T) {
 	}
 }
 
-// TestListTags_MissingRepoID verifies that ListTags_MissingRepoID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListTags_MissingRepoID verifies that ListTags returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestListTags_MissingRepoID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListTags(context.Background(), client, ListTagsInput{
 		ProjectID: toolutil.StringOrInt("10"),
 	})
@@ -295,11 +297,11 @@ func TestGetTag_Success(t *testing.T) {
 	}
 }
 
-// TestGetTag_MissingTagName verifies that GetTag_MissingTagName returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetTag_MissingTagName verifies that GetTag returns a validation error when tag_name is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing tag_name field.
 func TestGetTag_MissingTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetTag(context.Background(), client, GetTagInput{
 		ProjectID: toolutil.StringOrInt("10"), RepositoryID: 1,
 	})
@@ -362,11 +364,11 @@ func TestDeleteTag_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteTag_MissingTagName verifies that DeleteTag_MissingTagName returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTag_MissingTagName verifies that DeleteTag returns a validation error when tag_name is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing tag_name field.
 func TestDeleteTag_MissingTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTag(context.Background(), client, DeleteTagInput{
 		ProjectID: toolutil.StringOrInt("10"), RepositoryID: 1,
 	})
@@ -410,11 +412,11 @@ func TestDeleteTagsBulk_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteTagsBulk_MissingRepoID verifies that DeleteTagsBulk_MissingRepoID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTagsBulk_MissingRepoID verifies that DeleteTagsBulk returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestDeleteTagsBulk_MissingRepoID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTagsBulk(context.Background(), client, DeleteTagsBulkInput{
 		ProjectID: toolutil.StringOrInt("10"),
 	})
@@ -481,9 +483,10 @@ const covRuleJSON = `{
 // convertRepository — cover optional-field branches
 // ---------------------------------------------------------------------------.
 
-// TestConvertRepository_AllFields verifies the ConvertRepository_AllFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestConvertRepository_AllFields verifies the converter fills every output
+// field from the field of the same meaning, with no two fixture values alike.
+// It compares the whole output because the two timestamps used to be asserted
+// only as non-empty, and swapping their assignments failed nothing.
 func TestConvertRepository_AllFields(t *testing.T) {
 	now := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	cleanup := time.Date(2026, 1, 16, 12, 0, 0, 0, time.UTC)
@@ -499,27 +502,26 @@ func TestConvertRepository_AllFields(t *testing.T) {
 			{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048},
 		},
 	}
-	out := convertRepository(r, toolutil.RegistryRepositoryExtra{Size: 4096, DeleteAPIPath: "/api/v4/registry/repositories/1"})
-	if out.CreatedAt == "" {
-		t.Error("expected CreatedAt to be set")
+	got := convertRepository(r, toolutil.RegistryRepositoryExtra{Size: 4096, DeleteAPIPath: "/api/v4/registry/repositories/1"})
+	want := RepositoryOutput{
+		ID: 100, Name: "img", Path: testCovRepoPath, ProjectID: 42,
+		Location:               "loc",
+		CreatedAt:              "2026-01-15T10:00:00Z",
+		CleanupPolicyStartedAt: "2026-01-16T12:00:00Z",
+		Status:                 "delete_scheduled",
+		TagsCount:              5,
+		Size:                   4096,
+		DeleteAPIPath:          "/api/v4/registry/repositories/1",
+		Tags:                   []TagOutput{{Name: "v1.0", Path: "g/p/img:v1.0", Location: "loc:v1.0", TotalSize: 2048}},
 	}
-	if out.Size != 4096 || out.DeleteAPIPath != "/api/v4/registry/repositories/1" {
-		t.Errorf("size and delete path = %d and %q, want what was read beside the decode", out.Size, out.DeleteAPIPath)
-	}
-	if out.CleanupPolicyStartedAt == "" {
-		t.Error("expected CleanupPolicyStartedAt to be set")
-	}
-	if out.Status != "delete_scheduled" {
-		t.Errorf("expected Status=delete_scheduled, got %s", out.Status)
-	}
-	if len(out.Tags) != 1 || out.Tags[0].Name != "v1.0" {
-		t.Errorf("expected 1 embedded tag named v1.0, got %#v", out.Tags)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("convertRepository() =\n%#v\nwant:\n%#v", got, want)
 	}
 }
 
-// TestConvertRepository_NilOptionalFields verifies the ConvertRepository_NilOptionalFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestConvertRepository_NilOptionalFields verifies the converter leaves the
+// timestamp and status rows empty when GitLab sent none, rather than the zero
+// time or a zero-value status.
 func TestConvertRepository_NilOptionalFields(t *testing.T) {
 	r := &gl.RegistryRepository{ID: 1, Name: "n", Path: "p", ProjectID: 1}
 	out := convertRepository(r, toolutil.RegistryRepositoryExtra{})
@@ -538,9 +540,9 @@ func TestConvertRepository_NilOptionalFields(t *testing.T) {
 // convertTag — cover optional-field branches
 // ---------------------------------------------------------------------------.
 
-// TestConvertTag_AllFields verifies the ConvertTag_AllFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestConvertTag_AllFields verifies the converter fills every output field
+// from the field of the same meaning. The revision and the short revision are
+// the pair a swap would confuse, and asserting only the timestamp let one by.
 func TestConvertTag_AllFields(t *testing.T) {
 	now := time.Date(2026, 2, 1, 8, 0, 0, 0, time.UTC)
 	tag := &gl.RegistryRepositoryTag{
@@ -548,15 +550,19 @@ func TestConvertTag_AllFields(t *testing.T) {
 		Revision: "abc", ShortRevision: "a", Digest: "sha256:x",
 		TotalSize: 4096, CreatedAt: &now,
 	}
-	out := convertTag(tag)
-	if out.CreatedAt == "" {
-		t.Error("expected CreatedAt to be set")
+	got := convertTag(tag)
+	want := TagOutput{
+		Name: "v1.0", Path: "p", Location: "loc",
+		Revision: "abc", ShortRevision: "a", Digest: "sha256:x",
+		CreatedAt: "2026-02-01T08:00:00Z", TotalSize: 4096,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("convertTag() =\n%#v\nwant:\n%#v", got, want)
 	}
 }
 
-// TestConvertTag_NilCreatedAt verifies the ConvertTag_NilCreatedAt handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestConvertTag_NilCreatedAt verifies the converter leaves the creation time
+// empty when GitLab sent none, rather than the zero time.
 func TestConvertTag_NilCreatedAt(t *testing.T) {
 	tag := &gl.RegistryRepositoryTag{Name: "latest"}
 	out := convertTag(tag)
@@ -610,6 +616,20 @@ func TestFormatRepositoryMarkdown_EmptyOptionalFields(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Name**: n\n" +
 		"- **Path**: p\n" +
+		repositoryCardHints
+	if got != want {
+		t.Errorf("FormatRepositoryMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatRepositoryMarkdown_NoNameNoPath_HeadsWithTheResourceAlone verifies
+// a repository GitLab sent neither a path nor a name for is headed by the
+// resource alone, rather than by a heading ending in a colon with nothing
+// behind it.
+func TestFormatRepositoryMarkdown_NoNameNoPath_HeadsWithTheResourceAlone(t *testing.T) {
+	got := FormatRepositoryMarkdown(RepositoryOutput{ID: 7})
+	want := "## Registry Repository\n\n" +
+		"- **ID**: 7\n" +
 		repositoryCardHints
 	if got != want {
 		t.Errorf("FormatRepositoryMarkdown() =\n%q\nwant:\n%q", got, want)
@@ -701,6 +721,19 @@ func TestFormatTagMarkdown_EmptyOptionalFields(t *testing.T) {
 	}
 }
 
+// TestFormatTagMarkdown_NoName_HeadsWithTheResourceAlone verifies a tag GitLab
+// sent no name for is headed by the resource alone.
+func TestFormatTagMarkdown_NoName_HeadsWithTheResourceAlone(t *testing.T) {
+	got := FormatTagMarkdown(TagOutput{Path: "p"})
+	want := "## Registry Tag\n\n" +
+		"- **Path**: p\n" +
+		"- **Total Size**: 0 bytes\n" +
+		tagCardHints
+	if got != want {
+		t.Errorf("FormatTagMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatTagListMarkdown
 // ---------------------------------------------------------------------------.
@@ -756,9 +789,9 @@ func TestFormatProtectionRuleListMarkdown_Empty(t *testing.T) {
 // ListProject — API error, with Tags/TagsCount options
 // ---------------------------------------------------------------------------.
 
-// TestListProject_APIError verifies that ListProject returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListProject_APIError verifies that ListProject returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -798,9 +831,9 @@ func TestListProject_WithTagOptions(t *testing.T) {
 // ListGroup — API error
 // ---------------------------------------------------------------------------.
 
-// TestListGroup_APIError verifies that ListGroup returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListGroup_APIError verifies that ListGroup returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -815,9 +848,9 @@ func TestListGroup_APIError(t *testing.T) {
 // GetRepository — API error, with Tags/TagsCount options
 // ---------------------------------------------------------------------------.
 
-// TestGetRepository_APIError verifies that GetRepository returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetRepository_APIError verifies that GetRepository returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestGetRepository_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -852,20 +885,20 @@ func TestGetRepository_WithTagOptions(t *testing.T) {
 // DeleteRepository — missing project_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteRepository_MissingProjectID verifies that DeleteRepository_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteRepository_MissingProjectID verifies that DeleteRepository returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestDeleteRepository_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteRepository(context.Background(), client, DeleteRepositoryInput{RepositoryID: 1})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
 	}
 }
 
-// TestDeleteRepository_APIError verifies that DeleteRepository returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteRepository_APIError verifies that DeleteRepository returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 403 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestDeleteRepository_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -882,20 +915,20 @@ func TestDeleteRepository_APIError(t *testing.T) {
 // ListTags — missing project_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestListTags_MissingProjectID verifies that ListTags_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListTags_MissingProjectID verifies that ListTags returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestListTags_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListTags(context.Background(), client, ListTagsInput{RepositoryID: 1})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
 	}
 }
 
-// TestListTags_APIError verifies that ListTags returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListTags_APIError verifies that ListTags returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestListTags_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -910,31 +943,31 @@ func TestListTags_APIError(t *testing.T) {
 // GetTag — missing project_id, missing repository_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestGetTag_MissingProjectID verifies that GetTag_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetTag_MissingProjectID verifies that GetTag returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestGetTag_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetTag(context.Background(), client, GetTagInput{RepositoryID: 1, TagName: "x"})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
 	}
 }
 
-// TestGetTag_MissingRepositoryID verifies that GetTag_MissingRepositoryID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetTag_MissingRepositoryID verifies that GetTag returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestGetTag_MissingRepositoryID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetTag(context.Background(), client, GetTagInput{ProjectID: "1", TagName: "x"})
 	if err == nil || !strings.Contains(err.Error(), errRepoIDRequired) {
 		t.Fatalf(fmtExpectedRepoIDErr, err)
 	}
 }
 
-// TestGetTag_APIError verifies that GetTag returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGetTag_APIError verifies that GetTag returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestGetTag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -949,31 +982,31 @@ func TestGetTag_APIError(t *testing.T) {
 // DeleteTag — missing project_id, missing repository_id, API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTag_MissingProjectID verifies that DeleteTag_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTag_MissingProjectID verifies that DeleteTag returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestDeleteTag_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTag(context.Background(), client, DeleteTagInput{RepositoryID: 1, TagName: "x"})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
 	}
 }
 
-// TestDeleteTag_MissingRepositoryID verifies that DeleteTag_MissingRepositoryID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTag_MissingRepositoryID verifies that DeleteTag returns a validation error when repository_id is zero.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing repository_id field.
 func TestDeleteTag_MissingRepositoryID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTag(context.Background(), client, DeleteTagInput{ProjectID: "1", TagName: "x"})
 	if err == nil || !strings.Contains(err.Error(), errRepoIDRequired) {
 		t.Fatalf(fmtExpectedRepoIDErr, err)
 	}
 }
 
-// TestDeleteTag_APIError verifies that DeleteTag returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTag_APIError verifies that DeleteTag returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 403 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestDeleteTag_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -988,20 +1021,20 @@ func TestDeleteTag_APIError(t *testing.T) {
 // DeleteTagsBulk — missing project_id, API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestDeleteTagsBulk_MissingProjectID verifies that DeleteTagsBulk_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTagsBulk_MissingProjectID verifies that DeleteTagsBulk returns a validation error when project_id is empty.
+// The test exercises the input validation guard before any API call.
+// It asserts that the returned error names the missing project_id field.
 func TestDeleteTagsBulk_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTagsBulk(context.Background(), client, DeleteTagsBulkInput{RepositoryID: 1})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
 	}
 }
 
-// TestDeleteTagsBulk_APIError verifies that DeleteTagsBulk returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteTagsBulk_APIError verifies that DeleteTagsBulk returns the failure GitLab answered with.
+// The test answers 400, which is the status this handler hints on.
+// It asserts a non-nil error alone; the hint's content is asserted in TestHandlers_RefusedAtTheHintedStatus_CarryTheHint.
 func TestDeleteTagsBulk_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1044,9 +1077,9 @@ func TestDeleteTagsBulk_AllOptionalFields(t *testing.T) {
 // ListProtectionRules — API error
 // ---------------------------------------------------------------------------.
 
-// TestListProtectionRules_APIError verifies that ListProtectionRules returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListProtectionRules_APIError verifies that ListProtectionRules returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestListProtectionRules_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1061,9 +1094,9 @@ func TestListProtectionRules_APIError(t *testing.T) {
 // CreateProtectionRule — API error, no access levels
 // ---------------------------------------------------------------------------.
 
-// TestCreateProtectionRule_APIError verifies that CreateProtectionRule returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreateProtectionRule_APIError verifies that CreateProtectionRule returns the failure GitLab answered with.
+// The test answers 400, which is the status this handler hints on.
+// It asserts a non-nil error alone; the hint's content is asserted in TestHandlers_RefusedAtTheHintedStatus_CarryTheHint.
 func TestCreateProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1105,9 +1138,9 @@ func TestCreateProtectionRule_NoAccessLevels(t *testing.T) {
 // UpdateProtectionRule — API error, with access levels
 // ---------------------------------------------------------------------------.
 
-// TestUpdateProtectionRule_APIError verifies that UpdateProtectionRule returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestUpdateProtectionRule_APIError verifies that UpdateProtectionRule returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestUpdateProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1152,9 +1185,9 @@ func TestUpdateProtectionRule_AllOptionalFields(t *testing.T) {
 // DeleteProtectionRule — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProtectionRule_APIError verifies that DeleteProtectionRule returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteProtectionRule_APIError verifies that DeleteProtectionRule returns the failure when GitLab answers a status the handler attaches no hint to.
+// The test answers 400 to a handler that hints on 404 alone.
+// It asserts a non-nil error; the hinted status is TestHandlers_RefusedAtTheHintedStatus_CarryTheHint's.
 func TestDeleteProtectionRule_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, jsonBadReq)
@@ -1538,6 +1571,96 @@ func TestRegistryRepositories_UnreadableCapturedDeleteAPIPath(t *testing.T) {
 	})
 }
 
+// TestHandlers_RefusedAtTheHintedStatus_CarryTheHint verifies that every
+// handler, refused at the one status it attaches a hint to, returns an error
+// carrying that hint. The status and the hint are straight-line constants no
+// gate can see moved, and until this existed a handler could hint on the wrong
+// status, or on none, with nothing failing: the API-error tests below answer
+// 400 to handlers that hint on 404 and 403, and assert only that an error came
+// back.
+func TestHandlers_RefusedAtTheHintedStatus_CarryTheHint(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(client *gitlabclient.Client) error
+	}{
+		{"list_project", http.StatusNotFound, "verify project_id", func(c *gitlabclient.Client) error {
+			_, err := ListProject(context.Background(), c, ListProjectInput{ProjectID: "1"})
+			return err
+		}},
+		{"list_group", http.StatusNotFound, "verify group_id", func(c *gitlabclient.Client) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "1"})
+			return err
+		}},
+		{"get_repository", http.StatusNotFound, "queried by ID, not name", func(c *gitlabclient.Client) error {
+			_, err := GetRepository(context.Background(), c, GetRepositoryInput{RepositoryID: 1})
+			return err
+		}},
+		{"delete_repository", http.StatusForbidden, "requires Maintainer role", func(c *gitlabclient.Client) error {
+			return DeleteRepository(context.Background(), c, DeleteRepositoryInput{ProjectID: "1", RepositoryID: 1})
+		}},
+		{"list_tags", http.StatusNotFound, "may have no tags", func(c *gitlabclient.Client) error {
+			_, err := ListTags(context.Background(), c, ListTagsInput{ProjectID: "1", RepositoryID: 1})
+			return err
+		}},
+		{"get_tag", http.StatusNotFound, "tag names are case-sensitive", func(c *gitlabclient.Client) error {
+			_, err := GetTag(context.Background(), c, GetTagInput{ProjectID: "1", RepositoryID: 1, TagName: "v1"})
+			return err
+		}},
+		{"delete_tag", http.StatusForbidden, "requires Developer role", func(c *gitlabclient.Client) error {
+			return DeleteTag(context.Background(), c, DeleteTagInput{ProjectID: "1", RepositoryID: 1, TagName: "v1"})
+		}},
+		{"delete_tags_bulk", http.StatusBadRequest, "deletion is async", func(c *gitlabclient.Client) error {
+			return DeleteTagsBulk(context.Background(), c, DeleteTagsBulkInput{ProjectID: "1", RepositoryID: 1, NameRegexDelete: ".*"})
+		}},
+		{"list_protection_rules", http.StatusNotFound, "requires GitLab 16.7+", func(c *gitlabclient.Client) error {
+			_, err := ListProtectionRules(context.Background(), c, ListProtectionRulesInput{ProjectID: "1"})
+			return err
+		}},
+		{"create_protection_rule", http.StatusBadRequest, "repository_path_pattern must be a glob", func(c *gitlabclient.Client) error {
+			_, err := CreateProtectionRule(context.Background(), c, CreateProtectionRuleInput{ProjectID: "1", RepositoryPathPattern: "x"})
+			return err
+		}},
+		{"update_protection_rule", http.StatusNotFound, "pattern uniqueness still applies on rename", func(c *gitlabclient.Client) error {
+			_, err := UpdateProtectionRule(context.Background(), c, UpdateProtectionRuleInput{ProjectID: "1", RuleID: 1})
+			return err
+		}},
+		{"delete_protection_rule", http.StatusNotFound, "managing protection rules requires Maintainer", func(c *gitlabclient.Client) error {
+			return DeleteProtectionRule(context.Background(), c, DeleteProtectionRuleInput{ProjectID: "1", RuleID: 1})
+		}},
+		{"list_tag_protection_rules", http.StatusNotFound, "requires GitLab 17.8+", func(c *gitlabclient.Client) error {
+			_, err := ListTagProtectionRules(context.Background(), c, ListTagProtectionRulesInput{ProjectID: "1"})
+			return err
+		}},
+		{"create_tag_protection_rule", http.StatusBadRequest, "valid RE2 regular expression", func(c *gitlabclient.Client) error {
+			_, err := CreateTagProtectionRule(context.Background(), c, CreateTagProtectionRuleInput{ProjectID: "1", TagNamePattern: "["})
+			return err
+		}},
+		{"update_tag_protection_rule", http.StatusNotFound, "tag_name_pattern uniqueness still applies", func(c *gitlabclient.Client) error {
+			_, err := UpdateTagProtectionRule(context.Background(), c, UpdateTagProtectionRuleInput{ProjectID: "1", RuleID: 1})
+			return err
+		}},
+		{"delete_tag_protection_rule", http.StatusNotFound, "managing tag protection rules requires Maintainer", func(c *gitlabclient.Client) error {
+			return DeleteTagProtectionRule(context.Background(), c, DeleteTagProtectionRuleInput{ProjectID: "1", RuleID: 1})
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), "Suggestion: ") || !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("error = %q, want a suggestion containing %q", err, tc.hint)
+			}
+		})
+	}
+}
+
 // TestDeleteTagsBulk_AllCriteria verifies that DeleteTagsBulk forwards every
 // cleanup criterion, including the deprecated name_regex parameter, name_regex_keep,
 // and older_than. It asserts each query parameter reaches the request unchanged.
@@ -1570,5 +1693,241 @@ func TestDeleteTagsBulk_AllCriteria(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What each request carries, one input at a time
+// ---------------------------------------------------------------------------.
+
+// registryQuery flattens the query string a handler sent GitLab. It returns
+// the whole map rather than one key, because a parameter the handler dropped
+// and a parameter it invented are both a wrong request and only the whole map
+// shows the second.
+func registryQuery(r *http.Request) map[string]string {
+	got := map[string]string{}
+	for k, v := range r.URL.Query() {
+		got[k] = v[0]
+	}
+	return got
+}
+
+// registryRequestBody decodes the JSON body a handler sent GitLab, whole, for
+// the same reason registryQuery returns the whole query.
+func registryRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode body: %v", err)
+		return nil
+	}
+	return body
+}
+
+// TestListProject_OneTagFlagAtATime_SendsThatFlagAndNothingElse drives one
+// list per tag flag and compares the whole query. The two flags carry the same
+// value, so a list that set both could not tell them apart: with tags and
+// tags_count swapped in the handler, every existing test still passed.
+func TestListProject_OneTagFlagAtATime_SendsThatFlagAndNothingElse(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ListProjectInput
+		want  map[string]string
+	}{
+		{"nothing", ListProjectInput{ProjectID: "42"}, map[string]string{}},
+		{"tags", ListProjectInput{ProjectID: "42", Tags: true}, map[string]string{"tags": "true"}},
+		{"tags_count", ListProjectInput{ProjectID: "42", TagsCount: true}, map[string]string{"tags_count": "true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]string
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/projects/42/registry/repositories", func(w http.ResponseWriter, r *http.Request) {
+				got = registryQuery(r)
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "1"})
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if _, err := ListProject(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGetRepository_OneTagFlagAtATime_SendsThatFlagAndNothingElse is the same
+// property for the single-repository read, whose only test with the flags set
+// never looked at the query at all.
+func TestGetRepository_OneTagFlagAtATime_SendsThatFlagAndNothingElse(t *testing.T) {
+	tests := []struct {
+		name  string
+		input GetRepositoryInput
+		want  map[string]string
+	}{
+		{"nothing", GetRepositoryInput{RepositoryID: 99}, map[string]string{}},
+		{"tags", GetRepositoryInput{RepositoryID: 99, Tags: true}, map[string]string{"tags": "true"}},
+		{"tags_count", GetRepositoryInput{RepositoryID: 99, TagsCount: true}, map[string]string{"tags_count": "true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]string
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/registry/repositories/99", func(w http.ResponseWriter, r *http.Request) {
+				got = registryQuery(r)
+				testutil.RespondJSON(w, http.StatusOK, covRepoJSON)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if _, err := GetRepository(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDeleteTagsBulk_OneCriterionAtATime_SendsThatCriterionAndNothingElse
+// drives one bulk delete per cleanup criterion and compares the whole query.
+// The empty case is the one that matters most: a keep_n nobody set must not
+// reach GitLab as keep_n=0, which asks it to keep no tag at all, and the guard
+// that stops it could be loosened to >= 0 with nothing failing.
+func TestDeleteTagsBulk_OneCriterionAtATime_SendsThatCriterionAndNothingElse(t *testing.T) {
+	base := DeleteTagsBulkInput{ProjectID: "42", RepositoryID: 1}
+	with := func(f func(*DeleteTagsBulkInput)) DeleteTagsBulkInput {
+		in := base
+		f(&in)
+		return in
+	}
+	tests := []struct {
+		name  string
+		input DeleteTagsBulkInput
+		want  map[string]string
+	}{
+		{"nothing", base, map[string]string{}},
+		{"name_regex_delete", with(func(in *DeleteTagsBulkInput) { in.NameRegexDelete = "v.*" }), map[string]string{"name_regex_delete": "v.*"}},
+		{"name_regex_keep", with(func(in *DeleteTagsBulkInput) { in.NameRegexKeep = "release.*" }), map[string]string{"name_regex_keep": "release.*"}},
+		{"keep_n", with(func(in *DeleteTagsBulkInput) { in.KeepN = 5 }), map[string]string{"keep_n": "5"}},
+		{"older_than", with(func(in *DeleteTagsBulkInput) { in.OlderThan = "7d" }), map[string]string{"older_than": "7d"}},
+		{"name_regex", with(func(in *DeleteTagsBulkInput) { in.NameRegex = "old.*" }), map[string]string{"name_regex": "old.*"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]string
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/projects/42/registry/repositories/1/tags", func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodDelete)
+				got = registryQuery(r)
+				w.WriteHeader(http.StatusNoContent)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if err := DeleteTagsBulk(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("query = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What a caller is handed, field for field
+// ---------------------------------------------------------------------------.
+
+// covRepoFullJSON is a repository carrying every field the output publishes,
+// the two the capture reads beside the decode included, with no two values
+// alike, so a field filled from its neighbor is a mismatch rather than a
+// coincidence.
+const covRepoFullJSON = `{
+	"id":100,"name":"cov-img","path":"group/project/cov-img",
+	"project_id":42,"location":"registry.example.com/group/project/cov-img",
+	"tags_count":3,"status":"delete_scheduled",
+	"created_at":"2026-01-15T10:00:00Z",
+	"cleanup_policy_started_at":"2026-01-16T12:00:00Z",
+	"size":65536,"delete_api_path":"/api/v4/projects/42/registry/repositories/100",
+	"tags":[` + covTagJSON + `]
+}`
+
+// TestGetRepository_PublishesEveryFieldGitLabSent verifies the whole output a
+// caller is handed for a fully populated repository, through the handler
+// rather than the converter, so the capture of size and delete_api_path is
+// part of what is asserted. The two timestamps are the pair that used to be
+// checked as non-empty only, and a converter that swapped them passed.
+func TestGetRepository_PublishesEveryFieldGitLabSent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/registry/repositories/100", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, covRepoFullJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	got, err := GetRepository(context.Background(), client, GetRepositoryInput{RepositoryID: 100, Tags: true})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := RepositoryOutput{
+		ID: 100, Name: "cov-img", Path: "group/project/cov-img", ProjectID: 42,
+		Location:               "registry.example.com/group/project/cov-img",
+		CreatedAt:              "2026-01-15T10:00:00Z",
+		CleanupPolicyStartedAt: "2026-01-16T12:00:00Z",
+		Status:                 "delete_scheduled",
+		TagsCount:              3,
+		Size:                   65536,
+		DeleteAPIPath:          "/api/v4/projects/42/registry/repositories/100",
+		Tags:                   []TagOutput{covTagOutput()},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GetRepository() =\n%#v\nwant:\n%#v", got, want)
+	}
+}
+
+// covTagOutput is what covTagJSON decodes and converts to.
+func covTagOutput() TagOutput {
+	return TagOutput{
+		Name: "v1.0", Path: "group/project/cov-img:v1.0",
+		Location: "registry.example.com/group/project/cov-img:v1.0",
+		Revision: "abc123", ShortRevision: "abc1", Digest: "sha256:deadbeef",
+		CreatedAt: "2026-02-01T08:00:00Z", TotalSize: 4096,
+	}
+}
+
+// TestGetTag_PublishesEveryFieldGitLabSent verifies the whole output a caller
+// is handed for a fully populated tag. The revision and the short revision are
+// the pair a swap would confuse, and no test read either before this one.
+func TestGetTag_PublishesEveryFieldGitLabSent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/42/registry/repositories/100/tags/v1.0", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, covTagJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	got, err := GetTag(context.Background(), client, GetTagInput{ProjectID: "42", RepositoryID: 100, TagName: "v1.0"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := covTagOutput(); !reflect.DeepEqual(got, want) {
+		t.Errorf("GetTag() =\n%#v\nwant:\n%#v", got, want)
+	}
+}
+
+// TestRegistryOptions_ToolWithoutAUsageLine_FallsBackToTheDomainUsage verifies
+// an action added to the family before its own usage line is written is served
+// the domain's usage rather than none, beside the shared metadata every
+// registry action carries. Every tool served today has a line of its own, so
+// this is the only way the fallback is ever reached.
+func TestRegistryOptions_ToolWithoutAUsageLine_FallsBackToTheDomainUsage(t *testing.T) {
+	const tool = "gitlab_registry_not_yet_described"
+	got := registryOptions(tool)
+	if got.Usage != "Manage container registry repositories, tags, and protection rules for projects or groups." {
+		t.Errorf("Usage = %q, want the domain usage", got.Usage)
+	}
+	if got.IndividualTool.Name != tool || got.OwnerPackage != "containerregistry" || len(got.Tags) == 0 {
+		t.Errorf("shared metadata = %+v, want the tool name, the owner package and the tags", got)
 	}
 }

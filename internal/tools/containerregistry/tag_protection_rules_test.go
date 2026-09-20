@@ -6,6 +6,7 @@ package containerregistry
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestListTagProtectionRules_Success(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing project_id field.
 func TestListTagProtectionRules_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListTagProtectionRules(context.Background(), client, ListTagProtectionRulesInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
@@ -120,7 +121,7 @@ func TestCreateTagProtectionRule_Immutable(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing project_id field.
 func TestCreateTagProtectionRule_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateTagProtectionRule(context.Background(), client, CreateTagProtectionRuleInput{TagNamePattern: "v.+"})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
@@ -131,7 +132,7 @@ func TestCreateTagProtectionRule_MissingProjectID(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing tag_name_pattern field.
 func TestCreateTagProtectionRule_MissingPattern(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateTagProtectionRule(context.Background(), client, CreateTagProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
 	if err == nil || !strings.Contains(err.Error(), "tag_name_pattern is required") {
 		t.Fatalf("expected tag_name_pattern required error, got %v", err)
@@ -174,7 +175,7 @@ func TestUpdateTagProtectionRule_Success(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing project_id field.
 func TestUpdateTagProtectionRule_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateTagProtectionRule(context.Background(), client, UpdateTagProtectionRuleInput{RuleID: 5})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
@@ -185,7 +186,7 @@ func TestUpdateTagProtectionRule_MissingProjectID(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing rule_id field.
 func TestUpdateTagProtectionRule_MissingRuleID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateTagProtectionRule(context.Background(), client, UpdateTagProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
 	if err == nil || !strings.Contains(err.Error(), "rule_id is required") {
 		t.Fatalf("expected rule_id required error, got %v", err)
@@ -223,7 +224,7 @@ func TestDeleteTagProtectionRule_Success(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing project_id field.
 func TestDeleteTagProtectionRule_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTagProtectionRule(context.Background(), client, DeleteTagProtectionRuleInput{RuleID: 5})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpectedProjectIDErr, err)
@@ -234,7 +235,7 @@ func TestDeleteTagProtectionRule_MissingProjectID(t *testing.T) {
 // The test exercises the input validation guard before any API call.
 // It asserts that the returned error names the missing rule_id field.
 func TestDeleteTagProtectionRule_MissingRuleID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTagProtectionRule(context.Background(), client, DeleteTagProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
 	if err == nil || !strings.Contains(err.Error(), "rule_id is required") {
 		t.Fatalf("expected rule_id required error, got %v", err)
@@ -287,6 +288,22 @@ func TestFormatTagProtectionRuleMarkdown_Immutable(t *testing.T) {
 		"- **ID**: 1\n" +
 		"- **Tag Name Pattern**: `prod-.+`\n" +
 		"- **Min Access Level (Push)**: immutable\n" +
+		"- **Min Access Level (Delete)**: immutable\n" +
+		tagRuleCardHints
+	if got != want {
+		t.Errorf("FormatTagProtectionRuleMarkdown() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// TestFormatTagProtectionRuleMarkdown_NoPattern_HeadsWithTheResourceAlone
+// verifies a rule GitLab sent no tag pattern for is headed by the resource
+// alone. The heading helper is shared with the repository-path card, so the
+// two resource names it is called with are held apart here and there.
+func TestFormatTagProtectionRuleMarkdown_NoPattern_HeadsWithTheResourceAlone(t *testing.T) {
+	got := FormatTagProtectionRuleMarkdown(TagProtectionRuleOutput{ID: 4, ProjectID: 10, MinimumAccessLevelForPush: "owner"})
+	want := "## Tag Protection Rule\n\n" +
+		"- **ID**: 4\n" +
+		"- **Min Access Level (Push)**: owner\n" +
 		"- **Min Access Level (Delete)**: immutable\n" +
 		tagRuleCardHints
 	if got != want {
@@ -359,16 +376,16 @@ func TestCreateTagProtectionRule_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateTagProtectionRule_AccessLevels verifies the push/delete access-level branches are applied.
-// The test sets both minimum access levels and inspects the request body.
-// It asserts both fields reach the API and the call succeeds.
+// TestUpdateTagProtectionRule_AccessLevels verifies that both access levels
+// reach GitLab carrying the value the caller gave each. It compares the whole
+// body rather than looking for the two field names, which is what it did
+// before: with the two values swapped in the handler, both names were still
+// present and the test passed.
 func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
-	var body string
+	var body map[string]any
 	mux := http.NewServeMux()
 	mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
-		body = string(buf)
+		body = registryRequestBody(t, r)
 		testutil.RespondJSON(w, http.StatusOK,
 			`{"id":5,"project_id":10,"tag_name_pattern":"v.+","minimum_access_level_for_push":"owner","minimum_access_level_for_delete":"admin"}`)
 	})
@@ -383,15 +400,146 @@ func TestUpdateTagProtectionRule_AccessLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	for _, field := range []string{"minimum_access_level_for_push", "minimum_access_level_for_delete"} {
-		t.Run(field, func(t *testing.T) {
-			if !strings.Contains(body, field) {
-				t.Errorf("expected %s in request body, got: %s", field, body)
-			}
-		})
+	want := map[string]any{"minimum_access_level_for_push": "owner", "minimum_access_level_for_delete": "admin"}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("request body = %v, want %v", body, want)
 	}
 	if out.MinimumAccessLevelForPush != "owner" {
 		t.Errorf("expected push level owner, got %s", out.MinimumAccessLevelForPush)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What each request carries, one input at a time
+// ---------------------------------------------------------------------------.
+
+// TestCreateTagProtectionRule_OneAccessLevelAtATime_SendsThatLevelAndNothingElse
+// drives one creation per optional access level and compares the whole request
+// body. The pattern-only case is the immutable rule GitLab documents, and it
+// is also what a single inverted guard would break by sending a level nobody
+// asked for.
+func TestCreateTagProtectionRule_OneAccessLevelAtATime_SendsThatLevelAndNothingElse(t *testing.T) {
+	const pattern = "v.+"
+	tests := []struct {
+		name  string
+		input CreateTagProtectionRuleInput
+		want  map[string]any
+	}{
+		{
+			"pattern only",
+			CreateTagProtectionRuleInput{ProjectID: "10", TagNamePattern: pattern},
+			map[string]any{"tag_name_pattern": pattern},
+		},
+		{
+			"push",
+			CreateTagProtectionRuleInput{ProjectID: "10", TagNamePattern: pattern, MinimumAccessLevelForPush: "owner"},
+			map[string]any{"tag_name_pattern": pattern, "minimum_access_level_for_push": "owner"},
+		},
+		{
+			"delete",
+			CreateTagProtectionRuleInput{ProjectID: "10", TagNamePattern: pattern, MinimumAccessLevelForDelete: "admin"},
+			map[string]any{"tag_name_pattern": pattern, "minimum_access_level_for_delete": "admin"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]any
+			mux := http.NewServeMux()
+			mux.HandleFunc(tagRulesPath, func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				got = registryRequestBody(t, r)
+				testutil.RespondJSON(w, http.StatusCreated,
+					`{"id":5,"project_id":10,"tag_name_pattern":"v.+"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if _, err := CreateTagProtectionRule(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUpdateTagProtectionRule_OneFieldAtATime_SendsThatFieldAndNothingElse
+// drives one update per optional field and compares the whole request body.
+// The empty case is the other half: a rule whose pattern was never mentioned
+// must not have it rewritten to the empty string, which for a tag rule is a
+// regular expression matching everything.
+func TestUpdateTagProtectionRule_OneFieldAtATime_SendsThatFieldAndNothingElse(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateTagProtectionRuleInput
+		want  map[string]any
+	}{
+		{"nothing", UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5}, map[string]any{}},
+		{
+			"tag_name_pattern",
+			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, TagNamePattern: "stable-.+"},
+			map[string]any{"tag_name_pattern": "stable-.+"},
+		},
+		{
+			"minimum_access_level_for_push",
+			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForPush: "owner"},
+			map[string]any{"minimum_access_level_for_push": "owner"},
+		},
+		{
+			"minimum_access_level_for_delete",
+			UpdateTagProtectionRuleInput{ProjectID: "10", RuleID: 5, MinimumAccessLevelForDelete: "admin"},
+			map[string]any{"minimum_access_level_for_delete": "admin"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got map[string]any
+			mux := http.NewServeMux()
+			mux.HandleFunc(tagRulesPath+"/5", func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPatch)
+				got = registryRequestBody(t, r)
+				testutil.RespondJSON(w, http.StatusOK,
+					`{"id":5,"project_id":10,"tag_name_pattern":"v.+"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			if _, err := UpdateTagProtectionRule(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestListTagProtectionRules_PublishesEveryFieldGitLabSent verifies the whole
+// output a caller is handed, the two access levels carrying different values
+// so a converter filling one from the other is a mismatch.
+func TestListTagProtectionRules_PublishesEveryFieldGitLabSent(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(tagRulesPath, func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id":9,"project_id":10,"tag_name_pattern":"v.+","minimum_access_level_for_push":"maintainer","minimum_access_level_for_delete":"admin"}]`,
+			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	out, err := ListTagProtectionRules(context.Background(), client, ListTagProtectionRulesInput{ProjectID: "10"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := []TagProtectionRuleOutput{{
+		ID: 9, ProjectID: 10,
+		TagNamePattern:              "v.+",
+		MinimumAccessLevelForPush:   "maintainer",
+		MinimumAccessLevelForDelete: "admin",
+	}}
+	if !reflect.DeepEqual(out.Rules, want) {
+		t.Errorf("Rules =\n%#v\nwant:\n%#v", out.Rules, want)
+	}
+	if out.Pagination.TotalItems != 1 || out.Pagination.PerPage != 20 {
+		t.Errorf("Pagination = %+v, want the page GitLab reported", out.Pagination)
 	}
 }
 
