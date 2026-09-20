@@ -354,34 +354,51 @@ func TestDecorateSubmoduleMeta_UnknownTool(t *testing.T) {
 }
 
 // TestDecorateSubmoduleMeta_PartialEntry_ReplacesOnlyTheFieldsTheTableFills
-// verifies the claim the decorator's own comment makes, field by field: an
-// entry that fills the usage and nothing else leaves the aliases, the related
-// actions and the description as submoduleOptions built them.
+// verifies the claim the decorator's own comment makes, field by field: each
+// of the four fields is replaced when the entry fills it and left as
+// submoduleOptions built it when the entry does not.
 //
-// Every entry in the real table fills all four, so all four guards are true on
-// every call the suite makes and a guard that stopped replacing anything would
-// be seen by nothing. The entry is installed for one synthetic tool name and
+// Every entry in the real table fills all four, so on every call the suite
+// makes all four guards are true and a guard that stopped replacing anything
+// would be seen by nothing. The two cases fill disjoint halves so each guard is
+// taken both ways. Each entry is installed under a synthetic tool name and
 // removed again, since the table is a package-level map.
 func TestDecorateSubmoduleMeta_PartialEntry_ReplacesOnlyTheFieldsTheTableFills(t *testing.T) {
-	const tool = "gitlab_partial_submodule_tool"
-	submoduleActionMeta[tool] = submoduleActionMetaEntry{usage: "Only the usage is filled."}
-	t.Cleanup(func() { delete(submoduleActionMeta, tool) })
+	cases := []struct {
+		name  string
+		entry submoduleActionMetaEntry
+	}{
+		{name: "usage only", entry: submoduleActionMetaEntry{usage: "Only the usage is filled."}},
+		{name: "description only", entry: submoduleActionMetaEntry{description: "Only the description is filled."}},
+	}
 
-	base := submoduleOptions(tool)
-	options := submoduleOptions(tool)
-	decorateSubmoduleMeta(&options, tool)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const tool = "gitlab_partial_submodule_tool"
+			submoduleActionMeta[tool] = tc.entry
+			t.Cleanup(func() { delete(submoduleActionMeta, tool) })
 
-	if options.Usage != "Only the usage is filled." {
-		t.Errorf("Usage = %q, want the entry's own", options.Usage)
-	}
-	if !slices.Equal(options.Aliases, base.Aliases) {
-		t.Errorf("Aliases = %v, want the base %v: the entry named none", options.Aliases, base.Aliases)
-	}
-	if !slices.Equal(options.RelatedActions, base.RelatedActions) {
-		t.Errorf("RelatedActions = %v, want the base %v: the entry named none", options.RelatedActions, base.RelatedActions)
-	}
-	if options.IndividualTool.Description != "" {
-		t.Errorf("Description = %q, want it left empty: the entry named none", options.IndividualTool.Description)
+			base := submoduleOptions(tool)
+			options := submoduleOptions(tool)
+			decorateSubmoduleMeta(&options, tool)
+
+			wantUsage := base.Usage
+			if tc.entry.usage != "" {
+				wantUsage = tc.entry.usage
+			}
+			if options.Usage != wantUsage {
+				t.Errorf("Usage = %q, want %q", options.Usage, wantUsage)
+			}
+			if options.IndividualTool.Description != tc.entry.description {
+				t.Errorf("Description = %q, want %q", options.IndividualTool.Description, tc.entry.description)
+			}
+			if !slices.Equal(options.Aliases, base.Aliases) {
+				t.Errorf("Aliases = %v, want the base %v: the entry named none", options.Aliases, base.Aliases)
+			}
+			if !slices.Equal(options.RelatedActions, base.RelatedActions) {
+				t.Errorf("RelatedActions = %v, want the base %v: the entry named none", options.RelatedActions, base.RelatedActions)
+			}
+		})
 	}
 }
 

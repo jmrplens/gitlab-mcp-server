@@ -230,14 +230,15 @@ func buildSubmoduleIndex(entries []SubmoduleEntry) (pathIndex map[string]*Submod
 
 // matchTreeCommits fetches a single directory from the repository tree and fills in
 // CommitSHA for any submodule entries whose path matches a "commit" tree node.
+//
+// ref is always named: [List] resolves an empty one to the HEAD alias before
+// any of this runs, so there is no second check for it here.
 func matchTreeCommits(ctx context.Context, client *gitlabclient.Client, projectID, ref, dir string, pathIndex map[string]*SubmoduleEntry) {
 	opts := &gl.ListTreeOptions{}
 	opts.PerPage = 100
+	opts.Ref = new(ref)
 	if dir != "" {
 		opts.Path = new(dir)
-	}
-	if ref != "" {
-		opts.Ref = new(ref)
 	}
 	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))
 	if err != nil {

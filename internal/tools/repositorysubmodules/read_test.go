@@ -240,6 +240,46 @@ func TestRead_TreeCarriesAnotherSubmodulesCommit_PinsOnlyItsOwn(t *testing.T) {
 	}
 }
 
+// TestRead_TreeNodeAtTheSubmodulePathIsNotACommit_IsRefused verifies that a
+// node sitting at the submodule's path but carrying any other type is not read
+// as the pointer.
+//
+// It is the state a repository is in when a submodule has been replaced by an
+// ordinary file or directory in the ref being read: the path still resolves,
+// and the object id behind it names a blob or a tree rather than the commit of
+// another project. Answering with it would hand the caller a SHA that cannot be
+// fetched from the submodule's project, so the refusal is the right answer and
+// the error says which shape was expected.
+func TestRead_TreeNodeAtTheSubmodulePathIsNotACommit_IsRefused(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/tree") {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "b10bb10b", "name": "core-module", "type": "blob", "path": "libs/core-module", "mode": "100644"}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+			"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "main"
+		}`, submoduleGitmodules))
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "libs/core-module",
+		FilePath:      "f.txt",
+	})
+	if err == nil {
+		t.Fatal("expected an error when the node at the submodule path is a blob")
+	}
+	if !strings.Contains(err.Error(), "not found as a tree entry") {
+		t.Errorf("error = %v, want it to say no commit-type entry was found", err)
+	}
+	if strings.Contains(err.Error(), "b10bb10b") {
+		t.Errorf("error names the blob's object id, which is not a commit this submodule is pinned to: %v", err)
+	}
+}
+
 // TestRead_SubmoduleNotFound verifies Read when submodule not found.
 func TestRead_SubmoduleNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
