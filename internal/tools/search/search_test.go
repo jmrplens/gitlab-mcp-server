@@ -2237,6 +2237,9 @@ func TestSearchCode_QueryWithSpecialSymbols(t *testing.T) {
 func TestSearchCode_QueryWithParenthesesAndBrackets(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchProject && r.URL.Query().Get(queryScope) == scopeBlobs {
+			if got := r.URL.Query().Get("search"); got != "map[string]int{}" {
+				t.Errorf("search query = %q, want %q", got, "map[string]int{}")
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
 				"basename":"util","data":"map[string]int{}","path":"util.go",
 				"filename":"util.go","ref":"main","startline":1,"project_id":42
@@ -2260,6 +2263,9 @@ func TestSearchCode_QueryWithParenthesesAndBrackets(t *testing.T) {
 func TestSearchIssues_QueryWithUnicode(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathSearchGlobal && r.URL.Query().Get(queryScope) == "issues" {
+			if got := r.URL.Query().Get("search"); got != "\u00e9l\u00e8ve" {
+				t.Errorf("search query = %q, want the unicode query unchanged", got)
+			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
 				"id":1,"iid":5,"title":"\u00e9l\u00e8ve probl\u00e8me","state":"opened",
 				"web_url":"https://gitlab.example.com/issues/5",
@@ -2597,5 +2603,127 @@ func TestIssues_ReadsTheBasicIssueKeysOffTheCapture(t *testing.T) {
 	}
 	if _, err = Issues(context.Background(), serve(`[{"id":1,"iid":3,"type":9}]`), IssuesInput{Query: "t"}); err == nil {
 		t.Error("Issues() succeeded on a page whose type is not a string")
+	}
+}
+
+// TestSearchHandlers_EveryConvertedField_ComesFromItsOwnKey drives the five
+// handlers whose result row this package converts by hand and compares the
+// whole row with the one the fixture describes. No two values in a fixture
+// agree, so a converter that reads a neighboring key produces a different row.
+// Neither gate sees this class: a straight-line assignment has no branch to
+// flip and no condition to evaluate, and each of these rows had exactly one
+// field read back, so blanking any of the other twenty-six left the suite green.
+func TestSearchHandlers_EveryConvertedField_ComesFromItsOwnKey(t *testing.T) {
+	tests := []struct {
+		name  string
+		scope string
+		path  string
+		body  string
+		call  func(*gitlabclient.Client) (any, error)
+		want  any
+	}{
+		{
+			name:  "code",
+			scope: scopeBlobs,
+			path:  pathSearchGlobal,
+			body: `[{"basename":"handler","data":"func Handler() {}","path":"internal/api/handler.go",` +
+				`"filename":"handler.go","ref":"release-18-4","startline":12,"project_id":77}]`,
+			call: func(c *gitlabclient.Client) (any, error) {
+				out, err := Code(context.Background(), c, CodeInput{Query: "Handler"})
+				return out.Blobs, err
+			},
+			want: []BlobOutput{{
+				Basename: "handler", Data: "func Handler() {}", Path: "internal/api/handler.go",
+				Filename: "handler.go", Ref: "release-18-4", Startline: 12, ProjectID: 77,
+			}},
+		},
+		{
+			name:  "notes",
+			scope: "notes",
+			path:  pathSearchProject,
+			body: `[{"id":31,"body":"needs a changelog entry","noteable_type":"MergeRequest",` +
+				`"noteable_id":44,"noteable_iid":8,"system":true,"author":{"username":"reviewer-a"},` +
+				`"created_at":"2026-02-03T09:00:00Z","updated_at":"2026-02-04T11:30:00Z"}]`,
+			call: func(c *gitlabclient.Client) (any, error) {
+				out, err := Notes(context.Background(), c, NotesInput{ProjectID: "42", Query: "changelog"})
+				return out.Notes, err
+			},
+			want: []NoteOutput{{
+				ID: 31, Body: "needs a changelog entry", Author: "reviewer-a",
+				CreatedAt: "2026-02-03T09:00:00Z", UpdatedAt: "2026-02-04T11:30:00Z",
+				NoteableType: "MergeRequest", NoteableID: 44, NoteableIID: 8, System: true,
+			}},
+		},
+		{
+			name:  "snippets",
+			scope: "snippet_titles",
+			path:  pathSearchGlobal,
+			body: `[{"id":52,"title":"deploy notes","file_name":"deploy.md",` +
+				`"description":"how the tap is pushed","visibility":"internal",` +
+				`"author":{"username":"maintainer-b"},"web_url":"https://gl.example/-/snippets/52",` +
+				`"raw_url":"https://gl.example/-/snippets/52/raw","project_id":91,` +
+				`"created_at":"2026-03-05T08:00:00Z","updated_at":"2026-03-06T12:45:00Z"}]`,
+			call: func(c *gitlabclient.Client) (any, error) {
+				out, err := Snippets(context.Background(), c, SnippetsInput{Query: "deploy"})
+				return out.Snippets, err
+			},
+			want: []SnippetOutput{{
+				ID: 52, Title: "deploy notes", FileName: "deploy.md",
+				Description: "how the tap is pushed", Visibility: "internal", Author: "maintainer-b",
+				WebURL:    "https://gl.example/-/snippets/52",
+				RawURL:    "https://gl.example/-/snippets/52/raw",
+				ProjectID: 91, CreatedAt: "2026-03-05T08:00:00Z", UpdatedAt: "2026-03-06T12:45:00Z",
+			}},
+		},
+		{
+			name:  "users",
+			scope: "users",
+			path:  pathSearchGlobal,
+			body: `[{"id":63,"username":"octo","name":"Octo Cat","state":"blocked",` +
+				`"avatar_url":"https://gl.example/uploads/avatar/63.png","web_url":"https://gl.example/octo"}]`,
+			call: func(c *gitlabclient.Client) (any, error) {
+				out, err := Users(context.Background(), c, UsersInput{Query: "octo"})
+				return out.Users, err
+			},
+			want: []UserOutput{{
+				ID: 63, Username: "octo", Name: "Octo Cat", State: "blocked",
+				AvatarURL: "https://gl.example/uploads/avatar/63.png", WebURL: "https://gl.example/octo",
+			}},
+		},
+		{
+			name:  "wiki",
+			scope: "wiki_blobs",
+			path:  pathSearchGlobal,
+			body: `[{"slug":"runbooks/on-call","title":"On call runbook",` +
+				`"content":"page the duty engineer","format":"asciidoc"}]`,
+			call: func(c *gitlabclient.Client) (any, error) {
+				out, err := Wiki(context.Background(), c, WikiInput{Query: "on-call"})
+				return out.WikiBlobs, err
+			},
+			want: []WikiBlobOutput{{
+				Slug: "runbooks/on-call", Title: "On call runbook",
+				Content: "page the duty engineer", Format: "asciidoc",
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == tt.path && r.URL.Query().Get(queryScope) == tt.scope {
+					testutil.RespondJSONWithPagination(w, http.StatusOK, tt.body, defaultPagination)
+					return
+				}
+				t.Errorf("request went to %s (scope %q), want %s (scope %q)",
+					r.URL.Path, r.URL.Query().Get(queryScope), tt.path, tt.scope)
+				testutil.RespondJSON(w, http.StatusOK, "[]")
+			}))
+			got, err := tt.call(client)
+			if err != nil {
+				t.Fatalf("%s handler error = %v", tt.name, err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("%s rows = %+v, want %+v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
