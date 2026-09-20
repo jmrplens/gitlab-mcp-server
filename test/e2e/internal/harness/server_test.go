@@ -332,6 +332,12 @@ func TestServerProcess_RealBinary_ServesTheDefaultSurface(t *testing.T) {
 	if proc.alive() {
 		t.Fatalf("the server was still running %s after its stdin closed\nstderr: %s", exitWindow, proc.stderrTail())
 	}
+	// Closing the session is the path on which the SDK used to wait on the
+	// child too, and the reaper lost that race on a slow runner: the exit was
+	// then "not recorded" on a child that had exited cleanly.
+	if got := proc.exitStatus(); got != "exit status 0" {
+		t.Fatalf("the server ended as %q, want a clean exit recorded by the reaper\nstderr: %s", got, proc.stderrTail())
+	}
 }
 
 // TestServerProcess_ContextCancel_EndsTheChildWithACleanExit checks that the
