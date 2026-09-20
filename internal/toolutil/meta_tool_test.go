@@ -1296,18 +1296,19 @@ func TestMakeMetaHandler_UnknownAction(t *testing.T) {
 	}
 }
 
-// TestMakeMetaHandler_ActionAlias verifies that dotted action aliases resolve
-// to canonical meta-tool route names.
+// TestMakeMetaHandler_ActionAlias verifies that a dotted historical spelling
+// reaches the action whose route declares it.
 //
-// The test registers project.milestone_list and calls the handler with
-// milestone.list, then asserts the typed output is returned. This protects the
-// compatibility layer for user-facing action names.
+// The route is keyed milestone_list, the way a catalog group keys one, and
+// carries milestone.list as a compatibility alias; the handler is called with
+// the alias and must return the typed output. This protects the compatibility
+// layer for user-facing action names.
 func TestMakeMetaHandler_ActionAlias(t *testing.T) {
-	routes := ActionMap{
-		"project.milestone_list": Route(func(_ context.Context, _ map[string]any) (any, error) {
-			return testOutput{Result: "ok"}, nil
-		}),
-	}
+	milestoneList := Route(func(_ context.Context, _ map[string]any) (any, error) {
+		return testOutput{Result: "ok"}, nil
+	})
+	milestoneList.CompatibilityAliases = []string{"milestone.list"}
+	routes := ActionMap{"milestone_list": milestoneList}
 	handler := MakeMetaHandler("gitlab_project", routes, nil)
 
 	_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "milestone.list"})
@@ -1321,25 +1322,27 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 }
 
 // TestMakeMetaHandler_RoutedActionIsNeverRewrittenByAnAlias verifies that an
-// action the tool routes runs its own handler even when the alias table maps
-// its name to another action the tool also routes.
+// action the tool routes runs its own handler even when another action of the
+// same tool declares that name as one of its historical spellings.
 //
-// "me" is an alias of "current". With both routed, a call naming "me" must run
-// the "me" route; with only "current" routed, the alias still resolves. The
-// first half is the shape that sent gitlab_group/group_board_list to the epic
-// boards on a licensed instance, where both actions exist.
+// "current" declares "me" as an alias. With both routed, a call naming "me"
+// must run the "me" route; with only "current" routed, the alias still
+// resolves. The first half is the shape that sent gitlab_group/group_board_list
+// to the epic boards on a licensed instance, where both actions exist.
 func TestMakeMetaHandler_RoutedActionIsNeverRewrittenByAnAlias(t *testing.T) {
-	route := func(result string) ActionRoute {
-		return Route(func(_ context.Context, _ map[string]any) (any, error) {
+	route := func(result string, aliases ...string) ActionRoute {
+		built := Route(func(_ context.Context, _ map[string]any) (any, error) {
 			return testOutput{Result: result}, nil
 		})
+		built.CompatibilityAliases = aliases
+		return built
 	}
 	tests := map[string]struct {
 		routes ActionMap
 		want   string
 	}{
-		"both routed, the named one runs": {routes: ActionMap{"me": route("me"), "current": route("current")}, want: "me"},
-		"only the canonical routed":       {routes: ActionMap{"current": route("current")}, want: "current"},
+		"both routed, the named one runs": {routes: ActionMap{"me": route("me"), "current": route("current", "me")}, want: "me"},
+		"only the canonical routed":       {routes: ActionMap{"current": route("current", "me")}, want: "current"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -1389,135 +1392,55 @@ func TestMakeMetaHandler_EnvironmentGetByNameUsesProtectedGet(t *testing.T) {
 	}
 }
 
-// TestNormalizeActionAlias_DynamicCompatibilityAliases verifies dynamic-surface
-// compatibility aliases map to canonical meta-tool action IDs.
-func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
+// TestNormalizeActionAlias_ResolvesAgainstTheGroupsOwnRoutes states every
+// decision the resolver makes, against a route map shaped the way the catalog
+// really builds one: keyed by bare action names, with each route carrying the
+// historical spellings its compatibility policy declares.
+//
+// The map shape is the point. The table this replaced fabricated routes keyed
+// by dotted canonical IDs, which no catalog group produces, so it asserted a
+// rewrite the server could never perform and the ninety unreachable entries of
+// the old alias table read as covered.
+func TestNormalizeActionAlias_ResolvesAgainstTheGroupsOwnRoutes(t *testing.T) {
 	routes := ActionMap{
-		"storage_move.schedule_project":      {},
-		"mr_review.changes_get":              {},
-		"mr_review.draft_note_publish_all":   {},
-		"package.list":                       {},
-		"project.hook_list":                  {},
-		"external_status_check.list_project": {},
-		"access.deploy_token_create_project": {},
-		"project.member_delete":              {},
-		"project.member_edit":                {},
-		"merge_request.spent_time_add":       {},
-		"merge_request.time_estimate_set":    {},
-		"job.token_scope_list_inbound":       {},
-		"package.file_list":                  {},
-		"audit_event.list_group":             {},
-		"release.list":                       {},
-		"ci_variable.create":                 {},
-		"ci_variable.group_create":           {},
-		"access.deploy_key_add":              {},
-		"branch.update_protected":            {},
-		"release.link_create":                {},
-		"feature_flags.ff_user_list_create":  {},
-		"feature_flags.ff_user_list_delete":  {},
-		"feature_flags.ff_user_list_list":    {},
-		"issue.create":                       {},
-		"server.health_check":                {},
-		"job.download_single_artifact":       {},
-		"issue.link_create":                  {},
-		"issue.note_delete":                  {},
-		"issue.note_get":                     {},
-		"issue.note_list":                    {},
-		"issue.note_update":                  {},
-		"repository.tree":                    {},
-		"repository.file_get":                {},
-		"repository.file_raw":                {},
-		"pipeline.schedule_create_variable":  {},
-		"pipeline.schedule_delete_variable":  {},
-		"pipeline.schedule_edit_variable":    {},
-		"project.badge_edit":                 {},
-		"release.link_list":                  {},
-		"merge_request.emoji_mr_create":      {},
-		"merge_request.emoji_mr_delete":      {},
-		"merge_request.spent_time_reset":     {},
-		"issue.note_create":                  {},
-		"interactive.issue_create":           {},
-		"epic_discussion_update_note":        {},
-		"epic_discussion_delete_note":        {},
+		"milestone_get": {CompatibilityAliases: []string{"milestone.get"}},
+		"note_create":   {CompatibilityAliases: []string{"issue.note.create", "issue_note.create"}},
+		// board_list is an action of its own AND the alias of another, which
+		// is the shape that mis-routed group_board_list on a licensed
+		// instance.
+		"board_list":      {},
+		"epic_board_list": {CompatibilityAliases: []string{"board_list"}},
+		// Two actions claiming one spelling is a group the catalog refuses,
+		// and the resolver must still answer the same way every time.
+		"left":  {CompatibilityAliases: []string{"contested"}},
+		"right": {CompatibilityAliases: []string{"contested"}},
 	}
 
-	tests := map[string]string{
-		"project.schedule_storage_move":              "storage_move.schedule_project",
-		"merge_request.changes":                      "mr_review.changes_get",
-		"project.hooks.list":                         "project.hook_list",
-		"project.status_check_list":                  "external_status_check.list_project",
-		"project.status_checks.list":                 "external_status_check.list_project",
-		"ci_job_token_scope.inbound_allowlist.list":  "job.token_scope_list_inbound",
-		"deploy_token.create":                        "access.deploy_token_create_project",
-		"deploy_key.create":                          "access.deploy_key_add",
-		"branch.update_protection":                   "branch.update_protected",
-		"project_member.update":                      "project.member_edit",
-		"project_member.edit":                        "project.member_edit",
-		"project.member_remove":                      "project.member_delete",
-		"project_member.remove":                      "project.member_delete",
-		"mr_review.draft_notes_publish":              "mr_review.draft_note_publish_all",
-		"mr_review.publish":                          "mr_review.draft_note_publish_all",
-		"package.list_generic":                       "package.list",
-		"package.files":                              "package.file_list",
-		"group.audit_events":                         "audit_event.list_group",
-		"project.releases.list":                      "release.list",
-		"release.asset_link.create":                  "release.link_create",
-		"variable.create":                            "ci_variable.create",
-		"group.variable.create":                      "ci_variable.group_create",
-		"merge_request.add_spent_time":               "merge_request.spent_time_add",
-		"merge_request.set_time_estimate":            "merge_request.time_estimate_set",
-		"merge_request.time_estimate":                "merge_request.time_estimate_set",
-		"merge_request.time_spent_add":               "merge_request.spent_time_add",
-		"feature_flag_user_list.create":              "feature_flags.ff_user_list_create",
-		"feature_flag_user_list.delete":              "feature_flags.ff_user_list_delete",
-		"feature_flags.feature_flag_user_list":       "feature_flags.ff_user_list_list",
-		"feature_flags.feature_flag_user_list_list":  "feature_flags.ff_user_list_list",
-		"feature_flags.feature_flag_user_lists_list": "feature_flags.ff_user_list_list",
-		"gitlab_issue.create":                        "issue.create",
-		"gitlab_server.health_check":                 "server.health_check",
-		"job.artifact_download":                      "job.download_single_artifact",
-		"issue.link":                                 "issue.link_create",
-		"issue.note.create":                          "issue.note_create",
-		"issue.note.delete":                          "issue.note_delete",
-		"issue.note.get":                             "issue.note_get",
-		"issue.note.list":                            "issue.note_list",
-		"issue.note.update":                          "issue.note_update",
-		"repository_tree":                            "repository.tree",
-		"repository_tree.list":                       "repository.tree",
-		"repository_file.get":                        "repository.file_get",
-		"repository_file.read":                       "repository.file_get",
-		"repository_files.get_raw_file":              "repository.file_raw",
-		"pipeline.schedule_variable_create":          "pipeline.schedule_create_variable",
-		"pipeline.schedule_variable_delete":          "pipeline.schedule_delete_variable",
-		"pipeline.schedule_variable_update":          "pipeline.schedule_edit_variable",
-		"project.badge_update":                       "project.badge_edit",
-		"release.create_link":                        "release.link_create",
-		"release_link.link_list":                     "release.link_list",
-		"merge_request.emoji_mr_award_create":        "merge_request.emoji_mr_create",
-		"merge_request.emoji_mr_award_delete":        "merge_request.emoji_mr_delete",
-		"merge_request.time_spent_reset":             "merge_request.spent_time_reset",
-		"generic_package.list":                       "package.list",
-		"issue_note.create":                          "issue.note_create",
-		"issue_note.delete":                          "issue.note_delete",
-		"issue_note.get":                             "issue.note_get",
-		"issue_note.list":                            "issue.note_list",
-		"issue_note.update":                          "issue.note_update",
-		"gitlab_interactive_issue.create":            "interactive.issue_create",
-		"epic_discussion_note_update":                "epic_discussion_update_note",
-		"epic_discussion_note_delete":                "epic_discussion_delete_note",
+	testCases := []struct {
+		name   string
+		action string
+		want   string
+	}{
+		{name: "an alias resolves to the action that claims it", action: "milestone.get", want: "milestone_get"},
+		{name: "a second alias of one action resolves too", action: "issue_note.create", want: "note_create"},
+		{name: "an alias is matched without case or padding", action: "  Issue.Note.Create  ", want: "note_create"},
+		{name: "a routed name is never rewritten", action: "board_list", want: "board_list"},
+		{name: "a name the group does not know is unchanged", action: "milestone.list", want: "milestone.list"},
+		{name: "an alias two actions claim is unchanged", action: "contested", want: "contested"},
+		{name: "an empty action is unchanged", action: "", want: ""},
+		{name: "a blank action is unchanged", action: "   ", want: "   "},
 	}
-	for alias, want := range tests {
-		t.Run(alias, func(t *testing.T) {
-			if got := NormalizeActionAlias(alias, routes); got != want {
-				t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", alias, got, want)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := NormalizeActionAlias(testCase.action, routes); got != testCase.want {
+				t.Fatalf("NormalizeActionAlias(%q) = %q, want %q", testCase.action, got, testCase.want)
 			}
 		})
 	}
-	if got := NormalizeActionAlias("repository_file.read", ActionMap{}); got != "repository_file.read" {
-		t.Fatalf("NormalizeActionAlias without canonical route = %q, want unchanged", got)
-	}
-	if got := NormalizeActionAlias("", routes); got != "" {
-		t.Fatalf("NormalizeActionAlias empty action = %q, want empty", got)
+
+	if got := NormalizeActionAlias("milestone.get", ActionMap{}); got != "milestone.get" {
+		t.Fatalf("NormalizeActionAlias against a group with no routes = %q, want unchanged", got)
 	}
 }
 
