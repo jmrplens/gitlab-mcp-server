@@ -20,6 +20,14 @@
 // a Phase 0 stub (see TODO) — Phase 1 will wire it to the markdown formatter
 // registry via an exported HasRegisteredMarkdownFormatter helper.
 //
+// missing_parameter_guidance is a field-level check of its own: an action
+// whose ParameterGuidance is no richer than the scope defaults internal/tools
+// fills into every spec, while it requires an identifier those defaults do not
+// cover (topic_id, hook_id, agent_id, merge_request_iid). Asking instead
+// whether a spec carries any guidance at all, which is what this asked until
+// 3.1.0, could never fire, because that central fill runs first and covers
+// exactly the parameter names the old question looked for.
+//
 // Output JSON shape (plan/discovery-backlog.json):
 //
 //	{
