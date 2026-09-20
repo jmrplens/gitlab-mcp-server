@@ -463,7 +463,7 @@ func TestCreateUserRunner_EachOptionReachesTheRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var got capturedRequest
 			client := testutil.NewTestClient(t, recordRequest(t, "/api/v4/user/runners", &got, http.StatusCreated,
-				`{"id":102,"token":"glrt-xyz"}`))
+				`{"id":102,"token":"runner-token-xyz"}`))
 
 			input := tt.input
 			input.RunnerType = "group_type"

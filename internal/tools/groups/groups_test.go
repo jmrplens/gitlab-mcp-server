@@ -3993,7 +3993,7 @@ const distinctGroupJSON = `{
 	"shared_runners_setting":"disabled_and_overridable","duo_availability":"default_off",
 	"max_artifacts_size":128,"repository_storage":"nfs-02","file_template_project_id":17,
 	"two_factor_grace_period":72,"ldap_cn":"cn=plat","ldap_access":20,"wiki_access_level":"private",
-	"default_branch_protection":4,"enabled_git_access_protocol":"ssh","runners_token":"glrt-plat",
+	"default_branch_protection":4,"enabled_git_access_protocol":"ssh","runners_token":"runners-token-plat",
 	"shared_runners_minutes_limit":1500,"extra_shared_runners_minutes_limit":250,
 	"ip_restriction_ranges":"192.168.0.0/16","allowed_email_domains_list":"acme.example",
 	"statistics":{"commit_count":21,"storage_size":22,"repository_size":23,"wiki_size":24,
@@ -4057,7 +4057,7 @@ func distinctGroupDetail() DetailOutput {
 			ThroughNamespace: &toolutil.DuoAccessRuleNamespaceOutput{ID: 83, Name: "Acme", FullPath: "acme"},
 			Features:         []string{"duo_chat"},
 		}},
-		EnabledGitAccessProtocol: "ssh", RunnersToken: "glrt-plat",
+		EnabledGitAccessProtocol: "ssh", RunnersToken: "runners-token-plat",
 		SharedWithGroups: []SharedWithGroupOutput{{
 			GroupID: 81, GroupName: "security", GroupFullPath: "acme/sec", GroupAccessLevel: 30,
 			ExpiresAt: "2026-12-31", MemberRoleID: 2,

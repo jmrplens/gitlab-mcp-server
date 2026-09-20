@@ -438,7 +438,7 @@ func TestListServiceAccounts_OrderAndSortReachTheQuery(t *testing.T) {
 // for is a credential that outlives its purpose, and the response carries
 // whatever the fixture says either way.
 func TestCreateCurrentUserPAT_EachOptionReachesTheRequest(t *testing.T) {
-	const response = `{"id":11,"name":"my-pat","active":true,"token":"glpat-x","scopes":["api"],"revoked":false,"user_id":1}`
+	const response = `{"id":11,"name":"my-pat","active":true,"token":"account-token-x","scopes":["api"],"revoked":false,"user_id":1}`
 
 	tests := []struct {
 		name  string
