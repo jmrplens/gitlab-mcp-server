@@ -126,6 +126,30 @@ func TestFormatOutputMarkdownString_GroupScope(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdownString_BothScopes_NamesTheProject verifies that a
+// to-do carrying a project and a group names the project, which is the object
+// the row's value is read from.
+//
+// The label and the value are chosen by two separate functions, and only the
+// value prefers the project; with the label's conjunction widened to a
+// disjunction, a to-do carrying both would print the project path under
+// "**Group:**" and every test here still passed, because none sent both.
+func TestFormatOutputMarkdownString_BothScopes_NamesTheProject(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{
+		ID: 7, ActionName: "assigned", State: "pending",
+		Project: &BasicProjectOut{Name: "proj", PathWithNamespace: "org/project-path"},
+		Group:   &toolutil.NamespaceBasicOutput{Name: "Team", FullPath: "org/team"},
+	})
+	want := "## To-Do #7\n\n" +
+		"- **Action**: assigned\n" +
+		"- **State**: pending\n" +
+		"- **Project**: org/project-path\n" +
+		cardHints
+	if got != want {
+		t.Errorf("to-do card carrying both scopes:\n got %q\nwant %q", got, want)
+	}
+}
+
 // TestFormatOutputMarkdownString_BodyAddsNoStructure verifies that a to-do
 // body carrying a heading and a list item adds neither to the document. The
 // body is whatever the comment that raised the to-do said, and it used to be
