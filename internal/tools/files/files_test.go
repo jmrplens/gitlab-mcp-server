@@ -7,10 +7,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -496,7 +498,9 @@ func TestFileBlame_EmptyProjectID(t *testing.T) {
 
 // TestFileMetaData_Success verifies that FileMetaData succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/projects/42/repository/files/main.go (HEAD) returns a representative success body.
-// It asserts the returned output matches the expected fields.
+// It asserts the name, the size and the checksum;
+// TestFileMetadata_EveryHeaderGitLabSends_ReachesTheOutput is what holds the
+// rest of the converter.
 func TestFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go" && (r.Method == http.MethodHead || r.Method == http.MethodGet) {
@@ -554,7 +558,9 @@ func TestFileMetaData_EmptyProjectID(t *testing.T) {
 
 // TestFileGetRaw_Success verifies that FileGetRaw succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/projects/42/repository/files/main.go/raw (GET) returns a representative success body.
-// It asserts the returned output matches the expected fields.
+// It asserts the body, its byte count, and the path the output names: the raw
+// endpoint answers with bytes and no metadata, so the path is the output's
+// alone and was held by nothing.
 func TestFileGetRaw_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" {
@@ -578,6 +584,9 @@ func TestFileGetRaw_Success(t *testing.T) {
 	}
 	if out.Size != 29 {
 		t.Errorf("Size = %d, want 29", out.Size)
+	}
+	if out.FilePath != testFileMainGo {
+		t.Errorf("FilePath = %q, want %q", out.FilePath, testFileMainGo)
 	}
 }
 
@@ -1063,7 +1072,9 @@ func TestGetRaw_AtSizeLimit_Succeeds(t *testing.T) {
 
 // TestGetRawFileMetaData_Success verifies that GetRawFileMetaData succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/projects/42/repository/files/main.go/raw (HEAD) returns a representative success body.
-// It asserts the returned output matches the expected fields.
+// It asserts the name, the blob id and the checksum;
+// TestFileMetadata_EveryHeaderGitLabSends_ReachesTheOutput is what holds the
+// rest of the converter.
 func TestGetRawFileMetaData_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/repository/files/main.go/raw" && r.Method == http.MethodHead {
@@ -1141,7 +1152,9 @@ func TestGetRawFileMetaData_APIError(t *testing.T) {
 
 // TestCreate_WithAllOptionalFields verifies the Create_WithAllOptionalFields handler.
 // The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (POST) responds with HTTP Created.
-// It asserts the returned output matches the expected fields.
+// It asserts the path and branch of the result and that each optional field is
+// named in the body — the field's name only, never its value, which is what
+// TestCreate_CommitFields_ReachGitLabWithTheirValues holds.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1192,7 +1205,9 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 
 // TestUpdate_WithAllOptionalFields verifies the Update_WithAllOptionalFields handler.
 // The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (PUT) responds with HTTP OK.
-// It asserts the returned output matches the expected fields.
+// It asserts the path of the result and that each optional field is named in
+// the body — the field's name only, never its value, which is what
+// TestUpdate_CommitFields_ReachGitLabWithTheirValues holds.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1240,7 +1255,9 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 
 // TestDelete_WithAllOptionalFields verifies the Delete_WithAllOptionalFields handler.
 // The mock GitLab API at /api/v4/projects/42/repository/files/old.txt (DELETE) returns a representative success body.
-// It asserts the returned output matches the expected fields.
+// It asserts only that a deletion carrying every optional field is accepted:
+// Delete returns no output at all, and what each field reaches GitLab as is
+// held by TestDelete_OptionalCommitFields_ReachGitLabOnTheRequest.
 func TestDelete_WithAllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/files/old.txt" {
@@ -1487,13 +1504,16 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 	t.Run("a text file carries its content", func(t *testing.T) {
 		got := FormatOutputMarkdown(Output{
-			FileName: "main.go",
-			FilePath: "src/main.go",
-			Size:     1024,
-			Ref:      "main",
-			Encoding: "base64",
-			BlobID:   "blob123",
-			Content:  "package main",
+			FileName:     "main.go",
+			FilePath:     "src/main.go",
+			Size:         1024,
+			Ref:          "main",
+			Encoding:     "base64",
+			BlobID:       "blob123",
+			CommitID:     "commit123",
+			LastCommitID: "lastcommit123",
+			SHA256:       "sha256val",
+			Content:      "package main",
 		})
 
 		want := "## File: src/main.go\n\n" +
@@ -1502,6 +1522,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			"- **Ref**: main\n" +
 			"- **Encoding**: base64\n" +
 			"- **Blob ID**: `blob123`\n" +
+			"- **Commit ID**: `commit123`\n" +
+			"- **Last Commit ID**: `lastcommit123`\n" +
+			"- **SHA-256**: `sha256val`\n" +
 			"- **Executable**: ❌\n" +
 			"\n### Content\n\n" +
 			"```go\npackage main\n```\n" +
@@ -1656,7 +1679,7 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 			Encoding:     "base64",
 			BlobID:       "b1",
 			CommitID:     "c1",
-			LastCommitID: "c1",
+			LastCommitID: "c0",
 			SHA256:       "sha256val",
 		})
 
@@ -1667,7 +1690,7 @@ func TestFormatMetaDataMarkdown(t *testing.T) {
 			"- **Encoding**: base64\n" +
 			"- **Blob ID**: `b1`\n" +
 			"- **Commit ID**: `c1`\n" +
-			"- **Last Commit ID**: `c1`\n" +
+			"- **Last Commit ID**: `c0`\n" +
 			"- **SHA-256**: `sha256val`\n" +
 			"- **Executable**: ❌\n" +
 			fileMetadataHints
@@ -2447,5 +2470,364 @@ func TestEnrichFileInfoOutput_IncompleteIdentifiers_MakeNoMetadataRequest(t *tes
 				t.Errorf("commit fields = %q/%q, want both empty", out.CommitID, out.LastCommitID)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Every field GitLab sends reaches the output
+// ---------------------------------------------------------------------------.
+
+// TestGet_EveryFieldOfTheResponse_ReachesTheOutput asserts that each field of
+// GitLab's file representation arrives on the output under its own name, from
+// a fixture in which no two values agree.
+//
+// Six of them were held by nothing before this: size, content_sha256, blob_id,
+// commit_id, last_commit_id and execute_filemode. Every other fixture here
+// also spelled commit_id and last_commit_id the same, so the two could be
+// exchanged without a test noticing, and last_commit_id is what a caller hands
+// back as the optimistic lock on the next update.
+func TestGet_EveryFieldOfTheResponse_ReachesTheOutput(t *testing.T) {
+	const content = "package main\n"
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/repository/files/main.go" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"file_name":"main.go",
+			"file_path":"src/main.go",
+			"size":13,
+			"encoding":"base64",
+			"content":"`+base64.StdEncoding.EncodeToString([]byte(content))+`",
+			"content_sha256":"sha256-of-main",
+			"ref":"release-1.0",
+			"blob_id":"blob-of-main",
+			"commit_id":"commit-of-main",
+			"last_commit_id":"last-commit-of-main",
+			"execute_filemode":true
+		}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{
+		ProjectID: "42", FilePath: testFileMainGo, Ref: "release-1.0",
+	})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+
+	want := Output{
+		FileName:        "main.go",
+		FilePath:        "src/main.go",
+		Size:            13,
+		Encoding:        "base64",
+		Content:         content,
+		ContentCategory: "text",
+		SHA256:          "sha256-of-main",
+		Ref:             "release-1.0",
+		BlobID:          "blob-of-main",
+		CommitID:        "commit-of-main",
+		LastCommitID:    "last-commit-of-main",
+		ExecuteFilemode: true,
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("output = %+v, want %+v", out, want)
+	}
+}
+
+// TestFileMetadata_EveryHeaderGitLabSends_ReachesTheOutput asserts that both
+// metadata actions publish every header of GitLab's HEAD answer, from a
+// fixture in which no two headers agree.
+//
+// The two actions share one converter and one comparison holds both, but the
+// shared converter is exactly why the fixture matters: encoding and the
+// executable bit were asserted by neither test, and both fixtures spelled the
+// commit and last-commit headers the same, so the two could be exchanged with
+// nothing to say so. Content is not compared because no request these actions
+// make can carry it: client-go builds the file from headers alone, and none of
+// them is the body.
+func TestFileMetadata_EveryHeaderGitLabSends_ReachesTheOutput(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		raw  bool
+	}{
+		{name: "file metadata", path: "/api/v4/projects/42/repository/files/main.go"},
+		{name: "raw file metadata", path: "/api/v4/projects/42/repository/files/main.go/raw", raw: true},
+	}
+
+	want := MetaDataOutput{
+		FileName:        "main.go",
+		FilePath:        "src/main.go",
+		Size:            13,
+		Encoding:        "base64",
+		Ref:             "release-1.0",
+		BlobID:          "blob-of-main",
+		CommitID:        "commit-of-main",
+		LastCommitID:    "last-commit-of-main",
+		ExecuteFilemode: true,
+		SHA256:          "sha256-of-main",
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodHead || r.URL.Path != tc.path {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("X-Gitlab-File-Name", "main.go")
+				w.Header().Set("X-Gitlab-File-Path", "src/main.go")
+				w.Header().Set("X-Gitlab-Size", "13")
+				w.Header().Set("X-Gitlab-Encoding", "base64")
+				w.Header().Set("X-Gitlab-Ref", "release-1.0")
+				w.Header().Set("X-Gitlab-Blob-Id", "blob-of-main")
+				w.Header().Set("X-Gitlab-Commit-Id", "commit-of-main")
+				w.Header().Set("X-Gitlab-Last-Commit-Id", "last-commit-of-main")
+				w.Header().Set("X-Gitlab-Content-Sha256", "sha256-of-main")
+				w.Header().Set("X-Gitlab-Execute-Filemode", "true")
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			var (
+				out MetaDataOutput
+				err error
+			)
+			if tc.raw {
+				out, err = GetRawFileMetaData(context.Background(), client, RawMetaDataInput{
+					ProjectID: "42", FilePath: testFileMainGo, Ref: "release-1.0",
+				})
+			} else {
+				out, err = GetMetaData(context.Background(), client, MetaDataInput{
+					ProjectID: "42", FilePath: testFileMainGo, Ref: "release-1.0",
+				})
+			}
+			if err != nil {
+				t.Fatalf("metadata lookup unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(out, want) {
+				t.Errorf("output = %+v, want %+v", out, want)
+			}
+		})
+	}
+}
+
+// TestBlame_EveryFieldOfARange_ReachesTheOutput asserts that a blame range
+// publishes the whole commit GitLab attributes it to, from a fixture in which
+// the two dates and the two author values differ.
+//
+// The message was asserted by nothing, and the authored and committed dates
+// were one timestamp in every fixture, so the pair could be exchanged
+// unnoticed: a commit is authored once and can be committed much later, and
+// the card prints the committed one.
+func TestBlame_EveryFieldOfARange_ReachesTheOutput(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v4/projects/42/repository/files/main.go/blame" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{
+				"commit":{
+					"id":"commit-of-range-one",
+					"message":"teach main to greet",
+					"author_name":"Alice Author",
+					"author_email":"alice@example.com",
+					"authored_date":"2026-03-20T15:45:00Z",
+					"committed_date":"2026-03-21T09:05:00Z"
+				},
+				"lines":["package main","","func main() {}"]
+			}
+		]`)
+	}))
+
+	out, err := Blame(context.Background(), client, BlameInput{
+		ProjectID: "42", FilePath: testFileMainGo,
+	})
+	if err != nil {
+		t.Fatalf("Blame() unexpected error: %v", err)
+	}
+
+	want := BlameOutput{
+		FilePath: testFileMainGo,
+		Ranges: []BlameRangeOutput{
+			{
+				Commit: BlameRangeCommitOutput{
+					ID:            "commit-of-range-one",
+					Message:       "teach main to greet",
+					AuthorName:    "Alice Author",
+					AuthorEmail:   "alice@example.com",
+					AuthoredDate:  "2026-03-20T15:45:00Z",
+					CommittedDate: "2026-03-21T09:05:00Z",
+				},
+				Lines: []string{"package main", "", "func main() {}"},
+			},
+		},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("output = %+v, want %+v", out, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Commit fields reach GitLab with their values
+// ---------------------------------------------------------------------------.
+
+// assertJSONBodyField compares one top-level field of a decoded request body
+// with what the caller supplied; a nil want means the field must not be sent.
+func assertJSONBodyField(t *testing.T, body map[string]any, name string, want any) {
+	t.Helper()
+	got, ok := body[name]
+	switch {
+	case want == nil:
+		if ok {
+			t.Errorf("body carries %s=%v, want it absent", name, got)
+		}
+	case !ok:
+		t.Errorf("body omits %s, want %v", name, want)
+	case got != want:
+		t.Errorf("%s = %v, want %v", name, got, want)
+	}
+}
+
+// TestCreate_CommitFields_ReachGitLabWithTheirValues asserts that every field
+// of a file creation is sent carrying the value the caller gave it, and sent
+// by no other means when they gave none.
+//
+// Asserting that the key appears is not this property: the author name and
+// email could be exchanged, or the executable bit inverted, and a body that
+// named all five fields would still satisfy it. Both decide the commit GitLab
+// records, and neither is visible in the response, which names only the path
+// and the branch.
+func TestCreate_CommitFields_ReachGitLabWithTheirValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{
+			name: "all optional fields supplied",
+			input: CreateInput{
+				ProjectID: "42", FilePath: "script.sh", Branch: "feature",
+				Content: "#!/bin/sh\necho hello\n", CommitMessage: "add script",
+				StartBranch: "main", Encoding: "text",
+				AuthorEmail: "dev@example.com", AuthorName: "Dev Eloper",
+				ExecuteFilemode: new(true),
+			},
+			want: map[string]any{
+				"branch": "feature", "content": "#!/bin/sh\necho hello\n",
+				"commit_message": "add script", "start_branch": "main",
+				"encoding": "text", "author_email": "dev@example.com",
+				"author_name": "Dev Eloper", "execute_filemode": true,
+			},
+		},
+		{
+			name: "no optional fields supplied",
+			input: CreateInput{
+				ProjectID: "42", FilePath: "script.sh", Branch: "feature",
+				Content: "#!/bin/sh\necho hello\n", CommitMessage: "add script",
+			},
+			want: map[string]any{
+				"branch": "feature", "content": "#!/bin/sh\necho hello\n",
+				"commit_message": "add script", "start_branch": nil,
+				"encoding": nil, "author_email": nil,
+				"author_name": nil, "execute_filemode": nil,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, assertingWriteHandler(t, http.MethodPost, http.StatusCreated, tc.want))
+			out, err := Create(context.Background(), client, tc.input)
+			if err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+			if out.FilePath != "script.sh" || out.Branch != "feature" {
+				t.Errorf("output = %+v, want file path %q on branch %q", out, "script.sh", "feature")
+			}
+		})
+	}
+}
+
+// TestUpdate_CommitFields_ReachGitLabWithTheirValues asserts the same property
+// for a file update, which carries one field more than a creation does.
+//
+// last_commit_id is the dangerous one: it is the optimistic lock that stops an
+// update overwriting somebody else's change, and a value taken from the wrong
+// input sends GitLab a lock the caller never asked for while the response is
+// the same either way.
+func TestUpdate_CommitFields_ReachGitLabWithTheirValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{
+			name: "all optional fields supplied",
+			input: UpdateInput{
+				ProjectID: "42", FilePath: "script.sh", Branch: "feature",
+				Content: "#!/bin/sh\necho updated\n", CommitMessage: "update script",
+				StartBranch: "main", Encoding: "text",
+				AuthorEmail: "dev@example.com", AuthorName: "Dev Eloper",
+				LastCommitID: "commit-i-read", ExecuteFilemode: new(true),
+			},
+			want: map[string]any{
+				"branch": "feature", "content": "#!/bin/sh\necho updated\n",
+				"commit_message": "update script", "start_branch": "main",
+				"encoding": "text", "author_email": "dev@example.com",
+				"author_name": "Dev Eloper", "last_commit_id": "commit-i-read",
+				"execute_filemode": true,
+			},
+		},
+		{
+			name: "no optional fields supplied",
+			input: UpdateInput{
+				ProjectID: "42", FilePath: "script.sh", Branch: "feature",
+				Content: "#!/bin/sh\necho updated\n", CommitMessage: "update script",
+			},
+			want: map[string]any{
+				"branch": "feature", "content": "#!/bin/sh\necho updated\n",
+				"commit_message": "update script", "start_branch": nil,
+				"encoding": nil, "author_email": nil, "author_name": nil,
+				"last_commit_id": nil, "execute_filemode": nil,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, assertingWriteHandler(t, http.MethodPut, http.StatusOK, tc.want))
+			out, err := Update(context.Background(), client, tc.input)
+			if err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+			if out.FilePath != "script.sh" || out.Branch != "feature" {
+				t.Errorf("output = %+v, want file path %q on branch %q", out, "script.sh", "feature")
+			}
+		})
+	}
+}
+
+// assertingWriteHandler answers a file create or update on script.sh, holding
+// the JSON body to want first. Every other method reaches http.NotFound, which
+// is what the follow-up metadata HEAD the handler makes gets: the enrichment
+// swallows that failure by design and it is not this test's subject.
+func assertingWriteHandler(t *testing.T, method string, status int, want map[string]any) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != "/api/v4/projects/42/repository/files/script.sh" {
+			http.NotFound(w, r)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding the request body: %v", err)
+		} else {
+			for name, value := range want {
+				assertJSONBodyField(t, body, name, value)
+			}
+		}
+		testutil.RespondJSON(w, status, `{"file_path":"script.sh","branch":"feature"}`)
 	}
 }
