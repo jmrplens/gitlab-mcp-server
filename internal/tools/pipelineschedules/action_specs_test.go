@@ -4,6 +4,7 @@ package pipelineschedules
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -265,6 +266,78 @@ func TestPipelineScheduleOptions_UnknownToolKeepsGenericUsage(t *testing.T) {
 	}
 	if options.IndividualTool.Description != "" {
 		t.Errorf("Description = %q, want empty for unknown tool", options.IndividualTool.Description)
+	}
+}
+
+// TestScheduleActionMeta_EveryTool_IsDecoratedFromItsEntry holds every served
+// schedule spec to the metadata entry written for it: the usage line, the
+// aliases with the generic tool-name alias gone, the related actions and the
+// individual-tool description. The four guards in decorateScheduleMeta are
+// evaluated one way only by this table, so a guard inverted leaves every tool
+// on the generic placeholder, which is the text gitlab_find_action searches
+// and the list a model is offered next, and nothing asserted it before. An
+// entry no served tool reads is reported too, since a table row nobody
+// projects is metadata nobody can reach.
+func TestScheduleActionMeta_EveryTool_IsDecoratedFromItsEntry(t *testing.T) {
+	served := map[string]struct{}{}
+	for _, spec := range ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))) {
+		name := spec.IndividualTool.Name
+		served[name] = struct{}{}
+		t.Run(name, func(t *testing.T) {
+			meta, ok := scheduleActionMeta[name]
+			if !ok {
+				t.Fatalf("%s: no discovery metadata entry", name)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the entry's %q", spec.Usage, meta.usage)
+			}
+			if !slices.Equal(spec.Aliases, meta.aliases) {
+				t.Errorf("Aliases = %v, want the entry's %v", spec.Aliases, meta.aliases)
+			}
+			if !slices.Equal(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %v, want the entry's %v", spec.RelatedActions, meta.related)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("Description = %q, want the entry's %q", spec.IndividualTool.Description, meta.description)
+			}
+		})
+	}
+	for name := range scheduleActionMeta {
+		if _, ok := served[name]; !ok {
+			t.Errorf("scheduleActionMeta names %q, which no spec projects", name)
+		}
+	}
+}
+
+// TestDecorateScheduleMeta_PartialEntry_KeepsWhatTheEntryDoesNotCarry holds
+// each decoration to applying only for a field its entry carries. Every entry
+// today fills every field, so this planted empty one is the only thing that
+// evaluates the four guards the other way: an entry added without aliases or
+// related actions must keep what the options already held rather than replace
+// it with nothing, and an emptied alias list is an action gitlab_find_action
+// can reach by no name at all.
+func TestDecorateScheduleMeta_PartialEntry_KeepsWhatTheEntryDoesNotCarry(t *testing.T) {
+	const tool = "gitlab_pipeline_schedule_partial_entry_probe"
+	generic := pipelineScheduleOptions("schedule_partial_entry_probe", tool)
+	// The generic options relate to nothing, so give the guard something to keep.
+	generic.RelatedActions = []string{actionScheduleList}
+	options := generic
+
+	scheduleActionMeta[tool] = scheduleActionMetaEntry{}
+	t.Cleanup(func() { delete(scheduleActionMeta, tool) })
+	decorateScheduleMeta(&options, tool)
+
+	if options.Usage != generic.Usage {
+		t.Errorf("Usage = %q, want the generic %q kept", options.Usage, generic.Usage)
+	}
+	if !slices.Equal(options.Aliases, generic.Aliases) {
+		t.Errorf("Aliases = %v, want the generic %v kept", options.Aliases, generic.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, generic.RelatedActions) {
+		t.Errorf("RelatedActions = %v, want %v kept", options.RelatedActions, generic.RelatedActions)
+	}
+	if options.IndividualTool.Description != generic.IndividualTool.Description {
+		t.Errorf("Description = %q, want the generic %q kept", options.IndividualTool.Description, generic.IndividualTool.Description)
 	}
 }
 
