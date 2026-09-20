@@ -1,7 +1,8 @@
 // Package main tests the meta description auditor: the extraction rule for
 // both blocks a description enumerates parameters in, the comparison against
-// the routes' input schemas, the report and its exit codes, and one full run
-// over the served surface, which is the CI gate's own assertion.
+// the routes' input schemas, the report and its exit codes, and the served
+// surface itself: once as the full run the CI gate makes, and once as the value
+// rule alone, which names the action and the value a line offers wrongly.
 package main
 
 import (
@@ -792,5 +793,32 @@ func TestRun_ServedSurface_IsClean(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "0 refused, every parameter and value they offer exists") {
 		t.Errorf("stdout = %q, want the all-clear summary with nothing refused", out.String())
+	}
+}
+
+// TestAuditServedSurface_OffersNoValueTheActionItNamesRejects holds one rule of
+// the gate on its own: a served line that names a single action and spells a
+// value set for one of its parameters offers only values that action's own
+// input schema accepts. The values are read back from the schema rather than
+// listed here, so the test states the rule instead of pinning today's answer.
+//
+// It is the value rule at per-action grain, which is the grain a shared list
+// hides. gitlab_user's Notifications block offered "global" for
+// notification_global_update long after that action stopped accepting it: the
+// account-wide scope publishes one level fewer than its project and group
+// siblings, client-go refuses the extra one before it builds a request, and the
+// pooled union of the group would have admitted it. [TestRun_ServedSurface_IsClean]
+// covers this too, as one number among every rule's findings; this one names the
+// action and the value, which is what a reader needs when it regresses.
+func TestAuditServedSurface_OffersNoValueTheActionItNamesRejects(t *testing.T) {
+	findings, lines, _ := auditServedSurface()
+	if lines == 0 {
+		t.Fatal("audit read no description lines, so it asserted nothing")
+	}
+	for _, f := range findings {
+		if f.kind != kindEnumValue && f.kind != kindDocValue {
+			continue
+		}
+		t.Errorf("%s offers %s, which the schema of the action that line names rejects: %s", f.tool, f.detail, f.line)
 	}
 }
