@@ -20,7 +20,9 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net"
 	"net/http"
@@ -311,7 +313,7 @@ func (p *serverProcess) transport(ctx context.Context) mcp.Transport {
 	p.exited = make(chan struct{})
 	p.state.Store(nil)
 
-	return &childTransport{proc: p, inner: &mcp.CommandTransport{Command: cmd}, exited: p.exited}
+	return &childTransport{proc: p, cmd: cmd, exited: p.exited}
 }
 
 // httpTransport starts this child as an HTTP server and returns the transport
@@ -455,18 +457,23 @@ const (
 	// its own shutdown and for the runtime to write its coverage counters,
 	// short enough that a wedged child costs seconds rather than the run.
 	childTerminateDelay = 10 * time.Second
+	// stdinCloseGrace is how long a stdio child has, after its stdin closed,
+	// to exit on its own before it is sent SIGTERM, and then how long it has
+	// after that before it is killed. The SDK's own command transport gives
+	// five seconds at each step, and this keeps its shape.
+	stdinCloseGrace = 5 * time.Second
 	// childrenExitBudget bounds the whole end-of-run wait, not one child's:
 	// they are all signaled at once and shut down at once, so a per-child
 	// bound would multiply by however many shapes the run started.
 	//
 	// It covers the phase after the cancel and not the Close loop that runs
-	// first. Each session's Close reaches the SDK's own pipe teardown, which
-	// waits for the exit, then sends SIGTERM and waits again, then kills and
-	// waits again: up to three times its TerminateDuration, 15 s at the SDK's
-	// default, for one stdio child, and serially. A healthy child exits on
-	// EOF in a few hundred milliseconds, so the loop is only the shape of the
-	// teardown when a child has wedged -- which is also when go test's own
-	// timeout is likeliest to fire mid-teardown and take the counters with it.
+	// first. Each session's Close reaches childStdin's teardown, which waits
+	// for the exit, then sends SIGTERM and waits again, then kills and waits
+	// again: up to three times stdinCloseGrace for one stdio child, and
+	// serially. A healthy child exits on EOF in a few hundred milliseconds,
+	// so the loop is only the shape of the teardown when a child has wedged
+	// -- which is also when go test's own timeout is likeliest to fire
+	// mid-teardown and take the counters with it.
 	childrenExitBudget = 30 * time.Second
 )
 
@@ -537,16 +544,25 @@ func (p *serverProcess) stopChild(cmd *exec.Cmd) {
 	p.waitForExit(time.Now().Add(childStopTimeout))
 }
 
-// reap starts the one goroutine that collects the child.
+// reap starts the one goroutine that collects the child, and it is the only
+// thing in this package or the SDK that ever waits on the process.
 //
-// It waits through os.Process rather than exec.Cmd because the transport calls
-// Cmd.Wait itself when the session closes: two Cmd.Wait calls cannot be told
-// apart from a real failure, while a second os.Process.Wait answers
-// ErrProcessDone deterministically. The cost is that the transport's own Close
-// returns that error, which the session layer ignores, and the benefit is that
-// the harness can say whether the server is still running before anybody has
-// asked it to stop. Without that, a child killed by a panic looks exactly like
-// a slow one.
+// That exclusivity is the whole design, and it was violated for a while: the
+// SDK's command transport calls Cmd.Wait from its own Close, which runs on its
+// own when the child's stdout reaches EOF, and two waiters on one child are a
+// race the kernel settles for whichever wakes first. The loser gets ECHILD and
+// no state, and when the loser was this reaper the harness reported the exit
+// as never recorded, on a clean exit, on a slow runner, twice in one day. The
+// stdio transport now starts the child over pipes of its own and hands the
+// SDK only the two ends, so nothing else is in a position to wait.
+//
+// It waits through os.Process rather than exec.Cmd because Cmd.Wait closes the
+// parent's end of the stdout pipe, and the SDK's reader may still be draining
+// the child's last answer out of it. The Cmd.Wait that releases exec's own
+// descriptors runs from childStdin.Close, once the reader is done with them.
+// The benefit of collecting here rather than there is that the harness can
+// say whether the server is still running before anybody has asked it to
+// stop: without that, a child killed by a panic looks exactly like a slow one.
 func (p *serverProcess) reap(cmd *exec.Cmd, exited chan struct{}) {
 	go func() {
 		state, _ := cmd.Process.Wait()
@@ -593,22 +609,107 @@ func (p *serverProcess) stderrTail() string {
 	return sink.tail()
 }
 
-// childTransport starts the child through the SDK's command transport and
-// hands the reaper the process the moment there is one.
+// childTransport starts the child over pipes of its own, hands the reaper the
+// process the moment there is one, and gives the SDK the two pipe ends and
+// nothing else.
+//
+// Not the SDK's command transport, on purpose: that one waits on the process
+// from its own Close, and a second waiter is what made the reaper lose the
+// exit status on a slow runner (see [serverProcess.reap]). What the SDK's
+// Close did beyond waiting, the protocol's shutdown of a stdio server, is
+// [childStdin.Close] here, step for step and against the reaper's channel.
 type childTransport struct {
 	proc   *serverProcess
-	inner  *mcp.CommandTransport
+	cmd    *exec.Cmd
 	exited chan struct{}
 }
 
 // Connect starts the child and begins watching it.
+//
+// stdout is handed over behind a NopCloser, as the SDK's own transport does:
+// the connection is closed by closing stdin, and closing the read end of
+// stdout under a child still writing its last answer would end it with a
+// SIGPIPE instead. childStdin closes that end itself, after the exit.
 func (t *childTransport) Connect(ctx context.Context) (mcp.Connection, error) {
-	conn, err := t.inner.Connect(ctx)
+	stdout, err := t.cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	t.proc.reap(t.inner.Command, t.exited)
-	return conn, nil
+	stdin, err := t.cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	if startErr := t.cmd.Start(); startErr != nil {
+		return nil, startErr
+	}
+	t.proc.reap(t.cmd, t.exited)
+	return (&mcp.IOTransport{
+		Reader: io.NopCloser(stdout),
+		Writer: &childStdin{cmd: t.cmd, stdin: stdin, stdout: stdout, exited: t.exited},
+	}).Connect(ctx)
+}
+
+// childStdin is the child's stdin as the SDK sees it, and its Close is the
+// shutdown of a stdio server: close the input, wait for the exit, and only
+// then escalate to SIGTERM and to a kill, each with its own grace.
+//
+// Every wait is on the reaper's channel rather than on the process, which is
+// what keeps this package to one waiter. The Cmd.Wait at the end collects
+// nothing, since the reaper already has, and runs for exec's own bookkeeping:
+// it closes the descriptors exec holds and joins the goroutine copying stderr.
+type childStdin struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	exited chan struct{}
+}
+
+// Write sends to the child.
+func (c *childStdin) Write(p []byte) (int, error) { return c.stdin.Write(p) }
+
+// Close asks the child to stop and waits until it has.
+func (c *childStdin) Close() error {
+	if err := c.stdin.Close(); err != nil {
+		return fmt.Errorf("closing stdin: %w", err)
+	}
+	if c.exitedWithin(stdinCloseGrace) {
+		return c.release()
+	}
+	// A signal that cannot be sent, which is every signal on Windows, is not
+	// waited for: the kill is the next step either way.
+	if err := c.cmd.Process.Signal(syscall.SIGTERM); err == nil && c.exitedWithin(stdinCloseGrace) {
+		return c.release()
+	}
+	if err := c.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	if c.exitedWithin(stdinCloseGrace) {
+		return c.release()
+	}
+	return errors.New("unresponsive subprocess")
+}
+
+// exitedWithin reports whether the reaper collected the child in time.
+func (c *childStdin) exitedWithin(grace time.Duration) bool {
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case <-c.exited:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+// release lets exec finish with a child the reaper has already collected.
+//
+// The stdout pipe is closed here and not by the SDK because the reader is
+// done with it only now. Cmd.Wait answers ECHILD, the process having been
+// waited for already, and that answer is the expected one.
+func (c *childStdin) release() error {
+	_ = c.stdout.Close()
+	_ = c.cmd.Wait()
+	return nil
 }
 
 // stderrSink keeps the tail of one child's stderr in memory and the whole of
