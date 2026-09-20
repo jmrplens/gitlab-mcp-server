@@ -88,7 +88,7 @@ func TestList_ReportsWhereThePageEnds(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.Method == http.MethodGet {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+topicJSON+`]`, testutil.PaginationHeaders{
-				Page: "2", PerPage: "20", Total: "45", TotalPages: "3", NextPage: "3", PrevPage: "1",
+				Page: "2", PerPage: "20", Total: "45", TotalPages: "9", NextPage: "3", PrevPage: "1",
 			})
 			return
 		}
@@ -102,7 +102,7 @@ func TestList_ReportsWhereThePageEnds(t *testing.T) {
 	// Every number differs, so a block assembled from the wrong header is a
 	// different block rather than an equal one.
 	want := toolutil.PaginationOutput{
-		Page: 2, PerPage: 20, TotalItems: 45, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true,
+		Page: 2, PerPage: 20, TotalItems: 45, TotalPages: 9, NextPage: 3, PrevPage: 1, HasMore: true,
 	}
 	if out.Pagination != want {
 		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)

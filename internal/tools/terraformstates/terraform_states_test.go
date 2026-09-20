@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -437,7 +438,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 // ---------------------------------------------------------------------------
-// DeleteVersion — error
+// DeleteVersion: error
 // ---------------------------------------------------------------------------.
 
 // TestDeleteVersion_Error verifies DeleteVersion when error: a 400 is not the
@@ -480,8 +481,8 @@ func TestDeleteVersion_NotFound_HintsTheSerialAndTheWholeStateAlternative(t *tes
 // The two lock sentences a card carries, written out rather than taken from
 // the constants that produce them. Building the expectation out of
 // hintLockNeedsCLI would let that constant go back to telling a reader to call
-// gitlab_lock_terraform_state — the call GitLab refuses every time, which is
-// the whole reason the sentence was rewritten — with every test still green.
+// gitlab_lock_terraform_state, the call GitLab refuses every time and the
+// whole reason the sentence was rewritten, with every test still green.
 const (
 	wantLockHint = "Locking a state needs the terraform CLI against the GitLab HTTP backend: " +
 		"`gitlab_lock_terraform_state` sends no lock-info body, which GitLab refuses"
@@ -527,8 +528,9 @@ func TestFormatStateMarkdown_UnwrittenState(t *testing.T) {
 // is written only when both are missing, and nothing held that: with the two
 // conditions joined by "or" instead of "and" the whole suite stayed green,
 // because every card tested had either both fields or neither. Each case here
-// gives the card one field, which are also the two states GitLab really sends
-// — a serial it omits for a version it has, and a download path it withholds.
+// gives the card one field, which are also the two states GitLab really
+// sends: a serial it omits for a version it has, and a download path it
+// withholds.
 func TestFormatStateMarkdown_HalfWrittenState(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -594,7 +596,7 @@ func TestFormatLockMarkdown_Coverage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FormatListMarkdown — empty
+// FormatListMarkdown: empty
 // ---------------------------------------------------------------------------.
 
 // TestFormatListMarkdown_Empty verifies an empty list is the one sentence and
@@ -703,4 +705,60 @@ func terraformHandler() http.Handler {
 	})
 
 	return mux
+}
+
+// TestOperationLabels_EachHandlerReportsUnderItsOwnName holds the six
+// operation labels to the handler each was given to.
+//
+// The label is the first argument of every WrapErr call and becomes the
+// prefix of the message a model reads, and nothing in this package asserted
+// one: the hint assertions are over the sentence alone, which is a different
+// string. Six labels of one type with no reader is six values that could
+// trade places, so a caller whose delete was refused would be told the list
+// had failed. Each case drives its handler into a refusal GitLab really
+// sends and reads the prefix back.
+func TestOperationLabels_EachHandlerReportsUnderItsOwnName(t *testing.T) {
+	cases := []struct {
+		operation string
+		call      func(*gitlabclient.Client) error
+	}{
+		{"gitlab_list_terraform_states", func(c *gitlabclient.Client) error {
+			_, err := List(t.Context(), c, ListInput{ProjectPath: "group/project"})
+			return err
+		}},
+		{"gitlab_get_terraform_state", func(c *gitlabclient.Client) error {
+			_, err := Get(t.Context(), c, GetInput{ProjectPath: "group/project", Name: "state1"})
+			return err
+		}},
+		{"gitlab_delete_terraform_state", func(c *gitlabclient.Client) error {
+			return Delete(t.Context(), c, DeleteInput{ProjectID: "1", Name: "state1"})
+		}},
+		{"gitlab_delete_terraform_state_version", func(c *gitlabclient.Client) error {
+			return DeleteVersion(t.Context(), c, DeleteVersionInput{ProjectID: "1", Name: "state1", Serial: 3})
+		}},
+		{"gitlab_lock_terraform_state", func(c *gitlabclient.Client) error {
+			_, err := Lock(t.Context(), c, LockInput{ProjectID: "1", Name: "state1"})
+			return err
+		}},
+		{"gitlab_unlock_terraform_state", func(c *gitlabclient.Client) error {
+			_, err := Unlock(t.Context(), c, LockInput{ProjectID: "1", Name: "state1"})
+			return err
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.operation, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+			}))
+
+			err := tc.call(client)
+			if err == nil {
+				t.Fatalf("%s error = nil, want the refusal", tc.operation)
+			}
+			if !strings.HasPrefix(err.Error(), tc.operation+": ") {
+				t.Errorf("error = %q, want it to open with %q", err.Error(), tc.operation+": ")
+			}
+		})
+	}
 }

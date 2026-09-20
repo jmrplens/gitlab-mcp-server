@@ -310,9 +310,9 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 
 // TestTest_Success verifies Test publishes GitLab's whole sample payload. Every
 // string of the fixture differs from every other, which the previous one did
-// not do — it gave the name and the path one value, so the two could have
-// traded places unnoticed — and the event is compared entire rather than on the
-// two fields that used to be spot-checked.
+// not do (it gave the name and the path one value, so the two could have
+// traded places unnoticed), and the event is compared entire rather than on
+// the two fields that used to be spot-checked.
 func TestTest_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -530,7 +530,7 @@ func TestURLVariable_APIErrors(t *testing.T) {
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
-// Get — API error
+// Get: API error
 // ---------------------------------------------------------------------------.
 
 // TestGet_APIError verifies Get when API error.
@@ -545,7 +545,7 @@ func TestGet_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Add — API error, with all optional fields
+// Add: API error, with all optional fields
 // ---------------------------------------------------------------------------.
 
 // TestEdit_APIError verifies that an edit GitLab refused is reported rather
@@ -749,8 +749,71 @@ func TestAddAndEdit_OneFlagAtATime_SendThatToggleAndNoOther(t *testing.T) {
 	}
 }
 
+// hookRequestStrings are the string inputs an add or an edit carries, each
+// with a value no other one takes, so a guard reading a neighbour's field is
+// a different request rather than an equal one.
+var hookRequestStrings = []struct {
+	key     string
+	value   string
+	setAdd  func(*AddInput, string)
+	setEdit func(*EditInput, string)
+}{
+	{"name", "named-hook", func(i *AddInput, v string) { i.Name = v }, func(i *EditInput, v string) { i.Name = v }},
+	{"description", "described-hook", func(i *AddInput, v string) { i.Description = v }, func(i *EditInput, v string) { i.Description = v }},
+	{"token", "token-value", func(i *AddInput, v string) { i.Token = v }, func(i *EditInput, v string) { i.Token = v }},
+	{"signing_token", "signing-value", func(i *AddInput, v string) { i.SigningToken = v }, func(i *EditInput, v string) { i.SigningToken = v }},
+	{"push_events_branch_filter", "release/*", func(i *AddInput, v string) { i.PushEventsBranchFilter = v }, func(i *EditInput, v string) { i.PushEventsBranchFilter = v }},
+	{"branch_filter_strategy", "wildcard", func(i *AddInput, v string) { i.BranchFilterStrategy = v }, func(i *EditInput, v string) { i.BranchFilterStrategy = v }},
+}
+
+// TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther holds each string
+// guard to the field it reads.
+//
+// The flags above are pinned one at a time; the strings were not. Both
+// all-optional fixtures set every string together, so a guard crossed to read
+// a neighbor (`if input.Description != ""` copying `input.Name`) produced the
+// same request there, and the one input that sets a name without a description
+// asserts only that the name arrived. Driving one string at a time, and
+// refusing every other string key, tells all six apart on both call paths.
+func TestAddAndEdit_OneStringAtATime_SendThatKeyAndNoOther(t *testing.T) {
+	for _, field := range hookRequestStrings {
+		t.Run(field.key, func(t *testing.T) {
+			t.Run("add", func(t *testing.T) {
+				input := AddInput{URL: testHookURL}
+				field.setAdd(&input, field.value)
+				assertOnlyStringSent(t, field.key, field.value, captureHookBody(t, func(client *gitlabclient.Client) error {
+					_, err := Add(t.Context(), client, input)
+					return err
+				}))
+			})
+			t.Run("edit", func(t *testing.T) {
+				input := EditInput{ID: 1}
+				field.setEdit(&input, field.value)
+				assertOnlyStringSent(t, field.key, field.value, captureHookBody(t, func(client *gitlabclient.Client) error {
+					_, err := Edit(t.Context(), client, input)
+					return err
+				}))
+			})
+		})
+	}
+}
+
+// assertOnlyStringSent holds a request body to the one string key the caller
+// set, with its value, and to no other string key of the family.
+func assertOnlyStringSent(t *testing.T, key, value, body string) {
+	t.Helper()
+	if !strings.Contains(body, `"`+key+`":"`+value+`"`) {
+		t.Errorf("request body does not carry %q as %q: %s", key, value, body)
+	}
+	for _, other := range hookRequestStrings {
+		if other.key != key && strings.Contains(body, `"`+other.key+`"`) {
+			t.Errorf("request body carries %q, which the caller never set: %s", other.key, body)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
-// Test — API error
+// Test: API error
 // ---------------------------------------------------------------------------.
 
 // TestTest_APIError verifies Test when API error.
@@ -761,6 +824,74 @@ func TestTest_APIError(t *testing.T) {
 	_, err := Test(context.Background(), client, TestInput{ID: 999})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestNotFoundHints_EachHandlerCarriesItsOwnSentence holds the four 404 hints
+// to the handler each was written for.
+//
+// All four open with "verify hook_id with gitlab_list_system_hooks", which is
+// what the tests asserted, and every one of them satisfies that: the four
+// literals could trade places and nothing would fail. They differ in the tail,
+// and get's whole sentence is a prefix of edit's, so containment alone cannot
+// tell those two apart either. The assertion is therefore on the whole
+// sentence in the position the formatter puts it, between "Suggestion: " and
+// the colon that introduces the wrapped error, which a longer hint cannot
+// satisfy.
+func TestNotFoundHints_EachHandlerCarriesItsOwnSentence(t *testing.T) {
+	const listing = "verify hook_id with gitlab_list_system_hooks"
+	cases := []struct {
+		name string
+		hint string
+		call func(*gitlabclient.Client) error
+	}{
+		{
+			name: "get",
+			hint: listing + "; admin-only on self-managed instances",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Get(t.Context(), c, GetInput{ID: 999})
+				return err
+			},
+		},
+		{
+			name: "edit",
+			hint: listing + "; admin-only on self-managed instances; unset fields keep current values",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Edit(t.Context(), c, EditInput{ID: 999, URL: "https://hook.example.com"})
+				return err
+			},
+		},
+		{
+			name: "test",
+			hint: listing + "; test triggers a sample push event. Verify the receiving endpoint is reachable",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Test(t.Context(), c, TestInput{ID: 999})
+				return err
+			},
+		},
+		{
+			name: "set_url_variable",
+			hint: listing + "; URL variable keys are case-sensitive and referenced by placeholders in the hook URL",
+			call: func(c *gitlabclient.Client) error {
+				return SetURLVariable(t.Context(), c, SetURLVariableInput{ID: 999, Key: "TOKEN", Value: "v"})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not found"}`)
+			}))
+
+			err := tc.call(client)
+			if err == nil {
+				t.Fatalf("%s error = nil, want the refusal", tc.name)
+			}
+			if want := "Suggestion: " + tc.hint + ":"; !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %q, want it to carry %q", err.Error(), want)
+			}
+		})
 	}
 }
 

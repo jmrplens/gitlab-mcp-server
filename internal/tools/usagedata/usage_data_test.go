@@ -439,8 +439,12 @@ func TestTrackEvent_Error(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedNil)
 	}
-	if !strings.Contains(err.Error(), "valid Snowplow event identifier") {
-		t.Errorf("error = %q, want the hint keyed to a bad request", err.Error())
+	// The tail rather than the opening: the batch hint begins "each event name
+	// must be a valid Snowplow event identifier", so the opening cannot tell
+	// the two sentences apart and this handler wearing the batch one, which
+	// talks about a ceiling a single-event call has not got, would pass.
+	if !strings.Contains(err.Error(), "verify namespace_id/project_id exist if provided") {
+		t.Errorf("error = %q, want the hint keyed to a bad request on a single event", err.Error())
 	}
 }
 
@@ -848,7 +852,7 @@ func firstDifference(a, b string) int {
 // ---------- Tests consolidated from coverage_test.go ----------.
 
 // ---------------------------------------------------------------------------
-// GetQueries — API error
+// GetQueries: API error
 // ---------------------------------------------------------------------------.
 
 // TestGetQueries_APIError verifies GetQueries when API error.
@@ -863,7 +867,7 @@ func TestGetQueries_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetQueries — nil recorded_at
+// GetQueries: nil recorded_at
 // ---------------------------------------------------------------------------.
 
 // TestGetQueries_NilRecordedAt verifies GetQueries when nil recorded at.
@@ -881,7 +885,7 @@ func TestGetQueries_NilRecordedAt(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TrackEvents — API error
+// TrackEvents: API error
 // ---------------------------------------------------------------------------.
 
 // TestTrackEvents_APIError verifies that a refused batch carries the hint keyed
@@ -902,7 +906,7 @@ func TestTrackEvents_APIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — empty service ping
+// Formatters: empty service ping
 // ---------------------------------------------------------------------------.
 
 // TestFormatServicePingMarkdown_NothingReported_IsTheHeadingAndTheHints
@@ -917,7 +921,7 @@ func TestFormatServicePingMarkdown_NothingReported_IsTheHeadingAndTheHints(t *te
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — queries with many counts
+// Formatters: queries with many counts
 // ---------------------------------------------------------------------------.
 
 // TestFormatQueriesMarkdown_MoreThanTheCardShows_SaysHowManyItLeftOut verifies
@@ -975,7 +979,7 @@ func TestFormatQueriesMarkdown_HostileIdentity_StaysInsideItsRows(t *testing.T) 
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — service ping with many counts
+// Formatters: service ping with many counts
 // ---------------------------------------------------------------------------.
 
 // TestFormatServicePingMarkdown_ManyCounts_SaysHowManyItLeftOut verifies that
@@ -1032,12 +1036,16 @@ func usageDataCalls(t *testing.T, client *gitlabclient.Client) []struct {
 			_, err := GetServicePing(t.Context(), client, GetServicePingInput{})
 			return err
 		}},
-		{name: "non_sql_metrics", forbiddenHint: "service ping must be enabled", call: func() error {
+		{name: "non_sql_metrics", forbiddenHint: "self-managed only; service ping must be enabled", call: func() error {
 			_, err := GetNonSQLMetrics(t.Context(), client, GetNonSQLMetricsInput{})
 			return err
 		}},
 		{name: "usage_queries", forbiddenHint: "returns the SQL queries that produce service ping counts", call: func() error {
 			_, err := GetQueries(t.Context(), client, GetQueriesInput{})
+			return err
+		}},
+		{name: "metric_definitions", forbiddenHint: "returns YAML metric definitions", call: func() error {
+			_, err := GetMetricDefinitions(t.Context(), client, GetMetricDefinitionsInput{})
 			return err
 		}},
 		{name: "track_event", call: func() error {
@@ -1064,11 +1072,6 @@ func TestUsageData_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 			}
 		})
 	}
-	t.Run("metric_definitions", func(t *testing.T) {
-		if _, err := GetMetricDefinitions(t.Context(), client, GetMetricDefinitionsInput{}); err != nil {
-			t.Fatalf("GetMetricDefinitions() error = %v, want nil", err)
-		}
-	})
 }
 
 // TestUsageData_RefusalsPropagate verifies that an instance refusing the read
@@ -1111,7 +1114,7 @@ func TestGetMetricDefinitions_ReadError(t *testing.T) {
 	mux.HandleFunc("GET /api/v4/usage_data/metric_definitions", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "100")
 		w.WriteHeader(http.StatusOK)
-		// Write no data — mismatch with Content-Length triggers read error.
+		// Write no data: mismatch with Content-Length triggers read error.
 	})
 	client := testutil.NewTestClient(t, mux)
 	ctx := context.Background()
