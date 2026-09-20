@@ -149,6 +149,38 @@ func TestFormatDependencyMarkdown_HostileBranch_StaysContained(t *testing.T) {
 	assertContained(t, md)
 }
 
+// TestFormatMarkdown_PipelineRow_NeedsAPipelineWithAnID holds the pipeline row
+// to a pipeline GitLab really sent: an object with no id, which is what a
+// merge request whose pipeline has not run yet carries, renders no row rather
+// than a link to pipeline #0, and an object with one renders the number, the
+// link and the status when there is one.
+func TestFormatMarkdown_PipelineRow_NeedsAPipelineWithAnID(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline *toolutil.PipelineInfoOutput
+		want     string
+	}{
+		{"nil pipeline", nil, ""},
+		{"pipeline without id", &toolutil.PipelineInfoOutput{Status: "pending", WebURL: "https://gitlab.example.com/p/0"}, ""},
+		{
+			"pipeline without status", &toolutil.PipelineInfoOutput{ID: 9, WebURL: "https://gitlab.example.com/p/9"},
+			"- **Pipeline**: [#9](https://gitlab.example.com/p/9)",
+		},
+		{
+			"pipeline with status", &toolutil.PipelineInfoOutput{ID: 9, Status: "running", WebURL: "https://gitlab.example.com/p/9"},
+			"- **Pipeline**: [#9](https://gitlab.example.com/p/9) 🔵 running",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := FormatMarkdown(Output{IID: 1, Pipeline: tt.pipeline})
+			if got := lineWith(md, "**Pipeline**"); got != tt.want {
+				t.Errorf("pipeline row = %q, want %q\n---\n%s", got, tt.want, md)
+			}
+		})
+	}
+}
+
 // lineWith returns the single rendered line carrying label, which is how a
 // test asserts that a value stayed on the line written for it rather than
 // continuing onto lines of its own.

@@ -195,7 +195,7 @@ func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, in
 	if err := DeleteDependency(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted dependency on blocking MR %d from MR !%d in project %s.", input.BlockingMergeRequestID, input.MRIID, input.ProjectID)}, nil
+	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted dependency %d from MR !%d in project %s.", input.BlockingMergeRequestID, input.MRIID, input.ProjectID)}, nil
 }
 
 // mergeRequestReadSpec builds a read-only [toolutil.ActionSpec] for a
@@ -409,10 +409,10 @@ func mergeRequestActionMetadataTable() map[string]mergeRequestActionMetadata {
 			description: "Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR. See also: gitlab_mr_dependency_delete, gitlab_mr_dependencies_list.",
 		},
 		"dependency_delete": {
-			usage:       "Remove a previously added blocking dependency from a merge request.",
+			usage:       "Remove a previously added blocking dependency from a merge request. blocking_merge_request_id is the dependency's own id, as " + actionMRDependencies + " reports it, not the blocking merge request's id.",
 			aliases:     []string{"delete merge request dependency", "remove mr dependency", "unblock mr"},
 			related:     []string{"merge_request.dependency_create", actionMRDependencies},
-			description: "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
+			description: "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
 		},
 		"dependencies_list": {
 			usage:       "List the blocking dependencies of a merge request (the MRs that must merge first).",

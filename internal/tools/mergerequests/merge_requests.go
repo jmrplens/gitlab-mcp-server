@@ -156,6 +156,10 @@ type mergeRequestListFilters struct {
 	Keyset              toolutil.KeysetPaginationInput
 }
 
+// mergeRequestListTarget is the set of setters one listing's options accept.
+// Every field is a closure [newMergeRequestListTarget] builds, so none of them
+// is ever nil and none is checked: a listing that lacks an option leaves the
+// matching filter field unset on its side instead.
 type mergeRequestListTarget struct {
 	state               func(*string)
 	labels              func(*gl.LabelOptions)
@@ -257,22 +261,22 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 		return fmt.Errorf("approved_by_ids: %w", err)
 	}
 	setStringSlice(input.ApprovedByUsernames, target.approvedByUsernames)
-	if input.WithLabelsDetails != nil && target.withLabelsDetails != nil {
+	if input.WithLabelsDetails != nil {
 		target.withLabelsDetails(input.WithLabelsDetails)
 	}
-	if input.WithMergeRecheck != nil && target.withMergeRecheck != nil {
+	if input.WithMergeRecheck != nil {
 		target.withMergeRecheck(input.WithMergeRecheck)
 	}
-	if labels := labelOptions(input.Labels); labels != nil && target.labels != nil {
+	if labels := labelOptions(input.Labels); labels != nil {
 		target.labels(labels)
 	}
-	if labels := labelOptions(input.NotLabels); labels != nil && target.notLabels != nil {
+	if labels := labelOptions(input.NotLabels); labels != nil {
 		target.notLabels(labels)
 	}
-	if input.Draft != nil && target.draft != nil {
+	if input.Draft != nil {
 		target.draft(input.Draft)
 	}
-	if input.NonArchived != nil && target.nonArchived != nil {
+	if input.NonArchived != nil {
 		target.nonArchived(input.NonArchived)
 	}
 	setTime(toolutil.ParseOptionalTime(input.CreatedAfter), target.createdAfter)
@@ -281,16 +285,14 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setTime(toolutil.ParseOptionalTime(input.UpdatedBefore), target.updatedBefore)
 	setTime(toolutil.ParseOptionalTime(input.DeployedAfter), target.deployedAfter)
 	setTime(toolutil.ParseOptionalTime(input.DeployedBefore), target.deployedBefore)
-	if target.listOptions != nil {
-		toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
-	}
+	toolutil.ApplyListOptions(target.listOptions, toolutil.PaginationInput{Page: input.Page, PerPage: input.PerPage}, input.Keyset)
 	return nil
 }
 
 // setApproverIDs converts an approver filter to its SDK value and hands it to
 // the setter, leaving the option untouched when the filter is empty.
 func setApproverIDs(value toolutil.ApproverIDsFilter, setter func(*gl.ApproverIDsValue)) error {
-	if len(value) == 0 || setter == nil {
+	if len(value) == 0 {
 		return nil
 	}
 	converted, err := value.ApproverIDsValue()
@@ -302,30 +304,35 @@ func setApproverIDs(value toolutil.ApproverIDsFilter, setter func(*gl.ApproverID
 }
 
 func setInt64(value int64, setter func(int64)) {
-	if value != 0 && setter != nil {
+	if value != 0 {
 		setter(value)
 	}
 }
 
 func setStringSlice(value []string, setter func([]string)) {
-	if len(value) > 0 && setter != nil {
+	if len(value) > 0 {
 		setter(value)
 	}
 }
 
 func setString(value string, setter func(*string)) {
-	if value != "" && setter != nil {
+	if value != "" {
 		setter(&value)
 	}
 }
 
 func setTime(value *time.Time, setter func(*time.Time)) {
-	if value != nil && setter != nil {
+	if value != nil {
 		setter(value)
 	}
 }
 
 // UpdateInput defines parameters for updating a merge request.
+//
+// MilestoneID is a pointer, as on issues.UpdateInput, because GitLab reads
+// milestone_id=0 as "unassign" and a plain int64 cannot tell that zero from an
+// omitted field: the description promised "0 to unset" while the handler
+// dropped every zero on the floor.
 type UpdateInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"                    jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID              int64                `json:"merge_request_iid"                        jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
@@ -338,7 +345,7 @@ type UpdateInput struct {
 	Labels             []string             `json:"labels,omitempty"               jsonschema:"Label names to replace all labels on the merge request"`
 	AddLabels          []string             `json:"add_labels,omitempty"          jsonschema:"Label names to add without removing existing"`
 	RemoveLabels       []string             `json:"remove_labels,omitempty"       jsonschema:"Label names to remove"`
-	MilestoneID        int64                `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
+	MilestoneID        *int64               `json:"milestone_id,omitempty"        jsonschema:"Milestone ID (0 to unset)"`
 	RemoveSourceBranch *bool                `json:"remove_source_branch,omitempty" jsonschema:"Delete source branch after merge. Only set if explicitly requested"`
 	Squash             *bool                `json:"squash,omitempty"              jsonschema:"Squash commits on merge. Only set if explicitly requested"`
 	DiscussionLocked   *bool                `json:"discussion_locked,omitempty"   jsonschema:"Lock discussions on the merge request"`
@@ -701,8 +708,8 @@ func buildUpdateOpts(input UpdateInput) *gl.UpdateMergeRequestOptions {
 	if labels := labelOptions(input.RemoveLabels); labels != nil {
 		opts.RemoveLabels = labels
 	}
-	if input.MilestoneID > 0 {
-		opts.MilestoneID = new(input.MilestoneID)
+	if input.MilestoneID != nil {
+		opts.MilestoneID = input.MilestoneID
 	}
 	if input.RemoveSourceBranch != nil {
 		opts.RemoveSourceBranch = input.RemoveSourceBranch
@@ -2084,10 +2091,16 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 }
 
 // DeleteDependencyInput defines parameters for deleting a merge request dependency.
+//
+// The route is DELETE .../blocks/:block_id, and GitLab documents block_id as
+// "the ID of the merge request dependency": the id field of a
+// dependencies_list entry, not the blocking merge request's own id. The
+// parameter keeps the name client-go gives it, so the description is what
+// tells a model which of the two ids to send.
 type DeleteDependencyInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID                  int64                `json:"merge_request_iid"                    jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the blocking merge request to remove"`
+	BlockingMergeRequestID int64                `json:"blocking_merge_request_id" jsonschema:"ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id"`
 }
 
 // DeleteDependency removes a dependency (blocker) from a merge request.
@@ -2184,7 +2197,9 @@ func diagnoseMergeBlocker(mrIID int64, mr *gl.MergeRequest, originalErr error) e
 
 	var reasons []string
 
-	if hint, ok := mergeStatusHints[mr.DetailedMergeStatus]; ok && mr.DetailedMergeStatus != "mergeable" {
+	// A status the table has no hint for, "mergeable" among them, contributes
+	// nothing: the field-level checks below say what they can about it.
+	if hint, ok := mergeStatusHints[mr.DetailedMergeStatus]; ok {
 		reasons = append(reasons, hint)
 	}
 
