@@ -77,8 +77,62 @@ func TestTemplatePath_Identifiers_CollapseToPlaceholders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := templatePath(tt.path); got != tt.want {
+			if got, _ := templatePath(tt.path); got != tt.want {
 				t.Errorf("templatePath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTemplatePath_RawValues_ComeBackUnderTheirPlaceholder verifies the half of
+// the templating that the inventory's identifier counts rest on: a value it
+// replaces is reported under the name it was replaced with.
+//
+// It is not the same question as the path above. The path says which endpoint
+// was reached and the values say what stood in it, and with one fixture value a
+// handler that reads the caller's project and one that has a project id written
+// into it produce the same path. The repeated placeholder is the case that
+// decides the shape of the answer: both values have to come back, because a map
+// keeping one of them would report one distinct value where there are two,
+// which is the direction that invents a lead nobody can act on.
+func TestTemplatePath_RawValues_ComeBackUnderTheirPlaceholder(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want map[string][]string
+	}{
+		{
+			name: "one identifier per collection",
+			path: "/api/v4/projects/42/issues/7/notes",
+			want: map[string][]string{":project_id": {"42"}, ":issue_id": {"7"}},
+		},
+		{
+			name: "a project addressed by encoded path",
+			path: "/api/v4/projects/group%2Fproject/issues",
+			want: map[string][]string{":project_id": {"group%2Fproject"}},
+		},
+		{
+			name: "two identifiers under one placeholder name",
+			path: "/api/v4/x/my-things/1/my-things/2",
+			want: map[string][]string{":id": {"1", "2"}},
+		},
+		{
+			name: "a path with nothing to template",
+			path: "/api/v4/projects",
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, got := templatePath(tt.path)
+			if len(got) != len(tt.want) {
+				t.Fatalf("templatePath(%q) identifiers = %v, want %v", tt.path, got, tt.want)
+			}
+			for placeholder, want := range tt.want {
+				if !slices.Equal(got[placeholder], want) {
+					t.Errorf("templatePath(%q)[%q] = %v, want %v", tt.path, placeholder, got[placeholder], want)
+				}
 			}
 		})
 	}

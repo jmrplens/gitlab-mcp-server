@@ -30,11 +30,14 @@ type response struct {
 	// Conditions gate a field of this response, by field name. A field with
 	// none is one GitLab always sends.
 	Conditions map[string][]apilive.Condition
-	// Params are the parameter names the route declares. Only page and per_page
-	// mean anything to a reader of this fixture, since they are what says
-	// whether GitLab pages the endpoint; a param's type and requiredness are
-	// nothing the checks here ask about.
+	// Params are the parameter names the route declares, each optional. page
+	// and per_page are what says whether GitLab pages the endpoint, and a
+	// param GitLab lets a caller leave out is what the always-sent rule judges
+	// an unconditionally written field against.
 	Params []string
+	// ParamsRequired are declared the same way and marked required, which is
+	// what makes writing them on every call correct rather than a finding.
+	ParamsRequired []string
 }
 
 // recordIn writes a live GitLab record a test can join against, from a map of
@@ -71,7 +74,13 @@ func fixtureDocument(operations map[string]response) apilive.Document {
 			if route.Params == nil {
 				route.Params = map[string]apilive.Param{}
 			}
-			route.Params[name] = apilive.Param{}
+			route.Params[name] = apilive.Param{Type: "String"}
+		}
+		for _, name := range answer.ParamsRequired {
+			if route.Params == nil {
+				route.Params = map[string]apilive.Param{}
+			}
+			route.Params[name] = apilive.Param{Required: true, Type: "String"}
 		}
 		if len(answer.Response) > 0 || answer.Entity != "" {
 			route.Entity = answer.Entity
@@ -513,6 +522,65 @@ func TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeT
 	reversed, _, _ := index.lookup("GET", "/others")
 	if !reversed.Offset || !reversed.Keyset {
 		t.Errorf("operation = offset %t, keyset %t; want the merge to be independent of mount order", reversed.Offset, reversed.Keyset)
+	}
+}
+
+// TestNewOperationIndex_TwoRoutesMerged_UnionTheirParamsAndKeepEveryRequirement
+// verifies the merge of the half of a route that is about the request rather
+// than the answer.
+//
+// The params are unioned in both merges, at one path and at one shape, because
+// either route may be the one a recorded request reached. Requiredness is the
+// one field where the union is not symmetric: a param either route demands is
+// required on the merged answer, since the claim an always-sent finding rests
+// on is that GitLab lets a caller leave the param out, and a route that demands
+// it refutes that claim outright.
+func TestNewOperationIndex_TwoRoutesMerged_UnionTheirParamsAndKeepEveryRequirement(t *testing.T) {
+	index := newOperationIndex(apilive.Document{
+		SchemaVersion: apilive.SchemaVersion,
+		Routes: []apilive.Route{
+			{Method: "POST", Path: apilive.EndpointPrefix + "/things", Params: map[string]apilive.Param{"name": {Type: "String"}}},
+			{Method: "POST", Path: apilive.EndpointPrefix + "/things", Params: map[string]apilive.Param{"name": {Required: true, Type: "String"}, "path": {}}},
+			{Method: "POST", Path: apilive.EndpointPrefix + "/projects/:id/widgets", Params: map[string]apilive.Param{"color": {Required: true}}},
+			{Method: "POST", Path: apilive.EndpointPrefix + "/projects/:name/widgets", Params: map[string]apilive.Param{"size": {}}},
+		},
+	})
+
+	atOnePath, _, _ := index.lookup("POST", "/things")
+	if !atOnePath.Params["name"].Required {
+		t.Errorf("name = %+v, want the second route's requirement kept", atOnePath.Params["name"])
+	}
+	if _, declared := atOnePath.Params["path"]; !declared {
+		t.Errorf("params = %v, want the second route's own param too", atOnePath.Params)
+	}
+
+	atOneShape, _, _ := index.lookup("POST", "/projects/:project_id/widgets")
+	if !atOneShape.Params["color"].Required || len(atOneShape.Params) != 2 {
+		t.Errorf("params = %v, want both routes' params with the requirement kept", atOneShape.Params)
+	}
+}
+
+// TestUnionParams_TheRecordsOwnMap_IsNeverWrittenInto verifies the property
+// that keeps the merge safe to run over a shared record: the maps being merged
+// belong to the routes the record holds, and every reader of those routes sees
+// them.
+func TestUnionParams_TheRecordsOwnMap_IsNeverWrittenInto(t *testing.T) {
+	first := map[string]apilive.Param{"name": {}}
+	second := map[string]apilive.Param{"name": {Required: true}, "path": {}}
+
+	merged := unionParams(first, second)
+
+	if len(first) != 1 || first["name"].Required {
+		t.Errorf("the first map became %v, want it untouched", first)
+	}
+	if len(merged) != 2 || !merged["name"].Required {
+		t.Errorf("merged = %v, want both params with the requirement kept", merged)
+	}
+	if got := unionParams(nil, second); len(got) != 2 {
+		t.Errorf("unionParams(nil, …) = %v, want the second map", got)
+	}
+	if got := unionParams(first, nil); len(got) != 1 {
+		t.Errorf("unionParams(…, nil) = %v, want the first map", got)
 	}
 }
 

@@ -41,6 +41,15 @@ type Report struct {
 	// could see before. A report and not a gate, for the reason
 	// [SDKGraphQLCheck] records.
 	SDKGraphQL SDKGraphQLCheck `json:"sdk_graphql"`
+	// AlwaysSent is the first of the two checks here that read values rather
+	// than names: a param the SDK writes on every call that GitLab lets a
+	// caller leave out. A report and not a gate, for the reason
+	// [AlwaysSentCheck] records.
+	AlwaysSent AlwaysSentCheck `json:"always_sent"`
+	// Identifiers is the other: a placeholder the recorder only ever saw one
+	// value behind, which is where a hard-coded identifier can hide. A report
+	// and not a gate, for the reason [IdentifierCheck] records.
+	Identifiers IdentifierCheck `json:"identifier_values"`
 	// E2E is what a recorded end-to-end run says about which actions were seen
 	// issuing a request, which is the one grain finer than the package the
 	// observation check above is held at. Empty unless a shard directory was
@@ -161,6 +170,19 @@ type Summary struct {
 	// the lead. See [E2EObservation].
 	E2EActionsObserved int `json:"e2e_actions_issuing_requests"`
 	E2EActionsSilent   int `json:"e2e_actions_that_ran_and_issued_nothing"`
+	// The always-sent counts are the first of the two value questions: how many
+	// params the SDK writes unconditionally, how many of those GitLab requires
+	// anyway, and the remainder a caller cannot decline to send. See
+	// [AlwaysSentCheck].
+	AlwaysSentFields   int `json:"always_sent_fields"`
+	AlwaysSentRequired int `json:"always_sent_required_by_gitlab"`
+	AlwaysSentOptional int `json:"always_sent_but_optional"`
+	// The identifier counts are the other: how many placeholder positions the
+	// recording reached, and how many of them it only ever stood one value
+	// behind. Zero on an inventory recorded before the counts existed, which
+	// Identifiers.Ran is what tells apart. See [IdentifierCheck].
+	IdentifierPlaceholders int `json:"identifier_placeholders"`
+	IdentifierSingleValued int `json:"identifier_placeholders_with_one_value"`
 }
 
 // observedGrain is what [Summary.Grain] says, spelled once.
@@ -278,6 +300,8 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 	typedSentAlways, typedSentWhen, typedSentDeclared := unsurfacedCounts(shapes.Typed.Unsurfaced)
 	pagination := paginationCheck(root, inventory.Requests, actions)
 	sdkGraphQL := sdkGraphQLCheck(root)
+	alwaysSent := alwaysSentCheck(root, inventory.Requests)
+	identifiers := identifierCheck(inventory.Requests)
 	e2e := e2eObservation(opts.E2ECallsDir, actions)
 
 	stale = append(stale, endpoints.staleDeclarations()...)
@@ -296,6 +320,8 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 		Shapes:            shapes,
 		Pagination:        pagination,
 		SDKGraphQL:        sdkGraphQL,
+		AlwaysSent:        alwaysSent,
+		Identifiers:       identifiers,
 		E2E:               e2e,
 		Summary: Summary{
 			InventoryRows:           len(inventory.Requests),
@@ -343,6 +369,11 @@ func buildReport(ctx context.Context, root string, opts Options) (Report, error)
 			SDKGraphQLRefused:       len(sdkGraphQL.Refusals),
 			E2EActionsObserved:      len(e2e.Issuing),
 			E2EActionsSilent:        len(e2e.Silent),
+			AlwaysSentFields:        alwaysSent.Fields,
+			AlwaysSentRequired:      alwaysSent.Required,
+			AlwaysSentOptional:      len(alwaysSent.Optional),
+			IdentifierPlaceholders:  identifiers.Placeholders,
+			IdentifierSingleValued:  identifiers.Single,
 		},
 	}
 	if opts.GapsOnly {

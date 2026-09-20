@@ -13,7 +13,13 @@
 // This rule reads the request instead. Its input is the inventory
 // internal/testutil records and cmd/gen_request_inventory commits, which is the
 // first honest answer to what this server sends GitLab, and it puts that
-// inventory through five checks.
+// inventory through seven checks.
+//
+// Five of them read the inventory as a list of endpoints and parameter names,
+// which is what the recording keeps of a request. The last two read values,
+// because names alone leave two whole classes of defect invisible: a field this
+// server writes into every body whatever the caller asked for, and a path built
+// out of a constant every fixture happens to agree with.
 //
 // # Has the path ever been observed
 //
@@ -218,6 +224,47 @@
 // works on. It reports and does not gate, since a finding is a surface change;
 // its declaration table gates, since a claim that has stopped being true is not
 // a candidate. See [PaginationCheck].
+//
+// # Is a param sent that the caller never asked to send
+//
+// The first of the two checks that read values rather than names, and the
+// reason both exist: the recorder writes down that a body carried
+// package_name_pattern and nothing about what was in it, so a field this server
+// sends as null on every call reads exactly like a field a caller filled in.
+//
+// client-go's option structs say which keys encoding/json writes whatever the
+// handler set, and the live record says which params GitLab declares optional
+// on the route receiving them. A key written unconditionally whose param GitLab
+// requires anyway is correct; one whose param GitLab lets a caller leave out is
+// a value nobody can decline to send. On the pinned record that separates 10
+// findings from 34 benign always-sent fields with no declaration table doing
+// any of the work, and the 10 include the case it was built against:
+// package_protection_rule.update sends "package_name_pattern": null on a PATCH
+// where GitLab marks it optional, while the POST beside it requires the same
+// field and is right to send it always.
+//
+// Whether GitLab minds a null in a given position is per endpoint, which is one
+// of the reasons this reports rather than gates; the other is that the tag
+// belongs to client-go, so almost every fix is an upstream merge request and
+// failing a build on somebody else's struct tag is the shape the SDK GraphQL
+// section already declined. See [AlwaysSentCheck].
+//
+// # Was the path ever built out of anything but the fixture
+//
+// The other value check, and the one that had to be paid for in the recorder.
+// Templating /projects/1/issues into /projects/:project_id/issues is what makes
+// a row an endpoint, and it is also what hides a hard-coded identifier: with
+// one fixture value, a handler that reads the caller's project and one with the
+// fixture's id written into it produce the same row. Several handlers were in
+// the second state and every one of them was found by hand.
+//
+// The recorder therefore counts, per row and per placeholder, how many distinct
+// raw values it templated away, and this reads that count back. A placeholder
+// seen with exactly one value is a lead, never a verdict: a fixture that makes
+// one project and drives forty endpoints against it produces forty innocent
+// ones. It reports, it will keep reporting, and what would make it gateable is
+// fixtures that vary their identifiers wherever they can, which is a change to
+// hundreds of tests rather than to this rule. See [IdentifierCheck].
 //
 // # Where the report goes
 //

@@ -45,7 +45,22 @@ const (
 )
 
 // templatePath rewrites one request path into the endpoint it stands for, so
-// the inventory holds a row per endpoint rather than a row per fixture.
+// the inventory holds a row per endpoint rather than a row per fixture, and
+// reports the raw values it stood behind each placeholder.
+//
+// Those values never reach a shard: what is recorded of them is how many
+// distinct ones a row has been seen with, which is the one thing the templating
+// throws away that a reader needs. A path templated to
+// /projects/:project_id/issues says which endpoint was reached and says nothing
+// about whether the suite ever reached it with two different projects, and with
+// one fixture value a handler that builds /projects/1/... and one that builds
+// /projects/<the caller's id>/... are indistinguishable. Several handlers were
+// in the second state and had to be found by hand.
+//
+// A placeholder name that occurs twice in one path collects both values, which
+// is why this is a map of slices rather than of values. Folding them would only
+// ever report one distinct value where there are two, which is the direction
+// that invents a lead.
 //
 // The rule reads the shape of a segment and never a list of names. A list
 // would have to be kept in step with a thousand actions and would be wrong the
@@ -82,7 +97,7 @@ const (
 // first identifier the walk recognized, :iid for every later one), and that
 // made :id name the project on one row and the board on the next, whenever the
 // project was spelled as a fixture word the rule cannot recognize.
-func templatePath(escaped string) string {
+func templatePath(escaped string) (templated string, identifiers map[string][]string) {
 	path := strings.TrimPrefix(escaped, restRoot)
 	if path == escaped {
 		path = strings.TrimPrefix(escaped, apiRoot)
@@ -104,9 +119,14 @@ func templatePath(escaped string) string {
 		if i > 0 {
 			parent = segments[i-1]
 		}
-		segments[i] = placeholderFor(parent)
+		name := placeholderFor(parent)
+		if identifiers == nil {
+			identifiers = map[string][]string{}
+		}
+		identifiers[name] = append(identifiers[name], segment)
+		segments[i] = name
 	}
-	return strings.Join(segments, "/")
+	return strings.Join(segments, "/"), identifiers
 }
 
 // placeholderFor names the identifier that follows one collection segment.
