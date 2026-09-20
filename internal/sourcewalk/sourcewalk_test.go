@@ -41,10 +41,10 @@ func TestSkipDir_Names_PruneDotDirectories(t *testing.T) {
 // false for a directory that holds neither.
 func TestIsNestedCheckout_GitMarker_IdentifiesEitherShape(t *testing.T) {
 	base := t.TempDir()
-	// sequential: setup steps building one tree, asserted by the cases below
 	clone := filepath.Join(base, "clone")
 	worktree := filepath.Join(base, "worktree")
 	plain := filepath.Join(base, "plain")
+	// sequential: setup steps building one tree, asserted by the cases below
 	for _, dir := range []string{clone, worktree, plain} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatalf("MkdirAll(%s) error = %v", dir, err)
@@ -97,15 +97,16 @@ func TestIsNestedCheckout_UnstatableMarker_IsNotACheckout(t *testing.T) {
 // is the case a rule naming .claude would have missed in silence.
 func TestSkipDirBelowRoot_NestedWorktree_IsExcludedByEitherRule(t *testing.T) {
 	base := t.TempDir()
-	// sequential: setup steps building one tree, asserted by the cases below
 	agentWorktree := filepath.Join(base, ".claude", "worktrees", "agent-1")
 	namedWorktree := filepath.Join(base, "scratch")
 	source := filepath.Join(base, "internal", "tools")
+	// sequential: setup steps building one tree, asserted by the cases below
 	for _, dir := range []string{agentWorktree, namedWorktree, source} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatalf("MkdirAll(%s) error = %v", dir, err)
 		}
 	}
+	// sequential: the .git markers that make two of those directories checkouts
 	for _, dir := range []string{agentWorktree, namedWorktree} {
 		if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: /elsewhere\n"), 0o600); err != nil {
 			t.Fatalf("WriteFile(%s/.git) error = %v", dir, err)
@@ -193,9 +194,9 @@ func TestSkipDirBelowRootFS_TheRoot_IsAlwaysEntered(t *testing.T) {
 // the root the caller opened, which is the whole reason this form exists.
 func TestIsNestedCheckoutFS_AnOSRoot_AnswersLikeTheNativeForm(t *testing.T) {
 	base := t.TempDir()
-	// sequential: setup steps building one tree, asserted by the cases below
 	worktree := filepath.Join(base, "scratch")
 	source := filepath.Join(base, "internal")
+	// sequential: setup steps building one tree, asserted by the cases below
 	for _, dir := range []string{worktree, source} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatalf("MkdirAll(%s) error = %v", dir, err)

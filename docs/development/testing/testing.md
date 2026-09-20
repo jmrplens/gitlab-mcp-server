@@ -20,15 +20,15 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 17,358 |
-| Unit test functions                                   | 16,161 |
-| E2E test functions                                    |  1,197 |
-| cmd test functions                                    |  2,918 |
-| Test files (internal/)                                |    647 |
-| Test files (cmd/)                                     |    217 |
+| Total test functions                                  | 17,367 |
+| Unit test functions                                   | 16,169 |
+| E2E test functions                                    |  1,198 |
+| cmd test functions                                    |  2,917 |
+| Test files (internal/)                                |    648 |
+| Test files (cmd/)                                     |    216 |
 | Test files (test/e2e/)                                |    384 |
 | Tool sub-packages tested                              |    179 |
-| Core packages tested                                  |     28 |
+| Core packages tested                                  |     29 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  99.1% |
 | Overall coverage (`go test ./internal/...`)           |  99.7% |
 | Average package coverage                              |  99.3% |
@@ -39,7 +39,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 12,184 | 70.2% |
 | `TestFunc` (no underscore)             |    905 |  5.2% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,269 | 24.6% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,278 | 24.6% |
 
 ## Test Distribution
 
@@ -47,12 +47,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          3,179 |        184 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          3,188 |        185 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (179) |          9,697 |        447 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,197 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          2,918 |        217 | server entry point and developer command utilities                                              |
-| **Total**               |     **17,358** |  **1,248** |                                                                                                 |
+| E2E integration         |          1,198 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          2,917 |        216 | server entry point and developer command utilities                                              |
+| **Total**               |     **17,367** |  **1,248** |                                                                                                 |
 
 ### Core Packages
 
@@ -63,7 +63,7 @@
 | clientcompat         |        20 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                                                                                                                                             |
 | cmdutil              |        11 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                                                                                                                                           |
 | completions          |       113 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                                                                                                                                            |
-| config               |       112 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
+| config               |       113 |   100.0% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                                                                                                                                    |
 | edition              |         6 |   100.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                                                                                                                                       |
 | elicitation          |       149 |    99.3% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                                                                                                                                        |
 | freshness            |         3 |   100.0% | Package freshness reads the one harness setting that decides whether a test comparing a committed, generated artifact runs that comparison now or leaves it to the run where the artifact is refreshed.                                                                                                                             |
@@ -76,6 +76,7 @@
 | prompts              |       370 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                                                                                                                                          |
 | resources            |       208 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                                                                                                                                                 |
 | serverpool           |       130 |   100.0% | Package serverpool manages a pool of credential entries keyed by GitLab token and URL.                                                                                                                                                                                                                                              |
+| sourcewalk           |         7 |      n/a | Package sourcewalk answers one question for everything here that walks this repository's tree: which directories below a walk root are this repository's own source, and which are something else that merely lives inside the checkout.                                                                                            |
 | subscriptions        |       107 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                                                                                            |
 | telemetry            |       132 |    96.0% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                                                                                  |
 | testutil             |       142 |    99.8% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                                                                                       |
@@ -85,8 +86,8 @@
 | testutil/modelrecord |        55 |   100.0% | Package modelrecord declares what one model evaluation run writes down: the stimulus a model was given, every request that went to a provider, every tool call the model made, what the server dispatched for it, and what GitLab answered.                                                                                         |
 | testutil/modelscore  |        96 |   100.0% | Package modelscore turns one attempt's record into the verdict a published row is made of.                                                                                                                                                                                                                                          |
 | testutil/shardio     |        30 |   100.0% | Package shardio is the shard mechanism the records written by a test process and read back by a command are built on: one shard file per process, one JSON line per record, a directory tree read in one pass, and a line nobody can read reported rather than dropped.                                                             |
-| toolutil             |     1,038 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
-| **Subtotal**         | **3,179** |          |                                                                                                                                                                                                                                                                                                                                     |
+| toolutil             |     1,039 |    98.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                                                                                       |
+| **Subtotal**         | **3,188** |          |                                                                                                                                                                                                                                                                                                                                     |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -373,7 +374,6 @@
 | cmd/internal/mcpsurface          |   100.0% |
 | cmd/internal/provenance          |   100.0% |
 | cmd/internal/requestinventory    |   100.0% |
-| cmd/internal/sourcewalk          |   100.0% |
 | cmd/internal/testsource          |   100.0% |
 | cmd/server                       |    99.8% |
 
@@ -399,6 +399,7 @@
 | prompts              |   100.0% |
 | resources            |   100.0% |
 | serverpool           |   100.0% |
+| sourcewalk           |      n/a |
 | subscriptions        |   100.0% |
 | telemetry            |    96.0% |
 | testutil             |    99.8% |
