@@ -14,7 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // replacesPrefix starts the comment line a new test carries to name the old

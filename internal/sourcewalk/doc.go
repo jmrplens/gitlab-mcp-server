@@ -1,4 +1,4 @@
-// Package sourcewalk answers one question for every command that walks this
+// Package sourcewalk answers one question for everything here that walks this
 // repository's tree: which directories below a walk root are this
 // repository's own source, and which are something else that merely lives
 // inside the checkout.
@@ -49,7 +49,37 @@
 // audit is driven over is handed to it as the walk root, which is exempt. The
 // cost is 697 directories, once per run.
 //
-// Both rules together are [SkipDirBelowRoot], which is what a walk calls.
+// Both rules together are [SkipDirBelowRoot], which is what a walk calls, or
+// [SkipDirBelowRootFS] for a walk that scoped itself with [os.Root].
+//
+// # Why it lives here and not under cmd
+//
+// It was written under cmd/internal, because the walkers it was written for
+// were the audit commands. That location is not a filing decision, it is an
+// access rule: Go confines cmd/internal/... to importers under cmd/, so the
+// package was unimportable from exactly the other half of the callers. Its
+// author traced cmd/ and internal/ and concluded nothing else could reach the
+// worktrees, and the tests were what that missed. internal/toolutil has a
+// guardrail that sweeps the repository for a duplicate definition of a time
+// helper, and with 198 worktrees on disk it swept 198 copies of the
+// repository: the run stopped being a ten-second test and became a ten-minute
+// timeout.
+//
+// The timeout is the half that announces itself, and it is the lesser half.
+// That guardrail fails by naming the file that holds the duplicate, so a
+// worktree carrying another branch's code could make it fail and name a path
+// that is not in this tree, which reads as a defect in code the reader cannot
+// open. A slow test gets looked at; a test that fails pointing somewhere real
+// and wrong gets believed.
+//
+// The alternative to moving was a second copy under internal/, and that is the
+// defect this package was written to end rather than a way of extending it:
+// one rule in two places drifts, and the drift is silent, since the walker
+// left on the older copy simply goes on reading worktrees. This repository is
+// one Go module, so internal/sourcewalk is importable from cmd/, internal/ and
+// test/ alike, which is every caller there is; nothing outside the module has
+// any business with it, so a package at the root would be claiming an audience
+// it does not have. The move cost six import lines.
 //
 // # What stays with each walker
 //

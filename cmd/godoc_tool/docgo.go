@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // packageDocFile is the file a package comment lives in. A package comment

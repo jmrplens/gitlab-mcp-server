@@ -13,6 +13,8 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // TestFormatTime_ValidRFC3339 verifies that FormatTime formats a valid
@@ -229,7 +231,8 @@ var formatISOTimePtrFuncDef = regexp.MustCompile(`^func\s+formatISOTimePtr\b`)
 // timeHelperScan holds the result of the single shared repository sweep the
 // two DEDUP-003 guardrail tests consume: offending "path:lineno" locations
 // per helper regex. The sweep is repo-wide but runs once (sync.Once) and
-// prunes non-source trees (.git, node_modules, dist, the Astro site), which
+// prunes what is not source of ours (node_modules, dist, the Astro site, and
+// through sourcewalk every dot-directory and nested checkout), which
 // previously dominated the walk with tens of thousands of irrelevant entries.
 type timeHelperScan struct {
 	formatTimePtr    []string
@@ -261,9 +264,26 @@ func findDuplicateTimeHelper(t *testing.T, re *regexp.Regexp, skipDir string) []
 // hits for both helper regexes at once.
 func scanRepoForTimeHelpers(t *testing.T, skipDir string) timeHelperScan {
 	t.Helper()
-	repoRoot := findRepoRoot(t)
+	return scanTreeForTimeHelpers(findRepoRoot(t), skipDir)
+}
+
+// scanTreeForTimeHelpers sweeps the tree at repoRoot for both helper regexes.
+//
+// It takes its root as an argument, and reports rather than aborts, so that
+// [TestScanTreeForTimeHelpers_ANestedCheckout_IsNotCounted] can drive it over
+// a tree it plants. That is the only reason it is separate from the caller
+// above: what this sweep must not do cannot be shown against the repository
+// itself, because the thing it must not read is whatever an agent happens to
+// have checked out at the time.
+func scanTreeForTimeHelpers(repoRoot, skipDir string) timeHelperScan {
+	// These names are this sweep's own disinterest: generated output and the
+	// built site hold no Go source of ours. What is not this repository's
+	// source at all is sourcewalk's rule rather than this list's: a
+	// dot-directory, and any nested checkout, which on a machine running the
+	// parallel-agent tooling means the hundred and more worktrees under
+	// .claude. That is why .git is not named here either.
 	prunedDirs := map[string]struct{}{
-		".git": {}, "node_modules": {}, "dist": {}, "site": {},
+		"node_modules": {}, "dist": {}, "site": {},
 	}
 	var scan timeHelperScan
 	// The sweep is scoped to the repository root: every open goes through the
@@ -276,12 +296,15 @@ func scanRepoForTimeHelpers(t *testing.T, skipDir string) timeHelperScan {
 		return scan
 	}
 	defer func() { _ = root.Close() }()
-	scan.err = fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+	rootFS := root.FS()
+	scan.err = fs.WalkDir(rootFS, ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if d.IsDir() {
-			if _, pruned := prunedDirs[d.Name()]; pruned {
+			// The rule is asked of rootFS rather than of the native path, so
+			// the marker probe stays inside the root this sweep opened.
+			if _, pruned := prunedDirs[d.Name()]; pruned || sourcewalk.SkipDirBelowRootFS(rootFS, rel) {
 				return fs.SkipDir
 			}
 			return nil
@@ -375,5 +398,83 @@ func TestFormatISOTimePtr_UniqueAcrossRepo(t *testing.T) {
 		t.Fatalf("found %d duplicate formatISOTimePtr definition(s) outside %s:\n  %s\n"+
 			"Use toolutil.FormatISOTimePtr or rename the helper to a purpose-specific name.",
 			len(hits), canonicalDir, strings.Join(hits, "\n  "))
+	}
+}
+
+// TestScanTreeForTimeHelpers_ANestedCheckout_IsNotCounted holds the two
+// guardrails above to this repository's own source.
+//
+// The sweep they share walks from the repository root, and a checkout can
+// contain other checkouts: the parallel-agent tooling puts a git worktree per
+// agent under .claude/worktrees, and a developer can put one anywhere with
+// `git worktree add`. Each is a complete copy of this repository on some other
+// branch, and folding one into the sweep goes wrong twice. The visible way is
+// cost, which is what was found: at 198 worktrees these guardrails swept 198
+// copies and the package stopped finishing inside the ten-minute test timeout.
+// The way worth guarding is the quiet one. A guardrail that fails names the
+// file holding the duplicate, so a copy carrying another branch's code can
+// fail it against a path that does not exist in this tree, and the reader is
+// sent to open a file that is not there.
+//
+// So the assertion is that a definition inside a nested checkout is not
+// counted, rather than that the walk survives one. The ordinary directory is
+// the control and is what makes the rest mean anything: without a hit that
+// must be found, every assertion here would also pass on a sweep that pruned
+// the whole tree and read nothing.
+func TestScanTreeForTimeHelpers_ANestedCheckout_IsNotCounted(t *testing.T) {
+	base := t.TempDir()
+	const definitions = "package helpers\n\nfunc formatTimePtr() string { return \"\" }\n\nfunc formatISOTimePtr() string { return \"\" }\n"
+
+	// sequential: setup steps building one fixture tree, asserted by the cases below
+	plant := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(base, dir, "helpers.go"), []byte(definitions), 0o600); err != nil {
+			t.Fatalf("WriteFile(%s/helpers.go) error = %v", dir, err)
+		}
+	}
+	// The control: ordinary source of ours, which must be found.
+	plant("ours")
+	// A linked worktree in the shape the agent tooling leaves behind. Either
+	// rule alone excludes it: it sits under a dot-directory, and it carries a
+	// .git file of its own.
+	worktree := filepath.Join(".claude", "worktrees", "agent")
+	plant(worktree)
+	if err := os.WriteFile(filepath.Join(base, worktree, ".git"), []byte("gitdir: /elsewhere\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s/.git) error = %v", worktree, err)
+	}
+	// A checkout whose name gives nothing away, which `git worktree add
+	// ./scratch` produces. Only the marker rule excludes this one, so it is
+	// what would still be read if the fix had been a name in a skip list.
+	plant("scratch")
+	if err := os.MkdirAll(filepath.Join(base, "scratch", ".git"), 0o750); err != nil {
+		t.Fatalf("MkdirAll(scratch/.git) error = %v", err)
+	}
+
+	scan := scanTreeForTimeHelpers(base, "")
+	if scan.err != nil {
+		t.Fatalf("scanTreeForTimeHelpers() error = %v, want nil", scan.err)
+	}
+
+	want := filepath.Join("ours", "helpers.go")
+	cases := []struct {
+		name string
+		hits []string
+	}{
+		{name: "formatTimePtr", hits: scan.formatTimePtr},
+		{name: "formatISOTimePtr", hits: scan.formatISOTimePtr},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if len(tc.hits) != 1 {
+				t.Fatalf("%s: got %d hit(s) %v, want the one in %s alone: either a nested checkout was counted, or the walk read nothing at all",
+					tc.name, len(tc.hits), tc.hits, want)
+			}
+			if !strings.HasPrefix(tc.hits[0], want+":") {
+				t.Errorf("%s: got hit %q, want one in %s", tc.name, tc.hits[0], want)
+			}
+		})
 	}
 }

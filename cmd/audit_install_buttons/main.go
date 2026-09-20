@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // buttonConfig is the part of a client's MCP entry the buttons carry. Fields

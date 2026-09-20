@@ -20,6 +20,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/dynamic"
@@ -338,6 +339,14 @@ func countToolPackageDirsAt(toolsDir string) int {
 		if !entry.IsDir() {
 			return nil
 		}
+		// A checkout nested below this root would be counted as packages of
+		// ours, and this count is published. Nothing puts one under
+		// internal/tools today, which is why the walk had no rule at all; a
+		// count that is only right because of where somebody else chose to put
+		// something is the kind that changes without anyone editing it.
+		if path != toolsDir && sourcewalk.SkipDirBelowRoot(path) {
+			return filepath.SkipDir
+		}
 		if directoryHasGoFile(path) {
 			count++
 		}
@@ -540,6 +549,12 @@ func countSourceFilesAt(dir string) (src, test int) {
 			return walkErr
 		}
 		if info.IsDir() {
+			// See countToolPackageDirsAt: a nested checkout below this root
+			// would have every one of its files counted into a published
+			// figure.
+			if path != dir && sourcewalk.SkipDirBelowRoot(path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !strings.HasSuffix(path, ".go") {

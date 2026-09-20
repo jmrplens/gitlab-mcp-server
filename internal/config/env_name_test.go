@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // absentForTest makes each name genuinely absent for one test and restores
@@ -364,10 +366,17 @@ func TestPrefixedEnvNames_NoCallerReadsThemThroughOsGetenv(t *testing.T) {
 func moduleGoSources(t *testing.T, root string) map[string]string {
 	t.Helper()
 
-	// .claude holds agent worktrees, which are other checkouts of this
-	// repository at other commits; scanning them would report a reader that
-	// was converted here and not there.
-	skip := map[string]bool{".git": true, ".claude": true, "node_modules": true, "site": true, "test": true, "dist": true}
+	// These names are this walk's own disinterest: the built site, the test
+	// trees that configure the binary through whichever spelling they mean to
+	// exercise, and generated output.
+	//
+	// What is not this repository's source at all is sourcewalk's rule rather
+	// than this list's. It used to be spelled here as ".claude", which named
+	// where the agent tooling puts its worktrees instead of what one is: a
+	// checkout added anywhere else was still read as ours, and every file in
+	// it judged, so this guard could report a reader that was converted here
+	// and not on whatever branch that copy sat on.
+	skip := map[string]bool{"node_modules": true, "site": true, "test": true, "dist": true}
 
 	var paths []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
@@ -376,6 +385,11 @@ func moduleGoSources(t *testing.T, root string) map[string]string {
 		}
 		if entry.IsDir() {
 			if skip[entry.Name()] {
+				return filepath.SkipDir
+			}
+			// Never asked of root, which is this repository's own checkout and
+			// would prune the walk down to nothing.
+			if path != root && sourcewalk.SkipDirBelowRoot(path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -401,4 +415,63 @@ func moduleGoSources(t *testing.T, root string) map[string]string {
 		sources[path] = string(body)
 	}
 	return sources
+}
+
+// TestModuleGoSources_ANestedCheckout_IsNotRead holds the os.Getenv guard to
+// this repository's own source.
+//
+// The guard walks from the repository root, and a checkout can hold other
+// checkouts: the parallel-agent tooling puts a git worktree per agent under
+// .claude/worktrees, and a developer can put one anywhere with `git worktree
+// add`. Each is a complete copy of this repository on some other branch, so a
+// reader converted here and not there would be reported against a path that
+// is not in this tree, and with two hundred worktrees on disk the walk reads
+// two hundred copies before it reports anything.
+//
+// The assertion is that a file inside a nested checkout is not read, rather
+// than that the walk survives one, and the ordinary directory is the control:
+// without a file that must be found, a walk that pruned everything would pass
+// this too, which is also why moduleGoSources fails on an empty result.
+func TestModuleGoSources_ANestedCheckout_IsNotRead(t *testing.T) {
+	base := t.TempDir()
+	const reader = "package p\n\nimport \"os\"\n\nvar v = os.Getenv(\"GITLAB_MCP_TOOL_SURFACE\")\n"
+
+	// sequential: setup steps building one fixture tree, asserted below
+	plant := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(base, dir), 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s) error = %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(base, dir, "reader.go"), []byte(reader), 0o600); err != nil {
+			t.Fatalf("WriteFile(%s/reader.go) error = %v", dir, err)
+		}
+	}
+	// The control: ordinary source of ours, which must be read.
+	plant("ours")
+	// A linked worktree where the agent tooling leaves one. Either rule alone
+	// excludes it: it sits under a dot-directory and carries a .git file.
+	worktree := filepath.Join(".claude", "worktrees", "agent")
+	plant(worktree)
+	if err := os.WriteFile(filepath.Join(base, worktree, ".git"), []byte("gitdir: /elsewhere\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%s/.git) error = %v", worktree, err)
+	}
+	// A checkout under a name that gives nothing away, which `git worktree
+	// add ./scratch` produces. Only the marker rule excludes it, so this is
+	// the one a skip list naming .claude would still have read.
+	plant("scratch")
+	if err := os.MkdirAll(filepath.Join(base, "scratch", ".git"), 0o750); err != nil {
+		t.Fatalf("MkdirAll(scratch/.git) error = %v", err)
+	}
+
+	sources := moduleGoSources(t, base)
+
+	want := filepath.Join(base, "ours", "reader.go")
+	if _, ok := sources[want]; !ok {
+		t.Errorf("moduleGoSources() did not read the control %s; the walk read nothing of ours", want)
+	}
+	for path := range sources {
+		if path != want {
+			t.Errorf("moduleGoSources() read %s, which is inside a nested checkout", path)
+		}
+	}
 }
