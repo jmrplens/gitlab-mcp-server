@@ -124,6 +124,7 @@ readable without opening the tracker:
 | 49 | go-sdk | [Three methods served before the initialize handshake](#three-methods-are-served-on-a-legacy-session-before-the-initialize-handshake) | Yes, [#1271](https://github.com/modelcontextprotocol/go-sdk/issues/1271) | Yes, [#1273](https://github.com/modelcontextprotocol/go-sdk/pull/1273), merged | **Yes, unreleased** | No | None taken |
 | 50 | go-sdk | [The negotiated version is recorded on one path of four](#the-negotiated-protocol-version-is-recorded-on-one-path-of-four) | Yes, [#1272](https://github.com/modelcontextprotocol/go-sdk/issues/1272) | Yes, [#1274](https://github.com/modelcontextprotocol/go-sdk/pull/1274), open | No | No | None taken |
 | 51 | client-go | [A WithOptions delegation sends `null` as the request body](#a-withoptions-delegation-sends-null-as-the-request-body) | No | No | No | No | None taken |
+| 52 | client-go | [`UpdatePackageProtectionRulesOptions` lacks `omitempty`](#updatepackageprotectionrulesoptions-sends-two-explicit-nulls-on-every-partial-update) | No | No | No | Partly | Partial |
 
 States verified against the upstream trackers on 2026-09-12, and rows 8 to 23
 again on 2026-09-13 when the go-sdk batch was filed. Rows 39 to 44 were added
@@ -143,7 +144,8 @@ twelve of its fourteen that had merged. Rows 5, 6, 7, 19, 20, 22, 25, 26, 27,
 which the diff of the two versions says structurally as well: twenty-one
 non-test files differ between v3.0.0 and v3.12.0, no exported symbol was
 removed or renamed, no field changed its Go type or its `omitempty`, and no
-route a service method builds changed.
+route a service method builds changed. Row 52 was added on the 19th as well,
+and is read against that same v3.12.0 source.
 
 ## GitLab (`gitlab-org/gitlab`)
 
@@ -1814,6 +1816,65 @@ the five field errors above; verified against v3.0.0 and against `main` on
 the listing takes, with the same CE-safe default, or the template drops the
 five widgets into fragments the caller opts into. The decoder already
 tolerates their absence, since the listing runs without them today.
+
+### UpdatePackageProtectionRulesOptions sends two explicit nulls on every partial update
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: partly. An update that names the pattern and the type works;
+  an update that changes only an access level is refused by GitLab, and there
+  is no spelling of that call this server can send.
+- **Workaround**: partial, and it cannot be complete. The struct tag is what
+  decides, so no option a handler passes suppresses the nulls.
+  `internal/tools/protectedpackages.Update` sets each pointer only when the
+  caller named a value, which is the safe side of that choice, and answers the
+  refusal with a hint telling the caller to name `package_name_pattern` and
+  `package_type` on every update. The protection rule lifecycle in
+  `test/e2e/gitlab/common` sends the type with every update for the same
+  reason. All of it retires the day the tag changes.
+
+**Where**: `protected_packages.go`, `UpdatePackageProtectionRulesOptions`.
+
+**What**: the struct's two `*string` fields carry no `omitempty`.
+
+```go
+type UpdatePackageProtectionRulesOptions struct {
+	PackageNamePattern          *string                             `url:"package_name_pattern" json:"package_name_pattern"`
+	PackageType                 *string                             `url:"package_type" json:"package_type"`
+	MinimumAccessLevelForDelete Nullable[ProtectionRuleAccessLevel] `url:"minimum_access_level_for_delete,omitempty" json:"minimum_access_level_for_delete,omitempty"`
+	MinimumAccessLevelForPush   Nullable[ProtectionRuleAccessLevel] `url:"minimum_access_level_for_push,omitempty" json:"minimum_access_level_for_push,omitempty"`
+}
+```
+
+The two `Nullable` fields beside them do carry it, and there it works, because
+`Nullable[T]` is a `map[bool]T` and an empty map is empty to `encoding/json`. A
+nil `*string` is not, so `PATCH /projects/:id/packages/protection/rules/:id`
+always carries both keys: an update that changes only an access level sends
+`{"package_name_pattern": null, "package_type": null, ...}`.
+
+GitLab reads that null as blank rather than as "leave this one alone", and the
+rebuilt e2e suite measured it against a live instance: an update naming only
+the pattern is answered `422 Package type can't be blank`, which is why
+`TestPackage_ProtectionRules_Lifecycle` sends the type with every update. The
+mirror case was not measured, but it is the same null through the same
+whole-rule validation.
+
+GitLab's own record marks both parameters optional on the PATCH and required on
+the POST (`docs/development/gitlab-api-live.json`, `PATCH
+/api/:version/projects/:id/packages/protection/rules/:package_protection_rule_id`),
+so `CreatePackageProtectionRulesOptions`, which carries the same two tags, is
+unharmed: a caller who omits either one is refused for omitting it whether the
+key arrives as null or not at all. The minimal fix is the update struct alone,
+although a reviewer may prefer both changed for symmetry.
+
+**How we found it**: the `protectedpackages` sweep, reading what the handler can
+and cannot control. The consequence came from the e2e scenario's own comment,
+which had recorded the 422 without connecting it to the tag. Verified identical
+in v3.0.0, v3.10.0 and v3.12.0, so a dependency bump does not retire it.
+
+**Effort**: small, two struct tags and a test, like
+[`SetFeatureFlagOptions`](#setfeatureflagoptions-fields-lack-omitempty).
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 

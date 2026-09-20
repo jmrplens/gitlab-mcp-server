@@ -162,6 +162,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	}
 	rule, _, err := client.GL().ProtectedPackages.UpdatePackageProtectionRules(string(in.ProjectID), in.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
+		// client-go tags PackageNamePattern and PackageType without omitempty,
+		// so a field the caller did not name travels as JSON null and GitLab
+		// reads it as blank while validating the rule as a whole. Nothing here
+		// can suppress the null, the tag being what decides, so the caller is
+		// told what to send instead. Recorded in
+		// docs/development/upstream-bugs.md.
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint("packageProtectionRuleUpdate", err,
+				"send package_name_pattern and package_type on every update, including one that changes only an access level: a field left unnamed reaches GitLab as null and is read as blank")
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleUpdate", err, http.StatusNotFound,
 			"verify rule_id with gitlab_list_package_protection_rules; pattern uniqueness still applies on rename")
 	}
