@@ -157,8 +157,10 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	}
 }
 
-// applyLabelAndBoolFilters sets the label-name list filters and the boolean
-// label-detail/merge-recheck toggles.
+// applyLabelAndBoolFilters sets the label-name list filters and the four
+// boolean toggles (label details, merge-status recheck, draft and
+// non-archived), each of which is left unset when the caller supplied no
+// value, so GitLab applies its own default rather than ours.
 func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	if labels := labelOptions(input.Labels); labels != nil {
 		opts.Labels = labels

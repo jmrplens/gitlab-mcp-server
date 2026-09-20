@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -480,6 +481,7 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 
 	withDetails := true
 	withRecheck := true
+	nonArchived := true
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:              "1",
 		DeploymentID:           2,
@@ -498,12 +500,56 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 		NotLabels:              []string{"wontfix"},
 		WithLabelsDetails:      &withDetails,
 		WithMergeStatusRecheck: &withRecheck,
-		NonArchived:            &withRecheck,
+		NonArchived:            &nonArchived,
 		UpdatedAfter:           "2025-02-01T00:00:00Z",
 		UpdatedBefore:          "2025-11-30T23:59:59Z",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_EveryBoolFilter_ReachesItsOwnQueryKey drives one of the four *bool
+// filters at a time and holds the query to that filter's key alone, the other
+// three absent. TestList_AdditionalMergeRequestFilters sets three of them
+// non-nil and true in one call, which any permutation of their assignments
+// reproduces exactly; a filter written onto a sibling's option leaves its own
+// key unsent once it is the only one driven. Each is driven false as well,
+// since an assignment replaced by a literal true would otherwise pass.
+func TestList_EveryBoolFilter_ReachesItsOwnQueryKey(t *testing.T) {
+	filters := []struct {
+		key string
+		set func(*ListInput, *bool)
+	}{
+		{"with_labels_details", func(in *ListInput, v *bool) { in.WithLabelsDetails = v }},
+		{"with_merge_status_recheck", func(in *ListInput, v *bool) { in.WithMergeStatusRecheck = v }},
+		{"draft", func(in *ListInput, v *bool) { in.Draft = v }},
+		{"non_archived", func(in *ListInput, v *bool) { in.NonArchived = v }},
+	}
+	for _, filter := range filters {
+		for _, value := range []bool{true, false} {
+			t.Run(filter.key+"="+strconv.FormatBool(value), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					q := r.URL.Query()
+					for _, other := range filters {
+						want := ""
+						if other.key == filter.key {
+							want = strconv.FormatBool(value)
+						}
+						if got := q.Get(other.key); got != want {
+							t.Errorf("query %s = %q, want %q", other.key, got, want)
+						}
+					}
+					testutil.RespondJSON(w, http.StatusOK, `[]`)
+				}))
+
+				input := ListInput{ProjectID: "1", DeploymentID: 2}
+				filter.set(&input, &value)
+				if _, err := List(context.Background(), client, input); err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+			})
+		}
 	}
 }
 
