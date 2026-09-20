@@ -52,8 +52,9 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 			if !specs[i].GitLabDotComOnly || specs[i].Edition != "premium" {
 				t.Fatalf("ActionSpecs()[%d] gating = dotcom:%t edition:%q, want GitLab.com premium", i, specs[i].GitLabDotComOnly, specs[i].Edition)
 			}
-			if !specs[i].OpenWorld {
-				t.Fatalf("ActionSpecs()[%d].OpenWorld = false, want true", i)
+			if !specs[i].OpenWorld || !specs[i].ReadOnly || specs[i].Destructive {
+				t.Fatalf("ActionSpecs()[%d] open_world:%t read_only:%t destructive:%t, want an open-world read-only action",
+					i, specs[i].OpenWorld, specs[i].ReadOnly, specs[i].Destructive)
 			}
 		})
 	}
@@ -162,38 +163,37 @@ func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
 	}
 }
 
-// TestOrbit_RegisterMeta_UsesActionSpecs verifies that the routes used by
-// the consolidated gitlab_orbit meta-tool are projected from the canonical
-// GitLab.com-only ActionSpec definitions.
+// TestOrbit_RegisterMeta_UsesActionSpecs verifies that the route map the
+// gitlab_orbit meta-tool is registered with holds, under each spec's name,
+// the route that spec declared: same destructiveness, same input schema, same
+// output schema.
 //
-// The test compares the registered meta routes to the ActionSpecs projection for schema and destructiveness.
+// The map is compared with the specs it was built from. It used to be
+// compared with a second copy of itself, which held nothing.
 func TestOrbit_RegisterMeta_UsesActionSpecs(t *testing.T) {
 	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
 	if err != nil {
 		t.Fatalf("NewClientWithToken() error: %v", err)
 	}
 	got := orbitActionSpecRoutes(t, client)
-	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
-	}
+	want := ActionSpecs(client)
 
 	if len(got) != len(want) {
 		t.Fatalf("registered orbit route count = %d, want %d", len(got), len(want))
 	}
-	for actionName, wantRoute := range want {
-		t.Run(actionName, func(t *testing.T) {
-			gotRoute, ok := got[actionName]
+	for _, spec := range want {
+		t.Run(spec.Name, func(t *testing.T) {
+			gotRoute, ok := got[spec.Name]
 			if !ok {
-				t.Fatalf("registered meta routes missing %q", actionName)
+				t.Fatalf("registered meta routes missing %q", spec.Name)
 			}
-			if gotRoute.Destructive != wantRoute.Destructive {
-				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
+			if gotRoute.Destructive != spec.Route.Destructive {
+				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, spec.Route.Destructive)
 			}
-			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
+			if !reflect.DeepEqual(gotRoute.InputSchema, spec.Route.InputSchema) {
 				t.Fatal("input schema differs from ActionSpec projection")
 			}
-			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
+			if !reflect.DeepEqual(gotRoute.OutputSchema, spec.Route.OutputSchema) {
 				t.Fatal("output schema differs from ActionSpec projection")
 			}
 		})
@@ -334,6 +334,51 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 			}
 			if !strings.Contains(textContent.Text, "Not Found") || !strings.Contains(textContent.Text, "GitLab Orbit") {
 				t.Fatalf("content = %q, want Orbit not-found guidance", textContent.Text)
+			}
+		})
+	}
+}
+
+// TestOrbit_ActionSpecs_ForbiddenStaysAnError verifies that the not-found
+// wrapper every Orbit route carries converts a 404 and nothing else: a 403
+// keeps its Knowledge Graph access hint and reaches the caller as the error it
+// is, rather than as the "Orbit is not enabled" card, which would send a
+// caller with the wrong token off to check feature flags.
+func TestOrbit_ActionSpecs_ForbiddenStaysAnError(t *testing.T) {
+	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "gitlab_orbit_status", args: map[string]any{}},
+		{name: "gitlab_orbit_schema", args: map[string]any{}},
+		{name: "gitlab_orbit_tools", args: map[string]any{}},
+		{name: "gitlab_orbit_dsl", args: map[string]any{}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		}}},
+		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			route, ok := routes[tt.name]
+			if !ok {
+				t.Fatalf("routes map missing %q; registration dropped an individual tool", tt.name)
+			}
+			result, err := route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("Route.Handler() = %#v with nil error, want the forbidden error", result)
+			}
+			if !strings.Contains(err.Error(), "Knowledge Graph enabled") {
+				t.Fatalf("Route.Handler() error = %q, want the Knowledge Graph access hint", err)
+			}
+			if _, notFound := result.(orbitNotFoundOutput); notFound {
+				t.Fatalf("Route.Handler() = %#v, want no not-found card for a 403", result)
 			}
 		})
 	}

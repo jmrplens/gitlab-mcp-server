@@ -122,6 +122,31 @@ func TestFormatStatusMarkdown_NoData_SaysSo(t *testing.T) {
 	}
 }
 
+// TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow verifies that "no data"
+// is said only when every fact is missing: a response carrying one label and
+// nothing else renders that one row. The emptiness test joins five facts, and
+// a join that ignored any one of them would call a partial answer empty.
+func TestFormatStatusMarkdown_OneFieldAlone_RendersItsRow(t *testing.T) {
+	tests := []struct {
+		name string
+		out  StatusOutput
+		row  string
+	}{
+		{name: "status", out: StatusOutput{Status: "degraded"}, row: "- **Status**: degraded\n"},
+		{name: "version", out: StatusOutput{Version: "0.5.0"}, row: "- **Version**: 0.5.0\n"},
+		{name: "timestamp", out: StatusOutput{Timestamp: "2026-03-20T15:45:00Z"}, row: "- **Timestamp**: 20 Mar 2026 15:45 UTC\n"},
+		{name: "error", out: StatusOutput{System: &StatusSystem{Error: "cannot reach the gRPC cluster"}}, row: "- **Error**: cannot reach the gRPC cluster\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := "## Orbit Status\n\n" + tt.row + statusHints
+			if got := FormatStatusMarkdown(tt.out); got != want {
+				t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
+			}
+		})
+	}
+}
+
 // TestFormatSchemaMarkdown_RendersTheWholeCard verifies that the ontology
 // renders as a card with the three type counts as rows and the domains as a
 // nested collection.
@@ -141,6 +166,26 @@ func TestFormatSchemaMarkdown_RendersTheWholeCard(t *testing.T) {
 		"### Domains\n\n" +
 		"| Domain | Description | Nodes |\n| --- | --- | --- |\n" +
 		"| core | Core entities | User, Project |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'orbit.tools' to inspect the live query and tool manifest\n" +
+		"- Use action 'orbit.query' to run a query once you have chosen a shape from the manifest\n"
+
+	if got := FormatSchemaMarkdown(out); got != want {
+		t.Errorf("FormatSchemaMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatSchemaMarkdown_NoDomains_WritesNoTable verifies that an ontology
+// with no domains renders its counts and no Domains section, rather than a
+// heading over an empty table.
+func TestFormatSchemaMarkdown_NoDomains_WritesNoTable(t *testing.T) {
+	out := SchemaOutput{SchemaVersion: "1.0", Nodes: []any{map[string]any{"name": "User"}}}
+
+	want := "## Orbit Schema\n\n" +
+		"- **Schema version**: 1.0\n" +
+		"- **Domains**: 0\n" +
+		"- **Nodes**: 1\n" +
+		"- **Edges**: 0\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.tools' to inspect the live query and tool manifest\n" +
 		"- Use action 'orbit.query' to run a query once you have chosen a shape from the manifest\n"
@@ -320,6 +365,24 @@ func TestFormatGraphStatusMarkdown_RendersTheWholeCard(t *testing.T) {
 		"### Domains\n\n" +
 		"| Domain | Counts |\n| --- | --- |\n" +
 		"| SDLC | Issue: 4, MergeRequest: 7 |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
+		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
+
+	if got := FormatGraphStatusMarkdown(out); got != want {
+		t.Errorf("FormatGraphStatusMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable verifies that an
+// indexing status carrying no per-domain counts renders its project rows and
+// no Domains section, rather than a heading over an empty table.
+func TestFormatGraphStatusMarkdown_NoDomains_WritesNoTable(t *testing.T) {
+	out := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3}}
+
+	want := "## Orbit Graph Status\n\n" +
+		"- **Indexed projects**: 2\n" +
+		"- **Total known projects**: 3\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- Use action 'orbit.query' to query the graph once indexing reaches a healthy state\n" +
 		"- Use action 'orbit.status' to check the cluster itself when indexing never starts\n"
