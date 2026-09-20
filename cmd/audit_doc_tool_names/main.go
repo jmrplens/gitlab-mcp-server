@@ -64,7 +64,7 @@ var historicalDocs = []string{
 }
 
 func main() {
-	check := flag.Bool("check", false, "exit non-zero when the docs name a tool that does not exist")
+	check := flag.Bool("check", false, "exit non-zero when the docs name a tool the server does not register or an action ID the catalog does not publish, or when a declaration excuses neither")
 	flag.Parse()
 
 	os.Exit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))

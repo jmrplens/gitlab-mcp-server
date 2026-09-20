@@ -27,7 +27,7 @@ func main() {
 	dir := flag.String("dir", ".", "repository root the patterns are resolved against")
 	jsonPath := flag.String("json", defaultJSONPath, "write the work list here; empty writes none")
 	verbose := flag.Bool("v", false, "also print the alias references of a clean run and what was judged by kind")
-	check := flag.Bool("check", false, "exit non-zero when any published ID is not a canonical catalog ID")
+	check := flag.Bool("check", false, "exit non-zero when a published ID is not a canonical catalog ID, names a registered alias, sits at a site the type checker could not fold, or is excused by a declaration that excuses nothing")
 	flag.Parse()
 
 	os.Exit(run(auditConfig{
