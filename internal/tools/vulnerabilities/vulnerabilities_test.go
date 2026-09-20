@@ -5,6 +5,7 @@ package vulnerabilities
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -73,7 +74,7 @@ const sampleVulnGetNode = `{
   "location": {
     "file": "app/controllers/sessions_controller.rb",
     "startLine": "42",
-    "endLine": "42",
+    "endLine": "58",
     "blobPath": "/project/-/blob/main/app/controllers/sessions_controller.rb"
   },
   "project": {
@@ -198,17 +199,67 @@ func TestList_EmptyProjectPath(t *testing.T) {
 	}
 }
 
-// TestList_WithFilters verifies that severity and state filters are
-// correctly forwarded to the GraphQL API when listing vulnerabilities.
+// listVariableStrings reads a list-valued GraphQL variable back as the strings
+// it was sent as. A variable that survives the JSON round trip arrives as
+// []any, so comparing it against the caller's []string needs the conversion.
+func listVariableStrings(t *testing.T, vars map[string]any, key string) []string {
+	t.Helper()
+	raw, ok := vars[key].([]any)
+	if !ok {
+		t.Errorf("%s = %#v, want a list of strings", key, vars[key])
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		s, isString := v.(string)
+		if !isString {
+			t.Errorf("%s carries %#v, want a string", key, v)
+			return nil
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// TestList_WithFilters verifies that every filter the caller names reaches the
+// GraphQL query as the variable the document declares, each with the caller's
+// own value.
+//
+// The assertion is on the request rather than on the answer because the mock
+// answers whatever the test wrote: with the guards that build the variable map
+// inverted, a caller's severity filter never reaches GitLab and the model is
+// handed the project's whole vulnerability list as though it had been filtered.
 func TestList_WithFilters(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"vulnerabilities": func(w http.ResponseWriter, r *http.Request) {
 			vars, err := testutil.ParseGraphQLVariables(r)
 			if err != nil {
-				t.Fatalf("ParseGraphQLVariables error: %v", err)
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
 			}
 			if vars["projectPath"] != "my-group/my-project" {
 				t.Errorf("projectPath = %v, want my-group/my-project", vars["projectPath"])
+			}
+			if got := listVariableStrings(t, vars, "severity"); !slices.Equal(got, []string{"CRITICAL", "HIGH"}) {
+				t.Errorf("severity = %v, want [CRITICAL HIGH]", got)
+			}
+			if got := listVariableStrings(t, vars, "state"); !slices.Equal(got, []string{"DETECTED"}) {
+				t.Errorf("state = %v, want [DETECTED]", got)
+			}
+			if got := listVariableStrings(t, vars, "scanner"); !slices.Equal(got, []string{"semgrep"}) {
+				t.Errorf("scanner = %v, want [semgrep]", got)
+			}
+			if got := listVariableStrings(t, vars, "reportType"); !slices.Equal(got, []string{"SAST"}) {
+				t.Errorf("reportType = %v, want [SAST]", got)
+			}
+			if vars["hasIssues"] != true {
+				t.Errorf("hasIssues = %#v, want true", vars["hasIssues"])
+			}
+			if vars["hasResolution"] != false {
+				t.Errorf("hasResolution = %#v, want false", vars["hasResolution"])
+			}
+			if vars["sort"] != "severity_desc" {
+				t.Errorf("sort = %v, want severity_desc", vars["sort"])
 			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"project": {
@@ -382,8 +433,15 @@ func TestList_ProjectNilMissingProjectErrors(t *testing.T) {
 
 // Get tests.
 
-// TestGet_Success verifies that retrieving a single vulnerability by ID
-// returns the expected detail including identifiers, scanner, and location.
+// TestGet_Success verifies that retrieving a single vulnerability by ID returns
+// every part of the node GitLab answered with: its own fields, the scanner, the
+// location down to its blob path and line range, each identifier's four fields,
+// and the project reference.
+//
+// No two values in the fixture agree, the line range included, because a
+// converter that reads the wrong neighbor has no branch to flip and is
+// invisible to both coverage gates: with startLine and endLine both 42 the two
+// assignments were interchangeable and nothing said so.
 func TestGet_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"vulnerability(id": func(w http.ResponseWriter, _ *http.Request) {
@@ -420,11 +478,49 @@ func TestGet_Success(t *testing.T) {
 	if !v.HasMR {
 		t.Error("expected HasMR=true (mergeRequest present)")
 	}
-	if v.Project == nil || v.Project.FullPath != "my-group/my-project" {
-		t.Errorf("Project.FullPath = %v", v.Project)
+	if v.Scanner == nil {
+		t.Fatal("expected a scanner")
 	}
-	if len(v.Identifiers) != 2 {
-		t.Errorf("expected 2 identifiers, got %d", len(v.Identifiers))
+	if *v.Scanner != (ScannerItem{Name: "semgrep", Vendor: "GitLab"}) {
+		t.Errorf("Scanner = %+v, want {semgrep GitLab}", *v.Scanner)
+	}
+	if v.Location == nil {
+		t.Fatal("expected a location")
+	}
+	wantLocation := LocationItem{
+		File:      "app/controllers/sessions_controller.rb",
+		StartLine: 42,
+		EndLine:   58,
+		BlobPath:  "/project/-/blob/main/app/controllers/sessions_controller.rb",
+	}
+	if *v.Location != wantLocation {
+		t.Errorf("Location = %+v, want %+v", *v.Location, wantLocation)
+	}
+	if v.Project == nil {
+		t.Fatal("expected a project")
+	}
+	wantProject := ProjectItem{ID: "gid://gitlab/Project/1", Name: "my-project", FullPath: "my-group/my-project"}
+	if *v.Project != wantProject {
+		t.Errorf("Project = %+v, want %+v", *v.Project, wantProject)
+	}
+	if v.PrimaryID == nil {
+		t.Fatal("expected a primary identifier")
+	}
+	wantPrimary := IdentifierItem{
+		Name:         "CWE-89",
+		ExternalType: "cwe",
+		ExternalID:   "89",
+		URL:          "https://cwe.mitre.org/data/definitions/89.html",
+	}
+	if *v.PrimaryID != wantPrimary {
+		t.Errorf("PrimaryID = %+v, want %+v", *v.PrimaryID, wantPrimary)
+	}
+	wantIdentifiers := []IdentifierItem{
+		wantPrimary,
+		{Name: "CVE-2026-1234", ExternalType: "cve", ExternalID: "CVE-2026-1234"},
+	}
+	if !slices.Equal(v.Identifiers, wantIdentifiers) {
+		t.Errorf("Identifiers = %+v, want %+v", v.Identifiers, wantIdentifiers)
 	}
 }
 
@@ -458,11 +554,30 @@ func TestGet_NotFound(t *testing.T) {
 
 // Dismiss tests.
 
-// TestDismiss_Success verifies that dismissing a vulnerability via the
-// GraphQL mutation returns the updated vulnerability with dismissed state.
+// TestDismiss_Success verifies that dismissing a vulnerability sends the id,
+// the comment and the dismissal reason the caller gave, and returns the updated
+// vulnerability with its dismissed state.
+//
+// The comment is asserted on the request because nothing in the answer reflects
+// it: with the guard that copies it inverted, a triager's reason is dropped on
+// the floor and GitLab records a dismissal that says nothing about why.
 func TestDismiss_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
-		"vulnerabilityDismiss": func(w http.ResponseWriter, _ *http.Request) {
+		"vulnerabilityDismiss": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			if vars["id"] != "gid://gitlab/Vulnerability/42" {
+				t.Errorf("id = %v, want gid://gitlab/Vulnerability/42", vars["id"])
+			}
+			if vars["comment"] != "False positive confirmed by security team" {
+				t.Errorf("comment = %v, want the caller's own reason", vars["comment"])
+			}
+			if vars["dismissalReason"] != "FALSE_POSITIVE" {
+				t.Errorf("dismissalReason = %v, want FALSE_POSITIVE", vars["dismissalReason"])
+			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"vulnerabilityDismiss": {
 					"vulnerability": `+sampleMutationVuln+`,
@@ -496,6 +611,42 @@ func TestDismiss_Success(t *testing.T) {
 	}
 	if out.Vulnerability.DismissedAt != "2026-02-01T12:00:00Z" {
 		t.Errorf("DismissedAt = %q, want %q", out.Vulnerability.DismissedAt, "2026-02-01T12:00:00Z")
+	}
+}
+
+// TestDismiss_OmittedOptionsAreNotSent verifies that a dismissal naming neither
+// a comment nor a reason sends neither variable rather than sending both empty.
+//
+// GitLab's dismiss mutation takes both as nullable, so an empty string is a
+// value it would record: a caller who named no reason would have one written
+// down as "" instead of left unset.
+func TestDismiss_OmittedOptionsAreNotSent(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilityDismiss": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			if got, ok := vars["comment"]; ok {
+				t.Errorf("comment = %#v, want it absent when the caller gave none", got)
+			}
+			if got, ok := vars["dismissalReason"]; ok {
+				t.Errorf("dismissalReason = %#v, want it absent when the caller gave none", got)
+			}
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerabilityDismiss": {
+					"vulnerability": `+sampleMutationVuln+`,
+					"errors": []
+				}
+			}`)
+		},
+	})
+
+	_, err := Dismiss(context.Background(), testutil.NewTestClient(t, handler),
+		DismissInput{ID: "gid://gitlab/Vulnerability/42"})
+	if err != nil {
+		t.Fatalf("Dismiss() error = %v", err)
 	}
 }
 
@@ -785,6 +936,93 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_TitleAndPrimaryIdentifier verifies which identifier
+// earns a place beside the title in a list row.
+//
+// The identifier is there to name the weakness class the title alone may not
+// say, so it is written only when GitLab sent one that adds something: an
+// identifier with no name, or one that repeats the title, would render as an
+// empty or duplicated parenthesis in every row of the table.
+func TestFormatListMarkdown_TitleAndPrimaryIdentifier(t *testing.T) {
+	tests := []struct {
+		name      string
+		primaryID *IdentifierItem
+		want      string
+	}{
+		{name: "no identifier at all", primaryID: nil, want: "SQL Injection"},
+		{name: "an identifier with no name", primaryID: &IdentifierItem{ExternalType: "cwe"}, want: "SQL Injection"},
+		{name: "an identifier repeating the title", primaryID: &IdentifierItem{Name: "SQL Injection"}, want: "SQL Injection"},
+		{name: "an identifier naming the weakness", primaryID: &IdentifierItem{Name: "CWE-89"}, want: "SQL Injection (CWE-89)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatListMarkdown(ListOutput{Vulnerabilities: []Item{{
+				ID:         "gid://gitlab/Vulnerability/1",
+				Title:      "SQL Injection",
+				Severity:   "CRITICAL",
+				State:      "DETECTED",
+				ReportType: "SAST",
+				DetectedAt: "2026-01-15T10:00:00Z",
+				Scanner:    &ScannerItem{Name: "semgrep"},
+				PrimaryID:  tt.primaryID,
+			}}})
+			want := "## Vulnerabilities (1)\n\n" +
+				"| ID | Severity | Title | State | Scanner | Report Type | Detected |\n" +
+				"| --- | --- | --- | --- | --- | --- | --- |\n" +
+				"| `gid://gitlab/Vulnerability/1` | 🔴 CRITICAL | " + tt.want +
+				" | DETECTED | semgrep | SAST | 15 Jan 2026 10:00 UTC |\n\n" +
+				"Showing 1 items | no more pages\n" +
+				listHints
+			if got != want {
+				t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_UntitledVulnerability verifies that a report carrying no
+// title opens the generic heading rather than one trailing a colon.
+//
+// The title comes out of the security report artifact a repository's own CI job
+// writes, so a scanner that emitted none, or emitted whitespace, must not leave
+// the card headed "Vulnerability: ".
+func TestFormatGetMarkdown_UntitledVulnerability(t *testing.T) {
+	tests := []struct {
+		name  string
+		title string
+	}{
+		{name: "no title at all", title: ""},
+		{name: "a title of whitespace", title: "   \t "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatGetMarkdown(GetOutput{Vulnerability: Item{
+				ID:       "gid://gitlab/Vulnerability/1",
+				Title:    tt.title,
+				Severity: "LOW",
+				State:    "DETECTED",
+			}})
+			want := "## Vulnerability\n\n" +
+				"- **ID**: `gid://gitlab/Vulnerability/1`\n" +
+				"- **Severity**: 🔵 LOW\n" +
+				"- **State**: DETECTED\n" +
+				"- **Has Issues**: ❌\n" +
+				"- **Has Merge Request**: ❌\n" +
+				"- **Has Remediations**: ❌\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'vulnerability.dismiss' to dismiss it as an acceptable risk or a false positive\n" +
+				"- Use action 'vulnerability.confirm' to confirm it as a real vulnerability\n" +
+				"- Use action 'vulnerability.resolve' to mark it resolved\n" +
+				hintListOthers
+			if got != want {
+				t.Errorf("FormatGetMarkdown() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
 // TestFormatGetMarkdown verifies that one vulnerability renders as a card: one
 // list item per field, the project as a nested object, the identifiers as a
 // collection, and the scanner's prose quoted under its label.
@@ -877,6 +1115,131 @@ func TestFormatGetMarkdown_StateDecidesTheHints(t *testing.T) {
 				"\n---\n💡 **Next steps:**\n" + tt.want + hintListOthers
 			if got != want {
 				t.Errorf("FormatGetMarkdown(%q) =\n%s\nwant:\n%s", tt.state, got, want)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_ProjectReference verifies which project references open
+// the nested Project label and which rows go under it.
+//
+// The guard admits a project that names any one of the three fields, and every
+// fixture in the package until now named only the full path, so the ID and the
+// name rows were never rendered and no case distinguished the three operands
+// from each other. A label opened over nothing is what the card rule forbids,
+// and a project that names only its ID is still a reference worth printing.
+func TestFormatGetMarkdown_ProjectReference(t *testing.T) {
+	tests := []struct {
+		name    string
+		project *ProjectItem
+		want    string
+	}{
+		{name: "no project at all", project: nil, want: ""},
+		{
+			name:    "a project that names nothing opens no label",
+			project: &ProjectItem{},
+			want:    "",
+		},
+		{
+			name:    "only the ID",
+			project: &ProjectItem{ID: "gid://gitlab/Project/7"},
+			want:    "- **Project**:\n  - **ID**: `gid://gitlab/Project/7`\n",
+		},
+		{
+			name:    "only the name",
+			project: &ProjectItem{Name: "my-project"},
+			want:    "- **Project**:\n  - **Name**: my-project\n",
+		},
+		{
+			name:    "only the full path",
+			project: &ProjectItem{FullPath: "my-group/my-project"},
+			want:    "- **Project**:\n  - **Full Path**: my-group/my-project\n",
+		},
+		{
+			name:    "all three",
+			project: &ProjectItem{ID: "gid://gitlab/Project/7", Name: "my-project", FullPath: "my-group/my-project"},
+			want: "- **Project**:\n" +
+				"  - **ID**: `gid://gitlab/Project/7`\n" +
+				"  - **Name**: my-project\n" +
+				"  - **Full Path**: my-group/my-project\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatGetMarkdown(GetOutput{Vulnerability: Item{
+				ID:       "gid://gitlab/Vulnerability/1",
+				Title:    "V",
+				Severity: "LOW",
+				State:    "DETECTED",
+				Project:  tt.project,
+			}})
+			want := "## Vulnerability: V\n\n" +
+				"- **ID**: `gid://gitlab/Vulnerability/1`\n" +
+				"- **Title**: V\n" +
+				"- **Severity**: 🔵 LOW\n" +
+				"- **State**: DETECTED\n" +
+				"- **Has Issues**: ❌\n" +
+				"- **Has Merge Request**: ❌\n" +
+				"- **Has Remediations**: ❌\n" +
+				tt.want +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'vulnerability.dismiss' to dismiss it as an acceptable risk or a false positive\n" +
+				"- Use action 'vulnerability.confirm' to confirm it as a real vulnerability\n" +
+				"- Use action 'vulnerability.resolve' to mark it resolved\n" +
+				hintListOthers
+			if got != want {
+				t.Errorf("FormatGetMarkdown() =\n%s\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+// TestFormatGetMarkdown_LocationLineRange verifies how the location row reads
+// for each shape of line range a scanner reports.
+//
+// A finding with no line at all is the ordinary case for DAST and container
+// scanning, and the guard that skips the range is what keeps the row from
+// claiming the file's line zero; a single-line finding reports one line rather
+// than a range that starts and ends in the same place.
+func TestFormatGetMarkdown_LocationLineRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		location LocationItem
+		want     string
+	}{
+		{name: "no line reported", location: LocationItem{File: "main.go"}, want: "main.go"},
+		{name: "one line", location: LocationItem{File: "main.go", StartLine: 10, EndLine: 10}, want: "main.go:10"},
+		{name: "a range", location: LocationItem{File: "main.go", StartLine: 10, EndLine: 20}, want: "main.go:10-20"},
+		{name: "a start with no end", location: LocationItem{File: "main.go", StartLine: 10}, want: "main.go:10"},
+		{name: "an end with no start", location: LocationItem{File: "main.go", EndLine: 20}, want: "main.go"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatGetMarkdown(GetOutput{Vulnerability: Item{
+				ID:       "gid://gitlab/Vulnerability/1",
+				Title:    "V",
+				Severity: "LOW",
+				State:    "DETECTED",
+				Location: &tt.location,
+			}})
+			want := "## Vulnerability: V\n\n" +
+				"- **ID**: `gid://gitlab/Vulnerability/1`\n" +
+				"- **Title**: V\n" +
+				"- **Severity**: 🔵 LOW\n" +
+				"- **State**: DETECTED\n" +
+				"- **Location**: `" + tt.want + "`\n" +
+				"- **Has Issues**: ❌\n" +
+				"- **Has Merge Request**: ❌\n" +
+				"- **Has Remediations**: ❌\n" +
+				"\n---\n💡 **Next steps:**\n" +
+				"- Use action 'vulnerability.dismiss' to dismiss it as an acceptable risk or a false positive\n" +
+				"- Use action 'vulnerability.confirm' to confirm it as a real vulnerability\n" +
+				"- Use action 'vulnerability.resolve' to mark it resolved\n" +
+				hintListOthers
+			if got != want {
+				t.Errorf("FormatGetMarkdown() =\n%s\nwant:\n%s", got, want)
 			}
 		})
 	}
@@ -1118,11 +1481,34 @@ func TestList_ProjectNotFound(t *testing.T) {
 	}
 }
 
-// TestList_AllFilters verifies that all optional filter parameters (scanner,
-// has_issues, has_resolution, sort) are correctly forwarded to the GraphQL API.
-func TestList_AllFilters(t *testing.T) {
+// TestList_UnsetFiltersAreOmittedFromTheQuery verifies that a filter the caller
+// left unset is absent from the variables rather than sent empty.
+//
+// It is the other half of TestList_WithFilters, and the half a guard's boundary
+// turns on: sending severity as an empty list, or hasIssues as false because no
+// value was given, asks GitLab a narrower question than the caller asked.
+func TestList_UnsetFiltersAreOmittedFromTheQuery(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
-		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+		"vulnerabilities": func(w http.ResponseWriter, r *http.Request) {
+			vars, err := testutil.ParseGraphQLVariables(r)
+			if err != nil {
+				t.Errorf("ParseGraphQLVariables error: %v", err)
+				return
+			}
+			// Unrolled rather than ranged: this runs on the httptest server's
+			// goroutine, where a subtest may not be opened.
+			absent := func(name string) {
+				if got, ok := vars[name]; ok {
+					t.Errorf("%s = %#v, want it absent when the caller named no filter", name, got)
+				}
+			}
+			absent("severity")
+			absent("state")
+			absent("scanner")
+			absent("reportType")
+			absent("hasIssues")
+			absent("hasResolution")
+			absent("sort")
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"project": {
 					"vulnerabilities": {
@@ -1133,16 +1519,8 @@ func TestList_AllFilters(t *testing.T) {
 			}`)
 		},
 	})
-	hasIssues := true
-	hasResolution := false
 	client := testutil.NewTestClient(t, handler)
-	out, err := List(context.Background(), client, ListInput{
-		ProjectPath:   "g/p",
-		Scanner:       []string{"semgrep"},
-		HasIssues:     &hasIssues,
-		HasResolution: &hasResolution,
-		Sort:          "severity_desc",
-	})
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "g/p"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -1210,6 +1588,48 @@ func TestNodeToItem_ContainerLocation(t *testing.T) {
 	}
 	if item.Location.File != "registry.example.com/app:latest" {
 		t.Errorf("File = %q, want registry.example.com/app:latest (from Image)", item.Location.File)
+	}
+}
+
+// TestNodeToItem_LocationPrefersTheFileOverPathAndImage verifies that a
+// location naming a file keeps the file, whichever of the other members of the
+// location union carries a value beside it.
+//
+// The two fallbacks are guards that must both hold at once: read as "or"
+// instead of "and", a SAST finding's file would be replaced by whatever the
+// same object carried under path or image, and the caller would be pointed at
+// the wrong place in the repository.
+func TestNodeToItem_LocationPrefersTheFileOverPathAndImage(t *testing.T) {
+	item := nodeToItem(gqlVulnerabilityNode{
+		ID: "gid://gitlab/Vulnerability/3",
+		Location: &gqlLocation{
+			File:  "app/models/user.rb",
+			Path:  "/api/v1/users",
+			Image: "registry.example.com/app:latest",
+		},
+	})
+	if item.Location == nil {
+		t.Fatal("expected non-nil location")
+	}
+	if item.Location.File != "app/models/user.rb" {
+		t.Errorf("File = %q, want the file the report named", item.Location.File)
+	}
+}
+
+// TestNodeToItem_EmptyIssueLinksIsNotAnIssue verifies that a vulnerability whose
+// issueLinks connection came back with no nodes is not reported as having an
+// issue.
+//
+// GitLab sends the connection whether or not anything is linked, so the nil
+// check alone answers every vulnerability yes; the count is what decides it,
+// and has_issues is what a model reads to know a finding is already tracked.
+func TestNodeToItem_EmptyIssueLinksIsNotAnIssue(t *testing.T) {
+	item := nodeToItem(gqlVulnerabilityNode{
+		ID:         "gid://gitlab/Vulnerability/4",
+		IssueLinks: &gqlIssueLinksConnection{Nodes: []gqlIssueLinkNode{}},
+	})
+	if item.HasIssues {
+		t.Error("HasIssues = true for a connection carrying no links, want false")
 	}
 }
 

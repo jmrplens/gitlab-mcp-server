@@ -64,8 +64,12 @@ func TestSeverityCount_Success(t *testing.T) {
 	}
 }
 
-// TestSeverityCount_ZeroCounts verifies that severity counts with all-zero
-// values are correctly reported.
+// TestSeverityCount_ZeroCounts verifies that a project with nothing detected
+// answers with every severity level at zero, and not only with a zero total.
+//
+// "No criticals" is the answer a reader came for, so each level is checked
+// rather than inferred from the sum, which any six numbers adding to zero would
+// satisfy.
 func TestSeverityCount_ZeroCounts(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"vulnerabilitySeveritiesCount": func(w http.ResponseWriter, _ *http.Request) {
@@ -92,8 +96,16 @@ func TestSeverityCount_ZeroCounts(t *testing.T) {
 		t.Fatalf("SeverityCount() error = %v", err)
 	}
 
-	if out.Total != 0 {
-		t.Errorf("Total = %d, want 0", out.Total)
+	levels := map[string]int{
+		"critical": out.Critical, "high": out.High, "medium": out.Medium,
+		"low": out.Low, "info": out.Info, "unknown": out.Unknown, "total": out.Total,
+	}
+	for name, got := range levels {
+		t.Run(name, func(t *testing.T) {
+			if got != 0 {
+				t.Errorf("%s = %d, want 0", name, got)
+			}
+		})
 	}
 }
 
@@ -198,11 +210,13 @@ func TestPipelineSecuritySummary_Success(t *testing.T) {
 	if out.Sast == nil {
 		t.Fatal("expected SAST summary, got nil")
 	}
-	if out.Sast.VulnerabilitiesCount != 10 {
-		t.Errorf("SAST vulnerabilities = %d, want 10", out.Sast.VulnerabilitiesCount)
+	wantSast := ScannerSummaryItem{
+		VulnerabilitiesCount:    10,
+		ScannedResourcesCount:   150,
+		ScannedResourcesCsvPath: "/downloads/sast.csv",
 	}
-	if out.Sast.ScannedResourcesCount != 150 {
-		t.Errorf("SAST scanned resources = %d, want 150", out.Sast.ScannedResourcesCount)
+	if *out.Sast != wantSast {
+		t.Errorf("SAST = %+v, want %+v", *out.Sast, wantSast)
 	}
 
 	if out.Dast == nil {
@@ -235,8 +249,13 @@ func TestPipelineSecuritySummary_Success(t *testing.T) {
 	}
 }
 
-// TestPipelineSecuritySummary_AllScanners verifies that all scanner types
-// (SAST, DAST, dependency scanning, container scanning, secret detection) are included.
+// TestPipelineSecuritySummary_AllScanners verifies that each of the eight
+// scanners lands in its own field, carrying its own counts.
+//
+// Asserting only that all eight are non-nil leaves the eight assignments
+// interchangeable: a summary reading the API fuzzing counts into the coverage
+// fuzzing field has no branch to flip and neither coverage gate can see it, so
+// every scanner is compared against the whole item GitLab sent for it.
 func TestPipelineSecuritySummary_AllScanners(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"securityReportSummary": func(w http.ResponseWriter, _ *http.Request) {
@@ -268,14 +287,93 @@ func TestPipelineSecuritySummary_AllScanners(t *testing.T) {
 		t.Fatalf("PipelineSecuritySummary() error = %v", err)
 	}
 
-	if out.Sast == nil || out.Dast == nil || out.DependencyScanning == nil ||
-		out.ContainerScanning == nil || out.SecretDetection == nil ||
-		out.CoverageFuzzing == nil || out.APIFuzzing == nil || out.ClusterImageScanning == nil {
-		t.Fatal("expected all 8 scanners to be non-nil")
+	scanners := []struct {
+		name string
+		got  *ScannerSummaryItem
+		want ScannerSummaryItem
+	}{
+		{"sast", out.Sast, ScannerSummaryItem{VulnerabilitiesCount: 2, ScannedResourcesCount: 10}},
+		{"dast", out.Dast, ScannerSummaryItem{VulnerabilitiesCount: 3, ScannedResourcesCount: 20}},
+		{"dependency scanning", out.DependencyScanning, ScannerSummaryItem{VulnerabilitiesCount: 4, ScannedResourcesCount: 30}},
+		{"container scanning", out.ContainerScanning, ScannerSummaryItem{VulnerabilitiesCount: 1, ScannedResourcesCount: 5}},
+		{"secret detection", out.SecretDetection, ScannerSummaryItem{VulnerabilitiesCount: 0, ScannedResourcesCount: 100}},
+		{"coverage fuzzing", out.CoverageFuzzing, ScannerSummaryItem{VulnerabilitiesCount: 5, ScannedResourcesCount: 50}},
+		{"api fuzzing", out.APIFuzzing, ScannerSummaryItem{VulnerabilitiesCount: 2, ScannedResourcesCount: 15}},
+		{"cluster image scanning", out.ClusterImageScanning, ScannerSummaryItem{VulnerabilitiesCount: 1, ScannedResourcesCount: 8}},
+	}
+	for _, s := range scanners {
+		t.Run(s.name, func(t *testing.T) {
+			if s.got == nil {
+				t.Fatalf("%s summary = nil, want %+v", s.name, s.want)
+			}
+			if *s.got != s.want {
+				t.Errorf("%s summary = %+v, want %+v", s.name, *s.got, s.want)
+			}
+		})
 	}
 
 	if out.TotalVulnerabilities != 18 {
 		t.Errorf("TotalVulnerabilities = %d, want 18", out.TotalVulnerabilities)
+	}
+}
+
+// TestPipelineSecuritySummary_OnlyOneScannerRan verifies that a pipeline whose
+// report names one scanner answers with that scanner and leaves the other seven
+// fields unset.
+//
+// Every other fixture in the package sends SAST and DAST, so nothing until now
+// took the absent side of those two guards: a pipeline that runs only cluster
+// image scanning is the ordinary shape for a project that builds an image and
+// nothing else, and it must not be reported as having run a SAST scan.
+func TestPipelineSecuritySummary_OnlyOneScannerRan(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportSummary": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": {
+						"securityReportSummary": {
+							"sast": null,
+							"dast": null,
+							"dependencyScanning": null,
+							"containerScanning": null,
+							"secretDetection": null,
+							"coverageFuzzing": null,
+							"apiFuzzing": null,
+							"clusterImageScanning": {"vulnerabilitiesCount": 6, "scannedResourcesCount": 2, "scannedResourcesCsvPath": ""}
+						}
+					}
+				}
+			}`)
+		},
+	})
+
+	out, err := PipelineSecuritySummary(context.Background(), testutil.NewTestClient(t, handler),
+		PipelineSecuritySummaryInput{ProjectPath: "my-group/my-project", PipelineIID: "7"})
+	if err != nil {
+		t.Fatalf("PipelineSecuritySummary() error = %v", err)
+	}
+
+	want := PipelineSecuritySummaryOutput{
+		ClusterImageScanning: &ScannerSummaryItem{VulnerabilitiesCount: 6, ScannedResourcesCount: 2},
+		TotalVulnerabilities: 6,
+	}
+	if out.ClusterImageScanning == nil || *out.ClusterImageScanning != *want.ClusterImageScanning {
+		t.Errorf("ClusterImageScanning = %+v, want %+v", out.ClusterImageScanning, want.ClusterImageScanning)
+	}
+	if out.TotalVulnerabilities != want.TotalVulnerabilities {
+		t.Errorf("TotalVulnerabilities = %d, want %d", out.TotalVulnerabilities, want.TotalVulnerabilities)
+	}
+	absent := map[string]*ScannerSummaryItem{
+		"sast": out.Sast, "dast": out.Dast, "dependency scanning": out.DependencyScanning,
+		"container scanning": out.ContainerScanning, "secret detection": out.SecretDetection,
+		"coverage fuzzing": out.CoverageFuzzing, "api fuzzing": out.APIFuzzing,
+	}
+	for name, got := range absent {
+		t.Run(name+" did not run", func(t *testing.T) {
+			if got != nil {
+				t.Errorf("%s summary = %+v, want nil", name, got)
+			}
+		})
 	}
 }
 
@@ -483,6 +581,34 @@ func TestFormatPipelineSecuritySummaryMarkdown_WithScanners(t *testing.T) {
 func TestFormatPipelineSecuritySummaryMarkdown_Empty(t *testing.T) {
 	want := "## Pipeline Security Report Summary\n\nNo security scans ran in this pipeline.\n"
 	if got := FormatPipelineSecuritySummaryMarkdown(PipelineSecuritySummaryOutput{}); got != want {
+		t.Errorf("FormatPipelineSecuritySummaryMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatPipelineSecuritySummaryMarkdown_CleanScanIsNotNoScan verifies that
+// a scanner which ran and found nothing renders its row, rather than the
+// sentence reserved for a pipeline that ran no scan at all.
+//
+// Both conditions on that sentence have to hold together: read as "or", the
+// commonest good result a project can have — a scan that came back clean —
+// would be reported to the model as a pipeline with no security scanning, which
+// is the opposite claim.
+func TestFormatPipelineSecuritySummaryMarkdown_CleanScanIsNotNoScan(t *testing.T) {
+	out := PipelineSecuritySummaryOutput{
+		Sast:                 &ScannerSummaryItem{VulnerabilitiesCount: 0, ScannedResourcesCount: 150},
+		TotalVulnerabilities: 0,
+	}
+
+	want := "## Pipeline Security Report Summary\n\n" +
+		"| Scanner | Vulnerabilities | Scanned Resources |\n" +
+		"| --- | --- | --- |\n" +
+		"| SAST | 0 | 150 |\n\n" +
+		"**Total Vulnerabilities: 0**\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'security_finding.list' to read the findings these scanners reported\n" +
+		"- Use action 'vulnerability.severity_count' to see the project's counts by severity\n"
+
+	if got := FormatPipelineSecuritySummaryMarkdown(out); got != want {
 		t.Errorf("FormatPipelineSecuritySummaryMarkdown() =\n%s\nwant:\n%s", got, want)
 	}
 }
