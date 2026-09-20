@@ -2,6 +2,7 @@ package resourceevents
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -282,6 +283,71 @@ func TestMarkdownHints_IterationAndWeight(t *testing.T) {
 			result := toolutil.MarkdownForResult(tt.val)
 			if result == nil {
 				t.Fatalf("MarkdownForResult(%T) returned nil", tt.val)
+			}
+		})
+	}
+}
+
+// TestDecorateEventMeta_EverySpec_CarriesItsTableMetadata holds every spec
+// against the eventActionMeta row it was decorated from. Nothing read any of
+// the four fields before, so decorateEventMeta could be disconnected from the
+// table entirely and the suite stayed green: a model would then be told every
+// resource-event action is for "executing a resourceevents domain action", with
+// no description and the bare tool name as its only alias.
+func TestDecorateEventMeta_EverySpec_CarriesItsTableMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)
+	specs = append(specs, EpicActionSpecs(client)...)
+
+	for _, spec := range specs {
+		tool := spec.IndividualTool.Name
+		t.Run(tool, func(t *testing.T) {
+			meta, ok := eventActionMeta[tool]
+			if !ok {
+				t.Fatalf("no eventActionMeta entry for %q", tool)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the table's %q", spec.Usage, meta.usage)
+			}
+			if spec.Usage == usageDefault {
+				t.Error("Usage is still the generic default, so the table never reached the spec")
+			}
+			if !slices.Equal(spec.Aliases, meta.aliases) {
+				t.Errorf("Aliases = %q, want the table's %q", spec.Aliases, meta.aliases)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("IndividualTool.Description = %q, want the table's %q", spec.IndividualTool.Description, meta.description)
+			}
+			if !slices.Equal(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %q, want the table's %q", spec.RelatedActions, meta.related)
+			}
+		})
+	}
+}
+
+// TestEventActionMeta_EveryEntry_FillsEveryField pins what makes the two length
+// guards in decorateEventMeta unreachable: every row fills all four fields, so
+// len(...) > 0 is never false and nothing can tell it from len(...) >= 0. The
+// guards stay, because a row that omitted a field would otherwise have its
+// generic default overwritten with nothing; the property behind them is held
+// here instead.
+func TestEventActionMeta_EveryEntry_FillsEveryField(t *testing.T) {
+	if len(eventActionMeta) == 0 {
+		t.Fatal("eventActionMeta is empty, so this test asserts nothing")
+	}
+	for tool, meta := range eventActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			if meta.usage == "" {
+				t.Error("usage is empty")
+			}
+			if len(meta.aliases) == 0 {
+				t.Error("aliases is empty")
+			}
+			if meta.description == "" {
+				t.Error("description is empty")
+			}
+			if len(meta.related) == 0 {
+				t.Error("related is empty")
 			}
 		})
 	}
