@@ -283,7 +283,7 @@ func TestListGroup_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("mygroup"),
 	})
 	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
+		t.Fatal("expected error for 400 response, got nil")
 	}
 }
 
@@ -524,7 +524,7 @@ func TestCreateGroup_APIError(t *testing.T) {
 		BaseAccessLevel: 30,
 	})
 	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
+		t.Fatal("expected error for 400 response, got nil")
 	}
 }
 
@@ -714,7 +714,7 @@ func TestDeleteGroup_APIError(t *testing.T) {
 		MemberRoleID: 1,
 	})
 	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
+		t.Fatal("expected error for 400 response, got nil")
 	}
 }
 
