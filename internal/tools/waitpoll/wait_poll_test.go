@@ -259,8 +259,16 @@ func TestPoll_ImmediateTimeoutReturnsBeforePolling(t *testing.T) {
 
 // TestPoll_PollReceivesTimeoutContext verifies a slow poller receives a context
 // bounded by timeout_seconds and Poll returns a timeout result when it expires.
+//
+// The deadline is its own rather than fastDuration's millisecond, because the
+// loop checks the deadline before its first poll and a runner that took longer
+// than that to set the wait up finds it already past: the call then returns a
+// timeout with no poll at all, which is a different thing from the one under
+// test here. It failed that way on a Windows runner, where the timer
+// granularity alone is fifteen times the bound.
 func TestPoll_PollReceivesTimeoutContext(t *testing.T) {
 	opts, _ := pollOptions("running")
+	opts.PollDuration = func(int) time.Duration { return 150 * time.Millisecond }
 	opts.Poll = func(ctx context.Context) (pollItem, error) {
 		<-ctx.Done()
 		return pollItem{}, ctx.Err()
