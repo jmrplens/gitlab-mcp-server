@@ -63,7 +63,7 @@ func TestProjectList_Success(t *testing.T) {
 
 // TestProjectList_MissingProjectID verifies ProjectList when missing project ID.
 func TestProjectList_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectList(context.Background(), client, ProjectListInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -95,7 +95,7 @@ func TestProjectGet_Success(t *testing.T) {
 
 // TestProjectGet_MissingParams verifies ProjectGet when missing params.
 func TestProjectGet_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectGet(context.Background(), client, ProjectGetInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -133,7 +133,7 @@ func TestProjectContent_Success(t *testing.T) {
 
 // TestProjectContent_MissingParams verifies ProjectContent when missing params.
 func TestProjectContent_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectContent(context.Background(), client, ProjectContentInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -177,7 +177,7 @@ func TestProjectCreate_Success(t *testing.T) {
 
 // TestProjectCreate_MissingParams verifies ProjectCreate when missing params.
 func TestProjectCreate_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -192,7 +192,7 @@ func TestProjectCreate_MissingParams(t *testing.T) {
 // TestProjectCreate_MissingContent verifies that project create validates file
 // content before calling GitLab.
 func TestProjectCreate_MissingContent(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
 		ProjectID: toolutil.StringOrInt("10"),
 		Title:     "Test Snippet",
@@ -206,7 +206,7 @@ func TestProjectCreate_MissingContent(t *testing.T) {
 // TestProjectCreate_MissingFileName verifies that project create validates the
 // single-file file name before calling GitLab.
 func TestProjectCreate_MissingFileName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectCreate(context.Background(), client, ProjectCreateInput{
 		ProjectID:   toolutil.StringOrInt("10"),
 		Title:       "Test Snippet",
@@ -248,7 +248,7 @@ func TestProjectUpdate_Success(t *testing.T) {
 
 // TestProjectUpdate_MissingParams verifies ProjectUpdate when missing params.
 func TestProjectUpdate_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -286,7 +286,7 @@ func TestProjectDelete_Success(t *testing.T) {
 
 // TestProjectDelete_MissingParams verifies ProjectDelete when missing params.
 func TestProjectDelete_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := ProjectDelete(context.Background(), client, ProjectDeleteInput{})
 	if err == nil || !strings.Contains(err.Error(), errProjectIDRequired) {
 		t.Fatalf(fmtExpProjIDReqErr, err)
@@ -1167,14 +1167,14 @@ func TestProjectCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
 				ProjectID: "42", Title: "Test Snippet", Description: "desc",
 				FileName: "test.go", ContentBody: "package main", Visibility: "public",
 			},
-			want: []string{`"description":"desc"`, `"file_path":"test.go"`, `"content":"package main"`, `"visibility":"public"`},
+			want: []string{`"title":"Test Snippet"`, `"description":"desc"`, `"file_path":"test.go"`, `"content":"package main"`, `"visibility":"public"`},
 		},
 		{
 			name: "the single-file pair with no description",
 			input: ProjectCreateInput{
 				ProjectID: "42", Title: "Test Snippet", FileName: "empty.go", ContentBody: "package empty",
 			},
-			want: []string{`"file_path":"empty.go"`, `"visibility":"private"`},
+			want: []string{`"title":"Test Snippet"`, `"file_path":"empty.go"`, `"visibility":"private"`},
 			omit: []string{`"description"`},
 		},
 		{
@@ -1183,7 +1183,7 @@ func TestProjectCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
 				ProjectID: "42", Title: "Test Snippet",
 				Files: []CreateFileInput{{FilePath: "a.go", Content: "package a"}},
 			},
-			want: []string{`"file_path":"a.go"`, `"content":"package a"`},
+			want: []string{`"title":"Test Snippet"`, `"file_path":"a.go"`, `"content":"package a"`},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

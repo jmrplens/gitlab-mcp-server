@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -98,7 +99,7 @@ func TestGet_Success(t *testing.T) {
 
 // TestGet_MissingSnippetID verifies Get when missing snippet ID.
 func TestGet_MissingSnippetID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{})
 	if err == nil || !strings.Contains(err.Error(), "snippet_id is required") {
 		t.Fatalf("expected snippet_id required error, got %v", err)
@@ -129,7 +130,7 @@ func TestContent_Success(t *testing.T) {
 
 // TestContent_MissingSnippetID verifies Content when missing snippet ID.
 func TestContent_MissingSnippetID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Content(context.Background(), client, ContentInput{})
 	if err == nil || !strings.Contains(err.Error(), "snippet_id is required") {
 		t.Fatalf("expected snippet_id required error, got %v", err)
@@ -140,29 +141,35 @@ func TestContent_MissingSnippetID(t *testing.T) {
 // FileContent
 // ---------------------------------------------------------------------------.
 
-// TestFileContent_Success verifies FileContent when success.
+// TestFileContent_Success verifies FileContent answers with the bytes GitLab
+// served and echoes each of the three identifiers the caller named back on its
+// own key. The ref and the file name are echoed rather than read from a
+// response, so a handler that put one under the other's key would publish a
+// wrong answer with no branch for either gate to see; the fixture therefore
+// gives no two of them the same value.
 func TestFileContent_Success(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/snippets/42/files/main/test.go/raw", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v4/snippets/42/files/a-ref/b-file.go/raw", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("file content here"))
 	})
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := FileContent(context.Background(), client, FileContentInput{
-		SnippetID: 42, Ref: "main", FileName: "test.go",
+		SnippetID: 42, Ref: "a-ref", FileName: "b-file.go",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Content != "file content here" {
-		t.Errorf("unexpected content: %s", out.Content)
+	want := FileContentOutput{SnippetID: 42, Ref: "a-ref", FileName: "b-file.go", Content: "file content here"}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("file content = %+v, want %+v", out, want)
 	}
 }
 
 // TestFileContent_MissingParams verifies FileContent when missing params.
 func TestFileContent_MissingParams(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := FileContent(context.Background(), client, FileContentInput{})
 	if err == nil || !strings.Contains(err.Error(), "snippet_id is required") {
@@ -223,7 +230,7 @@ func TestCreate_Success(t *testing.T) {
 
 // TestCreate_MissingTitle verifies Create when missing title.
 func TestCreate_MissingTitle(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{})
 	if err == nil || !strings.Contains(err.Error(), "title is required") {
 		t.Fatalf("expected title required error, got %v", err)
@@ -232,7 +239,7 @@ func TestCreate_MissingTitle(t *testing.T) {
 
 // TestCreate_MissingContent verifies Create when missing content.
 func TestCreate_MissingContent(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{Title: "Test Snippet", FileName: "test.go"})
 	if err == nil || !strings.Contains(err.Error(), "content is required") {
 		t.Fatalf("expected content required error, got %v", err)
@@ -290,7 +297,7 @@ func TestUpdate_Success(t *testing.T) {
 
 // TestUpdate_MissingSnippetID verifies Update when missing snippet ID.
 func TestUpdate_MissingSnippetID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Update(context.Background(), client, UpdateInput{})
 	if err == nil || !strings.Contains(err.Error(), "snippet_id is required") {
 		t.Fatalf("expected snippet_id required error, got %v", err)
@@ -321,7 +328,7 @@ func TestDelete_Success(t *testing.T) {
 
 // TestDelete_MissingSnippetID verifies Delete when missing snippet ID.
 func TestDelete_MissingSnippetID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{})
 	if err == nil || !strings.Contains(err.Error(), "snippet_id is required") {
 		t.Fatalf("expected snippet_id required error, got %v", err)
@@ -912,7 +919,7 @@ func TestCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
 				Title: "Test Snippet", FileName: "test.go", Description: "desc",
 				ContentBody: "package main", Visibility: "public",
 			},
-			want: []string{`"file_name":"test.go"`, `"description":"desc"`, `"content":"package main"`, `"visibility":"public"`},
+			want: []string{`"title":"Test Snippet"`, `"file_name":"test.go"`, `"description":"desc"`, `"content":"package main"`, `"visibility":"public"`},
 		},
 		{
 			name: "files array only",
@@ -920,7 +927,7 @@ func TestCreate_SendsOnlyWhatTheCallerGave(t *testing.T) {
 				Title: "Test Snippet",
 				Files: []CreateFileInput{{FilePath: "a.go", Content: "package a"}},
 			},
-			want: []string{`"files"`, `"file_path":"a.go"`, `"visibility":"private"`},
+			want: []string{`"title":"Test Snippet"`, `"files"`, `"file_path":"a.go"`, `"visibility":"private"`},
 			// The content of the one file is inside files[], and the
 			// single-file keys beside it are not sent at all.
 			omit: []string{`"file_name"`, `"description"`},
@@ -1201,4 +1208,162 @@ func TestFormatMarkdown_SentFields(t *testing.T) {
 			t.Errorf("bare snippet card:\n got %q\nwant %q", got, want)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// The whole conversion, key by key
+// ---------------------------------------------------------------------------.
+
+// snippetEveryFieldJSON is one snippet in which no two values agree, neither
+// between the snippet's own keys nor between the author's, so no output below
+// can be produced by a converter that reads a neighboring key.
+const snippetEveryFieldJSON = `{"id":11,"title":"t-title","file_name":"n-file.go",` +
+	`"description":"d-description","visibility":"internal",` +
+	`"author":{"id":22,"username":"u-username","email":"e-mail@example.test",` +
+	`"name":"n-name","state":"s-state","created_at":"2021-01-01T01:01:01Z"},` +
+	`"project_id":33,"web_url":"https://example.test/w-web",` +
+	`"raw_url":"https://example.test/r-raw","repository_storage":"s-storage",` +
+	`"files":[{"path":"p-path.go","raw_url":"https://example.test/f-fileraw"}],` +
+	`"ssh_url_to_repo":"git@example.test:s-ssh.git",` +
+	`"http_url_to_repo":"https://example.test/h-http.git",` +
+	`"imported":true,"imported_from":"i-origin",` +
+	`"created_at":"2022-02-02T02:02:02Z","updated_at":"2023-03-03T03:03:03Z"}`
+
+// TestSnippets_EveryFieldComesFromItsOwnKey verifies that every handler
+// answering with a snippet fills each published field from the key GitLab
+// spells it under, the author object and the file rows included.
+//
+// A converter that assigns its neighbor, or stops assigning a field at all,
+// has no branch to flip, so neither coverage gate can see it. Measured here
+// before this test existed, ten of the seventeen assignments could be dropped
+// and three pairs swapped with the whole suite still green.
+func TestSnippets_EveryFieldComesFromItsOwnKey(t *testing.T) {
+	authorCreated := time.Date(2021, 1, 1, 1, 1, 1, 0, time.UTC)
+	created := time.Date(2022, 2, 2, 2, 2, 2, 0, time.UTC)
+	updated := time.Date(2023, 3, 3, 3, 3, 3, 0, time.UTC)
+	want := Output{
+		ID: 11, Title: "t-title", FileName: "n-file.go",
+		Description: "d-description", Visibility: "internal",
+		Author: &SnippetAuthorOutput{
+			ID: 22, Username: "u-username", Email: "e-mail@example.test",
+			Name: "n-name", State: "s-state", CreatedAt: &authorCreated,
+		},
+		ProjectID:         33,
+		WebURL:            "https://example.test/w-web",
+		RawURL:            "https://example.test/r-raw",
+		RepositoryStorage: "s-storage",
+		Files:             []FileOutput{{Path: "p-path.go", RawURL: "https://example.test/f-fileraw"}},
+		SSHURLToRepo:      "git@example.test:s-ssh.git",
+		HTTPURLToRepo:     "https://example.test/h-http.git",
+		Imported:          true, ImportedFrom: "i-origin",
+		CreatedAt: &created, UpdatedAt: &updated,
+	}
+	for _, snippetCall := range snippetCalls {
+		t.Run(snippetCall.name, func(t *testing.T) {
+			got, err := snippetCall.call(snippetsClient(t, snippetBodyFor(snippetCall.list, snippetEveryFieldJSON)))
+			if err != nil {
+				t.Fatalf("%s: %v", snippetCall.name, err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("snippet:\n got %+v\nwant %+v", got, want)
+			}
+		})
+	}
+}
+
+// snippetListCalls are the four handlers that answer with a page of snippets.
+var snippetListCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (ListOutput, error)
+}{
+	{name: "list", call: func(client *gitlabclient.Client) (ListOutput, error) {
+		return List(context.Background(), client, ListInput{})
+	}},
+	{name: "list_all", call: func(client *gitlabclient.Client) (ListOutput, error) {
+		return ListAll(context.Background(), client, ListAllInput{})
+	}},
+	{name: "explore", call: func(client *gitlabclient.Client) (ListOutput, error) {
+		return Explore(context.Background(), client, ExploreInput{})
+	}},
+	{name: "project_list", call: func(client *gitlabclient.Client) (ListOutput, error) {
+		return ProjectList(context.Background(), client, ProjectListInput{ProjectID: "42"})
+	}},
+}
+
+// TestSnippets_PaginationComesFromTheResponseHeaders verifies every snippet
+// listing publishes the page GitLab answered with, each field from its own
+// header and no two of them equal.
+//
+// The block is one straight assignment from the response, so a listing that
+// filled none of it would leave both gates green while telling a caller there
+// is no second page to ask for.
+func TestSnippets_PaginationComesFromTheResponseHeaders(t *testing.T) {
+	want := toolutil.PaginationOutput{
+		Page: 3, PerPage: 25, TotalItems: 97, TotalPages: 4,
+		NextPage: 5, PrevPage: 2, HasMore: true,
+	}
+	for _, listCall := range snippetListCalls {
+		t.Run(listCall.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSONWithPagination(w, http.StatusOK, snippetListJSON, testutil.PaginationHeaders{
+					Page: "3", PerPage: "25", Total: "97", TotalPages: "4", NextPage: "5", PrevPage: "2",
+				})
+			}))
+			out, err := listCall.call(client)
+			if err != nil {
+				t.Fatalf("%s: %v", listCall.name, err)
+			}
+			if out.Pagination != want {
+				t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+			}
+		})
+	}
+}
+
+// TestFormatMarkdown_AuthorRendersWhicheverHalfGitLabSent verifies the author
+// row carries the display name and the handle when GitLab sent both, whichever
+// one it sent alone, and no row at all when it sent neither or no author.
+// Only the "both" arm was exercised before, which left the other two arms of
+// the switch unreached by every test in the package.
+func TestFormatMarkdown_AuthorRendersWhicheverHalfGitLabSent(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		author *SnippetAuthorOutput
+		want   string
+	}{
+		{name: "name and handle", author: &SnippetAuthorOutput{Name: "A Name", Username: "handle"}, want: "- **Author**: A Name (@handle)\n"},
+		{name: "handle alone", author: &SnippetAuthorOutput{Username: "handle"}, want: "- **Author**: @handle\n"},
+		{name: "name alone", author: &SnippetAuthorOutput{Name: "A Name"}, want: "- **Author**: A Name\n"},
+		{name: "neither", author: &SnippetAuthorOutput{ID: 7}, want: ""},
+		{name: "no author", author: nil, want: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := FormatMarkdown(Output{ID: 1, Title: "T", Author: testCase.author})
+			if testCase.want == "" {
+				if strings.Contains(got, "**Author**") {
+					t.Errorf("card %q carries an author row, want none", got)
+				}
+				return
+			}
+			if !strings.Contains(got, testCase.want) {
+				t.Errorf("card %q missing %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestFormatMarkdown_LinkInstructionFollowsTheFilesRawURLs verifies a card
+// whose only file carries no raw URL is not told to preserve links, and that
+// one file with a URL among several without is enough for the instruction.
+// The loop over the files used to be entered with a URL on the first entry
+// every time, so the empty case was never taken.
+func TestFormatMarkdown_LinkInstructionFollowsTheFilesRawURLs(t *testing.T) {
+	noLinks := FormatMarkdown(Output{ID: 1, Title: "T", Files: []FileOutput{{Path: "a.go"}, {Path: "b.go"}}})
+	if strings.Contains(noLinks, toolutil.HintPreserveLinks) {
+		t.Errorf("card with no raw URL %q asks for links to be preserved", noLinks)
+	}
+	oneLink := FormatMarkdown(Output{ID: 1, Title: "T", Files: []FileOutput{{Path: "a.go"}, {Path: "b.go", RawURL: "https://example.test/raw"}}})
+	if !strings.Contains(oneLink, toolutil.HintPreserveLinks) {
+		t.Errorf("card whose second file has a raw URL %q does not ask for links to be preserved", oneLink)
+	}
 }
