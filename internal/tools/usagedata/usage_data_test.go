@@ -5,9 +5,11 @@ package usagedata
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -80,56 +82,74 @@ func TestGetServicePing_Error(t *testing.T) {
 	}
 }
 
-// TestGetNonSQLMetrics verifies GetNonSQLMetrics.
-func TestGetNonSQLMetrics(t *testing.T) {
+// TestGetNonSQLMetrics_EveryFieldDistinct_ReadsItsOwnValue verifies that each
+// of the twenty-one fields this report publishes is read from the field of the
+// same name rather than from a neighbor.
+//
+// No two values in the fixture agree, which is the only way to see the class:
+// the two license dates used to carry the same day, so a converter assigning
+// LicenseStartsAt from LicenseExpiresAt rendered identically, and an assignment
+// has no branch for either gate to flip. The comparison is of the whole struct
+// because asserting six fields left the other fifteen free to be crossed or
+// dropped in silence.
+func TestGetNonSQLMetrics_EveryFieldDistinct_ReadsItsOwnValue(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/non_sql_metrics")
 		testutil.RespondJSON(w, http.StatusOK, `{
-			"recorded_at": "2026-01-15",
-			"uuid": "abc-123",
+			"recorded_at": "2026-01-15T08:30:00Z",
+			"uuid": "uuid-abc-123",
 			"hostname": "gitlab.example.com",
 			"version": "16.8.0",
 			"installation_type": "omnibus",
 			"active_user_count": 150,
 			"edition": "EE",
-			"license_md5": "md5hash",
-			"license_sha256": "sha256hash",
-			"license_id": "lic-1",
+			"license_md5": "md5-of-the-license",
+			"license_sha256": "sha256-of-the-license",
+			"license_id": "license-7",
 			"historical_max_users": 200,
 			"licensee": {"name": "ACME"},
 			"license_user_count": 300,
-			"license_starts_at": "2026-01-01",
-			"license_expires_at": "2026-01-01",
+			"license_starts_at": "2026-02-01",
+			"license_expires_at": "2027-03-02",
 			"license_plan": "premium",
 			"license_add_ons": {"code_suggestions": 50},
 			"license_trial": "false",
-			"license_subscription_id": "sub-1",
-			"license": {"plan": "premium"},
+			"license_subscription_id": "subscription-9",
+			"license": {"plan": "ultimate"},
 			"settings": {"signup_enabled": "true"}
 		}`)
 	})
-	client := testutil.NewTestClient(t, handler)
-	out, err := GetNonSQLMetrics(t.Context(), client, GetNonSQLMetricsInput{})
+	out, err := GetNonSQLMetrics(t.Context(), testutil.NewTestClient(t, handler), GetNonSQLMetricsInput{})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.UUID != "abc-123" {
-		t.Errorf("UUID = %q, want abc-123", out.UUID)
+
+	want := NonSQLMetricsOutput{
+		RecordedAt:            "2026-01-15T08:30:00Z",
+		UUID:                  "uuid-abc-123",
+		Hostname:              "gitlab.example.com",
+		Version:               "16.8.0",
+		InstallationType:      "omnibus",
+		ActiveUserCount:       150,
+		Edition:               "EE",
+		LicenseMD5:            "md5-of-the-license",
+		LicenseSHA256:         "sha256-of-the-license",
+		LicenseID:             "license-7",
+		HistoricalMaxUsers:    200,
+		Licensee:              map[string]string{"name": "ACME"},
+		LicenseUserCount:      300,
+		LicenseStartsAt:       "2026-02-01",
+		LicenseExpiresAt:      "2027-03-02",
+		LicensePlan:           "premium",
+		LicenseAddOns:         map[string]int64{"code_suggestions": 50},
+		LicenseTrial:          "false",
+		LicenseSubscriptionID: "subscription-9",
+		License:               map[string]string{"plan": "ultimate"},
+		Settings:              map[string]string{"signup_enabled": "true"},
 	}
-	if out.Hostname != "gitlab.example.com" {
-		t.Errorf("Hostname = %q, want gitlab.example.com", out.Hostname)
-	}
-	if out.Version != "16.8.0" {
-		t.Errorf("Version = %q, want 16.8.0", out.Version)
-	}
-	if out.ActiveUserCount != 150 {
-		t.Errorf("ActiveUserCount = %d, want 150", out.ActiveUserCount)
-	}
-	if out.Edition != "EE" {
-		t.Errorf("Edition = %q, want EE", out.Edition)
-	}
-	if out.LicensePlan != "premium" {
-		t.Errorf("LicensePlan = %q, want premium", out.LicensePlan)
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetNonSQLMetrics() =\n%+v\nwant\n%+v", out, want)
 	}
 }
 
@@ -163,45 +183,73 @@ func TestGetNonSQLMetrics_NotFound_HintsAlternatives(t *testing.T) {
 	}
 }
 
-// TestGetQueries verifies GetQueries.
-func TestGetQueries(t *testing.T) {
+// TestGetQueries_EveryFieldDistinct_ReadsItsOwnValue verifies that each of the
+// twenty-two fields the queries report publishes is read from the field of the
+// same name, and that the recording time is rendered in RFC 3339.
+//
+// The fixture used to send the empty string for fifteen of them, which made
+// every string field interchangeable with every other while two assertions
+// passed; here no two values agree.
+func TestGetQueries_EveryFieldDistinct_ReadsItsOwnValue(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/queries")
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"recorded_at": "2026-01-15T10:00:00Z",
-			"uuid": "abc-123",
+			"uuid": "uuid-abc-123",
 			"hostname": "gitlab.example.com",
 			"version": "16.8.0",
 			"installation_type": "omnibus",
 			"active_user_count": "SELECT COUNT(*) FROM users WHERE state='active'",
 			"edition": "EE",
-			"license_md5": "",
-			"license_sha256": "",
-			"license_id": "",
-			"historical_max_users": 0,
-			"licensee": {},
-			"license_user_count": 0,
-			"license_starts_at": "",
-			"license_expires_at": "",
-			"license_plan": "",
-			"license_add_ons": {},
-			"license_trial": "",
-			"license_subscription_id": "",
-			"license": {},
-			"settings": {},
+			"license_md5": "md5-of-the-license",
+			"license_sha256": "sha256-of-the-license",
+			"license_id": "license-7",
+			"historical_max_users": 200,
+			"licensee": {"name": "ACME"},
+			"license_user_count": 300,
+			"license_starts_at": "2026-02-01",
+			"license_expires_at": "2027-03-02",
+			"license_plan": "premium",
+			"license_add_ons": {"code_suggestions": 50},
+			"license_trial": "false",
+			"license_subscription_id": "subscription-9",
+			"license": {"plan": "ultimate"},
+			"settings": {"signup_enabled": "true"},
 			"counts": {"users_count": "SELECT COUNT(*) FROM users"}
 		}`)
 	})
-	client := testutil.NewTestClient(t, handler)
-	out, err := GetQueries(t.Context(), client, GetQueriesInput{})
+	out, err := GetQueries(t.Context(), testutil.NewTestClient(t, handler), GetQueriesInput{})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.RecordedAt != "2026-01-15T10:00:00Z" {
-		t.Errorf("RecordedAt = %q, want 2026-01-15T10:00:00Z", out.RecordedAt)
+
+	want := QueriesOutput{
+		RecordedAt:            "2026-01-15T10:00:00Z",
+		UUID:                  "uuid-abc-123",
+		Hostname:              "gitlab.example.com",
+		Version:               "16.8.0",
+		InstallationType:      "omnibus",
+		ActiveUserCount:       "SELECT COUNT(*) FROM users WHERE state='active'",
+		Edition:               "EE",
+		LicenseMD5:            "md5-of-the-license",
+		LicenseSHA256:         "sha256-of-the-license",
+		LicenseID:             "license-7",
+		HistoricalMaxUsers:    200,
+		Licensee:              map[string]string{"name": "ACME"},
+		LicenseUserCount:      300,
+		LicenseStartsAt:       "2026-02-01",
+		LicenseExpiresAt:      "2027-03-02",
+		LicensePlan:           "premium",
+		LicenseAddOns:         map[string]int64{"code_suggestions": 50},
+		LicenseTrial:          "false",
+		LicenseSubscriptionID: "subscription-9",
+		License:               map[string]string{"plan": "ultimate"},
+		Settings:              map[string]string{"signup_enabled": "true"},
+		Counts:                map[string]string{"users_count": "SELECT COUNT(*) FROM users"},
 	}
-	if out.Counts["users_count"] != "SELECT COUNT(*) FROM users" {
-		t.Errorf("Counts[users_count] = %q, want SQL query", out.Counts["users_count"])
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetQueries() =\n%+v\nwant\n%+v", out, want)
 	}
 }
 
@@ -379,7 +427,9 @@ func TestTrackEvent(t *testing.T) {
 	}
 }
 
-// TestTrackEvent_Error verifies TrackEvent when error.
+// TestTrackEvent_Error verifies that a refusal of one tracked event carries the
+// hint keyed to 400, which nothing asserted: the status the hint hangs on could
+// have been any other and this test would still have passed.
 func TestTrackEvent_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -388,6 +438,125 @@ func TestTrackEvent_Error(t *testing.T) {
 	_, err := TrackEvent(t.Context(), client, TrackEventInput{Event: "bad_event"})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "valid Snowplow event identifier") {
+		t.Errorf("error = %q, want the hint keyed to a bad request", err.Error())
+	}
+}
+
+// captureTrackBody drives a call and returns the JSON body the handler put on
+// the wire, so an assertion is about what GitLab receives rather than about
+// what the input struct held.
+func captureTrackBody(t *testing.T, call func(client *gitlabclient.Client)) map[string]any {
+	t.Helper()
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		if err = json.Unmarshal(raw, &body); err != nil {
+			t.Errorf("decode request body %q: %v", raw, err)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	}))
+	call(client)
+	return body
+}
+
+// TestTrackEvent_SendsEachFieldTheCallerSetUnderItsOwnKey verifies that one
+// tracked event reaches GitLab carrying every field the caller supplied, under
+// the key client-go spells for it.
+//
+// Nothing used to read the request at all, so the two identifiers could trade
+// places and the event would be attributed to the wrong object with the suite
+// green: they are the same type, and an assignment offers no branch for either
+// gate to flip. They are distinct here for that reason.
+func TestTrackEvent_SendsEachFieldTheCallerSetUnderItsOwnKey(t *testing.T) {
+	sendToSnowplow := true
+	namespaceID := int64(11)
+	projectID := int64(22)
+
+	body := captureTrackBody(t, func(client *gitlabclient.Client) {
+		out, err := TrackEvent(t.Context(), client, TrackEventInput{
+			Event:                "test_event",
+			SendToSnowplow:       &sendToSnowplow,
+			NamespaceID:          &namespaceID,
+			ProjectID:            &projectID,
+			AdditionalProperties: map[string]string{"label": "value"},
+		})
+		if err != nil {
+			t.Errorf(fmtUnexpErr, err)
+		}
+		if out.Status != "accepted" {
+			t.Errorf("Status = %q, want accepted", out.Status)
+		}
+	})
+
+	want := map[string]any{
+		"event":                 "test_event",
+		"send_to_snowplow":      true,
+		"namespace_id":          float64(11),
+		"project_id":            float64(22),
+		"additional_properties": map[string]any{"label": "value"},
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("request body =\n%+v\nwant\n%+v", body, want)
+	}
+}
+
+// TestTrackEvents_SendsEveryEventInOrderWithItsOwnFields verifies that a batch
+// reaches GitLab as the array of events the caller passed, each carrying its
+// own fields, and that the count answered is the number sent.
+//
+// The two events differ in every field they set, so an event built from its
+// neighbor's values, or a loop that sends the first event twice, fails here.
+// The second carries send_to_snowplow at false to pin that a pointer to false
+// is sent rather than omitted, which is what distinguishes "the caller said no"
+// from "the caller said nothing".
+func TestTrackEvents_SendsEveryEventInOrderWithItsOwnFields(t *testing.T) {
+	sendToSnowplow := false
+	namespaceID := int64(11)
+	projectID := int64(22)
+
+	body := captureTrackBody(t, func(client *gitlabclient.Client) {
+		out, err := TrackEvents(t.Context(), client, TrackEventsInput{
+			Events: []TrackEventInput{
+				{
+					Event:                "event_1",
+					NamespaceID:          &namespaceID,
+					ProjectID:            &projectID,
+					AdditionalProperties: map[string]string{"label": "first"},
+				},
+				{Event: "event_2", SendToSnowplow: &sendToSnowplow},
+			},
+		})
+		if err != nil {
+			t.Errorf(fmtUnexpErr, err)
+		}
+		if out.Count != 2 {
+			t.Errorf("Count = %d, want 2", out.Count)
+		}
+	})
+
+	want := map[string]any{
+		"events": []any{
+			map[string]any{
+				"event":                 "event_1",
+				"namespace_id":          float64(11),
+				"project_id":            float64(22),
+				"additional_properties": map[string]any{"label": "first"},
+			},
+			map[string]any{
+				"event":            "event_2",
+				"send_to_snowplow": false,
+			},
+		},
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("request body =\n%+v\nwant\n%+v", body, want)
 	}
 }
 
@@ -434,6 +603,11 @@ const queriesHints = "\n---\n💡 **Next steps:**\n" +
 const definitionsHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use action 'admin.usage_data_service_ping' to read the values these metrics are reported with\n"
 
+// nonSQLMetricsHints is the guidance section the non-SQL metrics card closes
+// with.
+const nonSQLMetricsHints = "\n---\n💡 **Next steps:**\n" +
+	"- Use action 'admin.usage_data_service_ping' to read the full Service Ping report\n"
+
 // TestFormatServicePingMarkdown_LicenseAndCounts_RendersTheWholeCard verifies
 // that the report renders as a card whose two keyed collections are tables
 // under their own headings, with the recording time in the display form.
@@ -478,8 +652,44 @@ func TestFormatNonSQLMetricsMarkdown_RendersTheWholeCard(t *testing.T) {
 		"- **Edition**: EE\n" +
 		"- **Active Users**: 0\n" +
 		"- **Historical Max Users**: 0\n" +
-		"\n---\n💡 **Next steps:**\n" +
-		"- Use action 'admin.usage_data_service_ping' to read the full Service Ping report\n"
+		nonSQLMetricsHints
+
+	if got := FormatNonSQLMetricsMarkdown(out); got != want {
+		t.Errorf("FormatNonSQLMetricsMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestFormatNonSQLMetricsMarkdown_EveryRowPopulated_ReadsItsOwnField verifies
+// that each of the nine rows the card writes is filled from its own field.
+//
+// The zero case above cannot say that: it leaves both counters at 0 and three
+// rows unset, so the two Int rows could trade places, and so could Installation
+// Type and License Plan, and the card would render the same either way. Here no
+// two values agree, which is the only thing that separates them.
+func TestFormatNonSQLMetricsMarkdown_EveryRowPopulated_ReadsItsOwnField(t *testing.T) {
+	out := NonSQLMetricsOutput{
+		UUID:               "uuid-abc-123",
+		Hostname:           "gitlab.example.com",
+		Version:            "16.8.0",
+		Edition:            "EE",
+		InstallationType:   "omnibus",
+		ActiveUserCount:    150,
+		HistoricalMaxUsers: 200,
+		LicensePlan:        "premium",
+		RecordedAt:         "2026-01-15T10:00:00Z",
+	}
+
+	want := "## Non-SQL Metrics\n\n" +
+		"- **UUID**: uuid-abc-123\n" +
+		"- **Hostname**: gitlab.example.com\n" +
+		"- **Version**: 16.8.0\n" +
+		"- **Edition**: EE\n" +
+		"- **Installation Type**: omnibus\n" +
+		"- **Active Users**: 150\n" +
+		"- **Historical Max Users**: 200\n" +
+		"- **License Plan**: premium\n" +
+		"- **Recorded At**: 15 Jan 2026 10:00 UTC\n" +
+		nonSQLMetricsHints
 
 	if got := FormatNonSQLMetricsMarkdown(out); got != want {
 		t.Errorf("FormatNonSQLMetricsMarkdown() =\n%q\nwant\n%q", got, want)
@@ -509,6 +719,28 @@ func TestFormatMetricDefinitionsMarkdown_LongDocument_SaysTheCardShortenedIt(t *
 		definitionsHints
 
 	got := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: strings.Repeat("a", 15000)})
+	if got != want {
+		t.Errorf("FormatMetricDefinitionsMarkdown() = %d bytes, want %d bytes; first difference at %d",
+			len(got), len(want), firstDifference(got, want))
+	}
+}
+
+// TestFormatMetricDefinitionsMarkdown_ExactlyAtTheCardsCeiling_SaysNothingWasCut
+// verifies that a document of exactly the size the card shows renders whole and
+// with no notice under it.
+//
+// The boundary is the whole difference between the two sentences a reader can
+// see: one byte more and the card says it showed a prefix. A guard reading `<`
+// instead of `<=` prints that sentence under a document it did not cut, and
+// every other case here sits clear of the boundary on one side or the other.
+func TestFormatMetricDefinitionsMarkdown_ExactlyAtTheCardsCeiling_SaysNothingWasCut(t *testing.T) {
+	document := strings.Repeat("a", maxRenderedYAMLBytes)
+
+	want := "## Metric Definitions (YAML)\n\n" +
+		"```yaml\n" + document + "\n```\n" +
+		definitionsHints
+
+	got := FormatMetricDefinitionsMarkdown(MetricDefinitionsOutput{YAML: document})
 	if got != want {
 		t.Errorf("FormatMetricDefinitionsMarkdown() = %d bytes, want %d bytes; first difference at %d",
 			len(got), len(want), firstDifference(got, want))
@@ -549,10 +781,20 @@ func TestTruncateAtRuneBoundary_Tails_AreCutWhole(t *testing.T) {
 		want  string
 	}{
 		{name: "nothing to cut", data: "abc", limit: 3, want: "abc"},
+		// Exactly at the limit and ending in a byte that is not a character:
+		// nothing was cut, so nothing may be given back. Every other
+		// at-the-limit case ends in valid UTF-8, where the boundary loop is a
+		// no-op, so a guard reading `<` instead of `<=` ate this tail alone.
+		{name: "nothing to cut, and the tail is not UTF-8", data: "ab\xff", limit: 3, want: "ab\xff"},
 		{name: "cut between ASCII characters", data: "abcd", limit: 2, want: "ab"},
 		{name: "cut inside a two-byte character", data: "abé", limit: 3, want: "ab"},
 		{name: "cut inside a three-byte character", data: "ab€", limit: 4, want: "ab"},
 		{name: "cut after a whole character", data: "ab€c", limit: 5, want: "ab€"},
+		// A document may legitimately end in an encoded U+FFFD, which
+		// DecodeLastRune reports as RuneError with a size of three rather than
+		// one. That is a whole character and is kept; reading the error alone
+		// would eat three good bytes off every such document.
+		{name: "cut after a whole replacement character", data: "ab�z", limit: 5, want: "ab�"},
 		{name: "tail that is not UTF-8 at all", data: "ab\xff\xff\xff\xffz", limit: 6, want: "ab\xff"},
 	}
 
@@ -642,7 +884,8 @@ func TestGetQueries_NilRecordedAt(t *testing.T) {
 // TrackEvents — API error
 // ---------------------------------------------------------------------------.
 
-// TestTrackEvents_APIError verifies TrackEvents when API error.
+// TestTrackEvents_APIError verifies that a refused batch carries the hint keyed
+// to 400, which names the batch ceiling rather than the single-event sentence.
 func TestTrackEvents_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -652,6 +895,9 @@ func TestTrackEvents_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected API error, got nil")
+	}
+	if !strings.Contains(err.Error(), "max batch size applies") {
+		t.Errorf("error = %q, want the batch hint keyed to a bad request", err.Error())
 	}
 }
 
@@ -766,24 +1012,31 @@ func TestFormatServicePingMarkdown_ManyCounts_SaysHowManyItLeftOut(t *testing.T)
 // usageDataCalls names every usage-data handler beside a call of it, so the
 // two tests below can drive the same set against a working instance and a
 // refusing one.
+//
+// forbiddenHint is the sentence that handler adds to a 403, or empty where it
+// adds none: the three reads key a hint to that status and the two writes key
+// theirs to 400, so the same refusal reads differently depending on which
+// handler received it, and the distinction is what the hint is for.
 func usageDataCalls(t *testing.T, client *gitlabclient.Client) []struct {
-	name string
-	call func() error
+	name          string
+	forbiddenHint string
+	call          func() error
 } {
 	t.Helper()
 	return []struct {
-		name string
-		call func() error
+		name          string
+		forbiddenHint string
+		call          func() error
 	}{
-		{name: "service_ping", call: func() error {
+		{name: "service_ping", forbiddenHint: "only available on self-managed instances", call: func() error {
 			_, err := GetServicePing(t.Context(), client, GetServicePingInput{})
 			return err
 		}},
-		{name: "non_sql_metrics", call: func() error {
+		{name: "non_sql_metrics", forbiddenHint: "service ping must be enabled", call: func() error {
 			_, err := GetNonSQLMetrics(t.Context(), client, GetNonSQLMetricsInput{})
 			return err
 		}},
-		{name: "usage_queries", call: func() error {
+		{name: "usage_queries", forbiddenHint: "returns the SQL queries that produce service ping counts", call: func() error {
 			_, err := GetQueries(t.Context(), client, GetQueriesInput{})
 			return err
 		}},
@@ -819,7 +1072,13 @@ func TestUsageData_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 }
 
 // TestUsageData_RefusalsPropagate verifies that an instance refusing the read
-// or the write is reported rather than swallowed.
+// or the write is reported rather than swallowed, and that a read refused with
+// 403 carries the hint written for that handler.
+//
+// The hint is checked because it is the part no gate can be wrong about: it is
+// a string argument rather than a branch, so a handler wired to a sibling's
+// sentence would tell an administrator to enable the wrong thing and every
+// measurement here would still read clean.
 func TestUsageData_RefusalsPropagate(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -829,15 +1088,24 @@ func TestUsageData_RefusalsPropagate(t *testing.T) {
 
 	for _, tt := range usageDataCalls(t, client) {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.call(); err == nil {
+			err := tt.call()
+			if err == nil {
 				t.Fatalf("%s error = nil, want the instance refusal", tt.name)
+			}
+			if tt.forbiddenHint != "" && !strings.Contains(err.Error(), tt.forbiddenHint) {
+				t.Errorf("%s error = %q, want the hint %q", tt.name, err.Error(), tt.forbiddenHint)
 			}
 		})
 	}
 }
 
-// TestGetMetricDefinitions_ReadError covers the io.ReadAll error path
-// when the response body cannot be read due to truncated Content-Length.
+// TestGetMetricDefinitions_ReadError covers the io.ReadAll error path when the
+// response body cannot be read because of a truncated Content-Length.
+//
+// The error is inspected rather than merely counted: the SDK answers this
+// request without touching the body, so a failure here can come from either
+// layer, and the comment's claim about which one is only true if the message
+// the read path wraps is what came back.
 func TestGetMetricDefinitions_ReadError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/usage_data/metric_definitions", func(w http.ResponseWriter, _ *http.Request) {
@@ -850,6 +1118,9 @@ func TestGetMetricDefinitions_ReadError(t *testing.T) {
 	_, err := GetMetricDefinitions(ctx, client, GetMetricDefinitionsInput{})
 	if err == nil {
 		t.Fatal("expected error from truncated response body")
+	}
+	if !strings.Contains(err.Error(), "reading response body") {
+		t.Errorf("error = %q, want the failure the body read wraps", err.Error())
 	}
 }
 
