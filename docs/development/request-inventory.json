@@ -2471,7 +2471,7 @@
       "path": "/projects/:project_id/boards/:board_id",
       "identifiers": {
         ":board_id": 2,
-        ":project_id": 2
+        ":project_id": 3
       }
     },
     {
@@ -2504,7 +2504,7 @@
       ],
       "identifiers": {
         ":board_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -3290,6 +3290,14 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/repository/commits/abc123/discussions",
+      "query": [
+        "order_by",
+        "page",
+        "page_token",
+        "pagination",
+        "per_page",
+        "sort"
+      ],
       "identifiers": {
         ":project_id": 1
       }
@@ -3301,6 +3309,7 @@
       "path": "/projects/:project_id/repository/commits/abc123/discussions",
       "body": [
         "body",
+        "created_at",
         "position"
       ],
       "identifiers": {
@@ -3331,7 +3340,8 @@
       "method": "POST",
       "path": "/projects/:project_id/repository/commits/abc123/discussions/d1/notes",
       "body": [
-        "body"
+        "body",
+        "created_at"
       ],
       "identifiers": {
         ":project_id": 1
@@ -3353,10 +3363,11 @@
       "method": "PUT",
       "path": "/projects/:project_id/repository/commits/abc123/discussions/d1/notes/:note_id",
       "body": [
-        "body"
+        "body",
+        "created_at"
       ],
       "identifiers": {
-        ":note_id": 3,
+        ":note_id": 4,
         ":project_id": 1
       }
     },
@@ -3919,7 +3930,7 @@
       "method": "GET",
       "path": "/projects/:project_id/registry/protection/tag/rules",
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -3933,7 +3944,7 @@
         "tag_name_pattern"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -3942,8 +3953,8 @@
       "method": "DELETE",
       "path": "/projects/:project_id/registry/protection/tag/rules/:rule_id",
       "identifiers": {
-        ":project_id": 1,
-        ":rule_id": 1
+        ":project_id": 2,
+        ":rule_id": 2
       }
     },
     {
@@ -3957,8 +3968,8 @@
         "tag_name_pattern"
       ],
       "identifiers": {
-        ":project_id": 1,
-        ":rule_id": 1
+        ":project_id": 2,
+        ":rule_id": 2
       }
     },
     {
@@ -3984,7 +3995,7 @@
       "method": "DELETE",
       "path": "/projects/:project_id/registry/repositories/:repository_id",
       "identifiers": {
-        ":project_id": 2,
+        ":project_id": 3,
         ":repository_id": 2
       }
     },
@@ -4576,9 +4587,13 @@
       "path": "/projects/:project_id/deployments",
       "query": [
         "environment",
+        "finished_after",
+        "finished_before",
         "order_by",
         "sort",
-        "status"
+        "status",
+        "updated_after",
+        "updated_before"
       ],
       "identifiers": {
         ":project_id": 2
@@ -4616,7 +4631,7 @@
       "method": "GET",
       "path": "/projects/:project_id/deployments/:deployment_id",
       "identifiers": {
-        ":deployment_id": 3,
+        ":deployment_id": 4,
         ":project_id": 2
       }
     },
@@ -4629,7 +4644,7 @@
         "status"
       ],
       "identifiers": {
-        ":deployment_id": 1,
+        ":deployment_id": 2,
         ":project_id": 2
       }
     },
@@ -5022,7 +5037,7 @@
       "method": "GET",
       "path": "/projects/:project_id/environments/:environment_id",
       "identifiers": {
-        ":environment_id": 6,
+        ":environment_id": 8,
         ":project_id": 2
       }
     },
@@ -6353,8 +6368,10 @@
       "path": "/geo_sites",
       "query": [
         "order_by",
+        "page",
         "page_token",
         "pagination",
+        "per_page",
         "sort"
       ]
     },
@@ -6364,8 +6381,20 @@
       "method": "POST",
       "path": "/geo_sites",
       "body": [
+        "container_repositories_max_capacity",
+        "enabled",
+        "files_max_capacity",
+        "internal_url",
+        "minimum_reverification_interval",
         "name",
-        "url"
+        "primary",
+        "repos_max_capacity",
+        "selective_sync_namespace_ids",
+        "selective_sync_shards",
+        "selective_sync_type",
+        "sync_object_storage",
+        "url",
+        "verification_max_capacity"
       ]
     },
     {
@@ -6392,11 +6421,21 @@
       "method": "PUT",
       "path": "/geo_sites/:geo_site_id",
       "body": [
+        "container_repositories_max_capacity",
         "enabled",
-        "name"
+        "files_max_capacity",
+        "internal_url",
+        "minimum_reverification_interval",
+        "name",
+        "repos_max_capacity",
+        "selective_sync_namespace_ids",
+        "selective_sync_shards",
+        "selective_sync_type",
+        "url",
+        "verification_max_capacity"
       ],
       "identifiers": {
-        ":geo_site_id": 1
+        ":geo_site_id": 2
       }
     },
     {
@@ -6414,7 +6453,7 @@
       "method": "GET",
       "path": "/geo_sites/:geo_site_id/status",
       "identifiers": {
-        ":geo_site_id": 2
+        ":geo_site_id": 1
       }
     },
     {
@@ -6424,8 +6463,10 @@
       "path": "/geo_sites/status",
       "query": [
         "order_by",
+        "page",
         "page_token",
         "pagination",
+        "per_page",
         "sort"
       ]
     },
@@ -6612,7 +6653,7 @@
       "identifiers": {
         ":board_id": 1,
         ":group_id": 1,
-        ":list_id": 2
+        ":list_id": 3
       }
     },
     {
@@ -6729,7 +6770,7 @@
       "method": "GET",
       "path": "/groups/:group_id/epic_boards",
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 2
       }
     },
     {
@@ -6738,8 +6779,8 @@
       "method": "GET",
       "path": "/groups/:group_id/epic_boards/:epic_board_id",
       "identifiers": {
-        ":epic_board_id": 1,
-        ":group_id": 1
+        ":epic_board_id": 2,
+        ":group_id": 2
       }
     },
     {
@@ -7685,7 +7726,7 @@
         "with_projects"
       ],
       "identifiers": {
-        ":group_id": 4
+        ":group_id": 5
       }
     },
     {
@@ -7891,10 +7932,14 @@
       "method": "PUT",
       "path": "/groups/:group_id/hooks/:hook_id",
       "body": [
+        "branch_filter_strategy",
         "confidential_issues_events",
         "confidential_note_events",
+        "custom_headers",
+        "custom_webhook_template",
         "deployment_events",
         "description",
+        "emoji_events",
         "enable_ssl_verification",
         "feature_flag_events",
         "issues_events",
@@ -7905,9 +7950,11 @@
         "name",
         "note_events",
         "pipeline_events",
+        "project_events",
         "push_events",
         "push_events_branch_filter",
         "releases_events",
+        "resource_access_token_events",
         "signing_token",
         "subgroup_events",
         "tag_push_events",
@@ -9272,6 +9319,36 @@
     {
       "package": "internal/tools/integrations",
       "kind": "rest",
+      "method": "DELETE",
+      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/integrations",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/integrations",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/groups/:group_id/integrations/custom.issue-tracker",
+      "body": [
+        "webhook"
+      ],
+      "identifiers": {
+        ":group_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/integrations",
+      "kind": "rest",
       "method": "GET",
       "path": "/groups/my-group/integrations"
     },
@@ -9498,7 +9575,7 @@
         "webhook"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -10093,21 +10170,40 @@
       "method": "GET",
       "path": "/groups/:group_id/issues",
       "query": [
+        "assignee_id",
         "assignee_username",
+        "author_id",
         "author_username",
+        "confidential",
         "created_after",
         "created_before",
+        "due_date",
+        "iids[]",
+        "in",
+        "issue_type",
         "iteration_id",
         "labels",
         "milestone",
+        "my_reaction_emoji",
+        "not[assignee_id]",
+        "not[assignee_username]",
+        "not[author_id]",
+        "not[author_username]",
+        "not[in]",
+        "not[labels]",
+        "not[milestone]",
+        "not[my_reaction_emoji]",
         "not[search]",
+        "order_by",
         "page",
         "per_page",
         "scope",
         "search",
+        "sort",
         "state",
         "updated_after",
-        "updated_before"
+        "updated_before",
+        "with_labels_details"
       ],
       "identifiers": {
         ":group_id": 3
@@ -10125,17 +10221,30 @@
       "method": "GET",
       "path": "/issues",
       "query": [
+        "assignee_id",
         "assignee_username",
+        "author_id",
         "author_username",
         "confidential",
         "created_after",
         "created_before",
+        "due_date",
+        "iids[]",
+        "in",
+        "issue_type",
+        "iteration_id",
         "labels",
         "milestone",
+        "my_reaction_emoji",
         "not[assignee_id]",
+        "not[assignee_username]",
         "not[author_id]",
+        "not[author_username]",
+        "not[in]",
         "not[labels]",
+        "not[milestone]",
         "not[my_reaction_emoji]",
+        "not[search]",
         "order_by",
         "page",
         "per_page",
@@ -10144,7 +10253,8 @@
         "sort",
         "state",
         "updated_after",
-        "updated_before"
+        "updated_before",
+        "with_labels_details"
       ]
     },
     {
@@ -10167,6 +10277,8 @@
         "author_id",
         "author_username",
         "confidential",
+        "created_after",
+        "created_before",
         "due_date",
         "iids[]",
         "in",
@@ -10192,6 +10304,8 @@
         "search",
         "sort",
         "state",
+        "updated_after",
+        "updated_before",
         "with_labels_details"
       ],
       "identifiers": {
@@ -10253,9 +10367,12 @@
         "add_labels",
         "assignee_id",
         "confidential",
+        "description",
         "discussion_locked",
+        "due_date",
         "epic_id",
         "issue_type",
+        "labels",
         "remove_labels",
         "state_event",
         "title",
@@ -10346,7 +10463,8 @@
       "method": "PUT",
       "path": "/projects/:project_id/issues/:issue_id/reorder",
       "body": [
-        "move_after_id"
+        "move_after_id",
+        "move_before_id"
       ],
       "identifiers": {
         ":issue_id": 1,
@@ -10530,9 +10648,13 @@
       "path": "/projects/:project_id/jobs",
       "query": [
         "include_retried",
+        "order_by",
         "page",
+        "page_token",
+        "pagination",
         "per_page",
-        "scope[]"
+        "scope[]",
+        "sort"
       ],
       "identifiers": {
         ":project_id": 1
@@ -10544,7 +10666,7 @@
       "method": "GET",
       "path": "/projects/:project_id/jobs/:job_id",
       "identifiers": {
-        ":job_id": 2,
+        ":job_id": 4,
         ":project_id": 1
       }
     },
@@ -10563,6 +10685,26 @@
       "kind": "rest",
       "method": "GET",
       "path": "/projects/:project_id/jobs/:job_id/artifacts",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/a.txt",
+      "identifiers": {
+        ":job_id": 1,
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/jobs/:job_id/artifacts/big.bin",
       "identifiers": {
         ":job_id": 1,
         ":project_id": 1
@@ -10661,6 +10803,18 @@
       "package": "internal/tools/jobs",
       "kind": "rest",
       "method": "GET",
+      "path": "/projects/:project_id/jobs/artifacts/main/raw/a.txt",
+      "query": [
+        "job"
+      ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/jobs",
+      "kind": "rest",
+      "method": "GET",
       "path": "/projects/:project_id/jobs/artifacts/main/raw/report.txt",
       "query": [
         "job"
@@ -10696,9 +10850,13 @@
       "path": "/projects/:project_id/pipelines/:pipeline_id/jobs",
       "query": [
         "include_retried",
+        "order_by",
         "page",
+        "page_token",
+        "pagination",
         "per_page",
-        "scope[]"
+        "scope[]",
+        "sort"
       ],
       "identifiers": {
         ":pipeline_id": 1,
@@ -11438,6 +11596,7 @@
         "assignee_ids",
         "description",
         "discussion_locked",
+        "labels",
         "milestone_id",
         "remove_labels",
         "remove_source_branch",
@@ -11508,7 +11667,7 @@
       "method": "DELETE",
       "path": "/projects/:project_id/merge_requests/:merge_request_id/blocks/:block_id",
       "identifiers": {
-        ":block_id": 2,
+        ":block_id": 3,
         ":merge_request_id": 1,
         ":project_id": 1
       }
@@ -12724,7 +12883,9 @@
       "method": "GET",
       "path": "/orbit/graph_status",
       "query": [
-        "full_path"
+        "full_path",
+        "namespace_id",
+        "project_id"
       ]
     },
     {
@@ -13238,7 +13399,7 @@
       "method": "GET",
       "path": "/projects/:project_id/pipelines/:pipeline_id",
       "identifiers": {
-        ":pipeline_id": 7,
+        ":pipeline_id": 8,
         ":project_id": 2
       }
     },
@@ -13324,8 +13485,10 @@
       "path": "/projects/:project_id/pipeline_schedules",
       "query": [
         "order_by",
+        "page",
         "page_token",
         "pagination",
+        "per_page",
         "scope",
         "sort"
       ],
@@ -13953,6 +14116,8 @@
         "initialize_with_readme",
         "issues_access_level",
         "merge_method",
+        "merge_request_title_regex",
+        "merge_request_title_regex_description",
         "name",
         "only_allow_merge_if_pipeline_succeeds",
         "package_registry_access_level",
@@ -14185,12 +14350,14 @@
       "method": "GET",
       "path": "/projects/:project_id/groups",
       "query": [
+        "order_by",
         "page",
         "per_page",
         "search",
         "shared_min_access_level",
         "shared_visible_only",
         "skip_groups",
+        "sort",
         "with_shared"
       ],
       "identifiers": {
@@ -15425,6 +15592,7 @@
         "milestones",
         "name",
         "ref",
+        "released_at",
         "tag_message",
         "tag_name"
       ],
@@ -15501,6 +15669,15 @@
         "name",
         "released_at"
       ],
+      "identifiers": {
+        ":project_id": 1
+      }
+    },
+    {
+      "package": "internal/tools/releases",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/projects/:project_id/releases/v6.7.8",
       "identifiers": {
         ":project_id": 1
       }
@@ -15691,7 +15868,7 @@
         "ref"
       ],
       "identifiers": {
-        ":file_id": 1,
+        ":file_id": 2,
         ":project_id": 1
       }
     },
@@ -15704,7 +15881,7 @@
         "ref"
       ],
       "identifiers": {
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -15743,7 +15920,7 @@
       ],
       "identifiers": {
         ":project_id": 1,
-        ":submodule_id": 1
+        ":submodule_id": 2
       }
     },
     {
@@ -17092,7 +17269,7 @@
       "package": "internal/tools/snippets",
       "kind": "rest",
       "method": "GET",
-      "path": "/snippets/:snippet_id/files/main/f/raw",
+      "path": "/snippets/:snippet_id/files/a-ref/b-file.go/raw",
       "identifiers": {
         ":snippet_id": 1
       }
@@ -17101,7 +17278,7 @@
       "package": "internal/tools/snippets",
       "kind": "rest",
       "method": "GET",
-      "path": "/snippets/:snippet_id/files/main/test.go/raw",
+      "path": "/snippets/:snippet_id/files/main/f/raw",
       "identifiers": {
         ":snippet_id": 1
       }
@@ -17284,6 +17461,18 @@
       ],
       "identifiers": {
         ":hook_id": 3
+      }
+    },
+    {
+      "package": "internal/tools/systemhooks",
+      "kind": "rest",
+      "method": "PUT",
+      "path": "/hooks/:hook_id/url_variables/TOKEN",
+      "body": [
+        "value"
+      ],
+      "identifiers": {
+        ":hook_id": 1
       }
     },
     {
@@ -17540,7 +17729,7 @@
       "path": "/projects/:project_id/terraform/state/state1/versions/:version_id",
       "identifiers": {
         ":project_id": 1,
-        ":version_id": 2
+        ":version_id": 3
       }
     },
     {
@@ -17686,7 +17875,7 @@
       "path": "/projects/:project_id/uploads/:upload_id",
       "identifiers": {
         ":project_id": 1,
-        ":upload_id": 2
+        ":upload_id": 3
       }
     },
     {
@@ -17869,7 +18058,7 @@
       "method": "GET",
       "path": "/user/gpg_keys/:gpg_key_id",
       "identifiers": {
-        ":gpg_key_id": 3
+        ":gpg_key_id": 4
       }
     },
     {
@@ -17971,7 +18160,9 @@
       "method": "GET",
       "path": "/user/activities",
       "query": [
-        "from"
+        "from",
+        "order_by",
+        "sort"
       ]
     },
     {
@@ -18089,6 +18280,7 @@
         "created_after",
         "created_before",
         "custom_attributes[role]",
+        "custom_attributes[team]",
         "exclude_active",
         "exclude_external",
         "exclude_humans",
@@ -18357,6 +18549,8 @@
       "method": "GET",
       "path": "/users/:user_id/memberships",
       "query": [
+        "order_by",
+        "sort",
         "type"
       ],
       "identifiers": {
@@ -18594,6 +18788,7 @@
       "path": "/projects/:project_id/wikis/my-page",
       "body": [
         "content",
+        "format",
         "title"
       ],
       "identifiers": {
