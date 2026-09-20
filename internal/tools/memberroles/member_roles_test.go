@@ -4,8 +4,11 @@ package memberroles
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -104,14 +107,17 @@ func TestMemberRoleHandlers_PublishTheCapturedPermissions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s error: %v", tc.name, err)
 			}
-			if got.ReadAdminUsers == nil || !*got.ReadAdminUsers {
-				t.Errorf("read_admin_users = %v, want it published as true", got.ReadAdminUsers)
-			}
-			if got.ReadAdminCICD == nil || *got.ReadAdminCICD {
-				t.Errorf("read_admin_cicd = %v, want it published as false rather than omitted", got.ReadAdminCICD)
-			}
-			if got.UpdateSecurityScanProfiles == nil || !*got.UpdateSecurityScanProfiles {
-				t.Errorf("update_security_scan_profiles = %v, want it published", got.UpdateSecurityScanProfiles)
+			published := capturedOutputPermissions(got)
+			for key, want := range wantRolePermissions {
+				t.Run(key, func(t *testing.T) {
+					value := published[key]
+					if value == nil {
+						t.Fatalf("%s reached no published field", key)
+					}
+					if *value != want {
+						t.Errorf("%s = %v, want it published as %v", key, *value, want)
+					}
+				})
 			}
 		})
 	}
@@ -124,6 +130,164 @@ func firstRole(out ListOutput) Output {
 		return Output{}
 	}
 	return out.Roles[0]
+}
+
+// The two halves of a member role's permissions, counted so a field added to
+// one of them and left out of the tables below is a failure rather than a
+// permission nothing drives: twenty client-go's MemberRole models and decodes,
+// and twenty-five read off the captured response beside it.
+const (
+	sdkRolePermissionCount      = 20
+	capturedRolePermissionCount = 25
+)
+
+// sdkOutputPermissions pairs the key client-go's MemberRole reads a permission
+// from with the published field [toOutput] must copy it onto. The key is the
+// one GitLab sends, which the SDK struct and [Permissions] spell alike, so the
+// table says what the whole chain has to do with each value and not merely
+// that some field carries it.
+func sdkOutputPermissions(out Output) map[string]*bool {
+	return map[string]*bool{
+		"admin_cicd_variables":          out.AdminCICDVariables,
+		"admin_compliance_framework":    out.AdminComplianceFramework,
+		"admin_group_member":            out.AdminGroupMembers,
+		"admin_merge_request":           out.AdminMergeRequests,
+		"admin_push_rules":              out.AdminPushRules,
+		"admin_terraform_state":         out.AdminTerraformState,
+		"admin_vulnerability":           out.AdminVulnerability,
+		"admin_web_hook":                out.AdminWebHook,
+		"archive_project":               out.ArchiveProject,
+		"manage_deploy_tokens":          out.ManageDeployTokens,
+		"manage_group_access_tokens":    out.ManageGroupAccessTokens,
+		"manage_merge_request_settings": out.ManageMergeRequestSettings,
+		"manage_project_access_tokens":  out.ManageProjectAccessTokens,
+		"manage_security_policy_link":   out.ManageSecurityPolicyLink,
+		"read_code":                     out.ReadCode,
+		"read_runners":                  out.ReadRunners,
+		"read_dependency":               out.ReadDependency,
+		"read_vulnerability":            out.ReadVulnerability,
+		"remove_group":                  out.RemoveGroup,
+		"remove_project":                out.RemoveProject,
+	}
+}
+
+// capturedOutputPermissions is the same pairing for the twenty-five the
+// capture reads, taken off the published role rather than off the reader's own
+// [roleExtra], so it answers what [withCapturedPermissions] placed where.
+func capturedOutputPermissions(out Output) map[string]*bool {
+	return map[string]*bool{
+		"admin_ai_catalog_item":           out.AdminAICatalogItem,
+		"admin_ai_catalog_item_consumer":  out.AdminAICatalogItemConsumer,
+		"admin_integrations":              out.AdminIntegrations,
+		"admin_protected_branch":          out.AdminProtectedBranch,
+		"admin_protected_environments":    out.AdminProtectedEnvironments,
+		"admin_runners":                   out.AdminRunners,
+		"admin_security_attributes":       out.AdminSecurityAttributes,
+		"apply_security_scan_profiles":    out.ApplySecurityScanProfiles,
+		"create_security_scan_profiles":   out.CreateSecurityScanProfiles,
+		"delete_security_scan_profiles":   out.DeleteSecurityScanProfiles,
+		"destroy_package":                 out.DestroyPackage,
+		"read_admin_cicd":                 out.ReadAdminCICD,
+		"read_admin_groups":               out.ReadAdminGroups,
+		"read_admin_monitoring":           out.ReadAdminMonitoring,
+		"read_admin_projects":             out.ReadAdminProjects,
+		"read_admin_subscription":         out.ReadAdminSubscription,
+		"read_admin_users":                out.ReadAdminUsers,
+		"read_agent_artifacts":            out.ReadAgentArtifacts,
+		"read_compliance_dashboard":       out.ReadComplianceDashboard,
+		"read_crm_contact":                out.ReadCRMContact,
+		"read_security_attribute":         out.ReadSecurityAttribute,
+		"read_security_scan_profiles":     out.ReadSecurityScanProfiles,
+		"read_virtual_registry":           out.ReadVirtualRegistry,
+		"update_sec_ai_workflow_settings": out.UpdateSecAIWorkflowSettings,
+		"update_security_scan_profiles":   out.UpdateSecurityScanProfiles,
+	}
+}
+
+// outputRolePermissions is both halves at once: every permission key a member
+// role answer can carry, against the field the published role must show it on.
+func outputRolePermissions(out Output) map[string]*bool {
+	all := sdkOutputPermissions(out)
+	maps.Copy(all, capturedOutputPermissions(out))
+	return all
+}
+
+// oneHotRoleBody is a member role answer where the named permission is the
+// only true one and every other of the forty-five is false.
+func oneHotRoleBody(on string) string {
+	var body strings.Builder
+	body.WriteString(`{"id":10,"name":"one-hot","base_access_level":30`)
+	for _, key := range slices.Sorted(maps.Keys(outputRolePermissions(Output{}))) {
+		fmt.Fprintf(&body, `,%q:%t`, key, key == on)
+	}
+	body.WriteString("}")
+	return body.String()
+}
+
+// TestMemberRoleOutput_HoldsEachPermissionToItsOwnWireKey drives one answer per
+// permission, each carrying that key as the only true one, and holds the
+// published role to showing true on that permission's field and false on the
+// other forty-four.
+//
+// Every one of the forty-five is copied by a straight-line assignment no branch
+// guards, twenty in the [toOutput] literal and twenty-five in
+// [withCapturedPermissions], so the only thing a test can catch there is a copy
+// that takes the field beside it. An answer that gives several permissions the
+// same value cannot: exchanging two assignments whose sources agree leaves both
+// reads unchanged, which is as true of a fixture alternating true and false,
+// where every same-parity pair agrees, as of one setting them all to true.
+// Driving the keys one at a time makes every pair disagree in one of the runs,
+// and reading all forty-five back on each run means a copy that dropped its
+// source or took another's is seen wherever it lands.
+func TestMemberRoleOutput_HoldsEachPermissionToItsOwnWireKey(t *testing.T) {
+	keys := slices.Sorted(maps.Keys(outputRolePermissions(Output{})))
+	if want := sdkRolePermissionCount + capturedRolePermissionCount; len(keys) != want {
+		t.Fatalf("the permission table names %d keys, want the %d a member role answer carries", len(keys), want)
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			body := oneHotRoleBody(key)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && r.URL.Path == "/api/v4/member_roles" {
+					testutil.RespondJSON(w, http.StatusCreated, body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			got, err := CreateInstance(context.Background(), client, CreateInstanceInput{Name: "one-hot", BaseAccessLevel: 30})
+			if err != nil {
+				t.Fatalf("CreateInstance() error: %v", err)
+			}
+			for other, value := range outputRolePermissions(got) {
+				if value == nil {
+					t.Errorf("%s reached no published field when the answer set %s", other, key)
+					continue
+				}
+				if want := other == key; *value != want {
+					t.Errorf("%s = %v when the answer set %s alone, want %v", other, *value, key, want)
+				}
+			}
+		})
+	}
+}
+
+// TestRolePermissionTables_NameTheSameCapturedKeys holds the published-side
+// table to the reader-side one, so a permission the capture reads and the
+// published table leaves out cannot pass the one-hot drive by never being
+// asked about.
+func TestRolePermissionTables_NameTheSameCapturedKeys(t *testing.T) {
+	published := capturedOutputPermissions(Output{})
+	if len(published) != capturedRolePermissionCount {
+		t.Fatalf("the published table names %d captured permissions, want %d", len(published), capturedRolePermissionCount)
+	}
+	for key := range capturedRolePermissions(roleExtra{}) {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := published[key]; !ok {
+				t.Errorf("%s is read off the capture and named in no published-permission table", key)
+			}
+		})
+	}
 }
 
 // TestMemberRoleHandlers_CaptureUnreadable verifies each role-returning
