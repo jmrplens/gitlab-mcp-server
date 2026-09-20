@@ -165,6 +165,63 @@ func TestStatusExtraFrom_TheMatrixIsKeyedByReplicable(t *testing.T) {
 	}
 }
 
+// TestStatusExtraFrom_EveryMetricOfAFamilyLandsOnItsOwnField drives all
+// fourteen metrics of one replicable at once, each carrying a value no other
+// one does, and compares the whole cell.
+//
+// The tests above sample the family: between them they read five of the twelve
+// counters, so a closure writing a neighbour's field, or writing nothing,
+// was invisible for the other seven. They are counters of one type and one
+// shape, which is the pairing this suite has already been wrong about
+// elsewhere, and the table is keyed by the same suffixes the decomposition
+// searches for, so a wrong key would place the value silently.
+func TestStatusExtraFrom_EveryMetricOfAFamilyLandsOnItsOwnField(t *testing.T) {
+	extra := decompose(t, `{
+		"lfs_objects_count": 1,
+		"lfs_objects_registry_count": 2,
+		"lfs_objects_synced_count": 3,
+		"lfs_objects_failed_count": 4,
+		"lfs_objects_checksummed_count": 5,
+		"lfs_objects_checksum_failed_count": 6,
+		"lfs_objects_checksum_total_count": 7,
+		"lfs_objects_verified_count": 8,
+		"lfs_objects_verification_failed_count": 9,
+		"lfs_objects_verification_total_count": 10,
+		"lfs_objects_synced_in_percentage": "11.00%",
+		"lfs_objects_verified_in_percentage": "12.00%",
+		"lfs_objects_oldest_unsynced_time": "2026-01-13T09:00:00Z",
+		"lfs_objects_replication_enabled": true
+	}`)
+
+	if len(extra.Replicables) != 1 {
+		t.Fatalf("Replicables = %+v, want lfs_objects alone", extra.Replicables)
+	}
+	unsynced := time.Date(2026, 1, 13, 9, 0, 0, 0, time.UTC)
+	enabled := true
+	want := ReplicableStatus{
+		Count: 1, RegistryCount: 2, SyncedCount: 3, FailedCount: 4,
+		ChecksummedCount: 5, ChecksumFailedCount: 6, ChecksumTotalCount: 7,
+		VerifiedCount: 8, VerificationFailedCount: 9, VerificationTotalCount: 10,
+		SyncedInPercentage: "11.00%", VerifiedInPercentage: "12.00%",
+		OldestUnsyncedTime: &unsynced, ReplicationEnabled: &enabled,
+	}
+	got := extra.Replicables["lfs_objects"]
+	if got.OldestUnsyncedTime == nil || !got.OldestUnsyncedTime.Equal(unsynced) {
+		t.Errorf("OldestUnsyncedTime = %v, want %v", got.OldestUnsyncedTime, unsynced)
+	}
+	if got.ReplicationEnabled == nil || *got.ReplicationEnabled != enabled {
+		t.Errorf("ReplicationEnabled = %v, want %t", got.ReplicationEnabled, enabled)
+	}
+	// The two pointers are compared above; the rest compare by value.
+	got.OldestUnsyncedTime, got.ReplicationEnabled = want.OldestUnsyncedTime, want.ReplicationEnabled
+	if got != want {
+		t.Errorf("lfs_objects = %+v, want %+v", got, want)
+	}
+	if len(extra.Additional) != 0 {
+		t.Errorf("Additional = %+v, want nothing left over", extra.Additional)
+	}
+}
+
 // TestStatusExtraFrom_APrefixUnderTheThresholdIsNotAReplicable verifies the
 // rule that separates the matrix from the singular counters whose names end
 // in a metric: two metrics leave the keys alone, three group them. Without

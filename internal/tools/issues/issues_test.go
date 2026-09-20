@@ -5025,9 +5025,11 @@ func encodedBodyValue(t *testing.T, body map[string]any, key string) string {
 // anything.
 func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 	client, body := captureCreateBody(t)
+	confidential := true
 	_, err := Create(context.Background(), client, CreateInput{
 		ProjectID:                          testProjectID,
 		Title:                              testIssueTitle,
+		IID:                                70,
 		Description:                        "what the reporter wrote",
 		AssigneeID:                         71,
 		AssigneeIDs:                        []int64{72, 73},
@@ -5037,11 +5039,17 @@ func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 		EpicID:                             76,
 		MergeRequestToResolveDiscussionsOf: 77,
 		DiscussionToResolve:                "d78",
+		Labels:                             []string{"bug", "regression"},
+		DueDate:                            "2026-02-03",
+		CreatedAt:                          "2026-01-04T05:06:07Z",
+		Confidential:                       &confidential,
 	})
 	if err != nil {
 		t.Fatalf(fmtCreateErr, err)
 	}
 	for _, tt := range []struct{ key, want string }{
+		{"title", `"` + testIssueTitle + `"`},
+		{"iid", "70"},
 		{"description", `"what the reporter wrote"`},
 		{"assignee_id", "71"},
 		{"assignee_ids", "[72,73]"},
@@ -5051,6 +5059,10 @@ func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
 		{"epic_id", "76"},
 		{"merge_request_to_resolve_discussions_of", "77"},
 		{"discussion_to_resolve", `"d78"`},
+		{"labels", `"bug,regression"`},
+		{"due_date", `"2026-02-03"`},
+		{"created_at", `"2026-01-04T05:06:07Z"`},
+		{"confidential", "true"},
 	} {
 		t.Run(tt.key, func(t *testing.T) {
 			if got := encodedBodyValue(t, body, tt.key); got != tt.want {

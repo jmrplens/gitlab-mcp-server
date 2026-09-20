@@ -1391,7 +1391,7 @@ const errExpectedAPI = "expected API error, got nil"
 const fmtUnexpErr = "unexpected error: %v"
 
 // ---------------------------------------------------------------------------
-// List — API error, pagination params, include_retried
+// List: API error, pagination params, include_retried
 // ---------------------------------------------------------------------------.
 
 // TestJobList_APIError verifies JobList when API error.
@@ -1535,7 +1535,7 @@ func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Get — API error, canceled context
+// Get: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestJobGet_APIError verifies JobGet when API error.
@@ -1562,7 +1562,7 @@ func TestJobGet_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Trace — API error, canceled context
+// Trace: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestJobTrace_APIError verifies JobTrace when API error.
@@ -1617,7 +1617,7 @@ func TestJobTrace_BodyReadError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Cancel — API error, canceled context
+// Cancel: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestJobCancel_APIError verifies a 403 on cancel carries the cancel hint, the
@@ -1694,7 +1694,7 @@ func TestJobCancel_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Retry — API error, canceled context
+// Retry: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestJobRetry_APIError verifies a 403 on retry carries the retry hint.
@@ -1728,7 +1728,7 @@ func TestJobRetry_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListProject — API error, canceled context, with scope and pagination
+// ListProject: API error, canceled context, with scope and pagination
 // ---------------------------------------------------------------------------.
 
 // TestListProject_APIError verifies ListProject when API error.
@@ -1799,7 +1799,7 @@ func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListBridges — API error, canceled context, with scope and pagination
+// ListBridges: API error, canceled context, with scope and pagination
 // ---------------------------------------------------------------------------.
 
 // TestListBridges_APIError verifies ListBridges when API error.
@@ -1873,7 +1873,7 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetArtifacts — API error, canceled context
+// GetArtifacts: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestGetArtifacts_APIError verifies GetArtifacts when API error.
@@ -1902,7 +1902,7 @@ func TestGetArtifacts_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadArtifacts — API error, canceled context, missing project_id
+// DownloadArtifacts: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDownloadArtifacts_APIError verifies DownloadArtifacts when API error.
@@ -1933,7 +1933,7 @@ func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadSingleArtifact — API error, canceled context
+// DownloadSingleArtifact: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDownloadSingleArtifact_APIError verifies DownloadSingleArtifact when API error.
@@ -1964,7 +1964,7 @@ func TestDownloadSingleArtifact_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadSingleArtifactByRef — API error, canceled context
+// DownloadSingleArtifactByRef: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDownloadSingleArtifactByRef_APIError verifies DownloadSingleArtifactByRef when API error.
@@ -1995,7 +1995,7 @@ func TestDownloadSingleArtifactByRef_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Erase — API error, canceled context
+// Erase: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestErase_APIError verifies a 403 on erase carries the erase hint.
@@ -2029,7 +2029,7 @@ func TestErase_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// KeepArtifacts — API error, canceled context
+// KeepArtifacts: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestKeepArtifacts_APIError verifies a 403 on keep carries the keep hint.
@@ -2063,7 +2063,7 @@ func TestKeepArtifacts_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Play — API error, canceled context, with variables
+// Play: API error, canceled context, with variables
 // ---------------------------------------------------------------------------.
 
 // TestPlay_APIError verifies a 403 on play carries the play hint, which is
@@ -2243,7 +2243,7 @@ func TestPlay_InvalidJobInputs_RejectedBeforeRequest(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteArtifacts — API error
+// DeleteArtifacts: API error
 // ---------------------------------------------------------------------------.
 
 // TestDeleteArtifacts_APIError verifies a 403 on delete carries the delete
@@ -2266,7 +2266,7 @@ func TestDeleteArtifacts_NotFoundAPIError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteProjectArtifacts — API error
+// DeleteProjectArtifacts: API error
 // ---------------------------------------------------------------------------.
 
 // TestDeleteProjectArtifacts_APIError verifies a 403 on the bulk delete
@@ -2459,8 +2459,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 func TestFormatListMarkdown_WithJobs(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
-			{ID: 100, Name: "build", Stage: "build", Status: "success", Duration: 45.5},
-			{ID: 101, Name: "test", Stage: "test", Status: "failed", Duration: 12.3},
+			// A name that is not its stage in both rows: with the two equal,
+			// the Name and Stage columns could trade places and the table
+			// still read correctly.
+			{ID: 100, Name: "compile", Stage: "build", Status: "success", Duration: 45.5},
+			{ID: 101, Name: "unit", Stage: "test", Status: "failed", Duration: 12.3},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2, Page: 1, PerPage: 20, TotalPages: 1},
 	}
@@ -2469,8 +2472,8 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 	want := "## Jobs (2)\n\n" +
 		"| ID | Name | Stage | Status | Duration |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| #100 | build | build | ✅ success | 45.5s |\n" +
-		"| #101 | test | test | ❌ failed | 12.3s |\n" +
+		"| #100 | compile | build | ✅ success | 45.5s |\n" +
+		"| #101 | unit | test | ❌ failed | 12.3s |\n" +
 		"\nPage 1 of 1 | 2 items total | 20 per page\n" +
 		jobListHints
 	if got := FormatListMarkdown(out); got != want {
@@ -2501,7 +2504,7 @@ func TestFormatListMarkdown_KeysetPageLinksAndMarksArchived(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
 			{
-				ID: 200, Name: "deploy", Stage: "deploy", Status: "success", Duration: 10.0,
+				ID: 200, Name: "ship", Stage: "deploy", Status: "success", Duration: 10.0,
 				Archived: true,
 				WebURL:   "https://gitlab.example.com/-/jobs/200",
 			},
@@ -2511,7 +2514,7 @@ func TestFormatListMarkdown_KeysetPageLinksAndMarksArchived(t *testing.T) {
 	want := "## Jobs (1 shown, more available)\n\n" +
 		"| ID | Name | Stage | Status | Duration |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| [#200](https://gitlab.example.com/-/jobs/200) | deploy 📦 | deploy | ✅ success | 10.0s |\n" +
+		"| [#200](https://gitlab.example.com/-/jobs/200) | ship 📦 | deploy | ✅ success | 10.0s |\n" +
 		jobListHints
 	if got := FormatListMarkdown(out); got != want {
 		t.Errorf("FormatListMarkdown(keyset)\n got %q\nwant %q", got, want)
@@ -2774,7 +2777,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ActionSpecsCallAllRoutes — route coverage for all 17 tools
+// ActionSpecsCallAllRoutes: route coverage for all 17 tools
 // ---------------------------------------------------------------------------.
 
 // TestActionSpecs_CallAllRoutes validates job routes across multiple scenarios.

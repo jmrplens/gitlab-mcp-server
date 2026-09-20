@@ -84,6 +84,48 @@ func TestCommitObject_DocumentedFields(t *testing.T) {
 	}
 }
 
+// TestRunnerObject_EachFieldComesFromItsOwn holds the five fields the SDK's
+// JobRunner carries to their own source.
+//
+// Two pairs here are the same type and read alike, a description beside a name
+// and an active flag beside a shared one, and the only other test of this
+// converter passes a runner carrying an id alone. Swapping either pair
+// therefore changed nothing any test could see, on the path every SDK-side job
+// answer takes: Cancel, Retry, Erase, KeepArtifacts, Play and the pipeline
+// wait all reach it through ToOutput. Each value is distinct, and the two
+// flags are driven apart so that one cannot stand in for the other.
+func TestRunnerObject_EachFieldComesFromItsOwn(t *testing.T) {
+	out := runnerObject(gl.JobRunner{
+		ID:          7,
+		Description: "shell runner on the build host",
+		Active:      true,
+		IsShared:    false,
+		Name:        "runner-07",
+	})
+	if out == nil {
+		t.Fatal("runnerObject returned nil for a populated runner")
+	}
+	want := RunnerObject{
+		ID:          7,
+		Description: "shell runner on the build host",
+		Active:      true,
+		IsShared:    false,
+		Name:        "runner-07",
+	}
+	if *out != want {
+		t.Errorf("runnerObject() = %+v, want %+v", *out, want)
+	}
+
+	// The other side of both flags, so neither is held only at its zero.
+	flipped := runnerObject(gl.JobRunner{ID: 8, Active: false, IsShared: true})
+	if flipped == nil {
+		t.Fatal("runnerObject returned nil for a shared, paused runner")
+	}
+	if flipped.Active || !flipped.IsShared {
+		t.Errorf("flags = active %t, shared %t, want false and true", flipped.Active, flipped.IsShared)
+	}
+}
+
 // TestPipelineInfoObject_FullFields verifies pipelineInfoObject sets the
 // optional updated_at/created_at timestamps. Both hold one value here, so
 // which lands where is held by TestListBridges_MapsEveryDocumentedField.
