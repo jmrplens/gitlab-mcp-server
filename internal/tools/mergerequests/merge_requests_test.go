@@ -6309,22 +6309,74 @@ type mrListing struct {
 	// call lists with labels, not_labels and draft set to the values given, or
 	// with no filter at all when they are zero.
 	call func(*gitlabclient.Client, []string, []string, *bool) error
+	// callFlags lists with only the boolean toggles given, which is how one of
+	// them is driven on its own.
+	callFlags func(*gitlabclient.Client, mrListFlags) error
+}
+
+// mrListFlags carries the three boolean listing toggles the three listings
+// share, so a test can hand one listing the flags without naming its input
+// type.
+type mrListFlags struct {
+	withLabelsDetails      *bool
+	withMergeStatusRecheck *bool
+	nonArchived            *bool
 }
 
 // mrListings names the three listings and how each is called.
 var mrListings = []mrListing{
-	{"project", pathMRs, func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
-		_, err := List(context.Background(), c, ListInput{ProjectID: testProjectID, Labels: labels, NotLabels: notLabels, Draft: draft})
-		return err
-	}},
-	{"global", pathGlobalMRs, func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
-		_, err := ListGlobal(context.Background(), c, ListGlobalInput{Labels: labels, NotLabels: notLabels, Draft: draft})
-		return err
-	}},
-	{"group", pathGroupMRs, func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
-		_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "99", Labels: labels, NotLabels: notLabels, Draft: draft})
-		return err
-	}},
+	{
+		name: "project", path: pathMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := List(context.Background(), c, ListInput{ProjectID: testProjectID, Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := List(context.Background(), c, ListInput{
+				ProjectID:         testProjectID,
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+	{
+		name: "global", path: pathGlobalMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+	{
+		name: "group", path: pathGroupMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "99", Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{
+				GroupID:           "99",
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+}
+
+// mrListFlagSetters names each boolean listing toggle by the query key it must
+// reach, and sets that one alone.
+var mrListFlagSetters = map[string]func(*bool) mrListFlags{
+	"with_labels_details":       func(v *bool) mrListFlags { return mrListFlags{withLabelsDetails: v} },
+	"with_merge_status_recheck": func(v *bool) mrListFlags { return mrListFlags{withMergeStatusRecheck: v} },
+	"non_archived":              func(v *bool) mrListFlags { return mrListFlags{nonArchived: v} },
 }
 
 // TestMergeRequestListings_LabelAndDraftFilters_ReachTheQuery holds the three
@@ -6362,6 +6414,34 @@ func TestMergeRequestListings_NoFilter_SendsAnEmptyQuery(t *testing.T) {
 			}
 			if len(q) != 0 {
 				t.Errorf("unfiltered %s listing sent query %v, want none", listing.name, q)
+			}
+		})
+	}
+}
+
+// TestMergeRequestListings_EachFlagAlone_ReachesOnlyItsOwnKey drives the three
+// boolean listing toggles one at a time. A fixture setting all three cannot
+// tell them apart: the setter calls in applyMergeRequestListFilters can be
+// crossed pairwise and every key still carries the one value they share.
+// Driven alone, the guard of the flag that was set writes the caller's value
+// under the other flag's key, and the other guard never fires at all, so the
+// key the caller asked for is missing and a key nobody asked for is there. The
+// query is held to that one key to catch the second half of it.
+func TestMergeRequestListings_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
+	for _, listing := range mrListings {
+		t.Run(listing.name, func(t *testing.T) {
+			for key, set := range mrListFlagSetters {
+				t.Run(key, func(t *testing.T) {
+					var q url.Values
+					client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, listing.path, &q))
+					if err := listing.callFlags(client, set(new(true))); err != nil {
+						t.Fatalf("%s listing unexpected error: %v", listing.name, err)
+					}
+					assertQuery(t, q, key, "true")
+					if len(q) != 1 {
+						t.Errorf("%s listing with %s alone sent query %v, want %s and nothing else", listing.name, key, q, key)
+					}
+				})
 			}
 		})
 	}
