@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"testing"
@@ -275,6 +276,17 @@ func Live() string { return derived }
 	assertDead(t, found)
 }
 
+// otherPlatform is an operating system this test is not running on, chosen
+// among the ones the command re-reads under rather than an exotic one: every
+// GOARCH the suite runs on builds for linux and for windows, while plan9, the
+// first choice, has no arm64 port and so no packages at all on Apple silicon.
+var otherPlatform = func() string {
+	if runtime.GOOS == "windows" {
+		return "linux"
+	}
+	return "windows"
+}()
+
 // platformFixture is a package whose only reader of one constant sits behind a
 // build constraint this platform does not satisfy.
 var platformFixture = map[string]string{
@@ -287,12 +299,12 @@ const (
 
 func Live() string { return usedConst }
 `,
-	"fixture_plan9.go": `//go:build plan9
+	"fixture_" + otherPlatform + ".go": `//go:build ` + otherPlatform + `
 
 package fixture
 
 // Elsewhere is the only reader of platformConst, and this file is compiled
-// nowhere but plan9.
+// nowhere but on the platform its name and constraint carry.
 func Elsewhere() string { return platformConst }
 `,
 }
@@ -301,7 +313,7 @@ func Elsewhere() string { return platformConst }
 // packages a load left files out of are read again. Reporting this constant
 // would fail a build over code doing its job on another operating system.
 func TestScan_ConstantReadOnlyByAnotherPlatformsFile_IsNotReported(t *testing.T) {
-	assertDead(t, scanFixtureAs(t, platformFixture, []string{"plan9"}))
+	assertDead(t, scanFixtureAs(t, platformFixture, []string{otherPlatform}))
 }
 
 // TestScan_PlatformNotReadAgain_ReportsTheConstantAsDead is the same fixture
