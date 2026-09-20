@@ -149,9 +149,11 @@ func TestWalkOptionParams_AnUnknownType_VisitsNothing(t *testing.T) {
 // scope over somebody else's source tree.
 func TestReadSDKOptions_AnUnreadableDirectory_ReadsNothing(t *testing.T) {
 	for _, dir := range []string{"", t.TempDir()} {
-		if options := readSDKOptions(dir); len(options.Types) != 0 || len(options.Routes) != 0 {
-			t.Errorf("readSDKOptions(%q) = %+v, want nothing", dir, options)
-		}
+		t.Run(dir, func(t *testing.T) {
+			if options := readSDKOptions(dir); len(options.Types) != 0 || len(options.Routes) != 0 {
+				t.Errorf("readSDKOptions(%q) = %+v, want nothing", dir, options)
+			}
+		})
 	}
 }
 
