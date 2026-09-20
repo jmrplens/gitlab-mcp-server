@@ -1552,96 +1552,130 @@ func TestRegistryRepositories_UnreadableCapturedDeleteAPIPath(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
+	// Each of these three handlers wraps the capture's failure under an
+	// operation of its own, a second copy of the label its hinted refusal
+	// carries, and the shared assertion below judges only the decode message.
+	// The errors are therefore kept here and their operations asserted once
+	// the cases have run, which leaves every assertion on the test goroutine.
+	refused := map[string]error{}
 	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
 		{Name: "list_project", Call: func() error {
 			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
 			_, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
+			refused["list_project"] = err
 			return err
 		}},
 		{Name: "list_group", Call: func() error {
 			client := poisoned(`[{"id":1,"name":"app","delete_api_path":42}]`)
 			_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "7"})
+			refused["list_group"] = err
 			return err
 		}},
 		{Name: "get", Call: func() error {
 			client := poisoned(`{"id":1,"name":"app","delete_api_path":42}`)
 			_, err := GetRepository(context.Background(), client, GetRepositoryInput{RepositoryID: 1})
+			refused["get"] = err
 			return err
 		}},
 	})
+	for name, op := range map[string]string{
+		"list_project": "registry_list_project",
+		"list_group":   "registry_list_group",
+		"get":          "registry_get_repository",
+	} {
+		t.Run(name+"_operation", func(t *testing.T) {
+			err := refused[name]
+			if err == nil {
+				t.Fatalf("%s error = nil, want the capture's decode failure", name)
+			}
+			if !strings.HasPrefix(err.Error(), op+": ") {
+				t.Errorf("error = %q, want it to open with the operation %q", err, op)
+			}
+		})
+	}
 }
 
 // TestHandlers_RefusedAtTheHintedStatus_CarryTheHint verifies that every
 // handler, refused at the one status it attaches a hint to, returns an error
-// carrying that hint. The status and the hint are straight-line constants no
-// gate can see moved, and until this existed a handler could hint on the wrong
-// status, or on none, with nothing failing: the API-error tests below answer
-// 400 to handlers that hint on 404 and 403, and assert only that an error came
-// back.
+// naming that handler's operation and carrying that hint. The operation, the
+// status and the hint are straight-line constants no gate can see moved, and
+// until this existed a handler could hint on the wrong status, or on none,
+// with nothing failing: the API-error tests below answer 400 to handlers that
+// hint on 404 and 403, and assert only that an error came back.
+//
+// The operation is the prefix of every message a handler produces, through
+// both branches of WrapErrWithStatusHint, and it is what tells a reader which
+// of the sixteen refused. Nothing else in the package reads it: the tool names
+// and catalog IDs the other tests assert are different strings, so two of the
+// sixteen labels could be swapped and every other test would still pass. The
+// assertion takes the separator with it, since one label is a prefix of
+// another (registry_delete_tag of registry_delete_tags_bulk) and the bare
+// prefix would accept the bulk handler answering under the single one.
 func TestHandlers_RefusedAtTheHintedStatus_CarryTheHint(t *testing.T) {
 	cases := []struct {
 		name   string
+		op     string
 		status int
 		hint   string
 		call   func(client *gitlabclient.Client) error
 	}{
-		{"list_project", http.StatusNotFound, "verify project_id", func(c *gitlabclient.Client) error {
+		{"list_project", "registry_list_project", http.StatusNotFound, "verify project_id", func(c *gitlabclient.Client) error {
 			_, err := ListProject(context.Background(), c, ListProjectInput{ProjectID: "1"})
 			return err
 		}},
-		{"list_group", http.StatusNotFound, "verify group_id", func(c *gitlabclient.Client) error {
+		{"list_group", "registry_list_group", http.StatusNotFound, "verify group_id", func(c *gitlabclient.Client) error {
 			_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "1"})
 			return err
 		}},
-		{"get_repository", http.StatusNotFound, "queried by ID, not name", func(c *gitlabclient.Client) error {
+		{"get_repository", "registry_get_repository", http.StatusNotFound, "queried by ID, not name", func(c *gitlabclient.Client) error {
 			_, err := GetRepository(context.Background(), c, GetRepositoryInput{RepositoryID: 1})
 			return err
 		}},
-		{"delete_repository", http.StatusForbidden, "requires Maintainer role", func(c *gitlabclient.Client) error {
+		{"delete_repository", "registry_delete_repository", http.StatusForbidden, "requires Maintainer role", func(c *gitlabclient.Client) error {
 			return DeleteRepository(context.Background(), c, DeleteRepositoryInput{ProjectID: "1", RepositoryID: 1})
 		}},
-		{"list_tags", http.StatusNotFound, "may have no tags", func(c *gitlabclient.Client) error {
+		{"list_tags", "registry_list_tags", http.StatusNotFound, "may have no tags", func(c *gitlabclient.Client) error {
 			_, err := ListTags(context.Background(), c, ListTagsInput{ProjectID: "1", RepositoryID: 1})
 			return err
 		}},
-		{"get_tag", http.StatusNotFound, "tag names are case-sensitive", func(c *gitlabclient.Client) error {
+		{"get_tag", "registry_get_tag", http.StatusNotFound, "tag names are case-sensitive", func(c *gitlabclient.Client) error {
 			_, err := GetTag(context.Background(), c, GetTagInput{ProjectID: "1", RepositoryID: 1, TagName: "v1"})
 			return err
 		}},
-		{"delete_tag", http.StatusForbidden, "requires Developer role", func(c *gitlabclient.Client) error {
+		{"delete_tag", "registry_delete_tag", http.StatusForbidden, "requires Developer role", func(c *gitlabclient.Client) error {
 			return DeleteTag(context.Background(), c, DeleteTagInput{ProjectID: "1", RepositoryID: 1, TagName: "v1"})
 		}},
-		{"delete_tags_bulk", http.StatusBadRequest, "deletion is async", func(c *gitlabclient.Client) error {
+		{"delete_tags_bulk", "registry_delete_tags_bulk", http.StatusBadRequest, "deletion is async", func(c *gitlabclient.Client) error {
 			return DeleteTagsBulk(context.Background(), c, DeleteTagsBulkInput{ProjectID: "1", RepositoryID: 1, NameRegexDelete: ".*"})
 		}},
-		{"list_protection_rules", http.StatusNotFound, "requires GitLab 16.7+", func(c *gitlabclient.Client) error {
+		{"list_protection_rules", "registry_protection_list", http.StatusNotFound, "requires GitLab 16.7+", func(c *gitlabclient.Client) error {
 			_, err := ListProtectionRules(context.Background(), c, ListProtectionRulesInput{ProjectID: "1"})
 			return err
 		}},
-		{"create_protection_rule", http.StatusBadRequest, "repository_path_pattern must be a glob", func(c *gitlabclient.Client) error {
+		{"create_protection_rule", "registry_protection_create", http.StatusBadRequest, "repository_path_pattern must be a glob", func(c *gitlabclient.Client) error {
 			_, err := CreateProtectionRule(context.Background(), c, CreateProtectionRuleInput{ProjectID: "1", RepositoryPathPattern: "x"})
 			return err
 		}},
-		{"update_protection_rule", http.StatusNotFound, "pattern uniqueness still applies on rename", func(c *gitlabclient.Client) error {
+		{"update_protection_rule", "registry_protection_update", http.StatusNotFound, "pattern uniqueness still applies on rename", func(c *gitlabclient.Client) error {
 			_, err := UpdateProtectionRule(context.Background(), c, UpdateProtectionRuleInput{ProjectID: "1", RuleID: 1})
 			return err
 		}},
-		{"delete_protection_rule", http.StatusNotFound, "managing protection rules requires Maintainer", func(c *gitlabclient.Client) error {
+		{"delete_protection_rule", "registry_protection_delete", http.StatusNotFound, "managing protection rules requires Maintainer", func(c *gitlabclient.Client) error {
 			return DeleteProtectionRule(context.Background(), c, DeleteProtectionRuleInput{ProjectID: "1", RuleID: 1})
 		}},
-		{"list_tag_protection_rules", http.StatusNotFound, "requires GitLab 17.8+", func(c *gitlabclient.Client) error {
+		{"list_tag_protection_rules", "registry_tag_protection_list", http.StatusNotFound, "requires GitLab 17.8+", func(c *gitlabclient.Client) error {
 			_, err := ListTagProtectionRules(context.Background(), c, ListTagProtectionRulesInput{ProjectID: "1"})
 			return err
 		}},
-		{"create_tag_protection_rule", http.StatusBadRequest, "valid RE2 regular expression", func(c *gitlabclient.Client) error {
+		{"create_tag_protection_rule", "registry_tag_protection_create", http.StatusBadRequest, "valid RE2 regular expression", func(c *gitlabclient.Client) error {
 			_, err := CreateTagProtectionRule(context.Background(), c, CreateTagProtectionRuleInput{ProjectID: "1", TagNamePattern: "["})
 			return err
 		}},
-		{"update_tag_protection_rule", http.StatusNotFound, "tag_name_pattern uniqueness still applies", func(c *gitlabclient.Client) error {
+		{"update_tag_protection_rule", "registry_tag_protection_update", http.StatusNotFound, "tag_name_pattern uniqueness still applies", func(c *gitlabclient.Client) error {
 			_, err := UpdateTagProtectionRule(context.Background(), c, UpdateTagProtectionRuleInput{ProjectID: "1", RuleID: 1})
 			return err
 		}},
-		{"delete_tag_protection_rule", http.StatusNotFound, "managing tag protection rules requires Maintainer", func(c *gitlabclient.Client) error {
+		{"delete_tag_protection_rule", "registry_tag_protection_delete", http.StatusNotFound, "managing tag protection rules requires Maintainer", func(c *gitlabclient.Client) error {
 			return DeleteTagProtectionRule(context.Background(), c, DeleteTagProtectionRuleInput{ProjectID: "1", RuleID: 1})
 		}},
 	}
@@ -1653,6 +1687,9 @@ func TestHandlers_RefusedAtTheHintedStatus_CarryTheHint(t *testing.T) {
 			err := tc.call(client)
 			if err == nil {
 				t.Fatal(errExpectedAPI)
+			}
+			if !strings.HasPrefix(err.Error(), tc.op+": ") {
+				t.Errorf("error = %q, want it to open with the operation %q", err, tc.op)
 			}
 			if !strings.Contains(err.Error(), "Suggestion: ") || !strings.Contains(err.Error(), tc.hint) {
 				t.Errorf("error = %q, want a suggestion containing %q", err, tc.hint)
