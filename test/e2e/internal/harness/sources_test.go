@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // The trees the gates read, relative to the repository root: the runtime
@@ -83,7 +85,11 @@ func goFiles(t *testing.T, root string) []string {
 			return walkErr
 		}
 		if entry.IsDir() {
-			if name := entry.Name(); path != root && (name == "testdata" || strings.HasPrefix(name, ".")) {
+			// testdata is this walk's own disinterest; what is not this
+			// repository's source at all, a dot-directory or a nested
+			// checkout, is sourcewalk's rule. Neither is asked of root, which
+			// is named by the caller and entered whatever it is.
+			if path != root && (entry.Name() == "testdata" || sourcewalk.SkipDirBelowRoot(path)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -429,5 +435,40 @@ func TestGoFiles_SkipsTestdataAndHiddenDirectories(t *testing.T) {
 	want := []string{filepath.Join(dir, "kept", "file.go"), filepath.Join(dir, "top.go")}
 	if !slices.Equal(files, want) {
 		t.Errorf("goFiles() = %v, want %v", files, want)
+	}
+}
+
+// TestGoFiles_ANestedCheckout_IsNotListed holds the three source gates to
+// this repository's own files.
+//
+// A checkout can hold other checkouts: the parallel-agent tooling puts a git
+// worktree per agent under .claude/worktrees, and a developer can put one
+// anywhere with `git worktree add`. Each is a complete copy of this repository
+// on some other branch, and a gate that read one would fail against a path
+// that is not in this tree, for a constraint or a suffix that some other
+// branch carries. The hidden-directory rule above already keeps the tooling's
+// worktrees out by where they sit; this pins that a worktree under an
+// ordinary name is kept out by what it is, which is the case a name rule
+// cannot see. The ordinary directory is the control: without a file that must
+// be listed, a walk that pruned everything would pass this too.
+func TestGoFiles_ANestedCheckout_IsNotListed(t *testing.T) {
+	dir := t.TempDir()
+	plantFile(t, dir, filepath.Join("kept", "file.go"), "package p\n")
+	// A linked worktree in the shape the agent tooling leaves behind: under a
+	// dot-directory, carrying a .git file.
+	plantFile(t, dir, filepath.Join(".claude", "worktrees", "agent", "file.go"), "package p\n")
+	plantFile(t, dir, filepath.Join(".claude", "worktrees", "agent", ".git"), "gitdir: /elsewhere\n")
+	// A checkout whose name gives nothing away, carrying a .git directory as
+	// a clone does.
+	plantFile(t, dir, filepath.Join("scratch", "file.go"), "package p\n")
+	if err := os.MkdirAll(filepath.Join(dir, "scratch", ".git"), 0o750); err != nil {
+		t.Fatalf("creating scratch/.git: %v", err)
+	}
+
+	files := goFiles(t, dir)
+
+	want := []string{filepath.Join(dir, "kept", "file.go")}
+	if !slices.Equal(files, want) {
+		t.Errorf("goFiles() = %v, want %v: a nested checkout was listed, or the walk listed nothing", files, want)
 	}
 }

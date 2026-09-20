@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // FileSuffix is what makes a Go file a test file.
