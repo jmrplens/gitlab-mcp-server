@@ -23,7 +23,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_graphql_shapes`         | Catalog & metadata audits     | Every struct a GraphQL response is decoded into can hold what its document selects and declares nothing the document never selects; `-report` writes the reverse, what the schema offers there and no document of the decoding package selects                                                                                                            | `make check-graphql-shapes`, `make audit-graphql-shapes`, `make audit-graphql-sent`                                                                                     |
 | `audit_dead_consts`            | Catalog & metadata audits     | Every unexported constant in `internal/` and `cmd/` is one something reads, which `staticcheck`'s `unused` cannot answer for a member of a const group                                                                                                                                                                                                    | `make check-dead-consts`                                                                                                                                                |
 | `audit_readonly_graphql`       | Catalog & metadata audits     | No action classified ReadOnly can reach a GraphQL mutation                                                                                                                                                                                                                                                                                                | `make check-readonly-graphql`                                                                                                                                           |
-| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output)                                                                                                                                                                                                                                                                                           | `make audit-surface-quality`                                                                                                                                            |
+| `audit_surface_quality`        | Surface quality audits        | Consolidated MCP tool surface quality audit (metadata + output); `-check` gates on every rule that reads the served surface, the edition tier a description states and the constant index a list formatter reads included                                                                                                                                 | `make audit-surface-quality`, `make check-surface-quality`                                                                                                              |
 | `audit_gateway_chars`          | Surface quality audits        | Served descriptions and titles carry no character an MCP gateway validator rejects                                                                                                                                                                                                                                                                        | `make check-gateway-chars`                                                                                                                                              |
 | `audit_meta_descriptions`      | Surface quality audits        | Every parameter and value a served meta-tool description offers is one its actions accept, whether the value set is a schema enum or one a schema description spells                                                                                                                                                                                      | `make check-meta-descriptions`                                                                                                                                          |
 | `audit_tokens`                 | Surface quality audits        | LLM context-window overhead of every tool/resource/prompt definition; `-footprint` regenerates the README token-footprint section                                                                                                                                                                                                                         | `make audit-tokens`, `make gen-footprint`                                                                                                                               |
@@ -233,7 +233,7 @@ A JSON report with invariant checks. The binary exits non-zero on catalog-first 
 #### Make targets
 
 - `make audit-catalog-first`
-- `make analyze` (step 17)
+- `make analyze` (step 18)
 
 #### Notes
 
@@ -401,7 +401,7 @@ Every wrong ID with its file, its line, the string and the closest real ID, grou
 #### Make targets
 
 - `make audit-action-ids`: the report plus `plan/action-ids.json`.
-- `make check-action-ids`: CI gate, and step 10 of `make analyze`.
+- `make check-action-ids`: CI gate, and step 11 of `make analyze`.
 
 ### audit_dead_consts
 
@@ -828,6 +828,13 @@ Both views judge the surface as a client receives it, because both list it throu
 
 The metadata view ends with a **Result Envelopes** section (the `envelopes` key of its JSON report): every registered Markdown formatter driven through `MarkdownForResult` with a zero and a populated fixture from `internal/testutil`, counting the nil renders of a zero value apart from those of a populated value, listing every content block that carries no `Annotations`, every formatter that panicked, and the registry's own record of refused or half-honored registrations. It reports and does not gate: the dispatchers annotate every text block on the way out, so a bare block here is a formatter building its own envelope, and the list is the migration's work list.
 
+**`-check` makes the command a gate.** It prints the violations that gate and nothing else, and exits 1 on any. What gates is every rule that reads the served surface, in both views. The result-envelope section is excluded and stays a report, because a nil render of a zero value is a guard rather than a defect and the ten duplicate registrations it lists are a backlog nobody has worked through, so failing on them would fail every run from the day the flag was added.
+
+Two rules the same run answers were added with it:
+
+- **`edition-tier`.** The tier an individual tool's own description states, against the lowest tier the surface serves that tool at, read by listing the individual surface at Free, Premium and Ultimate. It reads the served surface rather than an `ActionSpec`'s `Edition` field because the field is not what gates a client: the catalog aggregation tags whole domains and overwrites whatever a spec declared, so a spec can disagree with its own description, with the catalog tag and with GitLab's licence table while nothing observes it. That is exactly the state `securitysettings.groupSecuritySettingsOptions` was in. Only a parenthetical of the first sentence counts, and only one whose leading clause is a tier phrase, which is the convention the descriptions follow: `(Premium/Ultimate, destructive)` states Premium, `(Premium/Ultimate iteration list type)` states nothing. The prose form (`Requires an Ultimate license`) is deliberately not read yet, because reading it today reports the three group Datadog tools, which are served at Free and say they need Premium: that is a gating question about group-level integrations rather than a description defect, and a gate must not be introduced red.
+- **`constant-index`.** A list formatter that renders the head of a slice where it means to render every element. It is read off the populated render the envelope section already produces: the audit fills its fixtures through its own text function, which spells the whole field path rather than the field's name, so the two elements of a slice of structs differ. Until they did, this walk could not tell a correct render from one that prints the first row twice. A formatter is reported when the render carries the first element's sentinel twice and the second element's not at all; twice rather than once, because a summary that names only the head of a list is not a defect. `constantIndexDeclarations` answers a finding the rule cannot tell from a defect, and a declaration that answers nothing fails.
+
 #### Usage
 
 ```bash
@@ -839,22 +846,27 @@ go run ./cmd/audit_surface_quality/ -view=metadata
 
 # Output view only
 go run ./cmd/audit_surface_quality/ -view=output
+
+# As a gate
+go run ./cmd/audit_surface_quality/ -check
 ```
 
 #### Flags
 
-| Flag    | Type     | Default | Description                                                                                                                                      |
-| ------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-view` | `string` | `all`   | Which audit view to run: `metadata`, `output`, or `all`                                                                                          |
-| `-json` | `bool`   | `false` | Emit JSON instead of Markdown; requires `-view=metadata` or `-view=output` (rejected with `-view=all`, which would emit two top-level documents) |
+| Flag     | Type     | Default | Description                                                                                                                                      |
+| -------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-view`  | `string` | `all`   | Which audit view to run: `metadata`, `output`, or `all`                                                                                          |
+| `-json`  | `bool`   | `false` | Emit JSON instead of Markdown; requires `-view=metadata` or `-view=output` (rejected with `-view=all`, which would emit two top-level documents) |
+| `-check` | `bool`   | `false` | Print only the violations that gate and exit 1 on any; rejected with `-json`, which prints the whole report                                      |
 
 #### Output
 
-A Markdown report to stdout with summary tables, violations/findings grouped by category, and a full tool listing. With `-json` (single view), a JSON document for that view.
+A Markdown report to stdout with summary tables, violations/findings grouped by category, and a full tool listing. With `-json` (single view), a JSON document for that view. With `-check`, one line per view plus one line per violation.
 
 #### Make targets
 
 - `make audit-surface-quality` — both views.
+- `make check-surface-quality`: the gate, also step 21 of `make analyze` and a step of CI's generated-artifacts job.
 - `make audit-tools` — `-view=metadata`.
 - `make audit-output` — `-view=output`.
 

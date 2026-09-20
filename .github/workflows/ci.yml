@@ -250,6 +250,8 @@ jobs:
         run: make check-action-ids
       - name: Check gateway-safe served characters
         run: make check-gateway-chars
+      - name: Check MCP tool surface quality
+        run: make check-surface-quality
       - name: Check test-file naming convention
         run: make check-test-file-names
       - name: Check token footprint

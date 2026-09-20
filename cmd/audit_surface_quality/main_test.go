@@ -162,3 +162,81 @@ func TestAuditRouteOutputSchema_CatalogRoutesDeclareSchemas(t *testing.T) {
 		t.Fatalf("auditRouteOutputSchema() = %+v, want no findings", got)
 	}
 }
+
+// TestReportGate_Violations_ArePrintedAndCounted checks what -check writes
+// instead of the report: a count, one line per violation naming its subject,
+// its category and its detail, and the same count returned as the exit
+// condition.
+func TestReportGate_Violations_ArePrintedAndCounted(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout.
+	var got int
+	out := captureStdout(t, func() {
+		got = reportGate("metadata", []violation{
+			{"gitlab_project_get", "edition-tier", "the description states Ultimate"},
+		})
+	})
+
+	if got != 1 {
+		t.Errorf("reportGate() = %d, want 1", got)
+	}
+	for _, want := range []string{"metadata: 1 violation(s)", "gitlab_project_get", "edition-tier", "the description states Ultimate"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("reportGate() printed %q, want it to carry %q", out, want)
+			}
+		})
+	}
+}
+
+// TestReportGate_NoViolations_SaysSo checks the green line, so a run that
+// gates on nothing still says which view it read.
+func TestReportGate_NoViolations_SaysSo(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout.
+	var got int
+	out := captureStdout(t, func() { got = reportGate("output", nil) })
+
+	if got != 0 {
+		t.Errorf("reportGate() = %d, want 0", got)
+	}
+	if !strings.Contains(out, "output: no violations") {
+		t.Errorf("reportGate() printed %q, want the green line", out)
+	}
+}
+
+// TestAuditViews_CheckMode_ReadsBothViews runs the command's own entry point
+// the way -check does: both views are read, each reports, and the exit
+// condition is what they add up to.
+//
+// It does not assert that the total is zero, and could not: the Markdown
+// registry is global and cannot be unregistered, so the formatters other
+// tests in this package register to prove a rule fires are in the surface
+// this walk reads. That the tree itself gates on nothing is asserted per
+// rule, by the tests that own each one.
+func TestAuditViews_CheckMode_ReadsBothViews(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout and checkMode is global.
+	checkMode = true
+	t.Cleanup(func() { checkMode = false })
+
+	var got int
+	out := captureStdout(t, func() { got = auditViews("all") })
+
+	if got < 0 {
+		t.Errorf("auditViews(all) = %d, want the violations the two views counted", got)
+	}
+	for _, want := range []string{"metadata:", "output: no violations"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("auditViews(all) printed %q, want it to carry %q", out, want)
+			}
+		})
+	}
+}
+
+// TestAuditViews_UnknownView_ReadsNothing checks the one branch main's own
+// validation keeps from happening, so a later caller cannot reach a view
+// that silently audits everything.
+func TestAuditViews_UnknownView_ReadsNothing(t *testing.T) {
+	if got := auditViews("neither"); got != 0 {
+		t.Errorf("auditViews(neither) = %d, want 0", got)
+	}
+}

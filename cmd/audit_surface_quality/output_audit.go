@@ -44,8 +44,9 @@ type toolQualityStats struct {
 
 // runOutputAudit runs the output-quality checks (OutputSchema presence,
 // "Returns:" info, Title field, "See also:" cross-refs, route OutputSchema)
-// and prints the report to stdout.
-func runOutputAudit(client *gitlabclient.Client) {
+// and prints the report to stdout. It returns how many findings gate, which
+// is what -check exits on.
+func runOutputAudit(client *gitlabclient.Client) int {
 	individual := listTools(client, false)
 	meta := listTools(client, true)
 
@@ -59,7 +60,15 @@ func runOutputAudit(client *gitlabclient.Client) {
 	findings = append(findings, auditSeeAlso(individual, "individual")...)
 	findings = append(findings, auditRouteOutputSchema(client)...)
 
+	if checkMode {
+		gating := make([]violation, len(findings))
+		for i, f := range findings {
+			gating[i] = violation(f)
+		}
+		return reportGate("output", gating)
+	}
 	printOutputReport(individual, meta, findings)
+	return len(findings)
 }
 
 // auditOutputSchema checks whether a tool declares an OutputSchema.
