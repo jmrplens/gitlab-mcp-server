@@ -103,17 +103,23 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatMutateMarkdown checks the whole confirmation: the heading names the
 // view rather than the type of object, the view's rows follow, and the server's
 // own sentence closes the card as its note.
+//
+// It is the one card fixture whose two flags disagree, and that is what pins
+// which row each is written into. Every other card here sets both to the same
+// value, so the card writer could have crossed private with subscribed — told
+// a caller a shared view was private and an unfollowed one followed — and no
+// assertion in the package would have moved.
 func TestFormatMutateMarkdown(t *testing.T) {
 	want := "## Saved View: My open tasks\n\n" +
 		"- **ID**: 7\n" +
 		"- **Private**: ❌\n" +
-		"- **Subscribed**: ❌\n" +
+		"- **Subscribed**: ✅\n" +
 		"- **Sort**: CREATED_DESC\n" +
 		"\nSuccessfully created saved view \"My open tasks\".\n"
 	got := FormatMutateMarkdown(MutateOutput{
 		Status:    "success",
 		Message:   "Successfully created saved view \"My open tasks\".",
-		SavedView: Item{ID: 7, Name: "My open tasks", Sort: "CREATED_DESC"},
+		SavedView: Item{ID: 7, Name: "My open tasks", Subscribed: true, Sort: "CREATED_DESC"},
 	})
 	if got != want {
 		t.Errorf("FormatMutateMarkdown()\n got %q\nwant %q", got, want)
