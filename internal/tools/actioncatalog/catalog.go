@@ -750,10 +750,9 @@ func (c *Catalog) Filter(opts FilterOptions) *Catalog {
 	if opts.ReadOnlyOnly {
 		filtered = filtered.FilterReadOnlyGroups()
 	}
-	if len(opts.AllowedToolNames) > 0 {
-		filtered = filtered.FilterAllowedToolNames(opts.AllowedToolNames)
-	}
-	return filtered
+	// An empty allow-list keeps everything, which FilterAllowedToolNames
+	// already answers on its own, so it is not asked here first.
+	return filtered.FilterAllowedToolNames(opts.AllowedToolNames)
 }
 
 // DomainFromToolName returns the canonical dynamic domain for a meta-tool name.

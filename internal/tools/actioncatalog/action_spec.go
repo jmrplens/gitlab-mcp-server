@@ -15,13 +15,11 @@ func ActionsFromSpecs(specs []toolutil.ActionSpec) ([]Action, error) {
 		return nil, err
 	}
 	actions := make([]Action, 0, len(specs))
-	seen := make(map[string]struct{}, len(specs))
 	var errs []error
+	// Two specs sharing a name never reach this loop: ActionSpecsToMapWithError
+	// refuses the duplicate by its trimmed name, and that refusal returned
+	// above, so a guard against one here could never be observed.
 	for _, spec := range specs {
-		if _, exists := seen[spec.Name]; exists {
-			continue
-		}
-		seen[spec.Name] = struct{}{}
 		route, ok := routes[spec.Name]
 		if !ok {
 			errs = append(errs, fmt.Errorf("action spec %q was not projected to a route", spec.Name))

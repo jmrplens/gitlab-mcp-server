@@ -93,16 +93,17 @@ func (spec CatalogGroupSpec) Validate() error {
 	if len(spec.Actions) == 0 {
 		return fmt.Errorf("catalog group %q has no actions", spec.ToolName)
 	}
-	seenActionIDs := make(map[ActionID]struct{}, len(spec.Actions))
+	// The action's own Validate refuses a blank name, so the trimmed name is
+	// never empty here; and every action ID of a group is the group's one
+	// domain joined to a name this loop has already held unique, so two
+	// actions cannot share an ID without first sharing a name. Neither guard
+	// could be observed, and neither is kept.
 	seenActionNames := make(map[string]struct{}, len(spec.Actions))
 	for _, actionSpec := range spec.Actions {
 		if err := actionSpec.Validate(); err != nil {
 			return fmt.Errorf("catalog group %q action %q: %w", spec.ToolName, actionSpec.Name, err)
 		}
 		actionName := strings.TrimSpace(actionSpec.Name)
-		if actionName == "" {
-			return fmt.Errorf("catalog group %q action name is required", spec.ToolName)
-		}
 		if _, exists := seenActionNames[actionName]; exists {
 			return fmt.Errorf("catalog group %q duplicate action %q", spec.ToolName, actionName)
 		}
@@ -113,11 +114,6 @@ func (spec CatalogGroupSpec) Validate() error {
 		if actionSpec.Route.InputSchema == nil {
 			return fmt.Errorf("catalog group %q action %q has nil input schema", spec.ToolName, actionName)
 		}
-		actionID := catalogGroupActionID(spec, actionName)
-		if _, exists := seenActionIDs[actionID]; exists {
-			return fmt.Errorf("catalog group %q duplicate action id %q", spec.ToolName, actionID)
-		}
-		seenActionIDs[actionID] = struct{}{}
 	}
 	return validateCatalogGroupAliases(spec)
 }
