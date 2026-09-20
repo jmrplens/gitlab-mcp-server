@@ -4,10 +4,12 @@
 package notifications
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -344,14 +346,17 @@ func TestUpdateSettingsForGroup_ValidationError(t *testing.T) {
 func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	tr := true
 	fa := false
-	opts := buildUpdateOpts(eventFields{
+	opts, err := buildUpdateOpts(eventFields{
 		Level: "custom", NotificationEmail: "email@test.com",
 		CloseIssue: &tr, CloseMergeRequest: &fa, FailedPipeline: &tr, FixedPipeline: &fa,
 		IssueDue: &tr, MergeMergeRequest: &fa, MergeWhenPipelineSucceeds: &tr, MovedProject: &fa,
 		NewEpic: &tr, NewIssue: &fa, NewMergeRequest: &tr, NewNote: &fa,
 		PushToMergeRequest: &tr, ReassignIssue: &fa, ReassignMergeRequest: &tr, ReopenIssue: &fa,
 		ReopenMergeRequest: &tr, SuccessPipeline: &fa,
-	})
+	}, scopedLevels)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
 	if opts.CloseIssue == nil || *opts.CloseIssue != true {
 		t.Error("CloseIssue should be true")
 	}
@@ -363,17 +368,52 @@ func TestBuildUpdateOpts_AllBooleans(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_UnknownLevel verifies BuildUpdateOpts when unknown level.
+// TestBuildUpdateOpts_UnknownLevel verifies that a level no scope knows is
+// refused rather than dropped, and that nothing else of the caller's request
+// survives the refusal.
+//
+// Dropping it is what this replaced: the options came back without a Level, the
+// PUT went out carrying the rest, and GitLab answered 200 with the level it
+// already had.
 func TestBuildUpdateOpts_UnknownLevel(t *testing.T) {
-	opts := buildUpdateOpts(eventFields{Level: "unknown_level"})
-	if opts.Level != nil {
-		t.Error("unknown level should not set Level")
+	opts, err := buildUpdateOpts(eventFields{Level: "unknown_level"}, scopedLevels)
+	if err == nil {
+		t.Fatal("buildUpdateOpts() error = nil, want a refusal naming the valid levels")
+	}
+	if opts != nil {
+		t.Errorf("buildUpdateOpts() = %+v, want no options beside the error", opts)
+	}
+	if !strings.Contains(err.Error(), "unknown_level") {
+		t.Errorf("error %q does not name the level it refused", err)
+	}
+	if want := "must be one of: " + strings.Join(scopedLevels, ", "); !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not offer %q", err, want)
+	}
+}
+
+// TestBuildUpdateOpts_LevelOutsideTheScope_IsRefused verifies that a level the
+// map translates but this scope does not accept is refused too. "global" on the
+// account-wide settings is the case: client-go rejects it before building a
+// request, so accepting it here would only move the failure one layer down.
+func TestBuildUpdateOpts_LevelOutsideTheScope_IsRefused(t *testing.T) {
+	opts, err := buildUpdateOpts(eventFields{Level: inheritLevel}, globalLevels)
+	if err == nil {
+		t.Fatal("buildUpdateOpts() error = nil, want the account-wide scope to refuse the inherit level")
+	}
+	if opts != nil {
+		t.Errorf("buildUpdateOpts() = %+v, want no options beside the error", opts)
+	}
+	if want := "must be one of: " + strings.Join(globalLevels, ", "); !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not offer %q, the levels the account-wide scope accepts", err, want)
 	}
 }
 
 // TestBuildUpdateOpts_EmptyLevel verifies BuildUpdateOpts when empty level.
 func TestBuildUpdateOpts_EmptyLevel(t *testing.T) {
-	opts := buildUpdateOpts(eventFields{})
+	opts, err := buildUpdateOpts(eventFields{}, globalLevels)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
 	if opts.Level != nil {
 		t.Error("empty level should not set Level")
 	}
@@ -381,14 +421,49 @@ func TestBuildUpdateOpts_EmptyLevel(t *testing.T) {
 
 // TestBuildUpdateOpts_ValidLevels verifies BuildUpdateOpts when valid levels.
 func TestBuildUpdateOpts_ValidLevels(t *testing.T) {
-	for _, lv := range []string{"disabled", "participating", "watch", "global", "mention", "custom"} {
+	for _, lv := range scopedLevels {
 		t.Run(lv, func(t *testing.T) {
-			opts := buildUpdateOpts(eventFields{Level: lv})
+			opts, err := buildUpdateOpts(eventFields{Level: lv}, scopedLevels)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
 			if opts.Level == nil {
 				t.Errorf("level %q should set Level", lv)
 			}
 		})
 	}
+}
+
+// TestLevelLists_AgreeWithTheTranslationTable asserts that the two published
+// level lists and the map that translates them are one vocabulary rather than
+// three copies of one.
+//
+// It is what lets buildUpdateOpts take the scope's list on trust: a name in a
+// list that levelMap does not carry would otherwise translate to the zero enum
+// value and send GitLab a level the caller never asked for, which is the same
+// silent substitution one level down from the one this layer removes.
+func TestLevelLists_AgreeWithTheTranslationTable(t *testing.T) {
+	t.Run("scoped_levels_are_exactly_the_translated_ones", func(t *testing.T) {
+		if len(scopedLevels) != len(levelMap) {
+			t.Fatalf("scopedLevels has %d entries, levelMap %d", len(scopedLevels), len(levelMap))
+		}
+		for _, level := range scopedLevels {
+			if _, ok := levelMap[level]; !ok {
+				t.Errorf("scopedLevels names %q, which levelMap cannot translate", level)
+			}
+		}
+	})
+	t.Run("global_levels_are_the_scoped_ones_without_the_inherit_level", func(t *testing.T) {
+		want := make([]string, 0, len(scopedLevels))
+		for _, level := range scopedLevels {
+			if level != inheritLevel {
+				want = append(want, level)
+			}
+		}
+		if !slices.Equal(globalLevels, want) {
+			t.Errorf("globalLevels = %v, want %v", globalLevels, want)
+		}
+	})
 }
 
 // FormatMarkdown wrapper.
@@ -663,6 +738,92 @@ func captureUpdateBody(t *testing.T, call func(*gitlabclient.Client) error) map[
 		t.Fatalf("request body %q is not an object: %v", body, err)
 	}
 	return sent
+}
+
+// TestUpdateGlobalSettings_Level_SendsTheSpellingGitLabAccepts verifies that
+// every level the account-wide action publishes reaches GitLab, and is the
+// account-wide half of the group test above.
+//
+// It is also what stops the narrowing going too far: removing a level from
+// globalLevels that the account-wide settings do accept would leave this loop
+// short of a case rather than silently shrinking the surface.
+func TestUpdateGlobalSettings_Level_SendsTheSpellingGitLabAccepts(t *testing.T) {
+	for _, level := range globalLevels {
+		t.Run(level, func(t *testing.T) {
+			sent := captureUpdateBody(t, func(client *gitlabclient.Client) error {
+				_, err := UpdateGlobalSettings(t.Context(), client, UpdateGlobalInput{Level: level})
+				return err
+			})
+
+			if len(sent) != 1 {
+				t.Fatalf("request body = %v, want only the level", sent)
+			}
+			if got, _ := sent["level"].(string); got != level {
+				t.Errorf("level = %q, want %q", got, level)
+			}
+		})
+	}
+}
+
+// updateCall names one update handler, the level list its scope enforces, and
+// the input that carries a level to it, so a question can be asked of all three
+// scopes from one table.
+type updateCall struct {
+	name  string
+	scope []string
+	call  func(context.Context, *gitlabclient.Client, string) error
+}
+
+// updateCalls lists the three update handlers with the level list each enforces.
+func updateCalls() []updateCall {
+	return []updateCall{
+		{"notification_global_update", globalLevels, func(ctx context.Context, client *gitlabclient.Client, level string) error {
+			_, err := UpdateGlobalSettings(ctx, client, UpdateGlobalInput{Level: level})
+			return err
+		}},
+		{"notification_project_update", scopedLevels, func(ctx context.Context, client *gitlabclient.Client, level string) error {
+			_, err := UpdateSettingsForProject(ctx, client, UpdateProjectInput{ProjectID: "proj", Level: level})
+			return err
+		}},
+		{"notification_group_update", scopedLevels, func(ctx context.Context, client *gitlabclient.Client, level string) error {
+			_, err := UpdateSettingsForGroup(ctx, client, UpdateGroupInput{GroupID: "grp", Level: level})
+			return err
+		}},
+	}
+}
+
+// TestUpdateSettings_LevelTheScopeRefuses_ReachesNoGitLab verifies that a level
+// outside the list an update scope publishes is refused before any request is
+// built, on all three scopes.
+//
+// Two levels are asked of each, and each scope is asked only about the ones it
+// does not accept. A misspelling is the ordinary case; the inherit level is the
+// one the account-wide action used to publish while client-go refused it, and it
+// stays legitimate at the other two scopes.
+func TestUpdateSettings_LevelTheScopeRefuses_ReachesNoGitLab(t *testing.T) {
+	for _, uc := range updateCalls() {
+		t.Run(uc.name, func(t *testing.T) {
+			for _, level := range []string{"Watch", inheritLevel} {
+				if slices.Contains(uc.scope, level) {
+					continue
+				}
+				t.Run(level, func(t *testing.T) {
+					client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						t.Errorf("a refused level reached GitLab: %s %s", r.Method, r.URL.Path)
+						testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
+					}))
+
+					err := uc.call(t.Context(), client, level)
+					if err == nil {
+						t.Fatalf("%s accepted level %q, want a refusal", uc.name, level)
+					}
+					if want := "must be one of: " + strings.Join(uc.scope, ", "); !strings.Contains(err.Error(), want) {
+						t.Errorf("error %q does not offer %q", err, want)
+					}
+				})
+			}
+		})
+	}
 }
 
 // TestFormatMarkdownString_OneEventAtATime_TicksOnlyItsOwnRow verifies that

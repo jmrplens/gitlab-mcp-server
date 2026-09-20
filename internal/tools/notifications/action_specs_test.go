@@ -5,6 +5,8 @@ package notifications
 import (
 	"net/http"
 	"regexp"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -90,6 +92,83 @@ func TestFormatMarkdownString_HintsNameActionsTheCatalogHolds(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestActionSpecs_Level_PublishesTheScopesOwnListEverywhere asserts that each
+// update action advertises the levels its own scope takes, in all three places
+// a model can read them: the enum the individual surface validates against, the
+// description every surface renders, and the Usage sentence discovery returns.
+//
+// All three actions used to share one six-value enum, which put "global" on the
+// account-wide one. client-go refuses that value in UpdateGlobalSettings before
+// it builds a request, so a model picking it off the published list was
+// guaranteed an error, and the 400 hint the same handler returned offered it
+// the very list it had just failed with. The Usage sentence is checked here
+// rather than assembled in the source, so the prose stays readable where it is
+// written and still cannot drift from the enum beside it.
+func TestActionSpecs_Level_PublishesTheScopesOwnListEverywhere(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("building the specs should reach no GitLab")
+	}))
+	want := map[string][]string{
+		actionGlobalUpdate:  globalLevels,
+		actionProjectUpdate: scopedLevels,
+		actionGroupUpdate:   scopedLevels,
+	}
+
+	for _, spec := range ActionSpecs(client) {
+		levels, isUpdate := want[spec.Name]
+		if !isUpdate {
+			continue
+		}
+		t.Run(spec.Name, func(t *testing.T) {
+			level := levelProperty(t, spec.Route.InputSchema)
+
+			if got := enumStrings(t, level); !slices.Equal(got, levels) {
+				t.Errorf("enum = %v, want %v", got, levels)
+			}
+			if description, _ := level["description"].(string); description != levelDescription(levels) {
+				t.Errorf("description = %q, want %q", description, levelDescription(levels))
+			}
+			if phrase := "level (" + strings.Join(levels, ", ") + ")"; !strings.Contains(spec.Usage, phrase) {
+				t.Errorf("Usage does not name %q:\n%s", phrase, spec.Usage)
+			}
+		})
+	}
+}
+
+// enumStrings returns the enum a published property carries, refusing anything
+// that is not a list of strings.
+func enumStrings(t *testing.T, property map[string]any) []string {
+	t.Helper()
+	enum, ok := property["enum"].([]any)
+	if !ok {
+		t.Fatalf("property publishes no enum, got %#v", property["enum"])
+	}
+	values := make([]string, 0, len(enum))
+	for _, value := range enum {
+		name, isString := value.(string)
+		if !isString {
+			t.Fatalf("enum holds %#v, want strings", value)
+		}
+		values = append(values, name)
+	}
+	return values
+}
+
+// levelProperty returns the `level` property of an update action's published
+// input schema, which is where both halves of the override land.
+func levelProperty(t *testing.T, schema map[string]any) map[string]any {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no properties: %#v", schema)
+	}
+	level, ok := properties["level"].(map[string]any)
+	if !ok {
+		t.Fatalf("input schema has no level property: %#v", properties)
+	}
+	return level
 }
 
 // TestCanonicalID_QualifiesEverySpecName asserts that a spec name and the ID a
