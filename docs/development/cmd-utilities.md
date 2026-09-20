@@ -233,7 +233,7 @@ A JSON report with invariant checks. The binary exits non-zero on catalog-first 
 #### Make targets
 
 - `make audit-catalog-first`
-- `make analyze` (step 16)
+- `make analyze` (step 17)
 
 #### Notes
 

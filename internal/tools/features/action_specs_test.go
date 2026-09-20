@@ -5,6 +5,7 @@ package features
 
 import (
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -38,8 +39,23 @@ func TestSetRoute_InputSchema_AcceptsTheThreeShapesAGateTakes(t *testing.T) {
 	if !ok {
 		t.Fatalf("value oneOf has type %T, want []any", value["oneOf"])
 	}
-	if len(oneOf) != 3 {
-		t.Fatalf("value oneOf length = %d, want 3 (boolean, integer, string)", len(oneOf))
+	// The set and not the count: three alternatives that repeat a type, or
+	// name one a gate cannot take, would still be three.
+	var got []string
+	for _, alternative := range oneOf {
+		shape, isMap := alternative.(map[string]any)
+		if !isMap {
+			t.Fatalf("value oneOf alternative has type %T, want map[string]any", alternative)
+		}
+		kind, isString := shape["type"].(string)
+		if !isString {
+			t.Fatalf("value oneOf alternative %v names no type", shape)
+		}
+		got = append(got, kind)
+	}
+	slices.Sort(got)
+	if want := []string{"boolean", "integer", "string"}; !slices.Equal(got, want) {
+		t.Fatalf("value oneOf types = %v, want %v", got, want)
 	}
 }
 
