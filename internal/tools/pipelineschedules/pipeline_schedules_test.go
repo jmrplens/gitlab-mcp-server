@@ -356,6 +356,13 @@ func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 // timestamp branches: owner, last_pipeline, variables, inputs, next_run_at,
 // created_at, and updated_at. The get/run handlers now use the raw superset path
 // (toOutputAPI), so this direct test keeps the SDK converter fully covered.
+//
+// The input's destroy pointer is held here and nowhere else. It is the one
+// field the two converters disagree about on purpose: gl.PipelineInput carries
+// it, so inputObjects passes it through, while the documented response has no
+// per-input destroy and scheduleInputAPI decodes none. Every whole-object
+// fixture in this file answers without one, so with no assertion here the
+// pass-through could be dropped and the package would stay green.
 func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
 	now := time.Date(2026, 3, 8, 1, 0, 0, 0, time.UTC)
 	destroy := true
@@ -392,8 +399,15 @@ func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
 	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
 		t.Errorf("variables = %+v, want one DEPLOY_ENV variable (nil skipped)", out.Variables)
 	}
-	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+	switch {
+	case len(out.Inputs) != 1:
 		t.Errorf("inputs = %+v, want one version input (nil skipped)", out.Inputs)
+	case out.Inputs[0].Name != "version" || out.Inputs[0].Value != "1.2.3":
+		t.Errorf("input name/value = %q/%v, want %q/%q", out.Inputs[0].Name, out.Inputs[0].Value, "version", "1.2.3")
+	case out.Inputs[0].Destroy == nil:
+		t.Error("input destroy = nil, want the SDK's own pointer carried through")
+	case !*out.Inputs[0].Destroy:
+		t.Error("input destroy = false, want true")
 	}
 	if out.NextRunAt == "" || out.CreatedAt == "" || out.UpdatedAt == "" {
 		t.Errorf("timestamps not formatted: %+v", out)
@@ -749,7 +763,10 @@ func TestCreateVariable_MissingValue(t *testing.T) {
 // Edit Variable
 // ---------------------------------------------------------------------------.
 
-// TestEditVariable_Success verifies EditVariable when success.
+// TestEditVariable_Success holds every field of the variable an edit returns to
+// the answer GitLab sent. The return is three straight assignments no gate can
+// flip, and no two fixture values agree, so a key read from the value or from
+// the variable type fails here instead of passing as a field nothing looks at.
 func TestEditVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/variables/DEPLOY_ENV" {
@@ -764,8 +781,14 @@ func TestEditVariable_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EditVariable() error: %v", err)
 	}
+	if out.Key != "DEPLOY_ENV" {
+		t.Errorf("Key = %q, want %q", out.Key, "DEPLOY_ENV")
+	}
 	if out.Value != "staging" {
 		t.Errorf("Value = %q, want %q", out.Value, "staging")
+	}
+	if out.VariableType != "env_var" {
+		t.Errorf("VariableType = %q, want %q", out.VariableType, "env_var")
 	}
 }
 
@@ -2064,7 +2087,7 @@ func TestListTriggeredPipelines_OrderByAndSort(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// toOutput — all optional fields (owner, timestamps)
+// FormatOutputMarkdown: the whole card, variables and inputs included
 // ---------------------------------------------------------------------------.
 
 // TestFormatOutputMarkdown_AllFields checks the whole card of a schedule
