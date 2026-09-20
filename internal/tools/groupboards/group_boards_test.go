@@ -1369,12 +1369,17 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 	}
 }
 
-// wholeGroupBoardJSON is a board answer in which no two values agree: every
-// number, string, date and flag is distinct, including the two visibility
-// flags and the nested milestone's four timestamps. That is what makes a
-// swapped pair of assignments in the converters visible: with
-// hide_backlog_list and hide_closed_list both true, as in every other fixture
-// here, exchanging those two lines changes nothing a test can see.
+// wholeGroupBoardJSON is a board answer in which no two fields of one object
+// agree: within each object every number, string, date and flag is distinct,
+// including the two visibility flags and the four timestamps of the nested
+// milestone and of the column's iteration. That is what makes a swapped pair
+// of assignments in the converters visible: with hide_backlog_list and
+// hide_closed_list both true, as in every other fixture here, exchanging those
+// two lines changes nothing a test can see. The iteration is spelled out to
+// the same depth although its converter is toolutil's shared one: with the
+// four date keys absent every date field of IterationOutput stayed empty, so
+// created_at could be read from updated_at, or start_date from due_date, and
+// nothing here would notice.
 const wholeGroupBoardJSON = `{
 	"id": 1,
 	"name": "Delivery",
@@ -1406,7 +1411,9 @@ const wholeGroupBoardJSON = `{
 		},
 		"iteration": {
 			"id": 71, "iid": 9, "sequence": 10, "group_id": 72, "title": "Iteration 4",
-			"description": "week 4", "state": 2, "web_url": "https://gitlab.example.com/it/71"
+			"description": "week 4", "state": 2, "web_url": "https://gitlab.example.com/it/71",
+			"start_date": "2026-06-01", "due_date": "2026-07-02",
+			"created_at": "2026-05-03T04:05:06Z", "updated_at": "2026-05-07T08:09:10Z"
 		}
 	}]
 }`
@@ -1448,6 +1455,8 @@ func wholeBoardListOutput() BoardListOutput {
 		Iteration: &IterationOutput{
 			ID: 71, IID: 9, Sequence: 10, GroupID: 72, Title: "Iteration 4",
 			Description: "week 4", State: 2, WebURL: "https://gitlab.example.com/it/71",
+			StartDate: "2026-06-01", DueDate: "2026-07-02",
+			CreatedAt: "2026-05-03T04:05:06Z", UpdatedAt: "2026-05-07T08:09:10Z",
 		},
 		Label:          &LabelOutput{Name: "Doing", Color: "#5bc0de", Description: "in progress"},
 		LimitMetric:    "all_metrics",
