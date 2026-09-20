@@ -588,9 +588,6 @@ func TestGroupDatadogToItem_FlatFallbackWithoutArchiveFlag_LeavesItFalse(t *test
 	}
 }
 
-// TestGroupDatadogToItem_NilTimestamps verifies the GroupDatadogToItem_NilTimestamps handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
 // TestGroupDatadogToItem_OneFieldAtATime_ReadsEachFromItsOwnSource asserts
 // that every field of the item, and of the nested Datadog configuration under
 // it, is read from the client-go field of the same meaning and from no other.
@@ -700,6 +697,9 @@ func TestGroupDatadogToItem_OneFieldAtATime_ReadsEachFromItsOwnSource(t *testing
 	}
 }
 
+// TestGroupDatadogToItem_NilTimestamps verifies the GroupDatadogToItem_NilTimestamps handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupDatadogToItem_NilTimestamps(t *testing.T) {
 	got := groupDatadogToItem(&gl.GroupDatadogIntegration{
 		ID: 1, Title: "Datadog", Slug: "datadog", Active: true,

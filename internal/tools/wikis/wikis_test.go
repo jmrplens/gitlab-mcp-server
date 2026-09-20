@@ -1326,7 +1326,7 @@ func TestUploadAttachment_Branch_SentOnlyWhenTheCallerNamedOne(t *testing.T) {
 }
 
 // TestWikis_CapturedFieldsReachTheOutput asserts that the two fields client-go
-// does not model — the page's metadata id and its front matter — are read off
+// does not model, the page's metadata id and its front matter, are read off
 // the captured response and published, for every handler that returns a page
 // (ADR-0021). Nothing else held them: the poisoned-body test asserts a decode
 // failure, so assigning a zero and a nil in their place left the suite green.

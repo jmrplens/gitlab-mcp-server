@@ -994,7 +994,7 @@ func TestList_APIError(t *testing.T) {
 //
 // The value is asserted exactly, and the Markdown the same output renders is
 // asserted beside it, because those are the two readers and the previous
-// assertion — that the field is not empty — could not tell them apart.
+// assertion, that the field is not empty, could not tell them apart.
 // time.Time.String() produces "2026-01-01 00:00:00 +0000 UTC", which a caller
 // cannot parse as a timestamp and which toolutil.FormatTime cannot parse
 // either, so the table printed that text in the Created column.
@@ -1296,7 +1296,7 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 //
 // Each of those is written behind a guard on its own zero value, and an unset
 // page is zero rather than absent, so a guard that admitted the boundary would
-// send "page=0&per_page=0" — a page the caller never named and GitLab never
+// send "page=0&per_page=0", a page the caller never named and GitLab never
 // offered. The sibling test drives every parameter set, which proves the
 // guards forward a value but not that they withhold one.
 func TestList_NoPaginationInput_SendsNoPaginationParameters(t *testing.T) {

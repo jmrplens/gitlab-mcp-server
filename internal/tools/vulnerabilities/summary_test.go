@@ -590,7 +590,7 @@ func TestFormatPipelineSecuritySummaryMarkdown_Empty(t *testing.T) {
 // sentence reserved for a pipeline that ran no scan at all.
 //
 // Both conditions on that sentence have to hold together: read as "or", the
-// commonest good result a project can have — a scan that came back clean —
+// commonest good result a project can have, a scan that came back clean,
 // would be reported to the model as a pipeline with no security scanning, which
 // is the opposite claim.
 func TestFormatPipelineSecuritySummaryMarkdown_CleanScanIsNotNoScan(t *testing.T) {

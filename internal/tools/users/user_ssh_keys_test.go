@@ -452,7 +452,7 @@ func TestAddSSHKey_WithExpiresAtAndUsageType(t *testing.T) {
 // and compares the whole body against the two required keys plus that one. The
 // expiry is the reason to compare rather than read the response: the fixture
 // answers with an expiry whether or not one was asked for, so the test above
-// passes with the option dropped. The unparsable case is the other half — a
+// passes with the option dropped. The unparsable case is the other half: a
 // date the handler could not read must be sent as nothing rather than as the
 // year 1, which is an expiry GitLab would honor.
 func TestAddSSHKey_EachOptionReachesTheRequest(t *testing.T) {

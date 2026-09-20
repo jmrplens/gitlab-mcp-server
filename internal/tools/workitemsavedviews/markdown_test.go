@@ -106,8 +106,8 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 //
 // It is the one card fixture whose two flags disagree, and that is what pins
 // which row each is written into. Every other card here sets both to the same
-// value, so the card writer could have crossed private with subscribed — told
-// a caller a shared view was private and an unfollowed one followed — and no
+// value, so the card writer could have crossed private with subscribed (told
+// a caller a shared view was private and an unfollowed one followed) and no
 // assertion in the package would have moved.
 func TestFormatMutateMarkdown(t *testing.T) {
 	want := "## Saved View: My open tasks\n\n" +

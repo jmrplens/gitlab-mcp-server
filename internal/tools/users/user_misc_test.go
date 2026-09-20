@@ -655,8 +655,8 @@ func TestGetUserActivities_CancelledContext(t *testing.T) {
 // TestGetUserMemberships_TheTypeFilterReachesTheQuery verifies that the
 // membership type and the ordering are asked of GitLab. The fixture answers
 // with a Namespace membership whether or not the filter was sent, so reading
-// the response — which is what the test this replaced did under a comment
-// claiming otherwise — proves nothing about the request.
+// the response (which is what the test this replaced did under a comment
+// claiming otherwise) proves nothing about the request.
 func TestGetUserMemberships_TheTypeFilterReachesTheQuery(t *testing.T) {
 	tests := []struct {
 		name  string

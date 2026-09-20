@@ -1,5 +1,5 @@
 // action_specs_test.go contains route and catalog-surface tests for behavior that
-// used to live in register.go — not-found output and destructive confirmation —
+// used to live in register.go (not-found output and destructive confirmation),
 // alongside the discovery metadata and input-schema assertions each spec carries.
 package wikis
 

@@ -107,8 +107,8 @@ func decodeJSONBody(t *testing.T, w http.ResponseWriter, r *http.Request) map[st
 // the ref it points at, and the annotated message, each read back from the
 // request body.
 //
-// No test read that body before, so all three could be read off one another —
-// creating a tag named after its own ref, annotated with the ref — and the
+// No test read that body before, so all three could be read off one another
+// (creating a tag named after its own ref, annotated with the ref) and the
 // suite stayed green; the message guard was a live mutant for the same reason.
 // The message is given with a literal backslash-n because that is what an MCP
 // client's double-escaped input looks like, and it must arrive as a newline.
@@ -453,7 +453,7 @@ const pathRepoTagSig = "/api/v4/projects/42/repository/tags/v1.0.0/signature"
 //
 // Four of the twelve fields were asserted before, which left the certificate's
 // own subject readable off its key identifier and the issuer's off the
-// certificate's — straight-line assignment no gate can judge — and left the
+// certificate's (straight-line assignment no gate can judge), and left the
 // serial number, which GitLab sends as a number and this package prints, unread
 // by anything driving the handler.
 func TestTagGetSignature_Success(t *testing.T) {
@@ -1027,8 +1027,8 @@ func TestTagUnprotect_APIError(t *testing.T) {
 //
 // Driving one field at a time is what makes the four guards distinguishable: a
 // permission entry is a block of ids, so an entry carrying all of them at once
-// has no fixture where no two values agree, and the assertion this replaces —
-// that the body mentioned each field name somewhere — passed with every guard
+// has no fixture where no two values agree, and the assertion this replaces,
+// that the body mentioned each field name somewhere, passed with every guard
 // inverted, because another entry in the same list supplied each name. The
 // empty cases matter as much: an optional field GitLab was not asked about
 // must be absent rather than sent as zero.

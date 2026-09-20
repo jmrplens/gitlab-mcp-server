@@ -1873,7 +1873,7 @@ func TestReleaseUpdate_PartialUpdateSendsNullTitleAndNoMilestones(t *testing.T) 
 
 // TestActionSpecs_GetRoute_ForbiddenStaysAnError pins that only a 404 becomes
 // the not-found card. The route's guard is "an error, and a 404 at that", and
-// with its two halves joined the other way every failure — a 403, a 500 —
+// with its two halves joined the other way every failure (a 403, a 500)
 // would be answered as "release not found", telling a model the release does
 // not exist when the truth is that it could not look.
 func TestActionSpecs_GetRoute_ForbiddenStaysAnError(t *testing.T) {
@@ -1972,7 +1972,7 @@ func TestFormatMarkdown_UpcomingWithNoDateCarriesNoMarker(t *testing.T) {
 
 // TestReleaseGet_EveryFieldIsReadFromItsOwnKey asserts the whole top level of
 // one release against a response in which no two values agree. Three of these
-// keys had no assertion anywhere — description_html, commit_path and tag_path —
+// keys had no assertion anywhere (description_html, commit_path and tag_path),
 // so the converter could have crossed the two paths, or filled the HTML notes
 // from the Markdown ones, and every gate would still have been green: an
 // assignment carries no branch for either of them to read.

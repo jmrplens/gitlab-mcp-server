@@ -1153,7 +1153,7 @@ func TestGetRawFileMetaData_APIError(t *testing.T) {
 // TestCreate_WithAllOptionalFields verifies the Create_WithAllOptionalFields handler.
 // The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (POST) responds with HTTP Created.
 // It asserts the path and branch of the result and that each optional field is
-// named in the body — the field's name only, never its value, which is what
+// named in the body: the field's name only, never its value, which is what
 // TestCreate_CommitFields_ReachGitLabWithTheirValues holds.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
@@ -1206,7 +1206,7 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 // TestUpdate_WithAllOptionalFields verifies the Update_WithAllOptionalFields handler.
 // The mock GitLab API at /api/v4/projects/42/repository/files/script.sh (PUT) responds with HTTP OK.
 // It asserts the path of the result and that each optional field is named in
-// the body — the field's name only, never its value, which is what
+// the body: the field's name only, never its value, which is what
 // TestUpdate_CommitFields_ReachGitLabWithTheirValues holds.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string

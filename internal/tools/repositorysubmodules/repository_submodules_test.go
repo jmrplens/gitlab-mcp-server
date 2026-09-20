@@ -79,8 +79,8 @@ func TestUpdate_Success(t *testing.T) {
 //
 // The forwarding half is what the name promised and the body did not do: until
 // this read the request, the option was a straight-line assignment under a
-// guard no assertion could see, so inverting the guard — sending an empty
-// message when the caller wrote one, and none when they did not — changed
+// guard no assertion could see, so inverting the guard (sending an empty
+// message when the caller wrote one, and none when they did not) changed
 // nothing any test looked at.
 func TestUpdate_WithCommitMessage(t *testing.T) {
 	var sent map[string]any

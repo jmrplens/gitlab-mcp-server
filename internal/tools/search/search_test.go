@@ -2612,7 +2612,7 @@ func TestIssues_ReadsTheBasicIssueKeysOffTheCapture(t *testing.T) {
 // agree, so a converter that reads a neighboring key produces a different row.
 // Neither gate sees this class: a straight-line assignment has no branch to
 // flip and no condition to evaluate, and each of these rows had exactly one
-// field read back, so blanking any of the other twenty-six left the suite green.
+// field read back, so blanking any of the other fields left the suite green.
 func TestSearchHandlers_EveryConvertedField_ComesFromItsOwnKey(t *testing.T) {
 	tests := []struct {
 		name  string
