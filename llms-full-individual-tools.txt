@@ -8618,7 +8618,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_resource_group_upcoming_jobs
 
-List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.
+List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.
 
 **Parameters:**
 
@@ -10312,7 +10312,7 @@ Update the authenticated user's global notification settings. Returns: the updat
 - `failed_pipeline` (boolean): Notify on pipeline failure
 - `fixed_pipeline` (boolean): Notify on pipeline fix
 - `issue_due` (boolean): Notify on issue due date
-- `level` (string): Notification level: disabled, participating, watch, global, mention, custom
+- `level` (string): Notification level: disabled, participating, watch, mention, custom
 - `merge_merge_request` (boolean): Notify on MR merge
 - `merge_when_pipeline_succeeds` (boolean): Notify on merge when pipeline succeeds
 - `moved_project` (boolean): Notify on project move
@@ -13413,7 +13413,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_create
 
-Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.
+Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.
 
 **Parameters:**
 
@@ -13429,7 +13429,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_release_link_create_batch
 
-Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.
+Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.
 
 **Parameters:**
 
@@ -13441,7 +13441,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_release_link_delete
 
-Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.
+Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list.
 
 **Parameters:**
 
@@ -13454,7 +13454,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_release_link_get
 
-Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.
+Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.
 
 **Parameters:**
 
@@ -13466,7 +13466,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_list
 
-List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.
+List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.
 
 **Parameters:**
 
@@ -13483,7 +13483,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_update
 
-Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.
+Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.
 
 **Parameters:**
 
@@ -13622,7 +13622,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_repository_archive
 
-Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.
+Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.
 
 **Parameters:**
 
@@ -14945,7 +14945,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_snippet_note_create
 
-Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_snippet_get.
+Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_project_snippet_get.
 
 **Parameters:**
 
@@ -15041,7 +15041,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_snippet_note_list
 
-List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get.
+List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_project_snippet_get.
 
 **Parameters:**
 
@@ -15656,11 +15656,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_settings
 
-Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.
+Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: gitlab_get_settings, gitlab_update_appearance.
 
 **Parameters:**
 
-- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size).
+- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size). A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

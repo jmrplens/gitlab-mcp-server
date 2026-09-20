@@ -881,32 +881,62 @@ Parameter guidance:
 - alert_metric_image_upload.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - appearance_update.message_background_color: hex_color. Source: Hex color string such as #e75e40 for the appearance banner background. Avoid: Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples.
 - appearance_update.message_font_color: hex_color. Source: Hex color string such as #ffffff for the appearance banner text. Avoid: Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples.
+- appearance_update.title: instance_brand_title. Source: Instance branding title shown in the GitLab UI header.
+- application_create.name: oauth_application_name. Source: Human-readable name for the OAuth application.
+- application_create.redirect_uri: oauth_redirect_uri. Source: Authorized callback URL the OAuth flow returns to.
+- application_create.scopes: oauth_scopes. Source: Space-delimited list of scopes GitLab OAuth supports.
+- application_delete.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.
+- application_renew_secret.id: oauth_application_id. Source: Numeric application ID from admin.application_list output.
+- broadcast_message_delete.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.
+- broadcast_message_get.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.
+- broadcast_message_update.id: broadcast_message_id. Source: Broadcast message numeric ID from admin.broadcast_message_list or admin.broadcast_message_get output.
+- cluster_agent_delete.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - cluster_agent_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - cluster_agent_register.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_create.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_get.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_list.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- cluster_agent_token_revoke.agent_id: cluster_agent_id. Source: Agent numeric ID from admin.cluster_agent_list or admin.cluster_agent_get output.
 - cluster_agent_token_revoke.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- db_migration_mark.version: migration_version. Source: The migration's timestamp version, as GitLab names it in the migration file.
 - dependency_proxy_delete.group_id: scope_group. Source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - error_tracking_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- error_tracking_delete.key_id: error_tracking_key_id. Source: Client key numeric ID from admin.error_tracking_list output.
 - error_tracking_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - error_tracking_get_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - error_tracking_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - error_tracking_update_settings.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- feature_delete.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
+- feature_set.name: feature_flag_name. Source: Feature flag name from admin.feature_list or admin.feature_list_definitions output.
+- feature_set.value: feature_flag_value. Source: Desired gate value: a boolean, a percentage, or a string GitLab accepts for the gate.
 - import_cancel_github.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- license_add.license: license_payload. Source: The encoded license text the administrator was issued, sent whole.
+- license_delete.id: license_id. Source: License numeric ID from admin.license_get or admin.license_add output.
+- plan_limits_change.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.
+- plan_limits_get.plan_name: plan_name. Source: Plan name whose limits are read or changed, for example default, free or premium.
 - secure_file_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - secure_file_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - secure_file_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - secure_file_list.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- settings_update.settings: settings_patch. Source: Map of setting keys to desired values, in the snake_case spelling the GitLab API expects.
 - terraform_state_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - terraform_state_lock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - terraform_state_unlock.name: terraform_state_name. Source: Terraform state name from the prompt or admin.terraform_state_list output. Avoid: Do not send the state name as id. Use params.name.
 - terraform_state_unlock.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - terraform_version_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- topic_delete.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.
+- topic_get.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.
+- topic_update.topic_id: topic_id. Source: Topic numeric ID from admin.topic_list or admin.topic_get output.
+- usage_data_track_event.event: usage_event_name. Source: The single internal event name to record.
 - usage_data_track_event.namespace_id: scope_namespace. Source: Namespace ID (numeric) of the target group or user namespace.
 - usage_data_track_event.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
+- usage_data_track_events.events: usage_event_batch. Source: Array of event objects to record in one request.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab-to-GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -2261,7 +2291,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.
 
 When to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote "origin"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.
-NOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.
+NOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.
 
 IMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):
 - HTTPS: https://gitlab.example.com/group/project.git
@@ -9031,7 +9061,7 @@ Action guidance:
 - get: Get a release by project_id and tag_name. Use this when a specific tag is known and detailed release notes/assets are needed.
 - get_latest: Get the latest release for a project. Use this when the task asks for the most recent release without knowing the tag name.
 - link_create: Create a single release asset link. The url must be an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url. To create several links at once (e.g. one per uploaded package file), use link_create_batch instead.
-- link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
+- link_create_batch: Create multiple release asset links in one call. Provide the release tag_name and a links array, each entry with a name and an absolute url. Use this instead of repeated link_create when attaching several assets at once, for example one link per file uploaded by package.publish_directory. Use absolute URLs returned by package publish actions for package assets.
 - link_delete: Delete a release asset link by link_id. Use to detach a downloadable asset from a release. The underlying file or package is not removed.
 - link_get: Get one release asset link by link_id. Use when the task references a specific release asset link.
 - link_list: List asset links attached to a release tag. Use to enumerate downloadable assets for a release before getting, updating, or deleting a specific link.
@@ -9049,7 +9079,7 @@ Parameter guidance:
 - get_latest.project_id: scope_project. Source: Project ID or full path that owns releases.
 - link_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_create.url: release_asset_absolute_url. Source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions. Avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
-- link_create_batch.links: release_asset_links. Source: Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute. Avoid: Prefer direct_asset_path over the deprecated filepath when setting a direct asset link., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
+- link_create_batch.links: release_asset_links. Source: Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute. Avoid: Do not call link_create once per asset when several are requested. Pass them all in the links array of link_create_batch., Do not put a single name and url at top level. Each link goes inside the links array., Prefer direct_asset_path over the deprecated filepath when setting a direct asset link., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
 - link_create_batch.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - link_get.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -9415,7 +9445,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>archive</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"format":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"project_id":{"type":"string"},"sha":{"type":"string"},"url":{"type":"string"}},"required":["project_id","format","url"],"type":"object"}
+{"additionalProperties":false,"properties":{"format":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"path":{"type":"string"},"project_id":{"type":"string"},"sha":{"type":"string"},"url":{"type":"string"}},"required":["project_id","format","url"],"type":"object"}
 ```
 
 </details>
@@ -10365,20 +10395,20 @@ Parameter guidance:
 - note_create.body. Source: The comment text the user wants to post. Markdown is supported. Avoid: body is the comment content, not a snippet content update. Updating the snippet body is snippet.update.
 - note_create.created_at. Source: Optional RFC 3339 timestamp to backdate the note. Requires admin or owner permissions. Avoid: created_at is ignored unless you have administrator or project/group owner permissions.
 - note_create.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_create.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_create.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_delete.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_delete.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_delete.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_delete.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_get.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_get.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_get.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_get.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_list.order_by. Source: Field to order notes by: created_at or updated_at. Avoid: Combine order_by with sort. Pass the field name, not a phrase like 'newest first'.
 - note_list.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_list.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_list.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - note_update.body. Source: The new comment text that replaces the existing note body. Markdown is supported. Avoid: This replaces the whole note body. It does not append to it.
 - note_update.note_id: note_id. Source: Numeric note ID from a prior snippet.note_list or snippet.note_create result. Avoid: note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list.
 - note_update.project_id: scope_project. Source: Project ID or full namespace path that owns the snippet. Avoid: Use the snippet's parent project here, not a group path or global snippet ID.
-- note_update.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_snippet_list or gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
+- note_update.snippet_id: snippet_id. Source: Numeric snippet ID from a prior gitlab_project_snippet_list result. Avoid: snippet_id is the project snippet ID, not the note_id.
 - project_content.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - project_create.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
 - project_delete.project_id: scope_project. Source: Project ID or URL-encoded path (e.g. "group/project").
@@ -11288,7 +11318,7 @@ Action guidance:
 - namespace_list: List namespaces (user and group namespaces) visible to the authenticated user. Use filters such as search, owned_only, top_level_only, order_by, sort, and pagination when scoping the result set.
 - namespace_search: Search namespaces by query string across name and path. Use when the user provides a partial namespace name or path fragment.
 - notification_global_get: Read the authenticated user's account-wide (global) notification settings. Use when the prompt asks what notifications a user receives by default, or before changing them with the global update action. Requires read_user token scope.
-- notification_global_update: Update the authenticated user's account-wide (global) notification settings. Set level (disabled, participating, watch, global, mention, custom), notification_email, and individual event flags when level is custom. Only the fields you pass are changed.
+- notification_global_update: Update the authenticated user's account-wide (global) notification settings. Set level (disabled, participating, watch, mention, custom), notification_email, and individual event flags when level is custom. Only the fields you pass are changed.
 - notification_group_get: Read the authenticated user's notification settings for one group. Use when the prompt asks how a user is notified for a specific group, or before overriding them with the group update action. Requires group membership.
 - notification_group_update: Update the authenticated user's notification settings for one group. Pass group_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom. Only the fields you pass are changed.
 - notification_project_get: Read the authenticated user's notification settings for one project. Use when the prompt asks how a user is notified for a specific project, or before overriding them with the project update action. Requires project membership.
@@ -11422,7 +11452,7 @@ Todos:
 
 Notifications:
 - notification_global_get: (no params)
-- notification_global_update: level (disabled/participating/watch/global/mention/custom), notification_email, close_issue, close_merge_request, failed_pipeline, fixed_pipeline, issue_due, merge_merge_request, merge_when_pipeline_succeeds, moved_project, new_epic, new_issue, new_merge_request, new_note, push_to_merge_request, reassign_issue, reassign_merge_request, reopen_issue, reopen_merge_request, success_pipeline
+- notification_global_update: level (disabled/participating/watch/mention/custom), notification_email, close_issue, close_merge_request, failed_pipeline, fixed_pipeline, issue_due, merge_merge_request, merge_when_pipeline_succeeds, moved_project, new_epic, new_issue, new_merge_request, new_note, push_to_merge_request, reassign_issue, reassign_merge_request, reopen_issue, reopen_merge_request, success_pipeline
 - notification_project_get / notification_project_update: project_id*. Update params: level, event booleans
 - notification_group_get / notification_group_update: group_id*. Update params: level, event booleans
 
@@ -21976,7 +22006,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_resource_group_upcoming_jobs
 
-List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.
+List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.
 
 **Parameters:**
 
@@ -23670,7 +23700,7 @@ Update the authenticated user's global notification settings. Returns: the updat
 - `failed_pipeline` (boolean): Notify on pipeline failure
 - `fixed_pipeline` (boolean): Notify on pipeline fix
 - `issue_due` (boolean): Notify on issue due date
-- `level` (string): Notification level: disabled, participating, watch, global, mention, custom
+- `level` (string): Notification level: disabled, participating, watch, mention, custom
 - `merge_merge_request` (boolean): Notify on MR merge
 - `merge_when_pipeline_succeeds` (boolean): Notify on merge when pipeline succeeds
 - `moved_project` (boolean): Notify on project move
@@ -26771,7 +26801,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_create
 
-Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.
+Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.
 
 **Parameters:**
 
@@ -26787,7 +26817,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_release_link_create_batch
 
-Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.
+Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.
 
 **Parameters:**
 
@@ -26799,7 +26829,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_release_link_delete
 
-Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.
+Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list.
 
 **Parameters:**
 
@@ -26812,7 +26842,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_release_link_get
 
-Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.
+Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.
 
 **Parameters:**
 
@@ -26824,7 +26854,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_list
 
-List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.
+List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.
 
 **Parameters:**
 
@@ -26841,7 +26871,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_link_update
 
-Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.
+Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.
 
 **Parameters:**
 
@@ -26980,7 +27010,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_repository_archive
 
-Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.
+Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.
 
 **Parameters:**
 
@@ -28303,7 +28333,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_snippet_note_create
 
-Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_snippet_get.
+Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_project_snippet_get.
 
 **Parameters:**
 
@@ -28399,7 +28429,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_snippet_note_list
 
-List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get.
+List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_project_snippet_get.
 
 **Parameters:**
 
@@ -29014,11 +29044,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_settings
 
-Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.
+Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: gitlab_get_settings, gitlab_update_appearance.
 
 **Parameters:**
 
-- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size).
+- `settings` (object) (required): Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size). A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
