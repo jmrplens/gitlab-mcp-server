@@ -1,6 +1,7 @@
 package adminspecs
 
 import (
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -24,8 +25,8 @@ func TestActionSpecs_MetadataInvariants(t *testing.T) {
 		}
 		names[spec.Name] = true
 
-		if spec.OwnerPackage != "adminspecs" {
-			t.Fatalf("%s OwnerPackage = %q, want adminspecs", spec.Name, spec.OwnerPackage)
+		if spec.OwnerPackage == "" {
+			t.Fatalf("%s OwnerPackage is empty", spec.Name)
 		}
 		if !spec.OpenWorld {
 			t.Fatalf("%s OpenWorld = false, want true", spec.Name)
@@ -52,6 +53,37 @@ func TestActionSpecs_MetadataInvariants(t *testing.T) {
 		if spec.Route.OutputSchema == nil {
 			t.Fatalf("%s Route.OutputSchema is nil", spec.Name)
 		}
+	}
+}
+
+// TestActionSpecs_OwnerPackage_IsThePackageTheHandlerComesFrom verifies that
+// every admin action names the domain package whose handler it routes to,
+// rather than this one, which declares the specs and issues no request of its
+// own.
+//
+// The owner is a join key rather than a label: the request inventory records a
+// package and nothing else, so an action owned by a package that issues nothing
+// can be joined to no recording at all, and one owned by the wrong package is
+// quietly credited with somebody else's requests. That second error is the one
+// R-PATH cannot catch by itself, which is why it is caught here.
+//
+// The oracle is the route rather than a second table, so this asserts a fact
+// about the tree instead of restating the constants it checks: every admin
+// handler takes the input type its own package declares, so the package path of
+// Route.InputType names the package that will issue the request. A
+// copy-pasted owner constant therefore fails here.
+func TestActionSpecs_OwnerPackage_IsThePackageTheHandlerComesFrom(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		t.Run(spec.Name, func(t *testing.T) {
+			if spec.Route.InputType == nil {
+				t.Fatalf("%s carries no input type to read an owner from", spec.Name)
+			}
+			pkgPath := spec.Route.InputType.PkgPath()
+			want := path.Base(pkgPath)
+			if spec.OwnerPackage != want {
+				t.Errorf("OwnerPackage = %q, want %q: the handler's input type is %s", spec.OwnerPackage, want, pkgPath)
+			}
+		})
 	}
 }
 

@@ -62,12 +62,16 @@
 // What no version of this can catch is an owner that names a real package and
 // the wrong one, because the recording joins on that name and nothing else.
 //
-// A package may nevertheless be silent for a reason, and internal/tools/adminspecs
-// is the whole of it today: it declares specs whose handlers live in other
-// packages, so its requests are recorded under the package that made them.
-// Such a package is held to a declaration with a reason, the way -scope=sdk
-// holds a client-go service to one, and a declaration that no longer describes
-// the tree is itself a finding.
+// A package may nevertheless be silent for a reason: it may declare specs
+// whose handlers live in other packages, so that its requests are recorded
+// under the packages that made them. Such a package is held to a declaration
+// with a reason, the way -scope=sdk holds a client-go service to one, and a
+// declaration that no longer describes the tree is itself a finding. No
+// package is declared today. internal/tools/adminspecs was the one entry, for
+// exactly that reason, until each of its 92 admin actions was given the domain
+// package its route names as its owner; naming the owner where the handler
+// lives is the better answer, because a declaration only excuses a join that
+// cannot be made while an owner that is true makes it.
 //
 // # Does the document validate
 //
