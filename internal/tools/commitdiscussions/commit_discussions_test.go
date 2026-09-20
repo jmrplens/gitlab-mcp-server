@@ -5,12 +5,18 @@ package commitdiscussions
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -284,14 +290,19 @@ func TestDeleteNote_NoteIDValidation(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Canceled Context Tests
 // ---------------------------------------------------------------------------.
+//
+// Each of the six drives its handler with a canceled context against
+// [testutil.ForbiddenHandler], which fails the test if any request arrives.
+// They used to mock an obliging GitLab instead, so the half of the claim that
+// matters — that the refusal comes from the handler rather than from the
+// instance — was asserted by nobody: a handler that dropped its ctx.Err()
+// guard and let client-go notice the cancellation would answer an error and
+// pass.
 
 // TestList_CancelledContext verifies the List_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID, CommitSHA: testCommitSHA})
 	if err == nil {
@@ -300,12 +311,9 @@ func TestList_CancelledContext(t *testing.T) {
 }
 
 // TestGet_CancelledContext verifies the Get_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID})
 	if err == nil {
@@ -314,12 +322,9 @@ func TestGet_CancelledContext(t *testing.T) {
 }
 
 // TestCreate_CancelledContext verifies the Create_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: "t"})
 	if err == nil {
@@ -328,12 +333,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 }
 
 // TestAddNote_CancelledContext verifies the AddNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestAddNote_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := AddNote(ctx, client, AddNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, Body: "t"})
 	if err == nil {
@@ -342,12 +344,9 @@ func TestAddNote_CancelledContext(t *testing.T) {
 }
 
 // TestUpdateNote_CancelledContext verifies the UpdateNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateNote_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, NoteID: 1, Body: "t"})
 	if err == nil {
@@ -356,12 +355,9 @@ func TestUpdateNote_CancelledContext(t *testing.T) {
 }
 
 // TestDeleteNote_CancelledContext verifies the DeleteNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteNote_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	err := DeleteNote(ctx, client, DeleteNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, NoteID: 1})
 	if err == nil {
@@ -422,6 +418,293 @@ func TestUpdateNote_APIError(t *testing.T) {
 	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID, NoteID: 99, Body: "x"})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Request Shape Tests
+// ---------------------------------------------------------------------------.
+//
+// What these handlers send GitLab is a block of straight-line assignments, and
+// no branch reads it: exchanging start_sha with head_sha, new_path with
+// old_path or order_by with sort leaves every mutant dead and every condition
+// covered while the comment lands on another line of another file, or the page
+// comes back ordered by "desc". The four below drive the handlers against a
+// mock that keeps the request and hold what GitLab received, with no two
+// values alike so an exchanged pair cannot pass for its neighbor.
+
+// captureRequestBody answers with response and keeps the request body it was
+// sent, so a test can hold what GitLab received rather than what the handler
+// returned.
+func captureRequestBody(t *testing.T, status int, response string, into *[]byte) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		*into = body
+		testutil.RespondJSON(w, status, response)
+	})
+}
+
+// decodeCreateSent reads a captured request body as the options client-go
+// encoded it, so an assertion names the field GitLab reads.
+func decodeCreateSent(t *testing.T, body []byte) gl.CreateCommitDiscussionOptions {
+	t.Helper()
+	var sent gl.CreateCommitDiscussionOptions
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("decode request body %q: %v", body, err)
+	}
+	return sent
+}
+
+// jsonString renders a value the way a request body reads, for a failure
+// message that shows the fields rather than the addresses %+v prints for the
+// pointers a diff position is made of.
+func jsonString(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", v, err)
+	}
+	return string(b)
+}
+
+// TestCreate_AnInlineComment_SendsTheAnchorGitLabHangsItOn pins every field of
+// the diff position a caller supplies, compared as one value so no field is
+// left unnamed: the three SHAs, the position type, both paths, both lines and
+// both endpoints of the line range. The whole anchor was unasserted, and it is
+// nine values of two types, so any two of the same type could be exchanged
+// without a test noticing.
+func TestCreate_AnInlineComment_SendsTheAnchorGitLabHangsItOn(t *testing.T) {
+	var captured []byte
+	client := testutil.NewTestClient(t, captureRequestBody(t, http.StatusCreated, `{"id":"d4","notes":[]}`, &captured))
+
+	_, err := Create(t.Context(), client, CreateInput{
+		ProjectID: testProjectID,
+		CommitSHA: testCommitSHA,
+		Body:      "needs a test",
+		Position: &PositionInput{
+			BaseSHA:      "base-sha",
+			StartSHA:     "start-sha",
+			HeadSHA:      "head-sha",
+			PositionType: "text",
+			NewPath:      "after.go",
+			NewLine:      12,
+			OldPath:      "before.go",
+			OldLine:      34,
+			LineRange: &LineRangeInput{
+				Start: &LinePositionInput{LineCode: "code-start", Type: "new", OldLine: 56, NewLine: 78},
+				End:   &LinePositionInput{LineCode: "code-end", Type: "old", OldLine: 90, NewLine: 11},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := &gl.NotePosition{
+		BaseSHA:      "base-sha",
+		StartSHA:     "start-sha",
+		HeadSHA:      "head-sha",
+		PositionType: "text",
+		NewPath:      "after.go",
+		NewLine:      12,
+		OldPath:      "before.go",
+		OldLine:      34,
+		LineRange: &gl.LineRange{
+			StartRange: &gl.LinePosition{LineCode: "code-start", Type: "new", OldLine: 56, NewLine: 78},
+			EndRange:   &gl.LinePosition{LineCode: "code-end", Type: "old", OldLine: 90, NewLine: 11},
+		},
+	}
+	if got := decodeCreateSent(t, captured).Position; !reflect.DeepEqual(got, want) {
+		t.Errorf("position sent = %s, want %s", jsonString(t, got), jsonString(t, want))
+	}
+}
+
+// TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave asserts that a
+// multi-line range with one endpoint reaches GitLab carrying that endpoint.
+// The guard collapsing a range to nil holds only when *both* endpoints are
+// absent, and reading it as "either" would drop a half-open range silently:
+// the comment would still be posted, on the single line the position names,
+// with the range the caller asked for gone.
+func TestCreate_AHalfOpenLineRange_KeepsTheEndpointTheCallerGave(t *testing.T) {
+	cases := []struct {
+		name  string
+		input *LineRangeInput
+		want  *gl.LineRange
+	}{
+		{
+			name:  "start alone",
+			input: &LineRangeInput{Start: &LinePositionInput{LineCode: "code-start", Type: "new", OldLine: 1, NewLine: 2}},
+			want:  &gl.LineRange{StartRange: &gl.LinePosition{LineCode: "code-start", Type: "new", OldLine: 1, NewLine: 2}},
+		},
+		{
+			name:  "end alone",
+			input: &LineRangeInput{End: &LinePositionInput{LineCode: "code-end", Type: "old", OldLine: 3, NewLine: 4}},
+			want:  &gl.LineRange{EndRange: &gl.LinePosition{LineCode: "code-end", Type: "old", OldLine: 3, NewLine: 4}},
+		},
+		{
+			name:  "neither endpoint",
+			input: &LineRangeInput{},
+			want:  nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured []byte
+			client := testutil.NewTestClient(t, captureRequestBody(t, http.StatusCreated, `{"id":"d5","notes":[]}`, &captured))
+
+			_, err := Create(t.Context(), client, CreateInput{
+				ProjectID: testProjectID,
+				CommitSHA: testCommitSHA,
+				Body:      "ranged comment",
+				Position: &PositionInput{
+					BaseSHA: "base-sha", StartSHA: "start-sha", HeadSHA: "head-sha",
+					PositionType: "text", NewPath: "after.go", NewLine: 12,
+					LineRange: tc.input,
+				},
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+
+			sent := decodeCreateSent(t, captured).Position
+			if sent == nil {
+				t.Fatalf("no position sent, request body was %s", captured)
+			}
+			if !reflect.DeepEqual(sent.LineRange, tc.want) {
+				t.Errorf("line_range sent = %s, want %s", jsonString(t, sent.LineRange), jsonString(t, tc.want))
+			}
+		})
+	}
+}
+
+// TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab asserts that each of the
+// three writing handlers sends the text and the backdate it was given. Nothing
+// read a request body here, so a handler that dropped created_at, or sent the
+// caller's text unnormalized, returned the mock's answer and passed. Each body
+// carries an escaped newline, which is what normalization turns into a real
+// one, and each case's text differs so no handler can pass on another's.
+func TestNoteWrites_TheBodyAndTheBackdate_ReachGitLab(t *testing.T) {
+	const backdate = "2026-01-06T07:08:09Z"
+	cases := []struct {
+		name     string
+		status   int
+		response string
+		sent     string
+		want     string
+		call     func(client *gitlabclient.Client, body string) error
+	}{
+		{
+			name:     "create",
+			status:   http.StatusCreated,
+			response: `{"id":"d6","notes":[]}`,
+			sent:     `opening\nthread`,
+			want:     "opening\nthread",
+			call: func(client *gitlabclient.Client, body string) error {
+				_, err := Create(t.Context(), client, CreateInput{
+					ProjectID: testProjectID, CommitSHA: testCommitSHA, Body: body, CreatedAt: backdate,
+				})
+				return err
+			},
+		},
+		{
+			name:     "add note",
+			status:   http.StatusCreated,
+			response: `{"id":41,"body":"x"}`,
+			sent:     `replying\nbelow`,
+			want:     "replying\nbelow",
+			call: func(client *gitlabclient.Client, body string) error {
+				_, err := AddNote(t.Context(), client, AddNoteInput{
+					ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID,
+					Body: body, CreatedAt: backdate,
+				})
+				return err
+			},
+		},
+		{
+			name:     "update note",
+			status:   http.StatusOK,
+			response: `{"id":42,"body":"x"}`,
+			sent:     `editing\nagain`,
+			want:     "editing\nagain",
+			call: func(client *gitlabclient.Client, body string) error {
+				_, err := UpdateNote(t.Context(), client, UpdateNoteInput{
+					ProjectID: testProjectID, CommitSHA: testCommitSHA, DiscussionID: testDiscussionID,
+					NoteID: 42, Body: body, CreatedAt: backdate,
+				})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured []byte
+			client := testutil.NewTestClient(t, captureRequestBody(t, tc.status, tc.response, &captured))
+
+			if err := tc.call(client, tc.sent); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+
+			var sent struct {
+				Body      *string    `json:"body"`
+				CreatedAt *time.Time `json:"created_at"`
+			}
+			if err := json.Unmarshal(captured, &sent); err != nil {
+				t.Fatalf("decode request body %q: %v", captured, err)
+			}
+			if sent.Body == nil || *sent.Body != tc.want {
+				t.Errorf("body sent = %s, want %q", jsonString(t, sent.Body), tc.want)
+			}
+			if sent.CreatedAt == nil || !sent.CreatedAt.Equal(time.Date(2026, 1, 6, 7, 8, 9, 0, time.UTC)) {
+				t.Errorf("created_at sent = %s, want %s", jsonString(t, sent.CreatedAt), backdate)
+			}
+		})
+	}
+}
+
+// TestList_OrderingAndPaging_ReachTheQueryAndThePageComesBack asserts the two
+// halves of a page: the six parameters the caller's ordering and paging turn
+// into, and the pagination block GitLab's headers turn into. Neither was read.
+// order_by and sort are both strings the same request carries, so exchanging
+// them would have sent order_by=desc; the block came from the response and a
+// zero one would have told a model there is no second page.
+func TestList_OrderingAndPaging_ReachTheQueryAndThePageComesBack(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "order_by", "created_at")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.AssertQueryParam(t, r, "page", "3")
+		testutil.AssertQueryParam(t, r, "per_page", "7")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok-9")
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{
+			Page: "3", PerPage: "7", Total: "45", TotalPages: "9", NextPage: "4", PrevPage: "2",
+		})
+	}))
+
+	out, err := List(t.Context(), client, ListInput{
+		ProjectID:  testProjectID,
+		CommitSHA:  testCommitSHA,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Page:       3,
+		PerPage:    7,
+		Pagination: "keyset",
+		PageToken:  "tok-9",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	want := toolutil.PaginationOutput{Page: 3, PerPage: 7, TotalItems: 45, TotalPages: 9, NextPage: 4, PrevPage: 2, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -595,6 +878,66 @@ func TestFormatNoteMarkdownString_SystemNoteOnRemovedLine(t *testing.T) {
 		noteHintsBlock
 	if got != want {
 		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatNoteMarkdownString_UnresolvedWholeFileNote pins the two states the
+// note card had never been rendered in: a resolvable note that is *not*
+// resolved, and a position naming a file and no line. The card read "resolved"
+// for every note that could carry a state, and a whole-file comment would have
+// hung a ":0" off its path.
+func TestFormatNoteMarkdownString_UnresolvedWholeFileNote(t *testing.T) {
+	n := NoteOutput{
+		ID:         13,
+		Author:     &toolutil.NoteUserOutput{Username: "dev"},
+		Body:       "this file needs a header",
+		Resolvable: true,
+		Position:   &toolutil.NotePositionOutput{PositionType: "file", NewPath: "internal/whole.go"},
+	}
+
+	got := FormatNoteMarkdownString(n)
+
+	want := "## Discussion Note #13\n\n" +
+		"- **Author**: @dev\n" +
+		"- **Resolvable**: unresolved\n" +
+		"- **Position**: `internal/whole.go`\n" +
+		"- **Body**: this file needs a header\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatNoteMarkdownString_APositionWithNoPath pins the card of a note
+// whose position carries the SHAs of the diff and no file at all: the row is
+// left out rather than written with an empty code span after the label.
+func TestFormatNoteMarkdownString_APositionWithNoPath(t *testing.T) {
+	got := FormatNoteMarkdownString(NoteOutput{
+		ID:       14,
+		Body:     "on the diff itself",
+		Position: &toolutil.NotePositionOutput{BaseSHA: "base-sha", HeadSHA: "head-sha"},
+	})
+
+	want := "## Discussion Note #14\n\n" +
+		"- **Body**: on the diff itself\n" +
+		noteHintsBlock
+	if got != want {
+		t.Errorf("note card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdownString_ResolvableButUnresolved pins the thread card of a
+// review thread still waiting on somebody: the state the card reads for every
+// open thread, which no test had rendered.
+func TestFormatMarkdownString_ResolvableButUnresolved(t *testing.T) {
+	got := FormatMarkdownString(Output{ID: "d7", Resolvable: true})
+
+	want := "## Discussion d7\n\n" +
+		"- **Individual Note**: ❌\n" +
+		"- **Resolvable**: unresolved\n" +
+		threadHintsBlock
+	if got != want {
+		t.Errorf("thread card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 
