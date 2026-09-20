@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 
@@ -320,7 +321,14 @@ func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input Dele
 // for a person to look at, and the assistant default otherwise.
 func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
 	embed := ""
-	if toolutil.IsImageFile(u.Alt) && toolutil.LinkableDestination(u.FullURL) {
+	// The file name is read from the URL and never from the alt text. GitLab
+	// derives alt from the file name and takes the extension off for an image
+	// or a video, so a PNG arrives as alt "screenshot" beside url
+	// "/uploads/<secret>/screenshot.png", and asking whether the alt text names
+	// an image answered no for every image an instance ever returned. The URL's
+	// last segment is the file name GitLab stored whatever it did to the alt
+	// text, so it answers the question under either behavior.
+	if toolutil.IsImageFile(path.Base(u.URL)) && toolutil.LinkableDestination(u.FullURL) {
 		// An image embed is a link with a '!' in front, so both halves want the
 		// same escaping MdTitleLink gives a link, applied here because the
 		// helper writes no '!'. The same allow list decides whether there is an

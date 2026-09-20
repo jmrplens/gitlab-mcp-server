@@ -851,12 +851,18 @@ func TestFormatUploadMarkdown_NoFullURL(t *testing.T) {
 // embed between the rows and the guidance, that the guidance still closes the
 // response so ExtractHints can read it, and that the block states the
 // audience the embed implies.
+//
+// The fixture is the answer GitLab really sends for a PNG: alt is the file
+// name with the extension taken off, which is what GitLab does for an image or
+// a video, so alt is "screenshot" while the URL keeps "screenshot.png". The
+// fixture used to give alt the extension, a shape no instance produces, and
+// that is what hid the embed reading the alt text instead of the file name.
 func TestUploadToolResult_Image(t *testing.T) {
 	out := UploadOutput{
-		Alt:      "screenshot.png",
+		Alt:      "screenshot",
 		URL:      "/uploads/a1b2/screenshot.png",
 		FullURL:  "https://gitlab.example.com/uploads/a1b2/screenshot.png",
-		Markdown: "![screenshot.png](/uploads/a1b2/screenshot.png)",
+		Markdown: "![screenshot](/uploads/a1b2/screenshot.png)",
 	}
 	result := UploadToolResult(out)
 	if result == nil || len(result.Content) != 1 {
@@ -867,11 +873,11 @@ func TestUploadToolResult_Image(t *testing.T) {
 		t.Fatalf("content block is %T, want *mcp.TextContent", result.Content[0])
 	}
 	want := "## File Uploaded\n\n" +
-		"- **Alt**: screenshot.png\n" +
+		"- **Alt**: screenshot\n" +
 		"- **Path**: /uploads/a1b2/screenshot.png\n" +
 		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
-		"- **Markdown**: `![screenshot.png](/uploads/a1b2/screenshot.png)`\n\n" +
-		"![screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **Markdown**: `![screenshot](/uploads/a1b2/screenshot.png)`\n\n" +
+		"![screenshot](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
 		uploadCardHints
 	if tc.Text != want {
 		t.Errorf("UploadToolResult() text =\n%q\nwant:\n%q", tc.Text, want)
@@ -924,10 +930,10 @@ func TestUploadToolResult_NonImage(t *testing.T) {
 // relative path renders as a broken image in a client that trusts it.
 func TestUploadToolResult_ImageWithUnlinkableFullURL_NoEmbed(t *testing.T) {
 	out := UploadOutput{
-		Alt:      "screenshot.png",
+		Alt:      "screenshot",
 		URL:      "/uploads/a1b2/screenshot.png",
 		FullURL:  "/uploads/a1b2/screenshot.png",
-		Markdown: "![screenshot.png](/uploads/a1b2/screenshot.png)",
+		Markdown: "![screenshot](/uploads/a1b2/screenshot.png)",
 	}
 	result := UploadToolResult(out)
 	if result == nil || len(result.Content) != 1 {
