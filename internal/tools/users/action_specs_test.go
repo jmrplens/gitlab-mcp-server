@@ -132,6 +132,63 @@ func TestActionSpecs_GetUserNotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetUserForbiddenIsReturnedAsAnError verifies that the
+// not-found wrapper answers only a 404. Both halves of its guard matter: with
+// the error check alone, any failure would be reported to the model as a user
+// that does not exist, which is the wrong instruction for a permission the
+// caller could ask for.
+func TestActionSpecs_GetUserForbiddenIsReturnedAsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	byTool := userSpecsByTool(t, ActionSpecs(client, false))
+
+	result, err := byTool["gitlab_get_user"].Route.Handler(t.Context(), map[string]any{"user_id": 42})
+	if err == nil {
+		t.Fatalf("Route.Handler(gitlab_get_user) = %#v, want the 403 as an error", result)
+	}
+	if _, isNotFound := result.(userNotFoundOutput); isNotFound {
+		t.Errorf("Route.Handler(gitlab_get_user) returned %T, want no not-found output for a 403", result)
+	}
+}
+
+// TestActionSpecs_InputSchemaOverridesReachTheSpec verifies that the enum
+// constraints a tool declares are carried on its spec, and that a tool
+// declaring none is left with none. Nothing else reads these back: they are
+// built in one branch and handed to the catalog, so a spec that silently lost
+// them would publish a free-text field where a closed set was meant.
+func TestActionSpecs_InputSchemaOverridesReachTheSpec(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
+
+	listOverrides := byTool["gitlab_list_users"].InputSchemaOverrides
+	if len(listOverrides) != 2 {
+		t.Fatalf("gitlab_list_users overrides = %+v, want the order_by and two_factor enums", listOverrides)
+	}
+	if got := byTool["gitlab_get_user"].InputSchemaOverrides; len(got) != 0 {
+		t.Errorf("gitlab_get_user overrides = %+v, want none", got)
+	}
+}
+
+// TestActionSpecs_EveryToolHasDiscoveryMetadata verifies the property that
+// makes the metadata lookup's miss branch unreachable: every individual tool
+// this package registers is either named in the switch or has an entry in
+// userToolMetadata. A tool falling through both would be served the
+// placeholder usage line, which says only that it executes a users action.
+func TestActionSpecs_EveryToolHasDiscoveryMetadata(t *testing.T) {
+	const placeholder = "Use to execute users domain action."
+
+	for _, spec := range ActionSpecs(newUserActionSpecClient(t), true) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if spec.Usage == placeholder {
+				t.Errorf("%s Usage is the placeholder; add an entry to userToolMetadata", spec.IndividualTool.Name)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Errorf("%s has no individual-tool description", spec.IndividualTool.Name)
+			}
+		})
+	}
+}
+
 // TestFormatUserNotFound verifies not-found result formatting for user lookups.
 func TestFormatUserNotFound(t *testing.T) {
 	result := formatUserNotFound(userNotFoundOutput{Identifier: "ID 999"})

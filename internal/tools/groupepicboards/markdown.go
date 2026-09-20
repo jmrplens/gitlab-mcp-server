@@ -60,9 +60,7 @@ func FormatOutputMarkdown(out Output) string {
 	if out.Group != nil {
 		c.Link("Group", out.Group.Name, out.Group.WebURL)
 	}
-	if names := labelNames(out.Labels); len(names) > 0 {
-		c.Field("Labels", strings.Join(names, ", "))
-	}
+	c.Field("Labels", strings.Join(labelNames(out.Labels), ", "))
 	c.Bool("Hide Backlog", out.HideBacklogList)
 	c.Bool("Hide Closed", out.HideClosedList)
 	if len(out.Lists) > 0 {

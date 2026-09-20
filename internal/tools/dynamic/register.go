@@ -79,8 +79,12 @@ const (
 	defaultMaxParamGuidanceItems = 2
 	minSegmentTerms              = 3
 	maxSegmentTerms              = 6
-	segmentTermBoost             = 90
-	toolManifestDetailURIBase    = "gitlab://tools/"
+	// minSegmentedQueryTerms is how many terms a query needs before the
+	// segmented pass runs over it. Each window is a full scoring pass over
+	// the catalog, so a query below this pays for the lexical pass alone.
+	minSegmentedQueryTerms    = 5
+	segmentTermBoost          = 90
+	toolManifestDetailURIBase = "gitlab://tools/"
 
 	actionAdminBroadcastMessageList = "admin.broadcast_message_list"
 	actionAdminSettingsGet          = "admin.settings_get"
@@ -2209,14 +2213,13 @@ func serviceAccountQueryVerb(terms []searchTerm) string {
 	return ""
 }
 
+// shouldRunSegmentedSearch reports whether a query has enough terms for the
+// segmented pass. It used to answer a query shorter than minSegmentTerms and
+// one longer than maxSegmentTerms on guards of their own, and neither decided
+// anything the comparison below does not: fewer than three terms is fewer
+// than five, and more than six is more than five.
 func shouldRunSegmentedSearch(terms []searchTerm, _ int) bool {
-	if len(terms) < minSegmentTerms {
-		return false
-	}
-	if len(terms) > maxSegmentTerms {
-		return true
-	}
-	return len(terms) >= 5
+	return len(terms) >= minSegmentedQueryTerms
 }
 
 func computeConfidence(matches []scoredActionEntry) []scoredActionEntry {

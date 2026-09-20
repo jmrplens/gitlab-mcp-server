@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -142,18 +143,21 @@ func TestGetGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_Success verifies that CreateGroupBoard succeeds when the GitLab API returns a valid response.
-// The test exercises the POST path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreateGroupBoard_Success verifies that CreateGroupBoard succeeds when the
+// GitLab API returns a valid response, and that the POST carries the caller's
+// name and nothing else. The body used to be decoded and thrown away, so a
+// handler that never sent the name at all would have passed.
 func TestCreateGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
+	var gotBody map[string]any
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"name":"New Board","group":{"id":42,"name":"mygroup"}}`)
 	})
 	client := testutil.NewTestClient(t, mux)
@@ -164,6 +168,9 @@ func TestCreateGroupBoard_Success(t *testing.T) {
 	}
 	if out.Name != "New Board" {
 		t.Errorf("name = %q, want %q", out.Name, "New Board")
+	}
+	if want := map[string]any{"name": "New Board"}; !reflect.DeepEqual(gotBody, want) {
+		t.Errorf("POST body = %#v, want %#v", gotBody, want)
 	}
 }
 
@@ -201,6 +208,51 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 	}
 	if out.Name != "Updated" {
 		t.Errorf("name = %q, want %q", out.Name, "Updated")
+	}
+}
+
+// TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet pins what the PUT body
+// carries for each optional input, one at a time. Every optional field of this
+// action is behind a guard, and until now no test read the request, so a guard
+// inverted, the caller's value dropped and an unset one sent as empty, was
+// invisible. Driving one field per case also tells the five guards apart: with
+// all five set at once, two swapped lines would still produce a body with all
+// five keys in it.
+func TestUpdateGroupBoard_SendsOnlyTheFieldTheCallerSet(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateGroupBoardInput
+		want  map[string]any
+	}{
+		{"nothing optional", UpdateGroupBoardInput{}, map[string]any{}},
+		{"name", UpdateGroupBoardInput{Name: "Renamed"}, map[string]any{"name": "Renamed"}},
+		{"assignee", UpdateGroupBoardInput{AssigneeID: 7}, map[string]any{"assignee_id": float64(7)}},
+		{"milestone", UpdateGroupBoardInput{MilestoneID: 9}, map[string]any{"milestone_id": float64(9)}},
+		{"labels", UpdateGroupBoardInput{Labels: []string{"bug", "urgent"}}, map[string]any{"labels": "bug,urgent"}},
+		{"weight", UpdateGroupBoardInput{Weight: 3}, map[string]any{"weight": float64(3)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPut)
+				if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+					t.Errorf("decode request body: %v", err)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Board"}`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			input := tc.input
+			input.GroupID, input.BoardID = toolutil.StringOrInt("42"), 1
+			if _, err := UpdateGroupBoard(context.Background(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(gotBody, tc.want) {
+				t.Errorf("PUT body = %#v, want %#v", gotBody, tc.want)
+			}
+		})
 	}
 }
 
@@ -336,15 +388,20 @@ func TestGetGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_Success verifies that CreateGroupBoardList succeeds when the GitLab API returns a valid response.
-// The test exercises the POST path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreateGroupBoardList_Success verifies that CreateGroupBoardList succeeds
+// when the GitLab API returns a valid response, and that the POST carries the
+// caller's label_id: the label is the only thing that says what the new column
+// collects, and nothing else in the suite reads the body.
 func TestCreateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
+	var gotBody map[string]any
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
 		}
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":12,"position":2,"label":{"id":8,"name":"Priority"}}`)
 	})
@@ -356,6 +413,9 @@ func TestCreateGroupBoardList_Success(t *testing.T) {
 	}
 	if out.Label == nil || out.Label.Name != "Priority" {
 		t.Errorf("label = %+v, want name Priority", out.Label)
+	}
+	if want := map[string]any{"label_id": float64(8)}; !reflect.DeepEqual(gotBody, want) {
+		t.Errorf("POST body = %#v, want %#v", gotBody, want)
 	}
 }
 
@@ -378,25 +438,34 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_Success verifies that UpdateGroupBoardList succeeds when the GitLab API returns a valid response.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestUpdateGroupBoardList_Success verifies that UpdateGroupBoardList succeeds
+// when the GitLab API returns a valid response, and that the PUT carries the
+// requested position. The position is the only thing this action changes, and
+// the response echoing it is no evidence that the request asked for it: the
+// mock answers 2 whatever it is sent.
 func TestUpdateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
+	var gotBody map[string]any
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodPut)
-		// GitLab returns the single updated list object — not an array; the
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		// GitLab returns the single updated list object, not an array; the
 		// handler bypasses the client-go wrapper that expects []*BoardList.
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
-	out, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{GroupID: toolutil.StringOrInt("42"), BoardID: 1, ListID: 10, Position: 2})
+	out, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{GroupID: toolutil.StringOrInt("42"), BoardID: 1, ListID: 10, Position: 3})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.Position != 2 {
 		t.Errorf("position = %d, want 2", out.Position)
+	}
+	if want := map[string]any{"position": float64(3)}; !reflect.DeepEqual(gotBody, want) {
+		t.Errorf("PUT body = %#v, want %#v", gotBody, want)
 	}
 }
 
@@ -461,7 +530,10 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // TestFormatGroupBoardMarkdown_AllFields pins the whole group board card: the
 // heading carrying the board's reference, one list item per field with the
 // group, milestone and assignee linked, the weight, the two visibility flags
-// as glyphs, and the columns as a nested table naming each one's scope.
+// as glyphs, and the columns as a nested table naming each one's scope. The
+// label list carries a nil entry and a nameless one because GitLab's arrays
+// carry both, and neither may reach the card as an empty name between two
+// commas.
 func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 	out := GroupBoardOutput{
 		ID:              1,
@@ -470,7 +542,7 @@ func TestFormatGroupBoardMarkdown_AllFields(t *testing.T) {
 		Milestone:       &MilestoneOutput{ID: 5, Title: "v1.0", WebURL: "https://gitlab.example.com/groups/mygroup/-/milestones/1"},
 		Assignee:        &BasicUserOutput{ID: 3, Username: "alice", WebURL: "https://gitlab.example.com/alice"},
 		Weight:          4,
-		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 2, Name: "feature"}},
+		Labels:          []*LabelDetailsOutput{{ID: 1, Name: "bug"}, nil, {ID: 3}, {ID: 2, Name: "feature"}},
 		HideBacklogList: true,
 		HideClosedList:  false,
 		Lists: []BoardListOutput{
@@ -581,7 +653,7 @@ const errExpCancelledCtx = "expected error for canceled context"
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
-// ListGroupBoards — API error, canceled context
+// ListGroupBoards: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestListGroupBoards_APIError verifies that ListGroupBoards returns a wrapped error when the GitLab API responds with an error status.
@@ -610,7 +682,7 @@ func TestListGroupBoards_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetGroupBoard — API error, canceled context
+// GetGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestGetGroupBoard_APIError verifies that GetGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -639,7 +711,7 @@ func TestGetGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CreateGroupBoard — API error, canceled context
+// CreateGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestCreateGroupBoard_APIError verifies that CreateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -655,20 +727,26 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_ValidationAPIError verifies that CreateGroupBoard_ValidationAPIError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreateGroupBoard_ValidationAPIError verifies that a refused creation
+// carries the name-and-scope hint. GitLab answers a rejected board name with
+// 400 on some paths and 422 on others, and the handler owes the same guidance
+// for both, so each code is driven rather than whichever one the fixture
+// happened to pick.
 func TestCreateGroupBoard_ValidationAPIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Name has already been taken"}`)
-	}))
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"Name has already been taken"}`)
+			}))
 
-	_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-	if !strings.Contains(err.Error(), "unique within the group") {
-		t.Fatalf("error = %q, want validation hint", err.Error())
+			_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), "unique within the group") {
+				t.Fatalf("error = %q, want validation hint", err.Error())
+			}
+		})
 	}
 }
 
@@ -685,7 +763,7 @@ func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateGroupBoard — API error, canceled context
+// UpdateGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestUpdateGroupBoard_APIError verifies that UpdateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -702,18 +780,24 @@ func TestUpdateGroupBoard_APIError(t *testing.T) {
 }
 
 // TestUpdateGroupBoard_ValidationAPIError verifies validation failures include
-// guidance about referenced assignee, milestone, label, and weight values.
+// guidance about referenced assignee, milestone, label, and weight values,
+// under either code GitLab refuses a board scope with: 400 and 422 share the
+// branch, so each is driven rather than only the one the fixture picked.
 func TestUpdateGroupBoard_ValidationAPIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"Invalid board scope"}`)
-	}))
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"Invalid board scope"}`)
+			}))
 
-	_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-	if !strings.Contains(err.Error(), "referenced assignee_id") {
-		t.Fatalf("error = %q, want validation hint", err.Error())
+			_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), "referenced assignee_id") {
+				t.Fatalf("error = %q, want validation hint", err.Error())
+			}
+		})
 	}
 }
 
@@ -730,7 +814,7 @@ func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteGroupBoard — API error, canceled context
+// DeleteGroupBoard: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDeleteGroupBoard_APIError verifies that DeleteGroupBoard returns a wrapped error when the GitLab API responds with an error status.
@@ -759,7 +843,7 @@ func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListGroupBoardLists — API error, canceled context
+// ListGroupBoardLists: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestListGroupBoardLists_APIError verifies that ListGroupBoardLists returns a wrapped error when the GitLab API responds with an error status.
@@ -788,7 +872,7 @@ func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetGroupBoardList — API error, canceled context
+// GetGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestGetGroupBoardList_APIError verifies that GetGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -817,7 +901,7 @@ func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CreateGroupBoardList — API error, canceled context
+// CreateGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestCreateGroupBoardList_APIError verifies that CreateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -833,20 +917,25 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_ValidationAPIError verifies that CreateGroupBoardList_ValidationAPIError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreateGroupBoardList_ValidationAPIError verifies a refused column
+// creation carries the duplicate-scope hint under either code GitLab refuses
+// one with: 400 and 422 share the branch, so each is driven rather than only
+// the one the fixture picked.
 func TestCreateGroupBoardList_ValidationAPIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"List already exists"}`)
-	}))
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"List already exists"}`)
+			}))
 
-	_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-	if !strings.Contains(err.Error(), "same scope already exists") {
-		t.Fatalf("error = %q, want duplicate scope hint", err.Error())
+			_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), "same scope already exists") {
+				t.Fatalf("error = %q, want duplicate scope hint", err.Error())
+			}
+		})
 	}
 }
 
@@ -863,7 +952,7 @@ func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateGroupBoardList — API error, canceled context, fallback, empty
+// UpdateGroupBoardList: API error, canceled context, fallback, empty
 // ---------------------------------------------------------------------------.
 
 // TestUpdateGroupBoardList_APIError verifies that UpdateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -892,7 +981,7 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DeleteGroupBoardList — API error, canceled context
+// DeleteGroupBoardList: API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDeleteGroupBoardList_APIError verifies that DeleteGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
@@ -921,7 +1010,7 @@ func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatGroupBoardMarkdown — minimal (no optional fields)
+// Formatter coverage: FormatGroupBoardMarkdown: minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
 // TestFormatGroupBoardMarkdown_Minimal pins the whole card of a board GitLab
@@ -944,7 +1033,7 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatListGroupBoardsMarkdown — empty
+// Formatter coverage: FormatListGroupBoardsMarkdown: empty
 // ---------------------------------------------------------------------------.
 
 // TestFormatListGroupBoardsMarkdown_Empty pins the whole render of a group
@@ -957,7 +1046,7 @@ func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatBoardListMarkdown — minimal (no optional fields)
+// Formatter coverage: FormatBoardListMarkdown: minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
 // TestFormatBoardListMarkdown_Minimal pins the whole card of a column with no
@@ -978,7 +1067,7 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatter coverage: FormatListBoardListsMarkdown — with data and empty
+// Formatter coverage: FormatListBoardListsMarkdown: with data and empty
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown_WithData pins the whole column list: the
@@ -1015,6 +1104,41 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	if got, want := FormatListBoardListsMarkdown(ListBoardListsOutput{}), "No board lists found.\n"; got != want {
 		t.Errorf("FormatListBoardListsMarkdown() = %q, want %q", got, want)
+	}
+}
+
+// TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind pins the Scope cell
+// for every scope GitLab gives a column, and for a scope object it sent with
+// nothing in it. Only the label and iteration kinds were driven before, so the
+// assignee and milestone arms of the scope decision were never taken at all,
+// and the emptiness checks beside each of them were never reached: a column
+// whose assignee has no username, or whose milestone or iteration has no
+// title, must read as the board's own backlog or closed column rather than as
+// a bare handle or a label with nothing after it.
+func TestFormatListBoardListsMarkdown_ScopeOfEachColumnKind(t *testing.T) {
+	cases := []struct {
+		name string
+		list BoardListOutput
+		want string
+	}{
+		{"label", BoardListOutput{ID: 1, Label: &LabelOutput{Name: "To Do"}}, "To Do"},
+		{"assignee", BoardListOutput{ID: 1, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "ada"}}, "@ada"},
+		{"milestone", BoardListOutput{ID: 1, Milestone: &MilestoneOutput{ID: 4, Title: "v1.0"}}, "Milestone: v1.0"},
+		{"iteration", BoardListOutput{ID: 1, Iteration: &IterationOutput{ID: 5, Title: "Sprint 4"}}, "Iteration: Sprint 4"},
+		{"label with no name", BoardListOutput{ID: 1, Label: &LabelOutput{}}, ""},
+		{"assignee with no username", BoardListOutput{ID: 1, Assignee: &BoardListAssigneeOutput{ID: 3}}, ""},
+		{"milestone with no title", BoardListOutput{ID: 1, Milestone: &MilestoneOutput{ID: 4}}, ""},
+		{"iteration with no title", BoardListOutput{ID: 1, Iteration: &IterationOutput{ID: 5}}, ""},
+		{"no scope at all", BoardListOutput{ID: 1}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatListBoardListsMarkdown(ListBoardListsOutput{Lists: []BoardListOutput{tc.list}})
+			want := "| 1 | " + tc.want + " | 0 | - | - |\n"
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListBoardListsMarkdown() = %q, want a row %q", md, want)
+			}
+		})
 	}
 }
 
@@ -1243,6 +1367,172 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 	if len(out.Boards) != 1 || out.Boards[0].Weight != 4 || !out.Boards[0].HideBacklogList {
 		t.Errorf("board[0] = %+v, want weight 4 and hide_backlog_list true", out.Boards)
 	}
+}
+
+// wholeGroupBoardJSON is a board answer in which no two fields of one object
+// agree: within each object every number, string, date and flag is distinct,
+// including the two visibility flags and the four timestamps of the nested
+// milestone and of the column's iteration. That is what makes a swapped pair
+// of assignments in the converters visible: with hide_backlog_list and
+// hide_closed_list both true, as in every other fixture here, exchanging those
+// two lines changes nothing a test can see. The iteration is spelled out to
+// the same depth although its converter is toolutil's shared one: with the
+// four date keys absent every date field of IterationOutput stayed empty, so
+// created_at could be read from updated_at, or start_date from due_date, and
+// nothing here would notice.
+const wholeGroupBoardJSON = `{
+	"id": 1,
+	"name": "Delivery",
+	"hide_backlog_list": true,
+	"hide_closed_list": false,
+	"weight": 3,
+	"group": {"id": 42, "name": "platform", "web_url": "https://gitlab.example.com/groups/platform"},
+	"milestone": {
+		"id": 44, "iid": 7, "group_id": 55, "title": "v1.0", "description": "first release",
+		"state": "active", "web_url": "https://gitlab.example.com/m/44",
+		"start_date": "2026-01-02", "due_date": "2026-03-04",
+		"created_at": "2026-01-05T06:07:08Z", "updated_at": "2026-02-09T10:11:12Z"
+	},
+	"assignee": {
+		"id": 11, "name": "Ada", "username": "ada", "state": "active",
+		"avatar_url": "https://gitlab.example.com/avatar/ada", "web_url": "https://gitlab.example.com/ada"
+	},
+	"labels": [{"id": 21, "name": "bug", "color": "#d9534f", "description": "a defect"}],
+	"lists": [{
+		"id": 31, "position": 5, "max_issue_count": 6, "max_issue_weight": 7,
+		"limit_metric": "all_metrics",
+		"label": {"id": 41, "name": "Doing", "color": "#5bc0de", "description": "in progress"},
+		"assignee": {"id": 51, "name": "Grace", "username": "grace"},
+		"milestone": {
+			"id": 61, "iid": 8, "group_id": 62, "title": "sprint-9", "description": "ninth",
+			"state": "closed", "web_url": "https://gitlab.example.com/m/61",
+			"start_date": "2026-04-01", "due_date": "2026-05-02",
+			"created_at": "2026-03-03T04:05:06Z", "updated_at": "2026-03-07T08:09:10Z"
+		},
+		"iteration": {
+			"id": 71, "iid": 9, "sequence": 10, "group_id": 72, "title": "Iteration 4",
+			"description": "week 4", "state": 2, "web_url": "https://gitlab.example.com/it/71",
+			"start_date": "2026-06-01", "due_date": "2026-07-02",
+			"created_at": "2026-05-03T04:05:06Z", "updated_at": "2026-05-07T08:09:10Z"
+		}
+	}]
+}`
+
+// wholeGroupBoardOutput is what the handlers must make of
+// [wholeGroupBoardJSON]: every field of the board, of its group, milestone,
+// assignee and labels, and of its one column with all four scope objects.
+func wholeGroupBoardOutput() GroupBoardOutput {
+	return GroupBoardOutput{
+		ID:   1,
+		Name: "Delivery",
+		Group: &GroupRefOutput{
+			ID: 42, Name: "platform", WebURL: "https://gitlab.example.com/groups/platform",
+		},
+		Milestone: &MilestoneOutput{
+			ID: 44, IID: 7, GroupID: 55, Title: "v1.0", Description: "first release",
+			State: "active", WebURL: "https://gitlab.example.com/m/44",
+			StartDate: "2026-01-02", DueDate: "2026-03-04",
+			CreatedAt: "2026-01-05T06:07:08Z", UpdatedAt: "2026-02-09T10:11:12Z",
+		},
+		Assignee: &BasicUserOutput{
+			ID: 11, Username: "ada", Name: "Ada", State: "active",
+			AvatarURL: "https://gitlab.example.com/avatar/ada", WebURL: "https://gitlab.example.com/ada",
+		},
+		Weight:          3,
+		Labels:          []*LabelDetailsOutput{{ID: 21, Name: "bug", Color: "#d9534f", Description: "a defect"}},
+		HideBacklogList: true,
+		HideClosedList:  false,
+		Lists:           []BoardListOutput{wholeBoardListOutput()},
+	}
+}
+
+// wholeBoardListOutput is the single column of [wholeGroupBoardJSON], which is
+// also the shape the board-list handlers must produce from the same object.
+func wholeBoardListOutput() BoardListOutput {
+	return BoardListOutput{
+		ID:       31,
+		Assignee: &BoardListAssigneeOutput{ID: 51, Name: "Grace", Username: "grace"},
+		Iteration: &IterationOutput{
+			ID: 71, IID: 9, Sequence: 10, GroupID: 72, Title: "Iteration 4",
+			Description: "week 4", State: 2, WebURL: "https://gitlab.example.com/it/71",
+			StartDate: "2026-06-01", DueDate: "2026-07-02",
+			CreatedAt: "2026-05-03T04:05:06Z", UpdatedAt: "2026-05-07T08:09:10Z",
+		},
+		Label:          &LabelOutput{Name: "Doing", Color: "#5bc0de", Description: "in progress"},
+		LimitMetric:    "all_metrics",
+		MaxIssueCount:  6,
+		MaxIssueWeight: 7,
+		Milestone: &MilestoneOutput{
+			ID: 61, IID: 8, GroupID: 62, Title: "sprint-9", Description: "ninth",
+			State: "closed", WebURL: "https://gitlab.example.com/m/61",
+			StartDate: "2026-04-01", DueDate: "2026-05-02",
+			CreatedAt: "2026-03-03T04:05:06Z", UpdatedAt: "2026-03-07T08:09:10Z",
+		},
+		Position: 5,
+	}
+}
+
+// TestGetGroupBoard_WholeShapeOfOneAnswer pins every field the board
+// converters fill, against a response in which no two values agree. Neither
+// gate can see a converter that reads the wrong neighbor, because an
+// assignment has no branch to flip; a whole-struct comparison against distinct
+// values is what notices, and it covers the nested group, milestone, assignee,
+// label and column shapes in one pass.
+func TestGetGroupBoard_WholeShapeOfOneAnswer(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, wholeGroupBoardJSON)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	got, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{GroupID: toolutil.StringOrInt("42"), BoardID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := wholeGroupBoardOutput(); !reflect.DeepEqual(got, want) {
+		t.Errorf("GetGroupBoard()\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// TestGetGroupBoardList_WholeShapeOfOneAnswer pins the column shape the SDK
+// path produces, for the same reason and against the same distinct values. It
+// is a path of its own rather than a repeat of the board test: here the column
+// comes from client-go's own struct and its limit_metric from the captured
+// response beside it, and only this test says the two are joined on the right
+// column.
+func TestGetGroupBoardList_WholeShapeOfOneAnswer(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/31", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, wholeBoardListJSON(t))
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	got, err := GetGroupBoardList(context.Background(), client, GetGroupBoardListInput{
+		GroupID: toolutil.StringOrInt("42"), BoardID: 1, ListID: 31,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := wholeBoardListOutput(); !reflect.DeepEqual(got, want) {
+		t.Errorf("GetGroupBoardList()\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// wholeBoardListJSON is the one column of [wholeGroupBoardJSON], taken from
+// that fixture rather than written out again so the two paths cannot drift
+// into agreeing with different objects.
+func wholeBoardListJSON(t *testing.T) string {
+	t.Helper()
+	var board struct {
+		Lists []json.RawMessage `json:"lists"`
+	}
+	if err := json.Unmarshal([]byte(wholeGroupBoardJSON), &board); err != nil {
+		t.Fatalf("read the board fixture: %v", err)
+	}
+	if len(board.Lists) != 1 {
+		t.Fatalf("board fixture has %d columns, want 1", len(board.Lists))
+	}
+	return string(board.Lists[0])
 }
 
 // TestBasicUserOutput_Nil verifies the assignee converter returns nil for a nil

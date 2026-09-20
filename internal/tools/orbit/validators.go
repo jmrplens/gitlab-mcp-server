@@ -73,7 +73,7 @@ func requireScopedNodes(query map[string]any, queryType string) error {
 	// Detect the common "id_range too wide" case specifically so the
 	// error message tells the user the exact issue, not just "no scope".
 	for _, n := range nodes {
-		if r, ok := n["id_range"].(map[string]any); ok && len(r) > 0 {
+		if r, ok := n["id_range"].(map[string]any); ok {
 			start, hasStart := toInt64(r["start"])
 			end, hasEnd := toInt64(r["end"])
 			if hasStart && hasEnd && (end-start) > 100000 {
@@ -136,7 +136,7 @@ func nodeHasScope(n map[string]any) bool {
 	// <= 100,000. The live API rejects wider ranges with a confusing
 	// "require node_ids or filters" error, so we mirror the check
 	// here to surface a precise actionable error.
-	if r, ok := n["id_range"].(map[string]any); ok && len(r) > 0 {
+	if r, ok := n["id_range"].(map[string]any); ok {
 		start, hasStart := toInt64(r["start"])
 		end, hasEnd := toInt64(r["end"])
 		if hasStart && hasEnd && (end-start) <= 100000 && (end-start) >= 0 {
@@ -197,7 +197,7 @@ func requireNeighborsShape(query map[string]any) error {
 		return errors.New("neighbors.node must be a non-empty string that references a top-level node's `id`; example: " +
 			`{"neighbors":{"node":"p"}}`)
 	}
-	if declared, hasDeclaredID := node["id"].(string); hasDeclaredID && declared != "" && declared != ref {
+	if declared, _ := node["id"].(string); declared != "" && declared != ref {
 		return fmt.Errorf("neighbors.node %q must match the top-level node's `id` %q; example: "+
 			`{"node":{"id":"p",...},"neighbors":{"node":"p"}}`, ref, declared)
 	}

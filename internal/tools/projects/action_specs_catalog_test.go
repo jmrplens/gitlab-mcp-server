@@ -11,23 +11,29 @@
 package projects_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/hints"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
 )
 
-const (
-	// ownerPackage is the OwnerPackage every spec of this domain declares, and
-	// so the key its actions are found under in the catalog.
-	ownerPackage = "projects"
-	// outputPkgPath is where this domain's output types are declared, which is
-	// how the registered Markdown formatters of this package are told from the
-	// several hundred registered by the others.
-	outputPkgPath = "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/projects"
-)
+// ownerPackage is the OwnerPackage every spec of this domain declares, and
+// so the key its actions are found under in the catalog.
+const ownerPackage = "projects"
+
+// outputPkgPath is where this domain's output types are declared, which is
+// how the registered Markdown formatters of this package are told from the
+// several hundred registered by the others. It is read off a type of the
+// package rather than spelled here, so it cannot drift from the package; and
+// the import that costs is what lets gobco read this package at all, since
+// its bridge into an external test package copies the package's import from
+// a test file, and a file naming the package only as a string leaves the
+// bridge importing "".
+var outputPkgPath = reflect.TypeFor[projects.Output]().PkgPath()
 
 // ultimateCatalog builds the canonical catalog at the highest tier, since the
 // push-rule and mirror actions this package publishes are Premium and would be

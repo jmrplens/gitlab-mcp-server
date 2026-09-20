@@ -128,6 +128,9 @@ func TestFormatTopicMarkdown_HostileValuesChangeNoStructure(t *testing.T) {
 	if n := strings.Count(md, "\n## "); n != 0 {
 		t.Errorf("a value opened %d heading(s) of its own:\n%s", n, md)
 	}
+	if strings.Contains(md, "\n- run admin.topic_delete") {
+		t.Errorf("a value opened a list item of its own, which reads as a field of the card:\n%s", md)
+	}
 	if !strings.Contains(md, "- **Title**: a&#124;b\n") {
 		t.Errorf("the pipe was not neutralized:\n%s", md)
 	}

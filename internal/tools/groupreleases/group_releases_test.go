@@ -4,7 +4,11 @@ package groupreleases
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -84,30 +88,29 @@ func TestList_Simple(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestList_MissingGroupID asserts that an empty group_id is refused by the
+// handler itself, naming the field, and that no request reaches GitLab: the
+// mock fails the test if one arrives, so the refusal cannot be the mock's.
 func TestList_MissingGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("List() expected error for missing group_id, got nil")
 	}
+	if !strings.Contains(err.Error(), "group_id") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
 }
 
-// TestList_CancelledContext verifies the List_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestList_CancelledContext asserts that a canceled context aborts the call
+// without contacting GitLab, which is what the forbidding mock holds: the
+// context is checked before the request is built.
 func TestList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{GroupID: "mygroup"})
-	if err == nil {
-		t.Fatal("List() expected error for canceled context, got nil")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("List() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -132,10 +135,11 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestList_APIError(t *testing.T) {
+// TestList_NotFound verifies that a 404 is the status the group_id hint is
+// attached to: the wrapped error names the operation and carries the suggestion
+// naming what to check. GitLab's own message is not asserted here because
+// client-go answers a 404 with its ErrNotFound sentinel and keeps no body.
+func TestList_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
@@ -148,15 +152,22 @@ func TestList_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("List() expected error for 404 response, got nil")
 	}
+	if !strings.Contains(err.Error(), "listGroupReleases") {
+		t.Errorf("error %q does not name the operation", err)
+	}
+	if !strings.Contains(err.Error(), "Suggestion: verify group_id with gitlab_group_get") {
+		t.Errorf("error %q does not carry the group_id hint", err)
+	}
 }
 
-// TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestList_ServerError(t *testing.T) {
+// TestList_Forbidden verifies that a status other than 404 is wrapped without
+// the group_id suggestion: a token that may not read the group is not a group
+// that does not exist, and offering the lookup hint there would send a model
+// after the wrong cause.
+func TestList_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"error":"internal"}`)
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"insufficient scope for this group"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -164,49 +175,101 @@ func TestList_ServerError(t *testing.T) {
 
 	_, err := List(context.Background(), client, ListInput{GroupID: "mygroup"})
 	if err == nil {
-		t.Fatal("List() expected error for 500 response, got nil")
+		t.Fatal("List() expected error for 403 response, got nil")
+	}
+	// The fixture message is not a status line, so finding it proves GitLab's
+	// own account of the refusal reaches the caller.
+	if !strings.Contains(err.Error(), "insufficient scope for this group") {
+		t.Errorf("error %q does not carry GitLab's message", err)
+	}
+	if strings.Contains(err.Error(), "Suggestion:") {
+		t.Errorf("error %q carries the 404-only hint", err)
 	}
 }
 
-// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestList_Pagination verifies that List forwards pagination parameters to the
+// GitLab API and parses the response metadata into the
+// [toolutil.PaginationOutput] it publishes.
+//
+// The middle-page case gives each of the six headers a number no other header
+// carries, so a block filled from the wrong header cannot pass the whole-struct
+// comparison; that is what a page-2-of-2 fixture could not hold, since Page and
+// TotalPages read the same there and swapping them changed nothing. The
+// last-page case keeps the other half: with no X-Next-Page, NextPage is zero
+// and HasMore is derived false.
 func TestList_Pagination(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
-			testutil.AssertQueryParam(t, r, "page", "2")
-			testutil.AssertQueryParam(t, r, "per_page", "10")
-			testutil.RespondJSONWithPagination(
-				w, http.StatusOK,
-				`[{"tag_name":"v0.9.0","name":"Old Release"}]`,
-				testutil.PaginationHeaders{
-					Page:       "2",
-					PerPage:    "10",
-					Total:      "11",
-					TotalPages: "2",
-					PrevPage:   "1",
-				},
-			)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+	cases := []struct {
+		name    string
+		page    int
+		perPage int
+		headers testutil.PaginationHeaders
+		want    toolutil.PaginationOutput
+	}{
+		{
+			name:    "middle page",
+			page:    2,
+			perPage: 10,
+			headers: testutil.PaginationHeaders{
+				Page:       "2",
+				PerPage:    "10",
+				Total:      "45",
+				TotalPages: "5",
+				NextPage:   "3",
+				PrevPage:   "1",
+			},
+			want: toolutil.PaginationOutput{
+				Page: 2, PerPage: 10, TotalItems: 45, TotalPages: 5,
+				NextPage: 3, PrevPage: 1, HasMore: true,
+			},
+		},
+		{
+			name:    "last page",
+			page:    5,
+			perPage: 10,
+			headers: testutil.PaginationHeaders{
+				Page:       "5",
+				PerPage:    "10",
+				Total:      "45",
+				TotalPages: "5",
+				PrevPage:   "4",
+			},
+			want: toolutil.PaginationOutput{
+				Page: 5, PerPage: 10, TotalItems: 45, TotalPages: 5,
+				PrevPage: 4, HasMore: false,
+			},
+		},
+	}
 
-	out, err := List(context.Background(), client, ListInput{
-		GroupID:         "mygroup",
-		PaginationInput: inputPagination(2, 10),
-	})
-	if err != nil {
-		t.Fatalf("List() unexpected error: %v", err)
-	}
-	if len(out.Releases) != 1 {
-		t.Fatalf("len(Releases) = %d, want 1", len(out.Releases))
-	}
-	if out.Pagination.TotalItems != 11 {
-		t.Errorf("Pagination.TotalItems = %d, want 11", out.Pagination.TotalItems)
-	}
-	if out.Pagination.TotalPages != 2 {
-		t.Errorf("Pagination.TotalPages = %d, want 2", out.Pagination.TotalPages)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
+					testutil.AssertQueryParam(t, r, "page", strconv.Itoa(tc.page))
+					testutil.AssertQueryParam(t, r, "per_page", strconv.Itoa(tc.perPage))
+					testutil.RespondJSONWithPagination(
+						w, http.StatusOK,
+						`[{"tag_name":"v0.9.0","name":"Old Release"}]`,
+						tc.headers,
+					)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := List(context.Background(), client, ListInput{
+				GroupID:         "mygroup",
+				PaginationInput: inputPagination(tc.page, tc.perPage),
+			})
+			if err != nil {
+				t.Fatalf("List() unexpected error: %v", err)
+			}
+			if len(out.Releases) != 1 {
+				t.Fatalf("len(Releases) = %d, want 1", len(out.Releases))
+			}
+			if out.Pagination != tc.want {
+				t.Errorf("Pagination = %+v, want %+v", out.Pagination, tc.want)
+			}
+		})
 	}
 }
 
@@ -319,7 +382,7 @@ const fullReleaseJSON = `[{
 	"commit_path":"/group/proj/-/commit/abc",
 	"tag_path":"/group/proj/-/tags/v3.0.0",
 	"author":{"id":7,"username":"rel","name":"Releaser","state":"active","avatar_url":"https://a","web_url":"https://u","created_at":"2025-12-01T00:00:00Z"},
-	"commit":{"id":"abcdef","short_id":"abc","title":"t","author_name":"an","author_email":"ae","authored_date":"2026-01-01T00:00:00Z","committer_name":"cn","committer_email":"ce","committed_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","message":"m","parent_ids":["p1"],"project_id":9,"web_url":"https://c","status":"success","stats":{"additions":1,"deletions":2,"total":3}},
+	"commit":{"id":"abcdef","short_id":"abc","title":"t","author_name":"an","author_email":"ae","authored_date":"2026-01-01T01:00:00Z","committer_name":"cn","committer_email":"ce","committed_date":"2026-01-01T02:00:00Z","created_at":"2026-01-01T03:00:00Z","message":"m","parent_ids":["p1"],"project_id":9,"web_url":"https://c","status":"success","stats":{"additions":1,"deletions":2,"total":3}},
 	"milestones":[{"id":1,"iid":2,"project_id":3,"title":"M1","description":"d","state":"active","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","due_date":"2026-02-01","start_date":"2026-01-15","web_url":"https://m","issue_stats":{"total":5,"closed":3}},null],
 	"evidences":[{"sha":"sha1","filepath":"/ev","collected_at":"2026-01-01T00:00:00Z"},null],
 	"assets":{"count":2,"evidence_file_path":"/evfile","sources":[{"format":"zip","url":"https://z"}],"links":[{"id":11,"name":"bin","url":"https://l","direct_asset_url":"https://d","external":true,"link_type":"package"},null]},
@@ -349,8 +412,22 @@ func TestList_FullNestedObjects(t *testing.T) {
 	if r.DescriptionHTML != "<p>notes</p>" {
 		t.Errorf("DescriptionHTML = %q", r.DescriptionHTML)
 	}
-	if r.CommitPath == "" || r.TagPath == "" {
-		t.Errorf("CommitPath/TagPath should be populated: %q %q", r.CommitPath, r.TagPath)
+	// The two timestamps are read through guards of their own, so each is held
+	// to the value GitLab sent for it rather than to being non-empty.
+	if r.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want the created_at GitLab sent", r.CreatedAt)
+	}
+	if r.ReleasedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("ReleasedAt = %q, want the released_at GitLab sent", r.ReleasedAt)
+	}
+	// Each path is held to its own value rather than to being populated: the two
+	// are strings of the same shape, so "both non-empty" is satisfied by a
+	// converter that reads the commit path into tag_path and the other way.
+	if r.CommitPath != "/group/proj/-/commit/abc" {
+		t.Errorf("CommitPath = %q, want the commit path", r.CommitPath)
+	}
+	if r.TagPath != "/group/proj/-/tags/v3.0.0" {
+		t.Errorf("TagPath = %q, want the tag path", r.TagPath)
 	}
 	assertFullAuthor(t, r.Author)
 	assertFullCommit(t, r.Commit)
@@ -365,7 +442,7 @@ func assertFullAuthor(t *testing.T, a *toolutil.AuthorOutput) {
 	// The fixture server sends an extra author.created_at field that is not part
 	// of the documented author subset; the trimmed toolutil.AuthorOutput must ignore it
 	// (version tolerance) while mapping the documented fields.
-	if a == nil || a.ID != 7 || a.Name != "Releaser" || a.State != "active" ||
+	if a == nil || a.ID != 7 || a.Username != "rel" || a.Name != "Releaser" || a.State != "active" ||
 		a.AvatarURL != "https://a" || a.WebURL != "https://u" {
 		t.Errorf("Author not fully mapped: %+v", a)
 	}
@@ -380,9 +457,20 @@ func assertFullCommit(t *testing.T, c *CommitOutput) {
 	// that are not part of the documented group-release commit subset; the
 	// trimmed CommitOutput must ignore them (version tolerance) while mapping the
 	// documented fields including web_url.
-	if c.ID != "abcdef" || c.ShortID != "abc" ||
-		c.WebURL != "https://c" || len(c.ParentIDs) != 1 {
-		t.Errorf("Commit not fully mapped: %+v", c)
+	if c.WebURL != "https://c" {
+		t.Errorf("Commit.WebURL = %q, want the commit page URL", c.WebURL)
+	}
+	// shapes.go says every base field is promoted from the shared commit shape,
+	// which nothing here held. The fixture gives each its own value, the three
+	// timestamps an hour apart, so a field read from the wrong one is visible.
+	want := toolutil.CommitOutput{
+		ID: "abcdef", ShortID: "abc", Title: "t",
+		AuthorName: "an", AuthorEmail: "ae", AuthoredDate: "2026-01-01T01:00:00Z",
+		CommitterName: "cn", CommitterEmail: "ce", CommittedDate: "2026-01-01T02:00:00Z",
+		CreatedAt: "2026-01-01T03:00:00Z", Message: "m", ParentIDs: []string{"p1"},
+	}
+	if !reflect.DeepEqual(c.CommitOutput, want) {
+		t.Errorf("Commit base fields = %+v, want %+v", c.CommitOutput, want)
 	}
 }
 
@@ -395,6 +483,19 @@ func assertFullMilestones(t *testing.T, ms []*toolutil.MilestoneOutput) {
 	if m.ID != 1 || m.IID != 2 || m.ProjectID != 3 || m.Title != "M1" || m.State != "active" ||
 		m.DueDate != "2026-02-01" || m.StartDate != "2026-01-15" || m.WebURL != "https://m" {
 		t.Errorf("Milestone not fully mapped: %+v", m)
+	}
+	// The three fields the check above leaves out, each held to the value the
+	// fixture sent for it rather than to being populated: title and description
+	// are both free text, and the two timestamps are a day apart, so a converter
+	// reading one into the other's field is visible here and nowhere else.
+	if m.Description != "d" {
+		t.Errorf("Milestone.Description = %q, want the description GitLab sent", m.Description)
+	}
+	if m.CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("Milestone.CreatedAt = %q, want the created_at GitLab sent", m.CreatedAt)
+	}
+	if m.UpdatedAt != "2026-01-02T00:00:00Z" {
+		t.Errorf("Milestone.UpdatedAt = %q, want the updated_at GitLab sent", m.UpdatedAt)
 	}
 	if m.IssueStats == nil || m.IssueStats.Total != 5 || m.IssueStats.Closed != 3 {
 		t.Errorf("Milestone.IssueStats not mapped: %+v", m.IssueStats)

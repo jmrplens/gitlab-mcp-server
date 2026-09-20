@@ -400,12 +400,18 @@ func TestComputeSHA256_ViaToolutil(t *testing.T) {
 	}
 }
 
-// TestStreamDownload_UnwritablePath verifies that streamDownloadPackageFile
-// returns an error when the output file cannot be created (e.g. parent is a file).
+// TestStreamDownload_UnwritablePath verifies that a download whose output path
+// has a regular file where a directory belongs is refused.
+//
+// The refusal comes from the confinement rather than from opening the file:
+// CanonicalDownloadOutputPath resolves the longest existing prefix and gets
+// ENOTDIR, so neither MkdirAll nor the create below it ever runs. The comment
+// here used to say os.Create failed, which gobco refutes: that arm is never
+// taken. TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked states the
+// same rule with the message it is actually refused by.
 func TestStreamDownload_UnwritablePath(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
 
-	// Create a file where a directory is expected, so os.Create fails.
 	blocker := filepath.Join(t.TempDir(), "blocker")
 	os.WriteFile(blocker, []byte("x"), 0o600)
 	badPath := filepath.Join(blocker, "sub", testOutputBin)
@@ -448,23 +454,42 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 
 // TestStreamDownload_DeadBranches documents why the error-return branches
 // inside streamDownloadPackageFile are unreachable through any public call
-// path:
+// path. The list is the one gobco reports as never evaluated both ways, so it
+// names every such branch rather than a selection of them:
 //
-//  1. FormatPackageURL error: the function only fails on invalid pid
-//     types in parseID. streamDownloadPackageFile always feeds it
-//     string(input.ProjectID), which parseID accepts unconditionally.
+//  1. FormatPackageURL error: reached, by the invalid-file-name cases of
+//     TestDownload_FileNameShapes. What is unreachable is the arm below it
+//     that leaves the hint empty: for a string project id, parseID accepts
+//     whatever it is given, so ErrInvalidFileName is the only error the call
+//     can return and errors.Is is never false there.
 //  2. NewRequest error: the only error path is url.PathUnescape on a
 //     malformed percent-encoded path. FormatPackageURL generates the
 //     path with PathEscape, so the result is always well-formed.
-//  3. outFile.Stat error: the file handle is still open, so Stat
-//     succeeds unconditionally under normal conditions.
-//  4. outFile.Sync error: fsync(2) genuinely fails with EINVAL on a named
+//  3. MkdirAll error: it fails where an ancestor exists and is not a
+//     directory, and CanonicalDownloadOutputPath has already refused that
+//     path. It resolves the longest existing prefix through EvalSymlinks,
+//     which answers ENOTDIR rather than ErrNotExist for a file used as a
+//     directory, and that is not the "not yet created" case it walks past.
+//     TestDownload_UnusableOutputPath_RefusedBeforeGitLabIsAsked is what
+//     pins the refusal, and it accepts either message for that reason.
+//  4. The second CanonicalDownloadOutputPath error: the same path resolved
+//     again now that the parent exists. Reaching it would mean the
+//     destination stopped being confined between the two calls, which is a
+//     race a test cannot stage; the call stays because a symlink planted
+//     under a directory this call just created is exactly what it guards.
+//  5. CreateDownloadOutputFile error: every destination a caller can name
+//     that would fail to open is refused by the confinement above, which
+//     checks the leaf's type as well as its roots. What is left is a
+//     filesystem that fails on open, which a unit test cannot stage.
+//  6. outFile.Sync error: fsync(2) genuinely fails with EINVAL on a named
 //     pipe, which is how TestStreamDownload_SyncErrorOnFIFO used to reach
 //     this branch. Confining output_path now refuses any destination that
 //     already exists and is not a regular file, so no caller-supplied path
 //     reaches Sync on a pipe any more; what is left are real I/O failures
 //     (a full or failing filesystem), which a unit test cannot stage. The
 //     wrap stays because those failures are what it names.
+//  7. outFile.Stat error: the file handle is still open, so Stat
+//     succeeds unconditionally under normal conditions.
 //
 // We assert the documented contract below: a happy-path download
 // streams the payload to disk, syncs the file, and reports its size

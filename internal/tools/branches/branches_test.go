@@ -6,6 +6,7 @@ package branches
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -456,13 +457,11 @@ func TestBranchGet_Success(t *testing.T) {
 	}
 }
 
-// TestBranchGet_EmptyProjectID verifies the BranchGet_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchGet_EmptyProjectID pins that a missing project_id is refused by
+// the handler itself. The mock forbids every request, so the refusal cannot be
+// GitLab's answer to a request built from an empty path.
 func TestBranchGet_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Get(context.Background(), client, GetInput{BranchName: "main"})
 	if err == nil {
@@ -491,13 +490,11 @@ func TestBranchDelete_Success(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_EmptyProjectID verifies the BranchDelete_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchDelete_EmptyProjectID pins that a missing project_id is refused
+// before anything is deleted: the mock forbids every request, so no delete can
+// have been issued against a path built from an empty project.
 func TestBranchDelete_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), client, DeleteInput{BranchName: "main"})
 	if err == nil {
@@ -562,13 +559,11 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingProjectID verifies that ProtectedBranchGet_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProtectedBranchGet_MissingProjectID pins that a missing project_id is
+// refused by the handler itself; the mock forbids every request, so nothing
+// was asked of GitLab.
 func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProtectedGet(context.Background(), client, ProtectedGetInput{
 		ProjectID:  "",
@@ -579,13 +574,11 @@ func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingBranchName verifies that ProtectedBranchGet_MissingBranchName returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProtectedBranchGet_MissingBranchName pins that a missing branch_name is
+// refused by the handler itself; the mock forbids every request, so nothing
+// was asked of GitLab.
 func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProtectedGet(context.Background(), client, ProtectedGetInput{
 		ProjectID:  "42",
@@ -596,13 +589,10 @@ func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_CancelledContext verifies the ProtectedBranchGet_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestProtectedBranchGet_CancelledContext asserts that a canceled context
+// aborts the call without contacting GitLab.
 func TestProtectedBranchGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -645,13 +635,11 @@ func TestProtectedBranchUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingProjectID verifies that ProtectedBranchUpdate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProtectedBranchUpdate_MissingProjectID pins that a missing project_id is
+// refused before any rule is changed; the mock forbids every request, so no
+// PATCH can have been issued.
 func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{
 		ProjectID:  "",
@@ -662,13 +650,11 @@ func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingBranchName verifies that ProtectedBranchUpdate_MissingBranchName returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestProtectedBranchUpdate_MissingBranchName pins that a missing branch_name
+// is refused before any rule is changed; the mock forbids every request, so no
+// PATCH can have been issued.
 func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{
 		ProjectID:  "42",
@@ -679,13 +665,10 @@ func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_CancelledContext verifies the ProtectedBranchUpdate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestProtectedBranchUpdate_CancelledContext asserts that a canceled context
+// aborts the call without changing any rule.
 func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -717,13 +700,11 @@ func TestDeleteMerged_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_MissingProjectID verifies that DeleteMerged_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeleteMerged_MissingProjectID pins that a missing project_id is refused
+// before the sweep starts: the mock forbids every request, so no branch can
+// have been deleted from a path built out of an empty project.
 func TestDeleteMerged_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := DeleteMerged(context.Background(), client, DeleteMergedInput{ProjectID: ""})
 	if err == nil {
@@ -745,13 +726,10 @@ func TestDeleteMerged_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_CancelledContext verifies the DeleteMerged_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeleteMerged_CancelledContext asserts that a canceled context aborts the
+// call without deleting any merged branch.
 func TestDeleteMerged_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -765,13 +743,15 @@ func TestDeleteMerged_CancelledContext(t *testing.T) {
 // Canceled context tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_CancelledContext verifies the BranchCreate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// Each canceled-context test below drives a mock that forbids every request,
+// which is what makes "without contacting GitLab" an assertion rather than a
+// sentence: the mocks these used to drive answered success, so a handler that
+// checked the context only after the call would have passed them all.
+
+// TestBranchCreate_CancelledContext asserts that a canceled context aborts the
+// call without creating anything.
 func TestBranchCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", BranchName: "x", Ref: "main"})
 	if err == nil {
@@ -779,13 +759,10 @@ func TestBranchCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchList_CancelledContext verifies the BranchList_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestBranchList_CancelledContext asserts that a canceled context aborts the
+// call without contacting GitLab.
 func TestBranchList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -793,13 +770,10 @@ func TestBranchList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchGet_CancelledContext verifies the BranchGet_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestBranchGet_CancelledContext asserts that a canceled context aborts the
+// call without contacting GitLab.
 func TestBranchGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -807,13 +781,10 @@ func TestBranchGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_CancelledContext verifies the BranchDelete_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestBranchDelete_CancelledContext asserts that a canceled context aborts the
+// call without deleting anything.
 func TestBranchDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", BranchName: "x"})
 	if err == nil {
@@ -821,13 +792,10 @@ func TestBranchDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_CancelledContext verifies the BranchProtect_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestBranchProtect_CancelledContext asserts that a canceled context aborts
+// the call without creating a protection rule.
 func TestBranchProtect_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Protect(ctx, client, ProtectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -835,13 +803,10 @@ func TestBranchProtect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_CancelledContext verifies the BranchUnprotect_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestBranchUnprotect_CancelledContext asserts that a canceled context aborts
+// the call without removing any protection.
 func TestBranchUnprotect_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Unprotect(ctx, client, UnprotectInput{ProjectID: "42", BranchName: "main"})
 	if err == nil {
@@ -849,13 +814,10 @@ func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestProtectedList_CancelledContext verifies the ProtectedList_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestProtectedList_CancelledContext asserts that a canceled context aborts
+// the call without contacting GitLab.
 func TestProtectedList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := ProtectedList(ctx, client, ProtectedListInput{ProjectID: "42"})
 	if err == nil {
@@ -867,65 +829,55 @@ func TestProtectedList_CancelledContext(t *testing.T) {
 // Empty ProjectID tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_EmptyProjectID verifies the BranchCreate_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchCreate_EmptyProjectID pins that a missing project_id is refused by
+// the handler itself; the mock forbids every request, so nothing was created.
 func TestBranchCreate_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{BranchName: "x", Ref: "main"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestBranchList_EmptyProjectID verifies the BranchList_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchList_EmptyProjectID pins that a missing project_id is refused by
+// the handler itself; the mock forbids every request, so no listing was asked
+// for.
 func TestBranchList_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestBranchProtect_EmptyProjectID verifies the BranchProtect_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchProtect_EmptyProjectID pins that a missing project_id is refused
+// by the handler itself; the mock forbids every request, so no protection rule
+// was created.
 func TestBranchProtect_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Protect(context.Background(), client, ProtectInput{BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestBranchUnprotect_EmptyProjectID verifies the BranchUnprotect_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchUnprotect_EmptyProjectID pins that a missing project_id is refused
+// by the handler itself; the mock forbids every request, so no protection was
+// removed. The refusal matters here because unprotect answers a 404 as
+// success, and a request built from an empty project would be one.
 func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Unprotect(context.Background(), client, UnprotectInput{BranchName: "main"})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
 	}
 }
 
-// TestProtectedList_EmptyProjectID verifies the ProtectedList_EmptyProjectID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestProtectedList_EmptyProjectID pins that a missing project_id is refused
+// by the handler itself; the mock forbids every request, so no listing was
+// asked for.
 func TestProtectedList_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ProtectedList(context.Background(), client, ProtectedListInput{})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
@@ -1114,9 +1066,9 @@ func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 // Converter edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilCommit verifies the ToOutput_NilCommit handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToOutput_NilCommit pins the converter on a branch GitLab sent without an
+// embedded commit: the commit key is omitted rather than published as an empty
+// object. It calls the converter directly and contacts no GitLab.
 func TestToOutput_NilCommit(t *testing.T) {
 	b := &gl.Branch{Name: "main", Protected: true}
 	out := ToOutput(b)
@@ -1125,9 +1077,9 @@ func TestToOutput_NilCommit(t *testing.T) {
 	}
 }
 
-// TestProtectedToOutput_EmptyAccessLevels verifies the ProtectedToOutput_EmptyAccessLevels handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestProtectedToOutput_EmptyAccessLevels pins the converter on a rule with no
+// access-level entries: the arrays stay nil rather than becoming empty ones.
+// It calls the converter directly and contacts no GitLab.
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
 	out := ProtectedToOutput(pb, toolutil.ProtectedBranchExtra{})
@@ -1374,9 +1326,10 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestMarkdownRegistry_BranchNotFound verifies that MarkdownRegistry_BranchNotFound returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestMarkdownRegistry_BranchNotFound pins what the registry renders for a
+// branch that does not exist: a result marked as an error, naming the branch
+// and the project and the action that lists the ones that do exist. It renders
+// the card directly and contacts no GitLab.
 func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})
 	if result == nil {
@@ -1655,9 +1608,10 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata pins the discovery metadata the catalog publishes
+// for the branch actions: ten tools, each owned by this package, each carrying
+// usage text, aliases and parameter guidance. It reads the specs and calls no
+// route.
 func TestActionSpecs_Metadata(t *testing.T) {
 	byTool := newBranchSpecsByTool(t)
 
@@ -1789,55 +1743,57 @@ func TestBranchCreate_GenericAPIError(t *testing.T) {
 	}
 }
 
-// TestBranchCreate_EmptyBranchName verifies the BranchCreate_EmptyBranchName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// Each branch_name refusal below drives a mock that forbids every request, so
+// the error can only have come from the handler. The empty mux these used to
+// drive answered 404 to anything, which unprotect reads as success and the
+// others as an error, so the refusal and GitLab's answer to a path with a hole
+// in it were indistinguishable.
+
+// TestBranchCreate_EmptyBranchName pins that an empty branch_name is refused
+// before any branch is created.
 func TestBranchCreate_EmptyBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"})
 	if err == nil {
 		t.Fatal("expected error for empty branch_name")
 	}
 }
 
-// TestBranchGet_EmptyBranchName verifies the BranchGet_EmptyBranchName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchGet_EmptyBranchName pins that an empty branch_name is refused
+// before anything is read.
 func TestBranchGet_EmptyBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for empty branch_name")
 	}
 }
 
-// TestBranchDelete_EmptyBranchName verifies the BranchDelete_EmptyBranchName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchDelete_EmptyBranchName pins that an empty branch_name is refused
+// before anything is deleted.
 func TestBranchDelete_EmptyBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for empty branch_name")
 	}
 }
 
-// TestBranchProtect_EmptyBranchName verifies the BranchProtect_EmptyBranchName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchProtect_EmptyBranchName pins that an empty branch_name is refused
+// before any protection rule is created.
 func TestBranchProtect_EmptyBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for empty branch_name")
 	}
 }
 
-// TestBranchUnprotect_EmptyBranchName verifies the BranchUnprotect_EmptyBranchName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestBranchUnprotect_EmptyBranchName pins that an empty branch_name is
+// refused before any protection is removed, which nothing else could tell:
+// unprotect answers a 404 as success, so the refusal has to happen here.
 func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected error for empty branch_name")
@@ -1902,12 +1858,16 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 // TestBranchGet_FullCommitMirror verifies that a branch's embedded commit object
 // is surfaced in full (id, dates, stats, last_pipeline, trailers, status) on the
 // canonical commit key rather than a flattened commit_id scalar.
+//
+// The fixture gives every field a value of its own, the two timestamps that
+// used to share one instant included, so that the converter's assignments can
+// be told apart from each other.
 func TestBranchGet_FullCommitMirror(t *testing.T) {
 	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gl/-/tree/main","commit":{` +
 		`"id":"abc123","short_id":"abc","title":"feat: x","message":"feat: x\n","author_name":"Ada","author_email":"ada@x.io",` +
 		`"authored_date":"2024-01-01T10:00:00Z","committer_name":"Bob","committer_email":"bob@x.io","committed_date":"2024-01-02T10:00:00Z",` +
-		`"created_at":"2024-01-02T10:00:00Z","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
-		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Signed-off-by":"Ada"},` +
+		`"created_at":"2024-01-03T11:30:00Z","web_url":"https://gl/-/commit/abc123","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
+		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Reviewed-by":"Bob"},` +
 		`"stats":{"additions":5,"deletions":2,"total":7},` +
 		`"last_pipeline":{"id":9,"iid":3,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc123","name":"build","web_url":"https://gl/pipelines/9","created_at":"2024-01-02T10:00:00Z","updated_at":"2024-01-02T11:00:00Z"}}}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1927,6 +1887,14 @@ func TestBranchGet_FullCommitMirror(t *testing.T) {
 
 // assertFullCommitMirror asserts that a CommitOutput surfaces every mirrored
 // gl.Commit field, including nested stats and last_pipeline sub-objects.
+//
+// Every field is held to a value of its own, which is what the fixture is
+// built for: the two name fields and the two address fields used to be read
+// back one apiece, so the author's address and the committer's name could
+// trade places in the converter and nothing would notice, and the three
+// timestamps were read back only for being non-empty while two of them
+// carried the same instant. A caller reads these keys out of the JSON result,
+// so a pair that trades places shows them the committer under author_email.
 func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 	t.Helper()
 	if c == nil {
@@ -1936,8 +1904,15 @@ func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 		"id":              {c.ID, "abc123"},
 		"short_id":        {c.ShortID, "abc"},
 		"title":           {c.Title, "feat: x"},
+		"message":         {c.Message, "feat: x\n"},
 		"author_name":     {c.AuthorName, "Ada"},
+		"author_email":    {c.AuthorEmail, "ada@x.io"},
+		"committer_name":  {c.CommitterName, "Bob"},
 		"committer_email": {c.CommitterEmail, "bob@x.io"},
+		"authored_date":   {c.AuthoredDate, "2024-01-01T10:00:00Z"},
+		"committed_date":  {c.CommittedDate, "2024-01-02T10:00:00Z"},
+		"created_at":      {c.CreatedAt, "2024-01-03T11:30:00Z"},
+		"web_url":         {c.WebURL, "https://gl/-/commit/abc123"},
 		"status":          {c.Status, "success"},
 	}
 	for field, v := range wantStr {
@@ -1948,11 +1923,17 @@ func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 	if c.ProjectID != 42 {
 		t.Errorf("commit project_id = %d, want 42", c.ProjectID)
 	}
-	if c.AuthoredDate == "" || c.CommittedDate == "" || c.CreatedAt == "" {
-		t.Errorf("commit dates not surfaced: %+v", c)
+	if got, want := toolutil.FormatTime(c.CommittedDate), "2 Jan 2024 10:00 UTC"; got != want {
+		t.Errorf("the display helper reads the committed date as %q, want %q", got, want)
 	}
-	if len(c.ParentIDs) != 2 || c.Trailers["Signed-off-by"] != "Ada" || len(c.ExtendedTrailers) != 1 {
-		t.Errorf("commit parent/trailers = %+v", c)
+	if len(c.ParentIDs) != 2 || c.ParentIDs[0] != "p1" || c.ParentIDs[1] != "p2" {
+		t.Errorf("commit parent_ids = %v, want [p1 p2]", c.ParentIDs)
+	}
+	if len(c.Trailers) != 1 || c.Trailers["Signed-off-by"] != "Ada" {
+		t.Errorf("commit trailers = %v, want Signed-off-by from Ada", c.Trailers)
+	}
+	if len(c.ExtendedTrailers) != 1 || c.ExtendedTrailers["Reviewed-by"] != "Bob" {
+		t.Errorf("commit extended_trailers = %v, want Reviewed-by from Bob", c.ExtendedTrailers)
 	}
 	assertCommitStats(t, c.Stats)
 	assertCommitLastPipeline(t, c.LastPipeline)
@@ -2344,4 +2325,355 @@ func TestProtect_UnreadableCapturedInheritedOnConflict(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// What the caller's optional values do to the request GitLab receives
+// ---------------------------------------------------------------------------.
+
+// protectRequest is the protected-branches request body as GitLab receives it.
+// The tests below decode it instead of matching the raw text, because a text
+// match over the whole body cannot say which array a value landed in.
+type protectRequest struct {
+	Name                      string              `json:"name"`
+	PushAccessLevel           *int                `json:"push_access_level"`
+	MergeAccessLevel          *int                `json:"merge_access_level"`
+	UnprotectAccessLevel      *int                `json:"unprotect_access_level"`
+	AllowForcePush            *bool               `json:"allow_force_push"`
+	CodeOwnerApprovalRequired *bool               `json:"code_owner_approval_required"`
+	AllowedToPush             []permissionRequest `json:"allowed_to_push"`
+	AllowedToMerge            []permissionRequest `json:"allowed_to_merge"`
+	AllowedToUnprotect        []permissionRequest `json:"allowed_to_unprotect"`
+}
+
+// permissionRequest is one allowed_to_{push,merge,unprotect} entry as GitLab
+// receives it.
+type permissionRequest struct {
+	ID          *int64 `json:"id"`
+	UserID      *int64 `json:"user_id"`
+	GroupID     *int64 `json:"group_id"`
+	DeployKeyID *int64 `json:"deploy_key_id"`
+	AccessLevel *int   `json:"access_level"`
+	Destroy     *bool  `json:"_destroy"`
+}
+
+// captureProtectRequest runs call against a mock answering method and path with
+// response, and returns the request body the handler built. The body is read
+// and stored on the mock's own goroutine and decoded on the test's, so a body
+// that does not parse is reported where it can abort the test.
+func captureProtectRequest(t *testing.T, method, path, response string, call func(*gitlabclient.Client) error) protectRequest {
+	t.Helper()
+
+	var raw []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading the request body: %v", err)
+			http.Error(w, "unreadable request body", http.StatusInternalServerError)
+			return
+		}
+		raw = body
+		testutil.RespondJSON(w, http.StatusOK, response)
+	}))
+
+	if err := call(client); err != nil {
+		t.Fatalf("handler returned an error: %v", err)
+	}
+	var got protectRequest
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("request body %q does not decode: %v", raw, err)
+	}
+	return got
+}
+
+// assertOptional compares one optional request field against what the caller
+// asked for. A key the body left out and a key carrying the zero value are
+// different requests, which is the whole point of the pointer, so the two are
+// reported apart rather than compared as values.
+func assertOptional[T comparable](t *testing.T, field string, got, want *T) {
+	t.Helper()
+	switch {
+	case want == nil && got != nil:
+		t.Errorf("%s = %v, want the key left out of the body", field, *got)
+	case want != nil && got == nil:
+		t.Errorf("%s left out of the body, want %v", field, *want)
+	case want != nil && got != nil && *got != *want:
+		t.Errorf("%s = %v, want %v", field, *got, *want)
+	}
+}
+
+// protectFlagCase is one optional-flag setting and the body it must produce.
+type protectFlagCase struct {
+	name          string
+	forcePush     *bool
+	codeOwner     *bool
+	wantForcePush *bool
+	wantCodeOwner *bool
+}
+
+// protectFlagCases sets one flag per case on purpose. With both carrying true,
+// a handler that dropped the caller's force-push flag and sent the CODEOWNERS
+// one twice would produce the same body as the correct one, so the cases that
+// matter are the ones where exactly one flag is set; false is asserted beside
+// true because dropping a flag and sending false look alike to a reader and
+// not to GitLab.
+func protectFlagCases() []protectFlagCase {
+	return []protectFlagCase{
+		{name: "force push allowed", forcePush: new(true), wantForcePush: new(true)},
+		{name: "force push refused", forcePush: new(false), wantForcePush: new(false)},
+		{name: "code owner approval required", codeOwner: new(true), wantCodeOwner: new(true)},
+		{name: "code owner approval not required", codeOwner: new(false), wantCodeOwner: new(false)},
+		{name: "neither flag set", forcePush: nil, codeOwner: nil},
+	}
+}
+
+// TestBranchProtect_OptionalFlagsReachGitLab pins that allow_force_push and
+// code_owner_approval_required reach GitLab exactly as the caller set them,
+// and that a flag the caller left unset is left out of the body rather than
+// sent as false. Nothing held this before: the tests that set the two flags
+// asserted the mock's own response, so a guard that never forwarded either
+// value changed nothing they could see.
+func TestBranchProtect_OptionalFlagsReachGitLab(t *testing.T) {
+	for _, c := range protectFlagCases() {
+		t.Run(c.name, func(t *testing.T) {
+			got := captureProtectRequest(t, http.MethodPost, pathProtectedBranches,
+				`{"id":1,"name":"main"}`,
+				func(client *gitlabclient.Client) error {
+					_, err := Protect(context.Background(), client, ProtectInput{
+						ProjectID:                 "42",
+						BranchName:                "main",
+						AllowForcePush:            c.forcePush,
+						CodeOwnerApprovalRequired: c.codeOwner,
+					})
+					return err
+				})
+			assertOptional(t, "allow_force_push", got.AllowForcePush, c.wantForcePush)
+			assertOptional(t, "code_owner_approval_required", got.CodeOwnerApprovalRequired, c.wantCodeOwner)
+		})
+	}
+}
+
+// TestProtectedUpdate_OptionalFlagsReachGitLab holds the update path to the
+// same contract as the protect path: the caller's two flags reach GitLab as
+// set, and an unset one is absent from the PATCH body.
+func TestProtectedUpdate_OptionalFlagsReachGitLab(t *testing.T) {
+	for _, c := range protectFlagCases() {
+		t.Run(c.name, func(t *testing.T) {
+			got := captureProtectRequest(t, http.MethodPatch, pathProtectedBranches+"/main",
+				`{"id":1,"name":"main"}`,
+				func(client *gitlabclient.Client) error {
+					_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{
+						ProjectID:                 "42",
+						BranchName:                "main",
+						AllowForcePush:            c.forcePush,
+						CodeOwnerApprovalRequired: c.codeOwner,
+					})
+					return err
+				})
+			assertOptional(t, "allow_force_push", got.AllowForcePush, c.wantForcePush)
+			assertOptional(t, "code_owner_approval_required", got.CodeOwnerApprovalRequired, c.wantCodeOwner)
+		})
+	}
+}
+
+// TestBranchProtect_AccessLevelsReachTheirOwnFields pins each coarse access
+// level on the key GitLab reads it from. The three levels differ from one
+// another because a fixture that protects a branch at 40 everywhere cannot
+// tell push, merge and unprotect apart: two of them could trade places and
+// every assertion would still hold.
+func TestBranchProtect_AccessLevelsReachTheirOwnFields(t *testing.T) {
+	got := captureProtectRequest(t, http.MethodPost, pathProtectedBranches,
+		`{"id":3,"name":"release/*"}`,
+		func(client *gitlabclient.Client) error {
+			_, err := Protect(context.Background(), client, ProtectInput{
+				ProjectID:            "42",
+				BranchName:           testReleaseWildcard,
+				PushAccessLevel:      30,
+				MergeAccessLevel:     40,
+				UnprotectAccessLevel: 60,
+			})
+			return err
+		})
+
+	if got.Name != testReleaseWildcard {
+		t.Errorf("name = %q, want %q", got.Name, testReleaseWildcard)
+	}
+	assertOptional(t, "push_access_level", got.PushAccessLevel, new(30))
+	assertOptional(t, "merge_access_level", got.MergeAccessLevel, new(40))
+	assertOptional(t, "unprotect_access_level", got.UnprotectAccessLevel, new(60))
+}
+
+// assertPermissionEntry pins one allowed_to_* entry field by field. Every id
+// the callers below hand it differs from every other, so an entry whose user
+// id was written to the entry id, or whose group id was written to the deploy
+// key, fails here rather than passing on a shared value.
+func assertPermissionEntry(t *testing.T, array string, got, want permissionRequest) {
+	t.Helper()
+	assertOptional(t, array+".id", got.ID, want.ID)
+	assertOptional(t, array+".user_id", got.UserID, want.UserID)
+	assertOptional(t, array+".group_id", got.GroupID, want.GroupID)
+	assertOptional(t, array+".deploy_key_id", got.DeployKeyID, want.DeployKeyID)
+	assertOptional(t, array+".access_level", got.AccessLevel, want.AccessLevel)
+	assertOptional(t, array+"._destroy", got.Destroy, want.Destroy)
+}
+
+// assertSingleEntry reports the one entry an allowed_to_* array must carry, or
+// fails when the array is not exactly one entry long.
+func assertSingleEntry(t *testing.T, array string, got []permissionRequest, want permissionRequest) {
+	t.Helper()
+	if len(got) != 1 {
+		t.Fatalf("%s has %d entries, want 1: %+v", array, len(got), got)
+	}
+	assertPermissionEntry(t, array, got[0], want)
+}
+
+// TestBranchProtect_PermissionEntriesReachTheirOwnArrays pins each
+// fine-grained permission entry on the array the caller put it in and on the
+// field it names. The check this replaces matched the serialized body as text
+// and shared one id between two arrays, so the entry id and the user id could
+// trade places and both assertions still found their value somewhere in the
+// body.
+func TestBranchProtect_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
+	got := captureProtectRequest(t, http.MethodPost, pathProtectedBranches,
+		`{"id":3,"name":"release/*"}`,
+		func(client *gitlabclient.Client) error {
+			_, err := Protect(context.Background(), client, ProtectInput{
+				ProjectID:          "42",
+				BranchName:         testReleaseWildcard,
+				AllowedToPush:      []BranchPermissionInput{{UserID: new(int64(11)), AccessLevel: new(30)}},
+				AllowedToMerge:     []BranchPermissionInput{{GroupID: new(int64(22))}},
+				AllowedToUnprotect: []BranchPermissionInput{{ID: new(int64(33)), Destroy: new(true)}},
+			})
+			return err
+		})
+
+	assertSingleEntry(t, "allowed_to_push", got.AllowedToPush,
+		permissionRequest{UserID: new(int64(11)), AccessLevel: new(30)})
+	assertSingleEntry(t, "allowed_to_merge", got.AllowedToMerge,
+		permissionRequest{GroupID: new(int64(22))})
+	assertSingleEntry(t, "allowed_to_unprotect", got.AllowedToUnprotect,
+		permissionRequest{ID: new(int64(33)), Destroy: new(true)})
+}
+
+// TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays holds the update
+// path to the same contract, and pins the rename beside it. The deploy key is
+// exercised here rather than on the protect path so all four ways of naming a
+// principal are covered once between the two.
+func TestProtectedUpdate_PermissionEntriesReachTheirOwnArrays(t *testing.T) {
+	got := captureProtectRequest(t, http.MethodPatch, pathProtectedBranches+"/main",
+		`{"id":1,"name":"main-renamed"}`,
+		func(client *gitlabclient.Client) error {
+			_, err := ProtectedUpdate(context.Background(), client, ProtectedUpdateInput{
+				ProjectID:          "42",
+				BranchName:         "main",
+				Name:               "main-renamed",
+				AllowedToPush:      []BranchPermissionInput{{DeployKeyID: new(int64(44))}},
+				AllowedToMerge:     []BranchPermissionInput{{GroupID: new(int64(55)), AccessLevel: new(40)}},
+				AllowedToUnprotect: []BranchPermissionInput{{UserID: new(int64(66))}},
+			})
+			return err
+		})
+
+	if got.Name != "main-renamed" {
+		t.Errorf("name = %q, want the rename to reach GitLab", got.Name)
+	}
+	assertSingleEntry(t, "allowed_to_push", got.AllowedToPush,
+		permissionRequest{DeployKeyID: new(int64(44))})
+	assertSingleEntry(t, "allowed_to_merge", got.AllowedToMerge,
+		permissionRequest{GroupID: new(int64(55)), AccessLevel: new(40)})
+	assertSingleEntry(t, "allowed_to_unprotect", got.AllowedToUnprotect,
+		permissionRequest{UserID: new(int64(66))})
+}
+
+// ---------------------------------------------------------------------------
+// What the catalog publishes about each action
+// ---------------------------------------------------------------------------.
+
+// TestActionSpecs_BranchGetRouteServerError pins that only a 404 becomes the
+// structured not-found card. Any other refusal reaches the caller as the error
+// it is, so a model is never told the branch does not exist when GitLab was
+// the thing that failed.
+func TestActionSpecs_BranchGetRouteServerError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+	}))
+	byTool := branchSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_branch_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "branch_name": "main"})
+	if err == nil {
+		t.Fatalf("Route.Handler error = nil, want the server failure; result = %#v", result)
+	}
+	if _, ok := result.(branchNotFoundOutput); ok {
+		t.Fatalf("result = %#v, want no not-found card for a 500", result)
+	}
+}
+
+// TestActionSpecs_Annotations pins the three hints every surface publishes for
+// each branch action: whether it only reads, whether it destroys, and whether
+// repeating it is safe. They are what a model reads before deciding to call
+// something without asking, so protecting a branch must not be published as
+// destructive and creating one must not be published as safe to repeat.
+func TestActionSpecs_Annotations(t *testing.T) {
+	byTool := newBranchSpecsByTool(t)
+
+	cases := []struct {
+		tool        string
+		readOnly    bool
+		destructive bool
+		idempotent  bool
+	}{
+		{"gitlab_branch_list", true, false, true},
+		{"gitlab_branch_get", true, false, true},
+		{"gitlab_protected_branches_list", true, false, true},
+		{"gitlab_protected_branch_get", true, false, true},
+		{"gitlab_branch_create", false, false, false},
+		{"gitlab_branch_protect", false, false, true},
+		{"gitlab_protected_branch_update", false, false, true},
+		{"gitlab_branch_delete", false, true, true},
+		{"gitlab_branch_delete_merged", false, true, true},
+		{"gitlab_branch_unprotect", false, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.tool, func(t *testing.T) {
+			spec, ok := byTool[c.tool]
+			if !ok {
+				t.Fatalf("%s is not published", c.tool)
+			}
+			if spec.ReadOnly != c.readOnly {
+				t.Errorf("ReadOnly = %v, want %v", spec.ReadOnly, c.readOnly)
+			}
+			if spec.Destructive != c.destructive {
+				t.Errorf("Destructive = %v, want %v", spec.Destructive, c.destructive)
+			}
+			if spec.Idempotent != c.idempotent {
+				t.Errorf("Idempotent = %v, want %v", spec.Idempotent, c.idempotent)
+			}
+		})
+	}
+}
+
+// TestBranchSpec_DestructiveRouteThatIsNotIdempotent pins the one flag
+// combination the published specs do not use today: a destructive action whose
+// repetition is not safe keeps idempotent false instead of being classified as
+// a delete, which would advertise that retrying it is harmless. Every
+// destructive branch action happens to be idempotent, so that half of the
+// classification is reachable only from here.
+func TestBranchSpec_DestructiveRouteThatIsNotIdempotent(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	spec := branchSpec("probe", toolutil.DestructiveVoidAction(client, Delete), "gitlab_branch_probe", false, false)
+
+	if !spec.Destructive {
+		t.Error("Destructive = false, want true for a destructive route")
+	}
+	if spec.Idempotent {
+		t.Error("Idempotent = true, want false when repeating the action is not safe")
+	}
+	if spec.ReadOnly {
+		t.Error("ReadOnly = true, want false for a destructive route")
+	}
 }

@@ -3,9 +3,12 @@ package waitpoll
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type pollItem struct {
@@ -106,6 +109,8 @@ func TestPoll_TerminalCanceledFailsWhenFailOnErrorIsOn(t *testing.T) {
 
 // TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError verifies failed
 // terminal states do not panic when the optional failure callback is omitted.
+// It leaves ProgressMessage nil as well, which is where the default
+// empty-message path is driven.
 func TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError(t *testing.T) {
 	opts, _ := pollOptions("failed")
 	opts.FailureError = nil
@@ -254,8 +259,16 @@ func TestPoll_ImmediateTimeoutReturnsBeforePolling(t *testing.T) {
 
 // TestPoll_PollReceivesTimeoutContext verifies a slow poller receives a context
 // bounded by timeout_seconds and Poll returns a timeout result when it expires.
+//
+// The deadline is its own rather than fastDuration's millisecond, because the
+// loop checks the deadline before its first poll and a runner that took longer
+// than that to set the wait up finds it already past: the call then returns a
+// timeout with no poll at all, which is a different thing from the one under
+// test here. It failed that way on a Windows runner, where the timer
+// granularity alone is fifteen times the bound.
 func TestPoll_PollReceivesTimeoutContext(t *testing.T) {
 	opts, _ := pollOptions("running")
+	opts.PollDuration = func(int) time.Duration { return 150 * time.Millisecond }
 	opts.Poll = func(ctx context.Context) (pollItem, error) {
 		<-ctx.Done()
 		return pollItem{}, ctx.Err()
@@ -389,6 +402,206 @@ func TestPoll_ContextCanceled(t *testing.T) {
 	}
 	if result != (Result[pollItem]{}) {
 		t.Fatalf("result = %#v, want zero result", result)
+	}
+}
+
+// TestPoll_DeadlineDuringALaterPollReturnsTheLastObservedItem verifies that when
+// the wait deadline expires while a later poll is in flight, the timed-out
+// result carries what the previous poll observed rather than a zero item.
+//
+// The only other test reaching that path blocks on the very first poll, where
+// the last observation is the zero value anyway, so both arguments carrying it
+// could be replaced by zeros and the suite would stay green. A caller whose job
+// was running when the wait ran out has to be told it was running: an empty
+// final_status reads as a job that never reported anything at all.
+func TestPoll_DeadlineDuringALaterPollReturnsTheLastObservedItem(t *testing.T) {
+	opts, _ := pollOptions("running")
+	opts.IntervalSeconds = 5
+	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return 300 * time.Millisecond
+		}
+		return 5 * time.Millisecond
+	}
+	polls := 0
+	opts.Poll = func(pollCtx context.Context) (pollItem, error) {
+		polls++
+		if polls == 1 {
+			return pollItem{Status: "running", Value: 1}, nil
+		}
+		<-pollCtx.Done() // outlive the wait deadline on the second attempt
+		return pollItem{}, pollCtx.Err()
+	}
+
+	result, err := Poll(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Poll() unexpected error: %v", err)
+	}
+	if !result.TimedOut || result.PollCount != 2 {
+		t.Fatalf("result = %#v, want a timeout on the second poll", result)
+	}
+	if result.FinalStatus != "running" || result.Item.Value != 1 {
+		t.Fatalf("result = %#v, want the first poll's running item", result)
+	}
+}
+
+// TestPoll_WaitedForReportsTheElapsedTime verifies both result constructors fill
+// WaitedFor with how long the wait actually took.
+//
+// Nothing asserted that field: deleting it from both constructors left the whole
+// suite green, while job.wait and pipeline.wait publish it as waited_for, which
+// is what tells a caller whether a wait that timed out had been running for a
+// second or for an hour. Each case below waits long enough that the field's
+// rounding to whole seconds cannot render it as "0s", so what is asserted is
+// elapsed time rather than a constant the code happens to produce.
+func TestPoll_WaitedForReportsTheElapsedTime(t *testing.T) {
+	const pastTheRounding = 700 * time.Millisecond
+
+	tests := []struct {
+		name         string
+		configure    func(opts *Options[pollItem])
+		wantTimedOut bool
+	}{
+		{
+			name: "terminal",
+			configure: func(opts *Options[pollItem]) {
+				opts.PollDuration = func(int) time.Duration { return time.Hour }
+				opts.Poll = func(context.Context) (pollItem, error) {
+					time.Sleep(pastTheRounding)
+					return pollItem{Status: "success"}, nil
+				}
+			},
+		},
+		{
+			name:         "timed out",
+			wantTimedOut: true,
+			configure: func(opts *Options[pollItem]) {
+				opts.PollDuration = func(seconds int) time.Duration {
+					if seconds == opts.TimeoutSeconds {
+						return pastTheRounding
+					}
+					return time.Hour
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, _ := pollOptions("running")
+			tc.configure(&opts)
+
+			result, err := Poll(context.Background(), opts)
+			if err != nil {
+				t.Fatalf("Poll() unexpected error: %v", err)
+			}
+			if result.TimedOut != tc.wantTimedOut {
+				t.Fatalf("TimedOut = %v, want %v", result.TimedOut, tc.wantTimedOut)
+			}
+			waited, err := time.ParseDuration(result.WaitedFor)
+			if err != nil {
+				t.Fatalf("WaitedFor = %q, want a duration: %v", result.WaitedFor, err)
+			}
+			if waited < time.Second {
+				t.Fatalf("WaitedFor = %q, want at least the %s this wait took", result.WaitedFor, pastTheRounding)
+			}
+		})
+	}
+}
+
+// progressToolInput and progressToolOutput carry the schemas of the stand-in
+// tool TestPoll_ProgressNotificationsNumberAndNameEachAttempt registers, since
+// Poll only reports progress through a real MCP session.
+type progressToolInput struct{}
+
+type progressToolOutput struct {
+	FinalStatus string `json:"final_status"`
+}
+
+// TestPoll_ProgressNotificationsNumberAndNameEachAttempt verifies that each
+// attempt sends one progress notification carrying that attempt's number and the
+// message ProgressMessage built for it.
+//
+// Every other test leaves Request nil, so the tracker is inactive and the whole
+// progress path is a no-op: it could be deleted, or handed attempt 0 for every
+// poll, without an assertion moving. That series is the only thing a caller sees
+// while a wait is running, and a wait that reports no progress looks to them
+// exactly like one that hung.
+func TestPoll_ProgressNotificationsNumberAndNameEachAttempt(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "waitpoll-test-server", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "wait_with_progress"},
+		func(callCtx context.Context, req *mcp.CallToolRequest, _ progressToolInput) (*mcp.CallToolResult, progressToolOutput, error) {
+			opts, _ := pollOptions("running", "running", "success")
+			opts.Request = req
+			opts.IntervalSeconds = 5
+			opts.TimeoutSeconds = 1
+			opts.PollDuration = func(seconds int) time.Duration {
+				if seconds == opts.TimeoutSeconds {
+					return 10 * time.Second
+				}
+				return time.Millisecond
+			}
+			opts.ProgressMessage = func(attempt int) string { return fmt.Sprintf("attempt %d", attempt) }
+
+			result, err := Poll(callCtx, opts)
+			if err != nil {
+				return nil, progressToolOutput{}, err
+			}
+			return nil, progressToolOutput{FinalStatus: result.FinalStatus}, nil
+		})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	notifications := make(chan *mcp.ProgressNotificationParams, 8)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "waitpoll-test-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			select {
+			case notifications <- req.Params:
+			default:
+			}
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	res, err := clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "wait_with_progress",
+		Arguments: map[string]any{},
+		Meta:      mcp.Meta{"progressToken": "waitpoll-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("CallTool result reports an error: %+v", res.Content)
+	}
+
+	for attempt := 1; attempt <= 3; attempt++ {
+		select {
+		case params := <-notifications:
+			if params.Progress != float64(attempt) {
+				t.Errorf("notification %d: progress = %v, want %d", attempt, params.Progress, attempt)
+			}
+			if want := fmt.Sprintf("attempt %d", attempt); params.Message != want {
+				t.Errorf("notification %d: message = %q, want %q", attempt, params.Message, want)
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for progress notification %d", attempt)
+		}
 	}
 }
 

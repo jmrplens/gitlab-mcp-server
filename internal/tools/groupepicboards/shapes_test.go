@@ -1,16 +1,14 @@
 // shapes_test.go validates the documented group-epic-board sub-object mirrors
 // (group, label details with the raw-superset fields, and board list label
-// scope) and the time-formatting helper, covering both the fully-populated and
-// nil branches of every converter per the doc-grounded reconcile.
+// scope), covering both the fully-populated and nil branches of every
+// converter per the doc-grounded reconcile, and holding each published label
+// key to the raw-superset field of the same name.
 package groupepicboards
 
 import (
 	"testing"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
-
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // TestConvertersNil verifies that every sub-object converter returns nil (or a
@@ -36,17 +34,6 @@ func TestConvertersNil(t *testing.T) {
 	}
 }
 
-// TestTimeHelper verifies the RFC3339 helper across nil and populated inputs.
-func TestTimeHelper(t *testing.T) {
-	if got := toolutil.FormatTimePtr(nil); got != "" {
-		t.Errorf("toolutil.FormatTimePtr(nil) = %q, want empty", got)
-	}
-	tm := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	if got := toolutil.FormatTimePtr(&tm); got != "2024-01-02T03:04:05Z" {
-		t.Errorf("formatTimePtr = %q", got)
-	}
-}
-
 // TestToOutputFullyPopulated verifies that toOutput surfaces every documented
 // nested sub-object (group trimmed to id/name/web_url, the raw-superset label
 // details including title/group_id/template/created_at, and the list label
@@ -63,7 +50,7 @@ func TestToOutputFullyPopulated(t *testing.T) {
 			{
 				ID: 10, Name: "Priority", Color: "#f00", Description: "p", DescriptionHTML: "<p>p</p>", TextColor: "#fff",
 				Title: "Priority", GroupID: 7, ProjectID: 0, Template: false,
-				CreatedAt: "2023-01-27T10:40:59.738Z", UpdatedAt: "2023-01-27T10:40:59.738Z",
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
 			},
 			nil,
 		},
@@ -105,8 +92,19 @@ func assertFullLabels(t *testing.T, out Output) {
 	if l.Color != "#f00" || l.DescriptionHTML != "<p>p</p>" || l.TextColor != "#fff" {
 		t.Errorf("LabelDetails core = %+v", l)
 	}
-	if l.Title != "Priority" || l.GroupID != 7 || l.CreatedAt == "" || l.UpdatedAt == "" {
+	if l.Title != "Priority" || l.GroupID != 7 {
 		t.Errorf("LabelDetails superset = %+v", l)
+	}
+	// The label's own id, its absent project scope and the template flag are
+	// held here too: this fixture is a group label, so an id read from
+	// project_id surfaces as 0 and a project_id read from id surfaces as 10.
+	if l.ID != 10 || l.ProjectID != 0 || l.Template {
+		t.Errorf("LabelDetails identity = %+v, want id 10, no project scope, not a template", l)
+	}
+	// Distinct instants, so a converter that reads created_at where it should
+	// read updated_at is caught here rather than passing on equal values.
+	if l.CreatedAt != labelCreatedAt || l.UpdatedAt != labelUpdatedAt {
+		t.Errorf("LabelDetails timestamps = %q/%q, want %q/%q", l.CreatedAt, l.UpdatedAt, labelCreatedAt, labelUpdatedAt)
 	}
 }
 
@@ -127,14 +125,77 @@ func assertFullList(t *testing.T, out Output) {
 	}
 }
 
+// TestLabelDetailsOutputEachKeyFromItsOwnField verifies that labelDetailsOutput
+// publishes every key from the raw-superset field of the same name, comparing
+// the whole converted struct rather than a chosen few fields. Two cases are
+// needed to separate the three int64 fields the label entity carries: a group
+// label leaves project_id at zero while id and group_id differ, and a
+// project-scoped template label leaves group_id at zero while id and project_id
+// differ, so an assignment reading an adjacent field cannot pass both. The
+// second case describes the label entity GitLab serializes, not a claim that an
+// epic board scopes a project label; it is what gives project_id and template
+// values of their own to be read back.
+func TestLabelDetailsOutputEachKeyFromItsOwnField(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *labelDetailsAPI
+		want LabelDetailsOutput
+	}{
+		{
+			name: "group label",
+			in: &labelDetailsAPI{
+				ID: 10, Name: "Priority", Color: "#f00", Description: "p",
+				DescriptionHTML: "<p>p</p>", TextColor: "#fff",
+				Title: "Priority", GroupID: 7, ProjectID: 0, Template: false,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+			want: LabelDetailsOutput{
+				ID: 10, Name: "Priority", Title: "Priority", Color: "#f00",
+				Description: "p", DescriptionHTML: "<p>p</p>", TextColor: "#fff",
+				GroupID: 7, ProjectID: 0, Template: false,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+		},
+		{
+			name: "project scoped template label",
+			in: &labelDetailsAPI{
+				ID: 11, Name: "Bug", Color: "#00f", Description: "b",
+				DescriptionHTML: "<p>b</p>", TextColor: "#000",
+				Title: "Bug", GroupID: 0, ProjectID: 42, Template: true,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+			want: LabelDetailsOutput{
+				ID: 11, Name: "Bug", Title: "Bug", Color: "#00f",
+				Description: "b", DescriptionHTML: "<p>b</p>", TextColor: "#000",
+				GroupID: 0, ProjectID: 42, Template: true,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := labelDetailsOutput(tt.in)
+			if got == nil {
+				t.Fatal("labelDetailsOutput() = nil, want a converted label")
+			}
+			if *got != tt.want {
+				t.Errorf("labelDetailsOutput() = %+v, want %+v", *got, tt.want)
+			}
+		})
+	}
+}
+
 // TestMarkdownHelpersNil verifies the markdown label helpers tolerate nil and
-// empty inputs.
+// empty inputs: a label GitLab sent without a name is skipped exactly like a
+// nil one, and a column whose label carries no name is still named by its
+// list type rather than rendered blank.
 func TestMarkdownHelpersNil(t *testing.T) {
 	if got := labelNames(nil); got != nil {
 		t.Errorf("labelNames(nil) = %v, want nil", got)
 	}
-	if got := labelNames([]*LabelDetailsOutput{nil, {Name: "a"}}); len(got) != 1 || got[0] != "a" {
-		t.Errorf("labelNames filtered = %v", got)
+	if got := labelNames([]*LabelDetailsOutput{nil, {ID: 5}, {Name: "a"}}); len(got) != 1 || got[0] != "a" {
+		t.Errorf("labelNames filtered = %v, want [a] with the nil and the unnamed label dropped", got)
 	}
 	if got := listScope(BoardListOutput{}); got != "" {
 		t.Errorf("listScope(no label, no type) = %q, want empty", got)
@@ -146,6 +207,11 @@ func TestMarkdownHelpersNil(t *testing.T) {
 	// list type is what names it.
 	if got := listScope(BoardListOutput{ListType: "closed"}); got != "closed" {
 		t.Errorf("listScope(no label) = %q, want closed", got)
+	}
+	// A label object carrying no name is the same absence as no label at all,
+	// so the list type names the column instead of it rendering blank.
+	if got := listScope(BoardListOutput{Label: &ListLabelOutput{ID: 9}, ListType: "backlog"}); got != "backlog" {
+		t.Errorf("listScope(unnamed label) = %q, want backlog", got)
 	}
 	if got := collapsedCell(nil); got != "" {
 		t.Errorf("collapsedCell(nil) = %q, want empty", got)

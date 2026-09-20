@@ -49,7 +49,10 @@ const (
 	testBase64Content = "dGVzdA=="
 )
 
-// publishResponseJSON identifies the publish response JSON constant used by this package.
+// publishResponseJSON is one published file as GitLab answers with it. No two
+// numbers in it agree: while the file's id and its store were both 1, the
+// handler could publish the store as the file's id and every test stayed
+// green, since an assignment has no branch either gate can flip.
 const publishResponseJSON = `{
 	"id": 1,
 	"package_id": 10,
@@ -58,7 +61,7 @@ const publishResponseJSON = `{
 	"file_sha256": "abc123hash",
 	"file_md5": "md5hash",
 	"file_sha1": "sha1hash",
-	"file_store": 1,
+	"file_store": 4,
 	"created_at": "2026-06-01T10:00:00Z",
 	"updated_at": "2026-06-01T11:00:00Z"
 }`
@@ -102,8 +105,8 @@ func TestPackagePublishBase64_Success(t *testing.T) {
 	if out.FileSHA1 != "sha1hash" {
 		t.Errorf("FileSHA1 = %q, want %q", out.FileSHA1, "sha1hash")
 	}
-	if out.FileStore != 1 {
-		t.Errorf("FileStore = %d, want 1", out.FileStore)
+	if out.FileStore != 4 {
+		t.Errorf("FileStore = %d, want 4", out.FileStore)
 	}
 	if out.SHA256 != "abc123hash" {
 		t.Errorf("SHA256 = %q, want %q", out.SHA256, "abc123hash")
@@ -670,7 +673,7 @@ func TestPackageGroupList_Success(t *testing.T) {
 			gotPath = r.URL.Path
 			gotQuery = r.URL.Query()
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[null,{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","project_id":7,"project_path":"grp/proj","tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/grp/proj/-/packages/10"}}]`,
+				`[null,{"id":10,"name":"my-pkg","version":"1.0.0","package_type":"generic","status":"default","project_id":7,"project_path":"grp/proj","pipeline":{"id":77,"status":"success","ref":"main","sha":"abc123","web_url":"https://gitlab.example.com/grp/proj/-/pipelines/77"},"tags":[{"id":1,"package_id":10,"name":"latest"}],"_links":{"web_path":"/grp/proj/-/packages/10"}}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			return
 		}
@@ -715,6 +718,13 @@ func TestPackageGroupList_Success(t *testing.T) {
 	if pkg.Links == nil || pkg.Links.WebPath != "/grp/proj/-/packages/10" {
 		t.Errorf("Packages[0].Links = %+v, want WebPath=/grp/proj/-/packages/10", pkg.Links)
 	}
+	wantPipeline := PipelineItem{
+		ID: 77, Status: "success", Ref: "main", SHA: "abc123",
+		WebURL: "https://gitlab.example.com/grp/proj/-/pipelines/77",
+	}
+	if pkg.Pipeline == nil || *pkg.Pipeline != wantPipeline {
+		t.Errorf("Packages[0].Pipeline = %+v, want %+v", pkg.Pipeline, wantPipeline)
+	}
 }
 
 // TestPackageGroupList_MissingGroupID verifies GroupList rejects an empty group_id.
@@ -755,6 +765,11 @@ func TestPackageGroupList_APIError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "packageGroupList") {
 		t.Errorf("error = %v, want packageGroupList prefix", err)
+	}
+	// The hint is what the comment promises and what a model acts on, so it is
+	// asserted rather than left to the operation prefix alone.
+	if !strings.Contains(err.Error(), "verify group_id with gitlab_group_get") {
+		t.Errorf("error = %v, want the hint naming how to check the group", err)
 	}
 }
 
@@ -1268,6 +1283,12 @@ func TestPackageToListItem_LeavesOutTheCollectionsGitLabDidNotSend(t *testing.T)
 // TestPublish_SelectAndURL verifies the publish request carries the default
 // response selector unless one was given, and that the answer names the URL
 // the file can be fetched from.
+//
+// The URL assertion is also what stands in for the branch that leaves it
+// empty. The same coordinates already built the request GitLab accepted, so
+// FormatPackageURL cannot fail here and gobco reports its `err == nil` as
+// never false; the property behind the guard is that a publish which
+// succeeded always publishes a URL, and that is what is asserted.
 func TestPublish_SelectAndURL(t *testing.T) {
 	for _, testCase := range []struct {
 		name    string
@@ -1308,6 +1329,11 @@ func TestPublish_SelectAndURL(t *testing.T) {
 // TestGroupList_FiltersReachTheRequest verifies every optional filter the
 // group listing accepts is sent when it was given and left out when it was
 // not, which only the query the handler built can say.
+//
+// The two flags are also driven one at a time, because a pair of booleans has
+// no fixture where no two values agree: with only an all-on and an all-off
+// case, the two guards could set each other's parameter and both cases would
+// still pass, which is what they did.
 func TestGroupList_FiltersReachTheRequest(t *testing.T) {
 	for _, testCase := range []struct {
 		name  string
@@ -1333,6 +1359,18 @@ func TestGroupList_FiltersReachTheRequest(t *testing.T) {
 				"exclude_subgroups", "package_name", "package_type",
 				"order_by", "sort", "include_versionless", "status",
 			},
+		},
+		{
+			name:  "only exclude_subgroups",
+			input: GroupListInput{GroupID: "7", ExcludeSubgroups: true},
+			want:  []string{"exclude_subgroups=true"},
+			omit:  []string{"include_versionless"},
+		},
+		{
+			name:  "only include_versionless",
+			input: GroupListInput{GroupID: "7", IncludeVersionless: true},
+			want:  []string{"include_versionless=true"},
+			omit:  []string{"exclude_subgroups"},
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -1423,5 +1461,167 @@ func TestPackageOptions_UseTheMetadataTable(t *testing.T) {
 	}
 	if unlisted.RelatedActions != nil || unlisted.IndividualTool.Description != "" {
 		t.Errorf("unlisted action carries %v / %q, want neither", unlisted.RelatedActions, unlisted.IndividualTool.Description)
+	}
+}
+
+// TestPackageToListItem_EveryFieldComesFromItsOwnSource verifies the whole
+// converted package against one built by hand, over a fixture where no two
+// values agree. An assignment carries no branch, so neither gate can see a
+// field read from its neighbor: measured by hand against the suite as it
+// stood, the package's version and status could be swapped, a pipeline's ref
+// and sha could be swapped, and the publishing user's avatar and profile URLs
+// could be swapped, with every test still green.
+func TestPackageToListItem_EveryFieldComesFromItsOwnSource(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	downloaded := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
+	tagCreated := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	tagUpdated := time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC)
+	pipeCreated := time.Date(2026, 5, 6, 7, 8, 9, 0, time.UTC)
+	pipeUpdated := time.Date(2026, 6, 7, 8, 9, 10, 0, time.UTC)
+	userCreated := time.Date(2026, 7, 8, 9, 10, 11, 0, time.UTC)
+
+	// The package's current pipeline and the one entry of its history differ
+	// in every field, so reading the history where the current pipeline
+	// belongs, or the other way round, is visible too.
+	current := &gl.PackagePipeline{
+		ID:        71,
+		Status:    "success",
+		Ref:       "main",
+		SHA:       "aaa111",
+		WebURL:    "https://gitlab.example.com/p/-/pipelines/71",
+		CreatedAt: &pipeCreated,
+		UpdatedAt: &pipeUpdated,
+		User: &gl.BasicUser{
+			ID:        5,
+			Username:  "alice",
+			Name:      "Alice Liddell",
+			State:     "active",
+			AvatarURL: "https://gitlab.example.com/uploads/avatar.png",
+			WebURL:    "https://gitlab.example.com/alice",
+			CreatedAt: &userCreated,
+		},
+	}
+	previous := &gl.PackagePipeline{
+		ID: 62, Status: "failed", Ref: "release-1", SHA: "bbb222",
+		WebURL: "https://gitlab.example.com/p/-/pipelines/62",
+	}
+
+	got := packageToListItem(&gl.Package{
+		ID:          10,
+		Name:        "my-pkg",
+		Version:     "1.0.0",
+		PackageType: "conan",
+		Status:      "hidden",
+		Links: &gl.PackageLinks{
+			WebPath:       "/grp/proj/-/packages/10",
+			DeleteAPIPath: "/api/v4/projects/42/packages/10",
+		},
+		Pipeline:         current,
+		Pipelines:        []*gl.PackagePipeline{previous},
+		CreatedAt:        &created,
+		LastDownloadedAt: &downloaded,
+		Tags: []gl.PackageTag{{
+			ID: 3, PackageID: 10, Name: "latest",
+			CreatedAt: &tagCreated, UpdatedAt: &tagUpdated,
+		}},
+	}, toolutil.PackageExtra{
+		CreatorID:        57,
+		ConanPackageName: "recipe-name",
+		ProjectID:        42,
+		ProjectPath:      "grp/proj",
+		Versions:         []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+	})
+
+	want := ListItem{
+		ID:               10,
+		Name:             "my-pkg",
+		Version:          "1.0.0",
+		PackageType:      "conan",
+		Status:           "hidden",
+		ConanPackageName: "recipe-name",
+		Links: &LinksItem{
+			WebPath:       "/grp/proj/-/packages/10",
+			DeleteAPIPath: "/api/v4/projects/42/packages/10",
+		},
+		Pipeline: &PipelineItem{
+			ID:        71,
+			Status:    "success",
+			Ref:       "main",
+			SHA:       "aaa111",
+			WebURL:    "https://gitlab.example.com/p/-/pipelines/71",
+			CreatedAt: pipeCreated.String(),
+			UpdatedAt: pipeUpdated.String(),
+			User: &PipelineUser{
+				ID:        5,
+				Username:  "alice",
+				Name:      "Alice Liddell",
+				State:     "active",
+				AvatarURL: "https://gitlab.example.com/uploads/avatar.png",
+				WebURL:    "https://gitlab.example.com/alice",
+				CreatedAt: userCreated.String(),
+			},
+		},
+		Pipelines: []PipelineItem{{
+			ID: 62, Status: "failed", Ref: "release-1", SHA: "bbb222",
+			WebURL: "https://gitlab.example.com/p/-/pipelines/62",
+		}},
+		CreatedAt:        created.String(),
+		LastDownloadedAt: downloaded.String(),
+		CreatorID:        57,
+		Tags: []TagItem{{
+			ID: 3, PackageID: 10, Name: "latest",
+			CreatedAt: tagCreated.String(), UpdatedAt: tagUpdated.String(),
+		}},
+		Versions:    []toolutil.PackageVersionOutput{{ID: 9, Version: "0.9.0"}},
+		ProjectID:   42,
+		ProjectPath: "grp/proj",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("packageToListItem() =\n%+v\nwant:\n%+v", got, want)
+	}
+}
+
+// TestPackages_PaginationComesFromTheResponseHeaders verifies each of the three
+// listings fills every pagination field from the header GitLab sent for it.
+// Nothing asserted the block at all, so all three could hand a model a page and
+// no way to ask for the next one while staying green; the headers carry six
+// distinct numbers, so a field read off a neighboring header is visible too.
+func TestPackages_PaginationComesFromTheResponseHeaders(t *testing.T) {
+	headers := testutil.PaginationHeaders{
+		Page: "3", PerPage: "20", Total: "97", TotalPages: "5", NextPage: "4", PrevPage: "2",
+	}
+	want := toolutil.PaginationOutput{
+		Page: 3, PerPage: 20, TotalItems: 97, TotalPages: 5, NextPage: 4, PrevPage: 2, HasMore: true,
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":10,"name":"my-pkg"}]`, headers)
+	}))
+
+	for _, testCase := range []struct {
+		name string
+		call func() (toolutil.PaginationOutput, error)
+	}{
+		{name: "list", call: func() (toolutil.PaginationOutput, error) {
+			out, err := List(t.Context(), client, ListInput{ProjectID: "42"})
+			return out.Pagination, err
+		}},
+		{name: "group_list", call: func() (toolutil.PaginationOutput, error) {
+			out, err := GroupList(t.Context(), client, GroupListInput{GroupID: "7"})
+			return out.Pagination, err
+		}},
+		{name: "file_list", call: func() (toolutil.PaginationOutput, error) {
+			out, err := FileList(t.Context(), client, FileListInput{ProjectID: "42", PackageID: "10"})
+			return out.Pagination, err
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.call()
+			if err != nil {
+				t.Fatalf("%s: %v", testCase.name, err)
+			}
+			if got != want {
+				t.Errorf("pagination = %+v, want %+v", got, want)
+			}
+		})
 	}
 }

@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -40,13 +42,62 @@ const (
 // Pipeline Schedule List
 // ---------------------------------------------------------------------------.
 
-// TestPipelineScheduleList_Success verifies PipelineScheduleList when success.
+// fullScheduleJSON is a schedule as GitLab lists one, with no two scalar
+// values alike and a null element in each array, so that a converter reading a
+// neighbor's field, dropping one, or keeping a null entry is told apart from
+// one reading its own.
+const fullScheduleJSON = `{
+	"id":11,"description":"Nightly build","ref":"release/2026","cron":"15 3 * * 2","cron_timezone":"Europe/Madrid","active":true,
+	"next_run_at":"2026-06-15T01:00:00Z","created_at":"2026-01-10T08:00:00Z","updated_at":"2026-03-20T12:30:00Z",
+	"owner":{"id":7,"username":"admin","name":"Admin User","state":"active","avatar_url":"https://gitlab.example.com/avatar/7.png","web_url":"https://gitlab.example.com/admin"},
+	"last_pipeline":{"id":99,"sha":"a1b2c3d4","ref":"main","status":"success","web_url":"https://gitlab.example.com/p/99"},
+	"variables":[{"key":"DEPLOY_ENV","value":"prod","variable_type":"env_var"},null],
+	"inputs":[{"name":"version","value":"1.2.3"},null]
+}`
+
+// fullScheduleOutput is what the handlers publish for fullScheduleJSON, on
+// either converter: the SDK one formats the timestamps to RFC3339 and the
+// raw one passes them through, and the fixture spells them so both agree.
+// The raw path is the one that can see variables[].raw, so it is passed the
+// only value that tells it apart.
+func fullScheduleOutput(raw bool) Output {
+	return Output{
+		ID:           11,
+		Description:  "Nightly build",
+		Ref:          "release/2026",
+		Cron:         "15 3 * * 2",
+		CronTimezone: "Europe/Madrid",
+		Active:       true,
+		NextRunAt:    "2026-06-15T01:00:00Z",
+		CreatedAt:    "2026-01-10T08:00:00Z",
+		UpdatedAt:    "2026-03-20T12:30:00Z",
+		Owner: &OwnerOutput{
+			ID: 7, Username: "admin", Name: "Admin User", State: "active",
+			AvatarURL: "https://gitlab.example.com/avatar/7.png", WebURL: "https://gitlab.example.com/admin",
+		},
+		LastPipeline: &LastPipelineOutput{ID: 99, SHA: "a1b2c3d4", Ref: "main", Status: "success"},
+		Variables:    []VariableObject{{Key: "DEPLOY_ENV", Value: "prod", VariableType: "env_var", Raw: raw}},
+		// destroy is a request-only param: the schedule entity's inputs carry
+		// name and value, so no answer ever fills it.
+		Inputs: []InputObject{{Name: "version", Value: "1.2.3"}},
+	}
+}
+
+// TestPipelineScheduleList_Success holds the whole page a list answers to the
+// schedule GitLab sent, field for field, and the pagination block to the
+// headers: the SDK converter is a run of straight assignments no gate can
+// flip, and only a fixture where no two values agree tells a field read from
+// its neighbor from one read from itself. The null array elements are
+// skipped rather than published as empty entries, and the input's destroy
+// flag is a request-only field GitLab does not echo, so it is not published.
 func TestPipelineScheduleList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedules && r.Method == http.MethodGet {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-				{"id":1,"description":"Nightly build","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}}
-			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+			if got := r.URL.Query().Get("page") + "/" + r.URL.Query().Get("per_page"); got != "2/5" {
+				t.Errorf("page/per_page = %q, want 2/5", got)
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+fullScheduleJSON+`]`,
+				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "12", TotalPages: "3", NextPage: "3", PrevPage: "1"})
 			return
 		}
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
@@ -54,18 +105,17 @@ func TestPipelineScheduleList_Success(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: "123",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Schedules) != 1 {
-		t.Fatalf("expected 1 schedule, got %d", len(out.Schedules))
+	want := ListOutput{
+		Schedules:  []Output{fullScheduleOutput(false)},
+		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 12, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true},
 	}
-	if out.Schedules[0].Description != "Nightly build" {
-		t.Errorf("description = %q, want %q", out.Schedules[0].Description, "Nightly build")
-	}
-	if out.Schedules[0].Owner == nil || out.Schedules[0].Owner.Username != "admin" {
-		t.Errorf("owner = %+v, want username %q", out.Schedules[0].Owner, "admin")
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("List() =\n%#v\nwant\n%#v", out, want)
 	}
 }
 
@@ -164,6 +214,32 @@ func assertLastPipelineDocumentedSubset(t *testing.T, lp *LastPipelineOutput) {
 	}
 	if strings.Contains(string(blob), "web_url") {
 		t.Errorf("last_pipeline JSON unexpectedly contains web_url: %s", blob)
+	}
+}
+
+// TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField holds what a
+// get publishes to the schedule GitLab answered, field for field, over the raw
+// superset path the handler takes. It is the same fixture the list test uses,
+// with variables[].raw added, which is the one field that path exists for: no
+// two values agree, so a converter reading a neighbor's field is told from
+// one reading its own, and the null array elements must be skipped rather than
+// published as empty entries.
+func TestPipelineScheduleGet_WholeSchedule_IsPublishedFieldForField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK,
+				strings.Replace(fullScheduleJSON, `"variable_type":"env_var"`, `"variable_type":"env_var","raw":true`, 1))
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "123", ScheduleID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if want := fullScheduleOutput(true); !reflect.DeepEqual(out, want) {
+		t.Errorf("Get() =\n%#v\nwant\n%#v", out, want)
 	}
 }
 
@@ -280,6 +356,13 @@ func TestPipelineScheduleGet_RawVariableAbsent_VersionTolerance(t *testing.T) {
 // timestamp branches: owner, last_pipeline, variables, inputs, next_run_at,
 // created_at, and updated_at. The get/run handlers now use the raw superset path
 // (toOutputAPI), so this direct test keeps the SDK converter fully covered.
+//
+// The input's destroy pointer is held here and nowhere else. It is the one
+// field the two converters disagree about on purpose: gl.PipelineInput carries
+// it, so inputObjects passes it through, while the documented response has no
+// per-input destroy and scheduleInputAPI decodes none. Every whole-object
+// fixture in this file answers without one, so with no assertion here the
+// pass-through could be dropped and the package would stay green.
 func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
 	now := time.Date(2026, 3, 8, 1, 0, 0, 0, time.UTC)
 	destroy := true
@@ -316,8 +399,15 @@ func TestToOutput_SDKConverter_FullSchedule(t *testing.T) {
 	if len(out.Variables) != 1 || out.Variables[0].Key != "DEPLOY_ENV" {
 		t.Errorf("variables = %+v, want one DEPLOY_ENV variable (nil skipped)", out.Variables)
 	}
-	if len(out.Inputs) != 1 || out.Inputs[0].Name != "version" {
+	switch {
+	case len(out.Inputs) != 1:
 		t.Errorf("inputs = %+v, want one version input (nil skipped)", out.Inputs)
+	case out.Inputs[0].Name != "version" || out.Inputs[0].Value != "1.2.3":
+		t.Errorf("input name/value = %q/%v, want %q/%q", out.Inputs[0].Name, out.Inputs[0].Value, "version", "1.2.3")
+	case out.Inputs[0].Destroy == nil:
+		t.Error("input destroy = nil, want the SDK's own pointer carried through")
+	case !*out.Inputs[0].Destroy:
+		t.Error("input destroy = false, want true")
 	}
 	if out.NextRunAt == "" || out.CreatedAt == "" || out.UpdatedAt == "" {
 		t.Errorf("timestamps not formatted: %+v", out)
@@ -673,7 +763,10 @@ func TestCreateVariable_MissingValue(t *testing.T) {
 // Edit Variable
 // ---------------------------------------------------------------------------.
 
-// TestEditVariable_Success verifies EditVariable when success.
+// TestEditVariable_Success holds every field of the variable an edit returns to
+// the answer GitLab sent. The return is three straight assignments no gate can
+// flip, and no two fixture values agree, so a key read from the value or from
+// the variable type fails here instead of passing as a field nothing looks at.
 func TestEditVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/variables/DEPLOY_ENV" {
@@ -688,8 +781,14 @@ func TestEditVariable_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EditVariable() error: %v", err)
 	}
+	if out.Key != "DEPLOY_ENV" {
+		t.Errorf("Key = %q, want %q", out.Key, "DEPLOY_ENV")
+	}
 	if out.Value != "staging" {
 		t.Errorf("Value = %q, want %q", out.Value, "staging")
+	}
+	if out.VariableType != "env_var" {
+		t.Errorf("VariableType = %q, want %q", out.VariableType, "env_var")
 	}
 }
 
@@ -791,6 +890,52 @@ func TestListTriggeredPipelines_Success(t *testing.T) {
 	}
 }
 
+// TestListTriggeredPipelines_WholeRow_IsPublishedFieldForField holds every
+// field of a triggered pipeline to what GitLab sent, with no two values alike
+// and the query held to the page the caller asked for.
+//
+// The converter is a run of straight assignments, so no gate can see a row
+// whose iid is read from its id or whose ref is read from its sha; a fixture
+// where the values repeat cannot either. The two timestamps are reformatted to
+// RFC3339 rather than passed through, which is asserted here and nowhere else.
+func TestListTriggeredPipelines_WholeRow_IsPublishedFieldForField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipeline_schedules/1/pipelines" {
+			q := r.URL.Query()
+			if q.Get("page") != "3" || q.Get("per_page") != "7" {
+				t.Errorf("page/per_page = %q/%q, want 3/7", q.Get("page"), q.Get("per_page"))
+			}
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+				{"id":100,"iid":10,"project_id":42,"ref":"release/2026","sha":"a1b2c3d4","status":"success","source":"schedule",
+				 "web_url":"https://gitlab.example.com/p/100","created_at":"2016-08-11T11:28:34.085Z","updated_at":"2016-08-11T11:32:35.169Z"}
+			]`, testutil.PaginationHeaders{Page: "3", PerPage: "7", Total: "15", TotalPages: "3", PrevPage: "2"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
+		ProjectID: "42", ScheduleID: 1,
+		Page: 3, PerPage: 7,
+	})
+	if err != nil {
+		t.Fatalf("ListTriggeredPipelines() error: %v", err)
+	}
+	want := TriggeredPipelinesListOutput{
+		Pipelines: []TriggeredPipelineOutput{{
+			ID: 100, IID: 10, ProjectID: 42,
+			Ref: "release/2026", SHA: "a1b2c3d4", Status: "success", Source: "schedule",
+			WebURL:    "https://gitlab.example.com/p/100",
+			CreatedAt: "2016-08-11T11:28:34Z",
+			UpdatedAt: "2016-08-11T11:32:35Z",
+		}},
+		Pagination: toolutil.PaginationOutput{Page: 3, PerPage: 7, TotalItems: 15, TotalPages: 3, PrevPage: 2},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("ListTriggeredPipelines() =\n%#v\nwant\n%#v", out, want)
+	}
+}
+
 // TestListTriggeredPipelines_MissingProjectID verifies ListTriggeredPipelines when missing project ID.
 func TestListTriggeredPipelines_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
@@ -800,12 +945,434 @@ func TestListTriggeredPipelines_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestListTriggeredPipelines_ZeroScheduleID verifies ListTriggeredPipelines when zero schedule ID.
+// TestListTriggeredPipelines_ZeroScheduleID verifies that schedule_id 0 is
+// refused by the handler before any request leaves it.
+//
+// The mock forbids every request, which is what separates the two refusals a
+// caller cannot otherwise tell apart: with the guard's boundary moved to
+// schedule_id < 0, zero reaches GitLab as /pipeline_schedules/0/pipelines and
+// the refusal becomes GitLab's 404 rather than the handler's own message. A
+// permissive mock answered both the same way and the boundary survived.
 func TestListTriggeredPipelines_ZeroScheduleID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { /* no response body needed */ }))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errExpZeroScheduleID)
+	}
+	assertContains(t, err, "schedule_id is required")
+}
+
+// ---------------------------------------------------------------------------
+// Which hint each refusal carries
+// ---------------------------------------------------------------------------.
+
+// TestScheduleHandlers_EachStatus_CarriesItsOwnHint holds every
+// status-specific remedy this package offers to the status that produces it
+// and to the words it says, and holds a status no branch names to carrying no
+// suggestion at all.
+//
+// Nothing saw these before. An IsHTTPStatus call has no operator for the
+// mutation gate to flip and the condition gate cannot read this package, so a
+// branch is held by a test or by nothing; and the tests there were answered
+// 403 to handlers whose one special case is 404, then asserted only that an
+// error came back, which the fallthrough satisfies just as well. A model reads
+// the hint to decide what to do next, so a delete that tells it to take
+// ownership and an edit that tells it to check the project are two different
+// wrong answers.
+func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
+	const (
+		hintOwnerManagesVariables = "only the schedule owner can manage variables"
+		hintVariableKeyExists     = "verify the variable key exists on this schedule with gitlab_pipeline_schedule_get"
+	)
+	ctx := context.Background()
+
+	cases := []struct {
+		name   string
+		status int
+		// hint is the text the refusal must carry; empty means the refusal
+		// must carry no suggestion, which is the fallthrough.
+		hint string
+		call func(client *gitlabclient.Client) error
+	}{
+		{"list/404", http.StatusNotFound, "verify the project exists with gitlab_project_get and that you have Developer+ role", func(c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: "1"})
+			return err
+		}},
+		{"list/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: "1"})
+			return err
+		}},
+		{"get/404", http.StatusNotFound, "verify schedule_id with gitlab_pipeline_schedule_list. schedule_id is the database ID, not a name", func(c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"get/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"create/400", http.StatusBadRequest, "check cron expression format", func(c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
+			return err
+		}},
+		{"create/403", http.StatusForbidden, "creating pipeline schedules requires Developer+ role on the project", func(c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
+			return err
+		}},
+		{"create/404", http.StatusNotFound, "verify the project exists with gitlab_project_get", func(c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
+			return err
+		}},
+		{"create/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
+			return err
+		}},
+		{"update/403", http.StatusForbidden, "only the schedule owner can edit. Use gitlab_pipeline_schedule_take_ownership first", func(c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"update/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"update/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"delete/403", http.StatusForbidden, "only the schedule owner or a Maintainer+ can delete a pipeline schedule", func(c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: "1", ScheduleID: 1})
+		}},
+		{"delete/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: "1", ScheduleID: 1})
+		}},
+		{"delete/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: "1", ScheduleID: 1})
+		}},
+		{"run/403", http.StatusForbidden, "only the schedule owner can manually trigger a schedule", func(c *gitlabclient.Client) error {
+			_, err := Run(ctx, c, RunInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"run/429", http.StatusTooManyRequests, "manual schedule runs are rate-limited", func(c *gitlabclient.Client) error {
+			_, err := Run(ctx, c, RunInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"run/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			_, err := Run(ctx, c, RunInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"take_ownership/403", http.StatusForbidden, "taking ownership of a pipeline schedule requires Maintainer+ role on the project", func(c *gitlabclient.Client) error {
+			_, err := TakeOwnership(ctx, c, TakeOwnershipInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"take_ownership/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			_, err := TakeOwnership(ctx, c, TakeOwnershipInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"create_variable/400", http.StatusBadRequest, "variable key must match", func(c *gitlabclient.Client) error {
+			_, err := CreateVariable(ctx, c, CreateVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+			return err
+		}},
+		{"create_variable/403", http.StatusForbidden, hintOwnerManagesVariables + ". Take ownership first if you are Maintainer+", func(c *gitlabclient.Client) error {
+			_, err := CreateVariable(ctx, c, CreateVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+			return err
+		}},
+		{"create_variable/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			_, err := CreateVariable(ctx, c, CreateVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+			return err
+		}},
+		{"edit_variable/403", http.StatusForbidden, hintOwnerManagesVariables + ". Take ownership first if you are Maintainer+", func(c *gitlabclient.Client) error {
+			_, err := EditVariable(ctx, c, EditVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+			return err
+		}},
+		{"edit_variable/404 names the key, not the schedule", http.StatusNotFound, hintVariableKeyExists, func(c *gitlabclient.Client) error {
+			_, err := EditVariable(ctx, c, EditVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K", Value: "V"})
+			return err
+		}},
+		{"delete_variable/403", http.StatusForbidden, hintOwnerManagesVariables, func(c *gitlabclient.Client) error {
+			return DeleteVariable(ctx, c, DeleteVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K"})
+		}},
+		{"delete_variable/404 names the key, not the schedule", http.StatusNotFound, hintVariableKeyExists, func(c *gitlabclient.Client) error {
+			return DeleteVariable(ctx, c, DeleteVariableInput{ProjectID: "1", ScheduleID: 1, Key: "K"})
+		}},
+		{"list_triggered_pipelines/404", http.StatusNotFound, hintVerifyScheduleID, func(c *gitlabclient.Client) error {
+			_, err := ListTriggeredPipelines(ctx, c, ListTriggeredPipelinesInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+		{"list_triggered_pipelines/500 carries no suggestion", http.StatusInternalServerError, "", func(c *gitlabclient.Client) error {
+			_, err := ListTriggeredPipelines(ctx, c, ListTriggeredPipelinesInput{ProjectID: "1", ScheduleID: 1})
+			return err
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+			err := tc.call(client)
+			if err == nil {
+				t.Fatalf("status %d: expected a refusal, got nil", tc.status)
+			}
+			if tc.hint == "" {
+				if strings.Contains(err.Error(), "Suggestion:") {
+					t.Errorf("status %d carries a suggestion it has no branch for: %v", tc.status, err)
+				}
+				return
+			}
+			if !strings.Contains(err.Error(), "Suggestion: "+tc.hint) {
+				t.Errorf("status %d = %v, want the suggestion %q", tc.status, err, tc.hint)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the mutating handlers put on the wire
+// ---------------------------------------------------------------------------.
+
+// captureScheduleRequest answers every request with the reply body and hands
+// back the JSON object the handler sent, so an assertion can be made about the
+// request GitLab receives rather than about the fixture the mock replies with.
+func captureScheduleRequest(t *testing.T, reply string, call func(client *gitlabclient.Client) error) map[string]any {
+	t.Helper()
+
+	var raw []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		raw = body
+		testutil.RespondJSON(w, http.StatusOK, reply)
+	}))
+
+	if err := call(client); err != nil {
+		t.Fatalf("handler returned an unexpected error: %v", err)
+	}
+	sent := map[string]any{}
+	if err := json.Unmarshal(raw, &sent); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", raw, err)
+	}
+	return sent
+}
+
+// assertScheduleRequestFields fails when the captured body does not carry each
+// present key with its value, or carries any of the absent keys at all.
+func assertScheduleRequestFields(t *testing.T, sent, present map[string]any, absent []string) {
+	t.Helper()
+	for key, want := range present {
+		got, ok := sent[key]
+		if !ok {
+			t.Errorf("request body omits %q; body = %v", key, sent)
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("request body %q = %#v, want %#v", key, got, want)
+		}
+	}
+	for _, key := range absent {
+		if got, ok := sent[key]; ok {
+			t.Errorf("request body carries %q = %#v, want the key omitted; body = %v", key, got, sent)
+		}
+	}
+}
+
+// TestPipelineScheduleCreate_OptionalFields_ReachTheBodyOnlyWhenSupplied
+// asserts what Create puts in the POST body, which nothing did: the mock
+// answered the same schedule whatever it was sent, so every assertion about
+// the response passed with the optional guards inverted.
+//
+// Both directions matter to a caller. A timezone that never leaves the handler
+// is a schedule that runs on the instance's clock rather than the caller's, and
+// an active flag sent where the input asked for none is not the same request,
+// since GitLab defaults an omitted one to true. Each optional field is set
+// alone, so a handler pairing the wrong input with the wrong option is told
+// apart from one pairing them correctly.
+func TestPipelineScheduleCreate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
+	inactive := false
+	required := map[string]any{"description": "Nightly", "ref": "main", "cron": "0 4 * * *"}
+	base := CreateInput{ProjectID: "1", Description: "Nightly", Ref: "main", Cron: "0 4 * * *"}
+
+	withTimezone := base
+	withTimezone.CronTimezone = "Europe/Madrid"
+	withActive := base
+	withActive.Active = &inactive
+	withInputs := base
+	withInputs.Inputs = []InputObject{{Name: "version", Value: "1.2.3"}}
+
+	cases := []struct {
+		name    string
+		input   CreateInput
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name:    "no optional field set",
+			input:   base,
+			present: required,
+			absent:  []string{"cron_timezone", "active", "inputs"},
+		},
+		{
+			name:    "cron timezone alone",
+			input:   withTimezone,
+			present: map[string]any{"cron_timezone": "Europe/Madrid"},
+			absent:  []string{"active", "inputs"},
+		},
+		{
+			name:    "active alone, and false",
+			input:   withActive,
+			present: map[string]any{"active": false},
+			absent:  []string{"cron_timezone", "inputs"},
+		},
+		{
+			name:    "inputs alone",
+			input:   withInputs,
+			present: map[string]any{"inputs": []any{map[string]any{"name": "version", "value": "1.2.3"}}},
+			absent:  []string{"cron_timezone", "active"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := captureScheduleRequest(t, fullScheduleJSON, func(client *gitlabclient.Client) error {
+				_, err := Create(context.Background(), client, tc.input)
+				return err
+			})
+			assertScheduleRequestFields(t, sent, required, nil)
+			assertScheduleRequestFields(t, sent, tc.present, tc.absent)
+		})
+	}
+}
+
+// TestPipelineScheduleUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied
+// asserts the same of Update, where every field is optional and the stakes are
+// the other way round: an edit that sends a key the caller did not set
+// overwrites what the schedule already had, so a description sent as "" would
+// erase one and a cron sent empty would be refused. Each field is set alone
+// against a body carrying nothing else, which is what tells a handler pairing
+// the wrong input with the wrong option from one pairing them correctly.
+func TestPipelineScheduleUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
+	active := true
+	base := UpdateInput{ProjectID: "1", ScheduleID: 1}
+	every := []string{"description", "ref", "cron", "cron_timezone", "active", "inputs"}
+
+	withDescription := base
+	withDescription.Description = "Weekly deploy"
+	withRef := base
+	withRef.Ref = "release/2026"
+	withCron := base
+	withCron.Cron = "15 3 * * 2"
+	withTimezone := base
+	withTimezone.CronTimezone = "Europe/Madrid"
+	withActive := base
+	withActive.Active = &active
+	destroy := true
+	withInputs := base
+	withInputs.Inputs = []InputObject{{Name: "version", Destroy: &destroy}}
+
+	cases := []struct {
+		name    string
+		input   UpdateInput
+		present map[string]any
+	}{
+		{name: "nothing set", input: base},
+		{name: "description alone", input: withDescription, present: map[string]any{"description": "Weekly deploy"}},
+		{name: "ref alone", input: withRef, present: map[string]any{"ref": "release/2026"}},
+		{name: "cron alone", input: withCron, present: map[string]any{"cron": "15 3 * * 2"}},
+		{name: "cron timezone alone", input: withTimezone, present: map[string]any{"cron_timezone": "Europe/Madrid"}},
+		{name: "active alone", input: withActive, present: map[string]any{"active": true}},
+		{
+			// The null value is client-go's own doing: PipelineInput.Value
+			// carries no omitempty, so the key travels whatever the caller
+			// set, and GitLab marks inputs[value] required on this route.
+			name:    "inputs alone, with a destroy",
+			input:   withInputs,
+			present: map[string]any{"inputs": []any{map[string]any{"name": "version", "value": nil, "destroy": true}}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := captureScheduleRequest(t, fullScheduleJSON, func(client *gitlabclient.Client) error {
+				_, err := Update(context.Background(), client, tc.input)
+				return err
+			})
+			absent := make([]string, 0, len(every))
+			for _, key := range every {
+				if _, set := tc.present[key]; !set {
+					absent = append(absent, key)
+				}
+			}
+			assertScheduleRequestFields(t, sent, tc.present, absent)
+		})
+	}
+}
+
+// TestScheduleVariable_VariableType_ReachesTheBodyOnlyWhenSupplied asserts
+// that the create and the edit send variable_type exactly when the caller
+// named one. GitLab defaults an omitted type to env_var, so a type that never
+// leaves the handler silently makes a file variable an environment variable,
+// and the mock answered the same variable either way.
+func TestScheduleVariable_VariableType_ReachesTheBodyOnlyWhenSupplied(t *testing.T) {
+	const reply = `{"key":"SECRET","value":"/tmp/secret","variable_type":"file"}`
+	cases := []struct {
+		name    string
+		call    func(client *gitlabclient.Client) error
+		present map[string]any
+		absent  []string
+	}{
+		{
+			name: "create with a type",
+			call: func(client *gitlabclient.Client) error {
+				_, err := CreateVariable(context.Background(), client, CreateVariableInput{
+					ProjectID: "1", ScheduleID: 1, Key: "SECRET", Value: "/tmp/secret", VariableType: "file",
+				})
+				return err
+			},
+			present: map[string]any{"key": "SECRET", "value": "/tmp/secret", "variable_type": "file"},
+		},
+		{
+			name: "create without a type",
+			call: func(client *gitlabclient.Client) error {
+				_, err := CreateVariable(context.Background(), client, CreateVariableInput{
+					ProjectID: "1", ScheduleID: 1, Key: "SECRET", Value: "/tmp/secret",
+				})
+				return err
+			},
+			present: map[string]any{"key": "SECRET", "value": "/tmp/secret"},
+			absent:  []string{"variable_type"},
+		},
+		{
+			name: "edit with a type",
+			call: func(client *gitlabclient.Client) error {
+				_, err := EditVariable(context.Background(), client, EditVariableInput{
+					ProjectID: "1", ScheduleID: 1, Key: "SECRET", Value: "/tmp/secret", VariableType: "file",
+				})
+				return err
+			},
+			// The key travels in the path rather than the body on an edit.
+			present: map[string]any{"value": "/tmp/secret", "variable_type": "file"},
+			absent:  []string{"key"},
+		},
+		{
+			name: "edit without a type",
+			call: func(client *gitlabclient.Client) error {
+				_, err := EditVariable(context.Background(), client, EditVariableInput{
+					ProjectID: "1", ScheduleID: 1, Key: "SECRET", Value: "/tmp/secret",
+				})
+				return err
+			},
+			present: map[string]any{"value": "/tmp/secret"},
+			absent:  []string{"key", "variable_type"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sent := captureScheduleRequest(t, reply, tc.call)
+			assertScheduleRequestFields(t, sent, tc.present, tc.absent)
+		})
 	}
 }
 
@@ -870,6 +1437,10 @@ func TestScheduleIDRequired_Validation(t *testing.T) {
 		}},
 		{"DeleteVariable_negative", func() error {
 			return DeleteVariable(ctx, client, DeleteVariableInput{ProjectID: pid, ScheduleID: -1, Key: "k"})
+		}},
+		{"ListTriggeredPipelines_zero", func() error {
+			_, e := ListTriggeredPipelines(ctx, client, ListTriggeredPipelinesInput{ProjectID: pid, ScheduleID: 0})
+			return e
 		}},
 		{"ListTriggeredPipelines_negative", func() error {
 			_, e := ListTriggeredPipelines(ctx, client, ListTriggeredPipelinesInput{ProjectID: pid, ScheduleID: -1})
@@ -1169,7 +1740,13 @@ func TestPipelineScheduleRun_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestPipelineSchedule_RunGetAfterPlayFails verifies PipelineSchedule when run get after play fails.
+// TestPipelineSchedule_RunGetAfterPlayFails verifies that a play GitLab
+// accepted, followed by a refetch it refuses, is reported as the refetch
+// rather than as the trigger.
+//
+// Naming the failing step is what a caller needs here and what asserting only
+// that an error came back leaves out: the schedule did run, so a message that
+// reads like a refused trigger invites a model to trigger it a second time.
 func TestPipelineSchedule_RunGetAfterPlayFails(t *testing.T) {
 	callCount := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1185,6 +1762,10 @@ func TestPipelineSchedule_RunGetAfterPlayFails(t *testing.T) {
 	_, err := Run(context.Background(), client, RunInput{ProjectID: "1", ScheduleID: 1})
 	if err == nil {
 		t.Fatal("expected error when get after run fails, got nil")
+	}
+	assertContains(t, err, "get pipeline schedule after run")
+	if callCount != 2 {
+		t.Errorf("GitLab was called %d time(s), want the play and then the refetch", callCount)
 	}
 }
 
@@ -1506,14 +2087,19 @@ func TestListTriggeredPipelines_OrderByAndSort(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// toOutput — all optional fields (owner, timestamps)
+// FormatOutputMarkdown: the whole card, variables and inputs included
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields checks the whole card of a schedule GitLab
-// answered in full, the variables and inputs included: a reader deciding
-// whether to run a schedule needs to know which are set, and the card used to
-// show neither. The values never appear — a schedule variable may be a secret.
-func TestToOutput_AllOptionalFields(t *testing.T) {
+// TestFormatOutputMarkdown_AllFields checks the whole card of a schedule
+// GitLab answered in full, the variables and inputs included: a reader
+// deciding whether to run a schedule needs to know which are set, and the card
+// used to show neither. The values never appear, since a schedule variable may
+// be a secret.
+//
+// It was called TestToOutput_AllOptionalFields, which named the SDK converter
+// this body never calls, so a reader counting what covers toOutput counted
+// this.
+func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
 		ID:           1,
 		Description:  "Nightly",
@@ -1704,8 +2290,15 @@ func TestFormatTriggeredPipelinesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestPipelineScheduleGet_WithTimestamps covers the NextRunAt/CreatedAt/UpdatedAt
-// != nil branches in toOutput by providing timestamps in the JSON response.
+// TestPipelineScheduleGet_WithTimestamps holds the three timestamps a get
+// publishes to the three the response carried, each a different instant.
+//
+// The comment here used to say it covered the != nil branches of toOutput,
+// which it never did: the get handler reads the raw superset path, where the
+// timestamps are decoded as strings and passed through with no branch at all,
+// so the only thing to hold is that each lands on its own field. Asserting
+// they are merely non-empty left a converter that reads created_at into
+// updated_at passing.
 func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testPathSchedule1 && r.Method == http.MethodGet {
@@ -1725,13 +2318,13 @@ func TestPipelineScheduleGet_WithTimestamps(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.NextRunAt == "" {
-		t.Error("expected non-empty NextRunAt")
+	if out.NextRunAt != "2026-06-15T01:00:00Z" {
+		t.Errorf("NextRunAt = %q, want 2026-06-15T01:00:00Z", out.NextRunAt)
 	}
-	if out.CreatedAt == "" {
-		t.Error("expected non-empty CreatedAt")
+	if out.CreatedAt != "2026-01-10T08:00:00Z" {
+		t.Errorf("CreatedAt = %q, want 2026-01-10T08:00:00Z", out.CreatedAt)
 	}
-	if out.UpdatedAt == "" {
-		t.Error("expected non-empty UpdatedAt")
+	if out.UpdatedAt != "2026-03-20T12:00:00Z" {
+		t.Errorf("UpdatedAt = %q, want 2026-03-20T12:00:00Z", out.UpdatedAt)
 	}
 }

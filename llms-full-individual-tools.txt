@@ -9086,7 +9086,6 @@ Modify an existing user. Returns: the updated user profile metadata. See also: g
 - `job_title` (string): New job title
 - `linkedin` (string): LinkedIn account
 - `location` (string): New location
-- `locked` (boolean): Lock or unlock the user account
 - `name` (string): New display name
 - `note` (string): New admin note
 - `organization` (string): New organization
@@ -9355,11 +9354,11 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_mr_dependency_delete
 
-Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.
+Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.
 
 **Parameters:**
 
-- `blocking_merge_request_id` (integer) (required): ID of the blocking merge request to remove
+- `blocking_merge_request_id` (integer) (required): ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string or integer) (required): Project ID or URL-encoded path

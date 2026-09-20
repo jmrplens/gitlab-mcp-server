@@ -18,11 +18,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestCatalogSurface_ConfirmDeclined covers confirmation early-return
-// branches in erase, delete_artifacts, and delete_project_artifacts handlers
-// when the user declines the destructive action confirmation.
+// TestCatalogSurface_ConfirmDeclined verifies that a declined confirmation
+// stops erase, delete_artifacts and delete_project_artifacts before GitLab is
+// reached, and answers with an error result that says the user declined. The
+// forbidden mock is the assertion about GitLab: on an empty mux a request that
+// did get through was answered 404, which is a non-nil result as well.
 func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.NewServeMux())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	byTool := jobSpecsByTool(t, ActionSpecs(client))
 	for _, toolName := range []string{"gitlab_job_erase", "gitlab_job_delete_artifacts", "gitlab_job_delete_project_artifacts"} {
@@ -66,8 +68,17 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 			if callErr != nil {
 				t.Fatalf("CallTool error: %v", callErr)
 			}
-			if result == nil {
-				t.Fatal("expected non-nil result for declined confirmation")
+			if result == nil || !result.IsError {
+				t.Fatalf("result = %+v, want an error result for a declined confirmation", result)
+			}
+			var text strings.Builder
+			for _, c := range result.Content {
+				if tc, ok := c.(*mcp.TextContent); ok {
+					text.WriteString(tc.Text)
+				}
+			}
+			if !strings.Contains(text.String(), "declined") {
+				t.Errorf("result text = %q, want it to say the user declined", text.String())
 			}
 		})
 	}
@@ -102,9 +113,11 @@ func TestActionSpecs_PrimaryMetadata(t *testing.T) {
 	}
 }
 
-// TestToOutput_OptionalFields verifies that ToOutput correctly formats
-// optional pointer fields (ArtifactsExpireAt, User, Runner, ErasedAt, Commit)
-// that are nil by default but populated in some API responses.
+// TestToOutput_OptionalFields verifies that ToOutput populates the optional
+// pointer fields (ArtifactsExpireAt, User, Runner, ErasedAt, Commit) that are
+// nil by default. The two timestamps share one value and are checked for
+// presence only; their exact rendering, and which lands where, is held by
+// TestJobGet_MapsEveryDocumentedField.
 func TestToOutput_OptionalFields(t *testing.T) {
 	now := time.Now()
 	job := &gl.Job{
@@ -141,8 +154,10 @@ func TestToOutput_OptionalFields(t *testing.T) {
 	}
 }
 
-// TestBridgeToOutput_OptionalFields verifies that BridgeToOutput correctly
-// formats optional pointer fields (User, DownstreamPipeline) when populated.
+// TestBridgeToOutput_OptionalFields verifies that BridgeToOutput populates the
+// optional pointer fields (User, DownstreamPipeline, the four timestamps) when
+// present. The timestamps share one value and are checked for presence only;
+// which lands where is held by TestListBridges_MapsEveryDocumentedField.
 func TestBridgeToOutput_OptionalFields(t *testing.T) {
 	now := time.Now()
 	bridge := &gl.Bridge{

@@ -234,6 +234,12 @@ func TestList_AssigneesAndLabels_CarryTheWholeObject(t *testing.T) {
 }
 
 // TestList_Empty verifies List when empty.
+//
+// The fixture omits pageInfo altogether, which is the answer the nil guard
+// around the pagination block exists for. client-go assigns a PageInfo to the
+// response whatever the document carried, so what reaches the caller is the
+// zero block rather than invented cursors, and the guard's false arm is
+// unreachable through the SDK.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
@@ -245,6 +251,9 @@ func TestList_Empty(t *testing.T) {
 	}
 	if len(out.WorkItems) != 0 {
 		t.Fatalf("expected 0 work items, got %d", len(out.WorkItems))
+	}
+	if out.Pagination != (toolutil.GraphQLPaginationOutput{}) {
+		t.Errorf("Pagination = %+v, want the zero block for an answer with no pageInfo", out.Pagination)
 	}
 }
 
@@ -1175,6 +1184,37 @@ func TestFormatListMarkdown_EmptyReturnsMessage(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_LinkedRows_AreLinkedAndAskedToStay checks the whole
+// rendering of a page where an item carries a web address: its reference cell
+// is a link, the confidential marker follows the link rather than replacing
+// it, and the guidance opens by asking the model to keep the links.
+//
+// No list fixture in this file carried a web address, so the linked half of
+// referenceCell and the linked branch of writeListHints were written by
+// nothing. The linked item is the second of the two on purpose: the flag that
+// decides the hint is accumulated across the rows, so a page that only becomes
+// linked partway through is what tells the accumulation from a look at the
+// first row alone.
+func TestFormatListMarkdown_LinkedRows_AreLinkedAndAskedToStay(t *testing.T) {
+	const url = "https://gitlab.example.com/-/work_items/2"
+	out := ListOutput{WorkItems: []WorkItemItem{
+		{IID: 1, Type: testTypeIssue, State: testStateOpen, Title: "First", Author: namedUser("dev1")},
+		{IID: 2, Type: testTypeTask, State: testStateClosed, Title: "Second", Author: namedUser("dev2"), WebURL: url, Confidential: true},
+	}}
+	want := "## Work Items (2)\n\n" +
+		"| IID | Type | State | Status | Title | Author |\n" +
+		"| --- | --- | --- | --- | --- | --- |\n" +
+		"| #1 | Issue | 🟢 OPEN |  | First | @dev1 |\n" +
+		"| [#2](" + url + ") 🔒 | Task | 🔴 CLOSED |  | Second | @dev2 |\n" +
+		"\n" + toolutil.FormatGraphQLPagination(toolutil.GraphQLPaginationOutput{}, 2) + "\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.work_item_get' to view full details of a specific item\n"
+	if got := extractText(t, FormatListMarkdown(out)); got != want {
+		t.Errorf("FormatListMarkdown(linked)\n got %q\nwant %q", got, want)
+	}
+}
+
 // TestFormatListMarkdown_SpecialCharsInTitle checks that a pipe in a title
 // stays one cell: the escaped entity is written and the row keeps its columns.
 func TestFormatListMarkdown_SpecialCharsInTitle(t *testing.T) {
@@ -1785,18 +1825,25 @@ func TestUpdate_APIError404(t *testing.T) {
 	}
 }
 
-// TestUpdate_EmptyAssigneesRemovesAll verifies that passing an empty AssigneeIDs
-// slice (non-nil) forwards it to the API, which interprets it as "remove all".
 // clearGuardHandler serves the two GraphQL shapes an empty-list update needs:
 // the work item read the guard performs, and the update mutation itself. It
 // dispatches on the request body so the extra read does not depend on call
 // ordering, and records how many reads happened.
+//
+// It carried the doc comment of a TestUpdate_EmptyAssigneesRemovesAll that is
+// nowhere in this file, promising that the empty array is forwarded to GitLab.
+// Nothing here reads a request body, so that claim was made by no test at all;
+// TestUpdate_EmptyAssignees_ReachesGitLabAsAnEmptyArray makes it now.
 func clearGuardHandler(t *testing.T, assignees string, reads *int) http.HandlerFunc {
 	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			// t.Fatalf would abort the httptest server's goroutine rather than
+			// the test: report, answer deterministically and return.
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		if strings.Contains(string(body), "workItemUpdate") {
 			testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Updated","author":{"username":"dev"},"widgets":[]}}}}`)
@@ -2047,14 +2094,16 @@ func TestMapStatusToID(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestCreate_WithLinkedItems verifies that linked items are passed to the API.
+//
+// The link type and the ids are read out of the mutation, since that is the
+// claim: the test asserted only the title the fixture echoes back, which a
+// create that dropped the widget answers with just as readily. The ids arrive
+// wrapped as work item global IDs, and the key client-go spells them under is
+// workItemsIds rather than the workItemIds a reader would expect.
 func TestCreate_WithLinkedItems(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf(fmtUnexpMethod, r.Method)
-		}
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/55","iid":"55","workItemType":{"name":"Issue"},"state":"OPEN","title":"Linked","author":{"username":"dev"},"widgets":[]}}}}`)
-	})
-	client := testutil.NewTestClient(t, handler)
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got,
+		`{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/55","iid":"55","workItemType":{"name":"Issue"},"state":"OPEN","title":"Linked","author":{"username":"dev"},"widgets":[]}}}}`))
 
 	out, err := Create(t.Context(), client, CreateInput{
 		FullPath:       testFullPath,
@@ -2070,6 +2119,15 @@ func TestCreate_WithLinkedItems(t *testing.T) {
 	}
 	if out.WorkItem.Title != "Linked" {
 		t.Errorf("Title = %q, want 'Linked'", out.WorkItem.Title)
+	}
+	input := mutationInput(t, got)
+	for _, testCase := range []wireCase{
+		{name: "link_type", widget: "linkedItemsWidget", field: "linkType", want: "BLOCKS"},
+		{name: "work_item_ids", widget: "linkedItemsWidget", field: "workItemsIds", want: []any{"gid://gitlab/WorkItem/10", "gid://gitlab/WorkItem/20"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			assertWire(t, input, testCase)
+		})
 	}
 }
 
@@ -2093,12 +2151,14 @@ func TestCreate_LinkedItemsNil(t *testing.T) {
 	}
 }
 
-// TestCreate_LinkedItemsEmptyIDs verifies that linked items with empty IDs is ignored.
+// TestCreate_LinkedItemsEmptyIDs verifies that linked items with empty IDs is
+// ignored, by reading the mutation rather than the answer: a link type with no
+// work items to link is not a widget GitLab has anything to do, and the test
+// asserted only the echoed title, which says nothing about what was sent.
 func TestCreate_LinkedItemsEmptyIDs(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Empty links","author":{"username":"dev"},"widgets":[]}}}}`)
-	})
-	client := testutil.NewTestClient(t, handler)
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got,
+		`{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Empty links","author":{"username":"dev"},"widgets":[]}}}}`))
 
 	out, err := Create(t.Context(), client, CreateInput{
 		FullPath:       testProjectPath,
@@ -2114,6 +2174,9 @@ func TestCreate_LinkedItemsEmptyIDs(t *testing.T) {
 	}
 	if out.WorkItem.Title != "Empty links" {
 		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+	if widget, ok := mutationInput(t, got)["linkedItemsWidget"]; ok {
+		t.Errorf("linkedItemsWidget = %#v, want it absent from the mutation", widget)
 	}
 }
 
@@ -2299,11 +2362,16 @@ func TestListWorkItemTypes_NotFound(t *testing.T) {
 	}
 }
 
-// TestListWorkItemTypes_WithOptions verifies ListWorkItemTypes passes name and
-// onlyAvailable filter options to the API.
+// TestListWorkItemTypes_WithOptions verifies ListWorkItemTypes passes name,
+// onlyAvailable and the forward cursor pair to the API.
+//
+// It set all four and read none of them, asserting the name of the type the
+// fixture answers with, which a handler that forwarded nothing answers with
+// too. Each is given a value no other option has, so the four variables also
+// tell a swap apart.
 func TestListWorkItemTypes_WithOptions(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got, `{
 			"data": {
 				"namespace": {
 					"workItemTypes": {
@@ -2314,9 +2382,7 @@ func TestListWorkItemTypes_WithOptions(t *testing.T) {
 					}
 				}
 			}
-		}`)
-	})
-	client := testutil.NewTestClient(t, handler)
+		}`))
 
 	out, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
 		FullPath:      testFullPath,
@@ -2333,6 +2399,44 @@ func TestListWorkItemTypes_WithOptions(t *testing.T) {
 	}
 	if out.Types[0].Name != "Issue" {
 		t.Errorf("Types[0].Name = %q, want Issue", out.Types[0].Name)
+	}
+	sent := map[string]any{
+		"namespacePath": testFullPath,
+		"name":          "ISSUE",
+		"onlyAvailable": true,
+		"first":         float64(10),
+		"after":         "cursor-abc",
+	}
+	for variable, want := range sent {
+		t.Run(variable, func(t *testing.T) {
+			if value := got.Variables[variable]; value != want {
+				t.Errorf("variable %s = %#v, want %#v", variable, value, want)
+			}
+		})
+	}
+}
+
+// TestListWorkItemTypes_Pagination_CarriesEveryCursorField holds the four
+// fields of the connection's pageInfo to the answer, each with a value no
+// other field has.
+//
+// The only fixture that read them sent false, false, "" and "", where a field
+// copied from its neighbor looks exactly like the one it should have carried,
+// and start_cursor was read nowhere at all: the backward half of this
+// connection could have been dropped with the whole suite green.
+func TestListWorkItemTypes_Pagination_CarriesEveryCursorField(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItemTypes":{`+
+			`"nodes":[{"id":"gid://gitlab/WorkItems::Type/1","name":"Issue","enabled":true}],`+
+			`"pageInfo":{"hasNextPage":true,"hasPreviousPage":false,"endCursor":"cursor-end","startCursor":"cursor-start"}}}}}`)
+	})
+	out, err := ListWorkItemTypes(t.Context(), testutil.NewTestClient(t, handler), ListWorkItemTypesInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.GraphQLPaginationOutput{HasNextPage: true, EndCursor: "cursor-end", StartCursor: "cursor-start"}
+	if out.Pagination != want {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -2622,6 +2726,10 @@ func TestList_Filters_ReachTheWire(t *testing.T) {
 		{"iteration_cadence_id", ListInput{IterationCadenceID: []string{"gid://gitlab/Iterations::Cadence/3"}}, "iterationCadenceId", []any{"gid://gitlab/Iterations::Cadence/3"}},
 		{"iteration_id", ListInput{IterationID: []string{"gid://gitlab/Iteration/4"}}, "iterationId", []any{"gid://gitlab/Iteration/4"}},
 		{"iteration_wildcard_id", ListInput{IterationWildcardID: "CURRENT"}, "iterationWildcardId", "CURRENT"},
+		// TestList_Filters passes a label and reads every other variable it
+		// sends, so this was the one filter the action exposes that nothing
+		// ever saw on the wire.
+		{"label_name", ListInput{LabelName: []string{testLabelBug}}, "labelName", []any{testLabelBug}},
 		{"milestone_title", ListInput{MilestoneTitle: []string{"v1.0"}}, "milestoneTitle", []any{"v1.0"}},
 		{"milestone_wildcard_id", ListInput{MilestoneWildcardID: "UPCOMING"}, "milestoneWildcardId", "UPCOMING"},
 		{"my_reaction_emoji", ListInput{MyReactionEmoji: "thumbsup"}, "myReactionEmoji", "thumbsup"},
@@ -2645,6 +2753,96 @@ func TestList_Filters_ReachTheWire(t *testing.T) {
 				t.Errorf("variable %s = %#v, want %#v", testCase.variable, sent, testCase.want)
 			}
 		})
+	}
+}
+
+// TestList_EmptyFilterLists_SendNoVariable pins the premise every list filter
+// is handed over on: buildListWorkItemsQuery declares a variable for one only
+// when its own len is above zero, so an empty filter builds the same request
+// as an absent one.
+//
+// That is why none of them is guarded here, and it is a claim about client-go
+// rather than about this package, so it needs a test of its own: without one,
+// a release that started forwarding empty lists would send eleven filters that
+// match nothing and no assertion in this file would notice.
+func TestList_EmptyFilterLists_SendNoVariable(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got, emptyWorkItemsResponse))
+	_, err := List(t.Context(), client, ListInput{
+		FullPath:           testFullPath,
+		In:                 []string{},
+		Types:              []string{},
+		AssigneeUsernames:  []string{},
+		IDs:                []string{},
+		IIDs:               []string{},
+		ParentIDs:          []string{},
+		LabelName:          []string{},
+		MilestoneTitle:     []string{},
+		ReleaseTag:         []string{},
+		IterationID:        []string{},
+		IterationCadenceID: []string{},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, variable := range []string{
+		"in", "types", "assigneeUsernames", "ids", "iids", "parentIds",
+		"labelName", "milestoneTitle", "releaseTag", "iterationId", "iterationCadenceId",
+	} {
+		t.Run(variable, func(t *testing.T) {
+			if value, ok := got.Variables[variable]; ok {
+				t.Errorf("variable %s = %#v, want it absent for an empty filter", variable, value)
+			}
+		})
+	}
+}
+
+// TestCreate_EmptyIDLists_BuildNoWidget pins the same premise on the create
+// path, where client-go folds an id list into a widget of its own only when
+// the list has entries.
+func TestCreate_EmptyIDLists_BuildNoWidget(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordGraphQL(t, &got, workItemCreateResponse))
+	_, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testFullPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "Widgets",
+		AssigneeIDs:    []int64{},
+		LabelIDs:       []int64{},
+		CRMContactIDs:  []int64{},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	input := mutationInput(t, got)
+	for _, widget := range []string{"assigneesWidget", "labelsWidget", "crmContactsWidget"} {
+		t.Run(widget, func(t *testing.T) {
+			if value, ok := input[widget]; ok {
+				t.Errorf("%s = %#v, want it absent for an empty list", widget, value)
+			}
+		})
+	}
+}
+
+// TestUpdate_EmptyLabelLists_BuildNoWidget pins it on the update path too. The
+// two assignee and CRM lists are deliberately not here: on update an explicit
+// empty array is the caller asking for every entry to be removed, so those two
+// are guarded on nil rather than on length and reach GitLab as [].
+func TestUpdate_EmptyLabelLists_BuildNoWidget(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+	_, err := Update(t.Context(), client, UpdateInput{
+		FullPath:       testFullPath,
+		IID:            42,
+		Title:          "Renamed",
+		AddLabelIDs:    []int64{},
+		RemoveLabelIDs: []int64{},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if value, ok := mutationInput(t, got)["labelsWidget"]; ok {
+		t.Errorf("labelsWidget = %#v, want it absent for two empty lists", value)
 	}
 }
 
@@ -3027,6 +3225,194 @@ func TestCreate_MalformedCreatedAt_IsRefusedByName(t *testing.T) {
 		t.Errorf("error = %v, want it to name created_at", err)
 	}
 }
+
+// mutationInput reads the single input object a create or update mutation
+// sends, which is where every field of both builders ends up.
+func mutationInput(t *testing.T, got graphQLRequest) map[string]any {
+	t.Helper()
+	input, ok := got.Variables["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("mutation input = %#v, want an object", got.Variables["input"])
+	}
+	return input
+}
+
+// wireCase names one field of a builder, the widget client-go folds it into
+// (empty for a key of the mutation input itself) and the value it must carry.
+type wireCase struct {
+	name   string
+	widget string
+	field  string
+	want   any
+}
+
+// assertWire reads the leaf a case names out of the mutation input and
+// compares it with what the caller sent.
+func assertWire(t *testing.T, input map[string]any, testCase wireCase) {
+	t.Helper()
+	sent := input[testCase.field]
+	if testCase.widget != "" {
+		sent = widgetField(t, input, testCase.widget, testCase.field)
+	}
+	if !reflect.DeepEqual(sent, testCase.want) {
+		t.Errorf("%s = %#v, want %#v", testCase.field, sent, testCase.want)
+	}
+}
+
+// recordWorkItemUpdate answers the two POSTs an update makes and records the
+// mutation's own request into got.
+//
+// client-go resolves the work item's global ID with a query of its own before
+// it sends workItemUpdate, so a handler recording every request it sees would
+// end up holding the lookup rather than the mutation.
+func recordWorkItemUpdate(t *testing.T, got *graphQLRequest) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		if !strings.Contains(string(raw), "workItemUpdate") {
+			testutil.RespondJSON(w, http.StatusOK, workItemGIDResponse)
+			return
+		}
+		if err = json.Unmarshal(raw, got); err != nil {
+			t.Errorf("decode GraphQL request: %v", err)
+			http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, workItemUpdateResponse)
+	}
+}
+
+// workItemGIDResponse answers the global-ID lookup every update and delete
+// makes before its own mutation.
+const workItemGIDResponse = `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/42"}}}}`
+
+// workItemUpdateResponse is the shortest answer an update mutation accepts,
+// for the tests whose whole assertion is on the request.
+const workItemUpdateResponse = `{"data":{"workItemUpdate":{"workItem":{` +
+	`"id":"gid://gitlab/WorkItem/42","iid":"42","workItemType":{"name":"Issue"},` +
+	`"state":"OPEN","title":"Updated","author":{"username":"dev"},"widgets":[]}}}}`
+
+// TestUpdate_Fields_ReachTheWire drives one update field at a time and asserts
+// the leaf it becomes inside the mutation input, in the widget client-go folds
+// it into and with the global ID wrapping client-go applies.
+//
+// Nothing read that mutation before. TestUpdate_AllOptions sets seventeen
+// fields at once and asserts only the title the fixture echoes back, so a
+// field assigned from its neighbor, or never assigned at all, reached GitLab
+// wrong with the whole suite green.
+func TestUpdate_Fields_ReachTheWire(t *testing.T) {
+	milestone, parent, iteration, weight := int64(4), int64(9), int64(7), int64(3)
+	cases := []struct {
+		input UpdateInput
+		wireCase
+	}{
+		{UpdateInput{Title: "Renamed"}, wireCase{name: "title", field: "title", want: "Renamed"}},
+		{UpdateInput{StateEvent: "CLOSE"}, wireCase{name: "state_event", field: "stateEvent", want: "CLOSE"}},
+		{UpdateInput{Description: "new desc"}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: "new desc"}},
+		{UpdateInput{AssigneeIDs: []int64{5}}, wireCase{name: "assignee_ids", widget: "assigneesWidget", field: "assigneeIds", want: []any{"gid://gitlab/User/5"}}},
+		{UpdateInput{MilestoneID: &milestone}, wireCase{name: "milestone_id", widget: "milestoneWidget", field: "milestoneId", want: "gid://gitlab/Milestone/4"}},
+		{UpdateInput{CRMContactIDs: []int64{6}}, wireCase{name: "crm_contact_ids", widget: "crmContactsWidget", field: "contactIds", want: []any{"gid://gitlab/CustomerRelations::Contact/6"}}},
+		// REPLACE is what makes the list the caller sent the whole list;
+		// without it GitLab would add to the contacts already attached.
+		{UpdateInput{CRMContactIDs: []int64{6}}, wireCase{name: "crm_contact_ids replace", widget: "crmContactsWidget", field: "operationMode", want: "REPLACE"}},
+		{UpdateInput{ParentID: &parent}, wireCase{name: "parent_id", widget: "hierarchyWidget", field: "parentId", want: "gid://gitlab/WorkItem/9"}},
+		{UpdateInput{AddLabelIDs: []int64{11}}, wireCase{name: "add_label_ids", widget: "labelsWidget", field: "addLabelIds", want: []any{"gid://gitlab/Label/11"}}},
+		{UpdateInput{RemoveLabelIDs: []int64{12}}, wireCase{name: "remove_label_ids", widget: "labelsWidget", field: "removeLabelIds", want: []any{"gid://gitlab/Label/12"}}},
+		{UpdateInput{StartDate: "2026-06-01"}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: "2026-06-01"}},
+		{UpdateInput{DueDate: "2026-06-30"}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: "2026-06-30"}},
+		{UpdateInput{Weight: &weight}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: float64(3)}},
+		{UpdateInput{HealthStatus: "needsAttention"}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: "needsAttention"}},
+		{UpdateInput{IterationID: &iteration}, wireCase{name: "iteration_id", widget: "iterationWidget", field: "iterationId", want: "gid://gitlab/Iteration/7"}},
+		{UpdateInput{Color: "#00ff00"}, wireCase{name: "color", widget: "colorWidget", field: "color", want: "#00ff00"}},
+		{UpdateInput{Status: "IN_PROGRESS"}, wireCase{name: "status", widget: "statusWidget", field: "status", want: string(gl.WorkItemStatusInProgress)}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+			input := testCase.input
+			input.FullPath, input.IID = testFullPath, 42
+			if _, err := Update(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertWire(t, mutationInput(t, got), testCase.wireCase)
+		})
+	}
+}
+
+// TestUpdate_EmptyAssignees_ReachesGitLabAsAnEmptyArray asserts the property
+// the clearing guard exists to protect: a confirmed clear sends assigneeIds as
+// [], which is how GitLab is told to remove every assignee.
+//
+// An update that dropped the empty array would leave the assignees in place
+// and answer with the work item as if it had removed them, and the guard would
+// have asked the user to approve a deletion that never happened.
+func TestUpdate_EmptyAssignees_ReachesGitLabAsAnEmptyArray(t *testing.T) {
+	var got graphQLRequest
+	client := testutil.NewTestClient(t, recordWorkItemUpdate(t, &got))
+	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Name:      "gitlab_update_work_item",
+			Arguments: json.RawMessage(`{"full_path":"my-group/my-project","work_item_iid":42,"assignee_ids":[],"confirm":true}`),
+		},
+	})
+
+	if _, err := Update(ctx, client, UpdateInput{FullPath: testFullPath, IID: 42, AssigneeIDs: []int64{}}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	sent := widgetField(t, mutationInput(t, got), "assigneesWidget", "assigneeIds")
+	if !reflect.DeepEqual(sent, []any{}) {
+		t.Errorf("assigneeIds = %#v, want an empty array", sent)
+	}
+}
+
+// TestCreate_Widgets_ReachTheWire drives one create field at a time and
+// asserts the leaf it becomes, for the fields the two tests beside it leave
+// unread: TestCreate_AllOptions sets thirteen at once and asserts only the
+// echoed title, and TestCreate_Fields_ReachTheWire covers the five added for
+// issue 583.
+func TestCreate_Widgets_ReachTheWire(t *testing.T) {
+	confidential := true
+	milestone, weight := int64(4), int64(3)
+	cases := []struct {
+		input CreateInput
+		wireCase
+	}{
+		{CreateInput{Confidential: &confidential}, wireCase{name: "confidential", field: "confidential", want: true}},
+		{CreateInput{Description: "desc"}, wireCase{name: "description", widget: "descriptionWidget", field: "description", want: "desc"}},
+		{CreateInput{AssigneeIDs: []int64{5}}, wireCase{name: "assignee_ids", widget: "assigneesWidget", field: "assigneeIds", want: []any{"gid://gitlab/User/5"}}},
+		{CreateInput{MilestoneID: &milestone}, wireCase{name: "milestone_id", widget: "milestoneWidget", field: "milestoneId", want: "gid://gitlab/Milestone/4"}},
+		{CreateInput{LabelIDs: []int64{11}}, wireCase{name: "label_ids", widget: "labelsWidget", field: "labelIds", want: []any{"gid://gitlab/Label/11"}}},
+		{CreateInput{StartDate: "2026-06-01"}, wireCase{name: "start_date", widget: "startAndDueDateWidget", field: "startDate", want: "2026-06-01"}},
+		{CreateInput{DueDate: "2026-06-30"}, wireCase{name: "due_date", widget: "startAndDueDateWidget", field: "dueDate", want: "2026-06-30"}},
+		{CreateInput{Weight: &weight}, wireCase{name: "weight", widget: "weightWidget", field: "weight", want: float64(3)}},
+		{CreateInput{HealthStatus: "needsAttention"}, wireCase{name: "health_status", widget: "healthStatusWidget", field: "healthStatus", want: "needsAttention"}},
+		{CreateInput{Color: "#00ff00"}, wireCase{name: "color", widget: "colorWidget", field: "color", want: "#00ff00"}},
+		{CreateInput{Status: "DONE"}, wireCase{name: "status", widget: "statusWidget", field: "status", want: string(gl.WorkItemStatusDone)}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var got graphQLRequest
+			client := testutil.NewTestClient(t, recordGraphQL(t, &got, workItemCreateResponse))
+			input := testCase.input
+			input.FullPath, input.WorkItemTypeID, input.Title = testFullPath, testTypeGID, "Widgets"
+			if _, err := Create(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertWire(t, mutationInput(t, got), testCase.wireCase)
+		})
+	}
+}
+
+// workItemCreateResponse is the shortest answer a create mutation accepts.
+const workItemCreateResponse = `{"data":{"workItemCreate":{"workItem":{` +
+	`"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Task"},` +
+	`"state":"OPEN","title":"Widgets","author":{"username":"dev"}}}}}`
 
 // ---------------------------------------------------------------------------
 // Helpers

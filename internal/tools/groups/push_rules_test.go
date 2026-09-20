@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,8 @@ const pathGroupPushRule = "/api/v4/groups/99/push_rule"
 var groupPushRuleJSON = `{"id":7,"commit_message_regex":"^JIRA-","commit_message_negative_regex":"WIP","branch_name_regex":"^(feature|bugfix)/","author_email_regex":"@example.com$","file_name_regex":"\\.exe$","max_file_size":100,"deny_delete_tag":true,"member_check":true,"prevent_secrets":true,"commit_committer_check":true,"commit_committer_name_check":false,"reject_unsigned_commits":true,"reject_non_dco_commits":false,"created_at":"2026-01-15T10:00:00Z"}`
 
 // TestGetPushRules_Success verifies GetPushRules issues a GET to the push_rule
-// endpoint and maps every gl.GroupPushRules field into the output.
+// endpoint and reads back the id, one pattern, the size, five flags and the
+// date; [TestGetPushRules_PublishesEachFieldGitLabSent] holds every field.
 func TestGetPushRules_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupPushRule {
@@ -321,7 +323,9 @@ func TestFormatPushRuleMarkdown(t *testing.T) {
 	}
 }
 
-// TestAddPushRule_AllFields exercises every optional setter in applyAddPushRuleOptions.
+// TestAddPushRule_AllFields sends every optional setting at once and holds the
+// body to seven of their names; [TestPushRuleWrites_EachSettingReachesTheRequestOnItsOwn]
+// holds each setting to its key and value.
 func TestAddPushRule_AllFields(t *testing.T) {
 	var gotBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +364,8 @@ func TestAddPushRule_AllFields(t *testing.T) {
 	}
 }
 
-// TestEditPushRule_AllFields exercises every optional setter in applyEditPushRuleOptions.
+// TestEditPushRule_AllFields sends every optional setting at once and holds
+// the body to seven of their names, as the add test above does.
 func TestEditPushRule_AllFields(t *testing.T) {
 	var gotBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -651,6 +656,133 @@ func TestFormatPushRuleMarkdown_APatternIsShownAsTheTextItIs(t *testing.T) {
 		t.Run(entity, func(t *testing.T) {
 			if strings.Contains(md, entity) {
 				t.Errorf("the pattern carries the entity %q a reader would copy back:\n%s", entity, md)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Every field the push-rule converter copies, and every setting the writes send
+// ---------------------------------------------------------------------------.
+
+// getDistinctPushRule answers the push-rule request with body and returns what
+// GetPushRules published for it.
+func getDistinctPushRule(t *testing.T, body string) PushRuleOutput {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathGroupPushRule {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := GetPushRules(context.Background(), client, GetPushRulesInput{GroupID: "99"})
+	if err != nil {
+		t.Fatalf("GetPushRules() unexpected error: %v", err)
+	}
+	return out
+}
+
+// TestGetPushRules_PublishesEachFieldGitLabSent verifies the whole rule
+// against the fixture, whose five patterns are each their own text. The
+// earlier assertion named the id, one pattern and the size, so a converter
+// copying one pattern into another's field passed.
+func TestGetPushRules_PublishesEachFieldGitLabSent(t *testing.T) {
+	out := getDistinctPushRule(t, groupPushRuleJSON)
+	want := PushRuleOutput{
+		ID: 7, CommitMessageRegex: "^JIRA-", CommitMessageNegativeRegex: "WIP", BranchNameRegex: "^(feature|bugfix)/",
+		AuthorEmailRegex: "@example.com$", FileNameRegex: `\.exe$`, MaxFileSize: 100,
+		DenyDeleteTag: true, MemberCheck: true, PreventSecrets: true, CommitCommitterCheck: true,
+		RejectUnsignedCommits: true, CreatedAt: "2026-01-15T10:00:00Z",
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetPushRules() published\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestGetPushRules_PublishesEachFlagOnItsOwn verifies each of the seven rule
+// flags lands on its own field when sent alone; the fixture sets five of them
+// true together, so a swapped pair among those five passed.
+func TestGetPushRules_PublishesEachFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want PushRuleOutput
+	}{
+		{key: "deny_delete_tag", want: PushRuleOutput{ID: 7, DenyDeleteTag: true}},
+		{key: "member_check", want: PushRuleOutput{ID: 7, MemberCheck: true}},
+		{key: "prevent_secrets", want: PushRuleOutput{ID: 7, PreventSecrets: true}},
+		{key: "commit_committer_check", want: PushRuleOutput{ID: 7, CommitCommitterCheck: true}},
+		{key: "commit_committer_name_check", want: PushRuleOutput{ID: 7, CommitCommitterNameCheck: true}},
+		{key: "reject_unsigned_commits", want: PushRuleOutput{ID: 7, RejectUnsignedCommits: true}},
+		{key: "reject_non_dco_commits", want: PushRuleOutput{ID: 7, RejectNonDCOCommits: true}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := getDistinctPushRule(t, `{"id":7,"`+tc.key+`":true}`)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("GetPushRules() published %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// pushRuleSetting is one push-rule setting: the key GitLab takes it under,
+// the value it carries, and the add and edit inputs naming only it.
+type pushRuleSetting struct {
+	key   string
+	value any
+	add   AddPushRuleInput
+	edit  EditPushRuleInput
+}
+
+// pushRuleSettings is every setting the two writes take, each with a value no
+// other setting in the table carries.
+func pushRuleSettings() []pushRuleSetting {
+	return []pushRuleSetting{
+		{"author_email_regex", "@acme.example$", AddPushRuleInput{AuthorEmailRegex: "@acme.example$"}, EditPushRuleInput{AuthorEmailRegex: new("@acme.example$")}},
+		{"branch_name_regex", "^feature/", AddPushRuleInput{BranchNameRegex: "^feature/"}, EditPushRuleInput{BranchNameRegex: new("^feature/")}},
+		{"commit_message_negative_regex", "WIP", AddPushRuleInput{CommitMessageNegativeRegex: "WIP"}, EditPushRuleInput{CommitMessageNegativeRegex: new("WIP")}},
+		{"commit_message_regex", "^JIRA-", AddPushRuleInput{CommitMessageRegex: "^JIRA-"}, EditPushRuleInput{CommitMessageRegex: new("^JIRA-")}},
+		{"file_name_regex", `\.exe$`, AddPushRuleInput{FileNameRegex: `\.exe$`}, EditPushRuleInput{FileNameRegex: new(`\.exe$`)}},
+		{"max_file_size", float64(25), AddPushRuleInput{MaxFileSize: new(int64(25))}, EditPushRuleInput{MaxFileSize: new(int64(25))}},
+		{"commit_committer_check", true, AddPushRuleInput{CommitCommitterCheck: new(true)}, EditPushRuleInput{CommitCommitterCheck: new(true)}},
+		{"commit_committer_name_check", true, AddPushRuleInput{CommitCommitterNameCheck: new(true)}, EditPushRuleInput{CommitCommitterNameCheck: new(true)}},
+		{"deny_delete_tag", true, AddPushRuleInput{DenyDeleteTag: new(true)}, EditPushRuleInput{DenyDeleteTag: new(true)}},
+		{"member_check", true, AddPushRuleInput{MemberCheck: new(true)}, EditPushRuleInput{MemberCheck: new(true)}},
+		{"prevent_secrets", true, AddPushRuleInput{PreventSecrets: new(true)}, EditPushRuleInput{PreventSecrets: new(true)}},
+		{"reject_unsigned_commits", true, AddPushRuleInput{RejectUnsignedCommits: new(true)}, EditPushRuleInput{RejectUnsignedCommits: new(true)}},
+		{"reject_non_dco_commits", true, AddPushRuleInput{RejectNonDCOCommits: new(true)}, EditPushRuleInput{RejectNonDCOCommits: new(true)}},
+	}
+}
+
+// TestPushRuleWrites_EachSettingReachesTheRequestOnItsOwn verifies each
+// setting, named alone, produces a body of exactly that setting under its own
+// key with its own value, on the add and on the edit. The all-fields tests
+// send five flags true at once and search the body for seven names, so a
+// setting written under a neighbor's key or with a neighbor's value passed.
+func TestPushRuleWrites_EachSettingReachesTheRequestOnItsOwn(t *testing.T) {
+	for _, setting := range pushRuleSettings() {
+		t.Run("add/"+setting.key, func(t *testing.T) {
+			add := setting.add
+			add.GroupID = "99"
+			body := recordedJSONBody(t, http.StatusCreated, groupPushRuleJSON, func(client *gitlabclient.Client) error {
+				_, err := AddPushRule(context.Background(), client, add)
+				return err
+			})
+			want := map[string]any{setting.key: setting.value}
+			if !reflect.DeepEqual(body, want) {
+				t.Errorf("add body = %v, want %v", body, want)
+			}
+		})
+		t.Run("edit/"+setting.key, func(t *testing.T) {
+			edit := setting.edit
+			edit.GroupID = "99"
+			body := recordedJSONBody(t, http.StatusOK, groupPushRuleJSON, func(client *gitlabclient.Client) error {
+				_, err := EditPushRule(context.Background(), client, edit)
+				return err
+			})
+			want := map[string]any{setting.key: setting.value}
+			if !reflect.DeepEqual(body, want) {
+				t.Errorf("edit body = %v, want %v", body, want)
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,6 +136,95 @@ func TestProjectUpload_ID_Omitted_VersionTolerance(t *testing.T) {
 	}
 	if out.URL != "/uploads/abc/dk.png" {
 		t.Errorf("out.URL = %q, want mapped despite missing id", out.URL)
+	}
+}
+
+// TestProjectUpload_FullURL_IsTheInstanceRootPlusFullPath verifies that
+// full_url addresses the instance's web interface: its scheme and host are the
+// instance's, and its path is exactly the full_path GitLab sent.
+//
+// What it guards: full_url was built on the SDK's base URL, which carries the
+// /api/v4 the SDK appends, while full_path is a path from the instance root
+// ("/-/project/1234/uploads/…"). The result was
+// "<host>/api/v4/-/project/1234/uploads/…", an address nothing serves, and it
+// was both the card's URL row and the source of the inline image embed. The
+// assertion that existed only looked for the file name inside the string, so
+// it passed on the broken prefix.
+func TestProjectUpload_FullURL_IsTheInstanceRootPlusFullPath(t *testing.T) {
+	const fullPath = "/-/project/1234/uploads/abc/dk.png"
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"alt": "dk",
+			"url": "/uploads/abc/dk.png",
+			"full_path": "`+fullPath+`",
+			"markdown": "![dk](/uploads/abc/dk.png)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Upload(context.Background(), nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	got, err := url.Parse(out.FullURL)
+	if err != nil {
+		t.Fatalf("url.Parse(%q) error = %v", out.FullURL, err)
+	}
+	base := client.GL().BaseURL()
+	if got.Scheme != base.Scheme || got.Host != base.Host {
+		t.Errorf("FullURL origin = %s://%s, want %s://%s", got.Scheme, got.Host, base.Scheme, base.Host)
+	}
+	if got.Path != fullPath {
+		t.Errorf("FullURL path = %q, want %q", got.Path, fullPath)
+	}
+}
+
+// TestProjectUpload_ContextCancelledMidFlight_AbandonsTheRequest verifies that
+// the caller's context reaches the upload request, so abandoning a call ends
+// the transfer instead of leaving it running against GitLab.
+//
+// It cancels only once the request has arrived, which is what separates this
+// from the already-cancelled case the guard at the top of Upload answers: the
+// guard returns before any request is built, so it cannot say whether the
+// request carries the context. The SDK takes it as a request option, and the
+// upload call was the one in this package that passed none.
+func TestProjectUpload_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	arrived := make(chan struct{})
+	var once sync.Once
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		once.Do(func() { close(arrived) })
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"alt": "dk",
+				"url": "/uploads/abc/dk.png",
+				"full_path": "/-/project/1234/uploads/abc/dk.png",
+				"markdown": "![dk](/uploads/abc/dk.png)"
+			}`)
+		}
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	go func() {
+		<-arrived
+		cancel()
+	}()
+
+	_, err := Upload(ctx, nil, client, UploadInput{
+		ProjectID:     "42",
+		Filename:      "dk.png",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("png")),
+	})
+	if err == nil {
+		t.Fatal("Upload() error = nil after the context was cancelled mid-flight, want the cancellation")
 	}
 }
 
@@ -678,9 +768,15 @@ func TestProjectUploadList_Success(t *testing.T) {
 	}
 }
 
-// TestProjectUploadDelete_Success verifies deleting a markdown upload.
+// TestProjectUploadDelete_Success verifies that Delete issues a DELETE to the
+// upload the caller named. The path is asserted rather than the method alone:
+// the upload id only reaches GitLab through that path, so a handler that sent
+// a different one deleted somebody else's attachment and answered success,
+// and nothing here noticed until this assertion existed.
 func TestProjectUploadDelete_Success(t *testing.T) {
+	var gotMethod, gotPath string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
 		if r.Method != http.MethodDelete {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -691,10 +787,16 @@ func TestProjectUploadDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 	err := Delete(context.Background(), client, DeleteInput{
 		ProjectID: "42",
-		UploadID:  1,
+		UploadID:  7,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q, want DELETE", gotMethod)
+	}
+	if gotPath != pathProjectUploads+"/7" {
+		t.Errorf("path = %q, want %q", gotPath, pathProjectUploads+"/7")
 	}
 }
 
@@ -749,12 +851,18 @@ func TestFormatUploadMarkdown_NoFullURL(t *testing.T) {
 // embed between the rows and the guidance, that the guidance still closes the
 // response so ExtractHints can read it, and that the block states the
 // audience the embed implies.
+//
+// The fixture is the answer GitLab really sends for a PNG: alt is the file
+// name with the extension taken off, which is what GitLab does for an image or
+// a video, so alt is "screenshot" while the URL keeps "screenshot.png". The
+// fixture used to give alt the extension, a shape no instance produces, and
+// that is what hid the embed reading the alt text instead of the file name.
 func TestUploadToolResult_Image(t *testing.T) {
 	out := UploadOutput{
-		Alt:      "screenshot.png",
+		Alt:      "screenshot",
 		URL:      "/uploads/a1b2/screenshot.png",
 		FullURL:  "https://gitlab.example.com/uploads/a1b2/screenshot.png",
-		Markdown: "![screenshot.png](/uploads/a1b2/screenshot.png)",
+		Markdown: "![screenshot](/uploads/a1b2/screenshot.png)",
 	}
 	result := UploadToolResult(out)
 	if result == nil || len(result.Content) != 1 {
@@ -765,11 +873,11 @@ func TestUploadToolResult_Image(t *testing.T) {
 		t.Fatalf("content block is %T, want *mcp.TextContent", result.Content[0])
 	}
 	want := "## File Uploaded\n\n" +
-		"- **Alt**: screenshot.png\n" +
+		"- **Alt**: screenshot\n" +
 		"- **Path**: /uploads/a1b2/screenshot.png\n" +
 		"- **URL**: [https://gitlab.example.com/uploads/a1b2/screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
-		"- **Markdown**: `![screenshot.png](/uploads/a1b2/screenshot.png)`\n\n" +
-		"![screenshot.png](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
+		"- **Markdown**: `![screenshot](/uploads/a1b2/screenshot.png)`\n\n" +
+		"![screenshot](https://gitlab.example.com/uploads/a1b2/screenshot.png)\n" +
 		uploadCardHints
 	if tc.Text != want {
 		t.Errorf("UploadToolResult() text =\n%q\nwant:\n%q", tc.Text, want)
@@ -813,6 +921,39 @@ func TestUploadToolResult_NonImage(t *testing.T) {
 	}
 }
 
+// TestUploadToolResult_ImageWithUnlinkableFullURL_NoEmbed verifies that an
+// image whose address is not one a client could open carries no inline embed:
+// the result is the plain card, and the address is still there as text.
+//
+// One allow list decides both halves, so this pins the second operand of the
+// embed guard, which every other case leaves true. An embed pointing at a
+// relative path renders as a broken image in a client that trusts it.
+func TestUploadToolResult_ImageWithUnlinkableFullURL_NoEmbed(t *testing.T) {
+	out := UploadOutput{
+		Alt:      "screenshot",
+		URL:      "/uploads/a1b2/screenshot.png",
+		FullURL:  "/uploads/a1b2/screenshot.png",
+		Markdown: "![screenshot](/uploads/a1b2/screenshot.png)",
+	}
+	result := UploadToolResult(out)
+	if result == nil || len(result.Content) != 1 {
+		t.Fatalf("UploadToolResult() = %#v, want one content block", result)
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content block is %T, want *mcp.TextContent", result.Content[0])
+	}
+	if want := FormatUploadMarkdown(out); tc.Text != want {
+		t.Errorf("UploadToolResult() text =\n%q\nwant the plain card:\n%q", tc.Text, want)
+	}
+	if !strings.Contains(tc.Text, "- **URL**: `/uploads/a1b2/screenshot.png`") {
+		t.Errorf("UploadToolResult() text =\n%q\nwant the address kept as text", tc.Text)
+	}
+	if tc.Annotations != toolutil.ContentAssistant {
+		t.Errorf("annotations = %#v, want toolutil.ContentAssistant", tc.Annotations)
+	}
+}
+
 // TestList_MissingProjectID verifies List returns error for empty project_id.
 func TestList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -847,7 +988,16 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_WithTimestampAndUploader verifies List maps CreatedAt and UploadedBy.
+// TestList_WithTimestampAndUploader verifies List maps CreatedAt and
+// UploadedBy, and that the timestamp is published in the wire form GitLab
+// sent rather than in Go's own rendering of a time.Time.
+//
+// The value is asserted exactly, and the Markdown the same output renders is
+// asserted beside it, because those are the two readers and the previous
+// assertion, that the field is not empty, could not tell them apart.
+// time.Time.String() produces "2026-01-01 00:00:00 +0000 UTC", which a caller
+// cannot parse as a timestamp and which toolutil.FormatTime cannot parse
+// either, so the table printed that text in the Created column.
 func TestList_WithTimestampAndUploader(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
@@ -874,8 +1024,11 @@ func TestList_WithTimestampAndUploader(t *testing.T) {
 	if out.Uploads[0].UploadedBy.ID != 7 || out.Uploads[0].UploadedBy.Name != "Admin User" {
 		t.Errorf("UploadedBy fields not mapped to documented subset: %+v", out.Uploads[0].UploadedBy)
 	}
-	if out.Uploads[0].CreatedAt == "" {
-		t.Error("expected CreatedAt to be set")
+	if out.Uploads[0].CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want the wire form GitLab sent", out.Uploads[0].CreatedAt)
+	}
+	if md := FormatListMarkdown(out); !strings.Contains(md, "| 1 Jan 2026 00:00 UTC |") {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant the Created column in the display form", md)
 	}
 }
 
@@ -921,6 +1074,41 @@ func TestDelete_CancelledContext(t *testing.T) {
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", UploadID: 5})
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
+	}
+}
+
+// TestDelete_ContextCancelledMidFlight_AbandonsTheRequest verifies that the
+// caller's context reaches the delete request, so an abandoned call stops
+// waiting on GitLab rather than running on unattended.
+//
+// It is the counterpart of the already-cancelled case above, which returns
+// before a request exists and so says nothing about what the request carries.
+// The sibling DeleteBySecret passed the context and this one did not, which is
+// the asymmetry the sweep found.
+func TestDelete_ContextCancelledMidFlight_AbandonsTheRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	arrived := make(chan struct{})
+	var once sync.Once
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		once.Do(func() { close(arrived) })
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	go func() {
+		<-arrived
+		cancel()
+	}()
+
+	err := Delete(ctx, client, DeleteInput{ProjectID: "42", UploadID: 7})
+	if err == nil {
+		t.Fatal("Delete() error = nil after the context was cancelled mid-flight, want the cancellation")
 	}
 }
 
@@ -1102,6 +1290,35 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 	}
 }
 
+// TestList_NoPaginationInput_SendsNoPaginationParameters verifies that a list
+// the caller gave no pagination for asks for the bare endpoint: no page,
+// per_page, pagination, page_token, order_by or sort.
+//
+// Each of those is written behind a guard on its own zero value, and an unset
+// page is zero rather than absent, so a guard that admitted the boundary would
+// send "page=0&per_page=0", a page the caller never named and GitLab never
+// offered. The sibling test drives every parameter set, which proves the
+// guards forward a value but not that they withhold one.
+func TestList_NoPaginationInput_SendsNoPaginationParameters(t *testing.T) {
+	var gotQuery url.Values
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := List(context.Background(), client, ListInput{ProjectID: "42"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, name := range []string{"page", "per_page", "pagination", "page_token", "order_by", "sort"} {
+		t.Run(name, func(t *testing.T) {
+			if got, ok := gotQuery[name]; ok {
+				t.Errorf("query carries %s=%v, want the parameter absent", name, got)
+			}
+		})
+	}
+}
+
 // uploadListHints is the guidance the upload list closes with.
 const uploadListHints = "\n---\n💡 **Next steps:**\n" +
 	"- Use `gitlab_project_upload_delete` with an ID from the table to remove one\n"
@@ -1119,11 +1336,15 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatListMarkdown_Populated verifies the whole table: the guidance sits
 // after the rows rather than between the heading and the header row, where it
 // used to swallow the table entirely, and the date renders in the display form.
+//
+// The timestamp is the wire form List publishes, not a bare date: a fixture
+// carrying a value the handler never produces asserts a rendering that never
+// happens.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{
 		Uploads: []ListItem{
 			{
-				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01",
+				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01T09:30:00Z",
 				UploadedBy: &UploadedByOutput{Username: "admin", Name: "Admin User"},
 			},
 		},
@@ -1131,7 +1352,7 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 	want := "## Project Markdown Uploads (1)\n\n" +
 		"| ID | Filename | Size (bytes) | Created | Uploaded By |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| 1 | a.png | 1024 | 1 Jan 2026 | Admin User (@admin) |\n" +
+		"| 1 | a.png | 1024 | 1 Jan 2026 09:30 UTC | Admin User (@admin) |\n" +
 		uploadListHints
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)

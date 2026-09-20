@@ -190,6 +190,46 @@ func TestDecorateVulnerabilityMeta_UnknownToolIsNoOp(t *testing.T) {
 	}
 }
 
+// TestDecorateVulnerabilityMeta_EmptyEntryLeavesEveryOptionAlone verifies that
+// each metadata field is copied only when the entry supplies it.
+//
+// Every entry in the real table fills usage, aliases, related actions and the
+// description, and only two supply schema overrides, so nothing else in the
+// package reaches the other side of those guards. An action added later with
+// partial metadata would otherwise lose what the generic options already
+// carried: an empty alias list would replace the tool's own name, and an empty
+// override list would drop the enum a sibling action depends on.
+func TestDecorateVulnerabilityMeta_EmptyEntryLeavesEveryOptionAlone(t *testing.T) {
+	const probe = "gitlab_vulnerability_meta_probe"
+	vulnerabilityActionMeta[probe] = vulnerabilityActionMetaEntry{}
+	t.Cleanup(func() { delete(vulnerabilityActionMeta, probe) })
+
+	options := toolutil.ActionSpecOptions{
+		Usage:                "generic usage",
+		Aliases:              []string{"generic alias"},
+		RelatedActions:       []string{"generic.related"},
+		InputSchemaOverrides: []toolutil.InputSchemaOverride{toolutil.SchemaEnumOverride("sort", "generic")},
+	}
+	options.IndividualTool.Description = "generic description"
+	decorateVulnerabilityMeta(&options, probe)
+
+	if options.Usage != "generic usage" {
+		t.Errorf("Usage = %q, want the generic one untouched", options.Usage)
+	}
+	if options.IndividualTool.Description != "generic description" {
+		t.Errorf("Description = %q, want the generic one untouched", options.IndividualTool.Description)
+	}
+	if !slices.Equal(options.Aliases, []string{"generic alias"}) {
+		t.Errorf("Aliases = %v, want the generic one left as it was", options.Aliases)
+	}
+	if !slices.Equal(options.RelatedActions, []string{"generic.related"}) {
+		t.Errorf("RelatedActions = %v, want the generic one left as it was", options.RelatedActions)
+	}
+	if len(options.InputSchemaOverrides) != 1 {
+		t.Errorf("InputSchemaOverrides = %v, want the generic one left as it was", options.InputSchemaOverrides)
+	}
+}
+
 // TestActionSpecs_CallRoutes verifies all 8 vulnerability routes execute successfully.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{

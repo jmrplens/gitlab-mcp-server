@@ -7,6 +7,7 @@ package issues
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
@@ -405,8 +406,10 @@ func TestUpdate_StateClose(t *testing.T) {
 	}
 }
 
-// TestUpdate_Labels verifies that Update supports adding labels
-// without removing existing ones via the AddLabels field.
+// TestUpdate_Labels verifies that Update returns the label set GitLab answers
+// with after an add_labels call. Which body key the caller's labels reach
+// GitLab under is the subject of TestUpdate_LabelInputs_EachReachesItsOwnBodyKey:
+// this mock discards the body, so it cannot tell add_labels from remove_labels.
 func TestUpdate_Labels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
@@ -776,12 +779,15 @@ func TestUpdate_EnrichedFields(t *testing.T) {
 
 // assertEnrichedInputBody decodes the request body and verifies the enriched
 // input fields (created_at, merge_request_to_resolve_discussions_of,
-// discussion_to_resolve) are correctly passed to the GitLab API.
+// discussion_to_resolve) are correctly passed to the GitLab API. It runs on
+// the httptest goroutine, so a body that does not decode is reported and
+// returned from rather than aborted on.
 func assertEnrichedInputBody(t *testing.T, r *http.Request) {
 	t.Helper()
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		t.Fatalf("failed to decode request body: %v", err)
+		t.Errorf("failed to decode request body: %v", err)
+		return
 	}
 	if v, ok := body["created_at"].(string); !ok || !strings.Contains(v, "2026") {
 		t.Errorf("created_at = %v, want value containing '2026'", body["created_at"])
@@ -2092,6 +2098,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		Confidential:     &conf,
 		IssueType:        "incident",
 		Weight:           3,
+		EpicID:           4,
 		DiscussionLocked: &locked,
 	})
 	if err != nil {
@@ -2158,6 +2165,9 @@ func assertUpdateOptsMetadata(t *testing.T, opts *gl.UpdateIssueOptions, wantCon
 	if opts.Weight == nil || *opts.Weight != 3 {
 		t.Error("buildUpdateOpts: Weight not set")
 	}
+	if opts.EpicID == nil || *opts.EpicID != 4 {
+		t.Error("buildUpdateOpts: EpicID not set")
+	}
 	if opts.DiscussionLocked == nil || *opts.DiscussionLocked != *wantLocked {
 		t.Error("buildUpdateOpts: DiscussionLocked not set")
 	}
@@ -2171,8 +2181,15 @@ func TestBuildUpdateOpts_InvalidDueDate(t *testing.T) {
 	}
 }
 
-// TestBuildUpdateOpts_Empty verifies BuildUpdateOpts when empty.
-func TestBuildUpdateOpts_Empty(t *testing.T) {
+// TestBuildUpdateOpts_EmptyInput_LeavesEveryOptionUnset checks that an input
+// setting nothing produces options setting nothing, so a caller changing one
+// field never clears the rest.
+//
+// It used to assert only that the options were non-nil, which is true of every
+// mistake this can make: a guard widened from "> 0" to ">= 0" sends a weight of
+// zero and an epic of zero, and one widened on the assignee slice sends
+// assignee_ids as null on every update that names no assignee.
+func TestBuildUpdateOpts_EmptyInput_LeavesEveryOptionUnset(t *testing.T) {
 	opts, err := buildUpdateOpts(UpdateInput{})
 	if err != nil {
 		t.Fatalf("buildUpdateOpts empty: %v", err)
@@ -2180,13 +2197,39 @@ func TestBuildUpdateOpts_Empty(t *testing.T) {
 	if opts == nil {
 		t.Fatal("buildUpdateOpts empty: got nil opts")
 	}
+	for _, tt := range []struct {
+		name string
+		set  bool
+	}{
+		{"Title", opts.Title != nil},
+		{"Description", opts.Description != nil},
+		{"StateEvent", opts.StateEvent != nil},
+		{"AssigneeID", opts.AssigneeID != nil},
+		{"AssigneeIDs", opts.AssigneeIDs != nil},
+		{"Labels", opts.Labels != nil},
+		{"AddLabels", opts.AddLabels != nil},
+		{"RemoveLabels", opts.RemoveLabels != nil},
+		{"MilestoneID", opts.MilestoneID != nil},
+		{"DueDate", opts.DueDate != nil},
+		{"Confidential", opts.Confidential != nil},
+		{"IssueType", opts.IssueType != nil},
+		{"Weight", opts.Weight != nil},
+		{"EpicID", opts.EpicID != nil},
+		{"DiscussionLocked", opts.DiscussionLocked != nil},
+		{"UpdatedAt", opts.UpdatedAt != nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Errorf("buildUpdateOpts(empty) set %s, want it left alone", tt.name)
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
 // ToOutput edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_Populated verifies ToOutput when populated.
 // assertPopulatedObjects verifies the strict object fields and their additive
 // convenience scalars produced by [ToOutput] for a fully-populated issue. It is
 // extracted from TestToOutput_Populated to keep that test below the cognitive
@@ -2223,10 +2266,14 @@ func assertPopulatedPeople(t *testing.T, out Output) {
 	}
 }
 
-// TestToOutput_Populated verifies that ToOutput maps every populated field of a
-// fully specified gl.Issue — including nested author, milestone, assignees, epic,
-// references, task-completion, and time-stats sub-objects — onto the corresponding
-// MCP output fields without dropping or mistranslating any value.
+// TestToOutput_Populated verifies that ToOutput carries the nested objects of a
+// fully specified gl.Issue (author, assignees, closer, milestone, epic,
+// references, task completion, time stats) onto the output, along with the
+// subscribed, confidential, discussion-locked, weight and epic-issue values.
+// It used to claim to map every field without mistranslation while setting
+// health_status, upvotes and downvotes and reading none of them back; the
+// scalars are held one distinct value each by
+// TestGet_EveryScalar_LandsOnItsOwnField.
 func TestToOutput_Populated(t *testing.T) {
 	now := new(gl.ISOTime)
 	issue := &gl.Issue{
@@ -2441,12 +2488,19 @@ func TestTimeStatsToOutput_Populated(t *testing.T) {
 // timestamps.
 func TestBasicMRToOutput(t *testing.T) {
 	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	merged := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
+	updated := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
+	merged := time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC)
+	mergeAfter := time.Date(2024, 4, 5, 6, 7, 8, 0, time.UTC)
+	prepared := time.Date(2024, 5, 6, 7, 8, 9, 0, time.UTC)
+	closed := time.Date(2024, 6, 7, 8, 9, 10, 0, time.UTC)
 	mr := &gl.BasicMergeRequest{
 		ID: 1, IID: 2, ProjectID: 7, Title: "MR1", State: "merged",
 		Description:  "body",
 		SourceBranch: "feat", TargetBranch: "main",
-		SourceProjectID: 7, TargetProjectID: 8,
+		// Three distinct project ids: a fork's source project differs from
+		// the project the merge request lives in, and while the fixture gave
+		// both the same value a converter reading one for the other passed.
+		SourceProjectID: 6, TargetProjectID: 8,
 		Author:    &gl.BasicUser{ID: 11, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "u", CreatedAt: &created},
 		Assignee:  &gl.BasicUser{Username: "bob"},
 		Assignees: []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
@@ -2480,8 +2534,11 @@ func TestBasicMRToOutput(t *testing.T) {
 		HasConflicts:                true,
 		BlockingDiscussionsResolved: true,
 		Upvotes:                     9, Downvotes: 2, UserNotesCount: 3,
-		CreatedAt: &created, UpdatedAt: &created, MergedAt: &merged,
-		MergeAfter: &merged, PreparedAt: &created, ClosedAt: &merged,
+		// Six distinct instants, one per timestamp, so a pair swapped in the
+		// converter cannot pass: the fixture used to carry two values across
+		// the six fields and the assertion only asked that each be non-empty.
+		CreatedAt: &created, UpdatedAt: &updated, MergedAt: &merged,
+		MergeAfter: &mergeAfter, PreparedAt: &prepared, ClosedAt: &closed,
 		WebURL: "https://gitlab.example.com/mr/1",
 	}
 	approvals := int64(2)
@@ -2499,8 +2556,8 @@ func TestBasicMRToOutput(t *testing.T) {
 	if out.IID != 2 {
 		t.Errorf("IID = %d, want 2", out.IID)
 	}
-	if out.ProjectID != 7 || out.SourceProjectID != 7 || out.TargetProjectID != 8 {
-		t.Errorf("project ids = %d/%d/%d", out.ProjectID, out.SourceProjectID, out.TargetProjectID)
+	if out.ProjectID != 7 || out.SourceProjectID != 6 || out.TargetProjectID != 8 {
+		t.Errorf("project ids = %d/%d/%d, want 7/6/8", out.ProjectID, out.SourceProjectID, out.TargetProjectID)
 	}
 	assertRelatedMRNested(t, out)
 	assertRelatedMRFlags(t, out)
@@ -2513,7 +2570,10 @@ func TestBasicMRToOutput(t *testing.T) {
 	if out.Upvotes != 9 || out.Downvotes != 2 || out.UserNotesCount != 3 {
 		t.Errorf("counts = %d/%d/%d", out.Upvotes, out.Downvotes, out.UserNotesCount)
 	}
-	assertRelatedMRTimestamps(t, out)
+	assertRelatedMRTimestamps(t, out, map[string]time.Time{
+		"CreatedAt": created, "UpdatedAt": updated, "MergedAt": merged,
+		"MergeAfter": mergeAfter, "PreparedAt": prepared, "ClosedAt": closed,
+	})
 	if out.WebURL != "https://gitlab.example.com/mr/1" {
 		t.Errorf("WebURL = %q, want correct URL", out.WebURL)
 	}
@@ -2546,8 +2606,23 @@ func assertRelatedMRNested(t *testing.T, out RelatedMROutput) {
 	if len(out.Reviewers) != 1 || out.Reviewers[0].Username != "dave" {
 		t.Errorf("Reviewers = %+v", out.Reviewers)
 	}
-	if out.MergeUser == nil || out.MergedBy == nil || out.ClosedBy == nil {
-		t.Errorf("merge/merged/closed user objects must be present")
+	// Three users of one type, so each is held to its own name: asking only
+	// that all three be present let a converter reading merged_by into
+	// merge_user pass.
+	for _, tt := range []struct {
+		name string
+		got  *toolutil.BasicUserOutput
+		want string
+	}{
+		{"MergeUser", out.MergeUser, "merger"},
+		{"MergedBy", out.MergedBy, "mergedby"},
+		{"ClosedBy", out.ClosedBy, "closer"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got == nil || tt.got.Username != tt.want {
+				t.Errorf("%s = %+v, want username %q", tt.name, tt.got, tt.want)
+			}
+		})
 	}
 	if out.Milestone == nil || out.Milestone.Title != "v1" {
 		t.Errorf("Milestone = %+v, want v1", out.Milestone)
@@ -2584,16 +2659,18 @@ func assertRelatedMRFlags(t *testing.T, out RelatedMROutput) {
 	}
 }
 
-// assertRelatedMRTimestamps asserts that every timestamp field rendered into a
-// non-empty RFC 3339 string from the all-populated fixture.
-func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput) {
+// assertRelatedMRTimestamps asserts that each timestamp field carries the
+// instant the fixture gave that field, rather than merely being non-empty:
+// each want is distinct, so a converter that reads a neighboring timestamp is
+// named here instead of passing.
+func assertRelatedMRTimestamps(t *testing.T, out RelatedMROutput, want map[string]time.Time) {
 	t.Helper()
 	for name, ts := range map[string]string{
 		"CreatedAt": out.CreatedAt, "UpdatedAt": out.UpdatedAt, "MergedAt": out.MergedAt,
 		"MergeAfter": out.MergeAfter, "PreparedAt": out.PreparedAt, "ClosedAt": out.ClosedAt,
 	} {
-		if ts == "" {
-			t.Errorf("timestamp %s empty, want RFC3339", name)
+		if expected := want[name].Format(time.RFC3339); ts != expected {
+			t.Errorf("timestamp %s = %q, want %q", name, ts, expected)
 		}
 	}
 }
@@ -3263,7 +3340,10 @@ func TestAddSpentTime_SuccessCov(t *testing.T) {
 	}
 }
 
-// TestAddSpentTime_WithSummaryCov verifies AddSpentTime when with summary cov.
+// TestAddSpentTime_WithSummaryCov verifies AddSpentTime returns the time stats
+// GitLab answered with when a summary is supplied. What the summary does to the
+// request is the subject of
+// TestAddSpentTime_Summary_ReachesTheRequestBody: this mock discards the body.
 func TestAddSpentTime_WithSummaryCov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1h", Summary: "debugging"})
@@ -3777,7 +3857,10 @@ func TestMove_NotFound(t *testing.T) {
 	}
 }
 
-// TestMove_BadRequest verifies the 400 hint path in Move.
+// TestMove_BadRequest verifies that Move surfaces a 400 from GitLab as an
+// error. Which remedy that error carries is held by
+// TestStatusHints_EachStatusPicksItsOwnRemedy; this test used to claim the
+// hint path while asserting only that an error came back.
 func TestMove_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -3944,7 +4027,11 @@ func TestAddSpentTime_APIError(t *testing.T) {
 	}
 }
 
-// TestIssueNotFoundHintErrors covers 404-specific hints for issue actions.
+// TestIssueNotFoundHintErrors verifies that each of these actions surfaces a
+// 404 from GitLab as an error rather than an empty answer. It asserts nothing
+// about the remedy that error carries: which hint each status picks is held by
+// TestStatusHints_EachStatusPicksItsOwnRemedy, and this test used to claim to
+// cover the hints while asserting only that an error came back.
 func TestIssueNotFoundHintErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -4777,5 +4864,957 @@ func TestToBasicOutputs_PairsEachIssueWithItsCapturedRow(t *testing.T) {
 	}
 	if _, err = ToBasicOutputs([]*gl.Issue{{ID: 1}}, gitlabclient.CapturedBody([]byte(`[{"type":7}]`))); err == nil {
 		t.Error("ToBasicOutputs() succeeded on a row whose type is not a string")
+	}
+}
+
+// TestList_CapturedKeys_PairEachIssueWithItsOwnRow drives a two-issue page
+// through the project listing and holds each row's captured keys to the issue
+// they arrived with. The loop pairing them has no branch, so a page reading
+// every issue's keys off the first row passes every one-row test here; the
+// group and global listings share this helper, so one listing drives it.
+func TestList_CapturedKeys_PairEachIssueWithItsOwnRow(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathIssues {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":1,"iid":10,"labels":[],"assignees":[],"severity":"HIGH","blocking_issues_count":3},
+			{"id":2,"iid":20,"labels":[],"assignees":[],"severity":"LOW","blocking_issues_count":4}
+		]`)
+	}))
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+	if err != nil {
+		t.Fatalf(fmtIssueListErr, err)
+	}
+	if len(out.Issues) != 2 {
+		t.Fatalf("List() returned %d issues, want 2", len(out.Issues))
+	}
+	for _, tt := range []struct {
+		iid      int64
+		severity string
+		blocking int64
+	}{
+		{10, "HIGH", 3},
+		{20, "LOW", 4},
+	} {
+		t.Run(tt.severity, func(t *testing.T) {
+			var row *Output
+			for i := range out.Issues {
+				if out.Issues[i].IID == tt.iid {
+					row = &out.Issues[i]
+				}
+			}
+			if row == nil {
+				t.Fatalf("no row carries iid %d", tt.iid)
+			}
+			blocking := int64(-1)
+			if row.BlockingIssuesCount != nil {
+				blocking = *row.BlockingIssuesCount
+			}
+			if row.Severity != tt.severity || blocking != tt.blocking {
+				t.Errorf("issue %d = severity %q blocking %d, want %q and %d", tt.iid, row.Severity, blocking, tt.severity, tt.blocking)
+			}
+		})
+	}
+}
+
+// TestListMRsRelated_CapturedKeys_PairEachRowWithItsOwnMergeRequest is the
+// same check for the merge request lists, whose converter pairs a captured row
+// with a merge request in a loop of its own.
+func TestListMRsRelated_CapturedKeys_PairEachRowWithItsOwnMergeRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != pathIssue10+"/related_merge_requests" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[
+			{"id":200,"iid":20,"reference":"!20","merge_status":"can_be_merged"},
+			{"id":201,"iid":21,"reference":"!21","merge_status":"cannot_be_merged"}
+		]`)
+	}))
+	out, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("ListMRsRelated() unexpected error: %v", err)
+	}
+	if len(out.MergeRequests) != 2 {
+		t.Fatalf("ListMRsRelated() returned %d rows, want 2", len(out.MergeRequests))
+	}
+	for _, tt := range []struct {
+		iid         int64
+		reference   string
+		mergeStatus string
+	}{
+		{20, "!20", "can_be_merged"},
+		{21, "!21", "cannot_be_merged"},
+	} {
+		t.Run(tt.reference, func(t *testing.T) {
+			var row *RelatedMROutput
+			for i := range out.MergeRequests {
+				if out.MergeRequests[i].IID == tt.iid {
+					row = &out.MergeRequests[i]
+				}
+			}
+			if row == nil {
+				t.Fatalf("no row carries iid %d", tt.iid)
+			}
+			if row.Reference != tt.reference || row.MergeStatus != tt.mergeStatus {
+				t.Errorf("merge request %d = reference %q status %q, want %q and %q", tt.iid, row.Reference, row.MergeStatus, tt.reference, tt.mergeStatus)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The request an optional input builds
+// ---------------------------------------------------------------------------.
+
+// captureBody answers one method and path with the given status and body and
+// hands the decoded request body back through the returned map, so a test can
+// ask which keys the caller's inputs reached GitLab under.
+func captureBody(t *testing.T, method, path string, status int, answer string) (*gitlabclient.Client, map[string]any) {
+	t.Helper()
+	body := map[string]any{}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode %s %s body: %v", method, path, err)
+			http.Error(w, "decode body", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, status, answer)
+	}))
+	return client, body
+}
+
+// captureCreateBody is [captureBody] for an issue create answered with
+// issueJSONMinimal.
+func captureCreateBody(t *testing.T) (*gitlabclient.Client, map[string]any) {
+	t.Helper()
+	return captureBody(t, http.MethodPost, pathIssues, http.StatusCreated, issueJSONMinimal)
+}
+
+// encodedBodyValue renders one decoded body value back as JSON so a number, a
+// string and an array can be compared against one written expectation, and
+// returns the empty string when the body carries no such key.
+func encodedBodyValue(t *testing.T, body map[string]any, key string) string {
+	t.Helper()
+	raw, ok := body[key]
+	if !ok {
+		return ""
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal body key %q: %v", key, err)
+	}
+	return string(encoded)
+}
+
+// TestCreate_OptionalInputs_EachReachesItsOwnBodyKey checks that every optional
+// create input the caller sets arrives at GitLab under its own key, each
+// carrying a value no other key carries.
+//
+// Each of these fields sits behind a guard of its own, and a guard read the
+// wrong way round drops the caller's value while reporting success. The tests
+// here asserted the output, which the mock's canned answer decides, so the
+// request body was never read and seven of these guards, with four more in the
+// update and spent-time builders, could be inverted or widened without failing
+// anything.
+func TestCreate_OptionalInputs_EachReachesItsOwnBodyKey(t *testing.T) {
+	client, body := captureCreateBody(t)
+	confidential := true
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID:                          testProjectID,
+		Title:                              testIssueTitle,
+		IID:                                70,
+		Description:                        "what the reporter wrote",
+		AssigneeID:                         71,
+		AssigneeIDs:                        []int64{72, 73},
+		MilestoneID:                        74,
+		IssueType:                          "incident",
+		Weight:                             75,
+		EpicID:                             76,
+		MergeRequestToResolveDiscussionsOf: 77,
+		DiscussionToResolve:                "d78",
+		Labels:                             []string{"bug", "regression"},
+		DueDate:                            "2026-02-03",
+		CreatedAt:                          "2026-01-04T05:06:07Z",
+		Confidential:                       &confidential,
+	})
+	if err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+	for _, tt := range []struct{ key, want string }{
+		{"title", `"` + testIssueTitle + `"`},
+		{"iid", "70"},
+		{"description", `"what the reporter wrote"`},
+		{"assignee_id", "71"},
+		{"assignee_ids", "[72,73]"},
+		{"milestone_id", "74"},
+		{"issue_type", `"incident"`},
+		{"weight", "75"},
+		{"epic_id", "76"},
+		{"merge_request_to_resolve_discussions_of", "77"},
+		{"discussion_to_resolve", `"d78"`},
+		{"labels", `"bug,regression"`},
+		{"due_date", `"2026-02-03"`},
+		{"created_at", `"2026-01-04T05:06:07Z"`},
+		{"confidential", "true"},
+	} {
+		t.Run(tt.key, func(t *testing.T) {
+			if got := encodedBodyValue(t, body, tt.key); got != tt.want {
+				t.Errorf("create body %q = %s, want %s", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCreate_UnsetOptionalInputs_SendNoKeyAtAll checks the other side of those
+// guards: a caller who set only project_id and title sends no optional key at
+// all, rather than a zero GitLab would store.
+//
+// A guard widened from "> 0" to ">= 0" keeps working for a caller who set the
+// field and starts sending a zero for one who did not, which is a weight of
+// zero, an epic of zero and a null assignee list on every issue opened.
+func TestCreate_UnsetOptionalInputs_SendNoKeyAtAll(t *testing.T) {
+	client, body := captureCreateBody(t)
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: testProjectID, Title: testIssueTitle,
+	}); err != nil {
+		t.Fatalf(fmtCreateErr, err)
+	}
+	for _, key := range []string{
+		"iid", "description", "assignee_id", "assignee_ids", "milestone_id",
+		"issue_type", "weight", "epic_id", "merge_request_to_resolve_discussions_of",
+		"discussion_to_resolve", "labels", "due_date", "created_at", "confidential",
+	} {
+		t.Run(key, func(t *testing.T) {
+			if _, present := body[key]; present {
+				t.Errorf("create body carries %q = %v for an input that set none", key, body[key])
+			}
+		})
+	}
+	if body["title"] != testIssueTitle {
+		t.Errorf("create body title = %v, want %q", body["title"], testIssueTitle)
+	}
+}
+
+// TestAddSpentTime_Summary_ReachesTheRequestBody checks that the optional
+// summary lands in the add-spent-time body, and that an unset one sends no
+// summary key at all. The guard around it was invertible without failing
+// anything: the only test that set a summary asserted the canned time stats
+// coming back.
+func TestAddSpentTime_Summary_ReachesTheRequestBody(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		summary string
+		want    string
+	}{
+		{"set", "chasing the redirect loop", `"chasing the redirect loop"`},
+		{"unset", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := map[string]any{}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathIssue10+"/add_spent_time" {
+					http.NotFound(w, r)
+					return
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode add_spent_time body: %v", err)
+					http.Error(w, "decode body", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, timeStatsJSONCov)
+			}))
+			if _, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{
+				ProjectID: testProjectID, IssueIID: 10, Duration: "1h", Summary: tt.summary,
+			}); err != nil {
+				t.Fatalf("AddSpentTime() unexpected error: %v", err)
+			}
+			if got := encodedBodyValue(t, body, "summary"); got != tt.want {
+				t.Errorf("add_spent_time body summary = %s, want %s", got, tt.want)
+			}
+			if body["duration"] != "1h" {
+				t.Errorf("add_spent_time body duration = %v, want 1h", body["duration"])
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The assignments no branch guards
+// ---------------------------------------------------------------------------.
+
+// TestGet_CapturedKeys_EachLandsOnItsOwnField checks the nine keys the issue
+// entity sends that client-go does not model (ADR-0021), each carrying a value
+// no other key carries, so the output says which key it was read from.
+//
+// They are a block of straight-line assignments with no branch in it, which is
+// what makes a mistake there invisible to both gates: swapping severity with
+// task_status leaves the whole suite green. Every other test here passes a zero
+// [toolutil.IssueExtra], so none of the six the full entity adds to the basic
+// one had ever carried a value.
+func TestGet_CapturedKeys_EachLandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathIssue10 {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":1,"iid":10,"title":"Captured","state":"opened","labels":[],"assignees":[],
+			"author":{"username":"alice"},"web_url":"https://gitlab.example.com/project/issues/10",
+			"blocking_issues_count":81,"start_date":"2026-08-02","type":"INCIDENT",
+			"epic_iid":83,"has_tasks":true,"imported":false,"imported_from":"jira",
+			"severity":"CRITICAL","task_status":"2 of 7 checklist items completed"
+		}`)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf(fmtIssueGetErr, err)
+	}
+	if out.BlockingIssuesCount == nil || *out.BlockingIssuesCount != 81 {
+		t.Errorf("BlockingIssuesCount = %v, want 81", out.BlockingIssuesCount)
+	}
+	if out.EpicIID == nil || *out.EpicIID != 83 {
+		t.Errorf("EpicIID = %v, want 83", out.EpicIID)
+	}
+	if out.HasTasks == nil || !*out.HasTasks {
+		t.Errorf("HasTasks = %v, want true", out.HasTasks)
+	}
+	if out.Imported == nil || *out.Imported {
+		t.Errorf("Imported = %v, want a sent false kept as false", out.Imported)
+	}
+	for _, tt := range []struct{ name, got, want string }{
+		{"start_date", out.StartDate, "2026-08-02"},
+		{"type", out.Type, "INCIDENT"},
+		{"imported_from", out.ImportedFrom, "jira"},
+		{"severity", out.Severity, "CRITICAL"},
+		{"task_status", out.TaskStatus, "2 of 7 checklist items completed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// relatedMRFlags names every boolean gl.BasicMergeRequest carries beside the
+// json key basicMRToOutput has to put it on.
+var relatedMRFlags = []struct {
+	name string
+	set  func(*gl.BasicMergeRequest)
+	key  string
+}{
+	{"Draft", func(mr *gl.BasicMergeRequest) { mr.Draft = true }, "draft"},
+	{"Imported", func(mr *gl.BasicMergeRequest) { mr.Imported = true }, "imported"},
+	{"MergeWhenPipelineSucceeds", func(mr *gl.BasicMergeRequest) { mr.MergeWhenPipelineSucceeds = true }, "merge_when_pipeline_succeeds"},
+	{"Squash", func(mr *gl.BasicMergeRequest) { mr.Squash = true }, "squash"},
+	{"SquashOnMerge", func(mr *gl.BasicMergeRequest) { mr.SquashOnMerge = true }, "squash_on_merge"},
+	{"ShouldRemoveSourceBranch", func(mr *gl.BasicMergeRequest) { mr.ShouldRemoveSourceBranch = true }, "should_remove_source_branch"},
+	{"ForceRemoveSourceBranch", func(mr *gl.BasicMergeRequest) { mr.ForceRemoveSourceBranch = true }, "force_remove_source_branch"},
+	{"AllowCollaboration", func(mr *gl.BasicMergeRequest) { mr.AllowCollaboration = true }, "allow_collaboration"},
+	{"AllowMaintainerToPush", func(mr *gl.BasicMergeRequest) { mr.AllowMaintainerToPush = true }, "allow_maintainer_to_push"},
+	{"DiscussionLocked", func(mr *gl.BasicMergeRequest) { mr.DiscussionLocked = true }, "discussion_locked"},
+	{"HasConflicts", func(mr *gl.BasicMergeRequest) { mr.HasConflicts = true }, "has_conflicts"},
+	{"BlockingDiscussionsResolved", func(mr *gl.BasicMergeRequest) { mr.BlockingDiscussionsResolved = true }, "blocking_discussions_resolved"},
+}
+
+// encodedRow renders a converted merge request row as JSON so a whole row can
+// be compared in one string.
+func encodedRow(t *testing.T, row RelatedMROutput) string {
+	t.Helper()
+	encoded, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("marshal the converted row: %v", err)
+	}
+	return string(encoded)
+}
+
+// TestBasicMRToOutput_OneFlagAtATime_MovesOnlyItsOwnKey drives each of the
+// twelve booleans on its own and holds the whole converted row to the all-false
+// row with that one key flipped.
+//
+// A fixture that sets every flag true, which is what the populated test uses,
+// cannot tell two of them apart: swapping draft with squash in the converter
+// leaves it green. One flag at a time is also what GitLab really answers, and
+// comparing the whole row rather than the one field is what catches a value
+// arriving somewhere else as well.
+func TestBasicMRToOutput_OneFlagAtATime_MovesOnlyItsOwnKey(t *testing.T) {
+	allFalse := encodedRow(t, basicMRToOutput(&gl.BasicMergeRequest{}, toolutil.MergeRequestExtra{}))
+	for _, tt := range relatedMRFlags {
+		t.Run(tt.name, func(t *testing.T) {
+			want := strings.Replace(allFalse, `"`+tt.key+`":false`, `"`+tt.key+`":true`, 1)
+			if want == allFalse {
+				t.Fatalf("the all-false row carries no %q key, so this case asserts nothing", tt.key)
+			}
+			mr := &gl.BasicMergeRequest{}
+			tt.set(mr)
+			if got := encodedRow(t, basicMRToOutput(mr, toolutil.MergeRequestExtra{})); got != want {
+				t.Errorf("setting %s produced\n got %s\nwant %s", tt.name, got, want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The query a list filter builds
+// ---------------------------------------------------------------------------.
+
+// listQueryFixture answers a GET at path with one minimal issue and hands the
+// query it arrived with back through the returned map, so a test can ask
+// which parameter each filter reached GitLab under.
+func listQueryFixture(t *testing.T, path string) (*gitlabclient.Client, map[string][]string) {
+	t.Helper()
+	query := map[string][]string{}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		maps.Copy(query, r.URL.Query())
+		testutil.RespondJSON(w, http.StatusOK, "["+issueJSONMinimal+"]")
+	}))
+	return client, query
+}
+
+// assertQuery holds each parameter of a captured query to the one value the
+// caller set, a repeated parameter joined by commas, and names any parameter
+// that arrived which the expectation does not list, so a filter sent under a
+// second key is reported as well as one that never arrived.
+func assertQuery(t *testing.T, got map[string][]string, want map[string]string) {
+	t.Helper()
+	for key, value := range want {
+		t.Run(key, func(t *testing.T) {
+			if v := strings.Join(got[key], ","); v != value {
+				t.Errorf("query %q = %q, want %q", key, v, value)
+			}
+		})
+	}
+	var unasked []string
+	for key := range got {
+		if _, listed := want[key]; !listed {
+			unasked = append(unasked, key+"="+strings.Join(got[key], ","))
+		}
+	}
+	if len(unasked) > 0 {
+		t.Errorf("query carries %v, which no input asked for", unasked)
+	}
+}
+
+// TestListGroup_EveryFilter_ReachesItsOwnQueryParameter checks that each filter
+// of the group listing arrives at GitLab under its own parameter, each carrying
+// a value no other filter carries, and that nothing else is sent.
+//
+// The options are thirty-two straight-line assignments with no branch in them,
+// so neither gate can see a filter read from its neighbor: swapping milestone
+// with not[milestone] and dropping created_after both left the suite green,
+// because the one test that set them read nothing back from the request.
+func TestListGroup_EveryFilter_ReachesItsOwnQueryParameter(t *testing.T) {
+	client, query := listQueryFixture(t, "/api/v4/groups/99/issues")
+	assignee, notAssignee, author, notAuthor, iteration := int64(31), int64(32), int64(33), int64(34), int64(37)
+	details, confidential := true, false
+	_, err := ListGroup(context.Background(), client, ListGroupInput{
+		GroupID: "99",
+		State:   "closed", Labels: []string{"l1", "l2"}, NotLabels: []string{"l3"},
+		WithLabelsDetails: &details,
+		Milestone:         "m1", NotMilestone: "m2",
+		Scope: "all", Search: "s1", NotSearch: "s2", In: "title", NotIn: "description",
+		AssigneeID: &assignee, NotAssigneeID: &notAssignee,
+		AssigneeUsername: "u1", NotAssigneeUsername: "u2",
+		AuthorID: &author, NotAuthorID: &notAuthor,
+		AuthorUsername: "u3", NotAuthorUsername: "u4",
+		MyReactionEmoji: "e1", NotMyReactionEmoji: "e2",
+		IIDs: []int64{35, 36}, IssueType: "incident", IterationID: &iteration,
+		Confidential: &confidential, DueDate: "week", OrderBy: "weight", Sort: "asc",
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-02-02T00:00:00Z",
+		UpdatedAfter: "2026-03-03T00:00:00Z", UpdatedBefore: "2026-04-04T00:00:00Z",
+		Page: 3, PerPage: 7,
+	})
+	if err != nil {
+		t.Fatalf("ListGroup() unexpected error: %v", err)
+	}
+	assertQuery(t, query, map[string]string{
+		"state": "closed", "labels": "l1,l2", "not[labels]": "l3", "with_labels_details": "true",
+		"milestone": "m1", "not[milestone]": "m2",
+		"scope": "all", "search": "s1", "not[search]": "s2", "in": "title", "not[in]": "description",
+		"assignee_id": "31", "not[assignee_id]": "32", "assignee_username": "u1", "not[assignee_username]": "u2",
+		"author_id": "33", "not[author_id]": "34", "author_username": "u3", "not[author_username]": "u4",
+		"my_reaction_emoji": "e1", "not[my_reaction_emoji]": "e2",
+		"iids[]": "35,36", "issue_type": "incident", "iteration_id": "37",
+		"confidential": "false", "due_date": "week", "order_by": "weight", "sort": "asc",
+		"created_after": "2026-01-01T00:00:00Z", "created_before": "2026-02-02T00:00:00Z",
+		"updated_after": "2026-03-03T00:00:00Z", "updated_before": "2026-04-04T00:00:00Z",
+		"page": "3", "per_page": "7",
+	})
+}
+
+// TestListAll_EveryFilter_ReachesItsOwnQueryParameter is the same check for
+// the global listing, whose three negated filters take a list where the
+// project and group listings take one value. Swapping assignee_username with
+// author_username and dropping updated_before both survived the suite.
+func TestListAll_EveryFilter_ReachesItsOwnQueryParameter(t *testing.T) {
+	client, query := listQueryFixture(t, pathGlobalIssues)
+	assignee, author, iteration := int64(31), int64(33), int64(37)
+	details, confidential := true, false
+	_, err := ListAll(context.Background(), client, ListAllInput{
+		State: "closed", Labels: []string{"l1", "l2"}, NotLabels: []string{"l3"},
+		WithLabelsDetails: &details,
+		Milestone:         "m1", NotMilestone: "m2",
+		Scope: "all", Search: "s1", NotSearch: "s2", In: "title", NotIn: "description",
+		AssigneeID: &assignee, NotAssigneeID: []int64{32, 38},
+		AssigneeUsername: "u1", NotAssigneeUsername: "u2",
+		AuthorID: &author, NotAuthorID: []int64{34},
+		AuthorUsername: "u3", NotAuthorUsername: "u4",
+		MyReactionEmoji: "e1", NotMyReactionEmoji: []string{"e2", "e3"},
+		IIDs: []int64{35, 36}, IssueType: "incident", IterationID: &iteration,
+		Confidential: &confidential, DueDate: "week", OrderBy: "weight", Sort: "asc",
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-02-02T00:00:00Z",
+		UpdatedAfter: "2026-03-03T00:00:00Z", UpdatedBefore: "2026-04-04T00:00:00Z",
+		Page: 3, PerPage: 7,
+	})
+	if err != nil {
+		t.Fatalf("ListAll() unexpected error: %v", err)
+	}
+	assertQuery(t, query, map[string]string{
+		"state": "closed", "labels": "l1,l2", "not[labels]": "l3", "with_labels_details": "true",
+		"milestone": "m1", "not[milestone]": "m2",
+		"scope": "all", "search": "s1", "not[search]": "s2", "in": "title", "not[in]": "description",
+		"assignee_id": "31", "not[assignee_id]": "32,38", "assignee_username": "u1", "not[assignee_username]": "u2",
+		"author_id": "33", "not[author_id]": "34", "author_username": "u3", "not[author_username]": "u4",
+		"my_reaction_emoji": "e1", "not[my_reaction_emoji]": "e2,e3",
+		"iids[]": "35,36", "issue_type": "incident", "iteration_id": "37",
+		"confidential": "false", "due_date": "week", "order_by": "weight", "sort": "asc",
+		"created_after": "2026-01-01T00:00:00Z", "created_before": "2026-02-02T00:00:00Z",
+		"updated_after": "2026-03-03T00:00:00Z", "updated_before": "2026-04-04T00:00:00Z",
+		"page": "3", "per_page": "7",
+	})
+}
+
+// TestList_DateFilters_EachReachesItsOwnQueryParameter checks the four date
+// windows of the project listing, the one part of its query no other test
+// read: every other filter is asserted by TestList_AdvancedFilters and its
+// siblings, and these four were set by a test that discarded the request.
+func TestList_DateFilters_EachReachesItsOwnQueryParameter(t *testing.T) {
+	client, query := listQueryFixture(t, pathIssues)
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:    testProjectID,
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-02-02T00:00:00Z",
+		UpdatedAfter: "2026-03-03T00:00:00Z", UpdatedBefore: "2026-04-04T00:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueListErr, err)
+	}
+	assertQuery(t, query, map[string]string{
+		"created_after": "2026-01-01T00:00:00Z", "created_before": "2026-02-02T00:00:00Z",
+		"updated_after": "2026-03-03T00:00:00Z", "updated_before": "2026-04-04T00:00:00Z",
+	})
+}
+
+// ---------------------------------------------------------------------------
+// The body a mutation builds
+// ---------------------------------------------------------------------------.
+
+// TestUpdate_LabelInputs_EachReachesItsOwnBodyKey checks that the three label
+// inputs of an update, and the description and due date beside them, each
+// arrive under their own key with the value the caller set.
+//
+// The only assertion on buildUpdateOpts' label options was that each was
+// non-nil, which a swap of add_labels with remove_labels satisfies: the labels
+// a caller asked to add would be removed and the ones to remove added.
+func TestUpdate_LabelInputs_EachReachesItsOwnBodyKey(t *testing.T) {
+	client, body := captureBody(t, http.MethodPut, pathIssue10, http.StatusOK, issueJSONMinimal)
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: testProjectID, IssueIID: 10,
+		Labels: []string{"keep", "also"}, AddLabels: []string{"added"}, RemoveLabels: []string{"gone"},
+		Description: "what changed", DueDate: "2026-05-06",
+	})
+	if err != nil {
+		t.Fatalf(fmtIssueUpdateErr, err)
+	}
+	for _, tt := range []struct{ key, want string }{
+		{"labels", `"keep,also"`},
+		{"add_labels", `"added"`},
+		{"remove_labels", `"gone"`},
+		{"description", `"what changed"`},
+		{"due_date", `"2026-05-06"`},
+	} {
+		t.Run(tt.key, func(t *testing.T) {
+			if got := encodedBodyValue(t, body, tt.key); got != tt.want {
+				t.Errorf("update body %q = %s, want %s", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReorder_Anchor_ReachesTheBodyKeyItWasGivenUnder checks that the issue a
+// reorder is anchored to arrives under the key the caller chose and under no
+// other: the two are the same type and neither success test read the body
+// (one decoded it and looked at nothing), so swapping them moved every issue
+// to the wrong side unnoticed.
+func TestReorder_Anchor_ReachesTheBodyKeyItWasGivenUnder(t *testing.T) {
+	anchor := int64(57)
+	for _, tt := range []struct {
+		name    string
+		input   ReorderInput
+		want    string
+		notSent string
+	}{
+		{"after", ReorderInput{ProjectID: testProjectID, IssueIID: 10, MoveAfterID: &anchor}, "move_after_id", "move_before_id"},
+		{"before", ReorderInput{ProjectID: testProjectID, IssueIID: 10, MoveBeforeID: &anchor}, "move_before_id", "move_after_id"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client, body := captureBody(t, http.MethodPut, pathReorder, http.StatusOK, issueJSONMinimal)
+			if _, err := Reorder(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Reorder() unexpected error: %v", err)
+			}
+			if got := encodedBodyValue(t, body, tt.want); got != "57" {
+				t.Errorf("reorder body %q = %s, want 57", tt.want, got)
+			}
+			if _, present := body[tt.notSent]; present {
+				t.Errorf("reorder body carries %q = %v for an anchor given as %s", tt.notSent, body[tt.notSent], tt.want)
+			}
+		})
+	}
+}
+
+// TestMove_TargetProject_ReachesTheBody checks that the project an issue is
+// moved to is what the request names: the option struct has one field and
+// dropping it left every move test green, since each asserted only the
+// canned issue that came back.
+func TestMove_TargetProject_ReachesTheBody(t *testing.T) {
+	client, body := captureBody(t, http.MethodPost, pathMove, http.StatusOK, issueJSONMinimal)
+	if _, err := Move(context.Background(), client, MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 314}); err != nil {
+		t.Fatalf("Move() unexpected error: %v", err)
+	}
+	if got := encodedBodyValue(t, body, "to_project_id"); got != "314" {
+		t.Errorf("move body to_project_id = %s, want 314", got)
+	}
+}
+
+// TestSetTimeEstimate_Duration_ReachesTheBody checks that the estimate a
+// caller sets is what GitLab is sent. Its add-spent-time sibling reads the
+// body; this one asserted only the canned stats coming back, so an empty
+// option struct passed.
+func TestSetTimeEstimate_Duration_ReachesTheBody(t *testing.T) {
+	client, body := captureBody(t, http.MethodPost, pathIssue10+"/time_estimate", http.StatusOK, timeStatsJSONCov)
+	if _, err := SetTimeEstimate(context.Background(), client, SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "3h30m"}); err != nil {
+		t.Fatalf("SetTimeEstimate() unexpected error: %v", err)
+	}
+	if got := encodedBodyValue(t, body, "duration"); got != `"3h30m"` {
+		t.Errorf("time_estimate body duration = %s, want \"3h30m\"", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The scalars a converter copies
+// ---------------------------------------------------------------------------.
+
+// TestGet_EveryScalar_LandsOnItsOwnField reads an issue whose every scalar
+// carries a value no other key carries and holds each output field to the key
+// it came from.
+//
+// The converter is a block of assignments with no branch in it, and the
+// populated fixture used before shared values across fields or left them
+// unasserted: swapping upvotes with downvotes, created_at with updated_at, and
+// dropping health_status all left the suite green.
+func TestGet_EveryScalar_LandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathIssue10 {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":101,"iid":10,"external_id":"EXT-102","title":"Title 103","description":"Body 104",
+			"state":"closed","health_status":"at_risk","project_id":105,
+			"created_at":"2026-01-06T00:00:00Z","updated_at":"2026-02-07T00:00:00Z","closed_at":"2026-03-08T00:00:00Z",
+			"due_date":"2026-04-09","moved_to_id":106,"upvotes":107,"downvotes":108,
+			"web_url":"https://gitlab.example.com/i/109","weight":110,"issue_type":"incident",
+			"user_notes_count":111,"merge_requests_count":112,"epic_issue_id":113,
+			"service_desk_reply_to":"reply-114@example.com","labels":[],"assignees":[]
+		}`)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf(fmtIssueGetErr, err)
+	}
+	for _, tt := range []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"id", out.ID, int64(101)},
+		{"iid", out.IID, int64(10)},
+		{"external_id", out.ExternalID, "EXT-102"},
+		{"title", out.Title, "Title 103"},
+		{"description", out.Description, "Body 104"},
+		{"state", out.State, "closed"},
+		{"health_status", out.HealthStatus, "at_risk"},
+		{"project_id", out.ProjectID, int64(105)},
+		{"created_at", out.CreatedAt, "2026-01-06T00:00:00Z"},
+		{"updated_at", out.UpdatedAt, "2026-02-07T00:00:00Z"},
+		{"closed_at", out.ClosedAt, "2026-03-08T00:00:00Z"},
+		{"due_date", out.DueDate, "2026-04-09"},
+		{"moved_to_id", out.MovedToID, int64(106)},
+		{"upvotes", out.Upvotes, int64(107)},
+		{"downvotes", out.Downvotes, int64(108)},
+		{"web_url", out.WebURL, "https://gitlab.example.com/i/109"},
+		{"weight", out.Weight, int64(110)},
+		{"issue_type", out.IssueType, "incident"},
+		{"user_notes_count", out.UserNotesCount, int64(111)},
+		{"merge_requests_count", out.MergeRequestCount, int64(112)},
+		{"epic_issue_id", out.EpicIssueID, int64(113)},
+		{"service_desk_reply_to", out.ServiceDeskReplyTo, "reply-114@example.com"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGet_OneFlagAtATime_MovesOnlyItsOwnKey reads an issue with one of its
+// three flags set and holds the whole output row to the all-false row with
+// that one key flipped, since a fixture setting all three cannot tell a swap
+// of confidential and discussion_locked from the right answer.
+func TestGet_OneFlagAtATime_MovesOnlyItsOwnKey(t *testing.T) {
+	readIssue := func(t *testing.T, flags string) string {
+		t.Helper()
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != pathIssue10 {
+				http.NotFound(w, r)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":10,"labels":[],"assignees":[]`+flags+`}`)
+		}))
+		out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+		if err != nil {
+			t.Fatalf(fmtIssueGetErr, err)
+		}
+		encoded, err := json.Marshal(out)
+		if err != nil {
+			t.Fatalf("marshal the issue: %v", err)
+		}
+		return string(encoded)
+	}
+	allFalse := readIssue(t, "")
+	for _, key := range []string{"confidential", "discussion_locked", "subscribed"} {
+		t.Run(key, func(t *testing.T) {
+			want := strings.Replace(allFalse, `"`+key+`":false`, `"`+key+`":true`, 1)
+			if want == allFalse {
+				t.Fatalf("the all-false row carries no %q key, so this case asserts nothing", key)
+			}
+			if got := readIssue(t, `,"`+key+`":true`); got != want {
+				t.Errorf("setting %s produced\n got %s\nwant %s", key, got, want)
+			}
+		})
+	}
+}
+
+// TestGetParticipants_EveryField_LandsOnItsOwnField holds each field of a
+// participant to the key it came from, with four distinct values, because the
+// success test asserted the username alone and a converter reading web_url
+// into name passed it.
+func TestGetParticipants_EveryField_LandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathIssue10+"/participants" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":201,"username":"handle-202","name":"Name 203","web_url":"https://gitlab.example.com/u/204"}]`)
+	}))
+	out, err := GetParticipants(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("GetParticipants() unexpected error: %v", err)
+	}
+	want := ParticipantOutput{ID: 201, Username: "handle-202", Name: "Name 203", WebURL: "https://gitlab.example.com/u/204"}
+	if len(out.Participants) != 1 || out.Participants[0] != want {
+		t.Errorf("Participants = %+v, want [%+v]", out.Participants, want)
+	}
+}
+
+// TestCreateTodo_EveryField_LandsOnItsOwnField holds each field of the to-do a
+// create answers with to the key it came from, all eight distinct. The success
+// test asserted four of them, and target_type and body are both strings the
+// converter could read from each other without failing it.
+func TestCreateTodo_EveryField_LandsOnItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathCreateTodo {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":301,"action_name":"assigned","target_type":"Issue",
+			"target":{"title":"Target 302","web_url":"https://gitlab.example.com/t/303"},
+			"body":"Body 304","state":"done","created_at":"2026-05-06T07:08:09Z"}`)
+	}))
+	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+	if err != nil {
+		t.Fatalf("CreateTodo() unexpected error: %v", err)
+	}
+	want := TodoOutput{
+		ID: 301, ActionName: "assigned", TargetType: "Issue",
+		TargetTitle: "Target 302", TargetURL: "https://gitlab.example.com/t/303",
+		Body: "Body 304", State: "done", CreatedAt: "2026-05-06T07:08:09Z",
+	}
+	got, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal the to-do: %v", err)
+	}
+	expected, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal the expected to-do: %v", err)
+	}
+	if string(got) != string(expected) {
+		t.Errorf("CreateTodo() = %s, want %s", got, expected)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The remedy each status picks
+// ---------------------------------------------------------------------------.
+
+// TestStatusHints_EachStatusPicksItsOwnRemedy drives every handler that keys a
+// hint on an HTTP status through the status that picks it, and holds the error
+// to a fragment only that hint carries; then through a status no branch names,
+// and holds the error to carrying no suggestion at all.
+//
+// Neither gate can see these branches: an IsHTTPStatus call carries no operator
+// gremlins mutates, and gobco cannot instrument this package. Five of the
+// remedies were already held, Create at 422 and the three 400s by
+// TestIssueValidationStatusHintErrors and Move at 404 by TestMove_NotFound;
+// every other error-path test answered 403 to a handler whose one special case
+// is 404, or asserted only that an error came back, which a handler with the
+// branch deleted produces just the same.
+func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
+	afterID := int64(1)
+	get := GetInput{ProjectID: testProjectID, IssueIID: 10}
+	for _, tt := range []struct {
+		name   string
+		status int
+		hint   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{"Create/404", http.StatusNotFound, "at least Reporter role", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: testProjectID, Title: testIssueTitle})
+			return err
+		}},
+		{"Create/422", http.StatusUnprocessableEntity, "referenced labels, assignee_ids and milestone_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{ProjectID: testProjectID, Title: testIssueTitle})
+			return err
+		}},
+		{"Get/404", http.StatusNotFound, "use gitlab_issue_list to see existing issues", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, get)
+			return err
+		}},
+		{"List/404", http.StatusNotFound, "Issues must be enabled", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{ProjectID: testProjectID})
+			return err
+		}},
+		{"Update/404", http.StatusNotFound, "Use gitlab_issue_list to check available issues", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Title: "x"})
+			return err
+		}},
+		{"Delete/403", http.StatusForbidden, "only project owners or administrators", func(ctx context.Context, c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{ProjectID: testProjectID, IssueIID: 10})
+		}},
+		{"ListGroup/404", http.StatusNotFound, "verify the group exists", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListGroup(ctx, c, ListGroupInput{GroupID: "99"})
+			return err
+		}},
+		{"ListAll/401", http.StatusUnauthorized, "requires an authenticated token", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListAll(ctx, c, ListAllInput{})
+			return err
+		}},
+		{"GetByID/404", http.StatusNotFound, "issue_id is the global database ID", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetByID(ctx, c, GetByIDInput{IssueID: 10})
+			return err
+		}},
+		{"Reorder/400", http.StatusBadRequest, "exactly one of move_after_id or move_before_id", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Reorder(ctx, c, ReorderInput{ProjectID: testProjectID, IssueIID: 10, MoveAfterID: &afterID})
+			return err
+		}},
+		{"Reorder/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Reorder(ctx, c, ReorderInput{ProjectID: testProjectID, IssueIID: 10, MoveAfterID: &afterID})
+			return err
+		}},
+		{"Move/404", http.StatusNotFound, "target project not found", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Move(ctx, c, MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99})
+			return err
+		}},
+		{"Move/400", http.StatusBadRequest, "target project not found", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Move(ctx, c, MoveInput{ProjectID: testProjectID, IssueIID: 10, ToProjectID: 99})
+			return err
+		}},
+		{"Subscribe/404", http.StatusNotFound, hintConfirmIssueExists, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Subscribe(ctx, c, SubscribeInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{"Unsubscribe/404", http.StatusNotFound, hintConfirmIssueExists, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Unsubscribe(ctx, c, UnsubscribeInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{"CreateTodo/404", http.StatusNotFound, hintConfirmIssueExists, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreateTodo(ctx, c, CreateTodoInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{"SetTimeEstimate/400", http.StatusBadRequest, "'3h30m', '1w2d', or '45m'", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := SetTimeEstimate(ctx, c, SetTimeEstimateInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1"})
+			return err
+		}},
+		{"ResetTimeEstimate/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ResetTimeEstimate(ctx, c, get)
+			return err
+		}},
+		{"AddSpentTime/400", http.StatusBadRequest, "'1h', '30m', or '1w2d'", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := AddSpentTime(ctx, c, AddSpentTimeInput{ProjectID: testProjectID, IssueIID: 10, Duration: "1"})
+			return err
+		}},
+		{"ResetSpentTime/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ResetSpentTime(ctx, c, get)
+			return err
+		}},
+		{"GetTimeStats/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetTimeStats(ctx, c, get)
+			return err
+		}},
+		{"GetParticipants/404", http.StatusNotFound, hintVerifyIssue, func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := GetParticipants(ctx, c, get)
+			return err
+		}},
+		{"ListMRsClosing/404", http.StatusNotFound, "only MRs that include 'Closes #N'", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListMRsClosing(ctx, c, ListMRsClosingInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+		{"ListMRsRelated/404", http.StatusNotFound, "broader than 'closing'", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := ListMRsRelated(ctx, c, ListMRsRelatedInput{ProjectID: testProjectID, IssueIID: 10})
+			return err
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			answer := func(status int) *gitlabclient.Client {
+				return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, status, `{"message":"refused"}`)
+				}))
+			}
+			err := tt.call(context.Background(), answer(tt.status))
+			if err == nil {
+				t.Fatalf("expected an error at %d, got nil", tt.status)
+			}
+			if !strings.Contains(err.Error(), "Suggestion: ") || !strings.Contains(err.Error(), tt.hint) {
+				t.Errorf("at %d error = %q, want the remedy %q", tt.status, err.Error(), tt.hint)
+			}
+			err = tt.call(context.Background(), answer(http.StatusConflict))
+			if err == nil {
+				t.Fatal("expected an error at 409, got nil")
+			}
+			if strings.Contains(err.Error(), "Suggestion: ") {
+				t.Errorf("at 409 error = %q, want no remedy for a status no branch names", err.Error())
+			}
+		})
 	}
 }

@@ -3,6 +3,7 @@ package users
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -317,6 +318,215 @@ func TestGet_UserAPIError(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{UserID: 999})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// TestGet_UserWithCustomAttributesReachesTheQuery verifies that the optional
+// admin flag is asked of GitLab and that an unset one is not invented. The
+// response is the fixture's own either way, so the query the handler built is
+// the only place the answer can be read.
+func TestGet_UserWithCustomAttributesReachesTheQuery(t *testing.T) {
+	yes := true
+
+	tests := []struct {
+		name  string
+		input GetInput
+		want  url.Values
+	}{
+		{"asked", GetInput{UserID: 42, WithCustomAttributes: &yes}, url.Values{"with_custom_attributes": {"true"}}},
+		{"not asked", GetInput{UserID: 42}, url.Values{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathGetUser, &got, http.StatusOK, userJSON))
+
+			if _, err := Get(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertSent(t, "get query", got.query, tt.want)
+		})
+	}
+}
+
+// userFlags is the block of eleven booleans the user converter copies across
+// in a row. A flag has only two values, so a fixture that sets more than one
+// cannot tell them apart and a converter reading the wrong neighbor looks
+// correct: measured here, swapping can_create_project with can_create_group
+// left the whole suite green. Reading the block into one comparable value is
+// what lets a case drive one flag and assert the other ten stayed false.
+type userFlags struct {
+	IsAdmin               bool
+	IsAuditor             bool
+	Bot                   bool
+	TwoFactorEnabled      bool
+	External              bool
+	Locked                bool
+	PrivateProfile        bool
+	CanCreateProject      bool
+	CanCreateGroup        bool
+	CanCreateOrganization bool
+	UsingLicenseSeat      bool
+}
+
+func flagsOf(out Output) userFlags {
+	return userFlags{
+		IsAdmin:               out.IsAdmin,
+		IsAuditor:             out.IsAuditor,
+		Bot:                   out.Bot,
+		TwoFactorEnabled:      out.TwoFactorEnabled,
+		External:              out.External,
+		Locked:                out.Locked,
+		PrivateProfile:        out.PrivateProfile,
+		CanCreateProject:      out.CanCreateProject,
+		CanCreateGroup:        out.CanCreateGroup,
+		CanCreateOrganization: out.CanCreateOrganization,
+		UsingLicenseSeat:      out.UsingLicenseSeat,
+	}
+}
+
+// TestGet_UserEachFlagIsReadFromItsOwnKey drives one flag at a time, which is
+// also what GitLab really answers for most users, and compares the whole block
+// against one with only that field set. Every other flag staying false is the
+// assertion that matters: it is what distinguishes eleven fields that all
+// carry the same two values.
+func TestGet_UserEachFlagIsReadFromItsOwnKey(t *testing.T) {
+	tests := []struct {
+		key  string
+		want userFlags
+	}{
+		{"is_admin", userFlags{IsAdmin: true}},
+		{"is_auditor", userFlags{IsAuditor: true}},
+		{"bot", userFlags{Bot: true}},
+		{"two_factor_enabled", userFlags{TwoFactorEnabled: true}},
+		{"external", userFlags{External: true}},
+		{"locked", userFlags{Locked: true}},
+		{"private_profile", userFlags{PrivateProfile: true}},
+		{"can_create_project", userFlags{CanCreateProject: true}},
+		{"can_create_group", userFlags{CanCreateGroup: true}},
+		{"can_create_organization", userFlags{CanCreateOrganization: true}},
+		{"using_license_seat", userFlags{UsingLicenseSeat: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			body := fmt.Sprintf(`{"id":42,"username":"testuser",%q:true}`, tt.key)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathGetUser {
+					testutil.RespondJSON(w, http.StatusOK, body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := Get(context.Background(), client, GetInput{UserID: 42})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got := flagsOf(out); got != tt.want {
+				t.Errorf("flags = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestList_UsersEachFilterReachesTheQuery drives one filter at a time and
+// compares the whole query. The list builder assigns two dozen fields in a
+// row with no branch in it, so no mutation gate can see a filter assigned from
+// the wrong input; a case per filter, each with a value of its own, can.
+func TestList_UsersEachFilterReachesTheQuery(t *testing.T) {
+	yes := true
+
+	tests := []struct {
+		name  string
+		input ListInput
+		want  url.Values
+	}{
+		{"search", ListInput{Search: "alice"}, url.Values{"search": {"alice"}}},
+		{"username", ListInput{Username: "bob"}, url.Values{"username": {"bob"}}},
+		{"active", ListInput{Active: &yes}, url.Values{"active": {"true"}}},
+		{"blocked", ListInput{Blocked: &yes}, url.Values{"blocked": {"true"}}},
+		{"external", ListInput{External: &yes}, url.Values{"external": {"true"}}},
+		{"admins", ListInput{Admins: &yes}, url.Values{"admins": {"true"}}},
+		{"humans", ListInput{Humans: &yes}, url.Values{"humans": {"true"}}},
+		{"exclude_active", ListInput{ExcludeActive: &yes}, url.Values{"exclude_active": {"true"}}},
+		{"exclude_external", ListInput{ExcludeExternal: &yes}, url.Values{"exclude_external": {"true"}}},
+		{"exclude_humans", ListInput{ExcludeHumans: &yes}, url.Values{"exclude_humans": {"true"}}},
+		{"exclude_internal", ListInput{ExcludeInternal: &yes}, url.Values{"exclude_internal": {"true"}}},
+		{"without_projects", ListInput{WithoutProjects: &yes}, url.Values{"without_projects": {"true"}}},
+		{"without_project_bots", ListInput{WithoutProjectBots: &yes}, url.Values{"without_project_bots": {"true"}}},
+		{"with_custom_attributes", ListInput{WithCustomAttributes: &yes}, url.Values{"with_custom_attributes": {"true"}}},
+		{"custom_attributes", ListInput{CustomAttributes: map[string]string{"team": "core"}}, url.Values{"custom_attributes[team]": {"core"}}},
+		{"two_factor", ListInput{TwoFactor: "enabled"}, url.Values{"two_factor": {"enabled"}}},
+		{"extern_uid", ListInput{ExternUID: "extern-uid"}, url.Values{"extern_uid": {"extern-uid"}}},
+		{"provider", ListInput{Provider: "ldapmain"}, url.Values{"provider": {"ldapmain"}}},
+		{"public_email", ListInput{PublicEmail: "public@x.test"}, url.Values{"public_email": {"public@x.test"}}},
+		{"created_after", ListInput{CreatedAfter: "2026-01-02T03:04:05Z"}, url.Values{"created_after": {"2026-01-02T03:04:05Z"}}},
+		{"created_before", ListInput{CreatedBefore: "2026-02-03T04:05:06Z"}, url.Values{"created_before": {"2026-02-03T04:05:06Z"}}},
+		{"order_by", ListInput{OrderBy: "created_at"}, url.Values{"order_by": {"created_at"}}},
+		{"sort", ListInput{Sort: "desc"}, url.Values{"sort": {"desc"}}},
+		{"nothing", ListInput{}, url.Values{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathListUsers, &got, http.StatusOK, `[`+userJSON+`]`))
+
+			if _, err := List(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertSent(t, "list query", got.query, tt.want)
+		})
+	}
+}
+
+// TestList_UsersAnUnparsableDateIsNotSent verifies that a created_after GitLab
+// would refuse is dropped rather than sent as the zero instant: the builder
+// parses it with no branch of its own, so a date it could not read would
+// otherwise reach GitLab as the year 1.
+func TestList_UsersAnUnparsableDateIsNotSent(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, recordRequest(t, pathListUsers, &got, http.StatusOK, `[]`))
+
+	if _, err := List(context.Background(), client, ListInput{
+		CreatedAfter:  "not-a-date",
+		CreatedBefore: "also-invalid",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertSent(t, "list query", got.query, url.Values{})
+}
+
+// TestSetUserStatus_EachOptionReachesTheRequest drives one status field at a
+// time and compares the whole body. An update sends only what the caller asked
+// to change, so the body is exactly that key: a builder that wrote the message
+// into the emoji is visible here and is not when all four are set at once.
+func TestSetUserStatus_EachOptionReachesTheRequest(t *testing.T) {
+	tests := []struct {
+		name  string
+		input SetStatusInput
+		want  map[string]any
+	}{
+		{"emoji", SetStatusInput{Emoji: "coffee"}, map[string]any{"emoji": "coffee"}},
+		{"message", SetStatusInput{Message: "reviewing"}, map[string]any{"message": "reviewing"}},
+		{"availability", SetStatusInput{Availability: "busy"}, map[string]any{"availability": "busy"}},
+		{"clear_status_after", SetStatusInput{ClearStatusAfter: "3_hours"}, map[string]any{"clear_status_after": "3_hours"}},
+		{"nothing", SetStatusInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathSetUserStatus, &got, http.StatusOK,
+				`{"emoji":"coffee","message":"reviewing","availability":"busy"}`))
+
+			if _, err := SetStatus(context.Background(), client, tt.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertSent(t, "set status body", got.body, tt.want)
+		})
 	}
 }
 
@@ -823,7 +1033,11 @@ func TestList_UsersWithPagination(t *testing.T) {
 	}
 }
 
-// TestList_UsersAllOptionalFilters verifies List when users all optional filters.
+// TestList_UsersAllOptionalFilters verifies that a request carrying several
+// filters is accepted and its page decoded, asserting three of them in the
+// query. Which input each filter is read from is held one filter at a time by
+// TestList_UsersEachFilterReachesTheQuery; the name here promises more than
+// the body does.
 func TestList_UsersAllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users" {
@@ -1147,7 +1361,10 @@ func TestListContributionEvents_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_AllFilters verifies ListContributionEvents when all filters.
+// TestListContributionEvents_AllFilters verifies that a request carrying every
+// filter is accepted and its page decoded. It asserts nothing about the query,
+// which TestListContributionEvents_EachFilterReachesTheQuery holds one filter
+// at a time.
 func TestListContributionEvents_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
@@ -1187,15 +1404,13 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}
 }
 
-// TestListContributionEvents_InvalidDateIgnored verifies ListContributionEvents when invalid date ignored.
+// TestListContributionEvents_InvalidDateIgnored verifies that a date GitLab
+// would refuse never reaches the query. Asserting only that the call succeeds
+// would pass just as well with the zero instant sent as before=0001-01-01,
+// which is a filter the caller never asked for.
 func TestListContributionEvents_InvalidDateIgnored(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/users/42/events" {
-			testutil.RespondJSON(w, http.StatusOK, `[]`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+	var got capturedRequest
+	client := testutil.NewTestClient(t, recordRequest(t, pathContribEvents, &got, http.StatusOK, `[]`))
 
 	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
 		UserID: 42,
@@ -1207,6 +1422,154 @@ func TestListContributionEvents_InvalidDateIgnored(t *testing.T) {
 	}
 	if len(out.Events) != 0 {
 		t.Fatalf("got %d events, want 0", len(out.Events))
+	}
+	assertSent(t, "events query", got.query, url.Values{})
+}
+
+// TestListContributionEvents_EachFilterReachesTheQuery drives one filter at a
+// time and compares the whole query, so a filter assigned from the wrong input
+// shows up. The two dates are the reason to compare rather than check
+// presence: both encode to the same shape, and a builder that read After into
+// Before would still send a plausible-looking pair.
+func TestListContributionEvents_EachFilterReachesTheQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ListContributionEventsInput
+		want  url.Values
+	}{
+		{"action", ListContributionEventsInput{Action: "pushed"}, url.Values{"action": {"pushed"}}},
+		{"target_type", ListContributionEventsInput{TargetType: "issue"}, url.Values{"target_type": {"issue"}}},
+		{"before", ListContributionEventsInput{Before: "2026-12-31"}, url.Values{"before": {"2026-12-31"}}},
+		{"after", ListContributionEventsInput{After: "2026-01-01"}, url.Values{"after": {"2026-01-01"}}},
+		{"scope", ListContributionEventsInput{Scope: "all"}, url.Values{"scope": {"all"}}},
+		{"sort", ListContributionEventsInput{Sort: "desc"}, url.Values{"sort": {"desc"}}},
+		{"order_by", ListContributionEventsInput{OrderBy: "id"}, url.Values{"order_by": {"id"}}},
+		{"nothing", ListContributionEventsInput{}, url.Values{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathContribEvents, &got, http.StatusOK, `[]`))
+
+			input := tt.input
+			input.UserID = 42
+			if _, err := ListContributionEvents(context.Background(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertSent(t, "events query", got.query, tt.want)
+		})
+	}
+}
+
+// TestListContributionEvents_EveryFieldIsReadFromItsOwnKey compares the whole
+// decoded event against one built by hand, with a value no other field shares.
+// The converter assigns nine fields in a row and nothing branches, so no
+// mutation gate can see one read from its neighbor: measured here, swapping
+// target_type with target_title left the whole suite green while it turned
+// every event's type into its title.
+func TestListContributionEvents_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pathContribEvents:
+			testutil.RespondJSON(w, http.StatusOK, `[{
+				"id":200,"title":"event title","project_id":5,"action_name":"pushed",
+				"target_id":10,"target_iid":11,"target_type":"Issue",
+				"target_title":"target title","created_at":"2026-03-15T09:00:00Z"
+			}]`)
+		case "/api/v4/projects/5":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":5,"web_url":"https://gitlab.example.com/g/p"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Events) != 1 {
+		t.Fatalf("got %d events, want 1", len(out.Events))
+	}
+	want := ContributionEventOutput{
+		ID:          200,
+		Title:       "event title",
+		ProjectID:   5,
+		ActionName:  "pushed",
+		TargetID:    10,
+		TargetIID:   11,
+		TargetType:  "Issue",
+		TargetTitle: "target title",
+		TargetURL:   "https://gitlab.example.com/g/p/-/issues/11",
+		CreatedAt:   "2026-03-15T09:00:00Z",
+	}
+	if out.Events[0] != want {
+		t.Errorf("event = %+v, want %+v", out.Events[0], want)
+	}
+}
+
+// TestListContributionEvents_AnEventWithoutACreatedAtLeavesItEmpty verifies
+// the absent side of the timestamp guard: GitLab's event entity carries
+// created_at, and an answer that omits it must leave the field empty rather
+// than publish the zero instant as a date the event happened on.
+func TestListContributionEvents_AnEventWithoutACreatedAtLeavesItEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathContribEvents {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":200,"project_id":5,"action_name":"pushed"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{UserID: 42})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Events) != 1 {
+		t.Fatalf("got %d events, want 1", len(out.Events))
+	}
+	if out.Events[0].CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want empty when GitLab sent none", out.Events[0].CreatedAt)
+	}
+}
+
+// TestListSSHKeys_AKeyWithoutTimestampsLeavesThemEmpty verifies the absent
+// side of the same guards on a key: created_at and expires_at are both
+// optional on GitLab's SSH key entity, and a key that carries neither must
+// publish neither rather than the zero instant twice.
+func TestListSSHKeys_AKeyWithoutTimestampsLeavesThemEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathListSSHKeys {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"laptop","key":"ssh-ed25519 AAA"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Keys) != 1 {
+		t.Fatalf("got %d keys, want 1", len(out.Keys))
+	}
+	if out.Keys[0].CreatedAt != "" || out.Keys[0].ExpiresAt != "" {
+		t.Errorf("key = %+v, want both timestamps empty", out.Keys[0])
+	}
+}
+
+// TestListSSHKeys_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to a key list: GitLab's answer decodes
+// for the SDK and not for the key fields read beside it, and the handler
+// reports it rather than returning keys whose last_used_at is silently empty.
+func TestListSSHKeys_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"title":"laptop","last_used_at":"whenever"}]`)
+	}))
+
+	_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{})
+	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("ListSSHKeys() error = %v, want the capture's decode failure", err)
 	}
 }
 
@@ -1339,6 +1702,28 @@ func TestFormatMarkdownString_AvatarOnly(t *testing.T) {
 			"- **Avatar**: [https://gitlab.example.com/uploads/avatar.png](https://gitlab.example.com/uploads/avatar.png)\n"+
 			"\n---\n💡 **Next steps:**\n"+
 			"- The avatar was updated; use gitlab_user_current to fetch the profile\n")
+}
+
+// TestFormatMarkdownString_NamedWithoutAnID verifies the other side of the
+// avatar condition: a user GitLab named is rendered as a user even when its ID
+// arrives at zero, because the avatar card is the answer to an upload and not
+// to any response that happens to lack an identifier.
+func TestFormatMarkdownString_NamedWithoutAnID(t *testing.T) {
+	out := Output{
+		Username:  "dana",
+		Name:      "Dana",
+		AvatarURL: "https://gitlab.example.com/uploads/avatar.png",
+	}
+
+	assertMarkdown(t, FormatMarkdownString(out),
+		"## GitLab User: Dana\n\n"+
+			"- **ID**: 0\n"+
+			"- **Username**: dana\n"+
+			"- **Admin**: ❌\n"+
+			"- **Bot**: ❌\n"+
+			"- **External**: ❌\n"+
+			"- **Avatar**: [https://gitlab.example.com/uploads/avatar.png](https://gitlab.example.com/uploads/avatar.png)\n"+
+			userCardHints)
 }
 
 // TestFormatMarkdownString_Empty verifies that an empty user writes no row

@@ -4,9 +4,13 @@ package usergpgkeys
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
@@ -19,11 +23,48 @@ const (
 	pathGPGKey           = "/api/v4/user/gpg_keys/1"
 	pathGPGKeyUser       = "/api/v4/users/42/gpg_keys/1"
 	gpgKeyJSON           = `{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-01-15T10:00:00Z"}`
-	gpgKeyListJSON       = `[{"id":1,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-01-15T10:00:00Z"},{"id":2,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-02-20T12:00:00Z"}]`
 	gpgKeyNilCreatedJSON = `{"id":3,"key":"-----BEGIN PGP PUBLIC KEY BLOCK-----"}`
 )
 
-// TestList_Success verifies that List lists a user GPG key on a successful GitLab API response.
+// The three keys GitLab's GpgKey entity sends, given values that share nothing
+// with each other and nothing with the next key in the list. A fixture whose
+// armored keys all read "-----BEGIN PGP PUBLIC KEY BLOCK-----" cannot tell a
+// converter that copies the key from one that never copies it at all, which is
+// what the previous list fixture did.
+const (
+	firstKeyArmored  = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nRklSU1RLRVlCT0RZ\n=Zm9v\n-----END PGP PUBLIC KEY BLOCK-----"
+	secondKeyArmored = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nU0VDT05ES0VZQk9EWQ==\n=YmFy\n-----END PGP PUBLIC KEY BLOCK-----"
+	firstKeyCreated  = "2026-01-15T10:00:00Z"
+	secondKeyCreated = "2026-02-20T12:00:00Z"
+)
+
+// gpgKeyListJSON is the two-key page the list handlers read. Each key carries
+// its own id, its own armored body and its own instant, so an output built
+// from the wrong element, or from a field of its neighbor, changes what the
+// assertions see.
+var gpgKeyListJSON = `[` +
+	`{"id":11,"key":` + quoteJSON(firstKeyArmored) + `,"created_at":"` + firstKeyCreated + `"},` +
+	`{"id":12,"key":` + quoteJSON(secondKeyArmored) + `,"created_at":"` + secondKeyCreated + `"}]`
+
+// gpgKeyEveryFieldJSON is the single key the get handlers read, carrying the
+// same three distinguishable values.
+var gpgKeyEveryFieldJSON = `{"id":7,"key":` + quoteJSON(firstKeyArmored) + `,"created_at":"` + firstKeyCreated + `"}`
+
+// quoteJSON renders a Go string as a JSON string literal, so a fixture can
+// hold an armored key with its newlines in it and still be valid JSON.
+func quoteJSON(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+// TestList_Success verifies that every field GitLab sends for every key on the
+// page reaches the output, in the order GitLab sent them. The three fields of
+// each key are asserted rather than the first id alone: a converter that never
+// copied the armored key, or that copied its neighbor's instant, passed the
+// older assertion, and the key is the only reason to call this at all.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGPGKeys {
@@ -37,11 +78,31 @@ func TestList_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
-	if len(out.Keys) != 2 {
-		t.Fatalf("len(out.Keys) = %d, want 2", len(out.Keys))
+	want := []struct {
+		name      string
+		id        int64
+		key       string
+		createdAt string
+	}{
+		{name: "first key on the page", id: 11, key: firstKeyArmored, createdAt: firstKeyCreated},
+		{name: "second key on the page", id: 12, key: secondKeyArmored, createdAt: secondKeyCreated},
 	}
-	if out.Keys[0].ID != 1 {
-		t.Errorf("out.Keys[0].ID = %d, want 1", out.Keys[0].ID)
+	if len(out.Keys) != len(want) {
+		t.Fatalf("len(out.Keys) = %d, want %d", len(out.Keys), len(want))
+	}
+	for i, w := range want {
+		t.Run(w.name, func(t *testing.T) {
+			got := out.Keys[i]
+			if got.ID != w.id {
+				t.Errorf("ID = %d, want %d", got.ID, w.id)
+			}
+			if got.Key != w.key {
+				t.Errorf("Key = %q, want %q", got.Key, w.key)
+			}
+			if got.CreatedAt != w.createdAt {
+				t.Errorf("CreatedAt = %q, want %q", got.CreatedAt, w.createdAt)
+			}
+		})
 	}
 }
 
@@ -86,22 +147,31 @@ func TestListForUser_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get retrieves a user GPG key on a successful GitLab API response.
+// TestGet_Success verifies that the key GitLab answered with is published
+// whole: its id, its armored body and its creation instant in RFC 3339, which
+// is the form every other timestamp in this server carries. The armored body
+// is the point of the call and no assertion read it before.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathGPGKey {
-			testutil.RespondJSON(w, http.StatusOK, gpgKeyJSON)
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/user/gpg_keys/7" {
+			testutil.RespondJSON(w, http.StatusOK, gpgKeyEveryFieldJSON)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
-	out, err := Get(context.Background(), client, GetInput{KeyID: 1})
+	out, err := Get(context.Background(), client, GetInput{KeyID: 7})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
-	if out.ID != 1 {
-		t.Errorf("out.ID = %d, want 1", out.ID)
+	if out.ID != 7 {
+		t.Errorf("out.ID = %d, want 7", out.ID)
+	}
+	if out.Key != firstKeyArmored {
+		t.Errorf("out.Key = %q, want the armored key GitLab sent", out.Key)
+	}
+	if out.CreatedAt != firstKeyCreated {
+		t.Errorf("out.CreatedAt = %q, want %q", out.CreatedAt, firstKeyCreated)
 	}
 }
 
@@ -132,6 +202,9 @@ func TestGetForUser_Success(t *testing.T) {
 	}
 	if out.ID != 1 {
 		t.Errorf("out.ID = %d, want 1", out.ID)
+	}
+	if out.Key == "" {
+		t.Error("out.Key is empty, so the key the caller asked for was not published")
 	}
 }
 
@@ -184,7 +257,74 @@ func TestAddForUser_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete deletes a user GPG key on a successful GitLab API response.
+// TestAdd_SendsTheArmoredKeyToGitLab asserts that the key the caller supplied
+// is what the POST carries. Nothing read the request body before, so a handler
+// that built its options and never filled them registered an empty key on the
+// account while answering with whatever the fixture returned, and every
+// assertion still passed.
+func TestAdd_SendsTheArmoredKeyToGitLab(t *testing.T) {
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathGPGKeys {
+			http.NotFound(w, r)
+			return
+		}
+		sent = decodeRequestBody(t, r)
+		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
+	}))
+
+	if _, err := Add(context.Background(), client, AddInput{Key: firstKeyArmored}); err != nil {
+		t.Fatalf("Add() unexpected error: %v", err)
+	}
+	if got := sent["key"]; got != firstKeyArmored {
+		t.Errorf("POST body key = %v, want the armored key the caller supplied", got)
+	}
+}
+
+// TestAddForUser_SendsTheArmoredKeyToGitLab asserts the same for the admin
+// route, where the key lands on somebody else's account and an empty one is
+// harder to notice.
+func TestAddForUser_SendsTheArmoredKeyToGitLab(t *testing.T) {
+	var sent map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathGPGKeysUser {
+			http.NotFound(w, r)
+			return
+		}
+		sent = decodeRequestBody(t, r)
+		testutil.RespondJSON(w, http.StatusCreated, gpgKeyJSON)
+	}))
+
+	if _, err := AddForUser(context.Background(), client, AddForUserInput{UserID: 42, Key: secondKeyArmored}); err != nil {
+		t.Fatalf("AddForUser() unexpected error: %v", err)
+	}
+	if got := sent["key"]; got != secondKeyArmored {
+		t.Errorf("POST body key = %v, want the armored key the caller supplied", got)
+	}
+}
+
+// decodeRequestBody reads a JSON request body inside an httptest handler. It
+// reports with t.Errorf and returns nil rather than aborting, since a Fatal
+// here would run off the test goroutine.
+func decodeRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	raw, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		t.Errorf("reading request body: %v", readErr)
+		return nil
+	}
+	var body map[string]any
+	if decodeErr := json.Unmarshal(raw, &body); decodeErr != nil {
+		t.Errorf("request body %q is not JSON: %v", raw, decodeErr)
+		return nil
+	}
+	return body
+}
+
+// TestDelete_Success verifies that a successful delete confirms which key was
+// removed, not merely that something was. GitLab answers 204 with no body, so
+// the confirmation card has nothing to name the key by except the id the
+// caller asked for, and that echo was asserted nowhere.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGPGKey {
@@ -200,6 +340,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 	if !out.Deleted {
 		t.Error("out.Deleted = false, want true")
+	}
+	if out.KeyID != 1 {
+		t.Errorf("out.KeyID = %d, want the 1 the caller asked to delete", out.KeyID)
 	}
 }
 
@@ -230,6 +373,9 @@ func TestDeleteForUser_Success(t *testing.T) {
 	}
 	if !out.Deleted {
 		t.Error("out.Deleted = false, want true")
+	}
+	if out.KeyID != 1 {
+		t.Errorf("out.KeyID = %d, want the 1 the caller asked to delete", out.KeyID)
 	}
 }
 
@@ -550,6 +696,13 @@ func TestList_EmptyResult(t *testing.T) {
 	if len(out.Keys) != 0 {
 		t.Errorf("len(out.Keys) = %d, want 0", len(out.Keys))
 	}
+	// The comment above promised "not nil" and only the length was read, which
+	// a nil slice satisfies. It matters in the served JSON: a nil slice writes
+	// "keys": null and an empty one writes "keys": [], and a model reading null
+	// cannot tell an empty account from a field the server failed to fill.
+	if out.Keys == nil {
+		t.Error("out.Keys is nil, so the response publishes null rather than an empty list")
+	}
 }
 
 // --- Markdown formatter tests ---
@@ -669,5 +822,124 @@ func TestGet_NilCreatedAt(t *testing.T) {
 	}
 	if out.CreatedAt != "" {
 		t.Errorf("out.CreatedAt = %q, want empty for nil created_at", out.CreatedAt)
+	}
+}
+
+// TestStatusHints_EachHandlerHintsOnTheStatusItNames drives every handler with
+// the one HTTP status its WrapErrWithStatusHint call singles out, and asserts
+// the hint reaches the caller.
+//
+// Each of the eight API-error tests above answers with a status the handler
+// does not hint on, and asserts only that some error came back, so not one of
+// the eight hints was ever produced: a status literal changed by a typo, or a
+// hint deleted outright, left every test green while a model was handed a bare
+// failure instead of the correction that resolves it.
+func TestStatusHints_EachHandlerHintsOnTheStatusItNames(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(client *gitlabclient.Client) error
+	}{
+		{
+			name: "list", status: http.StatusUnauthorized, hint: "read_user scope",
+			call: func(c *gitlabclient.Client) error { _, err := List(context.Background(), c, ListInput{}); return err },
+		},
+		{
+			name: "list_for_user", status: http.StatusNotFound, hint: "gitlab_get_user",
+			call: func(c *gitlabclient.Client) error {
+				_, err := ListForUser(context.Background(), c, ListForUserInput{UserID: 42})
+				return err
+			},
+		},
+		{
+			name: "get", status: http.StatusNotFound, hint: "may have been deleted",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Get(context.Background(), c, GetInput{KeyID: 1})
+				return err
+			},
+		},
+		{
+			name: "get_for_user", status: http.StatusNotFound, hint: "admin token may be required",
+			call: func(c *gitlabclient.Client) error {
+				_, err := GetForUser(context.Background(), c, GetForUserInput{UserID: 42, KeyID: 1})
+				return err
+			},
+		},
+		{
+			name: "add", status: http.StatusBadRequest, hint: "ASCII-armored OpenPGP public key block",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Add(context.Background(), c, AddInput{Key: "not-a-key"})
+				return err
+			},
+		},
+		{
+			name: "add_for_user", status: http.StatusForbidden, hint: "requires admin token",
+			call: func(c *gitlabclient.Client) error {
+				_, err := AddForUser(context.Background(), c, AddForUserInput{UserID: 42, Key: "not-a-key"})
+				return err
+			},
+		},
+		{
+			name: "delete", status: http.StatusNotFound, hint: "may already have been deleted",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Delete(context.Background(), c, DeleteInput{KeyID: 1})
+				return err
+			},
+		},
+		{
+			name: "delete_for_user", status: http.StatusForbidden, hint: "requires admin token",
+			call: func(c *gitlabclient.Client) error {
+				_, err := DeleteForUser(context.Background(), c, DeleteForUserInput{UserID: 42, KeyID: 1})
+				return err
+			},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"refused"}`)
+			}))
+			err := tt.call(client)
+			if err == nil {
+				t.Fatal(errExpAPIFailure)
+			}
+			if !strings.Contains(err.Error(), tt.hint) {
+				t.Errorf("error %q carries no hint about %q", err, tt.hint)
+			}
+		})
+	}
+}
+
+// TestKeyPreview_BodyExactlyAsLongAsThePreview_ShownWhole pins the boundary
+// the preview is cut on: a body of exactly the preview length is the whole
+// key, so it is shown as itself, and one rune more is shown as a tail. Only
+// the two ends were exercised before, and a body of exactly that length would
+// have been printed as an ellipsis in front of the whole thing.
+func TestKeyPreview_BodyExactlyAsLongAsThePreview_ShownWhole(t *testing.T) {
+	const runes = 8
+	exact := strings.Repeat("A", runes)
+	if got := keyPreview(exact, runes); got != exact {
+		t.Errorf("keyPreview(%d runes, %d) = %q, want the body itself", runes, runes, got)
+	}
+	longer := exact + "B"
+	if got := keyPreview(longer, runes); got != "..."+longer[1:] {
+		t.Errorf("keyPreview(%d runes, %d) = %q, want the last %d marked as a tail", runes+1, runes, got, runes)
+	}
+}
+
+// TestArmoredBody_KeyWithNoArmorHeaders_ReadsTheBodyAfterTheArmorLine holds
+// the pairing in the header rule: a line is skipped as an armor header only
+// when it both follows an armor line and looks like one ("Version: GnuPG v1").
+// A key written without armor headers has no blank line to end them, so every
+// body line arrives while that first condition still holds; treating those as
+// headers would leave nothing to preview and fall back to printing the armor.
+func TestArmoredBody_KeyWithNoArmorHeaders_ReadsTheBodyAfterTheArmorLine(t *testing.T) {
+	const noHeaderKey = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n" +
+		"Qk9EWVdJVEhOT0hFQURFUlM=\n" +
+		"=Zm9v\n" +
+		"-----END PGP PUBLIC KEY BLOCK-----\n"
+	if got := armoredBody(noHeaderKey); got != "Qk9EWVdJVEhOT0hFQURFUlM=" {
+		t.Errorf("armoredBody = %q, want the base64 body alone", got)
 	}
 }

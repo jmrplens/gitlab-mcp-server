@@ -1,8 +1,11 @@
 // group_epic_boards_test.go validates the List and Get handlers for GitLab
 // group epic board operations, covering success paths, input validation
-// (missing group_id, missing/zero board_id), API error responses, context
-// cancellation, pagination parameter forwarding, empty results, and edge
-// cases in toOutput (nil labels, nil list entries, lists without labels).
+// (missing group_id, missing/zero board_id), API error responses and which of
+// them carry the epic-board hint, context cancellation, pagination parameter
+// forwarding, empty results, the escaping that makes a group path one request
+// segment, and edge cases in toOutput (nil labels, nil list entries, lists
+// without labels). The Markdown formatters are pinned here too, whole output
+// at a time.
 package groupepicboards
 
 import (
@@ -11,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -19,13 +23,20 @@ const (
 	pathBoards = "/api/v4/groups/mygroup/epic_boards"
 	pathBoard1 = "/api/v4/groups/mygroup/epic_boards/1"
 
+	// The two label timestamps differ on purpose: GitLab sends them under
+	// separate keys, and a fixture that gives both the same instant cannot
+	// tell a converter reading the wrong one from a converter reading the
+	// right one.
+	labelCreatedAt = "2023-01-27T10:40:59.738Z"
+	labelUpdatedAt = "2024-06-03T08:15:22.101Z"
+
 	boardJSON = `{
 		"id": 1,
 		"name": "Epic Board",
 		"hide_backlog_list": true,
 		"hide_closed_list": false,
 		"group": {"id": 7, "name": "My Group", "web_url": "http://example.com/groups/my-group"},
-		"labels": [{"id": 10, "title": "Priority", "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>", "group_id": 7, "project_id": null, "template": false, "created_at": "2023-01-27T10:40:59.738Z", "updated_at": "2023-01-27T10:40:59.738Z"}],
+		"labels": [{"id": 10, "title": "Priority", "name": "Priority", "color": "#FF0000", "text_color": "#FFFFFF", "description": "P", "description_html": "<p>P</p>", "group_id": 7, "project_id": null, "template": false, "created_at": "` + labelCreatedAt + `", "updated_at": "` + labelUpdatedAt + `"}],
 		"lists": [
 			{"id": 100, "label": {"id": 10, "name": "Priority", "color": "#F0AD4E", "description": null}, "position": 0, "list_type": "label", "collapsed": false}
 		]
@@ -225,6 +236,109 @@ func TestList_NotFoundIncludesActionableHint(t *testing.T) {
 	}
 }
 
+// TestBoardPathsEscapeTheGroupIntoOneSegment pins what makes both handlers'
+// request-building error arms unreachable: the group a caller names is escaped
+// before it is interpolated, so a path with a slash, a space or a percent in
+// it still reaches GitLab as one segment and the request is always built
+// rather than refused. Without the escaping the slash would split the path and
+// address another endpoint entirely.
+func TestBoardPathsEscapeTheGroupIntoOneSegment(t *testing.T) {
+	const (
+		groupPath   = "my group/sub-group%x"
+		escapedPath = "/api/v4/groups/my%20group%2Fsub-group%25x/epic_boards"
+	)
+	tests := []struct {
+		name     string
+		wantPath string
+		body     string
+		call     func(t *testing.T, client *gitlabclient.Client) error
+	}{
+		{
+			name:     "list",
+			wantPath: escapedPath,
+			body:     "[]",
+			call: func(t *testing.T, client *gitlabclient.Client) error {
+				t.Helper()
+				_, err := List(context.Background(), client, ListInput{GroupID: toolutil.StringOrInt(groupPath)})
+				return err
+			},
+		},
+		{
+			name:     "get",
+			wantPath: escapedPath + "/7",
+			body:     `{"id":7,"name":"B"}`,
+			call: func(t *testing.T, client *gitlabclient.Client) error {
+				t.Helper()
+				_, err := Get(context.Background(), client, GetInput{GroupID: toolutil.StringOrInt(groupPath), BoardID: 7})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := r.URL.EscapedPath(); got != tt.wantPath {
+					t.Errorf("escaped path = %q, want %q", got, tt.wantPath)
+				}
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			}))
+			if err := tt.call(t, client); err != nil {
+				t.Fatalf("call with group %q error = %v, want nil", groupPath, err)
+			}
+		})
+	}
+}
+
+// TestBoardHintIsBoundToNotFound verifies that the epic-board hint both
+// handlers attach is attached on 404 alone: another refusal carries GitLab's
+// own message instead, so a permission failure is never reported as a group
+// whose boards are merely unconfigured.
+func TestBoardHintIsBoundToNotFound(t *testing.T) {
+	tests := []struct {
+		name     string
+		unwanted string
+		call     func(t *testing.T, client *gitlabclient.Client) error
+	}{
+		{
+			name:     "list",
+			unwanted: groupEpicBoardHint,
+			call: func(t *testing.T, client *gitlabclient.Client) error {
+				t.Helper()
+				_, err := List(context.Background(), client, ListInput{GroupID: testGroupID})
+				return err
+			},
+		},
+		{
+			name:     "get",
+			unwanted: "configure an epic board",
+			call: func(t *testing.T, client *gitlabclient.Client) error {
+				t.Helper()
+				_, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, BoardID: 1})
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			}))
+			err := tt.call(t, client)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "403 Forbidden") {
+				t.Errorf("error = %v, want GitLab's own message", err)
+			}
+			if strings.Contains(err.Error(), tt.unwanted) {
+				t.Errorf("error = %v, want no 404 hint on a 403", err)
+			}
+		})
+	}
+}
+
 // TestGet verifies the Get handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
@@ -324,8 +438,20 @@ func assertEpicBoardDetails(t *testing.T, out Output) {
 	if len(out.Labels) != 1 || out.Labels[0].Name != "Priority" {
 		t.Errorf("Labels = %v, want [Priority]", out.Labels)
 	}
-	if out.Labels[0].Title != "Priority" || out.Labels[0].GroupID != 7 || out.Labels[0].CreatedAt == "" {
-		t.Errorf("Labels[0] superset = %+v, want title/group_id/created_at populated", out.Labels[0])
+	if out.Labels[0].Title != "Priority" || out.Labels[0].GroupID != 7 {
+		t.Errorf("Labels[0] superset = %+v, want title/group_id populated", out.Labels[0])
+	}
+	// The label's own id is what a model is handed on the `id` key, and this
+	// fixture is a group label GitLab sends project_id null for, so an id read
+	// from project_id surfaces as 0 across the whole decode and convert path.
+	if out.Labels[0].ID != 10 || out.Labels[0].ProjectID != 0 || out.Labels[0].Template {
+		t.Errorf("Labels[0] identity = %+v, want id 10, no project scope, not a template", out.Labels[0])
+	}
+	// Each timestamp is held to its own key: the two carry different instants
+	// in the fixture, so reading one in the other's place fails here.
+	if out.Labels[0].CreatedAt != labelCreatedAt || out.Labels[0].UpdatedAt != labelUpdatedAt {
+		t.Errorf("Labels[0] timestamps = %q/%q, want %q/%q",
+			out.Labels[0].CreatedAt, out.Labels[0].UpdatedAt, labelCreatedAt, labelUpdatedAt)
 	}
 	if out.Group == nil || out.Group.ID != 7 || out.Group.WebURL == "" {
 		t.Errorf("Group = %+v, want id 7 with web_url", out.Group)
@@ -477,10 +603,12 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		{
 			name: "renders board with labels and lists",
 			input: Output{
-				ID:              1,
-				Name:            "Sprint Board",
-				Group:           &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://gitlab.example.com/groups/my-group"},
-				Labels:          []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, nil, {ID: 11, Name: "Bug"}},
+				ID:    1,
+				Name:  "Sprint Board",
+				Group: &GroupRefOutput{ID: 7, Name: "My Group", WebURL: "https://gitlab.example.com/groups/my-group"},
+				// The nil entry and the one GitLab sent without a name are
+				// both dropped from the Labels line.
+				Labels:          []*LabelDetailsOutput{{ID: 10, Name: "Priority"}, nil, {ID: 12}, {ID: 11, Name: "Bug"}},
 				HideBacklogList: true,
 				Lists: []BoardListOutput{
 					{ID: 100, Label: &ListLabelOutput{ID: 10, Name: "Priority"}, Position: 0, ListType: "label"},

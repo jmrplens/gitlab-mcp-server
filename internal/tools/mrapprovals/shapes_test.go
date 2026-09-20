@@ -106,6 +106,41 @@ func TestGroupOutput_NilAndFull(t *testing.T) {
 	}
 }
 
+// TestGroupOutput_EachFlagOnItsOwn verifies the two booleans are read from the
+// SDK field of the same name.
+//
+// A fixture setting both to true cannot tell them apart, and neither gate can:
+// swapping the two assignments is straight-line code with no branch to flip.
+// Driving one flag at a time and comparing the whole struct distinguishes
+// them, and is also what GitLab really answers for a group that enables one.
+func TestGroupOutput_EachFlagOnItsOwn(t *testing.T) {
+	cases := []struct {
+		name string
+		in   gl.Group
+		want GroupOutput
+	}{
+		{"neither", gl.Group{ID: 1}, GroupOutput{ID: 1}},
+		{
+			"request access only",
+			gl.Group{ID: 1, RequestAccessEnabled: true},
+			GroupOutput{ID: 1, RequestAccessEnabled: true},
+		},
+		{
+			"lfs only",
+			gl.Group{ID: 1, LFSEnabled: true},
+			GroupOutput{ID: 1, LFSEnabled: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := groupOutput(&tc.in)
+			if got == nil || *got != tc.want {
+				t.Errorf("groupOutput(%+v) = %+v, want %+v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestGroupOutputs_EmptyAndNilElements verifies groupOutputs returns nil for an
 // empty slice and skips nil elements.
 func TestGroupOutputs_EmptyAndNilElements(t *testing.T) {
@@ -134,18 +169,56 @@ func TestProtectedBranchOutputs_EmptyAndNilElements(t *testing.T) {
 	}
 }
 
+// TestProtectedBranchOutputs_EachFlagOnItsOwn verifies the two booleans of a
+// protected branch are read from the SDK field of the same name, for the
+// reason [TestGroupOutput_EachFlagOnItsOwn] gives: a fixture setting both
+// cannot tell a swap from the truth.
+func TestProtectedBranchOutputs_EachFlagOnItsOwn(t *testing.T) {
+	cases := []struct {
+		name string
+		in   gl.ProtectedBranch
+		want ProtectedBranchOutput
+	}{
+		{"neither", gl.ProtectedBranch{ID: 2, Name: "main"}, ProtectedBranchOutput{ID: 2, Name: "main"}},
+		{
+			"force push only",
+			gl.ProtectedBranch{ID: 2, Name: "main", AllowForcePush: true},
+			ProtectedBranchOutput{ID: 2, Name: "main", AllowForcePush: true},
+		},
+		{
+			"code owner approval only",
+			gl.ProtectedBranch{ID: 2, Name: "main", CodeOwnerApprovalRequired: true},
+			ProtectedBranchOutput{ID: 2, Name: "main", CodeOwnerApprovalRequired: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := protectedBranchOutputs([]*gl.ProtectedBranch{&tc.in})
+			if len(got) != 1 || *got[0] != tc.want {
+				t.Errorf("protectedBranchOutputs(%+v) = %+v, want [%+v]", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestProjectApprovalRuleOutput_NilAndFull verifies projectApprovalRuleOutput
 // maps every field including nested users, groups, and protected branches, and
 // returns nil for a nil input.
+//
+// The two approver lists carry different names on purpose. They used to carry
+// the same one, which made the eligible list and the user list
+// indistinguishable: exchanging the two assignments is straight-line code, so
+// neither the mutation nor the condition gate could report it, and counting
+// one entry in each passed either way.
 func TestProjectApprovalRuleOutput_NilAndFull(t *testing.T) {
 	if got := projectApprovalRuleOutput(nil); got != nil {
 		t.Errorf("projectApprovalRuleOutput(nil) = %v, want nil", got)
 	}
 	out := projectApprovalRuleOutput(&gl.ProjectApprovalRule{
 		ID: 11, Name: "Project Rule", RuleType: "regular", ReportType: "code_coverage",
-		EligibleApprovers:             []*gl.BasicUser{{Name: "Ann"}},
+		EligibleApprovers:             []*gl.BasicUser{{Name: "Eligible Ann"}},
 		ApprovalsRequired:             3,
-		Users:                         []*gl.BasicUser{{Name: "Ann"}},
+		Users:                         []*gl.BasicUser{{Name: "Named Ulf"}},
 		Groups:                        []*gl.Group{{Name: "Owners"}},
 		ContainsHiddenGroups:          true,
 		ProtectedBranches:             []*gl.ProtectedBranch{{Name: "main"}},
@@ -156,8 +229,13 @@ func TestProjectApprovalRuleOutput_NilAndFull(t *testing.T) {
 		!out.AppliesToAllProtectedBranches {
 		t.Fatalf("projectApprovalRuleOutput scalars = %+v", out)
 	}
-	if len(out.EligibleApprovers) != 1 || len(out.Users) != 1 || len(out.Groups) != 1 ||
-		len(out.ProtectedBranches) != 1 {
+	if len(out.EligibleApprovers) != 1 || out.EligibleApprovers[0].Name != "Eligible Ann" {
+		t.Errorf("EligibleApprovers = %+v, want the one eligible approver", out.EligibleApprovers)
+	}
+	if len(out.Users) != 1 || out.Users[0].Name != "Named Ulf" {
+		t.Errorf("Users = %+v, want the one named user", out.Users)
+	}
+	if len(out.Groups) != 1 || len(out.ProtectedBranches) != 1 {
 		t.Fatalf("projectApprovalRuleOutput nested counts = %+v", out)
 	}
 }

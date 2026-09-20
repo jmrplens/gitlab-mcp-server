@@ -33,6 +33,77 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DiscoveryMetadata holds every published spec to the metadata
+// table rather than to the generic fallback beside it, and holds the related
+// action IDs the specs publish to the same constants the Markdown hints are
+// built from. The two sets are written apart, in action_specs.go and in
+// markdown.go, and have drifted in other domains; a related action naming an
+// ID no surface resolves reads to a model as a capability that is not there.
+func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.Name, func(t *testing.T) {
+			meta, ok := epicBoardMetaByName[spec.Name]
+			if !ok {
+				t.Fatalf("no discovery metadata for published action %q", spec.Name)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the table's %q", spec.Usage, meta.usage)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("Description = %q, want the table's %q", spec.IndividualTool.Description, meta.description)
+			}
+			if len(spec.Aliases) == 0 || spec.Aliases[0] != spec.IndividualTool.Name {
+				t.Errorf("Aliases = %v, want the individual tool name first", spec.Aliases)
+			}
+			assertRelatedActionsUseTheHintConstants(t, spec.RelatedActions)
+		})
+	}
+}
+
+// assertRelatedActionsUseTheHintConstants holds each related ID to one of the
+// three the package spells: the two board IDs the Markdown hints are built
+// from and the epic list the specs share. Whether an ID resolves against the
+// catalog is what make check-action-ids answers; what this answers is that the
+// specs and the hints keep naming one spelling.
+func assertRelatedActionsUseTheHintConstants(t *testing.T, related []string) {
+	t.Helper()
+	known := map[string]bool{
+		actionEpicBoardList: true,
+		actionEpicBoardGet:  true,
+		actionGroupEpicList: true,
+	}
+	if len(related) == 0 {
+		t.Fatal("RelatedActions is empty")
+	}
+	for _, id := range related {
+		if !known[id] {
+			t.Errorf("RelatedActions entry %q names no canonical ID this package spells", id)
+		}
+	}
+}
+
+// TestActionSpecs_UnknownNameKeepsTheGenericMetadata verifies the fallback the
+// metadata lookup carries: an action name the table does not hold keeps the
+// generic usage and the domain's own related action rather than inheriting
+// another action's text. Nothing calls it with such a name today, which is
+// what this pins.
+func TestActionSpecs_UnknownNameKeepsTheGenericMetadata(t *testing.T) {
+	opts := groupEpicBoardOptions("no_such_action", "gitlab_group_epic_board_list")
+	if opts.Usage != "Use to execute groupepicboards domain action." {
+		t.Errorf("Usage = %q, want the generic default", opts.Usage)
+	}
+	if len(opts.Aliases) != 1 || opts.Aliases[0] != "gitlab_group_epic_board_list" {
+		t.Errorf("Aliases = %v, want the individual tool name alone", opts.Aliases)
+	}
+	if len(opts.RelatedActions) != 1 || opts.RelatedActions[0] != actionGroupEpicList {
+		t.Errorf("RelatedActions = %v, want [%s]", opts.RelatedActions, actionGroupEpicList)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("Description = %q, want empty", opts.IndividualTool.Description)
+	}
+}
+
 // TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the route returns the expected error or result.

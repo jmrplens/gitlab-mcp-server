@@ -25,9 +25,9 @@ func TestRequireScopedNodes_RejectsZeroNodes(t *testing.T) {
 
 // TestRequireScopedNodes_DetectsIdRangeSpanTooWide verifies that
 // [requireScopedNodes] returns the precise id_range span error when the
-// user supplies an id_range whose span exceeds the 100,000 limit. This
-// matches the live API's "require node_ids or filters" rejection so the
-// LLM can see the exact cause.
+// user supplies an id_range whose span exceeds the 100,000 limit, and that
+// the figure in the message is the span the caller sent, since a model
+// narrows the range by that number.
 func TestRequireScopedNodes_DetectsIdRangeSpanTooWide(t *testing.T) {
 	err := requireScopedNodes(map[string]any{
 		"query_type": "traversal",
@@ -40,8 +40,43 @@ func TestRequireScopedNodes_DetectsIdRangeSpanTooWide(t *testing.T) {
 	if err == nil {
 		t.Fatal("requireScopedNodes() error = nil, want id_range span error")
 	}
-	if !strings.Contains(err.Error(), "exceeds the 100,000 limit") {
-		t.Fatalf("requireScopedNodes() error = %q, want id_range span error", err)
+	if !strings.Contains(err.Error(), "span (499999) exceeds the 100,000 limit") {
+		t.Fatalf("requireScopedNodes() error = %q, want the span figure and the limit", err)
+	}
+}
+
+// TestRequireScopedNodes_IdRangeWithoutASpan_GetsTheScopeError verifies that
+// an id_range the span check cannot judge, one missing an end or running
+// backwards, is reported as a missing scope and never as a span that exceeds
+// the limit: the span message names a number, and a number computed from an
+// absent or inverted end would send the caller narrowing a range it never
+// wrote.
+func TestRequireScopedNodes_IdRangeWithoutASpan_GetsTheScopeError(t *testing.T) {
+	tests := []struct {
+		name    string
+		idRange map[string]any
+	}{
+		{name: "end without start", idRange: map[string]any{"end": 200000}},
+		{name: "start without end", idRange: map[string]any{"start": 200000}},
+		{name: "inverted range", idRange: map[string]any{"start": 100000, "end": 50000}},
+		{name: "empty object", idRange: map[string]any{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := requireScopedNodes(map[string]any{
+				"query_type": "traversal",
+				"node":       map[string]any{"id": "p", "entity": "Project", "id_range": tt.idRange},
+			}, "traversal")
+			if err == nil {
+				t.Fatal("requireScopedNodes() error = nil, want missing-scope error")
+			}
+			if !strings.Contains(err.Error(), "traversal queries require at least one node with node_ids, filters, or id_range") {
+				t.Fatalf("requireScopedNodes() error = %q, want the missing-scope message", err)
+			}
+			if strings.Contains(err.Error(), "exceeds") {
+				t.Fatalf("requireScopedNodes() error = %q, want no span figure for a range with no span", err)
+			}
+		})
 	}
 }
 
@@ -87,16 +122,44 @@ func TestNodeHasScope_AcceptsAllScopeShapes(t *testing.T) {
 }
 
 // TestNodeHasScope_RejectsInvalidIdRange verifies that [nodeHasScope]
-// returns false for id_range maps whose span is exactly at the boundary
-// (the spec uses <= 100000; the branch only succeeds with hasStart and
-// hasEnd). An id_range with a single key (no `end`) should also be
-// rejected so the validator does not silently accept malformed input.
+// returns false for an id_range carrying only one of its two ends: the
+// branch needs both to compute a span, so a single key is malformed input
+// rather than a scope. The boundaries of the span itself are held by
+// [TestNodeHasScope_IdRangeSpan_DecidesAtTheLimitAndAtZero].
 func TestNodeHasScope_RejectsInvalidIdRange(t *testing.T) {
 	if nodeHasScope(map[string]any{"id_range": map[string]any{"start": 1}}) {
 		t.Fatal("nodeHasScope() with id_range{start} only = true, want false")
 	}
 	if nodeHasScope(map[string]any{"id_range": map[string]any{"end": 100}}) {
 		t.Fatal("nodeHasScope() with id_range{end} only = true, want false")
+	}
+}
+
+// TestNodeHasScope_IdRangeSpan_DecidesAtTheLimitAndAtZero verifies where the
+// id_range rule turns: a span of exactly 100,000 is the last one accepted and
+// one more is refused, a range of a single id (start equal to end) is a scope,
+// a range running backwards is not, and it is the span and never the size of
+// the ids that decides, so ids in the millions with a small span pass.
+func TestNodeHasScope_IdRangeSpan_DecidesAtTheLimitAndAtZero(t *testing.T) {
+	tests := []struct {
+		name  string
+		start int
+		end   int
+		want  bool
+	}{
+		{name: "span exactly at the limit", start: 1, end: 100001, want: true},
+		{name: "span one over the limit", start: 1, end: 100002, want: false},
+		{name: "start equal to end", start: 5, end: 5, want: true},
+		{name: "inverted range", start: 100, end: 50, want: false},
+		{name: "large ids with a small span", start: 5000000, end: 5000010, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := map[string]any{"id_range": map[string]any{"start": tt.start, "end": tt.end}}
+			if got := nodeHasScope(node); got != tt.want {
+				t.Fatalf("nodeHasScope(id_range{%d, %d}) = %t, want %t", tt.start, tt.end, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -224,6 +287,51 @@ func TestRequireNeighborsShape_AcceptsValidShape(t *testing.T) {
 		"neighbors":  map[string]any{"node": "p", "direction": "both"},
 	}); err != nil {
 		t.Fatalf("requireNeighborsShape() error = %v, want nil", err)
+	}
+}
+
+// TestRequireNeighborsShape_RejectsEmptyNodeRef verifies that a `neighbors`
+// object whose `node` is present but empty is refused with the same message
+// as a missing one: an empty alias references nothing, and the check used to
+// hold only when the key was absent.
+func TestRequireNeighborsShape_RejectsEmptyNodeRef(t *testing.T) {
+	err := requireNeighborsShape(map[string]any{
+		"query_type": "neighbors",
+		"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		"neighbors":  map[string]any{"node": ""},
+	})
+	if err == nil {
+		t.Fatal("requireNeighborsShape() error = nil, want empty-node-ref error")
+	}
+	if !strings.Contains(err.Error(), "neighbors.node must be a non-empty string") {
+		t.Fatalf("requireNeighborsShape() error = %q, want empty-node-ref message", err)
+	}
+}
+
+// TestRequireNeighborsShape_NodeWithoutID_LeavesTheReferenceToGitLab verifies
+// that the alias comparison needs a declared string id to compare against: a
+// top-level node with no `id`, or one that is not a string, is passed through
+// for GitLab to judge rather than reported as a mismatch against an empty
+// name.
+func TestRequireNeighborsShape_NodeWithoutID_LeavesTheReferenceToGitLab(t *testing.T) {
+	tests := []struct {
+		name string
+		node map[string]any
+	}{
+		{name: "no id", node: map[string]any{"entity": "Project", "node_ids": []int{1}}},
+		{name: "non-string id", node: map[string]any{"id": 42, "entity": "Project", "node_ids": []int{1}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := requireNeighborsShape(map[string]any{
+				"query_type": "neighbors",
+				"node":       tt.node,
+				"neighbors":  map[string]any{"node": "p"},
+			})
+			if err != nil {
+				t.Fatalf("requireNeighborsShape() error = %v, want nil", err)
+			}
+		})
 	}
 }
 
@@ -355,6 +463,19 @@ func TestCollectQueryNodes_AcceptsTypedSliceShape(t *testing.T) {
 	}
 	if nodes[0]["id"] != "u" || nodes[1]["id"] != "p" {
 		t.Fatalf("collectQueryNodes() = %+v, want u and p in order", nodes)
+	}
+}
+
+// TestCollectQueryNodes_SkipsEntriesThatAreNotObjects verifies that a `nodes`
+// entry which is not an object (a string, a number, a null) is left out
+// rather than failing the whole query, so the selectors that are objects are
+// still validated and GitLab reports the malformed entry itself.
+func TestCollectQueryNodes_SkipsEntriesThatAreNotObjects(t *testing.T) {
+	nodes := collectQueryNodes(map[string]any{
+		"nodes": []any{"p", 42, nil, map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}}},
+	})
+	if len(nodes) != 1 || nodes[0]["id"] != "p" {
+		t.Fatalf("collectQueryNodes() = %+v, want only the object entry", nodes)
 	}
 }
 

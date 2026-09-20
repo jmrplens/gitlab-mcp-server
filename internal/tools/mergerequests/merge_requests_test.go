@@ -6,9 +6,12 @@ package mergerequests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -284,16 +287,21 @@ func TestMRMerge_Success(t *testing.T) {
 	}
 }
 
-// TestMRMerge_Conflicts verifies that Merge returns an error when the GitLab
-// API responds with 405, indicating the merge request has conflicts.
-func TestMRMerge_Conflicts(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// TestMRMerge_MethodNotAllowedEverywhere_IsAnError verifies that Merge reports
+// a 405 as an error when the pre-fetch was answered 405 too, so there is no
+// merge request to diagnose the refusal from. What the diagnosis says when
+// there is one is held by TestMerge_MethodNotAllowed_DiagnosisNamesEachBlockerOnce.
+func TestMRMerge_MethodNotAllowedEverywhere_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"405 Method Not Allowed"}`)
 	}))
 
 	_, err := Merge(context.Background(), client, MergeInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
-		t.Fatal("Merge() expected error for conflict, got nil")
+		t.Fatal("Merge() expected error for a 405, got nil")
+	}
+	if !strings.Contains(err.Error(), "405") {
+		t.Errorf("Merge() error = %q, want the 405 reported", err)
 	}
 }
 
@@ -1773,25 +1781,6 @@ func TestMRDependencyStatusBranches(t *testing.T) {
 	})
 }
 
-// TestMRRebase_WithSkipCI verifies Rebase accepts the skip_ci option.
-func TestMRRebase_WithSkipCI(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == pathMR1+"/rebase" {
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := Rebase(context.Background(), client, RebaseInput{ProjectID: testProjectID, MRIID: 1, SkipCI: true})
-	if err != nil {
-		t.Fatalf("Rebase() unexpected error: %v", err)
-	}
-	if !out.RebaseInProgress {
-		t.Fatal("RebaseInProgress = false, want true")
-	}
-}
-
 // TestDiagnoseMergeBlocker_Branches verifies merge blocker diagnostics for nil,
 // field-derived, and generic merge request states.
 func TestDiagnoseMergeBlocker_Branches(t *testing.T) {
@@ -1870,8 +1859,6 @@ const (
 	testMRTitle = "feat: login"
 	// testBlockerTitle identifies the test blocker title constant used by this package.
 	testBlockerTitle = "Blocker MR"
-	// testCreatedBefore identifies the test created before constant used by this package.
-	testCreatedBefore = "2026-12-31T23:59:59Z"
 	// testStateOpened identifies the test state opened constant used by this package.
 	testStateOpened = "opened"
 	// testStateMerged identifies the test state merged constant used by this package.
@@ -3743,43 +3730,6 @@ func assertRichMRTimestamps(t *testing.T, out Output) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Tests for Create with all optional fields to cover Create branches
-// ---------------------------------------------------------------------------.
-
-// TestCreate_AllOptionalFields verifies Create when all optional fields.
-func TestCreate_AllOptionalFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathMRs {
-			testutil.RespondJSON(w, http.StatusCreated, mrJSONCoverage)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	boolTrue := true
-	out, err := Create(context.Background(), client, CreateInput{
-		ProjectID:          testProjectID,
-		SourceBranch:       testBranchFeat,
-		TargetBranch:       testBranchMain,
-		Title:              "Full MR",
-		Description:        "Full desc",
-		AssigneeIDs:        []int64{1, 2},
-		ReviewerIDs:        []int64{3},
-		RemoveSourceBranch: &boolTrue,
-		Squash:             &boolTrue,
-		MilestoneID:        10,
-		AllowCollaboration: &boolTrue,
-		TargetProjectID:    99,
-	})
-	if err != nil {
-		t.Fatalf("Create() unexpected error: %v", err)
-	}
-	if out.IID != 1 {
-		t.Errorf(fmtIIDWant, out.IID)
-	}
-}
-
 // TestCreate_AssigneeIDSingular verifies that assignee_id (singular) is sent
 // in the HTTP request body when creating a merge request.
 func TestCreate_AssigneeIDSingular(t *testing.T) {
@@ -3851,201 +3801,88 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Tests for Merge with all optional fields
+// Tests for the string, date and paging filters of the three listings
 // ---------------------------------------------------------------------------.
 
-// TestMerge_AllOptionalFields verifies Merge when all optional fields.
-func TestMerge_AllOptionalFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge" {
-			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+// listingFilterQuery is what every string, date and paging filter the three
+// listings share encodes to when each is set to a value of its own. The
+// filters are wired to their options one pointer at a time, so a fixture in
+// which two of them agreed could not tell a crossed pair apart.
+var listingFilterQuery = map[string]string{
+	"state": testStateOpened, "milestone": testMilestoneV1, "scope": "created_by_me", "search": "login",
+	"source_branch": testBranchFeat, "target_branch": testBranchMain,
+	"author_username": testAuthorAlice, "not[author_username]": "mallory", "reviewer_username": testAuthorBob,
+	"created_after": "2026-01-01T00:00:00Z", "created_before": "2026-01-02T00:00:00Z",
+	"updated_after": "2026-01-03T00:00:00Z", "updated_before": "2026-01-04T00:00:00Z",
+	"order_by": "updated_at", "sort": "asc", "page": "2", "per_page": "50",
+}
 
-	boolTrue := true
-	out, err := Merge(context.Background(), client, MergeInput{
-		ProjectID:                testProjectID,
-		MRIID:                    1,
-		MergeCommitMessage:       "Merge commit",
-		Squash:                   &boolTrue,
-		ShouldRemoveSourceBranch: &boolTrue,
-		AutoMerge:                &boolTrue,
-		SHA:                      testSHAAbc,
-		SquashCommitMessage:      "Squash msg",
-	})
-	if err != nil {
-		t.Fatalf("Merge() unexpected error: %v", err)
-	}
-	if out.IID != 1 {
-		t.Errorf(fmtIIDWant, out.IID)
+// assertListingFilterQuery holds q to every pair of listingFilterQuery, one
+// subtest per filter so a report names the filter that went astray.
+func assertListingFilterQuery(t *testing.T, q url.Values) {
+	t.Helper()
+	for key, want := range listingFilterQuery {
+		t.Run(key, func(t *testing.T) {
+			assertQuery(t, q, key, want)
+		})
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Tests for Update with all optional fields to cover buildUpdateOpts
-// ---------------------------------------------------------------------------.
-
-// TestUpdate_AllOptionalFields verifies Update when all optional fields.
-func TestUpdate_AllOptionalFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == pathMR1 {
-			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	boolTrue := true
-	out, err := Update(context.Background(), client, UpdateInput{
-		ProjectID:          testProjectID,
-		MRIID:              1,
-		Title:              "Updated",
-		Description:        "New desc",
-		TargetBranch:       "develop",
-		StateEvent:         "close",
-		AssigneeIDs:        []int64{1},
-		ReviewerIDs:        []int64{2},
-		AddLabels:          []string{"new-label"},
-		RemoveLabels:       []string{"old-label"},
-		MilestoneID:        5,
-		RemoveSourceBranch: &boolTrue,
-		Squash:             &boolTrue,
-		DiscussionLocked:   &boolTrue,
-		AllowCollaboration: &boolTrue,
-	})
-	if err != nil {
-		t.Fatalf("Update() unexpected error: %v", err)
-	}
-	if out.IID != 1 {
-		t.Errorf(fmtIIDWant, out.IID)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Tests for List with all optional filter fields to cover buildListOptions
-// ---------------------------------------------------------------------------.
-
-// TestList_AllFilterFields verifies List when all filter fields.
-func TestList_AllFilterFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == pathMRs {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	boolTrue := true
+// TestList_StringDateAndPagingFilters_ReachTheQuery holds every string, date
+// and paging filter of the project listing to the query GitLab receives.
+func TestList_StringDateAndPagingFilters_ReachTheQuery(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:      testProjectID,
-		State:          testStateOpened,
-		Labels:         testLabels,
-		NotLabels:      []string{testLabelWontfix},
-		Milestone:      testMilestoneV1,
-		Scope:          "all",
-		Search:         "login",
-		SourceBranch:   testBranchFeat,
-		TargetBranch:   testBranchMain,
-		AuthorUsername: testAuthorAlice,
-		Draft:          &boolTrue,
-		IIDs:           []int64{1, 2},
-		CreatedAfter:   testCreatedAt,
-		CreatedBefore:  testCreatedBefore,
-		UpdatedAfter:   testCreatedAt,
-		UpdatedBefore:  testCreatedBefore,
-		OrderBy:        "created_at",
-		Sort:           "desc",
-		Page:           2, PerPage: 50,
+		ProjectID: testProjectID, State: testStateOpened, Milestone: testMilestoneV1, Scope: "created_by_me", Search: "login",
+		SourceBranch: testBranchFeat, TargetBranch: testBranchMain,
+		AuthorUsername: testAuthorAlice, NotAuthorUsername: "mallory", ReviewerUsername: testAuthorBob,
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-01-02T00:00:00Z",
+		UpdatedAfter: "2026-01-03T00:00:00Z", UpdatedBefore: "2026-01-04T00:00:00Z",
+		OrderBy: "updated_at", Sort: "asc", Page: 2, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
+	assertListingFilterQuery(t, q)
 }
 
-// ---------------------------------------------------------------------------
-// Tests for ListGlobal with all optional filter fields
-// ---------------------------------------------------------------------------.
-
-// TestListGlobal_AllFilterFields verifies ListGlobal when all filter fields.
-func TestListGlobal_AllFilterFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/merge_requests" {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	boolTrue := true
+// TestListGlobal_StringDateAndPagingFilters_ReachTheQuery holds the same
+// filters to the global listing's query.
+func TestListGlobal_StringDateAndPagingFilters_ReachTheQuery(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathGlobalMRs, &q))
 	_, err := ListGlobal(context.Background(), client, ListGlobalInput{
-		State:            testStateOpened,
-		Labels:           testLabels,
-		NotLabels:        []string{testLabelWontfix},
-		Milestone:        testMilestoneV1,
-		Scope:            "all",
-		Search:           "login",
-		SourceBranch:     testBranchFeat,
-		TargetBranch:     testBranchMain,
-		AuthorUsername:   testAuthorAlice,
-		ReviewerUsername: testAuthorBob,
-		Draft:            &boolTrue,
-		CreatedAfter:     testCreatedAt,
-		CreatedBefore:    testCreatedBefore,
-		UpdatedAfter:     testCreatedAt,
-		UpdatedBefore:    testCreatedBefore,
-		OrderBy:          "created_at",
-		Sort:             "desc",
-		Page:             1, PerPage: 50,
+		State: testStateOpened, Milestone: testMilestoneV1, Scope: "created_by_me", Search: "login",
+		SourceBranch: testBranchFeat, TargetBranch: testBranchMain,
+		AuthorUsername: testAuthorAlice, NotAuthorUsername: "mallory", ReviewerUsername: testAuthorBob,
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-01-02T00:00:00Z",
+		UpdatedAfter: "2026-01-03T00:00:00Z", UpdatedBefore: "2026-01-04T00:00:00Z",
+		OrderBy: "updated_at", Sort: "asc", Page: 2, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
 	}
+	assertListingFilterQuery(t, q)
 }
 
-// ---------------------------------------------------------------------------
-// Tests for ListGroup with all optional filter fields
-// ---------------------------------------------------------------------------.
-
-// TestListGroup_AllFilterFields verifies ListGroup when all filter fields.
-func TestListGroup_AllFilterFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/99/merge_requests" {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
-				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	boolTrue := true
+// TestListGroup_StringDateAndPagingFilters_ReachTheQuery holds the same
+// filters to the group listing's query.
+func TestListGroup_StringDateAndPagingFilters_ReachTheQuery(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathGroupMRs, &q))
 	_, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:          "99",
-		State:            testStateOpened,
-		Labels:           testLabels,
-		NotLabels:        []string{testLabelWontfix},
-		Milestone:        testMilestoneV1,
-		Scope:            "all",
-		Search:           "login",
-		SourceBranch:     testBranchFeat,
-		TargetBranch:     testBranchMain,
-		AuthorUsername:   testAuthorAlice,
-		ReviewerUsername: testAuthorBob,
-		Draft:            &boolTrue,
-		CreatedAfter:     testCreatedAt,
-		CreatedBefore:    testCreatedBefore,
-		UpdatedAfter:     testCreatedAt,
-		UpdatedBefore:    testCreatedBefore,
-		OrderBy:          "created_at",
-		Sort:             "desc",
-		Page:             1, PerPage: 50,
+		GroupID: "99", State: testStateOpened, Milestone: testMilestoneV1, Scope: "created_by_me", Search: "login",
+		SourceBranch: testBranchFeat, TargetBranch: testBranchMain,
+		AuthorUsername: testAuthorAlice, NotAuthorUsername: "mallory", ReviewerUsername: testAuthorBob,
+		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-01-02T00:00:00Z",
+		UpdatedAfter: "2026-01-03T00:00:00Z", UpdatedBefore: "2026-01-04T00:00:00Z",
+		OrderBy: "updated_at", Sort: "asc", Page: 2, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListGroup() unexpected error: %v", err)
 	}
+	assertListingFilterQuery(t, q)
 }
 
 // ---------------------------------------------------------------------------
@@ -4072,27 +3909,6 @@ func TestSetTimeEstimate_EmptyDuration(t *testing.T) {
 	_, err := SetTimeEstimate(context.Background(), client, SetTimeEstimateInput{ProjectID: testProjectID, MRIID: 1, Duration: ""})
 	if err == nil {
 		t.Fatal("SetTimeEstimate() expected error for empty duration, got nil")
-	}
-}
-
-// TestAddSpentTime_WithSummary verifies AddSpentTime when with summary.
-func TestAddSpentTime_WithSummary(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/add_spent_time" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"human_time_estimate":"","human_total_time_spent":"2h","time_estimate":0,"total_time_spent":7200}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	out, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{
-		ProjectID: testProjectID, MRIID: 1, Duration: "2h", Summary: "code review",
-	})
-	if err != nil {
-		t.Fatalf("AddSpentTime() unexpected error: %v", err)
-	}
-	if out.TotalTimeSpent != 7200 {
-		t.Errorf("TotalTimeSpent = %d, want 7200", out.TotalTimeSpent)
 	}
 }
 
@@ -6092,6 +5908,74 @@ func TestToggleSubscription_NotModifiedError_FallsBackToGet(t *testing.T) {
 	}
 }
 
+// stubbedMergeRequests is the SDK's merge request service with two methods
+// replaced, so a test can hand a handler an answer client-go's own transport
+// never produces: a nil merge request beside a nil error, or a response with
+// no HTTP response inside it. Every other method reaches the real service.
+type stubbedMergeRequests struct {
+	gl.MergeRequestsServiceInterface
+	cancelAutoMerge func() (*gl.MergeRequest, *gl.Response, error)
+	createTodo      func() (*gl.Todo, *gl.Response, error)
+}
+
+func (s stubbedMergeRequests) CancelMergeWhenPipelineSucceeds(any, int64, ...gl.RequestOptionFunc) (*gl.MergeRequest, *gl.Response, error) {
+	return s.cancelAutoMerge()
+}
+
+func (s stubbedMergeRequests) CreateTodo(any, int64, ...gl.RequestOptionFunc) (*gl.Todo, *gl.Response, error) {
+	return s.createTodo()
+}
+
+// TestCancelAutoMerge_NilMergeRequest_FallsBackToGet verifies the nil half of
+// the fall-back guard, which client-go cannot produce today because it
+// allocates the struct it decodes into: a cancel that answers no merge request
+// at all is read back the way the status hash is, with a Get. The SDK call is
+// stubbed for the same reason the 304 test above stubs its own.
+func TestCancelAutoMerge_NilMergeRequest_FallsBackToGet(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, mrSentKeysListJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	client.GL().MergeRequests = stubbedMergeRequests{
+		MergeRequestsServiceInterface: client.GL().MergeRequests,
+		cancelAutoMerge: func() (*gl.MergeRequest, *gl.Response, error) {
+			return nil, &gl.Response{Response: &http.Response{StatusCode: http.StatusOK}}, nil
+		},
+	}
+	out, err := CancelAutoMerge(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("CancelAutoMerge() unexpected error: %v", err)
+	}
+	if out.IID != 1 {
+		t.Errorf("IID = %d, want the merge request the fall-back Get fetched", out.IID)
+	}
+}
+
+// TestCreateTodo_ResponseWithoutHTTPResponse_IsTheOperationError verifies the
+// already-exists check survives a response with no HTTP response inside it,
+// which client-go never builds but the guard is written for: the status is a
+// field promoted through that pointer, so reading it first would crash, and
+// the failure has to fall through to the operation's own error.
+func TestCreateTodo_ResponseWithoutHTTPResponse_IsTheOperationError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	client.GL().MergeRequests = stubbedMergeRequests{
+		MergeRequestsServiceInterface: client.GL().MergeRequests,
+		createTodo: func() (*gl.Todo, *gl.Response, error) {
+			return nil, &gl.Response{}, errors.New("answered without an HTTP response")
+		},
+	}
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("CreateTodo() error = nil, want the SDK's error reported")
+	}
+	if !strings.Contains(err.Error(), "answered without an HTTP response") || strings.Contains(err.Error(), "pending todo") {
+		t.Errorf("CreateTodo() error = %q, want the SDK's error and no already-exists hint", err)
+	}
+}
+
 // TestMergeRequestIssueLists_ReadTheBasicIssueKeysOffTheCapture verifies the
 // two lists of issues a merge request carries answer with the basic issue
 // entity, its keys client-go does not model read from the captured page, and
@@ -6112,5 +5996,988 @@ func TestMergeRequestIssueLists_ReadTheBasicIssueKeysOffTheCapture(t *testing.T)
 	}
 	if _, err = IssuesClosed(context.Background(), serve(`[{"id":1,"iid":2,"type":3}]`), IssuesClosedInput{ProjectID: "1", MRIID: 5}); err == nil {
 		t.Error("IssuesClosed() succeeded on a page whose type is not a string")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The request each mutating handler builds, held key for key
+// ---------------------------------------------------------------------------.
+
+// captureJSONBody answers method and path with status and reply, recording the
+// request body's top-level members with each value as the raw JSON GitLab
+// would parse, so a test can hold the body to an exact set of keys.
+func captureJSONBody(t *testing.T, method, path string, status int, reply string, got *map[string]json.RawMessage) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(got); err != nil {
+			t.Errorf("decode %s %s body: %v", method, path, err)
+			http.Error(w, "undecodable body", http.StatusBadRequest)
+			return
+		}
+		testutil.RespondJSON(w, status, reply)
+	}
+}
+
+// assertBodyKeys fails unless got holds exactly the keys of want, each with the
+// raw JSON want gives it. A key the caller never set has to be absent rather
+// than null or zero, because GitLab reads either as a value to apply: a null
+// assignee list clears the assignees, a zero milestone unassigns it.
+func assertBodyKeys(t *testing.T, got map[string]json.RawMessage, want map[string]string) {
+	t.Helper()
+	for key, wantRaw := range want {
+		gotRaw, ok := got[key]
+		if !ok {
+			t.Errorf("body lacks %q (want %s); keys sent: %v", key, wantRaw, slices.Sorted(maps.Keys(got)))
+			continue
+		}
+		if string(gotRaw) != wantRaw {
+			t.Errorf("body %q = %s, want %s", key, gotRaw, wantRaw)
+		}
+	}
+	for key, raw := range got {
+		if _, ok := want[key]; !ok {
+			t.Errorf("body carries %q = %s, which the caller never set", key, raw)
+		}
+	}
+}
+
+// withRequired returns want with the keys every request of that handler
+// carries added, so a case spells only what it is about.
+func withRequired(required, want map[string]string) map[string]string {
+	merged := maps.Clone(required)
+	maps.Copy(merged, want)
+	return merged
+}
+
+// createRequired is what every create body carries whatever else the caller
+// set: the three fields the API requires.
+var createRequired = map[string]string{"source_branch": `"feat"`, "target_branch": `"main"`, "title": `"Full MR"`}
+
+// createBody drives Create with the required fields plus input's optional ones
+// and returns the body the mock received.
+func createBody(t *testing.T, input CreateInput) map[string]json.RawMessage {
+	t.Helper()
+	var body map[string]json.RawMessage
+	client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPost, pathMRs, http.StatusCreated, mrJSONCoverage, &body))
+	input.ProjectID, input.SourceBranch, input.TargetBranch, input.Title = testProjectID, testBranchFeat, testBranchMain, "Full MR"
+	if _, err := Create(context.Background(), client, input); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	return body
+}
+
+// TestCreate_OptionalFields_ReachTheBody holds the create body to exactly the
+// keys the caller set, each carrying a value no other field shares, and to the
+// three required keys alone when the caller set nothing else. The
+// response-only assertions this replaces could not tell a guard that dropped
+// the caller's value from one that sent an unset field as null.
+func TestCreate_OptionalFields_ReachTheBody(t *testing.T) {
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  map[string]string
+	}{
+		{"every optional field", CreateInput{
+			Description: "Full desc", AssigneeID: 7, AssigneeIDs: []int64{8, 9}, ReviewerIDs: []int64{10},
+			Labels: []string{testLabelBug, "critical"}, MilestoneID: 11, TargetProjectID: 12, ApprovalsBeforeMerge: 13,
+			RemoveSourceBranch: new(true), Squash: new(false), AllowCollaboration: new(true),
+		}, map[string]string{
+			"description": `"Full desc"`, "assignee_id": "7", "assignee_ids": "[8,9]", "reviewer_ids": "[10]",
+			"labels": `"bug,critical"`, "milestone_id": "11", "target_project_id": "12", "approvals_before_merge": "13",
+			"remove_source_branch": "true", "squash": "false", "allow_collaboration": "true",
+		}},
+		{"nothing optional", CreateInput{}, map[string]string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertBodyKeys(t, createBody(t, tt.input), withRequired(createRequired, tt.want))
+		})
+	}
+}
+
+// TestCreate_EachFlagAlone_ReachesOnlyItsOwnKey drives the three boolean
+// options of a create one at a time, since a fixture setting all of them
+// cannot tell two flags apart, and holds the body to that one key beside the
+// required three.
+func TestCreate_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
+	flags := map[string]CreateInput{
+		"remove_source_branch": {RemoveSourceBranch: new(true)},
+		"squash":               {Squash: new(true)},
+		"allow_collaboration":  {AllowCollaboration: new(true)},
+	}
+	for key, input := range flags {
+		t.Run(key, func(t *testing.T) {
+			assertBodyKeys(t, createBody(t, input), withRequired(createRequired, map[string]string{key: "true"}))
+		})
+	}
+}
+
+// updateBody drives Update on merge request 1 with input's optional fields and
+// returns the body the mock received.
+func updateBody(t *testing.T, input UpdateInput) map[string]json.RawMessage {
+	t.Helper()
+	var body map[string]json.RawMessage
+	client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPut, pathMR1, http.StatusOK, mrJSONCoverage, &body))
+	input.ProjectID, input.MRIID = testProjectID, 1
+	if _, err := Update(context.Background(), client, input); err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	return body
+}
+
+// TestUpdate_OptionalFields_ReachTheBody holds the update body to exactly the
+// keys the caller set, each with a value of its own, and to an empty object
+// when the caller set none. milestone_id has a case of its own at zero: GitLab
+// reads 0 as "unassign the milestone", the schema has promised that since the
+// field existed, and until this test the handler dropped every zero.
+func TestUpdate_OptionalFields_ReachTheBody(t *testing.T) {
+	tests := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]string
+	}{
+		{"every optional field", UpdateInput{
+			Title: "Updated", Description: "New desc", TargetBranch: "develop", StateEvent: "close",
+			AssigneeID: 7, AssigneeIDs: []int64{8, 9}, ReviewerIDs: []int64{10},
+			Labels: []string{testLabelBug}, AddLabels: []string{"security"}, RemoveLabels: []string{"stale"},
+			MilestoneID: new(int64(11)), RemoveSourceBranch: new(true), Squash: new(false),
+			DiscussionLocked: new(true), AllowCollaboration: new(false),
+		}, map[string]string{
+			"title": `"Updated"`, "description": `"New desc"`, "target_branch": `"develop"`, "state_event": `"close"`,
+			"assignee_id": "7", "assignee_ids": "[8,9]", "reviewer_ids": "[10]",
+			"labels": `"bug"`, "add_labels": `"security"`, "remove_labels": `"stale"`,
+			"milestone_id": "11", "remove_source_branch": "true", "squash": "false",
+			"discussion_locked": "true", "allow_collaboration": "false",
+		}},
+		{"milestone_id zero unassigns", UpdateInput{MilestoneID: new(int64(0))}, map[string]string{"milestone_id": "0"}},
+		{"nothing set", UpdateInput{}, map[string]string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertBodyKeys(t, updateBody(t, tt.input), tt.want)
+		})
+	}
+}
+
+// TestUpdate_EachFlagAlone_ReachesOnlyItsOwnKey drives the four boolean options
+// of an update one at a time and holds the body to that one key.
+func TestUpdate_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
+	flags := map[string]UpdateInput{
+		"remove_source_branch": {RemoveSourceBranch: new(true)},
+		"squash":               {Squash: new(true)},
+		"discussion_locked":    {DiscussionLocked: new(true)},
+		"allow_collaboration":  {AllowCollaboration: new(true)},
+	}
+	for key, input := range flags {
+		t.Run(key, func(t *testing.T) {
+			assertBodyKeys(t, updateBody(t, input), map[string]string{key: "true"})
+		})
+	}
+}
+
+// mergeBody drives Merge on merge request 1, answering the pre-fetch with a
+// merge request that enforces nothing so the body carries only what the
+// caller set, and returns the body the mock received.
+func mergeBody(t *testing.T, input MergeInput) map[string]json.RawMessage {
+	t.Helper()
+	var body map[string]json.RawMessage
+	capture := captureJSONBody(t, http.MethodPut, pathMR1+"/merge", http.StatusOK, mrJSONCoverage, &body)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
+			return
+		}
+		capture(w, r)
+	}))
+	input.ProjectID, input.MRIID = testProjectID, 1
+	if _, err := Merge(context.Background(), client, input); err != nil {
+		t.Fatalf("Merge() unexpected error: %v", err)
+	}
+	return body
+}
+
+// TestMerge_OptionalFields_ReachTheBody holds the merge body to exactly the
+// keys the caller set and to an empty object when the caller set none.
+func TestMerge_OptionalFields_ReachTheBody(t *testing.T) {
+	tests := []struct {
+		name  string
+		input MergeInput
+		want  map[string]string
+	}{
+		{"every optional field", MergeInput{
+			MergeCommitMessage: "Merge commit", SquashCommitMessage: "Squash msg", SHA: testSHAAbc,
+			Squash: new(true), ShouldRemoveSourceBranch: new(false), AutoMerge: new(true), MergeWhenPipelineSucceeds: new(false),
+		}, map[string]string{
+			"merge_commit_message": `"Merge commit"`, "squash_commit_message": `"Squash msg"`, "sha": `"` + testSHAAbc + `"`,
+			"squash": "true", "should_remove_source_branch": "false", "auto_merge": "true", "merge_when_pipeline_succeeds": "false",
+		}},
+		{"nothing set", MergeInput{}, map[string]string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertBodyKeys(t, mergeBody(t, tt.input), tt.want)
+		})
+	}
+}
+
+// TestMerge_EachFlagAlone_ReachesOnlyItsOwnKey drives the four boolean options
+// of a merge one at a time and holds the body to that one key.
+func TestMerge_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
+	flags := map[string]MergeInput{
+		"squash":                       {Squash: new(true)},
+		"should_remove_source_branch":  {ShouldRemoveSourceBranch: new(true)},
+		"auto_merge":                   {AutoMerge: new(true)},
+		"merge_when_pipeline_succeeds": {MergeWhenPipelineSucceeds: new(true)},
+	}
+	for key, input := range flags {
+		t.Run(key, func(t *testing.T) {
+			assertBodyKeys(t, mergeBody(t, input), map[string]string{key: "true"})
+		})
+	}
+}
+
+// TestAddSpentTime_DurationAndSummary_ReachTheBody holds the add-spent-time
+// body to the duration and, when given, the summary, and to the duration
+// alone otherwise.
+func TestAddSpentTime_DurationAndSummary_ReachTheBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		summary string
+		want    map[string]string
+	}{
+		{"with summary", "code review", map[string]string{"duration": `"2h"`, "summary": `"code review"`}},
+		{"without summary", "", map[string]string{"duration": `"2h"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]json.RawMessage
+			client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPost, pathMR1+"/add_spent_time", http.StatusCreated,
+				`{"human_time_estimate":"","human_total_time_spent":"2h","time_estimate":0,"total_time_spent":7200}`, &body))
+			out, err := AddSpentTime(context.Background(), client, AddSpentTimeInput{ProjectID: testProjectID, MRIID: 1, Duration: "2h", Summary: tt.summary})
+			if err != nil {
+				t.Fatalf("AddSpentTime() unexpected error: %v", err)
+			}
+			if out.TotalTimeSpent != 7200 {
+				t.Errorf("TotalTimeSpent = %d, want 7200", out.TotalTimeSpent)
+			}
+			assertBodyKeys(t, body, tt.want)
+		})
+	}
+}
+
+// TestDependencyHandlers_BlockingID_ReachesTheRequest holds the dependency the
+// caller named to the request: the body of a create, and the last path segment
+// of a delete, which GitLab reads as the dependency's own id. Neither is a
+// branch, so no gate could have seen either dropped.
+func TestDependencyHandlers_BlockingID_ReachesTheRequest(t *testing.T) {
+	t.Run("create sends blocking_merge_request_id", func(t *testing.T) {
+		var body map[string]json.RawMessage
+		client := testutil.NewTestClient(t, captureJSONBody(t, http.MethodPost, pathMR1+pathSuffixBlocks, http.StatusCreated, dependencyJSONCoverage, &body))
+		if _, err := CreateDependency(context.Background(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100}); err != nil {
+			t.Fatalf("CreateDependency() unexpected error: %v", err)
+		}
+		assertBodyKeys(t, body, map[string]string{"blocking_merge_request_id": "100"})
+	})
+	t.Run("delete addresses the dependency by id", func(t *testing.T) {
+		var path string
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete {
+				http.NotFound(w, r)
+				return
+			}
+			path = r.URL.Path
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		if err := DeleteDependency(context.Background(), client, DeleteDependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 57}); err != nil {
+			t.Fatalf("DeleteDependency() unexpected error: %v", err)
+		}
+		if want := pathMR1 + pathSuffixBlocks + "/57"; path != want {
+			t.Errorf("DELETE path = %q, want %q", path, want)
+		}
+	})
+}
+
+// mrListing is one of the three merge request listings, driven by the query
+// tests below through the one filter function they share.
+type mrListing struct {
+	name string
+	path string
+	// call lists with labels, not_labels and draft set to the values given, or
+	// with no filter at all when they are zero.
+	call func(*gitlabclient.Client, []string, []string, *bool) error
+	// callFlags lists with only the boolean toggles given, which is how one of
+	// them is driven on its own.
+	callFlags func(*gitlabclient.Client, mrListFlags) error
+}
+
+// mrListFlags carries the three boolean listing toggles the three listings
+// share, so a test can hand one listing the flags without naming its input
+// type.
+type mrListFlags struct {
+	withLabelsDetails      *bool
+	withMergeStatusRecheck *bool
+	nonArchived            *bool
+}
+
+// mrListings names the three listings and how each is called.
+var mrListings = []mrListing{
+	{
+		name: "project", path: pathMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := List(context.Background(), c, ListInput{ProjectID: testProjectID, Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := List(context.Background(), c, ListInput{
+				ProjectID:         testProjectID,
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+	{
+		name: "global", path: pathGlobalMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+	{
+		name: "group", path: pathGroupMRs,
+		call: func(c *gitlabclient.Client, labels, notLabels []string, draft *bool) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{GroupID: "99", Labels: labels, NotLabels: notLabels, Draft: draft})
+			return err
+		},
+		callFlags: func(c *gitlabclient.Client, flags mrListFlags) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{
+				GroupID:           "99",
+				WithLabelsDetails: flags.withLabelsDetails, WithMergeStatusRecheck: flags.withMergeStatusRecheck,
+				NonArchived: flags.nonArchived,
+			})
+			return err
+		},
+	},
+}
+
+// mrListFlagSetters names each boolean listing toggle by the query key it must
+// reach, and sets that one alone.
+var mrListFlagSetters = map[string]func(*bool) mrListFlags{
+	"with_labels_details":       func(v *bool) mrListFlags { return mrListFlags{withLabelsDetails: v} },
+	"with_merge_status_recheck": func(v *bool) mrListFlags { return mrListFlags{withMergeStatusRecheck: v} },
+	"non_archived":              func(v *bool) mrListFlags { return mrListFlags{nonArchived: v} },
+}
+
+// TestMergeRequestListings_LabelAndDraftFilters_ReachTheQuery holds the three
+// filters no listing test read off the wire, labels, not[labels] and draft, to
+// the query each listing sends. The three listings share one filter function,
+// and a guard inverted there would drop the caller's filter from all of them
+// while every response-only assertion stayed green.
+func TestMergeRequestListings_LabelAndDraftFilters_ReachTheQuery(t *testing.T) {
+	for _, listing := range mrListings {
+		t.Run(listing.name, func(t *testing.T) {
+			var q url.Values
+			client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, listing.path, &q))
+			if err := listing.call(client, []string{testLabelBug, "critical"}, []string{testLabelWontfix}, new(false)); err != nil {
+				t.Fatalf("%s listing unexpected error: %v", listing.name, err)
+			}
+			assertQuery(t, q, "labels", "bug,critical")
+			assertQuery(t, q, "not[labels]", testLabelWontfix)
+			assertQuery(t, q, "draft", "false")
+		})
+	}
+}
+
+// TestMergeRequestListings_NoFilter_SendsAnEmptyQuery holds an unfiltered
+// listing to a query with nothing in it. It is the absence half of every
+// filter assertion: an unset numeric filter sent as its zero asks GitLab for
+// author, assignee or reviewer 0, and an unset flag sent as false narrows a
+// listing nobody narrowed.
+func TestMergeRequestListings_NoFilter_SendsAnEmptyQuery(t *testing.T) {
+	for _, listing := range mrListings {
+		t.Run(listing.name, func(t *testing.T) {
+			var q url.Values
+			client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, listing.path, &q))
+			if err := listing.call(client, nil, nil, nil); err != nil {
+				t.Fatalf("%s listing unexpected error: %v", listing.name, err)
+			}
+			if len(q) != 0 {
+				t.Errorf("unfiltered %s listing sent query %v, want none", listing.name, q)
+			}
+		})
+	}
+}
+
+// TestMergeRequestListings_EachFlagAlone_ReachesOnlyItsOwnKey drives the three
+// boolean listing toggles one at a time. A fixture setting all three cannot
+// tell them apart: the setter calls in applyMergeRequestListFilters can be
+// crossed pairwise and every key still carries the one value they share.
+// Driven alone, the guard of the flag that was set writes the caller's value
+// under the other flag's key, and the other guard never fires at all, so the
+// key the caller asked for is missing and a key nobody asked for is there. The
+// query is held to that one key to catch the second half of it.
+func TestMergeRequestListings_EachFlagAlone_ReachesOnlyItsOwnKey(t *testing.T) {
+	for _, listing := range mrListings {
+		t.Run(listing.name, func(t *testing.T) {
+			for key, set := range mrListFlagSetters {
+				t.Run(key, func(t *testing.T) {
+					var q url.Values
+					client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, listing.path, &q))
+					if err := listing.callFlags(client, set(new(true))); err != nil {
+						t.Fatalf("%s listing unexpected error: %v", listing.name, err)
+					}
+					assertQuery(t, q, key, "true")
+					if len(q) != 1 {
+						t.Errorf("%s listing with %s alone sent query %v, want %s and nothing else", listing.name, key, q, key)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestList_IIDs_ReachTheQuery holds the iids filter, which only the project
+// listing offers, to the repeated iids[] keys GitLab reads.
+func TestList_IIDs_ReachTheQuery(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
+	if _, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, IIDs: []int64{3, 5}}); err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if got := q["iids[]"]; !slices.Equal(got, []string{"3", "5"}) {
+		t.Errorf("iids[] = %v, want [3 5] (all=%v)", got, q)
+	}
+}
+
+// TestRebase_SkipCI_ReachesTheBody holds skip_ci to the rebase body when the
+// caller set it and to an empty object when the caller did not, and reads the
+// in-progress flag off the status: GitLab answers 202 while the rebase runs
+// and 200 once it has nothing to do, and only the first is "in progress".
+func TestRebase_SkipCI_ReachesTheBody(t *testing.T) {
+	tests := []struct {
+		name           string
+		skipCI         bool
+		status         int
+		want           map[string]string
+		wantInProgress bool
+	}{
+		{"skip_ci accepted", true, http.StatusAccepted, map[string]string{"skip_ci": "true"}, true},
+		{"no skip_ci already up to date", false, http.StatusOK, map[string]string{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body map[string]json.RawMessage
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathMR1+"/rebase" {
+					http.NotFound(w, r)
+					return
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode rebase body: %v", err)
+				}
+				w.WriteHeader(tt.status)
+			}))
+			out, err := Rebase(context.Background(), client, RebaseInput{ProjectID: testProjectID, MRIID: 1, SkipCI: tt.skipCI})
+			if err != nil {
+				t.Fatalf("Rebase() unexpected error: %v", err)
+			}
+			assertBodyKeys(t, body, tt.want)
+			if out.RebaseInProgress != tt.wantInProgress {
+				t.Errorf("RebaseInProgress = %v, want %v for a %d", out.RebaseInProgress, tt.wantInProgress, tt.status)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The hint each status earns, held to its text
+// ---------------------------------------------------------------------------.
+
+// statusHintCase is one GitLab status answered to one handler and the hint the
+// error has to carry, or the fragment it must not carry.
+type statusHintCase struct {
+	name   string
+	status int
+	call   func(*gitlabclient.Client) error
+	want   string
+	reject string
+}
+
+// runStatusHintCases answers every request with the case's status and holds
+// the error to its hint. Each status is its own case because a hint guarded by
+// a disjunction of two statuses is held by neither status alone, which is
+// how a rebase's 403 could lose its hint to a 409 without a test noticing.
+func runStatusHintCases(t *testing.T, tests []statusHintCase) {
+	t.Helper()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"as GitLab said"}`)
+			}))
+			err := tt.call(client)
+			if err == nil {
+				t.Fatalf("error = nil, want a %d reported", tt.status)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to carry %q", err, tt.want)
+			}
+			if tt.reject != "" && strings.Contains(err.Error(), tt.reject) {
+				t.Errorf("error = %q, must not carry %q", err, tt.reject)
+			}
+		})
+	}
+}
+
+// TestStatusHints_EachStatusEarnsItsOwnHint holds the hints guarded by two
+// statuses to each status on its own, and holds the fall-through of each
+// handler to GitLab's own message rather than a hint written for another
+// status.
+func TestStatusHints_EachStatusEarnsItsOwnHint(t *testing.T) {
+	rebase := func(c *gitlabclient.Client) error {
+		_, err := Rebase(context.Background(), c, RebaseInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	approve := func(c *gitlabclient.Client) error {
+		_, err := Approve(context.Background(), c, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	createDependency := func(c *gitlabclient.Client) error {
+		_, err := CreateDependency(context.Background(), c, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100})
+		return err
+	}
+	cancelAutoMerge := func(c *gitlabclient.Client) error {
+		_, err := CancelAutoMerge(context.Background(), c, GetInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	createTodo := func(c *gitlabclient.Client) error {
+		_, err := CreateTodo(context.Background(), c, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+		return err
+	}
+	runStatusHintCases(t, []statusHintCase{
+		{"rebase 403", http.StatusForbidden, rebase, "rebase_in_progress", ""},
+		{"rebase 409", http.StatusConflict, rebase, "rebase_in_progress", ""},
+		{"rebase 422 keeps GitLab's message", http.StatusUnprocessableEntity, rebase, "as GitLab said", "rebase_in_progress"},
+		{"approve 401", http.StatusUnauthorized, approve, "self-approval", ""},
+		{"approve 403", http.StatusForbidden, approve, "self-approval", ""},
+		{"create dependency 422", http.StatusUnprocessableEntity, createDependency, "cycle", ""},
+		{"create dependency 400", http.StatusBadRequest, createDependency, "cycle", ""},
+		{"create dependency 500 keeps GitLab's message", http.StatusInternalServerError, createDependency, "as GitLab said", "cycle"},
+		{"cancel auto merge 405", http.StatusMethodNotAllowed, cancelAutoMerge, "auto_merge_enabled", ""},
+		{"cancel auto merge 406", http.StatusNotAcceptable, cancelAutoMerge, "auto_merge_enabled", ""},
+		{"create todo 404 is not an existing todo", http.StatusNotFound, createTodo, hintVerifyMR, "pending todo"},
+	})
+}
+
+// dropConnectionHandler hijacks the connection and closes it without writing
+// a response, which reaches the client as a transport error carrying no
+// response at all: the one shape of failure the status checks cannot read.
+func dropConnectionHandler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer does not support hijacking")
+			http.Error(w, "response writer does not support hijacking", http.StatusInternalServerError)
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}
+}
+
+// TestMerge_NonMethodNotAllowedFailures_KeepGitLabsMessage holds a merge that
+// fails with anything but a 405 to GitLab's own message, even when the
+// pre-fetched merge request has a blocker the 405 diagnosis would name: a 409
+// is a SHA that moved, and telling the caller the request is a draft instead
+// sends them to fix the wrong thing. The dropped connection is the failure
+// with no response at all, which the same check has to survive.
+func TestMerge_NonMethodNotAllowedFailures_KeepGitLabsMessage(t *testing.T) {
+	const draftMR = `{"id":100,"iid":1,"state":"opened","draft":true,"detailed_merge_status":"draft_status","blocking_discussions_resolved":true}`
+	tests := []struct {
+		name   string
+		merge  http.HandlerFunc
+		want   string
+		reject string
+	}{
+		{"409 sha mismatch", func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusConflict, `{"message":"SHA does not match HEAD of source branch"}`)
+		}, "SHA does not match", "cannot be merged"},
+		{"dropped connection", dropConnectionHandler(t), "mrMerge", "cannot be merged"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+					testutil.RespondJSON(w, http.StatusOK, draftMR)
+				case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
+					tt.merge(w, r)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			_, err := Merge(context.Background(), client, MergeInput{ProjectID: testProjectID, MRIID: 1})
+			if err == nil {
+				t.Fatal("Merge() error = nil, want the failure reported")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Merge() error = %q, want it to carry %q", err, tt.want)
+			}
+			if strings.Contains(err.Error(), tt.reject) {
+				t.Errorf("Merge() error = %q, must not diagnose a blocker on a failure that was not a 405", err)
+			}
+		})
+	}
+}
+
+// TestCreateTodo_DroppedConnection_IsAnError holds a to-do creation whose
+// connection dropped before any response to an error rather than a crash:
+// the already-exists check reads the status off a response that this failure
+// never produced, and has to notice that before it reads anything.
+func TestCreateTodo_DroppedConnection_IsAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, dropConnectionHandler(t))
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("CreateTodo() error = nil, want the dropped connection reported")
+	}
+	if !strings.Contains(err.Error(), "mrCreateTodo") || strings.Contains(err.Error(), "pending todo") {
+		t.Errorf("CreateTodo() error = %q, want the operation's own error and no already-exists hint", err)
+	}
+}
+
+// TestMerge_MethodNotAllowed_DiagnosisNamesEachBlockerOnce holds the whole
+// reason list of a 405 diagnosis to the merge request GitLab described, case
+// by case: a status hint names its blocker once even when the field-level
+// check would name it again, a clean field contributes nothing, a status the
+// table has no hint for contributes nothing, and the state and merge error
+// are named as GitLab sent them. The substring assertions this joins could
+// see a blocker missing and never one invented.
+func TestMerge_MethodNotAllowed_DiagnosisNamesEachBlockerOnce(t *testing.T) {
+	tests := []struct {
+		name string
+		mr   string
+		want string
+	}{
+		{
+			"pipeline running and nothing else", `{"state":"opened","detailed_merge_status":"ci_still_running","blocking_discussions_resolved":true}`,
+			mergeStatusHints["ci_still_running"],
+		},
+		{
+			"draft named by status and field once", `{"state":"opened","detailed_merge_status":"draft_status","draft":true,"blocking_discussions_resolved":true}`,
+			mergeStatusHints["draft_status"],
+		},
+		{
+			"conflict named by status and field once", `{"state":"opened","detailed_merge_status":"conflict","has_conflicts":true,"blocking_discussions_resolved":true}`,
+			mergeStatusHints["conflict"],
+		},
+		{
+			"discussions named by status and field once", `{"state":"opened","detailed_merge_status":"discussions_not_resolved"}`,
+			mergeStatusHints["discussions_not_resolved"],
+		},
+		{
+			"not open named by status and state once", `{"state":"closed","detailed_merge_status":"not_open","blocking_discussions_resolved":true}`,
+			mergeStatusHints["not_open"],
+		},
+		{
+			"unknown status leaves the fields to speak", `{"state":"merged","detailed_merge_status":"mergeable","draft":true,"has_conflicts":true}`,
+			"the merge request is a draft; there are merge conflicts; unresolved blocking discussions; " +
+				`merge request state is "merged" (must be opened)`,
+		},
+		{
+			"merge error is quoted after the rest", `{"state":"opened","detailed_merge_status":"unchecked","blocking_discussions_resolved":true,"merge_error":"hook declined"}`,
+			mergeStatusHints["unchecked"] + "; GitLab merge error: hook declined",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+					testutil.RespondJSON(w, http.StatusOK, `{"id":100,"iid":1,`+tt.mr[1:])
+				case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
+					testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"405 Method Not Allowed"}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			_, err := Merge(context.Background(), client, MergeInput{ProjectID: testProjectID, MRIID: 1})
+			if err == nil {
+				t.Fatal("Merge() error = nil, want the 405 diagnosed")
+			}
+			if prefix := "mrMerge: merge request !1 cannot be merged (" + tt.want + "): "; !strings.HasPrefix(err.Error(), prefix) {
+				t.Errorf("Merge() error =\n%q\nwant it to open with\n%q", err, prefix)
+			}
+		})
+	}
+}
+
+// TestMerge_MethodNotAllowedOnACleanRequest_KeepsGitLabsMessage holds a 405
+// on a merge request with nothing wrong with it to GitLab's message: a
+// diagnosis with no reasons in it would be an empty pair of parentheses.
+func TestMerge_MethodNotAllowedOnACleanRequest_KeepsGitLabsMessage(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pathMR1:
+			testutil.RespondJSON(w, http.StatusOK, `{"id":100,"iid":1,"state":"opened","detailed_merge_status":"mergeable","blocking_discussions_resolved":true}`)
+		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
+			testutil.RespondJSON(w, http.StatusMethodNotAllowed, `{"message":"as GitLab said"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	_, err := Merge(context.Background(), client, MergeInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("Merge() error = nil, want the 405 reported")
+	}
+	if !strings.Contains(err.Error(), "as GitLab said") || strings.Contains(err.Error(), "cannot be merged") {
+		t.Errorf("Merge() error = %q, want GitLab's message and no diagnosis", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Optional keys of the reviewer and to-do answers
+// ---------------------------------------------------------------------------.
+
+// TestReviewers_OptionalKeys_ReachTheOutputOrStayEmpty holds a reviewer's
+// review state, assignment time and user to the output, and holds a reviewer
+// GitLab sent without a time or a user to empty fields rather than a crash:
+// the time is formatted through a pointer the guard has to check first.
+func TestReviewers_OptionalKeys_ReachTheOutputOrStayEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1+"/reviewers" {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"user":{"id":10,"username":"carol","name":"Carol","state":"active","avatar_url":"http://a/carol","web_url":"http://carol"},"state":"reviewed","created_at":"2026-03-01T10:00:00Z"},
+				{"state":"unreviewed"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Reviewers(context.Background(), client, ParticipantsInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("Reviewers() unexpected error: %v", err)
+	}
+	want := []ReviewerOutput{
+		{ID: 10, Username: "carol", Name: "Carol", State: "active", AvatarURL: "http://a/carol", WebURL: "http://carol", Review: "reviewed", CreatedAt: "2026-03-01T10:00:00Z"},
+		{Review: "unreviewed"},
+	}
+	if !slices.Equal(out.Reviewers, want) {
+		t.Errorf("Reviewers = %+v, want %+v", out.Reviewers, want)
+	}
+}
+
+// TestCreateTodo_MissingTargetProjectAndTime_LeaveTheirFieldsEmpty holds a
+// to-do GitLab sent without a target, a project or a creation time to empty
+// fields on the output, with the rest filled: each is read through a pointer
+// the handler guards.
+func TestCreateTodo_MissingTargetProjectAndTime_LeaveTheirFieldsEmpty(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathMR1+"/todo" {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":7,"action_name":"marked","target_type":"MergeRequest","target_url":"http://mr/1","state":"pending"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf("CreateTodo() unexpected error: %v", err)
+	}
+	want := CreateTodoOutput{ID: 7, ActionName: testActionMarked, TargetType: testTargetTypeMR, TargetURL: "http://mr/1", State: testStatePending}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("CreateTodo() = %+v, want %+v", out, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The converter, one field at a time
+// ---------------------------------------------------------------------------.
+
+// getOutputFor answers the merge request GET with body and returns what Get
+// hands back.
+func getOutputFor(t *testing.T, body string) Output {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathMR1 {
+			testutil.RespondJSON(w, http.StatusOK, body)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+	if err != nil {
+		t.Fatalf(fmtMRGetErr, err)
+	}
+	return out
+}
+
+// TestToOutput_EachFlagAlone_SetsOnlyItsOwnField sends the merge request with
+// one boolean key true at a time and holds the output to the baseline with
+// that one field set, which is the only fixture that can tell two flags of a
+// struct of sixteen apart: a converter reading a neighbour's key passes any
+// fixture that sets them all. The expectation is built by decoding the same
+// key into the output type, since the two spell every one of these the same
+// way.
+func TestToOutput_EachFlagAlone_SetsOnlyItsOwnField(t *testing.T) {
+	baseline := getOutputFor(t, `{"id":100,"iid":1}`)
+	flags := []string{
+		"imported", "draft", "has_conflicts", "blocking_discussions_resolved", "squash", "squash_on_merge",
+		"merge_when_pipeline_succeeds", "should_remove_source_branch", "force_remove_source_branch",
+		"allow_collaboration", "allow_maintainer_to_push", "discussion_locked", "rebase_in_progress",
+		"subscribed", "first_contribution", "work_in_progress",
+	}
+	for _, flag := range flags {
+		t.Run(flag, func(t *testing.T) {
+			got := getOutputFor(t, `{"id":100,"iid":1,"`+flag+`":true}`)
+			want := baseline
+			if err := json.Unmarshal([]byte(`{"`+flag+`":true}`), &want); err != nil {
+				t.Fatalf("decode the flag into the output type: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("with %s true the output is\n%+v\nwant\n%+v", flag, got, want)
+			}
+		})
+	}
+}
+
+// TestToOutput_EachScalarReadsItsOwnKey sends a merge request in which no two
+// keys share a value and holds every non-boolean field the converter assigns
+// to the key it is named after. A fixture where two fields agree, as the rich
+// one does for merged_by and merge_user and for the two project ids, cannot
+// tell a swapped assignment from a right one.
+func TestToOutput_EachScalarReadsItsOwnKey(t *testing.T) {
+	out := getOutputFor(t, `{
+		"id":100,"iid":1,"project_id":42,"source_project_id":43,"target_project_id":44,
+		"title":"the title","description":"the description","state":"locked",
+		"imported_from":"github","source_branch":"src","target_branch":"tgt","web_url":"http://mr/1",
+		"detailed_merge_status":"need_rebase","sha":"sha-head","merge_commit_sha":"sha-merge","squash_commit_sha":"sha-squash",
+		"user_notes_count":5,"upvotes":6,"downvotes":7,"diverged_commits_count":8,"changes_count":"9","merge_error":"the error",
+		"author":{"username":"u-author"},"assignee":{"username":"u-assignee"},"merge_user":{"username":"u-merge-user"},
+		"merged_by":{"username":"u-merged-by"},"closed_by":{"username":"u-closed-by"},
+		"assignees":[{"username":"u-assignee-1"},{"username":"u-assignee-2"}],"reviewers":[{"username":"u-reviewer"}],
+		"labels":["l-one","l-two"],"label_details":[{"id":31,"name":"l-one"}],
+		"milestone":{"id":32,"title":"m-title"},"references":{"short":"!1","full":"g/p!1"},
+		"task_completion_status":{"count":33,"completed_count":34},"time_stats":{"time_estimate":35,"total_time_spent":36},
+		"user":{"can_merge":true},"diff_refs":{"base_sha":"sha-base","head_sha":"sha-diff-head","start_sha":"sha-start"},
+		"pipeline":{"id":37},"head_pipeline":{"id":38},
+		"merge_after":"2026-01-01T00:00:01Z","created_at":"2026-01-01T00:00:02Z","updated_at":"2026-01-01T00:00:03Z",
+		"merged_at":"2026-01-01T00:00:04Z","closed_at":"2026-01-01T00:00:05Z","prepared_at":"2026-01-01T00:00:06Z",
+		"latest_build_started_at":"2026-01-01T00:00:07Z","latest_build_finished_at":"2026-01-01T00:00:08Z",
+		"first_deployed_to_production_at":"2026-01-01T00:00:09Z"
+	}`)
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"id", out.ID, int64(100)},
+		{"iid", out.IID, int64(1)},
+		{"project_id", out.ProjectID, int64(42)},
+		{"source_project_id", out.SourceProjectID, int64(43)},
+		{"target_project_id", out.TargetProjectID, int64(44)},
+		{"title", out.Title, "the title"},
+		{"description", out.Description, "the description"},
+		{"state", out.State, "locked"},
+		{"imported_from", out.ImportedFrom, "github"},
+		{"source_branch", out.SourceBranch, "src"},
+		{"target_branch", out.TargetBranch, "tgt"},
+		{"web_url", out.WebURL, "http://mr/1"},
+		{"detailed_merge_status", out.DetailedMergeStatus, "need_rebase"},
+		{"sha", out.SHA, "sha-head"},
+		{"merge_commit_sha", out.MergeCommitSHA, "sha-merge"},
+		{"squash_commit_sha", out.SquashCommitSHA, "sha-squash"},
+		{"user_notes_count", out.UserNotesCount, int64(5)},
+		{"upvotes", out.Upvotes, int64(6)},
+		{"downvotes", out.Downvotes, int64(7)},
+		{"diverged_commits_count", out.DivergedCommitsCount, int64(8)},
+		{"changes_count", out.ChangesCount, "9"},
+		{"merge_error", out.MergeError, "the error"},
+		{"author", userName(out.Author), "u-author"},
+		{"assignee", userName(out.Assignee), "u-assignee"},
+		{"merge_user", userName(out.MergeUser), "u-merge-user"},
+		{"merged_by", userName(out.MergedBy), "u-merged-by"},
+		{"closed_by", userName(out.ClosedBy), "u-closed-by"},
+		{"assignees", userNames(out.Assignees), []string{"u-assignee-1", "u-assignee-2"}},
+		{"reviewers", userNames(out.Reviewers), []string{"u-reviewer"}},
+		{"labels", out.Labels, []string{"l-one", "l-two"}},
+		{"label_details", func() any {
+			if len(out.LabelDetails) != 1 || out.LabelDetails[0] == nil {
+				return out.LabelDetails
+			}
+			return out.LabelDetails[0].ID
+		}(), int64(31)},
+		{"milestone", func() any {
+			if out.Milestone == nil {
+				return nil
+			}
+			return out.Milestone.Title
+		}(), "m-title"},
+		{"references", func() any {
+			if out.References == nil {
+				return nil
+			}
+			return out.References.Full
+		}(), "g/p!1"},
+		{"task_completion_status", func() any {
+			if out.TaskCompletionStatus == nil {
+				return nil
+			}
+			return []int64{out.TaskCompletionStatus.Count, out.TaskCompletionStatus.CompletedCount}
+		}(), []int64{33, 34}},
+		{"time_stats", func() any {
+			if out.TimeStats == nil {
+				return nil
+			}
+			return []int64{out.TimeStats.TimeEstimate, out.TimeStats.TotalTimeSpent}
+		}(), []int64{35, 36}},
+		{"user", func() any {
+			if out.User == nil {
+				return nil
+			}
+			return out.User.CanMerge
+		}(), true},
+		{"diff_refs", out.DiffRefs, &DiffRefsOutput{BaseSHA: "sha-base", HeadSHA: "sha-diff-head", StartSHA: "sha-start"}},
+		{"pipeline", func() any {
+			if out.Pipeline == nil {
+				return nil
+			}
+			return out.Pipeline.ID
+		}(), int64(37)},
+		{"head_pipeline", func() any {
+			if out.HeadPipeline == nil {
+				return nil
+			}
+			return out.HeadPipeline.ID
+		}(), int64(38)},
+		{"merge_after", out.MergeAfter, "2026-01-01T00:00:01Z"},
+		{"created_at", out.CreatedAt, "2026-01-01T00:00:02Z"},
+		{"updated_at", out.UpdatedAt, "2026-01-01T00:00:03Z"},
+		{"merged_at", out.MergedAt, "2026-01-01T00:00:04Z"},
+		{"closed_at", out.ClosedAt, "2026-01-01T00:00:05Z"},
+		{"prepared_at", out.PreparedAt, "2026-01-01T00:00:06Z"},
+		{"latest_build_started_at", out.LatestBuildStartedAt, "2026-01-01T00:00:07Z"},
+		{"latest_build_finished_at", out.LatestBuildFinishedAt, "2026-01-01T00:00:08Z"},
+		{"first_deployed_to_production_at", out.FirstDeployedToProductionAt, "2026-01-01T00:00:09Z"},
+	}
+	for _, c := range checks {
+		t.Run(c.name, func(t *testing.T) {
+			if !reflect.DeepEqual(c.got, c.want) {
+				t.Errorf("%s = %#v, want %#v", c.name, c.got, c.want)
+			}
+		})
 	}
 }

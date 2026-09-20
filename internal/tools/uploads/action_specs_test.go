@@ -146,28 +146,31 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // TestActionSpecs_DistinctiveAliases verifies every project-upload spec carries
 // distinctive natural-language aliases beyond its canonical tool name, satisfying
 // the 1:1 audit metadata norm (no aliases_only_toolname findings).
+//
+// It ranges over the specs rather than over the alias map, which is the
+// direction the comment claims and the only one that can notice a new action
+// the map forgot: ranging over the map asserted that every entry had a spec,
+// and a spec with no entry would have passed in silence.
 func TestActionSpecs_DistinctiveAliases(t *testing.T) {
 	byTool := uploadSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, uploadsActionHandler())))
 
-	for tool, want := range uploadActionAliases {
-		spec, ok := byTool[tool]
-		if !ok {
-			t.Fatalf("missing spec for %q", tool)
-		}
-		extra := 0
-		for _, alias := range spec.Aliases {
-			if strings.TrimSpace(alias) != tool {
-				extra++
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			extra := 0
+			for _, alias := range spec.Aliases {
+				if strings.TrimSpace(alias) != tool {
+					extra++
+				}
 			}
-		}
-		if extra < 2 || extra > 4 {
-			t.Fatalf("%s: want 2-4 natural-language aliases, got %d (%v)", tool, extra, spec.Aliases)
-		}
-		for _, w := range want {
-			if !slices.Contains(spec.Aliases, w) {
-				t.Fatalf("%s: missing alias %q in %v", tool, w, spec.Aliases)
+			if extra < 2 || extra > 4 {
+				t.Errorf("%s: want 2-4 natural-language aliases, got %d (%v)", tool, extra, spec.Aliases)
 			}
-		}
+			for _, w := range uploadActionAliases[tool] {
+				if !slices.Contains(spec.Aliases, w) {
+					t.Errorf("%s: missing alias %q in %v", tool, w, spec.Aliases)
+				}
+			}
+		})
 	}
 }
 

@@ -320,7 +320,10 @@ func TestFormatSharedProjectsListMarkdown(t *testing.T) {
 	}
 }
 
-// TestListSharedProjects_AllFilters exercises every option setter.
+// TestListSharedProjects_AllFilters sends every option at once and holds the
+// query to eight of them by name and value; the access level and the search
+// are held by [TestListSharedProjects_Success], and the archived flag by
+// [TestApplyListSharedProjectsOptions_CarriesTheFiltersOnlyWhenGiven].
 func TestListSharedProjects_AllFilters(t *testing.T) {
 	var q string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -545,6 +548,45 @@ func TestShareGroup_BadRequestCarriesTheSameHintAsUnprocessable(t *testing.T) {
 			})
 			if err == nil || !strings.Contains(err.Error(), "group_access must be") {
 				t.Errorf("ShareGroupWithGroup on a %d = %v, want the parameter hint", status, err)
+			}
+		})
+	}
+}
+
+// TestListSharedProjects_AnswersArchivedUnlessTheRowsAreSimple verifies the
+// archived flag is published from a full row and left unanswered from a
+// simple one, on all three spellings of the input: simple omitted, simple
+// false and simple true. GitLab renders BasicProjectDetails for a simple
+// listing, which carries no archived key, so a flag copied off such a row
+// would answer "not archived" where GitLab said nothing.
+func TestListSharedProjects_AnswersArchivedUnlessTheRowsAreSimple(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		simple *bool
+		want   *bool
+	}{
+		{name: "omitted", simple: nil, want: new(true)},
+		{name: "false", simple: new(false), want: new(true)},
+		{name: "true", simple: new(true), want: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathGroupSharedProj {
+					http.NotFound(w, r)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[{"id":42,"name":"shared-proj","archived":true}]`)
+			}))
+			out, err := ListSharedProjects(context.Background(), client, ListSharedProjectsInput{GroupID: "99", Simple: tc.simple})
+			if err != nil {
+				t.Fatalf("ListSharedProjects() error: %v", err)
+			}
+			if len(out.Projects) != 1 {
+				t.Fatalf("len(out.Projects) = %d, want 1", len(out.Projects))
+			}
+			got := out.Projects[0].Archived
+			if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+				t.Errorf("archived = %v, want %v", got, tc.want)
 			}
 		})
 	}

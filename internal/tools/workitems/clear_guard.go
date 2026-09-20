@@ -82,17 +82,27 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 	return nil
 }
 
+// clearsList reports whether the caller submitted this list as an explicit
+// empty array, which is how GitLab is told to remove every entry. A list the
+// caller omitted arrives nil and leaves the current entries alone.
+//
+// It is one function because both readers below ask the same question.
+// Spelled out twice, each copy was decided again by the other before anything
+// a caller sees was settled, so inverting either one's && changed no answer.
+func clearsList(ids []int64) bool {
+	return ids != nil && len(ids) == 0
+}
+
 // clearsAnyList reports whether the update submits an explicit empty list.
 func clearsAnyList(input UpdateInput) bool {
-	return (input.AssigneeIDs != nil && len(input.AssigneeIDs) == 0) ||
-		(input.CRMContactIDs != nil && len(input.CRMContactIDs) == 0)
+	return clearsList(input.AssigneeIDs) || clearsList(input.CRMContactIDs)
 }
 
 // pendingClearLosses describes what an explicit empty list would delete,
 // returning nothing when the update clears no list or clears only empty ones.
 func pendingClearLosses(ctx context.Context, client *gitlabclient.Client, input UpdateInput) []string {
-	clearsAssignees := input.AssigneeIDs != nil && len(input.AssigneeIDs) == 0
-	clearsContacts := input.CRMContactIDs != nil && len(input.CRMContactIDs) == 0
+	clearsAssignees := clearsList(input.AssigneeIDs)
+	clearsContacts := clearsList(input.CRMContactIDs)
 	if !clearsAssignees && !clearsContacts {
 		return nil
 	}

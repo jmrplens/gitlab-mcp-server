@@ -1,14 +1,18 @@
 package resourceevents
 
-// PublishedActionIDs is every canonical action ID this package hands a model:
-// the RelatedActions entries of the specs in action_specs.go, which are the
-// one block of constants that file reads. This package writes no Markdown
-// hints.
+// PublishedActionIDs is the block of canonical action ID constants at the top
+// of action_specs.go, which is what its RelatedActions entries are built from.
+// It is not every ID this package hands a model: three of them are written as
+// literals in the eventActionMeta table, and the whole set is reached instead
+// by TestActionSpecs_RelatedActions_NameCatalogActions, which walks the specs.
+// Neither list covers the Markdown hints, which name individual tool names
+// rather than canonical IDs.
 //
-// It exists so the external test can hold them against the catalog the server
-// really builds. An ID that resolves to nothing is answered "unknown action"
-// the moment a model follows it, and what a model concludes from that is that
-// the capability is missing rather than that the cross-link is wrong.
+// It exists so the external test can hold the constants against the catalog
+// the server really builds. An ID that resolves to nothing is answered
+// "unknown action" the moment a model follows it, and what a model concludes
+// from that is that the capability is missing rather than that the cross-link
+// is wrong.
 var PublishedActionIDs = []string{
 	actionIssueGet,
 	actionMRGet,

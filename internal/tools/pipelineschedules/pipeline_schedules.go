@@ -247,9 +247,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Active != nil {
 		opts.Active = input.Active
 	}
-	if len(input.Inputs) > 0 {
-		opts.Inputs = toPipelineInputs(input.Inputs)
-	}
+	// toPipelineInputs answers an empty list with nil, which omitempty drops.
+	opts.Inputs = toPipelineInputs(input.Inputs)
 
 	s, _, err := client.GL().PipelineSchedules.CreatePipelineSchedule(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
@@ -296,9 +295,8 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.Active != nil {
 		opts.Active = input.Active
 	}
-	if len(input.Inputs) > 0 {
-		opts.Inputs = toPipelineInputs(input.Inputs)
-	}
+	// toPipelineInputs answers an empty list with nil, which omitempty drops.
+	opts.Inputs = toPipelineInputs(input.Inputs)
 
 	s, _, err := client.GL().PipelineSchedules.EditPipelineSchedule(string(input.ProjectID), int64(input.ScheduleID), opts, gitlab.WithContext(ctx))
 	if err != nil {

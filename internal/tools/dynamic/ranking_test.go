@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestRanking_ExplanationSummaryNilAndFuzzy verifies the Ranking_ExplanationSummaryNilAndFuzzy handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestRanking_ExplanationSummaryNilAndFuzzy verifies that a nil explanation
+// renders as the dash cell and a fuzzy reason says "fuzzy-matched" rather
+// than "matched".
 func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	if got := explanationSummary(nil); got != "-" {
 		t.Fatalf("explanationSummary(nil) = %q, want -", got)
@@ -26,9 +26,8 @@ func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	}
 }
 
-// TestRanking_HasSearchExplanations verifies the Ranking_HasSearchExplanations handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestRanking_HasSearchExplanations verifies that the Why column opens only
+// when at least one search result carries an explanation.
 func TestRanking_HasSearchExplanations(t *testing.T) {
 	if hasSearchExplanations([]SearchResult{{ID: "project.get"}}) {
 		t.Fatal("hasSearchExplanations() = true, want false for nil explanations")

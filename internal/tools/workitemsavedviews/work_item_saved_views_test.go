@@ -9,7 +9,9 @@ package workitemsavedviews
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -90,6 +92,61 @@ func TestGet_Success(t *testing.T) {
 	}
 	if settings, isMap := out.SavedView.DisplaySettings.(map[string]any); !isMap || settings["viewMode"] != "board" {
 		t.Errorf("DisplaySettings = %#v", out.SavedView.DisplaySettings)
+	}
+}
+
+// TestGet_CarriesEveryScalarOfTheView compares the whole converted view against
+// what GitLab sent, with the two flags driven one at a time.
+//
+// The shared fixture reads both flags from one node and asserts neither, and
+// asserts nothing about the description either, so the converter could have
+// crossed private with subscribed or dropped the description and every
+// assertion in the package still passed. Two nodes are needed rather than one
+// because a pair of booleans set together cannot be told apart: only a view
+// that is private and unfollowed, beside one that is shared and followed,
+// distinguishes the two fields.
+func TestGet_CarriesEveryScalarOfTheView(t *testing.T) {
+	cases := []struct {
+		name       string
+		isPrivate  bool
+		subscribed bool
+	}{
+		{name: "private and unfollowed", isPrivate: true},
+		{name: "shared and followed", subscribed: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			node := fmt.Sprintf(`{
+				"id": "gid://gitlab/WorkItems::SavedViews::SavedView/7",
+				"name": "My open tasks",
+				"description": "Everything assigned to me",
+				"isPrivate": %t,
+				"subscribed": %t,
+				"sort": "CREATED_DESC"
+			}`, testCase.isPrivate, testCase.subscribed)
+			client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+				"savedViews(id:": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"namespace":{"savedViews":{"nodes":[`+node+`]}}}`)
+				},
+			}))
+
+			out, err := Get(context.Background(), client, GetInput{NamespacePath: "my-group", SavedViewID: 7})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			want := Item{
+				ID:          7,
+				GID:         "gid://gitlab/WorkItems::SavedViews::SavedView/7",
+				Name:        "My open tasks",
+				Description: "Everything assigned to me",
+				IsPrivate:   testCase.isPrivate,
+				Subscribed:  testCase.subscribed,
+				Sort:        "CREATED_DESC",
+			}
+			if !reflect.DeepEqual(out.SavedView, want) {
+				t.Errorf("SavedView = %+v, want %+v", out.SavedView, want)
+			}
+		})
 	}
 }
 
@@ -391,6 +448,71 @@ func TestCreate_DefaultsDisplaySettings(t *testing.T) {
 		NamespacePath: "my-group", Name: "Minimal", Sort: "CREATED_DESC",
 	}); err != nil {
 		t.Fatalf("Create() unexpected error: %v", err)
+	}
+}
+
+// TestMutations_ForwardDescriptionAndPrivacy verifies that create and update
+// both send the description and the privacy flag the caller supplied.
+//
+// No other fixture in this file sets either field, so both assignments could be
+// deleted from the two options structs with the whole suite still green: a
+// model asking for a shared, documented view would have got a private,
+// undocumented one and been told the request succeeded. The flag is supplied as
+// false on purpose, since that is the value an "omitted means absent" pointer
+// exists to distinguish, and the description carries surrounding spaces so the
+// trim is part of what is pinned.
+func TestMutations_ForwardDescriptionAndPrivacy(t *testing.T) {
+	shared := false
+
+	t.Run("create", func(t *testing.T) {
+		client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+			"workItemSavedViewCreate": func(w http.ResponseWriter, r *http.Request) {
+				assertDescriptionAndPrivacy(t, r, "Everything assigned to me", false)
+				testutil.RespondGraphQL(w, http.StatusOK, `{"workItemSavedViewCreate":{"savedView":`+savedViewNode+`,"errors":[]}}`)
+			},
+		}))
+		if _, err := Create(context.Background(), client, CreateInput{
+			NamespacePath: "my-group",
+			Name:          "My open tasks",
+			Description:   " Everything assigned to me ",
+			IsPrivate:     &shared,
+			Sort:          "CREATED_DESC",
+		}); err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		client := testutil.NewTestClient(t, testutil.GraphQLHandler(map[string]http.HandlerFunc{
+			"workItemSavedViewUpdate": func(w http.ResponseWriter, r *http.Request) {
+				assertDescriptionAndPrivacy(t, r, "Everything assigned to me", false)
+				testutil.RespondGraphQL(w, http.StatusOK, `{"workItemSavedViewUpdate":{"savedView":`+savedViewNode+`,"errors":[]}}`)
+			},
+		}))
+		if _, err := Update(context.Background(), client, UpdateInput{
+			SavedViewID: 7,
+			Description: " Everything assigned to me ",
+			IsPrivate:   &shared,
+		}); err != nil {
+			t.Fatalf("Update() unexpected error: %v", err)
+		}
+	})
+}
+
+// assertDescriptionAndPrivacy fails the test unless the mutation input carries
+// exactly the description and privacy flag named. It runs on the httptest
+// server's goroutine, so it reports with t.Errorf and returns.
+func assertDescriptionAndPrivacy(t *testing.T, r *http.Request, description string, isPrivate bool) {
+	t.Helper()
+	input := mutationInput(t, r)
+	if input == nil {
+		return
+	}
+	if got := input["description"]; got != description {
+		t.Errorf("description = %#v, want %q", got, description)
+	}
+	if got := input["isPrivate"]; got != isPrivate {
+		t.Errorf("isPrivate = %#v, want %t", got, isPrivate)
 	}
 }
 

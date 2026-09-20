@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,28 @@ import (
 )
 
 const fmtContextCanceled = "context canceled: %w"
+
+// apiVersionPath is the segment client-go appends to the configured instance
+// URL, so it is what [gl.Client.BaseURL] hands back and never what a web
+// address starts from.
+const apiVersionPath = "api/v4/"
+
+// instanceRootURL returns the address the instance serves its web interface
+// at: the SDK's base URL with the API version path taken off and no trailing
+// slash.
+//
+// An upload's full_path is a path from that root rather than from the API
+// ("/-/project/1234/uploads/<secret>/<file>", per GitLab's
+// project_markdown_uploads documentation), so joining it to the base URL as it
+// comes built "<host>/api/v4/-/project/1234/uploads/…", which nothing serves.
+// That address was published as full_url, linked from the card's URL row and
+// used as the source of the inline image embed, so the link answered 404 and
+// the embed rendered nothing.
+func instanceRootURL(client *gitlabclient.Client) string {
+	base := client.GL().BaseURL()
+	base.Path = strings.TrimSuffix(base.Path, apiVersionPath)
+	return strings.TrimRight(base.String(), "/")
+}
 
 // UploadInput defines input for uploading a file to a GitLab project.
 // Exactly one of FilePath or ContentBase64 must be provided.
@@ -72,12 +95,13 @@ func Upload(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.
 		string(input.ProjectID),
 		uploadReader,
 		input.Filename,
+		gl.WithContext(ctx),
 	)
 	if err != nil {
 		return UploadOutput{}, fmt.Errorf("upload file to project %s: %w", input.ProjectID, err)
 	}
 
-	fullURL := strings.TrimRight(client.GL().BaseURL().String(), "/") + uploaded.FullPath
+	fullURL := instanceRootURL(client) + uploaded.FullPath
 
 	return UploadOutput{
 		ID:       uploaded.ID,
@@ -193,16 +217,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items := make([]ListItem, 0, len(uploads))
 	for _, u := range uploads {
-		item := ListItem{
+		// The timestamp is published in the wire form, as the group upload
+		// sibling publishes it. time.Time's own String gives "2026-01-01
+		// 00:00:00 +0000 UTC", which is neither what GitLab sent nor anything
+		// toolutil.FormatTime can parse, so the JSON carried a stamp no caller
+		// could read as a time and the table printed that same text where the
+		// display form belongs. RFC3339Ptr answers "" for the nil GitLab sends
+		// when it has no timestamp, which is what the guard here used to do.
+		items = append(items, ListItem{
 			ID:         u.ID,
 			Size:       u.Size,
 			Filename:   u.Filename,
+			CreatedAt:  toolutil.RFC3339Ptr(u.CreatedAt),
 			UploadedBy: uploadedByOutput(u.UploadedBy),
-		}
-		if u.CreatedAt != nil {
-			item.CreatedAt = u.CreatedAt.String()
-		}
-		items = append(items, item)
+		})
 	}
 
 	return ListOutput{
@@ -229,7 +257,11 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return errors.New("projectUploadDelete: upload_id is required and must be positive")
 	}
 
-	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadByID(string(input.ProjectID), input.UploadID)
+	_, err := client.GL().ProjectMarkdownUploads.DeleteProjectMarkdownUploadByID(
+		string(input.ProjectID),
+		input.UploadID,
+		gl.WithContext(ctx),
+	)
 	if err != nil {
 		return fmt.Errorf("delete upload %d from project %s: %w", input.UploadID, input.ProjectID, err)
 	}
@@ -293,7 +325,14 @@ func DeleteBySecret(ctx context.Context, client *gitlabclient.Client, input Dele
 // for a person to look at, and the assistant default otherwise.
 func UploadToolResult(u UploadOutput) *mcp.CallToolResult {
 	embed := ""
-	if toolutil.IsImageFile(u.Alt) && toolutil.LinkableDestination(u.FullURL) {
+	// The file name is read from the URL and never from the alt text. GitLab
+	// derives alt from the file name and takes the extension off for an image
+	// or a video, so a PNG arrives as alt "screenshot" beside url
+	// "/uploads/<secret>/screenshot.png", and asking whether the alt text names
+	// an image answered no for every image an instance ever returned. The URL's
+	// last segment is the file name GitLab stored whatever it did to the alt
+	// text, so it answers the question under either behavior.
+	if toolutil.IsImageFile(path.Base(u.URL)) && toolutil.LinkableDestination(u.FullURL) {
 		// An image embed is a link with a '!' in front, so both halves want the
 		// same escaping MdTitleLink gives a link, applied here because the
 		// helper writes no '!'. The same allow list decides whether there is an

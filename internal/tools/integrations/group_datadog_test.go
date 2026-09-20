@@ -5,8 +5,10 @@
 package integrations
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -146,7 +148,8 @@ func TestGetGroupDatadog_LegacyFlatResponse_MapsFlatFields(t *testing.T) {
 
 // TestGetGroupDatadog_NotFound verifies that GetGroupDatadog_NotFound returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that the error names the status; the suggestion attached to a
+// 404 is asserted by TestIntegrationHandlers_StatusHint_OnlyAtTheStatusItNames.
 func TestGetGroupDatadog_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -269,25 +272,112 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 	}
 }
 
-// TestSetGroupDatadog_UseInheritedSettings verifies the SetGroupDatadog_UseInheritedSettings handler.
-// The test exercises the PUT path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestSetGroupDatadog_UseInheritedSettings asserts that asking a group to
+// inherit its ancestor's Datadog configuration is accepted on its own, with no
+// other field supplied, and that the flag reaches GitLab.
 func TestSetGroupDatadog_UseInheritedSettings(t *testing.T) {
 	inherited := true
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodPut {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"id":7,"title":"Datadog","slug":"datadog","active":true}`))
-			return
-		}
-		http.NotFound(w, r)
-	}))
-
-	if _, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
+	got := setGroupDatadogBody(t, SetGroupDatadogInput{
 		GroupID:              testGroupPath,
 		UseInheritedSettings: &inherited,
-	}); err != nil {
+	})
+	if want := (map[string]any{"use_inherited_settings": true}); !reflect.DeepEqual(got, want) {
+		t.Errorf("request body = %v, want %v", got, want)
+	}
+}
+
+// setGroupDatadogBody drives SetGroupDatadog against a mock that records the
+// PUT body, and returns that body decoded as a JSON object. Asserting on the
+// decoded body rather than on a substring is what makes a field that never
+// left the handler visible: buildGroupDatadogOptions omits every unset field,
+// so a guard written the wrong way round drops the caller's value and sends an
+// empty one instead, and neither shows up in the response GitLab echoes.
+func setGroupDatadogBody(t *testing.T, input SetGroupDatadogInput) map[string]any {
+	t.Helper()
+	var raw []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !matchGroupDatadogPath(r.URL.Path) || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		raw = body
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7,"title":"Datadog","slug":"datadog","active":true}`)
+	}))
+
+	if _, err := SetGroupDatadog(t.Context(), client, input); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("request body is not a JSON object: %v (%s)", err, raw)
+	}
+	return got
+}
+
+// TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField drives each of the
+// nine configurable fields on its own and asserts the PUT body carries exactly
+// that field. One field per case is the only fixture that tells the nine
+// apart: a request populated with all of them agrees with itself however the
+// handler pairs an input field with an option field, so a value read from the
+// wrong neighbor, or a value dropped because its guard tests the empty case,
+// would go unnoticed. The explicit false on archive_trace_events also pins
+// that a flag a caller turned off is sent rather than omitted as a zero.
+func TestSetGroupDatadog_OneFieldAtATime_SendsOnlyThatField(t *testing.T) {
+	ciVisibility := true
+	archiveOff := false
+	inherited := true
+
+	tests := []struct {
+		name  string
+		input SetGroupDatadogInput
+		want  map[string]any
+	}{
+		{"api_key", SetGroupDatadogInput{APIKey: "secret-key"}, map[string]any{"api_key": "secret-key"}},
+		{"api_url", SetGroupDatadogInput{APIURL: testAPIURL}, map[string]any{"api_url": testAPIURL}},
+		{"datadog_env", SetGroupDatadogInput{DatadogEnv: "prod"}, map[string]any{"datadog_env": "prod"}},
+		{"datadog_service", SetGroupDatadogInput{DatadogService: "gitlab"}, map[string]any{"datadog_service": "gitlab"}},
+		{"datadog_site", SetGroupDatadogInput{DatadogSite: testDatadogSite}, map[string]any{"datadog_site": testDatadogSite}},
+		{"datadog_tags", SetGroupDatadogInput{DatadogTags: "team:platform"}, map[string]any{"datadog_tags": "team:platform"}},
+		{"datadog_ci_visibility", SetGroupDatadogInput{DatadogCIVisibility: &ciVisibility}, map[string]any{"datadog_ci_visibility": true}},
+		{"archive_trace_events", SetGroupDatadogInput{ArchiveTraceEvents: &archiveOff}, map[string]any{"archive_trace_events": false}},
+		{"use_inherited_settings", SetGroupDatadogInput{UseInheritedSettings: &inherited}, map[string]any{"use_inherited_settings": true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := tt.input
+			input.GroupID = testGroupPath
+			got := setGroupDatadogBody(t, input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("request body = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSetGroupDatadog_InheritedSettingsOffAlone_Rejected asserts that
+// use_inherited_settings=false is not itself a configuration: it names what
+// the group should not do and leaves nothing to store, so the handler refuses
+// it before reaching GitLab exactly as it refuses an empty input.
+func TestSetGroupDatadog_InheritedSettingsOffAlone_Rejected(t *testing.T) {
+	notInherited := false
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
+		GroupID:              testGroupPath,
+		UseInheritedSettings: &notInherited,
+	})
+	if err == nil {
+		t.Fatal("expected validation error for use_inherited_settings=false on its own")
+	}
+	if !strings.Contains(err.Error(), "at least one of") {
+		t.Errorf("error should describe the missing fields, got: %v", err)
 	}
 }
 
@@ -495,6 +585,115 @@ func TestGroupDatadogToItem_FlatFallbackWithoutArchiveFlag_LeavesItFalse(t *test
 	}
 	if got.Properties.ArchiveTraceEvents {
 		t.Error("Properties.ArchiveTraceEvents = true, want false when the response omitted it")
+	}
+}
+
+// TestGroupDatadogToItem_OneFieldAtATime_ReadsEachFromItsOwnSource asserts
+// that every field of the item, and of the nested Datadog configuration under
+// it, is read from the client-go field of the same meaning and from no other.
+//
+// TestGroupDatadogToItem_Scenarios cannot say this: its fixture sets all
+// seventeen event flags to true and both Datadog booleans to true, and values
+// that agree are indistinguishable however the converter pairs them. Setting
+// one field at a time is the fixture in which no two agree.
+func TestGroupDatadogToItem_OneFieldAtATime_ReadsEachFromItsOwnSource(t *testing.T) {
+	created := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	updated := time.Date(2026, 8, 9, 10, 11, 12, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		src  func(*gl.GroupDatadogIntegration)
+		want func(*GroupDatadogItem)
+	}{
+		{"id", func(s *gl.GroupDatadogIntegration) { s.ID = 9 }, func(i *GroupDatadogItem) { i.ID = 9 }},
+		{"title", func(s *gl.GroupDatadogIntegration) { s.Title = "Datadog" }, func(i *GroupDatadogItem) { i.Title = "Datadog" }},
+		{"slug", func(s *gl.GroupDatadogIntegration) { s.Slug = "datadog" }, func(i *GroupDatadogItem) { i.Slug = "datadog" }},
+		{"active", func(s *gl.GroupDatadogIntegration) { s.Active = true }, func(i *GroupDatadogItem) { i.Active = true }},
+		{"created_at", func(s *gl.GroupDatadogIntegration) { s.CreatedAt = &created }, func(i *GroupDatadogItem) { i.CreatedAt = "2026-03-04T05:06:07Z" }},
+		{"updated_at", func(s *gl.GroupDatadogIntegration) { s.UpdatedAt = &updated }, func(i *GroupDatadogItem) { i.UpdatedAt = "2026-08-09T10:11:12Z" }},
+		{"alert_events", func(s *gl.GroupDatadogIntegration) { s.AlertEvents = true }, func(i *GroupDatadogItem) { i.AlertEvents = true }},
+		{"commit_events", func(s *gl.GroupDatadogIntegration) { s.CommitEvents = true }, func(i *GroupDatadogItem) { i.CommitEvents = true }},
+		{"confidential_issues_events", func(s *gl.GroupDatadogIntegration) { s.ConfidentialIssuesEvents = true }, func(i *GroupDatadogItem) { i.ConfidentialIssuesEvents = true }},
+		{"confidential_note_events", func(s *gl.GroupDatadogIntegration) { s.ConfidentialNoteEvents = true }, func(i *GroupDatadogItem) { i.ConfidentialNoteEvents = true }},
+		{"deployment_events", func(s *gl.GroupDatadogIntegration) { s.DeploymentEvents = true }, func(i *GroupDatadogItem) { i.DeploymentEvents = true }},
+		{"incident_events", func(s *gl.GroupDatadogIntegration) { s.IncidentEvents = true }, func(i *GroupDatadogItem) { i.IncidentEvents = true }},
+		{"issues_events", func(s *gl.GroupDatadogIntegration) { s.IssuesEvents = true }, func(i *GroupDatadogItem) { i.IssuesEvents = true }},
+		{"job_events", func(s *gl.GroupDatadogIntegration) { s.JobEvents = true }, func(i *GroupDatadogItem) { i.JobEvents = true }},
+		{"merge_requests_events", func(s *gl.GroupDatadogIntegration) { s.MergeRequestsEvents = true }, func(i *GroupDatadogItem) { i.MergeRequestsEvents = true }},
+		{"note_events", func(s *gl.GroupDatadogIntegration) { s.NoteEvents = true }, func(i *GroupDatadogItem) { i.NoteEvents = true }},
+		{"pipeline_events", func(s *gl.GroupDatadogIntegration) { s.PipelineEvents = true }, func(i *GroupDatadogItem) { i.PipelineEvents = true }},
+		{"push_events", func(s *gl.GroupDatadogIntegration) { s.PushEvents = true }, func(i *GroupDatadogItem) { i.PushEvents = true }},
+		{"tag_push_events", func(s *gl.GroupDatadogIntegration) { s.TagPushEvents = true }, func(i *GroupDatadogItem) { i.TagPushEvents = true }},
+		{"vulnerability_events", func(s *gl.GroupDatadogIntegration) { s.VulnerabilityEvents = true }, func(i *GroupDatadogItem) { i.VulnerabilityEvents = true }},
+		{"wiki_page_events", func(s *gl.GroupDatadogIntegration) { s.WikiPageEvents = true }, func(i *GroupDatadogItem) { i.WikiPageEvents = true }},
+		{"comment_on_event_enabled", func(s *gl.GroupDatadogIntegration) { s.CommentOnEventEnabled = true }, func(i *GroupDatadogItem) { i.CommentOnEventEnabled = true }},
+		{"inherited", func(s *gl.GroupDatadogIntegration) { s.Inherited = true }, func(i *GroupDatadogItem) { i.Inherited = true }},
+		{
+			"properties.api_url",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{APIURL: testAPIURL}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{APIURL: testAPIURL} },
+		},
+		{
+			"properties.datadog_env",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{DatadogEnv: "prod"}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{DatadogEnv: "prod"} },
+		},
+		{
+			"properties.datadog_service",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{DatadogService: "svc"}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{DatadogService: "svc"} },
+		},
+		{
+			"properties.datadog_site",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{DatadogSite: testDatadogSite}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{DatadogSite: testDatadogSite} },
+		},
+		{
+			"properties.datadog_tags",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{DatadogTags: "team:core"}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{DatadogTags: "team:core"} },
+		},
+		{
+			"properties.datadog_ci_visibility",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{DatadogCIVisibility: true}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{DatadogCIVisibility: true} },
+		},
+		{
+			"properties.archive_trace_events",
+			func(s *gl.GroupDatadogIntegration) {
+				s.Properties = &gl.GroupDatadogIntegrationProperties{ArchiveTraceEvents: true}
+			},
+			func(i *GroupDatadogItem) { i.Properties = &GroupDatadogProperties{ArchiveTraceEvents: true} },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var src gl.GroupDatadogIntegration
+			tt.src(&src)
+			want := GroupDatadogItem{}
+			tt.want(&want)
+			if want.Properties == nil {
+				// With no nested object GitLab's older flat shape is read
+				// instead, which always yields an empty configuration here.
+				want.Properties = &GroupDatadogProperties{}
+			}
+			if got := groupDatadogToItem(&src); !reflect.DeepEqual(got, want) {
+				t.Errorf("groupDatadogToItem(%+v) =\n %+v\nwant %+v", src, got, want)
+			}
+		})
 	}
 }
 

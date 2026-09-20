@@ -6,7 +6,10 @@ package boards
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,6 +30,8 @@ const fmtUnexpErr = "unexpected error: %v"
 const (
 	// pathBoard1 identifies the path board 1 constant used by this package.
 	pathBoard1 = "/api/v4/projects/10/boards/1"
+	// pathBoardLists identifies the board's list collection endpoint.
+	pathBoardLists = "/api/v4/projects/10/boards/1/lists"
 	// pathBoardList100 identifies the path board list 100 constant used by this package.
 	pathBoardList100 = "/api/v4/projects/10/boards/1/lists/100"
 	// fmtExpectedID1 identifies the fmt expected ID 1 constant used by this package.
@@ -318,6 +323,14 @@ func TestListBoardLists_Success(t *testing.T) {
 	}
 	if out.Lists[0].Milestone == nil || out.Lists[0].Milestone.Title != "v1.0" {
 		t.Errorf("expected milestone v1.0, got %+v", out.Lists[0].Milestone)
+	}
+	// The fixture's two ceilings differ, because a column limited by issues and
+	// one limited by weight are different columns: a converter that crossed the
+	// two would publish each under the other's name and no assertion drawn from
+	// one value could tell.
+	if out.Lists[0].MaxIssueCount != 10 || out.Lists[0].MaxIssueWeight != 50 {
+		t.Errorf("ceilings = count %d weight %d, want count 10 weight 50",
+			out.Lists[0].MaxIssueCount, out.Lists[0].MaxIssueWeight)
 	}
 }
 
@@ -764,7 +777,7 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// Board CRUD — server errors & canceled contexts
+// Board CRUD: server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
 // TestListBoards_ServerError verifies that ListBoards_ServerError returns a wrapped error when the GitLab API responds with an error status.
@@ -871,31 +884,36 @@ func TestCreateBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_AllOptionalFields verifies the UpdateBoard_AllOptionalFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestUpdateBoard_AllOptionalFields pins the whole PUT body of a call that
+// sets every optional field: each one reaches GitLab under the key the API
+// documents, with the label list joined the way client-go encodes it. The test
+// used to set the same fields and assert only that no error came back, while
+// its own mock discarded the body, so nothing held the mapping at all.
 func TestUpdateBoard_AllOptionalFields(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/10/boards/1", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, boardJSON)
-	})
-	client := testutil.NewTestClient(t, mux)
-
 	hideTrue := true
 	hideFalse := false
-	_, err := UpdateBoard(context.Background(), client, UpdateBoardInput{
-		ProjectID:       "10",
-		BoardID:         1,
-		Name:            "Updated",
-		AssigneeID:      3,
-		MilestoneID:     5,
-		Labels:          []string{"bug", "feature"},
-		Weight:          2,
-		HideBacklogList: &hideTrue,
-		HideClosedList:  &hideFalse,
+	got := captureBoardRequestBody(t, pathBoard1, boardJSON, http.StatusOK, func(client *gitlabclient.Client) error {
+		_, err := UpdateBoard(context.Background(), client, UpdateBoardInput{
+			ProjectID:       "10",
+			BoardID:         1,
+			Name:            "Updated",
+			AssigneeID:      3,
+			MilestoneID:     5,
+			Labels:          []string{"bug", "feature"},
+			Weight:          2,
+			HideBacklogList: &hideTrue,
+			HideClosedList:  &hideFalse,
+		})
+		return err
 	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+
+	want := map[string]any{
+		"name": "Updated", "assignee_id": float64(3), "milestone_id": float64(5),
+		"labels": "bug,feature", "weight": float64(2),
+		"hide_backlog_list": true, "hide_closed_list": false,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("update body = %#v, want %#v", got, want)
 	}
 }
 
@@ -954,7 +972,7 @@ func TestDeleteBoard_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Board List CRUD — server errors & canceled contexts
+// Board List CRUD: server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
 // TestListBoardLists_ServerError verifies that ListBoardLists_ServerError returns a wrapped error when the GitLab API responds with an error status.
@@ -1011,25 +1029,26 @@ func TestGetBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_AllTypes verifies the CreateBoardList_AllTypes handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreateBoardList_AllTypes pins the whole POST body of a call naming every
+// list type at once: each scope id reaches GitLab under its own key, so
+// GitLab is the one that refuses the combination rather than this server
+// quietly sending one of them. The test used to set the same fields and assert
+// only that no error came back, over a mock that discarded the body.
 func TestCreateBoardList_AllTypes(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, boardListItemJSON)
+	got := captureBoardRequestBody(t, pathBoardLists, boardListItemJSON, http.StatusCreated, func(client *gitlabclient.Client) error {
+		_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{
+			ProjectID:   "10",
+			BoardID:     1,
+			AssigneeID:  3,
+			MilestoneID: 5,
+			IterationID: 10,
+		})
+		return err
 	})
-	client := testutil.NewTestClient(t, mux)
 
-	_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{
-		ProjectID:   "10",
-		BoardID:     1,
-		AssigneeID:  3,
-		MilestoneID: 5,
-		IterationID: 10,
-	})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+	want := map[string]any{"assignee_id": float64(3), "milestone_id": float64(5), "iteration_id": float64(10)}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("create list body = %#v, want %#v", got, want)
 	}
 }
 
@@ -1131,7 +1150,7 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Formatters — additional coverage
+// Formatters: additional coverage
 // ---------------------------------------------------------------------------.
 
 // TestFormatListBoardListsMarkdown pins the whole column list: the counted
@@ -1368,11 +1387,17 @@ func TestActionSpecs_BoardGetRoute(t *testing.T) {
 // fields documented in doc/api/boards.md (project repo URLs/timestamps,
 // milestone dates/timestamps, documented assignee identity, label details,
 // list label name/color/description, and the premium iteration list type).
+//
+// No two values inside the project object agree, and none inside the milestone
+// object does either, so a converter that read a field from a neighbour's key
+// changes what it publishes rather than reproducing it. Both are blocks of
+// straight-line assignments, which neither the mutation nor the condition gate
+// scores, so the fixture is the only thing that can tell two of them apart.
 const fullBoardJSON = `{
 	"id": 7,
 	"name": "Full",
-	"project": {"id": 10, "name": "P", "path_with_namespace": "g/p", "http_url_to_repo": "https://gl/g/p.git", "web_url": "https://gl/g/p", "created_at": "2021-01-01T00:00:00Z", "default_branch": "main"},
-	"milestone": {"id": 5, "iid": 2, "project_id": 10, "title": "v1.0", "state": "active", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-01T00:00:00Z", "updated_at": "2021-01-02T00:00:00Z"},
+	"project": {"id": 10, "name": "project-name", "name_with_namespace": "Group / project-name", "path": "project-path", "path_with_namespace": "g/project-path", "http_url_to_repo": "https://gl/g/p.git", "ssh_url_to_repo": "git@gl:g/p.git", "web_url": "https://gl/g/p", "readme_url": "https://gl/g/p/-/blob/main/README.md", "avatar_url": "https://gl/uploads/project-avatar.png", "created_at": "2021-01-01T00:00:00Z", "last_activity_at": "2021-03-04T00:00:00Z", "default_branch": "main", "tag_list": ["tag-one"], "topics": ["topic-one"], "star_count": 11, "forks_count": 12},
+	"milestone": {"id": 5, "iid": 2, "project_id": 10, "title": "v1.0", "description": "first release", "state": "active", "web_url": "https://gl/g/p/-/milestones/2", "start_date": "2021-01-01", "due_date": "2021-02-01", "created_at": "2021-01-03T00:00:00Z", "updated_at": "2021-01-04T00:00:00Z"},
 	"assignee": {"id": 3, "username": "alice", "name": "Alice", "state": "active", "web_url": "https://gl/alice"},
 	"weight": 2,
 	"labels": [{"id": 1, "name": "bug", "color": "#fff", "description": "bug label"}],
@@ -1385,7 +1410,9 @@ const fullBoardJSON = `{
 
 // TestConvertBoard_FullSubObjects verifies every nested sub-object converter
 // populates its canonical key with the documented field set, covering the
-// non-nil timestamp/iteration branches.
+// non-nil timestamp/iteration branches. The project and the milestone are
+// compared whole against a fixture in which no two of their values agree, so
+// each field is held to the key it is read from and not merely to being set.
 func TestConvertBoard_FullSubObjects(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
@@ -1408,21 +1435,70 @@ func TestConvertBoard_FullSubObjects(t *testing.T) {
 	assertFullBoardList(t, out.Lists[0])
 }
 
-// assertFullBoardProject checks the documented project reference subset.
+// assertFullBoardProject holds the whole documented project reference against
+// the fixture, field by field rather than by a handful of spot checks. Each
+// same-type pair carries a different value there, so a converter that read the
+// name from name_with_namespace's key, the path from path_with_namespace's, the
+// repository URL from the web one, the star count from the fork count or
+// created_at from last_activity_at changes the object a model reads.
 func assertFullBoardProject(t *testing.T, p *ProjectOutput) {
 	t.Helper()
-	if p == nil || p.WebURL != "https://gl/g/p" ||
-		p.HTTPURLToRepo != "https://gl/g/p.git" || p.CreatedAt == "" ||
-		p.DefaultBranch != "main" {
-		t.Errorf("project not fully converted: %+v", p)
+	if p == nil {
+		t.Error("project not converted: nil")
+		return
+	}
+	want := ProjectOutput{
+		ID:                10,
+		Name:              "project-name",
+		NameWithNamespace: "Group / project-name",
+		Path:              "project-path",
+		PathWithNamespace: "g/project-path",
+		HTTPURLToRepo:     "https://gl/g/p.git",
+		WebURL:            "https://gl/g/p",
+		CreatedAt:         "2021-01-01T00:00:00Z",
+		DefaultBranch:     "main",
+		TagList:           []string{"tag-one"},
+		Topics:            []string{"topic-one"},
+		SSHURLToRepo:      "git@gl:g/p.git",
+		ReadmeURL:         "https://gl/g/p/-/blob/main/README.md",
+		AvatarURL:         "https://gl/uploads/project-avatar.png",
+		StarCount:         11,
+		ForksCount:        12,
+		LastActivityAt:    "2021-03-04T00:00:00Z",
+	}
+	if !reflect.DeepEqual(*p, want) {
+		t.Errorf("project = %+v, want %+v", *p, want)
 	}
 }
 
-// assertFullBoardMilestone checks the documented milestone reference subset.
+// assertFullBoardMilestone holds the whole documented milestone reference
+// against the fixture. The identifiers are the reason it is a whole-object
+// comparison rather than a spot check: id and iid are what a caller passes
+// back, and a converter that crossed them would send every later call to
+// another milestone. The same holds one step quieter for the pairs beside
+// them, title with description, state with web_url, start_date with due_date
+// and created_at with updated_at, each of which carries a different value here.
 func assertFullBoardMilestone(t *testing.T, m *MilestoneOutput) {
 	t.Helper()
-	if m == nil || m.ProjectID != 10 || m.StartDate == "" || m.CreatedAt == "" {
-		t.Errorf("milestone not fully converted: %+v", m)
+	if m == nil {
+		t.Error("milestone not converted: nil")
+		return
+	}
+	want := MilestoneOutput{
+		ID:          5,
+		IID:         2,
+		ProjectID:   10,
+		Title:       "v1.0",
+		Description: "first release",
+		State:       "active",
+		WebURL:      "https://gl/g/p/-/milestones/2",
+		StartDate:   "2021-01-01",
+		DueDate:     "2021-02-01",
+		CreatedAt:   "2021-01-03T00:00:00Z",
+		UpdatedAt:   "2021-01-04T00:00:00Z",
+	}
+	if !reflect.DeepEqual(*m, want) {
+		t.Errorf("milestone = %+v, want %+v", *m, want)
 	}
 }
 
@@ -1522,6 +1598,386 @@ func TestFormatListBoardsMarkdown_MilestoneAssignee(t *testing.T) {
 	md := FormatListBoardsMarkdown(out)
 	if !strings.Contains(md, "v1") || !strings.Contains(md, "alice") {
 		t.Errorf("missing milestone/assignee in table:\n%s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the caller's fields become on the wire
+// ---------------------------------------------------------------------------.
+
+// captureBoardRequestBody drives call against a mock that answers path with
+// fixture, and returns the JSON object the handler sent as its request body.
+func captureBoardRequestBody(t *testing.T, path, fixture string, status int, call func(*gitlabclient.Client) error) map[string]any {
+	t.Helper()
+	var sent []byte
+	mux := http.NewServeMux()
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "unreadable request body", http.StatusBadRequest)
+			return
+		}
+		sent = body
+		testutil.RespondJSON(w, status, fixture)
+	})
+	if err := call(testutil.NewTestClient(t, mux)); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	got := map[string]any{}
+	if err := json.Unmarshal(sent, &got); err != nil {
+		t.Fatalf("request body %q does not decode as a JSON object: %v", sent, err)
+	}
+	return got
+}
+
+// TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey drives each optional field
+// alone and pins the body as the whole object it is: the key that field maps
+// to and nothing beside it. Every guard in UpdateBoard could be inverted,
+// dropping the caller's value and sending the zero one, without a test
+// noticing, and a call setting all of them at once cannot tell two guards
+// apart, because the two visibility flags carry values drawn from the same two
+// possibilities.
+func TestUpdateBoard_OneFieldAtATime_SendsOnlyThatKey(t *testing.T) {
+	hideBacklog := true
+	hideClosed := false
+	cases := []struct {
+		name  string
+		input UpdateBoardInput
+		want  map[string]any
+	}{
+		{"name", UpdateBoardInput{Name: "Renamed"}, map[string]any{"name": "Renamed"}},
+		{"assignee_id", UpdateBoardInput{AssigneeID: 3}, map[string]any{"assignee_id": float64(3)}},
+		{"milestone_id", UpdateBoardInput{MilestoneID: 5}, map[string]any{"milestone_id": float64(5)}},
+		{"labels", UpdateBoardInput{Labels: []string{"bug", "ux"}}, map[string]any{"labels": "bug,ux"}},
+		{"weight", UpdateBoardInput{Weight: 7}, map[string]any{"weight": float64(7)}},
+		{"hide_backlog_list", UpdateBoardInput{HideBacklogList: &hideBacklog}, map[string]any{"hide_backlog_list": true}},
+		{"hide_closed_list", UpdateBoardInput{HideClosedList: &hideClosed}, map[string]any{"hide_closed_list": false}},
+		{"nothing optional set", UpdateBoardInput{}, map[string]any{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := tc.input
+			input.ProjectID, input.BoardID = "10", 1
+			got := captureBoardRequestBody(t, pathBoard1, boardJSON, http.StatusOK, func(client *gitlabclient.Client) error {
+				_, err := UpdateBoard(context.Background(), client, input)
+				return err
+			})
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("update body = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCreateBoardList_OneScopeAtATime_SendsOnlyThatKey drives each list type
+// alone and pins the whole POST body. The four ids are interchangeable numbers,
+// so a swapped pair or an inverted guard would create a column scoped to
+// something the caller never named while every existing assertion held.
+func TestCreateBoardList_OneScopeAtATime_SendsOnlyThatKey(t *testing.T) {
+	cases := []struct {
+		name  string
+		input CreateBoardListInput
+		want  map[string]any
+	}{
+		{"label_id", CreateBoardListInput{LabelID: 20}, map[string]any{"label_id": float64(20)}},
+		{"assignee_id", CreateBoardListInput{AssigneeID: 3}, map[string]any{"assignee_id": float64(3)}},
+		{"milestone_id", CreateBoardListInput{MilestoneID: 5}, map[string]any{"milestone_id": float64(5)}},
+		{"iteration_id", CreateBoardListInput{IterationID: 9}, map[string]any{"iteration_id": float64(9)}},
+		{"no scope set", CreateBoardListInput{}, map[string]any{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := tc.input
+			input.ProjectID, input.BoardID = "10", 1
+			got := captureBoardRequestBody(t, pathBoardLists, boardListItemJSON, http.StatusCreated, func(client *gitlabclient.Client) error {
+				_, err := CreateBoardList(context.Background(), client, input)
+				return err
+			})
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("create list body = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdateBoardList_SendsThePositionTheCallerAsked pins the reorder body,
+// including a move to position zero: the field is sent unconditionally because
+// the first column is a position a caller may ask for, and an omitempty guard
+// added around it would silently drop exactly that move.
+func TestUpdateBoardList_SendsThePositionTheCallerAsked(t *testing.T) {
+	for _, position := range []int64{0, 3} {
+		t.Run(strconv.FormatInt(position, 10), func(t *testing.T) {
+			got := captureBoardRequestBody(t, pathBoardList100, boardListItemJSON, http.StatusOK, func(client *gitlabclient.Client) error {
+				_, err := UpdateBoardList(context.Background(), client, UpdateBoardListInput{
+					ProjectID: "10", BoardID: 1, ListID: 100, Position: position,
+				})
+				return err
+			})
+			want := map[string]any{"position": float64(position)}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("update list body = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fields a converter could cross without any gate noticing
+// ---------------------------------------------------------------------------.
+
+// TestBoards_ListVisibilityFlagsAreNotCrossed drives one flag at a time,
+// through both converters: the raw-superset one a board read uses and the SDK
+// one a board list uses. A board with both flags alike cannot tell
+// hide_backlog_list from hide_closed_list, and a converter that crossed them
+// would tell a model the Open column is hidden when the Closed one is.
+func TestBoards_ListVisibilityFlagsAreNotCrossed(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		wantBacklog bool
+		wantClosed  bool
+	}{
+		{"only the backlog column hidden", `{"id":1,"name":"B","hide_backlog_list":true,"hide_closed_list":false}`, true, false},
+		{"only the closed column hidden", `{"id":1,"name":"B","hide_backlog_list":false,"hide_closed_list":true}`, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			})
+			mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `[`+tc.body+`]`)
+			})
+			client := testutil.NewTestClient(t, mux)
+
+			got, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: "10", BoardID: 1})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if got.HideBacklogList != tc.wantBacklog || got.HideClosedList != tc.wantClosed {
+				t.Errorf("board get flags = backlog %t closed %t, want backlog %t closed %t",
+					got.HideBacklogList, got.HideClosedList, tc.wantBacklog, tc.wantClosed)
+			}
+
+			list, err := ListBoards(context.Background(), client, ListBoardsInput{ProjectID: "10"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(list.Boards) != 1 {
+				t.Fatalf("expected 1 board, got %d", len(list.Boards))
+			}
+			if list.Boards[0].HideBacklogList != tc.wantBacklog || list.Boards[0].HideClosedList != tc.wantClosed {
+				t.Errorf("board list flags = backlog %t closed %t, want backlog %t closed %t",
+					list.Boards[0].HideBacklogList, list.Boards[0].HideClosedList, tc.wantBacklog, tc.wantClosed)
+			}
+		})
+	}
+}
+
+// TestGetBoard_ProjectPathIsEscapedIntoTheRawRequest holds the property that
+// makes the NewRequest error arm of the two raw fetches unreachable: the
+// project a caller names is path-escaped into the URL, so what those handlers
+// hand the SDK is always a valid reference. It is worth holding for its own
+// sake too, since a namespaced path sent unescaped names another route. The
+// expectation carries a literal dot because the SDK escapes one to %2E and
+// net/url writes that back as the dot it encodes; the separator and the space
+// are what have to survive, and they do.
+func TestGetBoard_ProjectPathIsEscapedIntoTheRawRequest(t *testing.T) {
+	cases := []struct {
+		name    string
+		fixture string
+		call    func(*gitlabclient.Client) error
+		want    string
+	}{
+		{"board get", boardJSON, func(client *gitlabclient.Client) error {
+			_, err := GetBoard(context.Background(), client, GetBoardInput{ProjectID: "my.group/my project", BoardID: 1})
+			return err
+		}, "/api/v4/projects/my.group%2Fmy%20project/boards/1"},
+		{"board lists", `[]`, func(client *gitlabclient.Client) error {
+			_, err := ListBoardLists(context.Background(), client, ListBoardListsInput{ProjectID: "my.group/my project", BoardID: 1})
+			return err
+		}, "/api/v4/projects/my.group%2Fmy%20project/boards/1/lists"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotPath string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.EscapedPath()
+				testutil.RespondJSON(w, http.StatusOK, tc.fixture)
+			}))
+			if err := tc.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if gotPath != tc.want {
+				t.Errorf("request path = %q, want %q", gotPath, tc.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scope column: the shapes the label branch does not answer
+// ---------------------------------------------------------------------------.
+
+// TestFormatListBoardListsMarkdown_ScopeFallbacks pins the Scope column for
+// every column shape the label branch leaves: an assignee list, an iteration
+// list, and the three that name nothing (an assignee GitLab sent no handle
+// for, a milestone with no title and an iteration with no title), which render
+// as an empty cell rather than as some other list's scope. The iteration
+// branch was reached by no test at all.
+func TestFormatListBoardListsMarkdown_ScopeFallbacks(t *testing.T) {
+	out := ListBoardListsOutput{
+		Lists: []BoardListOutput{
+			{ID: 1, Assignee: &BoardListAssigneeOutput{ID: 3, Username: "alice"}},
+			{ID: 2, Assignee: &BoardListAssigneeOutput{ID: 4}},
+			{ID: 3, Milestone: &MilestoneOutput{ID: 5}},
+			{ID: 4, Iteration: &IterationOutput{ID: 9, Title: "Sprint 3"}},
+			{ID: 5, Iteration: &IterationOutput{ID: 10}},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 5},
+	}
+
+	md := FormatListBoardListsMarkdown(out)
+
+	want := "## Board Lists (5)\n\n" +
+		"| ID | Scope | Position | Max Issues | Max Weight |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | @alice | 0 | - | - |\n" +
+		"| 2 |  | 0 | - | - |\n" +
+		"| 3 |  | 0 | - | - |\n" +
+		"| 4 | Iteration: Sprint 3 | 0 | - | - |\n" +
+		"| 5 |  | 0 | - | - |\n\n" +
+		"5 items total\n\n" +
+		"---\n\U0001F4A1 **Next steps:**\n" +
+		"- Use action 'project.board_list_get' to read one column\n" +
+		"- Use action 'project.board_list_create' to add a new column\n"
+	if md != want {
+		t.Errorf("FormatListBoardListsMarkdown()\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatBoardMarkdown_LabelsWithoutNames pins a board whose scope labels
+// GitLab sent without names: the Labels row is written from the names there
+// are, and is not written at all when there are none. The second case is what
+// holds the row's absence now that the formatter asks for it unconditionally
+// and lets the card drop a blank value, which is what the card does for every
+// optional field rather than something this formatter decides.
+func TestFormatBoardMarkdown_LabelsWithoutNames(t *testing.T) {
+	cases := []struct {
+		name      string
+		labels    []*LabelDetailsOutput
+		labelsRow string
+	}{
+		{"one label named", []*LabelDetailsOutput{{ID: 1}, nil, {ID: 2, Name: "ux"}}, "- **Labels**: ux\n"},
+		{"none named", []*LabelDetailsOutput{{ID: 1}, nil}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := FormatBoardMarkdown(BoardOutput{ID: 4, Name: "Board", Labels: tc.labels})
+
+			want := "## Board #4: Board\n\n" +
+				"- **ID**: 4\n" +
+				tc.labelsRow +
+				"- **Hide Backlog**: " + toolutil.EmojiCross + "\n" +
+				"- **Hide Closed**: " + toolutil.EmojiCross + "\n\n" +
+				"---\n\U0001F4A1 **Next steps:**\n" +
+				"- Use action 'project.board_list_create' to add a column to this board\n" +
+				"- Use action 'project.board_update' to change this board's name or scope\n" +
+				"- Use action 'project.board_delete' to remove this board\n"
+			if md != want {
+				t.Errorf("FormatBoardMarkdown()\n got %q\nwant %q", md, want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Discovery metadata: what a model is served
+// ---------------------------------------------------------------------------.
+
+// TestBoardOptions_MetadataReachesEverySpec holds each tool's served discovery
+// metadata against the row it is written in: the usage sentence, the aliases
+// with the tool's own name first, the related actions and the individual-tool
+// description. Nothing asserted any of it, so the whole table could have been
+// dropped on the floor, every tool falling back to the generic sentence and
+// its own name, with the suite green.
+func TestBoardOptions_MetadataReachesEverySpec(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := boardSpecsByTool(t, ActionSpecs(client))
+
+	for tool, meta := range boardMetaByTool {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("boardMetaByTool describes %s, which ActionSpecs does not serve", tool)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("usage = %q, want %q", spec.Usage, meta.usage)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("description = %q, want %q", spec.IndividualTool.Description, meta.description)
+			}
+			wantAliases := append([]string{tool}, meta.aliases...)
+			if !reflect.DeepEqual(spec.Aliases, wantAliases) {
+				t.Errorf("aliases = %q, want %q", spec.Aliases, wantAliases)
+			}
+			if !reflect.DeepEqual(spec.RelatedActions, meta.related) {
+				t.Errorf("related actions = %q, want %q", spec.RelatedActions, meta.related)
+			}
+		})
+	}
+
+	for tool := range byTool {
+		if _, ok := boardMetaByTool[tool]; !ok {
+			t.Errorf("%s is served with no boardMetaByTool row, so it falls back to the generic metadata", tool)
+		}
+	}
+}
+
+// TestBoardOptions_ToolWithNoRowFallsBackToTheGenericMetadata states what a
+// board tool is served before anyone writes its row: its own name as the only
+// alias, the generic usage sentence and the two cross-domain related actions.
+// The sibling test holds that no served tool is in that state today, which is
+// what makes this branch unreachable from ActionSpecs.
+func TestBoardOptions_ToolWithNoRowFallsBackToTheGenericMetadata(t *testing.T) {
+	opts := boardOptions("gitlab_board_unlisted")
+
+	if want := "Use to execute boards domain action."; opts.Usage != want {
+		t.Errorf("usage = %q, want %q", opts.Usage, want)
+	}
+	if want := []string{"gitlab_board_unlisted"}; !reflect.DeepEqual(opts.Aliases, want) {
+		t.Errorf("aliases = %q, want %q", opts.Aliases, want)
+	}
+	if want := []string{"project.label_list", "issue.list"}; !reflect.DeepEqual(opts.RelatedActions, want) {
+		t.Errorf("related actions = %q, want %q", opts.RelatedActions, want)
+	}
+	if opts.IndividualTool.Description != "" {
+		t.Errorf("description = %q, want empty", opts.IndividualTool.Description)
+	}
+}
+
+// TestBoardOptions_RowWithoutUsageKeepsTheGenericSentence holds the one branch
+// of boardOptions the table never takes: every row carries a usage sentence
+// today, so a row written without one is the only way to see that the generic
+// sentence is what it falls back to rather than an empty usage. The row exists
+// for this test and is removed with it.
+func TestBoardOptions_RowWithoutUsageKeepsTheGenericSentence(t *testing.T) {
+	const tool = "gitlab_board_rowless_usage"
+	boardMetaByTool[tool] = boardMeta{description: "described", related: []string{actionBoardList}}
+	t.Cleanup(func() { delete(boardMetaByTool, tool) })
+
+	opts := boardOptions(tool)
+
+	if want := "Use to execute boards domain action."; opts.Usage != want {
+		t.Errorf("usage = %q, want %q", opts.Usage, want)
+	}
+	if want := []string{tool}; !reflect.DeepEqual(opts.Aliases, want) {
+		t.Errorf("aliases = %q, want %q", opts.Aliases, want)
+	}
+	if opts.IndividualTool.Description != "described" {
+		t.Errorf("description = %q, want %q", opts.IndividualTool.Description, "described")
 	}
 }
 

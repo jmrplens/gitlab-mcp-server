@@ -1,6 +1,8 @@
 package actioncatalog
 
 import (
+	"bytes"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -257,6 +259,61 @@ func TestFilterExcludedTools_DelegatesToNameMatching(t *testing.T) {
 			}
 			if got := catalogActionIDs(filtered); !slices.Equal(got, tt.wantActions) {
 				t.Errorf("FilterExcludedTools(%v) actions = %v, want %v", tt.exclude, got, tt.wantActions)
+			}
+		})
+	}
+}
+
+// captureSlogOutput sends the default logger into a buffer for the rest of
+// the test and restores it afterwards. The logger is process-wide, and no
+// test of this package runs in parallel, which is what makes that safe.
+func captureSlogOutput(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buffer bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buffer
+}
+
+// TestFilterExcludedTools_WarnsOnlyWhenAnEntryNamedNothing verifies the one
+// signal an operator gets about a wrong --exclude-tools entry: a WARN naming
+// each entry that matched nothing, and no warning at all when every entry
+// matched.
+//
+// The warning is the whole of what FilterExcludedTools adds over
+// FilterExcludedToolNames, and nothing observed it before: a filter that
+// warned on every clean configuration, or on none, passed every test.
+func TestFilterExcludedTools_WarnsOnlyWhenAnEntryNamedNothing(t *testing.T) {
+	tests := []struct {
+		name        string
+		exclude     []string
+		wantEntries string
+	}{
+		{name: "every entry matched", exclude: []string{"gitlab_issue_delete", "gitlab_project"}},
+		{name: "no entries at all", exclude: nil},
+		{name: "one entry matched nothing", exclude: []string{"gitlab_not_a_tool", "issue.delete"}, wantEntries: "gitlab_not_a_tool"},
+		{name: "two entries matched nothing", exclude: []string{"gitlab_not_a_tool", "nor.this"}, wantEntries: "gitlab_not_a_tool, nor.this"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logged := captureSlogOutput(t)
+			exclusionTestCatalog(t).FilterExcludedTools(tt.exclude)
+			output := logged.String()
+			if tt.wantEntries == "" {
+				if output != "" {
+					t.Fatalf("FilterExcludedTools(%v) logged %q, want nothing when every entry matched", tt.exclude, output)
+				}
+				return
+			}
+			if !strings.Contains(output, `"level":"WARN"`) {
+				t.Errorf("FilterExcludedTools(%v) logged %q, want a WARN", tt.exclude, output)
+			}
+			if !strings.Contains(output, `"entries":"`+tt.wantEntries+`"`) {
+				t.Errorf("FilterExcludedTools(%v) logged %q, want entries %q named", tt.exclude, output, tt.wantEntries)
+			}
+			if strings.Count(output, "\n") != 1 {
+				t.Errorf("FilterExcludedTools(%v) logged %q, want exactly one record", tt.exclude, output)
 			}
 		})
 	}

@@ -10,9 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies the Standalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions verifies
+// that read-only mode drops the interactive group and an explicit exclusion
+// drops project discovery, so the two together leave the route map empty.
 func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{
 		ReadOnly:     true,
@@ -33,9 +33,9 @@ func TestStandalone_AddStandaloneRoutesRespectsReadOnlyAndExclusions(t *testing.
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault verifies the Standalone_AddStandaloneRoutesAddsDiscoverByDefault handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault verifies that with
+// no options the route map gains the project discovery tool with its resolve
+// action.
 func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	routes, err := AddStandaloneRoutes(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -51,9 +51,9 @@ func TestStandalone_AddStandaloneRoutesAddsDiscoverByDefault(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil verifies the Standalone_AddStandaloneCatalogCreatesCatalogWhenNil handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil verifies that a
+// nil catalog is replaced by a fresh one holding the standalone tools rather
+// than answered with nil or an error.
 func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	catalog, err := AddStandaloneCatalog(nil, nil, StandaloneOptions{})
 	if err != nil {
@@ -67,9 +67,9 @@ func TestStandalone_AddStandaloneCatalogCreatesCatalogWhenNil(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesPreservesExistingMappings verifies the Standalone_AddStandaloneRoutesPreservesExistingMappings handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestStandalone_AddStandaloneRoutesPreservesExistingMappings verifies that
+// adding the standalone routes to a map that already holds a catalog route
+// keeps that route in the merged map.
 func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -90,9 +90,10 @@ func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors verifies that Standalone_AddStandaloneRoutesPropagatesCatalogErrors returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors verifies that a
+// route map already holding the discovery action makes the merge fail with an
+// error naming the duplicated route, rather than overwriting or dropping one
+// of the two.
 func TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_discover_project": {
@@ -110,7 +111,9 @@ func TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors(t *testing.T) {
 	}
 }
 
-// TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups covers Standalone with table-driven subtests for add standalone catalog rejects duplicate standalone groups.
+// TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups verifies
+// that a catalog already holding a standalone group makes the merge fail with
+// an error naming the duplicated route or group.
 func TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups(t *testing.T) {
 	testCases := []struct {
 		name string

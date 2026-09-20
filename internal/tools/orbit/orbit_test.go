@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,13 +17,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
-// TestStatus_Success_ExpectedOutput verifies that [Status] decodes the Orbit
-// status endpoint, including component replica metadata, from a successful API response.
+// TestStatus_FlatShape_MirrorsEveryField verifies that [Status] carries the
+// flat status response into [StatusOutput] field for field: the cluster
+// labels, each subsystem's name and status, its replica counts in the right
+// order, and its metrics decoded from raw JSON, with a stateless subsystem
+// left without replicas.
 //
-// The test mocks a healthy response from /api/v4/orbit/status with a clickhouse component.
-// It asserts that the output status, version, and component replica counts match the mock.
-// This ensures the handler correctly parses Orbit status and component details.
-func TestStatus_Success_ExpectedOutput(t *testing.T) {
+// No two values in the fixture agree, because a fixture answering 3/3 could
+// not tell ready from desired and a swap of the two used to pass.
+func TestStatus_FlatShape_MirrorsEveryField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
@@ -30,7 +34,8 @@ func TestStatus_Success_ExpectedOutput(t *testing.T) {
 			"timestamp": "2026-04-28T12:00:00Z",
 			"version": "0.5.0",
 			"components": [
-				{"name": "clickhouse", "status": "healthy", "replicas": {"ready": 3, "desired": 3}, "metrics": {"kind": "Deployment"}}
+				{"name": "clickhouse", "status": "degraded", "replicas": {"ready": 2, "desired": 3}, "metrics": {"kind": "Deployment"}},
+				{"name": "api", "status": "healthy"}
 			]
 		}`)
 	}))
@@ -39,20 +44,150 @@ func TestStatus_Success_ExpectedOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status() error: %v", err)
 	}
-	if out.Status != "healthy" || out.Version != "0.5.0" {
-		t.Fatalf("Status() = status %q version %q, want healthy 0.5.0", out.Status, out.Version)
+	want := StatusOutput{
+		Status:    "healthy",
+		Timestamp: "2026-04-28T12:00:00Z",
+		Version:   "0.5.0",
+		Components: []StatusComponent{
+			{Name: "clickhouse", Status: "degraded", Replicas: &StatusReplicas{Ready: 2, Desired: 3}, Metrics: map[string]any{"kind": "Deployment"}},
+			{Name: "api", Status: "healthy"},
+		},
 	}
-	if len(out.Components) != 1 || out.Components[0].Replicas.Ready != 3 {
-		t.Fatalf("Status() components = %+v, want clickhouse replicas", out.Components)
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Status() = %+v, want %+v", out, want)
+	}
+}
+
+// TestStatus_NestedShape_PromotesSystemAndRendersItsError verifies the shape
+// GitLab.com sends today, end to end: the SDK promotes the nested system object
+// into the flat fields, so [StatusOutput] carries the cluster health twice, and
+// the card reads it once, taking the flat copy and adding the one row only the
+// nested object has, the backend error.
+//
+// The formatter tests build a nested output whose flat fields are empty, which
+// the SDK never produces, so this is the only place the "flat wins, System fills
+// the rest" merge runs against a real response.
+func TestStatus_NestedShape_PromotesSystemAndRendersItsError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"user": {"available": true},
+			"system": {
+				"status": "unknown",
+				"timestamp": "2026-03-20T15:45:00Z",
+				"version": "0.5.0",
+				"error": "cannot reach the gRPC cluster",
+				"components": [{"name": "clickhouse", "status": "unknown"}]
+			}
+		}`)
+	}))
+
+	out, err := Status(context.Background(), client, StatusInput{})
+	if err != nil {
+		t.Fatalf("Status() error: %v", err)
+	}
+	wantSystem := &StatusSystem{
+		Status:     "unknown",
+		Timestamp:  "2026-03-20T15:45:00Z",
+		Version:    "0.5.0",
+		Error:      "cannot reach the gRPC cluster",
+		Components: []StatusComponent{{Name: "clickhouse", Status: "unknown"}},
+	}
+	want := StatusOutput{
+		User:       &StatusUser{Available: true},
+		System:     wantSystem,
+		Status:     wantSystem.Status,
+		Timestamp:  wantSystem.Timestamp,
+		Version:    wantSystem.Version,
+		Components: wantSystem.Components,
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Status() = %+v, want promoted nested shape %+v", out, want)
+	}
+
+	wantCard := "## Orbit Status\n\n" +
+		"- **Available to you**: ✅\n" +
+		"- **Status**: unknown\n" +
+		"- **Version**: 0.5.0\n" +
+		"- **Timestamp**: 20 Mar 2026 15:45 UTC\n" +
+		"- **Error**: cannot reach the gRPC cluster\n\n" +
+		"### Components\n\n" +
+		"| Component | Status | Replicas |\n| --- | --- | --- |\n" +
+		"| clickhouse | unknown |  |\n" +
+		statusHints
+	if got := FormatStatusMarkdown(out); got != wantCard {
+		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, wantCard)
+	}
+}
+
+// TestStatus_NestedLLMShape_RendersThePromotedTextOnce verifies the nested
+// shape under response_format=llm: GitLab puts the pre-formatted body inside
+// the system object, the SDK promotes it to the flat field, and the card fences
+// that text once rather than twice or not at all.
+func TestStatus_NestedLLMShape_RendersThePromotedTextOnce(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
+		testutil.AssertQueryParam(t, r, "response_format", "llm")
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"user": {"available": true},
+			"system": {"formatted_text": "status: healthy\nversion: 0.5.0"}
+		}`)
+	}))
+
+	out, err := Status(context.Background(), client, StatusInput{ResponseFormat: "llm"})
+	if err != nil {
+		t.Fatalf("Status() error: %v", err)
+	}
+	if out.FormattedText != "status: healthy\nversion: 0.5.0" || out.System == nil || out.System.FormattedText != out.FormattedText {
+		t.Fatalf("Status() = %+v, want the formatted text promoted from the system object", out)
+	}
+
+	want := "## Orbit Status\n\n```text\nstatus: healthy\nversion: 0.5.0\n```\n" + statusHints
+	if got := FormatStatusMarkdown(out); got != want {
+		t.Errorf("FormatStatusMarkdown() =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// TestStatus_ResponseFormats_ForwardTheNormalizedValue verifies that the
+// explicit JSON alias reaches GitLab as "json", and that a value with case or
+// whitespace around it is forwarded trimmed and lowercased rather than refused
+// or sent verbatim.
+func TestStatus_ResponseFormats_ForwardTheNormalizedValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "json alias", input: "json", want: "json"},
+		{name: "mixed case with whitespace", input: " Raw ", want: "raw"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
+				testutil.AssertQueryParam(t, r, "response_format", tt.want)
+				testutil.RespondJSON(w, http.StatusOK, `{"status":"healthy"}`)
+			}))
+
+			out, err := Status(context.Background(), client, StatusInput{ResponseFormat: tt.input})
+			if err != nil {
+				t.Fatalf("Status() error: %v", err)
+			}
+			if out.Status != "healthy" {
+				t.Fatalf("Status() = %+v, want healthy", out)
+			}
+		})
 	}
 }
 
 // TestSchema_WithExpandAndFormat_ForwardsQuery verifies that [Schema] forwards
-// expand and format query parameters and decodes schema domains, nodes, and edges.
+// expand as one comma-joined parameter and format as given, and mirrors the
+// ontology into [SchemaOutput] field for field: each domain's name, description
+// and node names, each edge's name, description and source/target variants,
+// and each node decoded from raw JSON into a value rather than dropped.
 //
-// The test mocks a response from /api/v4/orbit/schema with expand and format parameters.
-// It asserts that the output schema version, domains, and edges are decoded as expected.
-// This ensures query parameter forwarding and schema decoding are correct.
+// The decoded node is asserted as a value, not as a count: skipping the decoded
+// entries and keeping the nil one used to produce the same length.
 func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -71,8 +206,42 @@ func TestSchema_WithExpandAndFormat_ForwardsQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Schema() error: %v", err)
 	}
-	if out.SchemaVersion != "1.0" || len(out.Domains) != 1 || len(out.Edges) != 1 {
-		t.Fatalf("Schema() = %+v, want decoded schema", out)
+	want := SchemaOutput{
+		SchemaVersion: "1.0",
+		Domains:       []SchemaDomain{{Name: "core", Description: "Core entities", NodeNames: []string{"User", "Project"}}},
+		Nodes:         []any{map[string]any{"name": "User"}},
+		Edges: []SchemaEdge{{
+			Name:        "AUTHORED",
+			Description: "Authorship",
+			Variants:    []SchemaEdgeVariant{{SourceType: "User", TargetType: "Issue"}},
+		}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Schema() = %+v, want %+v", out, want)
+	}
+}
+
+// TestSchema_FormatAndAliasAgreeing_ForwardsOnce verifies that setting both
+// format and its response_format alias to the same value, whatever the case,
+// is accepted and forwarded as one lowercase format parameter, since the
+// mismatch refusal is for values that disagree and not for the alias being
+// present at all.
+func TestSchema_FormatAndAliasAgreeing_ForwardsOnce(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
+		testutil.AssertQueryParam(t, r, "format", "raw")
+		if got := r.URL.Query().Get("response_format"); got != "" {
+			t.Errorf("response_format query parameter = %q, want empty", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
+	}))
+
+	out, err := Schema(context.Background(), client, SchemaInput{Format: "raw", ResponseFormat: "RAW"})
+	if err != nil {
+		t.Fatalf("Schema() error: %v", err)
+	}
+	if out.SchemaVersion != "1.0" {
+		t.Fatalf("Schema() = %+v, want schema version 1.0", out)
 	}
 }
 
@@ -103,11 +272,10 @@ func TestSchema_ResponseFormatAlias_ForwardsFormat(t *testing.T) {
 	}
 }
 
-// TestTools_Success_ExpectedOutput verifies that [Tools] decodes the Orbit tools
-// catalog returned by the GitLab API.
-//
-// The test mocks a response from /api/v4/orbit/tools and asserts the tool name and count.
-// This ensures the handler parses the tools catalog correctly.
+// TestTools_Success_ExpectedOutput verifies that [Tools] mirrors the Orbit
+// tool manifest into [ToolsOutput]: each tool's name and description, and its
+// parameter schema decoded from raw JSON into a value the caller can read,
+// which is the part of the manifest a model builds its query from.
 func TestTools_Success_ExpectedOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -121,8 +289,13 @@ func TestTools_Success_ExpectedOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tools() error: %v", err)
 	}
-	if len(out.Tools) != 1 || out.Tools[0].Name != "query_graph" {
-		t.Fatalf("Tools() = %+v, want query_graph", out.Tools)
+	want := ToolsOutput{Tools: []ToolDefinition{{
+		Name:        "query_graph",
+		Description: "Execute graph queries",
+		Parameters:  map[string]any{"type": "object"},
+	}}}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Tools() = %+v, want %+v", out, want)
 	}
 }
 
@@ -192,12 +365,126 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
-	resultJSON, err := json.Marshal(out.Result)
-	if err != nil {
-		t.Fatalf("marshal result: %v", err)
+	want := QueryOutput{
+		Result:          []any{map[string]any{"_id": "1", "_type": "Project"}},
+		QueryType:       "traversal",
+		RawQueryStrings: []string{"SELECT ..."},
+		RowCount:        1,
 	}
-	if out.QueryType != "traversal" || out.RowCount != 1 || !strings.Contains(string(resultJSON), "Project") {
-		t.Fatalf("Query() = %+v, want traversal result", out)
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Query() = %+v, want %+v", out, want)
+	}
+}
+
+// TestQuery_NoResponseFormat_DefaultsToRaw verifies the choice the [Query]
+// godoc makes: a caller who names no response format is sent to GitLab as
+// "raw" rather than left to the server's own "llm" default, and the answer is
+// decoded as the structured envelope. Nothing asserted this before, and the
+// default answering "llm" left the suite green.
+func TestQuery_NoResponseFormat_DefaultsToRaw(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		var got map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusInternalServerError)
+			return
+		}
+		if string(got["response_format"]) != `"raw"` {
+			t.Errorf("response_format = %s, want raw when the caller set none", got["response_format"])
+			http.Error(w, "response_format, want raw", http.StatusInternalServerError)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"result":[{"_id":"1"}],"query_type":"traversal","row_count":1}`)
+	}))
+
+	out, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+		"query_type": "traversal",
+		"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+	}})
+	if err != nil {
+		t.Fatalf("Query() error: %v", err)
+	}
+	want := QueryOutput{Result: []any{map[string]any{"_id": "1"}}, QueryType: "traversal", RowCount: 1}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("Query() = %+v, want the decoded envelope %+v", out, want)
+	}
+}
+
+// TestQuery_EveryQueryType_ReachesTheWire verifies that a well-formed query of
+// each of the other three types passes the client-side validator and is
+// forwarded to GitLab as the caller wrote it: an aggregation with a scoped
+// node, a neighbors expansion referencing its node by id, and a path between
+// two nodes. The rejection tests prove the validator refuses; this proves it
+// does not refuse what GitLab accepts.
+func TestQuery_EveryQueryType_ReachesTheWire(t *testing.T) {
+	tests := []struct {
+		name  string
+		query map[string]any
+	}{
+		{
+			name: "aggregation",
+			query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{"id": "p", "entity": "Project", "filters": map[string]any{"full_path": map[string]any{"op": "starts_with", "value": "plens1/"}}},
+					map[string]any{"id": "mr", "entity": "MergeRequest", "columns": []any{"id"}},
+				},
+				"relationships": []any{map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"}},
+				"aggregations":  []any{map[string]any{"function": "count", "target": "mr", "alias": "mr_count"}},
+			},
+		},
+		{
+			name: "neighbors",
+			query: map[string]any{
+				"query_type": "neighbors",
+				"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}},
+				"neighbors":  map[string]any{"node": "p", "direction": "both"},
+			},
+		},
+		{
+			name: "path_finding",
+			query: map[string]any{
+				"query_type": "path_finding",
+				"nodes": []any{
+					map[string]any{"id": "u", "entity": "User", "node_ids": []any{7}},
+					map[string]any{"id": "p", "entity": "Project", "node_ids": []any{1}},
+				},
+				"path": map[string]any{"type": "shortest", "from": "u", "to": "p", "max_depth": 3},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantQuery, marshalErr := json.Marshal(tt.query)
+			if marshalErr != nil {
+				t.Fatalf("marshal query: %v", marshalErr)
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+				var got map[string]json.RawMessage
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, "decode request", http.StatusInternalServerError)
+					return
+				}
+				if string(got["query"]) != string(wantQuery) {
+					t.Errorf("query body = %s, want %s", got["query"], wantQuery)
+					http.Error(w, "query body differs from the caller's", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"`+tt.name+`","row_count":0}`)
+			}))
+
+			out, err := Query(context.Background(), client, QueryInput{Query: tt.query})
+			if err != nil {
+				t.Fatalf("Query() error: %v", err)
+			}
+			if out.QueryType != tt.name {
+				t.Fatalf("Query() query type = %q, want %q", out.QueryType, tt.name)
+			}
+		})
 	}
 }
 
@@ -322,9 +609,9 @@ func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
 }
 
 // TestGraphStatus_Success_ByFullPath verifies that [GraphStatus] forwards a full
-// project path and decodes project, domain, and indexing status data.
-//
-// The test mocks a response with indexed projects and domains and asserts the output fields.
+// project path and mirrors the answer into [GraphStatusOutput] field for field:
+// the project counts, each domain's per-type counts, and the indexing state
+// with the duration GitLab sent.
 func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -341,8 +628,71 @@ func TestGraphStatus_Success_ByFullPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GraphStatus() error: %v", err)
 	}
-	if out.Projects.Indexed != 3 || out.Indexing.State != "indexed" || out.Domains[0].Items[0].Count != 42 {
-		t.Fatalf("GraphStatus() = %+v, want indexed graph status", out)
+	want := GraphStatusOutput{
+		Projects: &GraphStatusProjects{Indexed: 3, TotalKnown: 4},
+		Domains:  []GraphStatusDomain{{Name: "SDLC", Items: []GraphStatusDomainItem{{Name: "MergeRequest", Count: 42}}}},
+		Indexing: &GraphStatusIndexing{State: "indexed", LastDurationMs: 99},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("GraphStatus() = %+v, want %+v", out, want)
+	}
+}
+
+// TestGraphStatus_EachScope_SendsOnlyThatParameter verifies that the one scope
+// the caller chose is the only scope parameter on the wire. GitLab refuses a
+// request naming more than one, and the SDK encodes a pointer to zero as
+// `namespace_id=0`, so a guard that let an unset id through would turn every
+// full-path lookup into a refused request.
+func TestGraphStatus_EachScope_SendsOnlyThatParameter(t *testing.T) {
+	tests := []struct {
+		name  string
+		input GraphStatusInput
+		want  url.Values
+	}{
+		{name: "namespace", input: GraphStatusInput{NamespaceID: 123}, want: url.Values{"namespace_id": {"123"}}},
+		{name: "project", input: GraphStatusInput{ProjectID: 456}, want: url.Values{"project_id": {"456"}}},
+		{name: "full path", input: GraphStatusInput{FullPath: "gitlab-org/gitlab"}, want: url.Values{"full_path": {"gitlab-org/gitlab"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, "/api/v4/orbit/graph_status")
+				if got := r.URL.Query(); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("query parameters = %v, want exactly %v", got, tt.want)
+					http.Error(w, "query parameters, want exactly the chosen scope", http.StatusInternalServerError)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":1}}`)
+			}))
+
+			out, err := GraphStatus(context.Background(), client, tt.input)
+			if err != nil {
+				t.Fatalf("GraphStatus() error: %v", err)
+			}
+			if out.Projects == nil || out.Projects.Indexed != 1 {
+				t.Fatalf("GraphStatus() = %+v, want one indexed project", out)
+			}
+		})
+	}
+}
+
+// TestGraphStatus_WithoutIndexing_LeavesIndexingNil verifies that a status
+// answer carrying no indexing object and no domains is mirrored as such: the
+// Indexing pointer stays nil rather than pointing at an empty state, and the
+// domains are an empty list, so the card writes neither section.
+func TestGraphStatus_WithoutIndexing_LeavesIndexingNil(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/graph_status")
+		testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":2}}`)
+	}))
+
+	out, err := GraphStatus(context.Background(), client, GraphStatusInput{ProjectID: 9})
+	if err != nil {
+		t.Fatalf("GraphStatus() error: %v", err)
+	}
+	want := GraphStatusOutput{Projects: &GraphStatusProjects{Indexed: 1, TotalKnown: 2}, Domains: []GraphStatusDomain{}}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("GraphStatus() = %+v, want %+v", out, want)
 	}
 }
 
@@ -465,6 +815,18 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				return err
 			},
 			want: "require at least one node",
+		},
+		{
+			name: "aggregation without node_ids or filters",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type":   "aggregation",
+					"nodes":        []any{map[string]any{"id": "mr", "entity": "MergeRequest", "columns": []any{"id"}}},
+					"aggregations": []any{map[string]any{"function": "count", "target": "mr", "alias": "mr_count"}},
+				}})
+				return err
+			},
+			want: "aggregation queries require at least one node",
 		},
 		{
 			name: "traversal with id_range is also scoped",
@@ -838,9 +1200,10 @@ func TestConvertStatus_NestedShape_MirrorsUserAndSystem(t *testing.T) {
 }
 
 // TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields verifies that
-// Orbit response converters skip nil slices while preserving optional metadata.
-//
-// The test asserts that nil entries are skipped in all nested slices and that optional fields are preserved in the output.
+// Orbit response converters skip nil entries in every nested slice while
+// preserving the optional indexing fields, each timestamp normalized to UTC
+// RFC3339 whatever zone the SDK decoded it in, and the start and completion
+// kept apart.
 func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testing.T) {
 	status := convertStatus(&gl.OrbitStatus{Components: []*gl.OrbitStatusComponent{nil, {Name: "api", Status: "healthy"}}})
 	if len(status.Components) != 1 || status.Components[0].Name != "api" || status.Components[0].Replicas != nil {
@@ -864,7 +1227,7 @@ func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testin
 		t.Fatalf("convertTools() = %+v, want one tool", tools.Tools)
 	}
 
-	started := time.Date(2026, 5, 6, 10, 0, 0, 0, time.UTC)
+	started := time.Date(2026, 5, 6, 12, 0, 0, 0, time.FixedZone("CEST", 2*60*60))
 	completed := started.Add(2 * time.Minute)
 	duration := int64(120000)
 	lastErr := "index timeout"
@@ -878,11 +1241,19 @@ func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testin
 			LastError:       &lastErr,
 		},
 	})
-	if len(graphStatus.Domains) != 1 || len(graphStatus.Domains[0].Items) != 1 {
-		t.Fatalf("convertGraphStatus() domains = %+v, want nil entries skipped", graphStatus.Domains)
+	wantDomains := []GraphStatusDomain{{Name: "SDLC", Items: []GraphStatusDomainItem{{Name: "Issue", Count: 7}}}}
+	if !reflect.DeepEqual(graphStatus.Domains, wantDomains) {
+		t.Fatalf("convertGraphStatus() domains = %+v, want nil entries skipped: %+v", graphStatus.Domains, wantDomains)
 	}
-	if graphStatus.Indexing.LastStartedAt == "" || graphStatus.Indexing.LastCompletedAt == "" || graphStatus.Indexing.LastError != lastErr {
-		t.Fatalf("convertGraphStatus() indexing = %+v, want optional fields", graphStatus.Indexing)
+	wantIndexing := &GraphStatusIndexing{
+		State:           "error",
+		LastStartedAt:   "2026-05-06T10:00:00Z",
+		LastCompletedAt: "2026-05-06T10:02:00Z",
+		LastDurationMs:  120000,
+		LastError:       "index timeout",
+	}
+	if !reflect.DeepEqual(graphStatus.Indexing, wantIndexing) {
+		t.Fatalf("convertGraphStatus() indexing = %+v, want %+v", graphStatus.Indexing, wantIndexing)
 	}
 }
 

@@ -4,6 +4,8 @@
 package workitemsavedviews
 
 import (
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -83,11 +85,19 @@ func TestFilters_ToSDK_EmptyOmitsEveryOptional(t *testing.T) {
 // TestFilters_ToSDK_AllScalarsAndSlices verifies that every scalar and slice
 // field reaches the SDK struct, which is what makes the MCP filter a 1:1 mirror
 // of WorkItemSavedViewFilterInput rather than a curated subset.
+//
+// No two values in the fixture agree, which is what makes the claim a real one:
+// the assignee and release-tag wildcards were both "ANY" here, so a converter
+// that crossed the two assigned each other's value and every assertion still
+// read the string it expected. The five flags cannot be told apart this way at
+// all, and are driven one at a time in
+// [TestFilters_ToSDK_EachBooleanReachesItsOwnField] instead; what this test
+// holds about them is only that each arrives set.
 func TestFilters_ToSDK_AllScalarsAndSlices(t *testing.T) {
 	yes := true
 	in := &Filters{
 		AssigneeUsernames:          []string{"alice"},
-		AssigneeWildcardID:         "ANY",
+		AssigneeWildcardID:         "ME",
 		AuthorUsername:             "bob",
 		Confidential:               &yes,
 		CRMContactID:               "gid://gitlab/CustomerRelations::Contact/1",
@@ -126,7 +136,7 @@ func TestFilters_ToSDK_AllScalarsAndSlices(t *testing.T) {
 		got  *string
 		want string
 	}{
-		"assignee_wildcard_id":    {got.AssigneeWildcardID, "ANY"},
+		"assignee_wildcard_id":    {got.AssigneeWildcardID, "ME"},
 		"author_username":         {got.AuthorUsername, "bob"},
 		"crm_contact_id":          {got.CRMContactID, "gid://gitlab/CustomerRelations::Contact/1"},
 		"crm_organization_id":     {got.CRMOrganizationID, "gid://gitlab/CustomerRelations::Organization/2"},
@@ -181,6 +191,50 @@ func TestFilters_ToSDK_AllScalarsAndSlices(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if value == nil || !*value {
 				t.Errorf("%s = %v, want true", name, value)
+			}
+		})
+	}
+}
+
+// TestFilters_ToSDK_EachBooleanReachesItsOwnField drives the five optional
+// flags one at a time, because no fixture setting them together can tell them
+// apart: a block of booleans has two values to go round, and setting all five
+// to true is exactly the arrangement in which a converter routing confidential
+// into exclude_projects reads correct. Setting one and requiring the other four
+// to stay absent distinguishes all five.
+func TestFilters_ToSDK_EachBooleanReachesItsOwnField(t *testing.T) {
+	yes := true
+	cases := []struct {
+		name string
+		in   *Filters
+	}{
+		{name: "confidential", in: &Filters{Confidential: &yes}},
+		{name: "exclude_group_work_items", in: &Filters{ExcludeGroupWorkItems: &yes}},
+		{name: "exclude_projects", in: &Filters{ExcludeProjects: &yes}},
+		{name: "include_descendant_work_items", in: &Filters{IncludeDescendantWorkItems: &yes}},
+		{name: "include_descendants", in: &Filters{IncludeDescendants: &yes}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := testCase.in.toSDK()
+			if err != nil {
+				t.Fatalf("toSDK() unexpected error: %v", err)
+			}
+			for name, value := range map[string]*bool{
+				"confidential":                  got.Confidential,
+				"exclude_group_work_items":      got.ExcludeGroupWorkItems,
+				"exclude_projects":              got.ExcludeProjects,
+				"include_descendant_work_items": got.IncludeDescendantWorkItems,
+				"include_descendants":           got.IncludeDescendants,
+			} {
+				t.Run(name, func(t *testing.T) {
+					switch {
+					case name != testCase.name && value != nil:
+						t.Errorf("%s = %v, want absent while only %s is set", name, *value, testCase.name)
+					case name == testCase.name && (value == nil || !*value):
+						t.Errorf("%s = %v, want true", name, value)
+					}
+				})
 			}
 		})
 	}
@@ -242,78 +296,106 @@ func convertNestedFixture(t *testing.T) *gl.WorkItemSavedViewFilters {
 }
 
 // TestFilters_ToSDK_CustomFieldSubFilter verifies that a custom field filter
-// carries both identifiers and both selected-option lists.
+// carries both identifiers and both selected-option lists, each into the field
+// it belongs in. Counting the entries is not enough: the option IDs and the
+// option values are two lists of one string apiece, so a converter that swapped
+// them satisfied every length this test used to check while asking GitLab to
+// match an option by an identifier that names none.
 func TestFilters_ToSDK_CustomFieldSubFilter(t *testing.T) {
-	got := convertNestedFixture(t)
-	if len(got.CustomField) != 1 {
-		t.Fatalf("CustomField = %+v, want one entry", got.CustomField)
-	}
-	field := got.CustomField[0]
-	if field.CustomFieldID == nil || field.CustomFieldName == nil {
-		t.Fatalf("CustomField[0] = %+v, want both identifiers", field)
-	}
-	if *field.CustomFieldName != "Team" || len(field.SelectedOptionIDs) != 1 || len(field.SelectedOptionValues) != 1 {
-		t.Errorf("CustomField[0] = %+v", field)
+	want := []gl.WorkItemCustomFieldFilter{{
+		CustomFieldID:        new("gid://gitlab/Issuables::CustomField/1"),
+		CustomFieldName:      new("Team"),
+		SelectedOptionIDs:    []string{"gid://gitlab/Issuables::CustomFieldSelectOption/2"},
+		SelectedOptionValues: []string{"Platform"},
+	}}
+	if got := convertNestedFixture(t).CustomField; !reflect.DeepEqual(got, want) {
+		t.Errorf("CustomField = %s, want %s", pretty(got), pretty(want))
 	}
 }
 
+// pretty renders a converted filter with its pointers dereferenced, so a
+// failure names the values that differ instead of their addresses.
+func pretty(v any) string {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%+v", v)
+	}
+	return string(encoded)
+}
+
 // TestFilters_ToSDK_HierarchyAndStatusSubFilters verifies the two small nested
-// objects, which share a shape: a couple of scalars each, all optional.
+// objects, which share a shape: a couple of scalars each, all optional. Each is
+// compared whole, because a status addressed by the wrong one of its two
+// identifiers matches nothing and looks, field by field, exactly like one
+// addressed correctly.
 func TestFilters_ToSDK_HierarchyAndStatusSubFilters(t *testing.T) {
 	got := convertNestedFixture(t)
 
 	t.Run("hierarchy_filters", func(t *testing.T) {
-		if got.HierarchyFilters == nil || got.HierarchyFilters.ParentWildcardID == nil {
-			t.Fatalf("HierarchyFilters = %+v", got.HierarchyFilters)
+		want := &gl.WorkItemHierarchyFilter{
+			ParentIDs:                  []string{"gid://gitlab/WorkItem/9"},
+			IncludeDescendantWorkItems: new(true),
+			ParentWildcardID:           new("NONE"),
 		}
-		if *got.HierarchyFilters.ParentWildcardID != "NONE" || len(got.HierarchyFilters.ParentIDs) != 1 {
-			t.Errorf("HierarchyFilters = %+v", got.HierarchyFilters)
-		}
-		if got.HierarchyFilters.IncludeDescendantWorkItems == nil || !*got.HierarchyFilters.IncludeDescendantWorkItems {
-			t.Error("HierarchyFilters.IncludeDescendantWorkItems = nil or false, want true")
+		if !reflect.DeepEqual(got.HierarchyFilters, want) {
+			t.Errorf("HierarchyFilters = %s, want %s", pretty(got.HierarchyFilters), pretty(want))
 		}
 	})
 
 	t.Run("status", func(t *testing.T) {
-		if got.Status == nil || got.Status.ID == nil || got.Status.Name == nil {
-			t.Fatalf("Status = %+v", got.Status)
+		want := &gl.WorkItemStatusFilter{
+			ID:   new("gid://gitlab/WorkItems::Statuses::Custom::Status/3"),
+			Name: new("In progress"),
 		}
-		if *got.Status.Name != "In progress" {
-			t.Errorf("Status.Name = %q", *got.Status.Name)
+		if !reflect.DeepEqual(got.Status, want) {
+			t.Errorf("Status = %s, want %s", pretty(got.Status), pretty(want))
 		}
 	})
 }
 
 // TestFilters_ToSDK_NegatedSubFilter verifies that every field of the "not"
-// sub-filter reaches the SDK struct.
+// sub-filter reaches the SDK struct, and reaches the field it belongs in.
+//
+// It compares the struct whole rather than counting entries, which is what it
+// did before: fifteen fields carrying one value apiece are all the same length,
+// so labels could arrive as milestone titles and a reaction as a weight without
+// a single count moving. What a caller sees then is a view excluding work items
+// nobody asked to exclude.
 func TestFilters_ToSDK_NegatedSubFilter(t *testing.T) {
-	not := convertNestedFixture(t).Not
-	if not == nil {
-		t.Fatal("Not = nil, want the negated sub-filter")
+	want := &gl.WorkItemSavedViewNegatedFilters{
+		AssigneeUsernames:   []string{"carol"},
+		AuthorUsername:      []string{"dave"},
+		CustomField:         []gl.WorkItemCustomFieldFilter{{CustomFieldName: new("Team")}},
+		HealthStatusFilter:  []string{"atRisk"},
+		IterationID:         []string{"gid://gitlab/Iteration/4"},
+		IterationWildcardID: new("CURRENT"),
+		LabelName:           []string{"wontfix"},
+		MilestoneTitle:      []string{"v0"},
+		MilestoneWildcardID: new("STARTED"),
+		MyReactionEmoji:     new("thumbsdown"),
+		ParentIDs:           []string{"gid://gitlab/WorkItem/10"},
+		ReleaseTag:          []string{"v0.9.0"},
+		Types:               []string{"TASK"},
+		Weight:              new("1"),
+		WorkItemTypeIDs:     []string{"gid://gitlab/WorkItems::Type/6"},
 	}
-	if len(not.AssigneeUsernames) != 1 || len(not.AuthorUsername) != 1 || len(not.CustomField) != 1 {
-		t.Errorf("Not lists = %+v", not)
-	}
-	if not.IterationWildcardID == nil || not.MilestoneWildcardID == nil || not.MyReactionEmoji == nil || not.Weight == nil {
-		t.Errorf("Not pointers = %+v", not)
-	}
-	if len(not.ParentIDs) != 1 || len(not.ReleaseTag) != 1 || len(not.Types) != 1 || len(not.WorkItemTypeIDs) != 1 {
-		t.Errorf("Not identifier lists = %+v", not)
-	}
-	if len(not.HealthStatusFilter) != 1 || len(not.IterationID) != 1 || len(not.LabelName) != 1 || len(not.MilestoneTitle) != 1 {
-		t.Errorf("Not attribute lists = %+v", not)
+	if got := convertNestedFixture(t).Not; !reflect.DeepEqual(got, want) {
+		t.Errorf("Not = %s, want %s", pretty(got), pretty(want))
 	}
 }
 
 // TestFilters_ToSDK_UnionedSubFilter verifies that every field of the "or"
-// sub-filter reaches the SDK struct.
+// sub-filter reaches the SDK struct, and reaches the field it belongs in: its
+// four fields are all lists of one string, so only the values tell them apart.
 func TestFilters_ToSDK_UnionedSubFilter(t *testing.T) {
-	or := convertNestedFixture(t).Or
-	if or == nil {
-		t.Fatal("Or = nil, want the unioned sub-filter")
+	want := &gl.WorkItemSavedViewUnionedFilters{
+		AssigneeUsernames: []string{"erin"},
+		AuthorUsernames:   []string{"frank"},
+		CustomField:       []gl.WorkItemCustomFieldFilter{{CustomFieldID: new("gid://gitlab/Issuables::CustomField/7")}},
+		LabelNames:        []string{"urgent"},
 	}
-	if len(or.AssigneeUsernames) != 1 || len(or.AuthorUsernames) != 1 || len(or.CustomField) != 1 || len(or.LabelNames) != 1 {
-		t.Errorf("Or = %+v", or)
+	if got := convertNestedFixture(t).Or; !reflect.DeepEqual(got, want) {
+		t.Errorf("Or = %s, want %s", pretty(got), pretty(want))
 	}
 }
 

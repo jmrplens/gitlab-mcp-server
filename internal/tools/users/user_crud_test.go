@@ -6,7 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -215,7 +218,11 @@ func TestCreateUser_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestModifyUser_AllOptionalFields verifies Modify with every optional field set.
+// TestModifyUser_AllOptionalFields verifies that a request carrying every
+// optional field is accepted and its user decoded. It asserts nothing about
+// what reached GitLab, which is what TestModify_EachOptionReachesTheRequest is
+// for; the comment used to claim it verified the fields were sent while its
+// own mock discarded the body.
 func TestModifyUser_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/users/42" {
@@ -231,7 +238,6 @@ func TestModifyUser_AllOptionalFields(t *testing.T) {
 	projLimit := int64(100)
 	privateProf := true
 	canCreateGrp := true
-	locked := false
 
 	out, err := Modify(context.Background(), client, ModifyInput{
 		UserID:             42,
@@ -250,7 +256,6 @@ func TestModifyUser_AllOptionalFields(t *testing.T) {
 		Note:               "Updated note",
 		PrivateProfile:     &privateProf,
 		CanCreateGroup:     &canCreateGrp,
-		Locked:             &locked,
 	})
 	if err != nil {
 		t.Fatalf("Modify() unexpected error: %v", err)
@@ -348,78 +353,167 @@ func decodeJSONBody(t *testing.T, r *http.Request) map[string]any {
 	return m
 }
 
-// TestCreate_AllOptionalFields exercises every new CreateUser optional field so
-// the option-wiring branches are covered.
-func TestCreate_AllOptionalFields(t *testing.T) {
-	var body map[string]any
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users" {
-			body = decodeJSONBody(t, r)
-			testutil.RespondJSON(w, http.StatusCreated, fullUserJSON)
+// capturedRequest is what a handler asked GitLab for: the query it built and
+// the JSON body it wrote. A test asserting that an optional input reaches
+// GitLab reads this and not the response, which is the fixture's own whatever
+// was sent.
+type capturedRequest struct {
+	query url.Values
+	body  map[string]any
+}
+
+// recordRequest answers one path with the given status and body, capturing what
+// the handler sent. Every other path is a 404, so a handler that makes a second
+// call of its own cannot overwrite the capture.
+func recordRequest(t *testing.T, path string, got *capturedRequest, status int, response string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != path {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
-	}))
-
-	bt := true
-	n := int64(5)
-	_, err := Create(context.Background(), client, CreateInput{
-		Email: "n@x.test", Name: "N", Username: "n",
-		Auditor: &bt, CanCreateGroup: &bt, PrivateProfile: &bt, ViewDiffsFileByFile: &bt,
-		Pronouns: "they", CommitEmail: "c@x.test", PublicEmail: "p@x.test", WebsiteURL: "https://x.test",
-		Linkedin: "li", Twitter: "tw", Skype: "sk", Discord: "dc", Github: "gh",
-		Provider: "ldap", ExternUID: "uid",
-		GroupIDForSAML: &n, ProjectsLimit: &n, ThemeID: &n, ColorSchemeID: &n,
-		SharedRunnersMinutesLimit: &n, ExtraSharedRunnersMinutesLimit: &n,
-	})
-	if err != nil {
-		t.Fatalf("Create() unexpected error: %v", err)
+		got.query = r.URL.Query()
+		got.body = decodeJSONBody(t, r)
+		testutil.RespondJSON(w, status, response)
 	}
-	for _, key := range []string{
-		"auditor", "can_create_group", "private_profile", "view_diffs_file_by_file",
-		"pronouns", "commit_email", "public_email", "website_url", "linkedin", "twitter",
-		"skype", "discord", "github", "provider", "extern_uid", "group_id_for_saml",
-		"theme_id", "color_scheme_id", "shared_runners_minutes_limit", "extra_shared_runners_minutes_limit",
-	} {
-		t.Run(key, func(t *testing.T) {
-			if _, ok := body[key]; !ok {
-				t.Errorf("create body missing %q: %v", key, body)
+}
+
+// assertSent compares the whole request against what one case drove instead of
+// checking that a key is present. Presence cannot tell two fields apart: an
+// option builder that assigned the wrong neighbor still sends both keys. A
+// case that drives one field and compares the whole map can.
+func assertSent(t *testing.T, what string, got, want any) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s = %#v, want %#v", what, got, want)
+	}
+}
+
+// TestCreate_EachOptionReachesTheRequest drives one optional field at a time
+// and compares the whole body GitLab received with the three required keys plus
+// that one. Driving them all at once and checking each key is present cannot
+// see an option builder that assigned the wrong neighbor, and cannot tell two
+// flags apart at all, since every one of them is then true.
+func TestCreate_EachOptionReachesTheRequest(t *testing.T) {
+	yes := true
+	five := int64(5)
+
+	tests := []struct {
+		name  string
+		input CreateInput
+		want  map[string]any
+	}{
+		{"password", CreateInput{Password: "pa$$"}, map[string]any{"password": "pa$$"}},
+		{"reset_password", CreateInput{ResetPassword: &yes}, map[string]any{"reset_password": true}},
+		{"force_random_password", CreateInput{ForceRandomPassword: &yes}, map[string]any{"force_random_password": true}},
+		{"skip_confirmation", CreateInput{SkipConfirmation: &yes}, map[string]any{"skip_confirmation": true}},
+		{"admin", CreateInput{Admin: &yes}, map[string]any{"admin": true}},
+		{"auditor", CreateInput{Auditor: &yes}, map[string]any{"auditor": true}},
+		{"external", CreateInput{External: &yes}, map[string]any{"external": true}},
+		{"can_create_group", CreateInput{CanCreateGroup: &yes}, map[string]any{"can_create_group": true}},
+		{"private_profile", CreateInput{PrivateProfile: &yes}, map[string]any{"private_profile": true}},
+		{"view_diffs_file_by_file", CreateInput{ViewDiffsFileByFile: &yes}, map[string]any{"view_diffs_file_by_file": true}},
+		{"bio", CreateInput{Bio: "bio"}, map[string]any{"bio": "bio"}},
+		{"location", CreateInput{Location: "location"}, map[string]any{"location": "location"}},
+		{"job_title", CreateInput{JobTitle: "job title"}, map[string]any{"job_title": "job title"}},
+		{"organization", CreateInput{Organization: "organization"}, map[string]any{"organization": "organization"}},
+		{"pronouns", CreateInput{Pronouns: "pronouns"}, map[string]any{"pronouns": "pronouns"}},
+		{"commit_email", CreateInput{CommitEmail: "commit@x.test"}, map[string]any{"commit_email": "commit@x.test"}},
+		{"public_email", CreateInput{PublicEmail: "public@x.test"}, map[string]any{"public_email": "public@x.test"}},
+		{"website_url", CreateInput{WebsiteURL: "https://site.test"}, map[string]any{"website_url": "https://site.test"}},
+		{"linkedin", CreateInput{Linkedin: "linkedin"}, map[string]any{"linkedin": "linkedin"}},
+		{"twitter", CreateInput{Twitter: "twitter"}, map[string]any{"twitter": "twitter"}},
+		{"skype", CreateInput{Skype: "skype"}, map[string]any{"skype": "skype"}},
+		{"discord", CreateInput{Discord: "discord"}, map[string]any{"discord": "discord"}},
+		{"github", CreateInput{Github: "github"}, map[string]any{"github": "github"}},
+		{"provider", CreateInput{Provider: "ldapmain"}, map[string]any{"provider": "ldapmain"}},
+		{"extern_uid", CreateInput{ExternUID: "extern-uid"}, map[string]any{"extern_uid": "extern-uid"}},
+		{"note", CreateInput{Note: "admin note"}, map[string]any{"note": "admin note"}},
+		{"group_id_for_saml", CreateInput{GroupIDForSAML: &five}, map[string]any{"group_id_for_saml": float64(5)}},
+		{"projects_limit", CreateInput{ProjectsLimit: &five}, map[string]any{"projects_limit": float64(5)}},
+		{"theme_id", CreateInput{ThemeID: &five}, map[string]any{"theme_id": float64(5)}},
+		{"color_scheme_id", CreateInput{ColorSchemeID: &five}, map[string]any{"color_scheme_id": float64(5)}},
+		{"shared_runners_minutes_limit", CreateInput{SharedRunnersMinutesLimit: &five}, map[string]any{"shared_runners_minutes_limit": float64(5)}},
+		{"extra_shared_runners_minutes_limit", CreateInput{ExtraSharedRunnersMinutesLimit: &five}, map[string]any{"extra_shared_runners_minutes_limit": float64(5)}},
+		{"nothing", CreateInput{}, map[string]any{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathListUsers, &got, http.StatusCreated, fullUserJSON))
+
+			input := tt.input
+			input.Email, input.Name, input.Username = "n@x.test", "N", "n"
+			if _, err := Create(context.Background(), client, input); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
 			}
+
+			want := map[string]any{"email": "n@x.test", "name": "N", "username": "n"}
+			maps.Copy(want, tt.want)
+			assertSent(t, "create body", got.body, want)
 		})
 	}
 }
 
-// TestModify_AllOptionalFields exercises every new ModifyUser optional field so
-// the option-wiring branches are covered.
-func TestModify_AllOptionalFields(t *testing.T) {
-	var body map[string]any
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/users/42" {
-			body = decodeJSONBody(t, r)
-			testutil.RespondJSON(w, http.StatusOK, fullUserJSON)
-			return
-		}
-		http.NotFound(w, r)
-	}))
+// TestModify_EachOptionReachesTheRequest drives one optional field at a time
+// and compares the whole body, for the reason its create sibling gives: an
+// update sends only what the caller asked to change, so the body is exactly
+// that one key and a builder writing into the wrong field is visible.
+//
+// A case per field is also what would have caught the phantom this sweep
+// removed. A locked flag this input published reached no field of client-go's
+// ModifyUserOptions, and GitLab's PUT /users/:id declares no such parameter,
+// so its case here would have driven the flag and found an empty body.
+func TestModify_EachOptionReachesTheRequest(t *testing.T) {
+	yes := true
+	four := int64(4)
 
-	bt := true
-	n := int64(4)
-	_, err := Modify(context.Background(), client, ModifyInput{
-		UserID: 42, Auditor: &bt, ViewDiffsFileByFile: &bt, CommitEmail: "c@x.test", PublicEmail: "p@x.test",
-		WebsiteURL: "https://x.test", Linkedin: "li", Twitter: "tw", Skype: "sk",
-		Provider: "ldap", ExternUID: "uid", ThemeID: &n,
-	})
-	if err != nil {
-		t.Fatalf("Modify() unexpected error: %v", err)
+	tests := []struct {
+		name  string
+		input ModifyInput
+		want  map[string]any
+	}{
+		{"email", ModifyInput{Email: "moved@x.test"}, map[string]any{"email": "moved@x.test"}},
+		{"name", ModifyInput{Name: "New Name"}, map[string]any{"name": "New Name"}},
+		{"username", ModifyInput{Username: "new-username"}, map[string]any{"username": "new-username"}},
+		{"password", ModifyInput{Password: "pa$$"}, map[string]any{"password": "pa$$"}},
+		{"admin", ModifyInput{Admin: &yes}, map[string]any{"admin": true}},
+		{"auditor", ModifyInput{Auditor: &yes}, map[string]any{"auditor": true}},
+		{"external", ModifyInput{External: &yes}, map[string]any{"external": true}},
+		{"skip_reconfirmation", ModifyInput{SkipReconfirmation: &yes}, map[string]any{"skip_reconfirmation": true}},
+		{"private_profile", ModifyInput{PrivateProfile: &yes}, map[string]any{"private_profile": true}},
+		{"can_create_group", ModifyInput{CanCreateGroup: &yes}, map[string]any{"can_create_group": true}},
+		{"view_diffs_file_by_file", ModifyInput{ViewDiffsFileByFile: &yes}, map[string]any{"view_diffs_file_by_file": true}},
+		{"bio", ModifyInput{Bio: "bio"}, map[string]any{"bio": "bio"}},
+		{"location", ModifyInput{Location: "location"}, map[string]any{"location": "location"}},
+		{"job_title", ModifyInput{JobTitle: "job title"}, map[string]any{"job_title": "job title"}},
+		{"organization", ModifyInput{Organization: "organization"}, map[string]any{"organization": "organization"}},
+		{"note", ModifyInput{Note: "admin note"}, map[string]any{"note": "admin note"}},
+		{"commit_email", ModifyInput{CommitEmail: "commit@x.test"}, map[string]any{"commit_email": "commit@x.test"}},
+		{"public_email", ModifyInput{PublicEmail: "public@x.test"}, map[string]any{"public_email": "public@x.test"}},
+		{"website_url", ModifyInput{WebsiteURL: "https://site.test"}, map[string]any{"website_url": "https://site.test"}},
+		{"linkedin", ModifyInput{Linkedin: "linkedin"}, map[string]any{"linkedin": "linkedin"}},
+		{"twitter", ModifyInput{Twitter: "twitter"}, map[string]any{"twitter": "twitter"}},
+		{"skype", ModifyInput{Skype: "skype"}, map[string]any{"skype": "skype"}},
+		{"provider", ModifyInput{Provider: "ldapmain"}, map[string]any{"provider": "ldapmain"}},
+		{"extern_uid", ModifyInput{ExternUID: "extern-uid"}, map[string]any{"extern_uid": "extern-uid"}},
+		{"projects_limit", ModifyInput{ProjectsLimit: &four}, map[string]any{"projects_limit": float64(4)}},
+		{"theme_id", ModifyInput{ThemeID: &four}, map[string]any{"theme_id": float64(4)}},
+		{"nothing", ModifyInput{}, map[string]any{}},
 	}
-	for _, key := range []string{
-		"auditor", "view_diffs_file_by_file", "commit_email", "public_email", "website_url",
-		"linkedin", "twitter", "skype", "provider", "extern_uid", "theme_id",
-	} {
-		t.Run(key, func(t *testing.T) {
-			if _, ok := body[key]; !ok {
-				t.Errorf("modify body missing %q: %v", key, body)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, recordRequest(t, pathGetUser, &got, http.StatusOK, fullUserJSON))
+
+			input := tt.input
+			input.UserID = 42
+			if _, err := Modify(context.Background(), client, input); err != nil {
+				t.Fatalf("Modify() unexpected error: %v", err)
 			}
+			assertSent(t, "modify body", got.body, tt.want)
 		})
 	}
 }

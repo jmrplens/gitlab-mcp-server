@@ -5,9 +5,14 @@ package projects
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // Test paths for approval operations.
@@ -528,6 +533,130 @@ func listRuleThreshold(ctx context.Context, t *testing.T, body string) (*int64, 
 		return nil, err
 	}
 	return out.Rules[0].CoverageMinimumThreshold, nil
+}
+
+// TestListApprovalRules_OrderAndSort_ReachTheQuery holds the keyset ordering
+// of a rule listing to the query GitLab receives, since each is copied under
+// an emptiness guard and a guard that drops the copy still lists the rules,
+// in whatever order the server chose.
+func TestListApprovalRules_OrderAndSort_ReachTheQuery(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathProject42ApprovalRules)
+		testutil.AssertQueryParam(t, r, "order_by", "name")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	if _, err := ListApprovalRules(t.Context(), client, ListApprovalRulesInput{ProjectID: "42", OrderBy: "name", Sort: "desc"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestCreateApprovalRule_SendsExactlyWhatTheCallerSet holds the create body
+// to the caller's own settings, both when only the required ones are given
+// and when every optional one is: an optional list that is not set must not
+// reach GitLab as null, and one that is must reach it with its members.
+func TestCreateApprovalRule_SendsExactlyWhatTheCallerSet(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input CreateApprovalRuleInput
+		want  string
+	}{
+		{
+			name:  "required only",
+			input: CreateApprovalRuleInput{ProjectID: "42", Name: "review", ApprovalsRequired: 2},
+			want:  `{"name":"review","approvals_required":2}`,
+		},
+		{
+			name: "every setting",
+			input: CreateApprovalRuleInput{
+				ProjectID: "42", Name: "review", ApprovalsRequired: 2,
+				RuleType: "regular", ReportType: "code_coverage",
+				UserIDs: []int64{11, 12}, GroupIDs: []int64{21}, ProtectedBranchIDs: []int64{31},
+				Usernames: []string{"alice"}, AppliesToAllProtectedBranches: new(false),
+			},
+			want: `{"name":"review","approvals_required":2,"rule_type":"regular","report_type":"code_coverage",` +
+				`"user_ids":[11,12],"group_ids":[21],"protected_branch_ids":[31],"usernames":["alice"],"applies_to_all_protected_branches":false}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := bodyAssertingClient(t, http.MethodPost, pathProject42ApprovalRules, testCase.want, http.StatusCreated, approvalRuleJSON)
+			if _, err := CreateApprovalRule(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestUpdateApprovalRule_SendsExactlyWhatTheCallerSet holds the update body
+// to the caller's own settings: an update naming only the rule sends an empty
+// object, and one naming every setting sends each under its own key.
+func TestUpdateApprovalRule_SendsExactlyWhatTheCallerSet(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input UpdateApprovalRuleInput
+		want  string
+	}{
+		{
+			name:  "rule only",
+			input: UpdateApprovalRuleInput{ProjectID: "42", RuleID: 10},
+			want:  `{}`,
+		},
+		{
+			name: "every setting",
+			input: UpdateApprovalRuleInput{
+				ProjectID: "42", RuleID: 10, Name: "renamed", ApprovalsRequired: new(int64(3)),
+				UserIDs: []int64{11}, GroupIDs: []int64{21, 22}, ProtectedBranchIDs: []int64{31},
+				Usernames: []string{"bob"}, AppliesToAllProtectedBranches: new(true),
+			},
+			want: `{"name":"renamed","approvals_required":3,"user_ids":[11],"group_ids":[21,22],` +
+				`"protected_branch_ids":[31],"usernames":["bob"],"applies_to_all_protected_branches":true}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := bodyAssertingClient(t, http.MethodPut, pathProject42ApprovalRule10, testCase.want, http.StatusOK, approvalRuleJSON)
+			if _, err := UpdateApprovalRule(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestGetApprovalConfig_EachKeyIsPublishedUnderItsOwnName holds the approval
+// configuration to what GitLab sent, its seven flags one at a time and its
+// one count beside them.
+func TestGetApprovalConfig_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
+	get := func(client *gitlabclient.Client) (any, error) {
+		return GetApprovalConfig(t.Context(), client, GetApprovalConfigInput{ProjectID: "42"})
+	}
+	assertFlagsPublishedOneAtATime(t, []reflect.Type{reflect.TypeFor[gl.ProjectApprovals]()}, nil, nil, oneKeyJSON, get)
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.ProjectApprovals]())
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, mustJSON(t, fixture))
+	}))
+	out, err := get(client)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, nil)
+}
+
+// TestGetApprovalRule_EachKeyIsPublishedUnderItsOwnName holds one approval
+// rule to what GitLab sent: its two flags one at a time, and its scalars
+// together, the coverage threshold read off the capture among them.
+func TestGetApprovalRule_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
+	get := func(client *gitlabclient.Client) (any, error) {
+		return GetApprovalRule(t.Context(), client, GetApprovalRuleInput{ProjectID: "42", RuleID: 10})
+	}
+	assertFlagsPublishedOneAtATime(t, []reflect.Type{reflect.TypeFor[gl.ProjectApprovalRule]()}, nil, nil, oneKeyJSON, get)
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.ProjectApprovalRule](), reflect.TypeFor[toolutil.ProjectApprovalRuleExtra]())
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, mustJSON(t, fixture))
+	}))
+	out, err := get(client)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, nil)
 }
 
 // TestFormatListApprovalRulesMarkdown_NonEmpty verifies the whole rule table,

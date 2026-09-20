@@ -219,11 +219,12 @@ func TestPackagePublishAndLink_LinkNameAndTypeReachTheRequest(t *testing.T) {
 	}
 }
 
-// TestPackagePublishAndLink_MissingTagName verifies PackagePublishAndLink when missing tag name.
+// TestPackagePublishAndLink_MissingTagName verifies the handler refuses a call
+// naming no release before it publishes anything: the mock fails the test if
+// any request arrives, where a 404-answering mux left the refusal's origin
+// unasserted.
 func TestPackagePublishAndLink_MissingTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	content := base64.StdEncoding.EncodeToString([]byte("data"))
 	_, err := PublishAndLink(context.Background(), nil, client, PublishAndLinkInput{
@@ -362,11 +363,38 @@ func TestPackagePublishDirectory_Success(t *testing.T) {
 	if out.TotalFiles != 3 {
 		t.Errorf("TotalFiles = %d, want 3", out.TotalFiles)
 	}
-	if len(out.Published) != 3 {
-		t.Errorf("Published count = %d, want 3", len(out.Published))
-	}
 	if len(out.Errors) != 0 {
 		t.Errorf("unexpected errors: %v", out.Errors)
+	}
+	// Each row is compared whole, and the answers differ from the local names
+	// on purpose: nothing here asserted a single field of a published row or
+	// the byte total, so the loop could report a digest as a file name and
+	// count no bytes at all while staying green, which neither gate can see
+	// because an assignment has no branch to flip.
+	want := []PublishDirItem{
+		{FileName: "file1.tar.gz", PackageFileID: 1, Size: 100, SHA256: "hash1"},
+		{FileName: "file2.tar.gz", PackageFileID: 2, Size: 100, SHA256: "hash2"},
+		{FileName: "file3.tar.gz", PackageFileID: 3, Size: 100, SHA256: "hash3"},
+	}
+	if len(out.Published) != len(want) {
+		t.Fatalf("Published count = %d, want %d", len(out.Published), len(want))
+	}
+	// The URL is built from the local name the loop published under, not from
+	// the name GitLab answered with, so it is checked apart and then cleared.
+	// The path is escaped the way the SDK builds it, dots included.
+	localNames := []string{"a.tar.gz", "b.tar.gz", "readme.md"}
+	for i, published := range out.Published {
+		wantSuffix := "/" + strings.ReplaceAll(localNames[i], ".", "%2E")
+		if !strings.HasSuffix(published.URL, wantSuffix) {
+			t.Errorf("Published[%d].URL = %q, want it to end in %q", i, published.URL, wantSuffix)
+		}
+		published.URL = ""
+		if published != want[i] {
+			t.Errorf("Published[%d] = %+v, want %+v", i, published, want[i])
+		}
+	}
+	if out.TotalBytes != 300 {
+		t.Errorf("TotalBytes = %d, want the 300 bytes the three answers reported", out.TotalBytes)
 	}
 }
 
@@ -488,9 +516,7 @@ func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "readme.md"), []byte("text"), 0o600)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
 		ProjectID:      "42",
@@ -511,9 +537,7 @@ func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 func TestPackagePublishDirectory_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
 		ProjectID:      "42",
@@ -531,9 +555,7 @@ func TestPackagePublishDirectory_NotADirectory(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "not-a-dir.txt")
 	os.WriteFile(tmpFile, []byte("file"), 0o600)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
 		ProjectID:      "42",
@@ -601,9 +623,7 @@ func TestPackagePublishDirectory_OutsideAllowedDirs_Rejected(t *testing.T) {
 
 // TestPackagePublishDirectory_MissingDirectoryPath verifies PackagePublishDirectory when missing directory path.
 func TestPackagePublishDirectory_MissingDirectoryPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
 		ProjectID:      "42",
@@ -691,9 +711,7 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.bin"), []byte("data"), 0o600)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 	_, err := PublishDirectory(ctx, nil, client, PublishDirInput{

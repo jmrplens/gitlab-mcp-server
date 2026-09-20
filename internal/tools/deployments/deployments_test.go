@@ -6,11 +6,14 @@ package deployments
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -36,7 +39,7 @@ func TestDeploymentList_Success(t *testing.T) {
 			]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
@@ -72,7 +75,7 @@ func TestDeploymentList_WithFilters(t *testing.T) {
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
@@ -86,27 +89,30 @@ func TestDeploymentList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_MissingProjectID verifies that DeploymentList_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentList_MissingProjectID asserts the handler refuses a list with
+// no project before it reaches GitLab, naming the field that is missing.
+//
+// [testutil.ForbiddenHandler] fails the test if any request arrives, which is
+// what separates the handler's own refusal from GitLab answering a path with a
+// hole in it.
 func TestDeploymentList_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("expected error for missing project_id")
 	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentList_CancelledContext verifies the DeploymentList_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentList_CancelledContext asserts that a canceled context aborts
+// the list without contacting GitLab, which is what the handler's own context
+// check is for. [testutil.ForbiddenHandler] is what proves the second half: a
+// handler that answered would have let the request through.
 func TestDeploymentList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -137,7 +143,7 @@ func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
 			}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -157,39 +163,60 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success",
-				"user":{"id":7,"username":"admin","name":"Admin","state":"active","web_url":"https://gl/admin"},
+				"user":{"id":7,"username":"admin","name":"Admin","state":"active","avatar_url":"https://gl/avatar/admin.png","web_url":"https://gl/admin"},
 				"environment":{"id":3,"name":"production","slug":"prod","state":"available","tier":"production","external_url":"https://app","auto_stop_setting":"always"},
 				"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z",
 				"deployable":{
 					"id":10,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,"coverage":92.5,
-					"created_at":"2026-01-01T00:00:00Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
+					"created_at":"2026-01-01T00:00:10Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
 					"project":{"ci_job_token_scope_enabled":true},
-					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru","twitter":"ru","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
-					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","web_url":"https://gl/c/abc"},
-					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:05:00Z"},
+					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"blocked","avatar_url":"https://gl/avatar/ru.png","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru-on-linkedin","twitter":"ru-on-twitter","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
+					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2025-12-31T23:50:00Z","created_at":"2025-12-31T23:55:00Z","web_url":"https://gl/c/abc"},
+					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:05Z","updated_at":"2026-01-01T00:05:30Z"},
 					"runner":{"id":99,"description":"shared","name":"runner-1","runner_type":"instance_type","status":"online","online":true,"paused":false,"is_shared":true}
 				}
 			}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.User == nil || out.User.ID != 7 || out.User.WebURL != "https://gl/admin" {
-		t.Errorf("user mismatch: %+v", out.User)
-	}
+	assertDeploymentUser(t, out.User)
 	if out.Environment == nil || out.Environment.ID != 3 || out.Environment.Name != "production" || out.Environment.ExternalURL != "https://app" {
 		t.Errorf("environment mismatch: %+v", out.Environment)
 	}
 	assertDeployable(t, out.Deployable)
 }
 
-// assertDeployable verifies a fully populated deployable and its nested
-// user, commit, pipeline, and runner objects.
+// assertDeploymentUser verifies the deployment-level user object.
+//
+// The account state and the avatar URL are read apart from the rest because
+// they are neighboring assignments of one type in projectUserOutput with no
+// branch between them: until this test read both, exchanging them published a
+// state where the picture belongs and no gate in the package could see it.
+func assertDeploymentUser(t *testing.T, u *UserOutput) {
+	t.Helper()
+	if u == nil {
+		t.Fatalf("deployment user is nil")
+	}
+	if u.ID != 7 || u.Name != "Admin" || u.Username != "admin" || u.WebURL != "https://gl/admin" {
+		t.Errorf("deployment user mismatch: %+v", u)
+	}
+	if u.State != "active" {
+		t.Errorf("deployment user State = %q, want %q", u.State, "active")
+	}
+	if u.AvatarURL != "https://gl/avatar/admin.png" {
+		t.Errorf("deployment user AvatarURL = %q, want %q", u.AvatarURL, "https://gl/avatar/admin.png")
+	}
+}
+
+// assertDeployable verifies a fully populated deployable: its own scalars and
+// timestamps, and its nested user, commit, pipeline, runner, and project
+// objects.
 func assertDeployable(t *testing.T, d *DeployableOutput) {
 	t.Helper()
 	if d == nil {
@@ -198,13 +225,10 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	if d.ID != 10 || d.Name != "deploy-prod" || d.Coverage != 92.5 {
 		t.Errorf("deployable scalar mismatch: %+v", d)
 	}
+	assertDeployableTimes(t, d)
 	assertDeployableUser(t, d.User)
-	if d.Commit == nil || d.Commit.ShortID != "abc" || d.Commit.AuthorEmail != "dev@x" || d.Commit.Message != "Fix bug" {
-		t.Errorf("deployable commit mismatch: %+v", d.Commit)
-	}
-	if d.Pipeline == nil || d.Pipeline.ID != 55 || d.Pipeline.WebURL != "https://gl/p/55" {
-		t.Errorf("deployable pipeline mismatch: %+v", d.Pipeline)
-	}
+	assertDeployableCommit(t, d.Commit)
+	assertDeployablePipeline(t, d.Pipeline)
 	if d.Runner == nil || d.Runner.ID != 99 || d.Runner.RunnerType != "instance_type" || !d.Runner.Online || !d.Runner.IsShared {
 		t.Errorf("deployable runner mismatch: %+v", d.Runner)
 	}
@@ -213,16 +237,105 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	}
 }
 
+// assertDeployableTimes holds each of the job's three timestamps to the key
+// GitLab sent it under.
+//
+// They are three neighboring assignments of one type in deployableOutput, so
+// exchanging any two of them compiles and publishes a job that started before
+// it was created. The fixture gives each one its own instant and each is read
+// here on its own, which is what makes such an exchange fail.
+func assertDeployableTimes(t *testing.T, d *DeployableOutput) {
+	t.Helper()
+	if d.CreatedAt != "2026-01-01T00:00:10Z" {
+		t.Errorf("deployable CreatedAt = %q, want %q", d.CreatedAt, "2026-01-01T00:00:10Z")
+	}
+	if d.StartedAt != "2026-01-01T00:01:00Z" {
+		t.Errorf("deployable StartedAt = %q, want %q", d.StartedAt, "2026-01-01T00:01:00Z")
+	}
+	if d.FinishedAt != "2026-01-01T00:05:00Z" {
+		t.Errorf("deployable FinishedAt = %q, want %q", d.FinishedAt, "2026-01-01T00:05:00Z")
+	}
+}
+
+// assertDeployableCommit verifies the commit the job built.
+//
+// The title and the author's name are neighboring assignments of one type in
+// deployableCommitOutput, and the commit date sits beside the message: each
+// carries a value of its own in the fixture and is read on its own here, so a
+// commit attributed to its own subject line fails rather than passing.
+func assertDeployableCommit(t *testing.T, c *DeployableCommitOutput) {
+	t.Helper()
+	if c == nil {
+		t.Fatalf("deployable commit is nil")
+	}
+	if c.ID != "abc123" || c.ShortID != "abc" || c.AuthorEmail != "dev@x" || c.Message != "Fix bug" {
+		t.Errorf("deployable commit mismatch: %+v", c)
+	}
+	if c.Title != "Fix" {
+		t.Errorf("commit Title = %q, want %q", c.Title, "Fix")
+	}
+	if c.AuthorName != "Dev" {
+		t.Errorf("commit AuthorName = %q, want %q", c.AuthorName, "Dev")
+	}
+	if c.CreatedAt != "2025-12-31T23:55:00Z" {
+		t.Errorf("commit CreatedAt = %q, want %q", c.CreatedAt, "2025-12-31T23:55:00Z")
+	}
+}
+
+// assertDeployablePipeline verifies the pipeline that ran the job.
+//
+// Its two timestamps are neighboring assignments of one type in
+// deployablePipelineOutput, and neither was read anywhere in the package: the
+// fixture dates the update five minutes of pipeline time after the creation,
+// so exchanging them fails here.
+func assertDeployablePipeline(t *testing.T, p *DeployablePipelineOutput) {
+	t.Helper()
+	if p == nil {
+		t.Fatalf("deployable pipeline is nil")
+	}
+	if p.ID != 55 || p.SHA != "abc123" || p.Ref != "main" || p.Status != "success" || p.WebURL != "https://gl/p/55" {
+		t.Errorf("deployable pipeline mismatch: %+v", p)
+	}
+	if p.CreatedAt != "2026-01-01T00:00:05Z" {
+		t.Errorf("pipeline CreatedAt = %q, want %q", p.CreatedAt, "2026-01-01T00:00:05Z")
+	}
+	if p.UpdatedAt != "2026-01-01T00:05:30Z" {
+		t.Errorf("pipeline UpdatedAt = %q, want %q", p.UpdatedAt, "2026-01-01T00:05:30Z")
+	}
+}
+
 // assertDeployableUser verifies the documented deployable user profile fields.
+//
+// The two social links carry values that differ from each other, because they
+// are neighboring assignments in the converter with no branch between them:
+// with one fixture value for both, a profile published under the wrong link
+// would read exactly like the right one and no gate could see it. The account
+// state and the avatar URL are the same shape one pair down, and the account
+// is blocked in the fixture where the deployment's own user is active, so the
+// two converters cannot be told apart by their answers either.
 func assertDeployableUser(t *testing.T, u *DeployableUserOutput) {
 	t.Helper()
 	if u == nil {
 		t.Fatalf("deployable user is nil")
 	}
 	if u.Username != "runner-user" || u.Bio != "builds things" || u.Location != "Earth" ||
-		u.PublicEmail != "ru@x" || u.Linkedin != "ru" || u.Twitter != "ru" ||
-		u.WebsiteURL != "https://ru" || u.Organization != "GL" || u.CreatedAt == "" {
+		u.PublicEmail != "ru@x" || u.WebsiteURL != "https://ru" || u.Organization != "GL" {
 		t.Errorf("deployable user mismatch: %+v", u)
+	}
+	if u.CreatedAt != "2025-01-01T00:00:00Z" {
+		t.Errorf("deployable user CreatedAt = %q, want %q", u.CreatedAt, "2025-01-01T00:00:00Z")
+	}
+	if u.State != "blocked" {
+		t.Errorf("deployable user State = %q, want %q", u.State, "blocked")
+	}
+	if u.AvatarURL != "https://gl/avatar/ru.png" {
+		t.Errorf("deployable user AvatarURL = %q, want %q", u.AvatarURL, "https://gl/avatar/ru.png")
+	}
+	if u.Linkedin != "ru-on-linkedin" {
+		t.Errorf("Linkedin = %q, want %q", u.Linkedin, "ru-on-linkedin")
+	}
+	if u.Twitter != "ru-on-twitter" {
+		t.Errorf("Twitter = %q, want %q", u.Twitter, "ru-on-twitter")
 	}
 }
 
@@ -235,7 +348,7 @@ func TestDeploymentGet_Success(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z"}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -253,11 +366,11 @@ func TestDeploymentGet_Success(t *testing.T) {
 func TestDeploymentGet_NilDeployable(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
-			// deployable field is absent — zero-value DeploymentDeployable has empty Pipeline
+			// deployable field is absent: zero-value DeploymentDeployable has empty Pipeline
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z"}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -281,7 +394,7 @@ func TestDeploymentGet_DeployableWithoutProject(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"id":10,"status":"success","stage":"deploy"}}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -321,7 +434,7 @@ func TestDeploymentList_DeployableProject(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","deployable":{"id":10,"status":"success","project":{"ci_job_token_scope_enabled":true}}}]`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
@@ -346,7 +459,7 @@ func TestDeploymentGet_NilPipeline(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"id":10,"status":"success","stage":"deploy"}}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -370,7 +483,7 @@ func TestDeploymentGet_EmptyWebURL(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"pipeline":{"web_url":""}}}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
@@ -382,27 +495,27 @@ func TestDeploymentGet_EmptyWebURL(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_ZeroID verifies the DeploymentGet_ZeroID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentGet_ZeroID asserts the handler refuses a read with no
+// deployment id rather than asking GitLab for deployment zero, and names the
+// field. A request that did leave would reach a path GitLab answers 404 to,
+// which a caller would read as a deployment that once existed.
 func TestDeploymentGet_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero deployment_id")
 	}
+	if !strings.Contains(err.Error(), "deployment_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentGet_CancelledContext verifies the DeploymentGet_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentGet_CancelledContext asserts a canceled context aborts the
+// read before the request is built, with the forbidden handler standing in for
+// the GitLab that must not be reached.
 func TestDeploymentGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -425,7 +538,7 @@ func TestDeploymentCreate_Success(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"iid":3,"ref":"main","sha":"abc123","status":"created","environment":{"name":"staging"},"created_at":"2026-06-01T00:00:00Z"}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Create(context.Background(), client, CreateInput{
@@ -442,22 +555,24 @@ func TestDeploymentCreate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_MissingFields verifies that DeploymentCreate_MissingFields returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentCreate_MissingFields asserts that each of the four required
+// fields is checked here and named in the refusal, with no request made.
+//
+// Naming the field is what a model needs to correct the call: a create that
+// left without one of them would come back as GitLab's own 400 about a
+// parameter, which says nothing about which of the four the caller omitted.
 func TestDeploymentCreate_MissingFields(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	tests := []struct {
-		name  string
-		input CreateInput
+		name      string
+		input     CreateInput
+		wantField string
 	}{
-		{"missing project_id", CreateInput{Environment: "e", Ref: "r", SHA: "s"}},
-		{"missing environment", CreateInput{ProjectID: "42", Ref: "r", SHA: "s"}},
-		{"missing ref", CreateInput{ProjectID: "42", Environment: "e", SHA: "s"}},
-		{"missing sha", CreateInput{ProjectID: "42", Environment: "e", Ref: "r"}},
+		{"missing project_id", CreateInput{Environment: "e", Ref: "r", SHA: "s"}, "project_id is required"},
+		{"missing environment", CreateInput{ProjectID: "42", Ref: "r", SHA: "s"}, "environment is required"},
+		{"missing ref", CreateInput{ProjectID: "42", Environment: "e", SHA: "s"}, "ref is required"},
+		{"missing sha", CreateInput{ProjectID: "42", Environment: "e", Ref: "r"}, "sha is required"},
 	}
 
 	for _, tt := range tests {
@@ -465,6 +580,9 @@ func TestDeploymentCreate_MissingFields(t *testing.T) {
 			_, err := Create(context.Background(), client, tt.input)
 			if err == nil {
 				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantField) {
+				t.Errorf("error = %v, want %q", err, tt.wantField)
 			}
 		})
 	}
@@ -533,13 +651,11 @@ func TestDeploymentCreate_Generic400_HintsInputChecks(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_CancelledContext verifies the DeploymentCreate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentCreate_CancelledContext asserts a canceled context aborts the
+// create before anything is posted. It matters more here than on a read: a
+// deployment created after the caller gave up is one nothing will ever finish.
 func TestDeploymentCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -562,7 +678,7 @@ func TestDeploymentUpdate_Success(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success"}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	out, err := Update(context.Background(), client, UpdateInput{
@@ -578,41 +694,41 @@ func TestDeploymentUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_ZeroID verifies the DeploymentUpdate_ZeroID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentUpdate_ZeroID asserts the update is refused here, with the
+// field named, rather than sent as a write to a path naming deployment zero.
 func TestDeploymentUpdate_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", DeploymentID: 0, Status: "success"})
 	if err == nil {
 		t.Fatal("expected error for zero deployment_id")
 	}
+	if !strings.Contains(err.Error(), "deployment_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentUpdate_MissingStatus verifies that DeploymentUpdate_MissingStatus returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentUpdate_MissingStatus asserts an update with nothing to set is
+// refused here and names the field. Sent anyway it would be a PUT carrying an
+// empty body, which GitLab answers with a 400 about a parameter rather than
+// about the state the caller failed to choose.
 func TestDeploymentUpdate_MissingStatus(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", DeploymentID: 1, Status: ""})
 	if err == nil {
 		t.Fatal("expected error for missing status")
 	}
+	if !strings.Contains(err.Error(), "status is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentUpdate_CancelledContext verifies the DeploymentUpdate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentUpdate_CancelledContext asserts a canceled context aborts the
+// update before the status is sent, so a deployment is not transitioned on
+// behalf of a caller who is no longer there.
 func TestDeploymentUpdate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -635,7 +751,7 @@ func TestDeploymentDelete_Success(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
 	}))
 
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", DeploymentID: 1})
@@ -644,27 +760,26 @@ func TestDeploymentDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_ZeroID verifies the DeploymentDelete_ZeroID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentDelete_ZeroID asserts a delete with no deployment id never
+// leaves this process, and names the field. This is the one refusal here whose
+// absence could destroy something: the id decides what is deleted.
 func TestDeploymentDelete_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", DeploymentID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero deployment_id")
 	}
+	if !strings.Contains(err.Error(), "deployment_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentDelete_CancelledContext verifies the DeploymentDelete_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentDelete_CancelledContext asserts a canceled context aborts the
+// delete before it is sent. The forbidden handler is the assertion that
+// matters here: a delete that left anyway cannot be taken back.
 func TestDeploymentDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -747,13 +862,11 @@ func TestDeploymentReject_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_MissingProjectID verifies that DeploymentApproveOrReject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentApproveOrReject_MissingProjectID asserts the approval is
+// refused here, with the field named, and that no approval is recorded
+// anywhere on the way.
 func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ApproveOrReject(context.Background(), client, ApproveOrRejectInput{
 		DeploymentID: 10,
@@ -762,15 +875,16 @@ func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing project_id")
 	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentApprove_OrRejectZeroDeploymentID verifies the DeploymentApprove_OrRejectZeroDeploymentID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentApprove_OrRejectZeroDeploymentID asserts an approval naming no
+// deployment is refused here and names the field, rather than being posted to
+// a path that names deployment zero.
 func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ApproveOrReject(context.Background(), client, ApproveOrRejectInput{
 		ProjectID: "42",
@@ -779,15 +893,17 @@ func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for zero deployment_id")
 	}
+	if !strings.Contains(err.Error(), "deployment_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
-// TestDeploymentApproveOrReject_InvalidStatus verifies the DeploymentApproveOrReject_InvalidStatus handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentApproveOrReject_InvalidStatus asserts a status outside the two
+// this action takes is refused here, with both accepted values named, and that
+// nothing is posted. The refusal has to be the handler's: GitLab would answer
+// a 400 that says which parameter it disliked and not what to send instead.
 func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ApproveOrReject(context.Background(), client, ApproveOrRejectInput{
 		ProjectID:    "42",
@@ -797,11 +913,15 @@ func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid status")
 	}
+	if !strings.Contains(err.Error(), "approved, rejected") {
+		t.Errorf("error = %v, want the two accepted values named", err)
+	}
 }
 
-// TestDeploymentApproveOrReject_APIError verifies that DeploymentApproveOrReject returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentApproveOrReject_APIError asserts a 403 carries the hint that
+// says what a 403 means here: not a missing role in general, but that the
+// caller is not an approver on the protected environment. Nothing else in the
+// package would notice if that hint were exchanged for the not-found one.
 func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -815,6 +935,9 @@ func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for API error")
 	}
+	if !strings.Contains(err.Error(), "designated approver on the protected environment") {
+		t.Errorf("error = %v, want the approver hint", err)
+	}
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -823,60 +946,73 @@ func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 const errExpectedAPI = "expected API error, got nil"
 
 // ---------------------------------------------------------------------------
-// List — API error, missing project_id (via empty StringOrInt)
+// List: API error, missing project_id (via empty StringOrInt)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentList_APIError verifies that DeploymentList returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentList_APIError asserts a refusal GitLab raised is reported with
+// the read named and GitLab's own message kept, rather than returned bare.
+// The status is a 403 on purpose: the 404 hint is a branch of its own, and an
+// error that carried it here would be telling a caller to check an id that was
+// never the problem.
 func TestDeploymentList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := List(context.Background(), client, ListInput{ProjectID: "1"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+	if !strings.Contains(err.Error(), "list deployments") || !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Errorf("error = %v, want the read named and GitLab's message kept", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
-// Get — API error, missing project_id
+// Get: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentGet_APIError verifies that DeploymentGet returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentGet_APIError asserts the same of the single read: the
+// operation is named and GitLab's message kept, and the 404 hint about
+// verifying the deployment id stays out of an error that is not about one.
 func TestDeploymentGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := Get(context.Background(), client, GetInput{ProjectID: "1", DeploymentID: 1})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+	if !strings.Contains(err.Error(), "get deployment") || !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Errorf("error = %v, want the read named and GitLab's message kept", err)
+	}
+	if strings.Contains(err.Error(), "gitlab_deployment_list") {
+		t.Errorf("error = %v, want no not-found hint on a 403", err)
+	}
 }
 
-// TestDeploymentGet_MissingProjectID verifies that DeploymentGet_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentGet_MissingProjectID asserts the read is refused here, with
+// the field named, rather than sent to a path with an empty project segment.
 func TestDeploymentGet_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{DeploymentID: 1})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
-// Create — API error, with optional fields (Tag + Status)
+// Create: API error, with optional fields (Tag + Status)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentCreate_APIError verifies that DeploymentCreate returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentCreate_APIError asserts a 403 on create carries the hint about
+// the role a deployment needs, which is the one corrective a caller refused
+// this way can act on.
 func TestDeploymentCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := Create(context.Background(), client, CreateInput{
 		ProjectID: "1", Environment: "staging", Ref: "main", SHA: "abc123",
@@ -884,11 +1020,15 @@ func TestDeploymentCreate_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+	if !strings.Contains(err.Error(), opCreateDeployment) || !strings.Contains(err.Error(), "Developer+ role") {
+		t.Errorf("error = %v, want the create named and the role hint", err)
+	}
 }
 
-// TestDeploymentCreate_StatusErrorBranches verifies that DeploymentCreate_StatusErrorBranches returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentCreate_StatusErrorBranches asserts which corrective a create
+// carries per status: the 400 GitLab raises about the request gets the hint
+// naming what to verify, and any other refusal is named as the create it was
+// without one invented for it.
 func TestDeploymentCreate_StatusErrorBranches(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -959,25 +1099,32 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Update — API error, missing project_id
+// Update: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentUpdate_APIError verifies that DeploymentUpdate returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentUpdate_APIError asserts a 403 on update is reported with the
+// write named and GitLab's message kept, and carries neither of the two hints
+// the update has: the transition hint belongs to a 400 and the list hint to a
+// 404, and a caller without the role can act on neither.
 func TestDeploymentUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", DeploymentID: 1, Status: "success"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+	if !strings.Contains(err.Error(), opUpdateDeployment) || !strings.Contains(err.Error(), "403 Forbidden") {
+		t.Errorf("error = %v, want the write named and GitLab's message kept", err)
+	}
+	if strings.Contains(err.Error(), "Transitions out of terminal states") || strings.Contains(err.Error(), "gitlab_deployment_list") {
+		t.Errorf("error = %v, want no 400 or 404 hint on a 403", err)
+	}
 }
 
-// TestDeploymentUpdate_BadRequest verifies the DeploymentUpdate_BadRequest handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDeploymentUpdate_BadRequest asserts a 400 carries the hint naming the
+// statuses an update takes and the transitions GitLab refuses, which is the
+// one thing a caller refused this way can act on.
 func TestDeploymentUpdate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad status"}`)
@@ -991,37 +1138,43 @@ func TestDeploymentUpdate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_MissingProjectID verifies that DeploymentUpdate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentUpdate_MissingProjectID asserts the write is refused here,
+// with the field named, rather than sent to a path with an empty project
+// segment.
 func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Update(context.Background(), client, UpdateInput{DeploymentID: 1, Status: "success"})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
-// Delete — API error, missing project_id
+// Delete: API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentDelete_APIError verifies that DeploymentDelete returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentDelete_APIError asserts a 403 on delete carries the hint that
+// names both of its conditions: the role, and the final state a deployment has
+// to be in before GitLab will remove it.
 func TestDeploymentDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", DeploymentID: 1})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
+	if !strings.Contains(err.Error(), "Maintainer+ role") || !strings.Contains(err.Error(), "final state") {
+		t.Errorf("error = %v, want the role and final-state hint", err)
+	}
 }
 
-// TestDeploymentDelete_NotFound verifies that DeploymentDelete_NotFound returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentDelete_NotFound asserts a 404 on delete points the caller at
+// the listing that would have given it a real deployment id, rather than at
+// the role hint a 403 carries.
 func TestDeploymentDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -1035,26 +1188,33 @@ func TestDeploymentDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_MissingProjectID verifies that DeploymentDelete_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDeploymentDelete_MissingProjectID asserts the delete is refused here,
+// with the field named, rather than sent to a path with an empty project
+// segment.
 func TestDeploymentDelete_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{DeploymentID: 1})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
+	if !strings.Contains(err.Error(), "project_id is required") {
+		t.Errorf("error = %v, want the missing field named", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
-// ApproveOrReject — canceled context
+// ApproveOrReject: canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentApproveOrReject_CancelledContext verifies the DeploymentApproveOrReject_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestDeploymentApproveOrReject_CancelledContext asserts a canceled context
+// leaves no approval recorded.
+//
+// Unlike the five handlers above it, this one keeps no context check of its
+// own, so the refusal comes from the transport rather than from the validation
+// block; the forbidden handler holds the outcome a caller cares about either
+// way, which is that nothing was approved.
 func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := ApproveOrReject(ctx, client, ApproveOrRejectInput{
@@ -1177,9 +1337,9 @@ func TestFormatOutputMarkdown_Blocked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ZeroID verifies the OutputMarkdown_ZeroID Markdown formatter for a representative output_zeroid input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_ZeroID asserts a zero value renders nothing at all
+// rather than a card headed "Deployment #0": the formatter is registered by
+// type and is driven with a zero value by the surface audit.
 func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -1312,9 +1472,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatDeploymentNotFound verifies the DeploymentNotFound Markdown formatter for a representative deploymentnotfound input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestFormatDeploymentNotFound asserts the not-found card is rendered as an
+// error result carrying content, which is what makes a model read it as an
+// answer about a deployment rather than as a successful empty one.
 func TestFormatDeploymentNotFound(t *testing.T) {
 	result := formatDeploymentNotFound(deploymentNotFoundOutput{Identifier: "17"})
 	if result == nil || !result.IsError {
@@ -1386,13 +1546,17 @@ func TestFormatApproveOrRejectMarkdown_HostileMessage_ReachesThePageAsText(t *te
 }
 
 // ---------------------------------------------------------------------------
-// toOutput — all optional fields
+// FormatOutputMarkdown: a failed deployment, every optional field set
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields verifies the ToOutput_AllOptionalFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestToOutput_AllOptionalFields(t *testing.T) {
+// TestFormatOutputMarkdown_FailedDeployment pins the card of a deployment that
+// did not succeed, with every optional field present: the failure glyph beside
+// the status, and a deployer GitLab sent no profile URL for, whose name is
+// written as text rather than as a link to nowhere.
+//
+// It was named for the converter it does not call, which would have counted
+// toOutput as covered by a test that never reaches it.
+func TestFormatOutputMarkdown_FailedDeployment(t *testing.T) {
 	got := FormatOutputMarkdown(Output{
 		ID:          100,
 		IID:         50,
@@ -1421,9 +1585,9 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestList_WithSortField verifies the List_WithSortField handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestList_WithSortField asserts the sort direction reaches GitLab as its own
+// query parameter, which is the only place a caller's choice of order is
+// visible: the answer a mock writes is in whatever order the fixture wrote it.
 func TestList_WithSortField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("sort") != "desc" {
@@ -1444,9 +1608,11 @@ func TestList_WithSortField(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata asserts the package publishes six actions, each
+// under an individual tool name of its own and owned by this package, and that
+// the three a model is most likely to reach for carry the usage, aliases and
+// parameter guidance the discovery surfaces read. No request is made: building
+// the specs asks GitLab nothing.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1486,9 +1652,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallAllRoutes drives every one of the six routes the way a
+// surface dispatches it, from a map of arguments rather than a typed input, so
+// a route whose handler no longer accepts what the catalog would hand it fails
+// here rather than at a caller.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newDeploymentSpecsByTool(t)
 
@@ -1564,9 +1731,9 @@ func newDeploymentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return deploymentSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestActionSpecs_DeploymentGetRoute validates the DeploymentGetRoute route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_DeploymentGetRoute asserts the wrapper around the read hands
+// back the deployment itself on success, rather than swallowing it into the
+// not-found card the same wrapper writes for a 404.
 func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	const respJSON = `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1614,6 +1781,620 @@ func TestDeployments_UnreadableCapturedPendingApprovalCount(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers send GitLab
+// ---------------------------------------------------------------------------.
+
+// createRequestBody is a deployment creation as GitLab receives it. The two
+// optional fields are pointers so a test can tell a value the caller set from
+// a key this server never sent: GitLab 19 answers 400 "tag is missing" to a
+// create that omits tag, so false and absent are different requests.
+type createRequestBody struct {
+	Environment string  `json:"environment"`
+	Ref         string  `json:"ref"`
+	SHA         string  `json:"sha"`
+	Tag         *bool   `json:"tag"`
+	Status      *string `json:"status"`
+}
+
+// optionalText renders an optional request field for a failure message,
+// naming an absent key rather than printing a pointer.
+func optionalText[T any](p *T) string {
+	if p == nil {
+		return "absent"
+	}
+	return fmt.Sprintf("%v", *p)
+}
+
+// TestDeploymentCreate_Request_CarriesTheFieldsTheCallerSet asserts that each
+// create field reaches GitLab on its own key, and that the two optional ones
+// are sent exactly when the caller set them.
+//
+// Nothing about the response says what was sent, so the guards around tag and
+// status can be inverted, and ref and sha exchanged, with every other create
+// test still passing: a caller's tag would never arrive while an unset one
+// would be sent, which is the request GitLab 19 refuses.
+func TestDeploymentCreate_Request_CarriesTheFieldsTheCallerSet(t *testing.T) {
+	const (
+		env = "production"
+		ref = "release-1.2"
+		sha = "9f8e7d6c5b4a3210"
+	)
+	branchRef, tagRef := false, true
+
+	cases := []struct {
+		name       string
+		tag        *bool
+		status     string
+		wantTag    string
+		wantStatus string
+	}{
+		{name: "branch ref with no initial status", tag: &branchRef, wantTag: "false", wantStatus: "absent"},
+		{name: "tag ref with an initial status", tag: &tagRef, status: "running", wantTag: "true", wantStatus: "running"},
+		{name: "neither optional field set", wantTag: "absent", wantStatus: "absent"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body createRequestBody
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode body: %v", err)
+					testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"decode body"}`)
+					return
+				}
+				if body.Environment != env || body.Ref != ref || body.SHA != sha {
+					t.Errorf("environment/ref/sha = %q/%q/%q, want %q/%q/%q",
+						body.Environment, body.Ref, body.SHA, env, ref, sha)
+				}
+				if got := optionalText(body.Tag); got != testCase.wantTag {
+					t.Errorf("tag = %s, want %s", got, testCase.wantTag)
+				}
+				if got := optionalText(body.Status); got != testCase.wantStatus {
+					t.Errorf("status = %s, want %s", got, testCase.wantStatus)
+				}
+				testutil.RespondJSON(w, http.StatusCreated,
+					`{"id":7,"iid":3,"ref":"`+ref+`","sha":"`+sha+`","status":"running"}`)
+			}))
+
+			out, err := Create(context.Background(), client, CreateInput{
+				ProjectID: "42", Environment: env, Ref: ref, SHA: sha, Tag: testCase.tag, Status: testCase.status,
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			// The id and the iid differ in the fixture so the two output
+			// fields cannot be read from one another.
+			if out.ID != 7 || out.IID != 3 {
+				t.Errorf("id/iid = %d/%d, want 7/3", out.ID, out.IID)
+			}
+		})
+	}
+}
+
+// TestDeploymentUpdate_Request_CarriesTheStatusTheCallerAskedFor asserts the
+// new status is what reaches GitLab. Every other update test reads the status
+// out of the answer the mock writes, so an update that sent no status at all
+// would still report the one it was told, and the deployment would stay where
+// it was.
+func TestDeploymentUpdate_Request_CarriesTheStatusTheCallerAskedFor(t *testing.T) {
+	for _, status := range []string{"success", "canceled"} {
+		t.Run(status, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Status *string `json:"status"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode body: %v", err)
+					testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"decode body"}`)
+					return
+				}
+				if got := optionalText(body.Status); got != status {
+					t.Errorf("status = %s, want %s", got, status)
+				}
+				testutil.RespondJSON(w, http.StatusOK,
+					`{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"`+status+`"}`)
+			}))
+
+			out, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", DeploymentID: 1, Status: status})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.Status != status {
+				t.Errorf("Status = %q, want %q", out.Status, status)
+			}
+		})
+	}
+}
+
+// TestDeploymentList_TimeFilters_EachReachesItsOwnParameter asserts the four
+// timestamp filters arrive under the four names GitLab knows them by, each
+// with the window the caller asked for.
+//
+// They are four assignments in a row with no branch between them, so a pair
+// exchanged there answers a question about one window with another, and both
+// coverage gates stay green on it.
+func TestDeploymentList_TimeFilters_EachReachesItsOwnParameter(t *testing.T) {
+	const (
+		updatedAfter   = "2026-01-02T03:04:05Z"
+		updatedBefore  = "2026-02-03T04:05:06Z"
+		finishedAfter  = "2026-03-04T05:06:07Z"
+		finishedBefore = "2026-04-05T06:07:08Z"
+	)
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertQueryParam(t, r, "updated_after", updatedAfter)
+		testutil.AssertQueryParam(t, r, "updated_before", updatedBefore)
+		testutil.AssertQueryParam(t, r, "finished_after", finishedAfter)
+		testutil.AssertQueryParam(t, r, "finished_before", finishedBefore)
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	if _, err := List(context.Background(), client, ListInput{
+		ProjectID:      "42",
+		UpdatedAfter:   updatedAfter,
+		UpdatedBefore:  updatedBefore,
+		FinishedAfter:  finishedAfter,
+		FinishedBefore: finishedBefore,
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestDeploymentList_Pagination_ReportsWhatGitLabAnswered asserts the page
+// block is filled from the response headers. Every other list test reads only
+// the deployments, so a listing that told a caller nothing about where the
+// page ends would pass all of them while leaving a model unable to ask for the
+// rest.
+func TestDeploymentList_Pagination_ReportsWhatGitLabAnswered(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK,
+			`[{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success"}]`,
+			testutil.PaginationHeaders{Page: "2", PerPage: "20", Total: "57", TotalPages: "3", NextPage: "3", PrevPage: "1"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := toolutil.PaginationOutput{Page: 2, PerPage: 20, TotalItems: 57, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// What the handlers publish of what GitLab sent
+// ---------------------------------------------------------------------------.
+
+// blockedDeploymentJSON is one deployment GitLab is holding for approval,
+// carrying the three fields its extended entity sends and client-go's
+// Deployment does not model, plus two timestamps that differ from each other.
+const blockedDeploymentJSON = `{
+	"id":7,"iid":3,"ref":"main","sha":"abc123","status":"blocked",
+	"created_at":"2026-06-01T00:00:00Z","updated_at":"2026-06-02T09:30:00Z",
+	"pending_approval_count":1,
+	"approvals":[{"user":{"id":8,"username":"dana"},"status":"approved","created_at":"2026-06-02T09:30:00Z","comment":"looks good"}],
+	"approval_summary":{"rules":[{"id":11,"access_level":40,"access_level_description":"Maintainers","required_approvals":2}]}
+}`
+
+// assertBlockedDeployment holds one deployment against blockedDeploymentJSON:
+// the identifiers and the timestamps on their own fields, and the three
+// approval fields beside them.
+func assertBlockedDeployment(t *testing.T, out Output) {
+	t.Helper()
+	if out.ID != 7 || out.IID != 3 {
+		t.Errorf("id/iid = %d/%d, want 7/3", out.ID, out.IID)
+	}
+	if out.CreatedAt != "2026-06-01T00:00:00Z" || out.UpdatedAt != "2026-06-02T09:30:00Z" {
+		t.Errorf("created/updated = %q/%q, want 2026-06-01T00:00:00Z/2026-06-02T09:30:00Z", out.CreatedAt, out.UpdatedAt)
+	}
+	if out.PendingApprovalCount != 1 {
+		t.Errorf("PendingApprovalCount = %d, want 1", out.PendingApprovalCount)
+	}
+	if len(out.Approvals) != 1 || out.Approvals[0].Status != "approved" || out.Approvals[0].Comment != "looks good" {
+		t.Errorf("approvals = %+v, want one approval carrying its comment", out.Approvals)
+	}
+	if out.ApprovalSummary == nil || len(out.ApprovalSummary.Rules) != 1 ||
+		out.ApprovalSummary.Rules[0].ID != 11 || out.ApprovalSummary.Rules[0].RequiredApprovals != 2 {
+		t.Errorf("approval summary = %+v, want one rule requiring two approvals", out.ApprovalSummary)
+	}
+}
+
+// TestDeployments_ApprovalFields_ReadFromTheAnswerGitLabSent asserts that the
+// three approval fields reach the caller through all three handlers that
+// answer with one deployment.
+//
+// The create and update handlers read them off the captured response and the
+// get handler off its own raw superset, so they are three separate readings of
+// the same entity. Dropping any of them leaves a deployment GitLab is holding
+// for approval indistinguishable from one that needs none, and no branch
+// changes when it is dropped.
+func TestDeployments_ApprovalFields_ReadFromTheAnswerGitLabSent(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(*testing.T, *gitlabclient.Client) (Output, error)
+	}{
+		{name: "create", call: func(_ *testing.T, client *gitlabclient.Client) (Output, error) {
+			return Create(context.Background(), client, CreateInput{
+				ProjectID: "42", Environment: "production", Ref: "main", SHA: "abc123",
+			})
+		}},
+		{name: "update", call: func(_ *testing.T, client *gitlabclient.Client) (Output, error) {
+			return Update(context.Background(), client, UpdateInput{ProjectID: "42", DeploymentID: 7, Status: "success"})
+		}},
+		{name: "get", call: func(_ *testing.T, client *gitlabclient.Client) (Output, error) {
+			return Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 7})
+		}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, blockedDeploymentJSON)
+			}))
+
+			out, err := testCase.call(t, client)
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertBlockedDeployment(t, out)
+		})
+	}
+}
+
+// TestDeploymentGet_DeployableCarryingOneField_IsStillPublished asserts that
+// the backing job is surfaced whenever GitLab sends any one of its documented
+// fields, and that the field arrives under its own name.
+//
+// The guard that decides whether there is a job at all is ten conditions
+// joined by &&, and a fixture that populates the job fully cannot tell them
+// apart: loosening any one of them drops the job from the answer for exactly
+// the deployments that carry that field alone.
+func TestDeploymentGet_DeployableCarryingOneField_IsStillPublished(t *testing.T) {
+	cases := []struct {
+		name string
+		job  string
+		read func(*DeployableOutput) string
+		want string
+	}{
+		{name: "id", job: `{"id":10}`, want: "10", read: func(d *DeployableOutput) string {
+			return strconv.FormatInt(d.ID, 10)
+		}},
+		{name: "name", job: `{"name":"deploy-prod"}`, want: "deploy-prod", read: func(d *DeployableOutput) string {
+			return d.Name
+		}},
+		{name: "status", job: `{"status":"running"}`, want: "running", read: func(d *DeployableOutput) string {
+			return d.Status
+		}},
+		{name: "stage", job: `{"stage":"deploy"}`, want: "deploy", read: func(d *DeployableOutput) string {
+			return d.Stage
+		}},
+		{name: "ref", job: `{"ref":"release-1.2"}`, want: "release-1.2", read: func(d *DeployableOutput) string {
+			return d.Ref
+		}},
+		{name: "user", job: `{"user":{"id":8,"username":"runner-user"}}`, want: "runner-user", read: func(d *DeployableOutput) string {
+			if d.User == nil {
+				return "absent"
+			}
+			return d.User.Username
+		}},
+		{name: "commit", job: `{"commit":{"id":"abc123","title":"Fix"}}`, want: "abc123", read: func(d *DeployableOutput) string {
+			if d.Commit == nil {
+				return "absent"
+			}
+			return d.Commit.ID
+		}},
+		{name: "pipeline", job: `{"pipeline":{"id":55}}`, want: "55", read: func(d *DeployableOutput) string {
+			if d.Pipeline == nil {
+				return "absent"
+			}
+			return strconv.FormatInt(d.Pipeline.ID, 10)
+		}},
+		{name: "runner", job: `{"runner":{"id":99}}`, want: "99", read: func(d *DeployableOutput) string {
+			if d.Runner == nil {
+				return "absent"
+			}
+			return strconv.FormatInt(d.Runner.ID, 10)
+		}},
+		{name: "project", job: `{"project":{"ci_job_token_scope_enabled":true}}`, want: "true", read: func(d *DeployableOutput) string {
+			if d.Project == nil {
+				return "absent"
+			}
+			return strconv.FormatBool(d.Project.CIJobTokenScopeEnabled)
+		}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			out := getDeploymentWithDeployable(t, testCase.job)
+			if out.Deployable == nil {
+				t.Fatalf("Deployable = nil for a job carrying only %s", testCase.name)
+			}
+			if got := testCase.read(out.Deployable); got != testCase.want {
+				t.Errorf("deployable %s = %s, want %s", testCase.name, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestDeploymentGet_PipelineCarryingOneField_IsStillPublished asserts the same
+// of the pipeline under the job: any one documented field is enough for the
+// pipeline to be published, which is the only thing that distinguishes the
+// five conditions of its own emptiness guard from one another.
+func TestDeploymentGet_PipelineCarryingOneField_IsStillPublished(t *testing.T) {
+	cases := []struct {
+		name     string
+		pipeline string
+		read     func(*DeployablePipelineOutput) string
+		want     string
+	}{
+		{name: "id", pipeline: `{"id":55}`, want: "55", read: func(p *DeployablePipelineOutput) string {
+			return strconv.FormatInt(p.ID, 10)
+		}},
+		{name: "sha", pipeline: `{"sha":"abc123"}`, want: "abc123", read: func(p *DeployablePipelineOutput) string {
+			return p.SHA
+		}},
+		{name: "ref", pipeline: `{"ref":"release-1.2"}`, want: "release-1.2", read: func(p *DeployablePipelineOutput) string {
+			return p.Ref
+		}},
+		{name: "status", pipeline: `{"status":"running"}`, want: "running", read: func(p *DeployablePipelineOutput) string {
+			return p.Status
+		}},
+		{name: "web_url", pipeline: `{"web_url":"https://gl/p/55"}`, want: "https://gl/p/55", read: func(p *DeployablePipelineOutput) string {
+			return p.WebURL
+		}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			out := getDeploymentWithDeployable(t, `{"pipeline":`+testCase.pipeline+`}`)
+			if out.Deployable == nil || out.Deployable.Pipeline == nil {
+				t.Fatalf("Pipeline = nil for a pipeline carrying only %s (deployable %+v)", testCase.name, out.Deployable)
+			}
+			if got := testCase.read(out.Deployable.Pipeline); got != testCase.want {
+				t.Errorf("pipeline %s = %s, want %s", testCase.name, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestDeploymentGet_RunnerFlags_EachReadFromItsOwnField asserts the three
+// runner flags one at a time, each against the whole triple.
+//
+// A runner answered with two of them true cannot distinguish a pair of
+// exchanged assignments, since both sides carry the same value; one flag at a
+// time is the only fixture that can, and it is also what GitLab answers for an
+// ordinary instance runner.
+func TestDeploymentGet_RunnerFlags_EachReadFromItsOwnField(t *testing.T) {
+	cases := []struct {
+		name   string
+		runner string
+		want   DeployableRunnerOutput
+	}{
+		{name: "online", runner: `{"id":99,"online":true}`, want: DeployableRunnerOutput{ID: 99, Online: true}},
+		{name: "paused", runner: `{"id":99,"paused":true}`, want: DeployableRunnerOutput{ID: 99, Paused: true}},
+		{name: "is_shared", runner: `{"id":99,"is_shared":true}`, want: DeployableRunnerOutput{ID: 99, IsShared: true}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			out := getDeploymentWithDeployable(t, `{"runner":`+testCase.runner+`}`)
+			if out.Deployable == nil || out.Deployable.Runner == nil {
+				t.Fatalf("Runner = nil for a runner carrying %s", testCase.name)
+			}
+			if got := *out.Deployable.Runner; got != testCase.want {
+				t.Errorf("runner = %+v, want %+v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// getDeploymentWithDeployable reads one deployment whose deployable is the
+// given JSON object, so a case table can vary the backing job alone.
+func getDeploymentWithDeployable(t *testing.T, deployable string) Output {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/deployments/1" || r.Method != http.MethodGet {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"id":1,"iid":2,"ref":"main","sha":"abc123","status":"success","deployable":`+deployable+`}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	return out
+}
+
+// TestActionSpecs_DeploymentGetRoute_ErrorGitLabRaised_ReachesTheCaller
+// asserts the not-found card answers a 404 and nothing else.
+//
+// The wrapper decides on `err != nil && IsHTTPStatus(err, 404)`, whose left
+// operand alone is enough to enter the branch: with the two joined the other
+// way, a 403 on a project the token cannot read would be reported to a model
+// as a deployment that does not exist, and the call would look successful.
+func TestActionSpecs_DeploymentGetRoute_ErrorGitLabRaised_ReachesTheCaller(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	byTool := deploymentSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_deployment_get"].Route.Handler(t.Context(),
+		map[string]any{"project_id": "42", "deployment_id": 17})
+	if err == nil {
+		t.Fatalf("Route.Handler result = %#v, want the error GitLab raised", result)
+	}
+	if _, ok := result.(deploymentNotFoundOutput); ok {
+		t.Errorf("result = %#v, want no not-found card for a 403", result)
+	}
+	if !strings.Contains(err.Error(), "get deployment") {
+		t.Errorf("error = %v, want the read named in it", err)
+	}
+}
+
+// TestFormatOutputMarkdown_WhatGitLabLeftOut_RendersNoRowAtAll pins the card
+// of a deployment answered with the optional halves missing: no status, a job
+// that never started a pipeline, an approval recorded against no user and with
+// no timestamp or comment, and an approval summary carrying no rules.
+//
+// Each of those is the unexercised side of a condition the card tests to
+// decide whether to write a row, and a card that invented a label with nothing
+// under it, or a glyph with no word beside it, would have passed all of them.
+func TestFormatOutputMarkdown_WhatGitLabLeftOut_RendersNoRowAtAll(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                   8,
+		IID:                  4,
+		Ref:                  "main",
+		SHA:                  "abc123",
+		Deployable:           &DeployableOutput{ID: 9},
+		PendingApprovalCount: 1,
+		Approvals:            []toolutil.DeploymentApprovalOutput{{Status: "rejected"}},
+		ApprovalSummary:      &toolutil.DeploymentApprovalSummaryOutput{},
+	})
+
+	want := "## Deployment #8\n\n" +
+		"- **IID**: 4\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Pending Approvals**: 1\n" +
+		"\n### Approvals\n\n" +
+		"| User | Status | When | Comment |\n| --- | --- | --- | --- |\n" +
+		"|  | rejected |  |  |\n" +
+		blockedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_RejectionAgainstARule_IsNotCountedAsAnApproval
+// pins the Approved column for a rule that has been answered twice, once each
+// way. Both answers are recorded in the same list, so counting the list would
+// report a rule as satisfied on the strength of the rejection that blocked it.
+func TestFormatOutputMarkdown_RejectionAgainstARule_IsNotCountedAsAnApproval(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                   9,
+		IID:                  5,
+		Ref:                  "main",
+		SHA:                  "abc123",
+		Status:               "blocked",
+		PendingApprovalCount: 1,
+		ApprovalSummary: &toolutil.DeploymentApprovalSummaryOutput{Rules: []toolutil.DeploymentApprovalRuleOutput{{
+			ID: 4, AccessLevel: 40, AccessLevelDescription: "Maintainers", RequiredApprovals: 2,
+			DeploymentApprovals: []toolutil.DeploymentApprovalOutput{
+				{Status: "approved"},
+				{Status: "rejected"},
+			},
+		}}},
+	})
+
+	want := "## Deployment #9\n\n" +
+		"- **IID**: 5\n" +
+		"- **Status**: ❓ blocked\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Pending Approvals**: 1\n" +
+		"\n### Approval Rules\n\n" +
+		"| ID | Level | Grantee | Description | Required | Approved |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 4 | Maintainer |  | Maintainers | 2 | 1 |\n" +
+		blockedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_JobWithoutAPipeline_LeavesTheIDUnlinked pins the row
+// of a deployment whose backing job never started a pipeline. A deployment has
+// no page of its own, so the pipeline is the only thing the ID column can link
+// to, and the row that has none carries the number alone rather than a link
+// with nowhere to go.
+func TestFormatListMarkdown_JobWithoutAPipeline_LeavesTheIDUnlinked(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{Deployments: []Output{{
+		ID: 4, IID: 1, Ref: "main", Status: "success",
+		Deployable: &DeployableOutput{ID: 12},
+	}}})
+
+	want := "## Deployments (1)\n\n" +
+		"| ID | IID | Ref | Status | Environment | Deployed By |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 4 | 1 | main | ✅ success |  |  |\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestDeploymentOptions_ActionWithNoCaseOfItsOwn_CarriesTheDomainDefaults
+// asserts what an action added without metadata of its own would publish: the
+// domain's owner, tags and cross-links rather than an empty spec.
+//
+// Every one of the six actions matches a case of its own, so the last case is
+// the only one ever evaluated false, and nothing else reaches the defaults
+// they are all built on.
+func TestDeploymentOptions_ActionWithNoCaseOfItsOwn_CarriesTheDomainDefaults(t *testing.T) {
+	const tool = "gitlab_deployment_rollback"
+	options := deploymentOptionsForAction("deployment_rollback", tool)
+
+	if options.OwnerPackage != "deployments" {
+		t.Errorf("OwnerPackage = %q, want deployments", options.OwnerPackage)
+	}
+	if options.Usage == "" {
+		t.Error("Usage is empty, so the action would be published with nothing said about it")
+	}
+	if got := strings.Join(options.Tags, ","); got != "environment,deployment" {
+		t.Errorf("Tags = %q, want environment,deployment", got)
+	}
+	if got := strings.Join(options.RelatedActions, ","); got != actionEnvironmentGet+","+actionPipelineGet {
+		t.Errorf("RelatedActions = %q, want the environment and pipeline reads", got)
+	}
+	if got := strings.Join(options.Aliases, ","); got != tool {
+		t.Errorf("Aliases = %q, want the individual tool name", got)
+	}
+	if options.IndividualTool.Name != tool || options.IndividualTool.Title == "" {
+		t.Errorf("IndividualTool = %+v, want %q with a title", options.IndividualTool, tool)
+	}
+}
+
+// TestFormatOutputMarkdown_GroupScopedApprovalRule_NamesTheGroup pins the row
+// a rule granting approval to a group renders as: the grantee names the group,
+// and the level reads "-" because a group rule's access level is not what
+// decides. Nothing else exercises that branch, so the group spelling could
+// change to anything and no test would read it.
+func TestFormatOutputMarkdown_GroupScopedApprovalRule_NamesTheGroup(t *testing.T) {
+	got := FormatOutputMarkdown(Output{
+		ID:                   6,
+		IID:                  1,
+		Ref:                  "main",
+		SHA:                  "abc123",
+		Status:               "blocked",
+		PendingApprovalCount: 2,
+		ApprovalSummary: &toolutil.DeploymentApprovalSummaryOutput{Rules: []toolutil.DeploymentApprovalRuleOutput{
+			{ID: 3, GroupID: 12, AccessLevelDescription: "Release managers", RequiredApprovals: 2},
+		}},
+	})
+
+	want := "## Deployment #6\n\n" +
+		"- **IID**: 1\n" +
+		"- **Status**: ❓ blocked\n" +
+		"- **Ref**: main\n" +
+		"- **SHA**: `abc123`\n" +
+		"- **Pending Approvals**: 2\n" +
+		"\n### Approval Rules\n\n" +
+		"| ID | Level | Grantee | Description | Required | Approved |\n| --- | --- | --- | --- | --- | --- |\n" +
+		"| 3 | - | group #12 | Release managers | 2 | 0 |\n" +
+		blockedHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 }
 
 // deploymentSpecsByTool supports deployment specs by tool assertions in deployments tests.

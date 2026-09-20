@@ -3,16 +3,21 @@ package dynamic
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies the ControllerSurfaceSpecs_ClassifyDynamicControllers handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies the metadata
+// the two controller specs carry: both validate as dynamic controllers of the
+// dynamic group and package, execute is destructive and carries an output
+// schema, find is read-only, and each serves the shared description with the
+// phrases a model relies on.
 func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	specs := ControllerSurfaceSpecs(nil)
 	if len(specs) != 2 {
@@ -44,9 +49,44 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	}
 }
 
-// TestControllerSurfaceSpecs_RouteHandlers verifies the ControllerSurfaceSpecs_RouteHandlers handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestControllerSurfaceSpecs_CarryTheirHintsAndIcons verifies the rest of what
+// each spec declares: execute is non-idempotent and its route is itself marked
+// destructive, find is idempotent, both are open-world, and each carries its
+// own icon set. The route flag matters most: a surface built from this spec
+// dispatches through the route, so a route marked safe would let a read-only
+// or safe-mode surface run every catalog mutation through the one tool that
+// reaches them all.
+func TestControllerSurfaceSpecs_CarryTheirHintsAndIcons(t *testing.T) {
+	specs := ControllerSurfaceSpecs(nil)
+	cases := []struct {
+		name             string
+		spec             actioncatalog.SurfaceToolSpec
+		wantIdempotent   bool
+		wantRouteDestroy bool
+		wantIcons        []mcp.Icon
+	}{
+		{name: "execute", spec: findDynamicSurfaceSpec(t, specs, executeActionToolName), wantRouteDestroy: true, wantIcons: toolutil.IconServer},
+		{name: "find", spec: findDynamicSurfaceSpec(t, specs, findToolName), wantIdempotent: true, wantIcons: toolutil.IconSearch},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.spec.Idempotent != tc.wantIdempotent || !tc.spec.OpenWorld {
+				t.Errorf("idempotent = %t, open world = %t; want idempotent %t and open world", tc.spec.Idempotent, tc.spec.OpenWorld, tc.wantIdempotent)
+			}
+			if tc.spec.Route.Destructive != tc.wantRouteDestroy {
+				t.Errorf("route Destructive = %t, want %t", tc.spec.Route.Destructive, tc.wantRouteDestroy)
+			}
+			if !reflect.DeepEqual(tc.spec.Icons, tc.wantIcons) {
+				t.Errorf("icons = %+v, want %+v", tc.spec.Icons, tc.wantIcons)
+			}
+		})
+	}
+}
+
+// TestControllerSurfaceSpecs_RouteHandlers verifies that both controller
+// routes run against a populated registry without a Go error: a find for an
+// action the registry holds, and an execute of one it does not. Nothing more
+// is asserted about what either route answered.
 func TestControllerSurfaceSpecs_RouteHandlers(t *testing.T) {
 	specs := ControllerSurfaceSpecs(NewRegistry(testRoutes(t)))
 

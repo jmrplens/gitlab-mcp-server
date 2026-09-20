@@ -85,6 +85,64 @@ func TestActionSpecs_Metadata_NoGenericPlaceholders(t *testing.T) {
 	}
 }
 
+// TestMergeRequestGetRoute_OnlyANotFoundBecomesTheCard holds the get route's
+// wrapper to the one status it rewrites: a 404 is answered with the not-found
+// card and no error, while any other failure stays the error GitLab caused,
+// since a card saying "verify the IID" over a 500 sends the caller to check a
+// number that was right.
+func TestMergeRequestGetRoute_OnlyANotFoundBecomesTheCard(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantCard bool
+	}{
+		{"404 becomes the card", http.StatusNotFound, true},
+		{"500 stays an error", http.StatusInternalServerError, false},
+		{"403 stays an error", http.StatusForbidden, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.status, `{"message":"as GitLab said"}`)
+			}))
+			byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+			result, err := byTool["gitlab_mr_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "merge_request_iid": 5})
+			card, isCard := result.(mergeRequestNotFoundOutput)
+			switch {
+			case tt.wantCard && (err != nil || !isCard):
+				t.Fatalf("route answered (%T, %v), want the not-found card and no error", result, err)
+			case tt.wantCard && card.Identifier != "!5 in project 42":
+				t.Errorf("card identifier = %q, want the IID and project the caller named", card.Identifier)
+			case !tt.wantCard && (err == nil || isCard):
+				t.Fatalf("route answered (%T, %v), want GitLab's %d reported as an error", result, err, tt.status)
+			case !tt.wantCard && !strings.Contains(err.Error(), "as GitLab said"):
+				t.Errorf("route error = %q, want GitLab's message", err)
+			}
+		})
+	}
+}
+
+// TestDeleteDependencyOutput_NamesTheDependencyItDeleted holds the delete
+// confirmation to the id it was given as the dependency's own, since the
+// message used to call that number the blocking merge request, which is the
+// other id a caller could have sent and the one GitLab would answer 404 to.
+func TestDeleteDependencyOutput_NamesTheDependencyItDeleted(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/merge_requests/1/blocks/57" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := DeleteDependencyOutput(t.Context(), client, DeleteDependencyInput{ProjectID: "42", MRIID: 1, BlockingMergeRequestID: 57})
+	if err != nil {
+		t.Fatalf("DeleteDependencyOutput() unexpected error: %v", err)
+	}
+	if want := "Successfully deleted dependency 57 from MR !1 in project 42."; out.Status != "success" || out.Message != want {
+		t.Errorf("DeleteDependencyOutput() = %+v, want status success and message %q", out, want)
+	}
+}
+
 // hasNaturalLanguageAlias reports whether the spec has at least one alias that
 // is neither the canonical action name nor the individual tool name, matching
 // the R-META aliases_only_toolname detector.

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,9 @@ import (
 )
 
 // TestListProvisionedUsers_FiltersAndOutput verifies the query parameters, the
-// pagination headers, and that the full user output is parsed 1:1.
+// pagination headers, and the identity, nested lists and creator of the one
+// user published; every field of a user is held to its value by
+// [TestListProvisionedUsers_PublishesEachFieldGitLabSent].
 func TestListProvisionedUsers_FiltersAndOutput(t *testing.T) {
 	var query url.Values
 	mux := http.NewServeMux()
@@ -78,7 +81,8 @@ func TestListProvisionedUsers_FiltersAndOutput(t *testing.T) {
 	}
 }
 
-// assertProvisionedUser checks the full 1:1 mapping of the fixture user.
+// assertProvisionedUser checks the fixture user's identity, its three nested
+// lists and its creator. It does not read the name, the URL or the bot flag.
 func assertProvisionedUser(t *testing.T, u ProvisionedUserOutput) {
 	t.Helper()
 	if u.ID != 7 || u.Username != "scim-user" || u.Email != "scim@example.com" || u.State != "active" {
@@ -153,8 +157,11 @@ func TestProvisionedUserToOutput_NilSliceElements(t *testing.T) {
 	}
 }
 
-// TestProvisionedUserToOutput_AllFields exercises every scalar and timestamp
-// branch of the gl.User -> ProvisionedUserOutput mapping.
+// TestProvisionedUserToOutput_AllFields sets every scalar and timestamp of the
+// gl.User -> ProvisionedUserOutput mapping and reads back the seven times and
+// addresses, the creator's date, five scalars and the three list lengths. It
+// asserts nothing about the other scalars; [TestListProvisionedUsers_PublishesEachFieldGitLabSent]
+// holds each of those to its value.
 func TestProvisionedUserToOutput_AllFields(t *testing.T) {
 	ts := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
 	iso := gl.ISOTime(ts)
@@ -293,5 +300,104 @@ func TestListProvisionedUsers_ACapturedFieldTheTypeCannotHold_IsReported(t *test
 	_, err := ListProvisionedUsers(context.Background(), client, ListProvisionedUsersInput{GroupID: "42"})
 	if err == nil || !strings.Contains(err.Error(), "decode the captured response") {
 		t.Errorf("ListProvisionedUsers() error = %v, want the capture's decode failure", err)
+	}
+}
+
+// listDistinctProvisionedUsers answers the list with body and returns the one
+// user it published.
+func listDistinctProvisionedUsers(t *testing.T, body string) ProvisionedUserOutput {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/42/provisioned_users", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, body)
+	})
+	client := testutil.NewTestClient(t, mux)
+	out, err := ListProvisionedUsers(context.Background(), client, ListProvisionedUsersInput{GroupID: "42"})
+	if err != nil {
+		t.Fatalf("ListProvisionedUsers() unexpected error: %v", err)
+	}
+	if len(out.Users) != 1 {
+		t.Fatalf("got %d users, want 1", len(out.Users))
+	}
+	return out.Users[0]
+}
+
+// TestListProvisionedUsers_PublishesEachFieldGitLabSent verifies the whole
+// user against an answer in which no two values agree, the captured keys and
+// the nested objects included. The all-fields test above sets a value on
+// every field and reads five of them back, so a converter copying one of the
+// nine profile strings into a neighbor's field passed.
+func TestListProvisionedUsers_PublishesEachFieldGitLabSent(t *testing.T) {
+	out := listDistinctProvisionedUsers(t, `[{"id":7,"username":"scim-user","email":"scim@acme.example","name":"SCIM User",`+
+		`"state":"active","web_url":"https://gl.example.com/scim-user","created_at":"2026-02-03T04:05:06Z",`+
+		`"bio":"a bio","location":"Madrid","public_email":"public@acme.example","skype":"scim.skype",`+
+		`"linkedin":"scim-linkedin","twitter":"scim_twitter","website_url":"https://scim.example",`+
+		`"organization":"Acme","job_title":"Engineer","extern_uid":"uid-7","provider":"group_saml",`+
+		`"theme_id":2,"last_activity_on":"2026-03-04","color_scheme_id":3,"avatar_url":"https://gl.example.com/uploads/7.png",`+
+		`"projects_limit":50,"current_sign_in_at":"2026-04-05T06:07:08Z","current_sign_in_ip":"10.0.0.1",`+
+		`"last_sign_in_at":"2026-04-04T06:07:08Z","last_sign_in_ip":"10.0.0.2","confirmed_at":"2026-02-04T04:05:06Z",`+
+		`"note":"a note","identities":[{"provider":"group_saml","extern_uid":"uid-7"}],`+
+		`"scim_identities":[{"extern_uid":"scim-7","group_id":42,"active":true}],`+
+		`"shared_runners_minutes_limit":1500,"extra_shared_runners_minutes_limit":250,`+
+		`"custom_attributes":[{"key":"dept","value":"eng"}],"namespace_id":9,`+
+		`"created_by":{"id":1,"username":"admin","name":"Admin","state":"blocked","created_at":"2023-01-02T03:04:05Z",`+
+		`"avatar_url":"https://gl.example.com/uploads/1.png","web_url":"https://gl.example.com/admin"},`+
+		`"commit_email":"commit@acme.example","discord":"scim#1","github":"scim-gh","local_time":"2:30 PM",`+
+		`"preferred_language":"es","pronouns":"they/them","work_information":"Acme Engineering",`+
+		`"followers":12,"following":34,"is_followed":true}]`)
+	want := ProvisionedUserOutput{
+		ID: 7, Username: "scim-user", Email: "scim@acme.example", Name: "SCIM User", State: "active",
+		WebURL: "https://gl.example.com/scim-user", CreatedAt: "2026-02-03T04:05:06Z", Bio: "a bio",
+		Location: "Madrid", PublicEmail: "public@acme.example", Skype: "scim.skype", Linkedin: "scim-linkedin",
+		Twitter: "scim_twitter", WebsiteURL: "https://scim.example", Organization: "Acme", JobTitle: "Engineer",
+		ExternUID: "uid-7", Provider: "group_saml", ThemeID: 2, LastActivityOn: "2026-03-04", ColorSchemeID: 3,
+		AvatarURL: "https://gl.example.com/uploads/7.png", ProjectsLimit: 50,
+		CurrentSignInAt: "2026-04-05T06:07:08Z", CurrentSignInIP: "10.0.0.1",
+		LastSignInAt: "2026-04-04T06:07:08Z", LastSignInIP: "10.0.0.2", ConfirmedAt: "2026-02-04T04:05:06Z",
+		Note:                      "a note",
+		Identities:                []ProvisionedUserIdentity{{Provider: "group_saml", ExternUID: "uid-7"}},
+		SCIMIdentities:            []ProvisionedUserSCIMIdentity{{ExternUID: "scim-7", GroupID: 42, Active: true}},
+		SharedRunnersMinutesLimit: 1500, ExtraSharedRunnersMinutesLimit: 250,
+		CustomAttributes: []ProvisionedUserCustomAttribute{{Key: "dept", Value: "eng"}},
+		NamespaceID:      9,
+		CreatedBy: &ProvisionedUserBasicUser{
+			ID: 1, Username: "admin", Name: "Admin", State: "blocked", CreatedAt: "2023-01-02T03:04:05Z",
+			AvatarURL: "https://gl.example.com/uploads/1.png", WebURL: "https://gl.example.com/admin",
+		},
+		CommitEmail: "commit@acme.example", Discord: "scim#1", GitHub: "scim-gh", LocalTime: "2:30 PM",
+		PreferredLanguage: "es", Pronouns: "they/them", WorkInformation: "Acme Engineering",
+		Followers: new(int64(12)), Following: new(int64(34)), IsFollowed: new(true),
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("ListProvisionedUsers() published\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestListProvisionedUsers_PublishesEachFlagOnItsOwn verifies each of the
+// eleven booleans a user carries lands on its own field when sent alone; the
+// all-fields test sets ten of them true together.
+func TestListProvisionedUsers_PublishesEachFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want ProvisionedUserOutput
+	}{
+		{key: "bot", want: ProvisionedUserOutput{ID: 7, Bot: true}},
+		{key: "is_admin", want: ProvisionedUserOutput{ID: 7, IsAdmin: true}},
+		{key: "is_auditor", want: ProvisionedUserOutput{ID: 7, IsAuditor: true}},
+		{key: "can_create_group", want: ProvisionedUserOutput{ID: 7, CanCreateGroup: true}},
+		{key: "can_create_project", want: ProvisionedUserOutput{ID: 7, CanCreateProject: true}},
+		{key: "can_create_organization", want: ProvisionedUserOutput{ID: 7, CanCreateOrganization: true}},
+		{key: "two_factor_enabled", want: ProvisionedUserOutput{ID: 7, TwoFactorEnabled: true}},
+		{key: "external", want: ProvisionedUserOutput{ID: 7, External: true}},
+		{key: "private_profile", want: ProvisionedUserOutput{ID: 7, PrivateProfile: true}},
+		{key: "using_license_seat", want: ProvisionedUserOutput{ID: 7, UsingLicenseSeat: true}},
+		{key: "locked", want: ProvisionedUserOutput{ID: 7, Locked: true}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := listDistinctProvisionedUsers(t, `[{"id":7,"`+tc.key+`":true}]`)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("ListProvisionedUsers() published %+v, want %+v", out, tc.want)
+			}
+		})
 	}
 }

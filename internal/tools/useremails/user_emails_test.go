@@ -4,7 +4,9 @@ package useremails
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -45,15 +47,15 @@ func TestListForUser_Success(t *testing.T) {
 	}
 }
 
-// TestListForUser_InvalidUserID verifies that ListForUser returns a validation error when user_id is invalid.
+// TestListForUser_InvalidUserID verifies that ListForUser refuses user_id 0
+// itself. The mock forbids every request, so the refusal asserted here is the
+// handler's and not a 404 GitLab would have answered: with a mock that replies
+// at all, relaxing the guard to `< 0` leaves the test green because zero
+// reaches GitLab and comes back an error anyway.
 func TestListForUser_InvalidUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListForUser(context.Background(), client, ListForUserInput{UserID: 0})
-	if err == nil {
-		t.Fatal("expected error for invalid user_id, got nil")
-	}
+	assertRefusedWith(t, err, errUserIDPositive)
 }
 
 // TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
@@ -76,17 +78,17 @@ func TestGet_Success(t *testing.T) {
 	if out.Email != "test@example.com" {
 		t.Errorf("out.Email = %q, want %q", out.Email, "test@example.com")
 	}
+	if want := "2026-01-15T10:00:00Z"; out.ConfirmedAt != want {
+		t.Errorf("out.ConfirmedAt = %q, want %q", out.ConfirmedAt, want)
+	}
 }
 
-// TestGet_InvalidEmailID verifies that Get returns a validation error when email_id is invalid.
+// TestGet_InvalidEmailID verifies that Get refuses email_id 0 itself, before
+// any request leaves for GitLab.
 func TestGet_InvalidEmailID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{EmailID: 0})
-	if err == nil {
-		t.Fatal("expected error for invalid email_id, got nil")
-	}
+	assertRefusedWith(t, err, errEmailIDPositive)
 }
 
 // TestGet_APIError verifies that Get returns an error when the GitLab API responds with a failure status.
@@ -97,6 +99,26 @@ func TestGet_APIError(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{EmailID: 999})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// TestGet_ConfirmedAtFromAnInstanceOutsideUTC verifies that a confirmation an
+// instance timestamps in its own zone is published as the instant it names.
+// The layout this replaced ended in a literal "Z" and converted nothing, so
+// GitLab's 10:00:00+01:00 was republished as 10:00:00Z: an hour away from the
+// instant meant, under a label saying otherwise. Every fixture in this file
+// was already UTC, so nothing here could see it.
+func TestGet_ConfirmedAtFromAnInstanceOutsideUTC(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"email":"zoned@example.com","confirmed_at":"2026-01-15T10:00:00+01:00"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{EmailID: 1})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	if want := "2026-01-15T09:00:00Z"; out.ConfirmedAt != want {
+		t.Errorf("out.ConfirmedAt = %q, want %q", out.ConfirmedAt, want)
 	}
 }
 
@@ -119,15 +141,12 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestAdd_EmptyEmail verifies that Add returns a validation error when email is empty.
+// TestAdd_EmptyEmail verifies that Add refuses an empty email itself rather
+// than posting a body without one and letting GitLab answer.
 func TestAdd_EmptyEmail(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Add(context.Background(), client, AddInput{Email: ""})
-	if err == nil {
-		t.Fatal("expected error for empty email, got nil")
-	}
+	assertRefusedWith(t, err, "email is required")
 }
 
 // TestAddForUser_Success verifies that AddForUser returns the expected output when the GitLab API responds successfully.
@@ -149,15 +168,100 @@ func TestAddForUser_Success(t *testing.T) {
 	}
 }
 
-// TestAddForUser_InvalidUserID verifies that AddForUser returns a validation error when user_id is invalid.
-func TestAddForUser_InvalidUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := AddForUser(context.Background(), client, AddForUserInput{UserID: 0, Email: "test@example.com"})
-	if err == nil {
-		t.Fatal("expected error for invalid user_id, got nil")
+// decodeEmailRequestBody reads the JSON body the handler built. It decodes
+// into a map rather than a struct because half of what these tests assert is
+// that a key is absent: skip_confirmation is a pointer with omitempty, so a
+// flag the caller left false and a flag the handler forgot to send are the
+// same struct and differ only by whether the key is on the wire.
+func decodeEmailRequestBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	body := map[string]any{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return nil
 	}
+	return body
+}
+
+// assertEmailBody holds a POST body to the address and the flag the caller
+// named, absence of the flag included.
+func assertEmailBody(t *testing.T, body map[string]any, wantEmail string, wantSkip bool) {
+	t.Helper()
+	if got := body["email"]; got != wantEmail {
+		t.Errorf("email sent = %v, want %q", got, wantEmail)
+	}
+	got, present := body["skip_confirmation"]
+	switch {
+	case wantSkip && got != true:
+		t.Errorf("skip_confirmation sent = %v (present %t), want true", got, present)
+	case !wantSkip && present:
+		t.Errorf("skip_confirmation sent = %v; a caller who did not ask for it sends no key", got)
+	}
+}
+
+// TestAdd_SendsTheEmailAndTheConfirmationFlag verifies that what Add puts on
+// the wire is what the caller asked for. No test in this package read the
+// request body, so a handler posting an empty object passed every one of them:
+// emptying the options struct leaves the whole suite green.
+func TestAdd_SendsTheEmailAndTheConfirmationFlag(t *testing.T) {
+	tests := []struct {
+		name  string
+		input AddInput
+	}{
+		{name: "with skip_confirmation", input: AddInput{Email: "admin@example.com", SkipConfirmation: true}},
+		{name: "without skip_confirmation", input: AddInput{Email: "plain@example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, pathAddEmail)
+				assertEmailBody(t, decodeEmailRequestBody(t, r), tt.input.Email, tt.input.SkipConfirmation)
+				testutil.RespondJSON(w, http.StatusCreated, emailJSON)
+			}))
+
+			if _, err := Add(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("Add() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestAddForUser_SendsTheEmailAndTheConfirmationFlag is the admin half of the
+// same property: the address and the flag reach the user's own collection, at
+// the path naming that user.
+func TestAddForUser_SendsTheEmailAndTheConfirmationFlag(t *testing.T) {
+	tests := []struct {
+		name  string
+		input AddForUserInput
+	}{
+		{name: "with skip_confirmation", input: AddForUserInput{UserID: 42, Email: "skip@example.com", SkipConfirmation: true}},
+		{name: "without skip_confirmation", input: AddForUserInput{UserID: 42, Email: "plain@example.com"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, pathAddEmailUser)
+				assertEmailBody(t, decodeEmailRequestBody(t, r), tt.input.Email, tt.input.SkipConfirmation)
+				testutil.RespondJSON(w, http.StatusCreated, emailJSON)
+			}))
+
+			if _, err := AddForUser(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("AddForUser() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestAddForUser_InvalidUserID verifies that AddForUser refuses user_id 0
+// itself, so a valid email is never posted to /users/0/emails.
+func TestAddForUser_InvalidUserID(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := AddForUser(context.Background(), client, AddForUserInput{UserID: 0, Email: "test@example.com"})
+	assertRefusedWith(t, err, errUserIDPositive)
 }
 
 // TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
@@ -179,15 +283,13 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_InvalidEmailID verifies that Delete returns a validation error when email_id is invalid.
+// TestDelete_InvalidEmailID verifies that Delete refuses email_id 0 itself.
+// A DELETE that reaches GitLab is the one refusal that cannot be taken back,
+// so the mock forbids every request rather than answering one.
 func TestDelete_InvalidEmailID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Delete(context.Background(), client, DeleteInput{EmailID: 0})
-	if err == nil {
-		t.Fatal("expected error for invalid email_id, got nil")
-	}
+	assertRefusedWith(t, err, errEmailIDPositive)
 }
 
 // TestDeleteForUser_Success verifies that DeleteForUser returns the expected output when the GitLab API responds successfully.
@@ -210,13 +312,29 @@ func TestDeleteForUser_Success(t *testing.T) {
 }
 
 // TestFormatMarkdownString verifies the card rendered from a date-only
-// confirmation, which GitLab sends on the list-for-user route.
+// confirmation, which is FormatTime's second parse and the shape a caller who
+// built the output itself may hand the formatter. No handler here produces
+// one: toOutput formats every confirmation as RFC 3339 in UTC.
 func TestFormatMarkdownString(t *testing.T) {
 	assertMarkdown(t, FormatMarkdownString(Output{ID: 1, Email: "test@example.com", ConfirmedAt: "2026-01-15"}),
 		"## Email\n\n"+
 			"- **ID**: 1\n"+
 			"- **Email**: test@example.com\n"+
 			"- **Confirmed**: ✅ 15 Jan 2026\n")
+}
+
+// assertRefusedWith holds a refusal to the message the handler itself
+// produces. Asserting only that some error came back cannot tell the handler's
+// own validation from a status the mock happened to answer, which is what let
+// every `<= 0` guard here be relaxed to `< 0` with the suite still green.
+func assertRefusedWith(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected the handler to refuse with %q, got nil", want)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to carry %q", err.Error(), want)
+	}
 }
 
 // assertQuery fails the test if any expected query parameter is missing or
@@ -287,10 +405,10 @@ func TestListForUser_TableDriven(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:       "returns error on 500 API failure",
+			name:       "returns error on 403 API failure",
 			input:      ListForUserInput{UserID: 42},
 			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"server error"}`,
+			mockBody:   `{"message":"403 Forbidden"}`,
 			wantErr:    true,
 		},
 		{
@@ -309,14 +427,17 @@ func TestListForUser_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assertQuery(t, r, tt.wantQuery)
-				if tt.mockStatus > 0 {
+			// A case that names no status is one the handler has to refuse on
+			// its own, so the mock forbids every request instead of answering
+			// a 404 the assertion could not tell from the handler's refusal.
+			handler := testutil.ForbiddenHandler(t)
+			if tt.mockStatus > 0 {
+				handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					assertQuery(t, r, tt.wantQuery)
 					testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
-					return
-				}
-				http.NotFound(w, r)
-			}))
+				})
+			}
+			client := testutil.NewTestClient(t, handler)
 
 			out, err := ListForUser(context.Background(), client, tt.input)
 			if (err != nil) != tt.wantErr {
@@ -329,8 +450,10 @@ func TestListForUser_TableDriven(t *testing.T) {
 	}
 }
 
-// TestAdd_TableDriven validates Add across skip_confirmation flag, API errors,
-// and various input combinations.
+// TestAdd_TableDriven validates what Add returns: the created email on a 201,
+// and an error on a 422 GitLab refused. It asserts nothing about the request
+// body, which the mock here discards; what reaches GitLab is held by
+// TestAdd_SendsTheEmailAndTheConfirmationFlag.
 func TestAdd_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -341,7 +464,7 @@ func TestAdd_TableDriven(t *testing.T) {
 		validate   func(t *testing.T, out Output)
 	}{
 		{
-			name:       "adds email with skip_confirmation",
+			name:       "returns the created email when skip_confirmation is set",
 			input:      AddInput{Email: "admin@example.com", SkipConfirmation: true},
 			mockStatus: http.StatusCreated,
 			mockBody:   `{"id":5,"email":"admin@example.com","confirmed_at":"2026-06-01T12:00:00Z"}`,
@@ -382,8 +505,10 @@ func TestAdd_TableDriven(t *testing.T) {
 	}
 }
 
-// TestAddForUser_TableDriven validates AddForUser covering empty email, skip_confirmation,
-// and API failure paths.
+// TestAddForUser_TableDriven validates what AddForUser returns and what it
+// refuses: an empty email and a non-positive user_id before any request, the
+// created email on a 201, and an error on a 403. The request body is held by
+// TestAddForUser_SendsTheEmailAndTheConfirmationFlag instead.
 func TestAddForUser_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -399,7 +524,7 @@ func TestAddForUser_TableDriven(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:       "adds email with skip_confirmation for user",
+			name:       "returns the created email when skip_confirmation is set",
 			input:      AddForUserInput{UserID: 42, Email: "skip@example.com", SkipConfirmation: true},
 			mockStatus: http.StatusCreated,
 			mockBody:   `{"id":10,"email":"skip@example.com","confirmed_at":"2026-03-01T08:00:00Z"}`,
@@ -429,13 +554,15 @@ func TestAddForUser_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tt.mockStatus > 0 {
+			// As in TestListForUser_TableDriven: a case with no status is one
+			// the handler must refuse before it builds a request.
+			handler := testutil.ForbiddenHandler(t)
+			if tt.mockStatus > 0 {
+				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
-					return
-				}
-				http.NotFound(w, r)
-			}))
+				})
+			}
+			client := testutil.NewTestClient(t, handler)
 
 			out, err := AddForUser(context.Background(), client, tt.input)
 			if (err != nil) != tt.wantErr {
@@ -448,11 +575,12 @@ func TestAddForUser_TableDriven(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies Delete returns an error when the GitLab API responds
-// with a server error status code.
+// TestDelete_APIError verifies Delete returns an error when GitLab refuses the
+// deletion with a 403, which is what a token without the rights to the address
+// is answered.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 	}))
 
 	_, err := Delete(context.Background(), client, DeleteInput{EmailID: 1})
@@ -502,13 +630,16 @@ func TestDeleteForUser_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tt.mockStatus > 0 {
+			// The four identifier cases name no status: a DELETE that leaves
+			// for GitLab with a zero or negative id is the defect, so the mock
+			// forbids every request rather than answering one.
+			handler := testutil.ForbiddenHandler(t)
+			if tt.mockStatus > 0 {
+				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
-					return
-				}
-				http.NotFound(w, r)
-			}))
+				})
+			}
+			client := testutil.NewTestClient(t, handler)
 
 			_, err := DeleteForUser(context.Background(), client, tt.input)
 			if (err != nil) != tt.wantErr {

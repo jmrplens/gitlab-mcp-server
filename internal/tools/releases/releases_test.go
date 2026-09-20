@@ -16,6 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -203,8 +204,11 @@ func TestReleaseGet_SuccessEnrichedFields(t *testing.T) {
 	}
 }
 
-// TestReleaseCreateInput_EnrichedFields verifies that Create passes
-// the enriched Ref and Milestones fields to the GitLab API.
+// TestReleaseCreateInput_EnrichedFields verifies that a create carrying a ref
+// and milestones round-trips: the call succeeds and the created release is
+// read back. It asserts nothing about the request, which its own mock
+// discards; that half is
+// TestReleaseCreate_SendsEveryOptionalFieldItWasGiven.
 func TestReleaseCreateInput_EnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectReleases {
@@ -1192,14 +1196,32 @@ func TestUpdate_InvalidReleasedAt(t *testing.T) {
 	}
 }
 
-// TestCreate_ConflictError covers the 409/422 error branch in Create.
-func TestCreate_ConflictError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusConflict, `{"message":"Release already exists"}`)
-	}))
-	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", TagName: "v1.0.0"})
-	if err == nil {
-		t.Fatal("expected error for 409")
+// TestCreate_RefusedAsExisting_CarriesTheHint covers both statuses GitLab uses
+// to say the tag already carries a release, and pins the hint with them. Only
+// the 409 was driven and only "an error came back" was asserted, so the 422
+// side of the `||` was never true and narrowing the pair to a single status
+// answered a real conflict with the generic message, dropping the one sentence
+// that tells a model what to do instead.
+func TestCreate_RefusedAsExisting_CarriesTheHint(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{
+		{"conflict", http.StatusConflict},
+		{"unprocessable entity", http.StatusUnprocessableEntity},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"Release already exists"}`)
+			}))
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", TagName: "v1.0.0"})
+			if err == nil {
+				t.Fatalf("expected an error for %d", tc.status)
+			}
+			if !strings.Contains(err.Error(), "gitlab_release_update") {
+				t.Errorf("error should hint at updating the existing release: %v", err)
+			}
+		})
 	}
 }
 
@@ -1608,5 +1630,412 @@ func TestToOutput_DocumentedSubset_OmitsUndocumentedCommitAndAuthorFields(t *tes
 				t.Errorf("serialized author must keep documented field %s; got %s", documented, authorJSON)
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The request a handler builds
+// ---------------------------------------------------------------------------.
+
+// capturedRequest answers one method and path with respJSON and hands back the
+// body that request carried, so an assertion can be about what GitLab received
+// rather than about what the mock chose to answer. Any other request is a 404,
+// which fails the calling test through the error the handler returns.
+func capturedRequest(t *testing.T, method, path string, status int, respJSON string) (*gitlabclient.Client, *[]byte) {
+	t.Helper()
+	captured := new([]byte)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read body failed", http.StatusInternalServerError)
+			return
+		}
+		*captured = body
+		testutil.RespondJSON(w, status, respJSON)
+	}))
+	return client, captured
+}
+
+// TestReleaseCreate_SendsEveryOptionalFieldItWasGiven pins the request a
+// creation builds for a caller who supplied all of them, each value distinct
+// from the others. Six guards decide those fields one at a time and nothing
+// read the body, so inverting any of them left the caller's value at home and
+// published an empty release instead; released_at was worse than unguarded,
+// being offered in the input schema and read by no line of the handler.
+func TestReleaseCreate_SendsEveryOptionalFieldItWasGiven(t *testing.T) {
+	client, body := capturedRequest(t, http.MethodPost, pathProjectReleases, http.StatusCreated,
+		`{"tag_name":"v4.0.0","name":"Quartz","description":"the notes","created_at":"2026-03-02T10:00:00Z","released_at":"2026-04-05T06:07:08Z"}`)
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID:   "42",
+		TagName:     "v4.0.0",
+		Name:        "Quartz",
+		Description: "the notes",
+		ReleasedAt:  "2026-04-05T06:07:08Z",
+		Ref:         "release/4.x",
+		Milestones:  []string{"M-one", "M-two"},
+		TagMessage:  "annotated for v4",
+		Assets:      &AssetsInput{Links: []AssetLinkInput{{Name: "the binary", URL: "https://example.com/bin"}}},
+	}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+
+	var sent struct {
+		TagName     string   `json:"tag_name"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		ReleasedAt  string   `json:"released_at"`
+		Ref         string   `json:"ref"`
+		TagMessage  string   `json:"tag_message"`
+		Milestones  []string `json:"milestones"`
+		Assets      struct {
+			Links []struct {
+				Name string `json:"name"`
+			} `json:"links"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal(*body, &sent); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(*body))
+	}
+
+	for _, field := range []struct{ name, got, want string }{
+		{"tag_name", sent.TagName, "v4.0.0"},
+		{"name", sent.Name, "Quartz"},
+		{"description", sent.Description, "the notes"},
+		{"released_at", sent.ReleasedAt, "2026-04-05T06:07:08Z"},
+		{"ref", sent.Ref, "release/4.x"},
+		{"tag_message", sent.TagMessage, "annotated for v4"},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			if field.got != field.want {
+				t.Errorf("%s = %q, want %q", field.name, field.got, field.want)
+			}
+		})
+	}
+	if want := []string{"M-one", "M-two"}; !reflect.DeepEqual(sent.Milestones, want) {
+		t.Errorf("milestones = %v, want %v", sent.Milestones, want)
+	}
+	if len(sent.Assets.Links) != 1 || sent.Assets.Links[0].Name != "the binary" {
+		t.Errorf("assets.links = %+v, want the one link the caller gave", sent.Assets.Links)
+	}
+}
+
+// TestReleaseCreate_OmitsTheOptionalFieldsItWasNotGiven pins the other half: a
+// creation given nothing but the tag sends nothing but the tag. The milestones
+// guard is a length comparison, and relaxing it to `>= 0` attaches a pointer
+// to an empty slice, which puts an explicit null on the wire that GitLab and a
+// reader of the request alike cannot tell from a deliberate one.
+func TestReleaseCreate_OmitsTheOptionalFieldsItWasNotGiven(t *testing.T) {
+	client, body := capturedRequest(t, http.MethodPost, pathProjectReleases, http.StatusCreated,
+		`{"tag_name":"v4.1.0","name":"","description":"","created_at":"2026-03-02T10:00:00Z","released_at":"2026-03-02T10:00:00Z"}`)
+
+	if _, err := Create(context.Background(), client, CreateInput{ProjectID: "42", TagName: "v4.1.0"}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+
+	for _, key := range []string{"name", "description", "released_at", "ref", "milestones", "tag_message", "assets"} {
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(*body), `"`+key+`"`) {
+				t.Errorf("request carries %q although the caller gave none: %s", key, string(*body))
+			}
+		})
+	}
+	if !strings.Contains(string(*body), `"tag_name":"v4.1.0"`) {
+		t.Errorf("request should still carry the tag: %s", string(*body))
+	}
+}
+
+// TestReleaseCreate_InvalidReleasedAt_RefusedBeforeGitLab asserts that a
+// released_at the handler cannot parse is refused where the update already
+// refuses it, and refused before anything is sent: the mock fails the test if
+// a request arrives at all.
+func TestReleaseCreate_InvalidReleasedAt_RefusedBeforeGitLab(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", TagName: "v1.0.0", ReleasedAt: "yesterday",
+	})
+	if err == nil {
+		t.Fatal("expected an error for an unparseable released_at")
+	}
+	if !strings.Contains(err.Error(), "invalid released_at") {
+		t.Fatalf("error should name released_at: %v", err)
+	}
+}
+
+// TestReleaseCreate_AssetLinkOmitsTheFieldsItWasNotGiven pins that an asset
+// link carries only what the caller filled in. Every existing fixture set all
+// five fields at once, so each guard was decided one way only and a link given
+// no direct path would have sent an empty one rather than none.
+func TestReleaseCreate_AssetLinkOmitsTheFieldsItWasNotGiven(t *testing.T) {
+	client, body := capturedRequest(t, http.MethodPost, pathProjectReleases, http.StatusCreated,
+		`{"tag_name":"v4.2.0","name":"","description":"","created_at":"2026-03-02T10:00:00Z","released_at":"2026-03-02T10:00:00Z"}`)
+
+	if _, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		TagName:   "v4.2.0",
+		Assets:    &AssetsInput{Links: []AssetLinkInput{{}}},
+	}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+
+	var sent struct {
+		Assets struct {
+			Links []map[string]any `json:"links"`
+		} `json:"assets"`
+	}
+	if err := json.Unmarshal(*body, &sent); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(*body))
+	}
+	if len(sent.Assets.Links) != 1 {
+		t.Fatalf("assets.links = %+v, want the one empty link", sent.Assets.Links)
+	}
+	if len(sent.Assets.Links[0]) != 0 {
+		t.Errorf("assets.links[0] = %v, want no key at all", sent.Assets.Links[0])
+	}
+}
+
+// TestReleaseUpdate_SendsTheTitleAndNotesItWasGiven pins the request an update
+// builds. Both guards survived the mutation gate because the one test reading
+// an update body asked only about milestones and the release date, so a
+// caller's new title could have been dropped and its absence read as success.
+func TestReleaseUpdate_SendsTheTitleAndNotesItWasGiven(t *testing.T) {
+	client, body := capturedRequest(t, http.MethodPut, pathReleaseV120, http.StatusOK,
+		`{"tag_name":"v1.2.0","name":"Renamed","description":"rewritten"}`)
+
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:   "42",
+		TagName:     testTagV120,
+		Name:        "Renamed",
+		Description: "rewritten",
+	}); err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+
+	var sent struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := json.Unmarshal(*body, &sent); err != nil {
+		t.Fatalf("unmarshal request body: %v; body=%q", err, string(*body))
+	}
+	if sent.Name == nil || *sent.Name != "Renamed" {
+		t.Errorf("name = %v, want %q", sent.Name, "Renamed")
+	}
+	if sent.Description == nil || *sent.Description != "rewritten" {
+		t.Errorf("description = %v, want %q", sent.Description, "rewritten")
+	}
+}
+
+// TestReleaseUpdate_PartialUpdateSendsNullTitleAndNoMilestones records what an
+// update that changes only the release date puts on the wire, which is two
+// separate facts about the same body.
+//
+// The milestones key is absent, and must stay absent: its guard is a length
+// comparison whose relaxation attaches a pointer to an empty slice, and GitLab
+// documents an empty milestones value as "remove every milestone".
+//
+// The title and the notes, by contrast, are sent as explicit nulls, because
+// client-go's UpdateReleaseOptions spells those two fields without
+// `omitempty`. That is recorded rather than endorsed: this test is what fails,
+// deliberately, on the day the SDK adds the tag and the nulls stop being sent.
+func TestReleaseUpdate_PartialUpdateSendsNullTitleAndNoMilestones(t *testing.T) {
+	client, body := capturedRequest(t, http.MethodPut, pathReleaseV120, http.StatusOK,
+		`{"tag_name":"v1.2.0","name":"Untouched","description":"untouched"}`)
+
+	if _, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:  "42",
+		TagName:    testTagV120,
+		ReleasedAt: "2026-01-15T10:00:00Z",
+	}); err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+
+	if strings.Contains(string(*body), `"milestones"`) {
+		t.Errorf("request carries milestones although the caller gave none: %s", string(*body))
+	}
+	for _, key := range []string{"name", "description"} {
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(*body), `"`+key+`":null`) {
+				t.Errorf("client-go no longer sends %q as null: %s", key, string(*body))
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The answer a route gives, and the card a formatter writes
+// ---------------------------------------------------------------------------.
+
+// TestActionSpecs_GetRoute_ForbiddenStaysAnError pins that only a 404 becomes
+// the not-found card. The route's guard is "an error, and a 404 at that", and
+// with its two halves joined the other way every failure (a 403, a 500)
+// would be answered as "release not found", telling a model the release does
+// not exist when the truth is that it could not look.
+func TestActionSpecs_GetRoute_ForbiddenStaysAnError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	byTool := releaseSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_release_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "tag_name": "v1.0.0"})
+	if err == nil {
+		t.Fatalf("expected an error for a 403, got result %#v", result)
+	}
+	if _, ok := result.(releaseNotFoundOutput); ok {
+		t.Error("a 403 was answered as a release that does not exist")
+	}
+}
+
+// TestFormatMarkdown_CommitIsTheShortSHAGitLabSent pins which of the two SHAs
+// the card shows. Every fixture gave the same string as the short and the full
+// id, so reading the wrong one changed nothing; a real response differs, and
+// the full one is what the card falls back to when GitLab sent no short form.
+func TestFormatMarkdown_CommitIsTheShortSHAGitLabSent(t *testing.T) {
+	head := "## Release: Cut\n\n- **Tag**: v5.0.0\n"
+	tail := "- **Commit Title**: Tidy\n" + cardHints
+
+	short := FormatMarkdown(Output{
+		TagName: "v5.0.0", Name: "Cut",
+		Commit: &toolutil.CommitOutput{ID: "0123456789abcdef0123", ShortID: "0123456", Title: "Tidy"},
+	})
+	if want := head + "- **Commit**: `0123456`\n" + tail; short != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", short, want)
+	}
+
+	full := FormatMarkdown(Output{
+		TagName: "v5.0.0", Name: "Cut",
+		Commit: &toolutil.CommitOutput{ID: "0123456789abcdef0123", Title: "Tidy"},
+	})
+	if want := head + "- **Commit**: `0123456789abcdef0123`\n" + tail; full != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", full, want)
+	}
+}
+
+// TestFormatMarkdown_LinksWithNeitherFormCarryNoURLRow pins the third way a
+// release can name its page: GitLab sent a links object holding neither the
+// self link nor the edit one, and the card writes no URL row rather than a
+// label with nothing after it.
+func TestFormatMarkdown_LinksWithNeitherFormCarryNoURLRow(t *testing.T) {
+	got := FormatMarkdown(Output{TagName: "v0.3.0", Name: "Linkless", Links: &toolutil.LinksOutput{}})
+
+	want := "## Release: Linkless\n\n" +
+		"- **Tag**: v0.3.0\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_NilMilestoneIsSkipped pins that a null entry in the
+// milestone list is passed over rather than dereferenced. The converter drops
+// the nulls GitLab sends, so only a formatter called with a hand-built list
+// reaches this, which is exactly what a sibling package's card does.
+func TestFormatMarkdown_NilMilestoneIsSkipped(t *testing.T) {
+	got := FormatMarkdown(Output{
+		TagName:    "v0.4.0",
+		Name:       "Partial",
+		Milestones: []*toolutil.MilestoneOutput{nil, {Title: "kept"}},
+	})
+
+	want := "## Release: Partial\n\n" +
+		"- **Tag**: v0.4.0\n" +
+		"- **Milestones**: kept\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMarkdown_UpcomingWithNoDateCarriesNoMarker pins that the calendar
+// glyph marks a date and never stands on its own: a release GitLab flagged as
+// upcoming but gave no dates for keeps its flag row and grows no empty
+// Released row beside it.
+func TestFormatMarkdown_UpcomingWithNoDateCarriesNoMarker(t *testing.T) {
+	got := FormatMarkdown(Output{TagName: "v0.5.0", Name: "Planned", UpcomingRelease: true})
+
+	want := "## Release: Planned\n\n" +
+		"- **Tag**: v0.5.0\n" +
+		"- \U0001F4C5 **Upcoming release**\n" +
+		cardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestReleaseGet_EveryFieldIsReadFromItsOwnKey asserts the whole top level of
+// one release against a response in which no two values agree. Three of these
+// keys had no assertion anywhere (description_html, commit_path and tag_path),
+// so the converter could have crossed the two paths, or filled the HTML notes
+// from the Markdown ones, and every gate would still have been green: an
+// assignment carries no branch for either of them to read.
+func TestReleaseGet_EveryFieldIsReadFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/42/releases/v6.7.8" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"tag_name":"v6.7.8",
+			"name":"Topaz",
+			"description":"the notes body",
+			"description_html":"<p>the notes rendered</p>",
+			"created_at":"2026-01-02T03:04:05Z",
+			"released_at":"2026-07-08T09:10:11Z",
+			"upcoming_release":true,
+			"commit_path":"/group/project/-/commit/facefeed",
+			"tag_path":"/group/project/-/tags/v6.7.8"
+		}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", TagName: "v6.7.8"})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+
+	for _, field := range []struct{ name, got, want string }{
+		{"tag_name", out.TagName, "v6.7.8"},
+		{"name", out.Name, "Topaz"},
+		{"description", out.Description, "the notes body"},
+		{"description_html", out.DescriptionHTML, "<p>the notes rendered</p>"},
+		{"created_at", out.CreatedAt, "2026-01-02T03:04:05Z"},
+		{"released_at", out.ReleasedAt, "2026-07-08T09:10:11Z"},
+		{"commit_path", out.CommitPath, "/group/project/-/commit/facefeed"},
+		{"tag_path", out.TagPath, "/group/project/-/tags/v6.7.8"},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			if field.got != field.want {
+				t.Errorf("%s = %q, want %q", field.name, field.got, field.want)
+			}
+		})
+	}
+	if !out.UpcomingRelease {
+		t.Error("upcoming_release = false, want true")
+	}
+}
+
+// TestReleaseOptionsForAction_UnknownNameKeepsTheSharedDefaults pins what the
+// metadata switch falls through to. Every action this package declares matches
+// a case, so the last comparison was never decided the other way, and a name
+// that matches none has to arrive with the shared owner, tags and individual
+// tool rather than with nothing at all.
+func TestReleaseOptionsForAction_UnknownNameKeepsTheSharedDefaults(t *testing.T) {
+	options := releaseOptionsForAction("not_an_action", "gitlab_release_invented")
+
+	if options.OwnerPackage != "releases" {
+		t.Errorf("OwnerPackage = %q, want %q", options.OwnerPackage, "releases")
+	}
+	if options.IndividualTool.Name != "gitlab_release_invented" {
+		t.Errorf("IndividualTool.Name = %q, want %q", options.IndividualTool.Name, "gitlab_release_invented")
+	}
+	if options.Usage == "" || len(options.Aliases) == 0 || len(options.Tags) == 0 {
+		t.Errorf("fallback metadata incomplete: usage=%q aliases=%v tags=%v", options.Usage, options.Aliases, options.Tags)
 	}
 }

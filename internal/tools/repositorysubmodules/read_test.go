@@ -7,11 +7,19 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
+
+// submoduleGitmodules is the one-entry .gitmodules the read fixtures below
+// serve: a submodule at libs/core-module pointing at org/project.
+const submoduleGitmodules = `[submodule "libs/core-module"]
+	path = libs/core-module
+	url = git@gitlab.example.com:org/project.git
+`
 
 // TestRead_Success verifies Read when success.
 func TestRead_Success(t *testing.T) {
@@ -88,6 +96,187 @@ func TestRead_Success(t *testing.T) {
 	}
 	if out.SubmodulePath != "libs/core-module" {
 		t.Errorf("expected submodule_path 'libs/core-module', got %q", out.SubmodulePath)
+	}
+}
+
+// TestRead_Output_CarriesEveryFieldOfTheFileGitLabSent holds the whole output
+// against a response in which no two values agree.
+//
+// The success test above reads five of the eight fields, so the size, the path
+// and the encoding could each be dropped or swapped for a neighbor and nothing
+// would fail; an assignment has no branch to flip, so neither quality gate
+// reaches this class at all.
+func TestRead_Output_CarriesEveryFieldOfTheFileGitLabSent(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, ".gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "main"
+			}`, submoduleGitmodules))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "1a2b3c4d5e6f7a8b", "name": "core-module", "type": "commit", "path": "libs/core-module", "mode": "160000"}
+			]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"file_name": "parser.c",
+				"file_path": "src/parser.c",
+				"size": 4096,
+				"encoding": "text",
+				"content": "int parse(void) { return 0; }",
+				"ref": "1a2b3c4d5e6f7a8b"
+			}`)
+		}
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	got, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "libs/core-module",
+		FilePath:      "src/parser.c",
+		Ref:           "main",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := ReadOutput{
+		FileName:        "parser.c",
+		FilePath:        "src/parser.c",
+		SubmodulePath:   "libs/core-module",
+		ResolvedProject: "org/project",
+		CommitSHA:       "1a2b3c4d5e6f7a8b",
+		Size:            4096,
+		Content:         "int parse(void) { return 0; }",
+		Encoding:        "text",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("read output mismatch:\ngot:  %+v\nwant: %+v", got, want)
+	}
+}
+
+// TestRead_TreeListing_AsksTheParentDirectoryAtTheRequestedRef pins the tree
+// request the pinned-commit lookup builds: scoped to the submodule's parent
+// directory, at the ref the caller named.
+//
+// The listing is not recursive, so a request that lost its path answers with
+// the repository root and a submodule under libs/ is never found; one that lost
+// its ref answers at the default branch, so the commit read is not the one the
+// caller's ref pins and the file comes back from the wrong revision.
+func TestRead_TreeListing_AsksTheParentDirectoryAtTheRequestedRef(t *testing.T) {
+	var treePath, treeRef string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, ".gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "release-3-1"
+			}`, submoduleGitmodules))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			treePath = r.URL.Query().Get("path")
+			treeRef = r.URL.Query().Get("ref")
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "sha1", "name": "core-module", "type": "commit", "path": "libs/core-module", "mode": "160000"}
+			]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name": "f.txt", "encoding": "text", "content": "hi"}`)
+		}
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	if _, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "libs/core-module",
+		FilePath:      "f.txt",
+		Ref:           "release-3-1",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if treePath != "libs" {
+		t.Errorf("tree listing asked for path %q, want libs", treePath)
+	}
+	if treeRef != "release-3-1" {
+		t.Errorf("tree listing asked at ref %q, want release-3-1", treeRef)
+	}
+}
+
+// TestRead_TreeCarriesAnotherSubmodulesCommit_PinsOnlyItsOwn verifies that the
+// commit read out of the tree is the node at the submodule's own path, and not
+// the first node of type "commit" the listing happens to carry.
+//
+// A directory holding two submodules answers with a commit node for each, so
+// the listing that resolves libs/core-module also carries libs/vendor-module;
+// taking the wrong one reads the file out of a real commit of another project
+// and reports it under this submodule's name, with nothing in the output saying
+// so.
+func TestRead_TreeCarriesAnotherSubmodulesCommit_PinsOnlyItsOwn(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, ".gitmodules"):
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+				"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "main"
+			}`, submoduleGitmodules))
+		case strings.Contains(r.URL.Path, "/repository/tree"):
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "0000vendorsha", "name": "vendor-module", "type": "commit", "path": "libs/vendor-module", "mode": "160000"},
+				{"id": "1111ourown", "name": "core-module", "type": "commit", "path": "libs/core-module", "mode": "160000"}
+			]`)
+		default:
+			testutil.RespondJSON(w, http.StatusOK, `{"file_name": "f.txt", "encoding": "text", "content": "hi"}`)
+		}
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "libs/core-module",
+		FilePath:      "f.txt",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.CommitSHA != "1111ourown" {
+		t.Errorf("CommitSHA = %q, want 1111ourown: the vendor module's commit is not this submodule's pointer", out.CommitSHA)
+	}
+}
+
+// TestRead_TreeNodeAtTheSubmodulePathIsNotACommit_IsRefused verifies that a
+// node sitting at the submodule's path but carrying any other type is not read
+// as the pointer.
+//
+// It is the state a repository is in when a submodule has been replaced by an
+// ordinary file or directory in the ref being read: the path still resolves,
+// and the object id behind it names a blob or a tree rather than the commit of
+// another project. Answering with it would hand the caller a SHA that cannot be
+// fetched from the submodule's project, so the refusal is the right answer and
+// the error says which shape was expected.
+func TestRead_TreeNodeAtTheSubmodulePathIsNotACommit_IsRefused(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/repository/tree") {
+			testutil.RespondJSON(w, http.StatusOK, `[
+				{"id": "b10bb10b", "name": "core-module", "type": "blob", "path": "libs/core-module", "mode": "100644"}
+			]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf(`{
+			"file_name": ".gitmodules", "encoding": "text", "content": %q, "ref": "main"
+		}`, submoduleGitmodules))
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := Read(t.Context(), client, ReadInput{
+		ProjectID:     "42",
+		SubmodulePath: "libs/core-module",
+		FilePath:      "f.txt",
+	})
+	if err == nil {
+		t.Fatal("expected an error when the node at the submodule path is a blob")
+	}
+	if !strings.Contains(err.Error(), "not found as a tree entry") {
+		t.Errorf("error = %v, want it to say no commit-type entry was found", err)
+	}
+	if strings.Contains(err.Error(), "b10bb10b") {
+		t.Errorf("error names the blob's object id, which is not a commit this submodule is pinned to: %v", err)
 	}
 }
 

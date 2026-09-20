@@ -132,9 +132,7 @@ func boardOptions(individualTool string) toolutil.ActionSpecOptions {
 		if meta.usage != "" {
 			usage = meta.usage
 		}
-		if len(meta.aliases) > 0 {
-			aliases = append([]string{individualTool}, meta.aliases...)
-		}
+		aliases = append(aliases, meta.aliases...)
 	}
 	return toolutil.ActionSpecOptions{
 		Aliases: aliases, Usage: usage, Tags: []string{"project", "board"},

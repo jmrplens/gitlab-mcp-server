@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -28,6 +29,35 @@ const (
 	// fmtIDWant10 identifies the fmt ID want 10 constant used by this package.
 	fmtIDWant10 = "ID = %d, want 10"
 )
+
+// TestPipelineGet_ReadsEachIdentifierFromItsOwnKey pins the three identifiers
+// a pipeline carries against an answer in which no two of them agree. Every
+// other detail fixture here sends id and iid as the same number, so a
+// converter reading iid off id would publish the right answer by coincidence
+// and no assertion in this file could tell.
+func TestPipelineGet_ReadsEachIdentifierFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":7001,"iid":12,"project_id":42,
+			"status":"success","source":"push","ref":"main","sha":"abc123"}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", PipelineID: 7001})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	identifiers := map[string][2]int64{
+		"id":         {out.ID, 7001},
+		"iid":        {out.IID, 12},
+		"project_id": {out.ProjectID, 42},
+	}
+	for key, pair := range identifiers {
+		t.Run(key, func(t *testing.T) {
+			if pair[0] != pair[1] {
+				t.Errorf("%s = %d, want %d", key, pair[0], pair[1])
+			}
+		})
+	}
+}
 
 // TestPipelineGet_ReadsArchived verifies a pipeline carries, beside what
 // client-go decoded, the archived flag lib/api/entities/ci/pipeline.rb sends
@@ -1332,10 +1362,22 @@ func TestUpdateMetadata_MissingProject(t *testing.T) {
 // Create with variables
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithVariables verifies Create when with variables.
+// TestCreate_WithVariables verifies that each variable the caller passed
+// reaches GitLab: its key, its value, and the type where one was named. The
+// variables are the whole point of the call and the response echoes none of
+// them, so an assertion on the decoded pipeline would pass just as well with
+// the variables dropped on the floor.
 func TestCreate_WithVariables(t *testing.T) {
+	var body string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("reading create body: %v", err)
+				http.Error(w, "unreadable body", http.StatusInternalServerError)
+				return
+			}
+			body = string(raw)
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id":20,"iid":20,"project_id":42,
 				"status":"created","source":"api","ref":"main","sha":"aaa",
@@ -1365,6 +1407,57 @@ func TestCreate_WithVariables(t *testing.T) {
 	}
 	if out.Status != "created" {
 		t.Errorf("Status = %q, want %q", out.Status, "created")
+	}
+	sent := map[string]string{
+		"the first key":                  `"key":"CI_VAR"`,
+		"the first value":                `"value":"hello"`,
+		"an env_var type":                `"variable_type":"env_var"`,
+		"the file key":                   `"key":"SECRET_FILE"`,
+		"a file type":                    `"variable_type":"file"`,
+		"the key whose type was omitted": `"key":"DEFAULT_TYPE"`,
+	}
+	for name, want := range sent {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("create body missing %s (%s):\n%s", name, want, body)
+			}
+		})
+	}
+	// A variable that named no type must carry none: GitLab defaults it to
+	// env_var, and sending variable_type="" instead is a value the caller
+	// never asked for.
+	t.Run("no empty variable_type for the variable that named none", func(t *testing.T) {
+		if strings.Contains(body, `"variable_type":""`) {
+			t.Errorf("create body sent an empty variable_type:\n%s", body)
+		}
+	})
+}
+
+// TestCreate_NoVariables_SendsNoVariablesKey is the other side of the guard
+// around them: a create naming no variable must leave the key out rather than
+// send an empty array for GitLab to interpret.
+func TestCreate_NoVariables_SendsNoVariablesKey(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/pipeline" {
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("reading create body: %v", err)
+				http.Error(w, "unreadable body", http.StatusInternalServerError)
+				return
+			}
+			body = string(raw)
+			testutil.RespondJSON(w, http.StatusCreated, pipelineDetailJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	if _, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if strings.Contains(body, "variables") {
+		t.Errorf("create body carried a variables key with none given:\n%s", body)
 	}
 }
 
@@ -1431,6 +1524,23 @@ func TestFormatListMarkdown_WithPipelines(t *testing.T) {
 		listHints
 	if got := FormatListMarkdown(out); got != want {
 		t.Errorf("FormatListMarkdown()\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_RowWithNoStatus_LeavesTheCellEmpty checks the status
+// cell of a row GitLab sent no status on. The glyph is chosen from the status
+// word, so rendering one for the empty string puts a verdict in the cell that
+// GitLab never gave; the cell stays empty instead.
+func TestFormatListMarkdown_RowWithNoStatus_LeavesTheCellEmpty(t *testing.T) {
+	out := ListOutput{
+		Pipelines: []Output{
+			{ID: 1, Status: "   ", Source: "push", Ref: "main", SHA: "abc123", WebURL: "https://gitlab.example.com/-/pipelines/1"},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 1, Page: 1, PerPage: 20, TotalPages: 1},
+	}
+	const wantRow = "| [#1](https://gitlab.example.com/-/pipelines/1) |  | push | main | abc123 |\n"
+	if got := FormatListMarkdown(out); !strings.Contains(got, wantRow) {
+		t.Errorf("FormatListMarkdown()\n got %q\nwant a row %q", got, wantRow)
 	}
 }
 
@@ -2107,6 +2217,29 @@ func TestActionSpecs_Get404NotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetErrorOtherThan404_IsReported verifies the get route turns
+// only a 404 into the not-found card. A 403 says the caller may not look and a
+// 500 says GitLab broke; answering either with "pipeline not found" sends a
+// model off to correct an identifier that was right all along.
+func TestActionSpecs_GetErrorOtherThan404_IsReported(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			byTool := pipelineSpecsByTool(t, ActionSpecs(client))
+
+			result, err := byTool["gitlab_pipeline_get"].Route.Handler(t.Context(), map[string]any{"project_id": "1", "pipeline_id": 1})
+			if err == nil {
+				t.Fatalf("Route.Handler() = %#v with no error, want the %d reported", result, status)
+			}
+			if _, ok := result.(pipelineNotFoundOutput); ok {
+				t.Errorf("Route.Handler() answered the not-found card for %d", status)
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined verifies the delete handler returns
 // early when the user declines the confirmation prompt.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
@@ -2240,6 +2373,73 @@ func TestGetLatest_FallbackKeysetAndFilters(t *testing.T) {
 	}
 	if out.ID != 88 {
 		t.Errorf("fallback ID = %d, want 88", out.ID)
+	}
+}
+
+// fallbackListQuery drives GetLatest down its 403 fallback and hands back the
+// query the fallback list request carried, so a test can state what the
+// fallback asked GitLab for rather than only what it decoded.
+func fallbackListQuery(t *testing.T, input GetLatestInput) url.Values {
+	t.Helper()
+	var query url.Values
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case r.URL.Path == pathProjectPipelines && r.Method == http.MethodGet:
+			query = r.URL.Query()
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":88,"status":"success","ref":"main","sha":"abc123"}]`)
+		case r.URL.Path == "/api/v4/projects/42/pipelines/88":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":88,"status":"success","ref":"main","sha":"abc123"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	if _, err := GetLatest(context.Background(), client, input); err != nil {
+		t.Fatalf("GetLatest() unexpected error: %v", err)
+	}
+	if query == nil {
+		t.Fatal("GetLatest() never issued the fallback list request")
+	}
+	return query
+}
+
+// TestGetLatest_FallbackDefaults_AskForTheSingleNewestPipeline states what the
+// fallback has to ask for when the caller named no ordering. It stands in for
+// /pipelines/latest, so it must request one pipeline ordered newest first; any
+// other ordering or page size answers with a pipeline that is not the latest,
+// and the decoded output looks the same either way.
+func TestGetLatest_FallbackDefaults_AskForTheSingleNewestPipeline(t *testing.T) {
+	query := fallbackListQuery(t, GetLatestInput{ProjectID: "42"})
+
+	defaults := map[string]string{"order_by": "id", "sort": "desc", "per_page": "1"}
+	for param, want := range defaults {
+		t.Run(param, func(t *testing.T) {
+			if got := query.Get(param); got != want {
+				t.Errorf("fallback %s = %q, want %q", param, got, want)
+			}
+		})
+	}
+}
+
+// TestGetLatest_FallbackKeepsTheCallersOrdering is the other half: those three
+// are defaults, so an order_by, sort or per_page the caller supplied has to
+// reach GitLab unchanged rather than being overwritten by them.
+func TestGetLatest_FallbackKeepsTheCallersOrdering(t *testing.T) {
+	query := fallbackListQuery(t, GetLatestInput{
+		ProjectID: "42",
+		OrderBy:   "updated_at",
+		Sort:      "asc",
+		PerPage:   50,
+	})
+
+	supplied := map[string]string{"order_by": "updated_at", "sort": "asc", "per_page": "50"}
+	for param, want := range supplied {
+		t.Run(param, func(t *testing.T) {
+			if got := query.Get(param); got != want {
+				t.Errorf("fallback %s = %q, want the caller's %q", param, got, want)
+			}
+		})
 	}
 }
 

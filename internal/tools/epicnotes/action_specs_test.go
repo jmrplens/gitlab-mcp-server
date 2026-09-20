@@ -13,7 +13,8 @@ import (
 )
 
 // TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
+// Every epic note action speaks GraphQL, so one mux answers the query and the
+// three mutations the five routes send.
 // It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := epicNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, graphqlSessionMux())))
@@ -53,8 +54,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 }
 
 // TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// The destroyNote mutation answers HTTP 200 with a payload error, which is how
+// GitLab refuses a deletion.
+// It asserts that the route reports that refusal as an error.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
@@ -74,8 +76,8 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 }
 
 // TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// The client declines the confirmation, so no request reaches GitLab at all.
+// It asserts the caller is answered with a non-empty cancellation message.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := epicNoteSpecsByTool(t, ActionSpecs(client))
@@ -129,6 +131,52 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 		}
 	}
 	t.Error("expected text content in cancellation result")
+}
+
+// TestActionSpecs_EveryActionCarriesItsOwnMetadata pins the five individual
+// tool names this package publishes and holds each spec to metadata of its own.
+//
+// Those five names are what makes decorateEpicNoteMeta's last case
+// unfalsifiable, since it is reached only when the four before it missed, which
+// is exactly the delete tool. The property worth holding is the one behind
+// that: a sixth action added here without a case of its own would ship the
+// placeholder usage, an empty description and no related actions, and fails
+// here rather than reaching a model.
+func TestActionSpecs_EveryActionCarriesItsOwnMetadata(t *testing.T) {
+	const placeholderUsage = "Use to execute epicnotes domain action."
+
+	wantTools := []string{
+		"gitlab_epic_note_list",
+		"gitlab_epic_note_get",
+		"gitlab_epic_note_create",
+		"gitlab_epic_note_update",
+		"gitlab_epic_note_delete",
+	}
+	byTool := epicNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t))))
+	if len(byTool) != len(wantTools) {
+		t.Fatalf("ActionSpecs() published %d tools, want %d: %v", len(byTool), len(wantTools), byTool)
+	}
+
+	for _, tool := range wantTools {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("ActionSpecs() publishes no %s", tool)
+			}
+			if spec.Usage == "" || spec.Usage == placeholderUsage {
+				t.Errorf("Usage = %q, want the action's own text", spec.Usage)
+			}
+			if spec.IndividualTool.Description == "" {
+				t.Error("IndividualTool.Description is empty, want the action's own description")
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Error("RelatedActions is empty, want the action's own cross-links")
+			}
+			if len(spec.ParameterGuidance) == 0 {
+				t.Error("ParameterGuidance is empty, want guidance for the action's inputs")
+			}
+		})
+	}
 }
 
 func graphqlSessionMux() http.Handler {

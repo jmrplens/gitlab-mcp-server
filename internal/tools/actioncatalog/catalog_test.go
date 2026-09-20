@@ -3,6 +3,7 @@ package actioncatalog
 import (
 	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -12,9 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestCatalog_FromActionMapsRoundTrip_DeterministicActions verifies the Catalog_FromActionMapsRoundTrip_DeterministicActions handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_FromActionMapsRoundTrip_DeterministicActions verifies that a
+// catalog built from legacy route maps lists its actions in canonical ID
+// order whatever order the maps iterate in, and that the maps read back out
+// of it carry the routes' destructive flags and schemas.
 func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
@@ -80,11 +82,14 @@ func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	if catalog == nil {
 		t.Fatal("FromActionMapsWithError() catalog = nil, want partial catalog")
 	}
+	if got := catalog.CountGroups(); got != 0 {
+		t.Fatalf("FromActionMapsWithError() CountGroups() = %d, want 0: the rejected group must not be kept", got)
+	}
 }
 
-// TestFromActionMaps_InvalidToolName_Panics verifies the FromActionMaps_InvalidToolName_Panics handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestFromActionMaps_InvalidToolName_Panics verifies that the panicking
+// constructor refuses a route map keyed by an empty tool name instead of
+// returning a catalog without it.
 func TestFromActionMaps_InvalidToolName_Panics(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -97,9 +102,11 @@ func TestFromActionMaps_InvalidToolName_Panics(t *testing.T) {
 	})
 }
 
-// TestGroup_SetActionAndActionsInOrder_DefensiveBranches verifies the Group_SetActionAndActionsInOrder_DefensiveBranches handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestGroup_SetActionAndActionsInOrder_DefensiveBranches verifies the edges
+// of a group's action table: a nameless action is ignored, a repeated name
+// replaces the action without a second order entry, a group with no recorded
+// order lists its actions sorted, and a stale order entry naming no action
+// or naming one twice yields each action once.
 func TestGroup_SetActionAndActionsInOrder_DefensiveBranches(t *testing.T) {
 	group := Group{ToolName: "gitlab_project"}
 	group.SetAction(Action{})
@@ -177,9 +184,12 @@ func TestCatalog_Clone_SharesSchemasAndOwnsStructure(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupAndAddActionValidateDuplicates verifies the Catalog_AddGroupAndAddActionValidateDuplicates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_AddGroupAndAddActionValidateDuplicates verifies what AddGroup
+// and AddAction refuse: a group already present, an action claiming another
+// tool, an ID that is not its domain and name, a nil receiver, an empty tool
+// name, more than one options value, two actions sharing an ID, and an
+// action with no name; and that a refused AddAction leaves the count as it
+// was.
 func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	catalog := NewCatalog()
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project"})
@@ -232,9 +242,10 @@ func TestCatalog_AddGroupAndAddActionValidateDuplicates(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupInitializesZeroValueCatalog verifies the Catalog_AddGroupInitializesZeroValueCatalog handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_AddGroupInitializesZeroValueCatalog verifies that a zero-value
+// Catalog accepts its first group without NewCatalog having run, and that
+// two groups sharing a base domain cannot both hold an action of one name,
+// since the action ID would be the same.
 func TestCatalog_AddGroupInitializesZeroValueCatalog(t *testing.T) {
 	var catalog Catalog
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project", BaseDomain: "shared"})
@@ -253,9 +264,10 @@ func TestCatalog_AddGroupInitializesZeroValueCatalog(t *testing.T) {
 	}
 }
 
-// TestMustAddCatalogGroup_PanicsOnInvariantDrift verifies the MustAddCatalogGroup_PanicsOnInvariantDrift handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMustAddCatalogGroup_PanicsOnInvariantDrift verifies that the helper the
+// clone and filter paths add groups through panics when AddGroup refuses,
+// since a group those paths handle was validated when the source catalog
+// took it and a refusal now is an invariant that drifted.
 func TestMustAddCatalogGroup_PanicsOnInvariantDrift(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -329,8 +341,9 @@ func TestCatalog_AddGroup_SameNameCollisionRejectedBeforeDuplicateIDCheck(t *tes
 
 // TestCatalog_AddGroup_IntraGroupDuplicateIDViaDomainOverlap verifies the
 // intra-group "duplicate action id %q" branch in AddGroup — the one
-// TestCatalog_AddGroup_DuplicateActionIDDeadBranch documents as unreachable
-// through same-name collisions. It is reachable through a different route:
+// TestCatalog_AddGroup_SameNameCollisionRejectedBeforeDuplicateIDCheck
+// documents as unreachable through same-name collisions. It is reachable
+// through a different route:
 // ActionID is literally domain+"."+name, and normalizeAction only checks
 // that an action's own explicit ID (if any) matches its own domain+name —
 // it never compares across actions. Two actions with DIFFERENT Name values
@@ -354,9 +367,10 @@ func TestCatalog_AddGroup_IntraGroupDuplicateIDViaDomainOverlap(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddActionCreatesGroupWithMetadata verifies the Catalog_AddActionCreatesGroupWithMetadata handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_AddActionCreatesGroupWithMetadata verifies that AddAction
+// synthesizes a missing group from the options it is given, so the group
+// carries a description, a read-only flag, icons and a formatter like one
+// built the usual way, and that options naming a different tool are refused.
 func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
 	catalog := NewCatalog()
 	formatResult := func(any) *mcp.CallToolResult { return nil }
@@ -386,9 +400,8 @@ func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroupPreservesFormatter verifies the Catalog_AddGroupPreservesFormatter handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_AddGroupPreservesFormatter verifies that the formatter a group
+// was built with is still on the group read back out of the catalog.
 func TestCatalog_AddGroupPreservesFormatter(t *testing.T) {
 	group := NewGroup(GroupOptions{
 		ToolName: "gitlab_project",
@@ -411,9 +424,10 @@ func TestCatalog_AddGroupPreservesFormatter(t *testing.T) {
 	}
 }
 
-// TestCatalog_LookupsAndNilReceivers verifies the Catalog_LookupsAndNilReceivers handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_LookupsAndNilReceivers verifies that every accessor answers a
+// nil catalog with nothing rather than a panic, that a lookup of a group or
+// action the catalog does not hold reports false, and that one it does hold
+// comes back normalized with its name, domain and schema URI.
 func TestCatalog_LookupsAndNilReceivers(t *testing.T) {
 	var nilCatalog *Catalog
 	if _, ok := nilCatalog.Group("gitlab_project"); ok {
@@ -442,9 +456,11 @@ func TestCatalog_LookupsAndNilReceivers(t *testing.T) {
 	}
 }
 
-// TestCatalog_ValidateRejectsInvalidCatalogs verifies the Catalog_ValidateRejectsInvalidCatalogs handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_ValidateRejectsInvalidCatalogs verifies each refusal of
+// Catalog.Validate by the text it reports: a nil handler, a nil input schema,
+// a route with no binder, a schema URI naming another action or another
+// tool, an alias two actions claim, a group with no tool name and an action
+// with no name.
 func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -473,9 +489,16 @@ func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 			want: "has no binder",
 		},
 		{
-			name: "bad schema uri",
+			name: "schema uri names another action",
 			catalog: catalogWithActions(t, "gitlab_project", []Action{
 				{Name: "get", Route: testRoute(false), SchemaURI: "gitlab://schema/meta/gitlab_project/list"},
+			}),
+			want: "malformed schema URI",
+		},
+		{
+			name: "schema uri names another tool",
+			catalog: catalogWithActions(t, "gitlab_project", []Action{
+				{Name: "get", Route: testRoute(false), SchemaURI: "gitlab://schema/meta/gitlab_issue/get"},
 			}),
 			want: "malformed schema URI",
 		},
@@ -508,19 +531,20 @@ func TestCatalog_ValidateRejectsInvalidCatalogs(t *testing.T) {
 	}
 }
 
-// TestCatalog_ValidateAcceptsValidAndRejectsNil verifies the Catalog_ValidateAcceptsValidAndRejectsNil handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_ValidateAcceptsValidAndRejectsNil verifies that Validate refuses
+// a nil catalog, accepts a well-formed one whose action lists an alias twice
+// beside a blank one (a repeat on one action is not a claim by two), and
+// exempts the dynamic controllers alone from the binder rule.
 func TestCatalog_ValidateAcceptsValidAndRejectsNil(t *testing.T) {
 	var nilCatalog *Catalog
 	if err := nilCatalog.Validate(); err == nil {
 		t.Fatal("nil Validate() error = nil, want error")
 	}
 	catalog := catalogWithActions(t, "gitlab_project", []Action{
-		{Name: "get", Route: testRoute(false), Aliases: []string{"", "project.show"}},
+		{Name: "get", Route: testRoute(false), Aliases: []string{"", "project.show", "Project.Show"}},
 	})
 	if err := catalog.Validate(); err != nil {
-		t.Fatalf("Validate(valid) error = %v", err)
+		t.Fatalf("Validate(valid) error = %v, want an alias repeated on one action accepted", err)
 	}
 
 	// The dynamic controllers are the one exemption from the binder rule:
@@ -537,9 +561,10 @@ func TestCatalog_ValidateAcceptsValidAndRejectsNil(t *testing.T) {
 	}
 }
 
-// TestCatalog_FiltersCloneWithoutMutatingSource verifies the Catalog_FiltersCloneWithoutMutatingSource handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalog_FiltersCloneWithoutMutatingSource verifies that each filter
+// returns a narrowed copy and leaves the source catalog with every group it
+// had, that a nil catalog filters to nil, and that an empty exclusion or
+// allow-list keeps everything.
 func TestCatalog_FiltersCloneWithoutMutatingSource(t *testing.T) {
 	catalog := NewCatalog()
 	readGroup := NewGroup(GroupOptions{ToolName: "gitlab_search", ReadOnly: true})
@@ -906,5 +931,310 @@ func TestCatalog_Validate_RefusesAReplacedHandler(t *testing.T) {
 	err := catalog.Validate()
 	if err == nil || !strings.Contains(err.Error(), `action "project.get"`) || !strings.Contains(err.Error(), "without its binder") {
 		t.Fatalf("Validate() error = %v, want the replaced handler refused by action", err)
+	}
+}
+
+// TestCatalog_ActionMetadataFallsBackToTheRouteOnlyWhenUnset verifies that
+// an action's aliases, tags, usage and related actions come from its route
+// exactly when the action carries none of its own: an action given its own
+// keeps them even though the route's differ.
+//
+// Every value here is distinct from every other, on the route and on the
+// action alike, so a fallback that reads the wrong list, or one that
+// overwrites what the action carried, is seen by the value that arrives.
+func TestCatalog_ActionMetadataFallsBackToTheRouteOnlyWhenUnset(t *testing.T) {
+	route := testRoute(false)
+	route.Aliases = []string{"route-alias"}
+	route.Tags = []string{"route-tag"}
+	route.Usage = "route usage"
+	route.RelatedActions = []string{"route.related"}
+
+	tests := []struct {
+		name               string
+		action             Action
+		wantAliases        []string
+		wantTags           []string
+		wantUsage          string
+		wantRelatedActions []string
+	}{
+		{
+			name:               "an action carrying none takes the route's",
+			action:             Action{Name: "get", Route: route},
+			wantAliases:        []string{"route-alias"},
+			wantTags:           []string{"route-tag"},
+			wantUsage:          "route usage",
+			wantRelatedActions: []string{"route.related"},
+		},
+		{
+			name: "an action carrying its own keeps them",
+			action: Action{
+				Name:           "get",
+				Route:          route,
+				Aliases:        []string{"action-alias"},
+				Tags:           []string{"action-tag"},
+				Usage:          "action usage",
+				RelatedActions: []string{"action.related"},
+			},
+			wantAliases:        []string{"action-alias"},
+			wantTags:           []string{"action-tag"},
+			wantUsage:          "action usage",
+			wantRelatedActions: []string{"action.related"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := catalogWithActions(t, "gitlab_project", []Action{tt.action})
+			got, ok := catalog.Action("project.get")
+			if !ok {
+				t.Fatal("Action(project.get) = false, want the action indexed")
+			}
+			if !slices.Equal(got.Aliases, tt.wantAliases) {
+				t.Errorf("aliases = %v, want %v", got.Aliases, tt.wantAliases)
+			}
+			if !slices.Equal(got.Tags, tt.wantTags) {
+				t.Errorf("tags = %v, want %v", got.Tags, tt.wantTags)
+			}
+			if got.Usage != tt.wantUsage {
+				t.Errorf("usage = %q, want %q", got.Usage, tt.wantUsage)
+			}
+			if !slices.Equal(got.RelatedActions, tt.wantRelatedActions) {
+				t.Errorf("related actions = %v, want %v", got.RelatedActions, tt.wantRelatedActions)
+			}
+		})
+	}
+}
+
+// filterTestCatalog builds the two-group catalog the Filter tests narrow: a
+// read-only gitlab_search group and a mutating gitlab_project group.
+func filterTestCatalog(t *testing.T) *Catalog {
+	t.Helper()
+	catalog := NewCatalog()
+	readGroup := NewGroup(GroupOptions{ToolName: "gitlab_search", ReadOnly: true})
+	readGroup.SetAction(Action{Name: "code", Route: testRoute(false), ReadOnly: true})
+	writeGroup := NewGroup(GroupOptions{ToolName: "gitlab_project"})
+	writeGroup.SetAction(Action{Name: "create", Route: testRoute(false)})
+	if err := catalog.AddGroup(readGroup); err != nil {
+		t.Fatalf("AddGroup(gitlab_search) error = %v", err)
+	}
+	if err := catalog.AddGroup(writeGroup); err != nil {
+		t.Fatalf("AddGroup(gitlab_project) error = %v", err)
+	}
+	return catalog
+}
+
+// catalogGroupNames returns the tool names of every group in the catalog,
+// sorted, so a test can compare the survivors of a filter as one value.
+func catalogGroupNames(catalog *Catalog) []string {
+	names := make([]string, 0, catalog.CountGroups())
+	for _, group := range catalog.Groups() {
+		names = append(names, group.ToolName)
+	}
+	return names
+}
+
+// TestCatalog_Filter_AppliesEachOptionOnItsOwn verifies that Filter honors
+// each of its three options when it is the only one set, and all of them
+// together, by the groups that survive.
+//
+// The one Filter test before this set all three at once on a catalog where
+// any two of them already produced the final answer, so an allow-list that
+// was never applied passed.
+func TestCatalog_Filter_AppliesEachOptionOnItsOwn(t *testing.T) {
+	tests := []struct {
+		name string
+		opts FilterOptions
+		want []string
+	}{
+		{name: "nothing set keeps every group", opts: FilterOptions{}, want: []string{"gitlab_project", "gitlab_search"}},
+		{name: "exclusion alone removes the named group", opts: FilterOptions{ExcludeTools: []string{"gitlab_search"}}, want: []string{"gitlab_project"}},
+		{name: "read-only alone keeps the read-only group", opts: FilterOptions{ReadOnlyOnly: true}, want: []string{"gitlab_search"}},
+		{name: "allow-list alone keeps the named group", opts: FilterOptions{AllowedToolNames: []string{"gitlab_project"}}, want: []string{"gitlab_project"}},
+		{name: "allow-list naming nothing present keeps no group", opts: FilterOptions{AllowedToolNames: []string{"gitlab_issue"}}, want: []string{}},
+		{
+			name: "every option composes",
+			opts: FilterOptions{ExcludeTools: []string{"gitlab_project"}, ReadOnlyOnly: true, AllowedToolNames: []string{"gitlab_search"}},
+			want: []string{"gitlab_search"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := filterTestCatalog(t)
+			filtered := catalog.Filter(tt.opts)
+			if got := catalogGroupNames(filtered); !slices.Equal(got, tt.want) {
+				t.Errorf("Filter(%+v) groups = %v, want %v", tt.opts, got, tt.want)
+			}
+			if got := catalog.CountGroups(); got != 2 {
+				t.Errorf("source CountGroups() = %d after Filter, want 2", got)
+			}
+			if filtered == catalog {
+				t.Error("Filter() returned the source catalog, want a copy")
+			}
+		})
+	}
+}
+
+// TestCatalog_AddAction_ToOneGroup_LeavesTheOthersIndexed verifies that
+// adding an action to one existing group re-indexes that group alone: the
+// actions of every other group stay in the catalog's action index.
+//
+// AddAction rebuilds the target group by dropping its actions from the index
+// first, selecting them by tool name, so a selection that matched too widely
+// would silently unindex a neighbor.
+func TestCatalog_AddAction_ToOneGroup_LeavesTheOthersIndexed(t *testing.T) {
+	catalog := filterTestCatalog(t)
+	if err := catalog.AddAction("gitlab_project", Action{Name: "get", Route: testRoute(false), ReadOnly: true}); err != nil {
+		t.Fatalf("AddAction() error = %v", err)
+	}
+	if got := catalogActionIDs(catalog); !slices.Equal(got, []string{"project.create", "project.get", "search.code"}) {
+		t.Errorf("actions after AddAction = %v, want project.create, project.get and search.code all indexed", got)
+	}
+	if _, ok := catalog.Action("search.code"); !ok {
+		t.Error("Action(search.code) = false after adding to gitlab_project, want the other group's action still indexed")
+	}
+	if group, ok := catalog.Group("gitlab_project"); !ok || !slices.Equal(group.ActionOrder, []string{"create", "get"}) {
+		t.Errorf("gitlab_project order = %v (found %t), want [create get]", group.ActionOrder, ok)
+	}
+}
+
+// groupMetadataOptions returns group options with every metadata field set
+// to a value no other field shares, and exactly one of the three boolean
+// fields set, named by flag: "read_only", "enterprise_only" or
+// "gitlab_com_only".
+//
+// A rebuild of a group is a block of twelve plain assignments, which is the
+// shape neither gate can report on, and the three flags are what a fixture
+// setting them all to true cannot tell apart.
+func groupMetadataOptions(flag string) GroupOptions {
+	return GroupOptions{
+		ToolName:               "gitlab_fixture",
+		Title:                  "Fixture title",
+		Description:            "Fixture description.",
+		Icons:                  []mcp.Icon{{Source: "data:image/svg+xml;base64,fixture", MIMEType: "image/svg+xml", Sizes: []string{"any"}}},
+		ReadOnly:               flag == "read_only",
+		FormatResult:           groupMetadataFormatter,
+		BaseDomain:             "fixture_domain",
+		EnterpriseOnly:         flag == "enterprise_only",
+		GitLabDotComOnly:       flag == "gitlab_com_only",
+		CapabilityRequirements: []string{"fixture-capability"},
+		OwnerPackage:           "fixturepkg",
+		SurfaceKind:            SurfaceKindGitLabAction,
+	}
+}
+
+// groupMetadataFormatter is the formatter groupMetadataOptions carries. A
+// func cannot be compared, so the assertion runs it and reads the text back.
+func groupMetadataFormatter(any) *mcp.CallToolResult {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "fixture formatter"}}}
+}
+
+// assertGroupMetadata holds every metadata field of got to want, one field
+// at a time so the report names the one that moved.
+func assertGroupMetadata(t *testing.T, got Group, want GroupOptions) {
+	t.Helper()
+	if got.ToolName != want.ToolName {
+		t.Errorf("tool name = %q, want %q", got.ToolName, want.ToolName)
+	}
+	if got.Title != want.Title {
+		t.Errorf("title = %q, want %q", got.Title, want.Title)
+	}
+	if got.Description != want.Description {
+		t.Errorf("description = %q, want %q", got.Description, want.Description)
+	}
+	if !reflect.DeepEqual(got.Icons, want.Icons) {
+		t.Errorf("icons = %+v, want %+v", got.Icons, want.Icons)
+	}
+	if got.ReadOnly != want.ReadOnly {
+		t.Errorf("read-only = %t, want %t", got.ReadOnly, want.ReadOnly)
+	}
+	if got.FormatResult == nil {
+		t.Error("formatter = nil, want the fixture's")
+	} else if result := got.FormatResult(nil); len(result.Content) != 1 || result.Content[0].(*mcp.TextContent).Text != "fixture formatter" {
+		t.Errorf("formatter result = %+v, want the fixture formatter's text", result)
+	}
+	if got.BaseDomain != want.BaseDomain {
+		t.Errorf("base domain = %q, want %q", got.BaseDomain, want.BaseDomain)
+	}
+	if got.EnterpriseOnly != want.EnterpriseOnly {
+		t.Errorf("enterprise-only = %t, want %t", got.EnterpriseOnly, want.EnterpriseOnly)
+	}
+	if got.GitLabDotComOnly != want.GitLabDotComOnly {
+		t.Errorf("gitlab.com-only = %t, want %t", got.GitLabDotComOnly, want.GitLabDotComOnly)
+	}
+	if !slices.Equal(got.CapabilityRequirements, want.CapabilityRequirements) {
+		t.Errorf("capability requirements = %v, want %v", got.CapabilityRequirements, want.CapabilityRequirements)
+	}
+	if got.OwnerPackage != want.OwnerPackage {
+		t.Errorf("owner package = %q, want %q", got.OwnerPackage, want.OwnerPackage)
+	}
+	if got.SurfaceKind != want.SurfaceKind {
+		t.Errorf("surface kind = %q, want %q", got.SurfaceKind, want.SurfaceKind)
+	}
+}
+
+// TestCatalog_Rebuilds_KeepEveryGroupMetadataField verifies that every path
+// which rebuilds a group from its own metadata hands each field on: reading
+// it back, cloning, binding, narrowing to read-only actions, replacing
+// writes with previews, excluding one of its actions, and adding an action
+// to it. Each runs three times, with one boolean field set per run.
+//
+// Six of those paths copy the group's fields into a fresh GroupOptions by
+// hand, and a field left out of one copy is a group that loses its icons,
+// its formatter or its tier on one surface and keeps them on the others.
+func TestCatalog_Rebuilds_KeepEveryGroupMetadataField(t *testing.T) {
+	rebuilds := []struct {
+		name    string
+		rebuild func(t *testing.T, catalog *Catalog) (Group, bool)
+		// forcesReadOnly marks the one path that sets the flag on purpose.
+		forcesReadOnly bool
+	}{
+		{name: "read back", rebuild: func(_ *testing.T, c *Catalog) (Group, bool) { return c.Group("gitlab_fixture") }},
+		{name: "clone", rebuild: func(_ *testing.T, c *Catalog) (Group, bool) { return c.Clone().Group("gitlab_fixture") }},
+		{name: "bind", rebuild: func(_ *testing.T, c *Catalog) (Group, bool) {
+			return c.BindTo(&gitlabclient.Client{}).Group("gitlab_fixture")
+		}},
+		{name: "read-only actions", forcesReadOnly: true, rebuild: func(_ *testing.T, c *Catalog) (Group, bool) {
+			return c.FilterReadOnlyActions().Group("gitlab_fixture")
+		}},
+		{name: "safe-mode previews", rebuild: func(_ *testing.T, c *Catalog) (Group, bool) {
+			return c.WithSafeModePreviews().Group("gitlab_fixture")
+		}},
+		{name: "exclude one action", rebuild: func(t *testing.T, c *Catalog) (Group, bool) {
+			t.Helper()
+			filtered, unmatched := c.FilterExcludedToolNames([]string{"fixture_domain.delete"})
+			if len(unmatched) != 0 {
+				t.Fatalf("unmatched = %v, want the action found", unmatched)
+			}
+			return filtered.Group("gitlab_fixture")
+		}},
+		{name: "add an action", rebuild: func(t *testing.T, c *Catalog) (Group, bool) {
+			t.Helper()
+			if err := c.AddAction("gitlab_fixture", Action{Name: "list", Route: testRoute(false), ReadOnly: true}); err != nil {
+				t.Fatalf("AddAction() error = %v", err)
+			}
+			return c.Group("gitlab_fixture")
+		}},
+	}
+	flags := []string{"read_only", "enterprise_only", "gitlab_com_only"}
+	for _, rebuild := range rebuilds {
+		for _, flag := range flags {
+			t.Run(rebuild.name+"/"+flag, func(t *testing.T) {
+				want := groupMetadataOptions(flag)
+				group := NewGroup(want)
+				group.SetAction(Action{Name: "get", Route: testRoute(false), ReadOnly: true})
+				group.SetAction(Action{Name: "delete", Route: testRoute(true), Destructive: true})
+				catalog := NewCatalog()
+				if err := catalog.AddGroup(group); err != nil {
+					t.Fatalf("AddGroup() error = %v", err)
+				}
+				got, ok := rebuild.rebuild(t, catalog)
+				if !ok {
+					t.Fatal("Group(gitlab_fixture) = false after the rebuild, want the group kept")
+				}
+				if rebuild.forcesReadOnly {
+					want.ReadOnly = true
+				}
+				assertGroupMetadata(t, got, want)
+			})
+		}
 	}
 }

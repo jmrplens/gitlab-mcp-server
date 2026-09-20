@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -155,9 +157,15 @@ func TestList_InvalidDeploymentID(t *testing.T) {
 	}
 }
 
+// deploymentListHint is the one recovery this action offers, and it is
+// attached to 404 alone: a deployment id that does not exist is what sending
+// the caller to the deployment listing answers.
+const deploymentListHint = "verify project_id and deployment_id with gitlab_deployment_list"
+
 // TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that a 403 carries GitLab's own message and not the hint, which
+// would send a caller who lacks access looking for a deployment that is there.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -171,6 +179,12 @@ func TestList_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "server error") {
+		t.Errorf("error = %q, want GitLab's own message in it", err)
+	}
+	if strings.Contains(err.Error(), deploymentListHint) {
+		t.Errorf("error = %q, want the not-found hint left off a 403", err)
 	}
 }
 
@@ -227,7 +241,9 @@ const fmtUnexpErr = "unexpected error: %v"
 
 // TestList_APIError404 verifies that List404 returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts the error names the operation and carries the hint, which the
+// status literal in the handler decides: moving it off 404 left every other
+// test in this file passing.
 func TestList_APIError404(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -238,6 +254,9 @@ func TestList_APIError404(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "list_deployment_merge_requests") {
 		t.Errorf("error should contain tool name, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), deploymentListHint) {
+		t.Errorf("error = %q, want the hint naming the deployment listing", err)
 	}
 }
 
@@ -462,6 +481,7 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 
 	withDetails := true
 	withRecheck := true
+	nonArchived := true
 	_, err := List(context.Background(), client, ListInput{
 		ProjectID:              "1",
 		DeploymentID:           2,
@@ -480,12 +500,56 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 		NotLabels:              []string{"wontfix"},
 		WithLabelsDetails:      &withDetails,
 		WithMergeStatusRecheck: &withRecheck,
-		NonArchived:            &withRecheck,
+		NonArchived:            &nonArchived,
 		UpdatedAfter:           "2025-02-01T00:00:00Z",
 		UpdatedBefore:          "2025-11-30T23:59:59Z",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestList_EveryBoolFilter_ReachesItsOwnQueryKey drives one of the four *bool
+// filters at a time and holds the query to that filter's key alone, the other
+// three absent. TestList_AdditionalMergeRequestFilters sets three of them
+// non-nil and true in one call, which any permutation of their assignments
+// reproduces exactly; a filter written onto a sibling's option leaves its own
+// key unsent once it is the only one driven. Each is driven false as well,
+// since an assignment replaced by a literal true would otherwise pass.
+func TestList_EveryBoolFilter_ReachesItsOwnQueryKey(t *testing.T) {
+	filters := []struct {
+		key string
+		set func(*ListInput, *bool)
+	}{
+		{"with_labels_details", func(in *ListInput, v *bool) { in.WithLabelsDetails = v }},
+		{"with_merge_status_recheck", func(in *ListInput, v *bool) { in.WithMergeStatusRecheck = v }},
+		{"draft", func(in *ListInput, v *bool) { in.Draft = v }},
+		{"non_archived", func(in *ListInput, v *bool) { in.NonArchived = v }},
+	}
+	for _, filter := range filters {
+		for _, value := range []bool{true, false} {
+			t.Run(filter.key+"="+strconv.FormatBool(value), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					q := r.URL.Query()
+					for _, other := range filters {
+						want := ""
+						if other.key == filter.key {
+							want = strconv.FormatBool(value)
+						}
+						if got := q.Get(other.key); got != want {
+							t.Errorf("query %s = %q, want %q", other.key, got, want)
+						}
+					}
+					testutil.RespondJSON(w, http.StatusOK, `[]`)
+				}))
+
+				input := ListInput{ProjectID: "1", DeploymentID: 2}
+				filter.set(&input, &value)
+				if _, err := List(context.Background(), client, input); err != nil {
+					t.Fatalf(fmtUnexpErr, err)
+				}
+			})
+		}
 	}
 }
 
@@ -990,9 +1054,13 @@ func TestList_UndecodableBody_IsTheOperationError(t *testing.T) {
 }
 
 // TestList_EmptyApproverFilters_ReachNoQueryParameter verifies an unset
-// approver filter is left off the request rather than sent empty. The three
-// length guards in buildListOptions are what decides that, and a boundary
-// mutation of any of them turns "the caller asked for this" into "always".
+// approver filter is left off the request rather than sent empty.
+//
+// It does not hold the three length guards in buildListOptions, and no test
+// can: ApproverIDsValue answers an empty filter with a nil value, and the SDK
+// writes no key for an empty username slice, so dropping a guard sends exactly
+// the same request. Each of the three survives its boundary mutation, verified
+// by hand, and what this test holds is the request rather than the guard.
 //
 // Both spellings of each ID filter are checked because the SDK's encoder picks
 // between them by the value it was given: the Any and None literals are written
@@ -1055,6 +1123,225 @@ func TestToOutput_DiffRefs_EachShaAloneProducesTheObject(t *testing.T) {
 				t.Errorf("DiffRefs = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// distinctRowJSON is a merge request in which no two values agree: every
+// number, string and timestamp is unique, so a field read from a neighbour's
+// key changes the row rather than reproducing it. The flags are left out
+// because a block of booleans has no such fixture; they are driven one at a
+// time in TestList_EveryFlag_ComesFromItsOwnKey.
+const distinctRowJSON = `[{
+	"id": 101,
+	"iid": 102,
+	"project_id": 103,
+	"source_project_id": 104,
+	"target_project_id": 105,
+	"title": "title-value",
+	"description": "description-value",
+	"state": "state-value",
+	"imported_from": "imported-from-value",
+	"source_branch": "source-branch-value",
+	"target_branch": "target-branch-value",
+	"web_url": "https://gl.example.com/web-url",
+	"detailed_merge_status": "detailed-merge-status-value",
+	"sha": "sha-value",
+	"merge_commit_sha": "merge-commit-sha-value",
+	"squash_commit_sha": "squash-commit-sha-value",
+	"upvotes": 106,
+	"downvotes": 107,
+	"user_notes_count": 108,
+	"diverged_commits_count": 109,
+	"merge_error": "merge-error-value",
+	"changes_count": "changes-count-value",
+	"author": {"id": 110, "username": "author-username"},
+	"assignee": {"id": 111, "username": "assignee-username"},
+	"merge_user": {"id": 112, "username": "merge-user-username"},
+	"closed_by": {"id": 113, "username": "closed-by-username"},
+	"merged_by": {"id": 114, "username": "merged-by-username"},
+	"assignees": [{"id": 115, "username": "assignees-username"}],
+	"reviewers": [{"id": 116, "username": "reviewers-username"}],
+	"labels": ["labels-value"],
+	"label_details": [{"id": 117, "name": "label-details-name"}],
+	"milestone": {"id": 118, "title": "milestone-title"},
+	"references": {"short": "references-short", "relative": "references-relative", "full": "references-full"},
+	"task_completion_status": {"count": 119, "completed_count": 120},
+	"time_stats": {
+		"time_estimate": 121, "total_time_spent": 122,
+		"human_time_estimate": "human-time-estimate-value",
+		"human_total_time_spent": "human-total-time-spent-value"
+	},
+	"user": {"can_merge": true},
+	"diff_refs": {"base_sha": "diff-refs-base-sha", "head_sha": "diff-refs-head-sha", "start_sha": "diff-refs-start-sha"},
+	"pipeline": {"id": 123, "ref": "pipeline-ref"},
+	"head_pipeline": {"id": 124, "ref": "head-pipeline-ref"},
+	"merge_after": "2031-01-01T00:00:00Z",
+	"latest_build_started_at": "2032-02-02T00:00:00Z",
+	"latest_build_finished_at": "2033-03-03T00:00:00Z",
+	"first_deployed_to_production_at": "2034-04-04T00:00:00Z",
+	"created_at": "2035-05-05T00:00:00Z",
+	"updated_at": "2036-06-06T00:00:00Z",
+	"merged_at": "2037-07-07T00:00:00Z",
+	"closed_at": "2038-08-08T00:00:00Z",
+	"prepared_at": "2039-09-09T00:00:00Z",
+	"approvals_before_merge": 125,
+	"merge_status": "merge-status-value",
+	"reference": "reference-value",
+	"title_html": "title-html-value",
+	"description_html": "description-html-value"
+}]`
+
+// wantDistinctRow is the row toOutput has to build from distinctRowJSON.
+func wantDistinctRow() Output {
+	approvals := int64(125)
+	return Output{
+		ID: 101, IID: 102, ProjectID: 103, SourceProjectID: 104, TargetProjectID: 105,
+		Title: "title-value", Description: "description-value", State: "state-value",
+		ImportedFrom: "imported-from-value",
+		SourceBranch: "source-branch-value", TargetBranch: "target-branch-value",
+		WebURL:              "https://gl.example.com/web-url",
+		DetailedMergeStatus: "detailed-merge-status-value",
+		SHA:                 "sha-value",
+		MergeCommitSHA:      "merge-commit-sha-value",
+		SquashCommitSHA:     "squash-commit-sha-value",
+		Upvotes:             106, Downvotes: 107, UserNotesCount: 108, DivergedCommitsCount: 109,
+		MergeError: "merge-error-value", ChangesCount: "changes-count-value",
+		Author:    &toolutil.BasicUserOutput{ID: 110, Username: "author-username"},
+		Assignee:  &toolutil.BasicUserOutput{ID: 111, Username: "assignee-username"},
+		MergeUser: &toolutil.BasicUserOutput{ID: 112, Username: "merge-user-username"},
+		ClosedBy:  &toolutil.BasicUserOutput{ID: 113, Username: "closed-by-username"},
+		MergedBy:  &toolutil.BasicUserOutput{ID: 114, Username: "merged-by-username"},
+		Assignees: []*toolutil.BasicUserOutput{{ID: 115, Username: "assignees-username"}},
+		Reviewers: []*toolutil.BasicUserOutput{{ID: 116, Username: "reviewers-username"}},
+		Labels:    []string{"labels-value"},
+		LabelDetails: []*toolutil.LabelDetailsOutput{
+			{ID: 117, Name: "label-details-name"},
+		},
+		Milestone: &toolutil.MRMilestoneOutput{ID: 118, Title: "milestone-title"},
+		References: &toolutil.ReferencesOutput{
+			Short: "references-short", Relative: "references-relative", Full: "references-full",
+		},
+		TaskCompletionStatus: &toolutil.TaskCompletionStatusOutput{Count: 119, CompletedCount: 120},
+		TimeStats: &TimeStatsOutput{
+			HumanTimeEstimate: "human-time-estimate-value", HumanTotalTimeSpent: "human-total-time-spent-value",
+			TimeEstimate: 121, TotalTimeSpent: 122,
+		},
+		User: &toolutil.MergeRequestUserOutput{CanMerge: true},
+		DiffRefs: &DiffRefsOutput{
+			BaseSHA: "diff-refs-base-sha", HeadSHA: "diff-refs-head-sha", StartSHA: "diff-refs-start-sha",
+		},
+		Pipeline:                    &toolutil.PipelineInfoOutput{ID: 123, Ref: "pipeline-ref"},
+		HeadPipeline:                &toolutil.PipelineOutput{ID: 124, Ref: "head-pipeline-ref"},
+		MergeAfter:                  "2031-01-01T00:00:00Z",
+		LatestBuildStartedAt:        "2032-02-02T00:00:00Z",
+		LatestBuildFinishedAt:       "2033-03-03T00:00:00Z",
+		FirstDeployedToProductionAt: "2034-04-04T00:00:00Z",
+		CreatedAt:                   "2035-05-05T00:00:00Z",
+		UpdatedAt:                   "2036-06-06T00:00:00Z",
+		MergedAt:                    "2037-07-07T00:00:00Z",
+		ClosedAt:                    "2038-08-08T00:00:00Z",
+		PreparedAt:                  "2039-09-09T00:00:00Z",
+		ApprovalsBeforeMerge:        &approvals,
+		MergeStatus:                 "merge-status-value",
+		Reference:                   "reference-value",
+		TitleHTML:                   "title-html-value",
+		DescriptionHTML:             "description-html-value",
+	}
+}
+
+// indentJSON renders a value as indented JSON so that a whole-row mismatch
+// below reads as a diff rather than as a wall of pointer addresses.
+func indentJSON(t *testing.T, v any) string {
+	t.Helper()
+	encoded, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal for the failure message: %v", err)
+	}
+	return string(encoded)
+}
+
+// TestList_EveryField_ComesFromItsOwnKey compares the whole converted row
+// against a fixture where no two values agree. toOutput is a block of
+// straight-line assignments, which neither the mutation nor the condition gate
+// scores: a probe that read created_at from updated_at's key and the assignee
+// from the merge user's left every other test in this file passing.
+func TestList_EveryField_ComesFromItsOwnKey(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, distinctRowJSON)
+	}))
+
+	out, err := List(context.Background(), client, ListInput{ProjectID: "1", DeploymentID: 2})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.MergeRequests) != 1 {
+		t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+	}
+	if got, want := out.MergeRequests[0], wantDistinctRow(); !reflect.DeepEqual(got, want) {
+		t.Errorf("row =\n%s\nwant\n%s", indentJSON(t, got), indentJSON(t, want))
+	}
+}
+
+// TestList_EveryFlag_ComesFromItsOwnKey drives one boolean at a time and holds
+// the whole row against one carrying that flag alone. A fixture setting every
+// flag cannot tell two of them apart, so a converter reading squash from
+// squash_on_merge's key would pass it.
+func TestList_EveryFlag_ComesFromItsOwnKey(t *testing.T) {
+	flags := []struct {
+		key string
+		set func(*Output)
+	}{
+		{"imported", func(row *Output) { row.Imported = true }},
+		{"draft", func(row *Output) { row.Draft = true }},
+		{"has_conflicts", func(row *Output) { row.HasConflicts = true }},
+		{"blocking_discussions_resolved", func(row *Output) { row.BlockingDiscussionsResolved = true }},
+		{"squash", func(row *Output) { row.Squash = true }},
+		{"squash_on_merge", func(row *Output) { row.SquashOnMerge = true }},
+		{"merge_when_pipeline_succeeds", func(row *Output) { row.MergeWhenPipelineSucceeds = true }},
+		{"should_remove_source_branch", func(row *Output) { row.ShouldRemoveSourceBranch = true }},
+		{"allow_maintainer_to_push", func(row *Output) { row.AllowMaintainerToPush = true }},
+		{"discussion_locked", func(row *Output) { row.DiscussionLocked = true }},
+		{"force_remove_source_branch", func(row *Output) { row.ForceRemoveSourceBranch = true }},
+		{"allow_collaboration", func(row *Output) { row.AllowCollaboration = true }},
+		{"rebase_in_progress", func(row *Output) { row.RebaseInProgress = true }},
+		{"subscribed", func(row *Output) { row.Subscribed = true }},
+		{"first_contribution", func(row *Output) { row.FirstContribution = true }},
+		{"work_in_progress", func(row *Output) { row.WorkInProgress = true }},
+	}
+	for _, flag := range flags {
+		t.Run(flag.key, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `[{"iid":1,"`+flag.key+`":true}]`)
+			}))
+			out, err := List(context.Background(), client, ListInput{ProjectID: "1", DeploymentID: 2})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if len(out.MergeRequests) != 1 {
+				t.Fatalf("List() returned %d rows, want 1", len(out.MergeRequests))
+			}
+			want := Output{IID: 1, Labels: []string{}, User: &toolutil.MergeRequestUserOutput{}}
+			flag.set(&want)
+			if got := out.MergeRequests[0]; !reflect.DeepEqual(got, want) {
+				t.Errorf("row carrying %s alone =\n%s\nwant\n%s", flag.key, indentJSON(t, got), indentJSON(t, want))
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_RowWithoutState_LeavesTheStateCellEmpty verifies a
+// row whose state GitLab did not send renders an empty cell. Without the
+// guard the cell would read "❓", the glyph for a state nothing recognizes,
+// which tells a reader the state is unknown rather than absent.
+func TestFormatListMarkdown_RowWithoutState_LeavesTheStateCellEmpty(t *testing.T) {
+	got := FormatListMarkdownString(ListOutput{MergeRequests: []Output{{
+		IID: 10, Title: "Add feature X", Author: &toolutil.BasicUserOutput{Username: "dev"},
+		SourceBranch: "feature-x", TargetBranch: "main",
+	}}})
+	want := "## Deployment Merge Requests (1)\n\n" + tableHead +
+		"| !10 | Add feature X |  | @dev | feature-x -> main |\n" + listHints
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
 

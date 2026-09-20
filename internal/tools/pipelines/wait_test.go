@@ -5,6 +5,7 @@ package pipelines
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -223,11 +224,11 @@ func TestWait_CanceledContext(t *testing.T) {
 	}
 }
 
-// TestWait_EmptyProjectID verifies that Wait returns an error for empty project_id.
+// TestWait_EmptyProjectID verifies that Wait refuses a call with no project,
+// and refuses it here rather than letting GitLab answer: the mock fails the
+// test if any request arrives, so the refusal is the handler's own.
 func TestWait_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Wait(context.Background(), nil, client, WaitInput{
 		PipelineID: 10,
@@ -235,20 +236,33 @@ func TestWait_EmptyProjectID(t *testing.T) {
 	if err == nil {
 		t.Fatal("Wait() expected error for empty project_id, got nil")
 	}
+	if !strings.Contains(err.Error(), "project_id") {
+		t.Errorf("Wait() error = %q, want it to name project_id", err)
+	}
 }
 
-// TestWait_InvalidPipelineID verifies that Wait returns an error for pipeline_id <= 0.
+// TestWait_InvalidPipelineID verifies that Wait refuses every pipeline_id at
+// or below zero, itself. Zero is the one a missing argument decodes to and so
+// the one a model reaches by accident, and it is the value the guard's own
+// boundary turns on: against a mock that answers anything, a test asserting
+// only that some error came back passes on GitLab's 404 while the guard lets
+// zero through.
 func TestWait_InvalidPipelineID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	for _, id := range []int64{0, -1} {
+		t.Run(strconv.FormatInt(id, 10), func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
-	_, err := Wait(context.Background(), nil, client, WaitInput{
-		ProjectID:  "42",
-		PipelineID: 0,
-	})
-	if err == nil {
-		t.Fatal("Wait() expected error for invalid pipeline_id, got nil")
+			_, err := Wait(context.Background(), nil, client, WaitInput{
+				ProjectID:  "42",
+				PipelineID: id,
+			})
+			if err == nil {
+				t.Fatalf("Wait(pipeline_id=%d) expected an error, got nil", id)
+			}
+			if !strings.Contains(err.Error(), "pipeline_id") {
+				t.Errorf("Wait(pipeline_id=%d) error = %q, want it to name pipeline_id", id, err)
+			}
+		})
 	}
 }
 
@@ -478,16 +492,46 @@ func TestFormatPipelineNotFound(t *testing.T) {
 	}
 }
 
-// TestFormatWaitResult verifies wait result formatting marks timeouts as errors.
+// TestFormatWaitResult verifies wait result formatting marks a timeout as an
+// error and a wait that reached a terminal status as none. Both halves matter:
+// a result always flagged IsError tells a client every wait failed, and one
+// never flagged tells it a wait that ran out of time succeeded.
 func TestFormatWaitResult(t *testing.T) {
-	result := formatWaitResult(WaitOutput{
-		Pipeline:    DetailOutput{ID: 10, Status: "running", WebURL: "https://gitlab.example.com/-/pipelines/10"},
-		WaitedFor:   "60s",
-		PollCount:   6,
-		FinalStatus: "running",
-		TimedOut:    true,
-	})
-	if result == nil || !result.IsError {
-		t.Fatalf("formatWaitResult() = %+v, want timeout error result", result)
+	cases := []struct {
+		name     string
+		out      WaitOutput
+		wantErrs bool
+	}{
+		{
+			name: "timed out",
+			out: WaitOutput{
+				Pipeline:    DetailOutput{ID: 10, Status: "running", WebURL: "https://gitlab.example.com/-/pipelines/10"},
+				WaitedFor:   "60s",
+				PollCount:   6,
+				FinalStatus: "running",
+				TimedOut:    true,
+			},
+			wantErrs: true,
+		},
+		{
+			name: "reached a terminal status",
+			out: WaitOutput{
+				Pipeline:    DetailOutput{ID: 10, Status: statusSuccess, WebURL: "https://gitlab.example.com/-/pipelines/10"},
+				WaitedFor:   "30s",
+				PollCount:   3,
+				FinalStatus: statusSuccess,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := formatWaitResult(tc.out)
+			if result == nil {
+				t.Fatal("formatWaitResult() = nil")
+			}
+			if result.IsError != tc.wantErrs {
+				t.Errorf("formatWaitResult().IsError = %v, want %v", result.IsError, tc.wantErrs)
+			}
+		})
 	}
 }

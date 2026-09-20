@@ -520,7 +520,7 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	switch {
 	case hasFormat:
 		request.ResponseFormat = format
-	case !hasFormat:
+	default:
 		request.ResponseFormat = &rawFormat
 	}
 	useRaw := hasFormat && *format == gl.OrbitResponseFormatLLM

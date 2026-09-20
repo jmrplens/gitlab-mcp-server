@@ -13,9 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestActionSpecs_MutationErrors validates the MutationErrors route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestActionSpecs_MutationErrors asserts how each route answers an instance
+// that refuses it: the four writes report the error, and the read alone
+// answers a 404 with the not-found card, which is the one route that turns a
+// refusal into a result rather than an error.
 func TestActionSpecs_MutationErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -59,9 +60,10 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalogSurface_DeleteConfirmDeclined drives the delete over a real MCP
+// session whose client declines the confirmation, and asserts the call is
+// answered rather than left hanging. The mock GitLab is an empty mux on
+// purpose: a declined confirmation must reach no endpoint at all.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)

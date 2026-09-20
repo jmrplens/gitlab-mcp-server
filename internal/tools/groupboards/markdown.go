@@ -114,9 +114,7 @@ func FormatGroupBoardMarkdown(out GroupBoardOutput) string {
 		c.Markdown("Assignee", toolutil.MdUserLink(out.Assignee.Username, out.Assignee.WebURL))
 	}
 	c.Count("Weight", out.Weight)
-	if names := boardLabelNames(out.Labels); len(names) > 0 {
-		c.Field("Labels", strings.Join(names, ", "))
-	}
+	c.Field("Labels", strings.Join(boardLabelNames(out.Labels), ", "))
 	c.Bool("Hide Backlog", out.HideBacklogList)
 	c.Bool("Hide Closed", out.HideClosedList)
 	writeBoardListsTable(c, out.Lists)

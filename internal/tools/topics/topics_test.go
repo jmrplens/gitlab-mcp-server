@@ -5,7 +5,9 @@ package topics
 
 import (
 	"context"
+	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +15,7 @@ import (
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
@@ -20,6 +23,21 @@ const fmtUnexpErr = "unexpected error: %v"
 
 // topicJSON identifies the topic JSON constant used by this package.
 const topicJSON = `{"id":1,"name":"go","title":"Go","description":"The Go programming language","total_projects_count":42,"organization_id":7,"avatar_url":"https://example.com/go.png"}`
+
+// wantTopic is what topicJSON has to decode to, whole. No two of its fields
+// carry the same value, so a converter that reads one of GitLab's fields into
+// the neighboring output field produces a different object rather than an
+// equal one: description and avatar_url could be crossed in topicToItem with
+// the whole suite still green, because no test here read either of them.
+var wantTopic = TopicItem{
+	ID:                 1,
+	Name:               "go",
+	Title:              "Go",
+	Description:        "The Go programming language",
+	TotalProjectsCount: 42,
+	OrganizationID:     7,
+	AvatarURL:          "https://example.com/go.png",
+}
 
 // pathTopics identifies the path topics constant used by this package.
 const pathTopics = "/api/v4/topics"
@@ -39,7 +57,8 @@ const testTopicID = "topic_id"
 // fmtExpErrMentionTopicID identifies the fmt exp err mention topic ID constant used by this package.
 const fmtExpErrMentionTopicID = "expected error to mention topic_id, got %q"
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that a listed topic arrives whole: every field
+// GitLab sent under the output field that names it.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.Method == http.MethodGet {
@@ -56,14 +75,37 @@ func TestList_Success(t *testing.T) {
 	if len(out.Topics) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(out.Topics))
 	}
-	if out.Topics[0].Name != "go" {
-		t.Errorf("expected name 'go', got %q", out.Topics[0].Name)
+	if out.Topics[0] != wantTopic {
+		t.Errorf("listed topic = %+v, want %+v", out.Topics[0], wantTopic)
 	}
-	if out.Topics[0].TotalProjectsCount != 42 {
-		t.Errorf("expected 42 projects, got %d", out.Topics[0].TotalProjectsCount)
+}
+
+// TestList_ReportsWhereThePageEnds verifies that the list carries GitLab's own
+// pagination headers back to the caller. A list that reports none is a list a
+// model cannot ask for the rest of, and dropping the block is a straight-line
+// edit no mutant and no condition covers.
+func TestList_ReportsWhereThePageEnds(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathTopics && r.Method == http.MethodGet {
+			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+topicJSON+`]`, testutil.PaginationHeaders{
+				Page: "2", PerPage: "20", Total: "45", TotalPages: "9", NextPage: "3", PrevPage: "1",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topics[0].OrganizationID != 7 {
-		t.Errorf("expected organization ID 7, got %d", out.Topics[0].OrganizationID)
+	// Every number differs, so a block assembled from the wrong header is a
+	// different block rather than an equal one.
+	want := toolutil.PaginationOutput{
+		Page: 2, PerPage: 20, TotalItems: 45, TotalPages: 9, NextPage: 3, PrevPage: 1, HasMore: true,
+	}
+	if out.Pagination != want {
+		t.Errorf("pagination = %+v, want %+v", out.Pagination, want)
 	}
 }
 
@@ -86,8 +128,11 @@ func TestList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestList_KeysetPagination verifies List forwards keyset, page_token,
-// order_by, and sort query parameters to the GitLab API.
+// TestList_KeysetPagination verifies List forwards per_page, keyset,
+// page_token, order_by, sort and search to the GitLab API. All six are driven
+// at once with values none of them shares, so a handler that writes one
+// caller's value under another's parameter name is a different query string
+// rather than an equal one.
 func TestList_KeysetPagination(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +149,7 @@ func TestList_KeysetPagination(t *testing.T) {
 		Pagination: "keyset", PageToken: "tok123",
 		OrderBy: "name",
 		Sort:    "desc",
+		Search:  "gopher",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -117,6 +163,7 @@ func TestList_KeysetPagination(t *testing.T) {
 		"order_by":   "name",
 		"sort":       "desc",
 		"per_page":   "50",
+		"search":     "gopher",
 	}
 	for key, want := range checks {
 		t.Run(key, func(t *testing.T) {
@@ -127,19 +174,91 @@ func TestList_KeysetPagination(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
-func TestList_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
+// topicHandlerCase is one topic handler, the HTTP status its corrective hint
+// was written for, and the opening of that hint. Every opening is distinct, so
+// a hint attached to the wrong handler is as visible as one attached at the
+// wrong status.
+type topicHandlerCase struct {
+	name       string
+	hintStatus int
+	hintOpens  string
+	call       func(ctx context.Context, client *gitlabclient.Client) error
+}
 
-	_, err := List(t.Context(), client, ListInput{})
-	if err == nil {
-		t.Fatal("expected error, got nil")
+// topicHandlerCases lists all five handlers with the status-to-hint pairing
+// each one declares.
+func topicHandlerCases() []topicHandlerCase {
+	return []topicHandlerCase{
+		{"list", http.StatusForbidden, "topic listing is public on most instances", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{})
+			return err
+		}},
+		{"get", http.StatusNotFound, "verify topic id (numeric) with gitlab_list_topics", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{TopicID: 1})
+			return err
+		}},
+		{"create", http.StatusForbidden, "requires administrator access; name must be unique on the instance", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{Name: "go"})
+			return err
+		}},
+		{"update", http.StatusForbidden, "requires administrator access; verify id with gitlab_list_topics", func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Update(ctx, c, UpdateInput{TopicID: 1, Title: "Go"})
+			return err
+		}},
+		{"delete", http.StatusForbidden, "requires administrator access; deletion is irreversible", func(ctx context.Context, c *gitlabclient.Client) error {
+			return Delete(ctx, c, DeleteInput{TopicID: 1})
+		}},
 	}
 }
 
-// TestGet_Success verifies Get when success.
+// statusOnlyClient answers every request with one status and no body, which is
+// all the status check behind each hint reads.
+func statusOnlyClient(t *testing.T, status int) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+	}))
+}
+
+// TestTopicHandlers_HintReachesTheCallerAtItsOwnStatusOnly verifies that each
+// handler's corrective hint is attached at the status it was written for and
+// at no other, which is the whole of what WrapErrWithStatusHint decides.
+//
+// Nothing else held that pairing. A hint keyed to the wrong status still
+// compiles, still returns an error, and reads exactly like the tests this
+// replaces, which asserted only that an error came back: Get's 404 could be
+// changed to 403, retiring the one hint that tells a model the topic id was
+// wrong, with the whole suite still green.
+func TestTopicHandlers_HintReachesTheCallerAtItsOwnStatusOnly(t *testing.T) {
+	// A status no hint here is keyed to, so the other leg of the branch is the
+	// one taken.
+	const unhintedStatus = http.StatusBadRequest
+	for _, tc := range topicHandlerCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("at its own status", func(t *testing.T) {
+				err := tc.call(t.Context(), statusOnlyClient(t, tc.hintStatus))
+				if err == nil {
+					t.Fatalf("status %d: expected an error, got nil", tc.hintStatus)
+				}
+				if want := "Suggestion: " + tc.hintOpens; !strings.Contains(err.Error(), want) {
+					t.Errorf("status %d: error %q does not carry %q", tc.hintStatus, err, want)
+				}
+			})
+			t.Run("at another status", func(t *testing.T) {
+				err := tc.call(t.Context(), statusOnlyClient(t, unhintedStatus))
+				if err == nil {
+					t.Fatalf("status %d: expected an error, got nil", unhintedStatus)
+				}
+				if strings.Contains(err.Error(), "Suggestion:") {
+					t.Errorf("status %d: hint attached to a status it was not written for: %q", unhintedStatus, err)
+				}
+			})
+		})
+	}
+}
+
+// TestGet_Success verifies that a fetched topic arrives whole: every field
+// GitLab sent under the output field that names it.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopicOne && r.Method == http.MethodGet {
@@ -153,18 +272,13 @@ func TestGet_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topic.ID != 1 {
-		t.Errorf("expected topic ID 1, got %d", out.Topic.ID)
-	}
-	if out.Topic.Title != "Go" {
-		t.Errorf("expected title 'Go', got %q", out.Topic.Title)
-	}
-	if out.Topic.OrganizationID != 7 {
-		t.Errorf("expected organization ID 7, got %d", out.Topic.OrganizationID)
+	if out.Topic != wantTopic {
+		t.Errorf("fetched topic = %+v, want %+v", out.Topic, wantTopic)
 	}
 }
 
-// TestCreate_Success verifies Create when success.
+// TestCreate_Success verifies that the topic GitLab answers a creation with
+// reaches the caller whole.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopics && r.Method == http.MethodPost {
@@ -178,12 +292,13 @@ func TestCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topic.Name != "go" {
-		t.Errorf("expected name 'go', got %q", out.Topic.Name)
+	if out.Topic != wantTopic {
+		t.Errorf("created topic = %+v, want %+v", out.Topic, wantTopic)
 	}
 }
 
-// TestUpdate_Success verifies Update when success.
+// TestUpdate_Success verifies that the topic GitLab answers an update with
+// reaches the caller whole.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathTopicOne && r.Method == http.MethodPut {
@@ -197,8 +312,8 @@ func TestUpdate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topic.ID != 1 {
-		t.Errorf("expected topic ID 1, got %d", out.Topic.ID)
+	if out.Topic != wantTopic {
+		t.Errorf("updated topic = %+v, want %+v", out.Topic, wantTopic)
 	}
 }
 
@@ -215,18 +330,6 @@ func TestDelete_Success(t *testing.T) {
 	err := Delete(t.Context(), client, DeleteInput{TopicID: 1})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
-	}
-}
-
-// TestDelete_Error verifies Delete when error.
-func TestDelete_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-
-	err := Delete(t.Context(), client, DeleteInput{TopicID: 1})
-	if err == nil {
-		t.Fatal("expected error, got nil")
 	}
 }
 
@@ -281,57 +384,11 @@ func TestDelete_InvalidTopicID(t *testing.T) {
 // The Markdown formatters are covered whole-output in markdown_test.go,
 // beside the card and the list vocabulary they now write.
 
-// ---------- Tests consolidated from coverage_test.go ----------.
-
-// errExpectedNil identifies the err expected nil constant used by this package.
-const errExpectedNil = "expected error, got nil"
-
-// ---------------------------------------------------------------------------
-// List — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestList_APIError400 verifies List when API error 400.
-func TestList_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := List(t.Context(), client, ListInput{})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Get — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestGet_APIError400 verifies Get when API error 400.
-func TestGet_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := Get(t.Context(), client, GetInput{TopicID: 1})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Create — API error (400), with optional fields
-// ---------------------------------------------------------------------------.
-
-// TestCreate_APIError400 verifies Create when API error 400.
-func TestCreate_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := Create(t.Context(), client, CreateInput{Name: "test"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// TestCreate_WithAllOptionalFields verifies Create when with all optional fields.
+// TestCreate_WithAllOptionalFields verifies that each field the caller filled
+// in reaches GitLab under its own name and carries its own value, and that
+// nothing else is sent. Every value here is distinct, because asserting only
+// that the body mentions "title" and "description" passes just as happily on a
+// handler that writes the title into the description key.
 func TestCreate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -349,39 +406,25 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := Create(t.Context(), client, CreateInput{
-		Name: "go", Title: "Go", Description: "The Go programming language",
+		Name: "go", Title: "Go language", Description: "Everything about Go",
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topic.Name != "go" {
-		t.Errorf("expected name 'go', got %q", out.Topic.Name)
+	if out.Topic != wantTopic {
+		t.Errorf("created topic = %+v, want %+v", out.Topic, wantTopic)
 	}
-	for _, want := range []string{"title", "description"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(capturedBody, want) {
-				t.Errorf("request body missing field %q", want)
-			}
-		})
-	}
+	assertSentBody(t, capturedBody, map[string]string{
+		"name": "go", "title": "Go language", "description": "Everything about Go",
+	})
 }
 
-// ---------------------------------------------------------------------------
-// Update — API error (400), with all optional fields
-// ---------------------------------------------------------------------------.
-
-// TestUpdate_APIError400 verifies Update when API error 400.
-func TestUpdate_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
-	}))
-	_, err := Update(t.Context(), client, UpdateInput{TopicID: 1, Name: "x"})
-	if err == nil {
-		t.Fatal(errExpectedNil)
-	}
-}
-
-// TestUpdate_WithAllOptionalFields verifies Update when with all optional fields.
+// TestUpdate_WithAllOptionalFields verifies that each field the caller filled
+// in reaches GitLab under its own name and carries its own value, and that
+// nothing else is sent. The rename is the one that went unheld: the guard
+// around it could be inverted, so that a caller's new name never left this
+// process and an empty one was sent whenever they gave none, with the whole
+// suite still green.
 func TestUpdate_WithAllOptionalFields(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -402,32 +445,95 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 		TopicID: 1, Name: "golang", Title: "Golang", Description: "Updated desc",
 	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.Topic.ID != 1 {
-		t.Errorf("expected topic ID 1, got %d", out.Topic.ID)
+	if out.Topic != wantTopic {
+		t.Errorf("updated topic = %+v, want %+v", out.Topic, wantTopic)
 	}
-	for _, want := range []string{"title", "description"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(capturedBody, want) {
-				t.Errorf("request body missing field %q", want)
+	assertSentBody(t, capturedBody, map[string]string{
+		"name": "golang", "title": "Golang", "description": "Updated desc",
+	})
+}
+
+// TestUpdate_OmittedFieldsAreNotSent verifies the other half of each guard: a
+// field the caller left empty is left out of the request rather than sent as an
+// empty string, which on a rename would clear the topic's name.
+//
+// Each optional field is driven on its own rather than all three at once,
+// because a body carrying every field cannot say which guard admitted which:
+// one field set is the only shape in which the two legs of a guard are told
+// apart.
+func TestUpdate_OmittedFieldsAreNotSent(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]string
+	}{
+		{"name only", UpdateInput{TopicID: 1, Name: "golang"}, map[string]string{"name": "golang"}},
+		{"title only", UpdateInput{TopicID: 1, Title: "Golang"}, map[string]string{"title": "Golang"}},
+		{"description only", UpdateInput{TopicID: 1, Description: "Updated desc"}, map[string]string{"description": "Updated desc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedBody string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPut {
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Errorf("read request body: %v", err)
+						http.Error(w, "read request body", http.StatusInternalServerError)
+						return
+					}
+					capturedBody = string(body)
+					testutil.RespondJSON(w, http.StatusOK, topicJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			if _, err := Update(t.Context(), client, tc.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
 			}
+			assertSentBody(t, capturedBody, tc.want)
 		})
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Delete — API error (400)
-// ---------------------------------------------------------------------------.
-
-// TestDelete_APIError400 verifies Delete when API error 400.
-func TestDelete_APIError400(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
+// TestCreate_OmittedFieldsAreNotSent verifies the same of a creation: the name
+// is the only field GitLab requires, and a title or description the caller did
+// not give is absent from the request rather than sent empty.
+func TestCreate_OmittedFieldsAreNotSent(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, topicJSON)
+			return
+		}
+		http.NotFound(w, r)
 	}))
-	err := Delete(t.Context(), client, DeleteInput{TopicID: 1})
-	if err == nil {
-		t.Fatal(errExpectedNil)
+	if _, err := Create(t.Context(), client, CreateInput{Name: "go"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertSentBody(t, capturedBody, map[string]string{"name": "go"})
+}
+
+// assertSentBody holds the request body to exactly the fields want names, with
+// exactly the values it gives them. Decoding into a map rather than a struct is
+// what makes a field nobody asked to send visible: a struct would ignore it.
+func assertSentBody(t *testing.T, body string, want map[string]string) {
+	t.Helper()
+	var sent map[string]string
+	if err := json.Unmarshal([]byte(body), &sent); err != nil {
+		t.Fatalf("request body %q is not an object of strings: %v", body, err)
+	}
+	if !maps.Equal(sent, want) {
+		t.Errorf("request body = %v, want %v", sent, want)
 	}
 }
 

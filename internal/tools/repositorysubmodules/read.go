@@ -112,11 +112,11 @@ func Read(ctx context.Context, client *gitlabclient.Client, input ReadInput) (Re
 
 // resolveSubmoduleProject reads .gitmodules from the parent repository and
 // extracts the project path for the given submodule.
+//
+// ref is always named: [Read] resolves an empty one to the HEAD alias before
+// any of this runs, so there is no second check for it here.
 func resolveSubmoduleProject(ctx context.Context, client *gitlabclient.Client, projectID, ref, submodulePath string) (string, error) {
-	fileOpts := &gl.GetFileOptions{}
-	if ref != "" {
-		fileOpts.Ref = new(ref)
-	}
+	fileOpts := &gl.GetFileOptions{Ref: new(ref)}
 
 	f, _, err := client.GL().RepositoryFiles.GetFile(projectID, ".gitmodules", fileOpts, gl.WithContext(ctx))
 	if err != nil {
@@ -150,15 +150,16 @@ func resolveSubmoduleProject(ctx context.Context, client *gitlabclient.Client, p
 
 // getSubmoduleCommitSHA retrieves the commit SHA that the submodule pointer
 // references by looking up the tree entry of type "commit".
+//
+// ref is always named: [Read] resolves an empty one to the HEAD alias before
+// any of this runs, so there is no second check for it here.
 func getSubmoduleCommitSHA(ctx context.Context, client *gitlabclient.Client, projectID, ref, submodulePath string) (string, error) {
 	dir := parentDir(submodulePath)
 	opts := &gl.ListTreeOptions{}
 	opts.PerPage = 100
+	opts.Ref = new(ref)
 	if dir != "" {
 		opts.Path = new(dir)
-	}
-	if ref != "" {
-		opts.Ref = new(ref)
 	}
 
 	nodes, _, err := client.GL().Repositories.ListTree(projectID, opts, gl.WithContext(ctx))

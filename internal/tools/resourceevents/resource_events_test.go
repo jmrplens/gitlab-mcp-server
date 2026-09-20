@@ -6,6 +6,7 @@ package resourceevents
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -403,9 +404,15 @@ func covBadHandler() http.Handler {
 
 // ======================== Label Events ========================.
 
-// TestListIssueLabelEvents_Validation verifies ListIssueLabelEvents when validation.
+// TestListIssueLabelEvents_Validation verifies ListIssueLabelEvents refuses
+// empty input before it reaches GitLab.
+//
+// The handler here fails the test if any request arrives, which is the whole
+// assertion: against a mock that answers 400 the test passed whether the
+// refusal came from the handler or from the mock, so deleting the guard left
+// it green.
 func TestListIssueLabelEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueLabelEvents(t.Context(), client, ListIssueLabelEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -435,9 +442,10 @@ func TestListIssueLabelEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueLabelEvent_Validation verifies GetIssueLabelEvent when validation.
+// TestGetIssueLabelEvent_Validation verifies GetIssueLabelEvent refuses empty
+// input before it reaches GitLab.
 func TestGetIssueLabelEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueLabelEvent(t.Context(), client, GetIssueLabelEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -467,9 +475,10 @@ func TestGetIssueLabelEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRLabelEvents_Validation verifies ListMRLabelEvents when validation.
+// TestListMRLabelEvents_Validation verifies ListMRLabelEvents refuses empty
+// input before it reaches GitLab.
 func TestListMRLabelEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRLabelEvents(t.Context(), client, ListMRLabelEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -499,9 +508,10 @@ func TestListMRLabelEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRLabelEvent_Validation verifies GetMRLabelEvent when validation.
+// TestGetMRLabelEvent_Validation verifies GetMRLabelEvent refuses empty input
+// before it reaches GitLab.
 func TestGetMRLabelEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRLabelEvent(t.Context(), client, GetMRLabelEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -533,9 +543,10 @@ func TestGetMRLabelEvent_Success(t *testing.T) {
 
 // ======================== Milestone Events ========================.
 
-// TestListIssueMilestoneEvents_Validation verifies ListIssueMilestoneEvents when validation.
+// TestListIssueMilestoneEvents_Validation verifies ListIssueMilestoneEvents
+// refuses empty input before it reaches GitLab.
 func TestListIssueMilestoneEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueMilestoneEvents(t.Context(), client, ListIssueMilestoneEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -565,9 +576,10 @@ func TestListIssueMilestoneEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueMilestoneEvent_Validation verifies GetIssueMilestoneEvent when validation.
+// TestGetIssueMilestoneEvent_Validation verifies GetIssueMilestoneEvent refuses
+// empty input before it reaches GitLab.
 func TestGetIssueMilestoneEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueMilestoneEvent(t.Context(), client, GetIssueMilestoneEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -597,9 +609,10 @@ func TestGetIssueMilestoneEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRMilestoneEvents_Validation verifies ListMRMilestoneEvents when validation.
+// TestListMRMilestoneEvents_Validation verifies ListMRMilestoneEvents refuses
+// empty input before it reaches GitLab.
 func TestListMRMilestoneEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRMilestoneEvents(t.Context(), client, ListMRMilestoneEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -629,9 +642,10 @@ func TestListMRMilestoneEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRMilestoneEvent_Validation verifies GetMRMilestoneEvent when validation.
+// TestGetMRMilestoneEvent_Validation verifies GetMRMilestoneEvent refuses empty
+// input before it reaches GitLab.
 func TestGetMRMilestoneEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRMilestoneEvent(t.Context(), client, GetMRMilestoneEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -663,9 +677,10 @@ func TestGetMRMilestoneEvent_Success(t *testing.T) {
 
 // ======================== State Events ========================.
 
-// TestListIssueStateEvents_Validation verifies ListIssueStateEvents when validation.
+// TestListIssueStateEvents_Validation verifies ListIssueStateEvents refuses
+// empty input before it reaches GitLab.
 func TestListIssueStateEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueStateEvents(t.Context(), client, ListIssueStateEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -695,9 +710,10 @@ func TestListIssueStateEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetIssueStateEvent_Validation verifies GetIssueStateEvent when validation.
+// TestGetIssueStateEvent_Validation verifies GetIssueStateEvent refuses empty
+// input before it reaches GitLab.
 func TestGetIssueStateEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueStateEvent(t.Context(), client, GetIssueStateEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -727,9 +743,10 @@ func TestGetIssueStateEvent_Success(t *testing.T) {
 	}
 }
 
-// TestListMRStateEvents_Validation verifies ListMRStateEvents when validation.
+// TestListMRStateEvents_Validation verifies ListMRStateEvents refuses empty
+// input before it reaches GitLab.
 func TestListMRStateEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRStateEvents(t.Context(), client, ListMRStateEventsInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -759,9 +776,10 @@ func TestListMRStateEvents_Success(t *testing.T) {
 	}
 }
 
-// TestGetMRStateEvent_Validation verifies GetMRStateEvent when validation.
+// TestGetMRStateEvent_Validation verifies GetMRStateEvent refuses empty input
+// before it reaches GitLab.
 func TestGetMRStateEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, covBadHandler())
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRStateEvent(t.Context(), client, GetMRStateEventInput{})
 	if err == nil {
 		t.Fatal(errExpectedValidation)
@@ -838,6 +856,131 @@ func TestCovtoStateEventOutput_NilUser(t *testing.T) {
 	}
 	if out.SourceCommit != "abc123" {
 		t.Errorf("SourceCommit = %q, want what was read beside the decode", out.SourceCommit)
+	}
+}
+
+// ======================== Converters: every published field ========================.
+
+// The fixtures above send two or three keys of each object, so every other
+// field of the converters was assigned from whatever neighbor the source
+// happened to name and nothing could tell. The fixtures below send every key
+// GitLab sends, with no two values equal anywhere in the object, which is what
+// makes reading the wrong neighbor visible.
+const covFullUserJSON = `"user":{"id":5,"username":"alice","name":"Alice Adams","state":"active",` +
+	`"avatar_url":"https://gitlab.example.com/avatar/5.png","web_url":"https://gitlab.example.com/alice",` +
+	`"created_at":"2020-02-03T04:05:06Z"}`
+
+// covFullUser is covFullUserJSON as the output shape publishes it.
+func covFullUser() EventUserOutput {
+	return EventUserOutput{
+		ID: 5, Username: "alice", Name: "Alice Adams", State: "active",
+		AvatarURL: "https://gitlab.example.com/avatar/5.png",
+		WebURL:    "https://gitlab.example.com/alice",
+		CreatedAt: "2020-02-03T04:05:06Z",
+	}
+}
+
+// TestGetIssueLabelEvent_FullFixture_PublishesEveryFieldGitLabSent pins the
+// label event, its label and its acting user field by field. Only the action,
+// the label name and the username were ever asserted, so the label's colors
+// and description and five of the user's seven fields could each have been
+// read from the neighboring key.
+func TestGetIssueLabelEvent_FullFixture_PublishesEveryFieldGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"action":"add","created_at":"2026-01-15T10:00:00Z",`+
+			`"resource_type":"Issue","resource_id":7,`+covFullUserJSON+`,`+
+			`"label":{"id":100,"name":"bug","color":"#ff0000","text_color":"#ffffff","description":"Something is broken"}}`)
+	}))
+
+	out, err := GetIssueLabelEvent(t.Context(), client, GetIssueLabelEventInput{ProjectID: covPID(), IssueIID: 1, LabelEventID: 10})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 10 || out.Action != "add" || out.CreatedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("event = %+v, want id 10, action add and the created_at GitLab sent", out)
+	}
+	if out.ResourceType != "Issue" || out.ResourceID != 7 {
+		t.Errorf("resource = %q/%d, want Issue/7", out.ResourceType, out.ResourceID)
+	}
+	wantUser := covFullUser()
+	if out.User == nil || !reflect.DeepEqual(*out.User, wantUser) {
+		t.Errorf("user = %+v, want %+v", out.User, wantUser)
+	}
+	wantLabel := LabelEventLabelOutput{ID: 100, Name: "bug", Color: "#ff0000", TextColor: "#ffffff", Description: "Something is broken"}
+	if out.Label == nil || !reflect.DeepEqual(*out.Label, wantLabel) {
+		t.Errorf("label = %+v, want %+v", out.Label, wantLabel)
+	}
+}
+
+// TestGetIssueMilestoneEvent_FullFixture_PublishesEveryFieldGitLabSent pins the
+// milestone event, its milestone field by field, and the issue state read off
+// the captured response (ADR-0021), which the SDK's own struct does not model
+// and which nothing asserted at all.
+func TestGetIssueMilestoneEvent_FullFixture_PublishesEveryFieldGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":30,"action":"add","created_at":"2026-03-01T08:00:00Z",`+
+			`"resource_type":"Issue","resource_id":7,"state":"closed",`+covFullUserJSON+`,`+
+			`"milestone":{"id":200,"iid":3,"group_id":11,"project_id":13,"title":"v1.0","description":"First release",`+
+			`"state":"active","web_url":"https://gitlab.example.com/milestones/3","start_date":"2026-01-02",`+
+			`"due_date":"2026-02-03","created_at":"2025-12-01T00:00:00Z","updated_at":"2025-12-02T00:00:00Z","expired":false}}`)
+	}))
+
+	out, err := GetIssueMilestoneEvent(t.Context(), client, GetIssueMilestoneEventInput{ProjectID: covPID(), IssueIID: 1, MilestoneEventID: 30})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 30 || out.Action != "add" || out.CreatedAt != "2026-03-01T08:00:00Z" {
+		t.Errorf("event = %+v, want id 30, action add and the created_at GitLab sent", out)
+	}
+	if out.ResourceType != "Issue" || out.ResourceID != 7 {
+		t.Errorf("resource = %q/%d, want Issue/7", out.ResourceType, out.ResourceID)
+	}
+	if out.State != "closed" {
+		t.Errorf("State = %q, want the issue state read off the captured response", out.State)
+	}
+	wantUser := covFullUser()
+	if out.User == nil || !reflect.DeepEqual(*out.User, wantUser) {
+		t.Errorf("user = %+v, want %+v", out.User, wantUser)
+	}
+	expired := false
+	wantMilestone := MilestoneOutput{
+		ID: 200, IID: 3, GroupID: 11, ProjectID: 13, Title: "v1.0", Description: "First release",
+		State: "active", WebURL: "https://gitlab.example.com/milestones/3",
+		StartDate: "2026-01-02", DueDate: "2026-02-03",
+		CreatedAt: "2025-12-01T00:00:00Z", UpdatedAt: "2025-12-02T00:00:00Z", Expired: &expired,
+	}
+	if out.Milestone == nil || !reflect.DeepEqual(*out.Milestone, wantMilestone) {
+		t.Errorf("milestone = %+v, want %+v", out.Milestone, wantMilestone)
+	}
+}
+
+// TestGetIssueStateEvent_FullFixture_PublishesEveryFieldGitLabSent pins the
+// state event including both fields read off the captured response: the commit
+// that closed the issue, and the merge request that did, which nothing
+// asserted and which could be dropped with the suite still green.
+func TestGetIssueStateEvent_FullFixture_PublishesEveryFieldGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":40,"state":"closed","created_at":"2026-04-01T14:00:00Z",`+
+			`"resource_type":"Issue","resource_id":7,"source_commit":"abc123","source_merge_request_id":88,`+
+			covFullUserJSON+`}`)
+	}))
+
+	out, err := GetIssueStateEvent(t.Context(), client, GetIssueStateEventInput{ProjectID: covPID(), IssueIID: 1, StateEventID: 40})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 40 || out.State != "closed" || out.CreatedAt != "2026-04-01T14:00:00Z" {
+		t.Errorf("event = %+v, want id 40, state closed and the created_at GitLab sent", out)
+	}
+	if out.ResourceType != "Issue" || out.ResourceID != 7 {
+		t.Errorf("resource = %q/%d, want Issue/7", out.ResourceType, out.ResourceID)
+	}
+	if out.SourceCommit != "abc123" || out.SourceMergeRequestID != 88 {
+		t.Errorf("source = %q/%d, want abc123/88 read off the captured response", out.SourceCommit, out.SourceMergeRequestID)
+	}
+	wantUser := covFullUser()
+	if out.User == nil || !reflect.DeepEqual(*out.User, wantUser) {
+		t.Errorf("user = %+v, want %+v", out.User, wantUser)
 	}
 }
 
@@ -1025,6 +1168,34 @@ func TestFormatStateEventsMarkdown_WithEvents(t *testing.T) {
 	}
 }
 
+// TestFormatStateEventsMarkdown_ResourceCell_EveryShape pins the Resource cell
+// for each of the four things GitLab can leave out of a state event. Only the
+// both-present shape was ever rendered by a test, so the three others were free
+// to read "Issue (ID 0)", "(ID 9)" or " (ID 0)" on a row a model is asked to
+// act on.
+func TestFormatStateEventsMarkdown_ResourceCell_EveryShape(t *testing.T) {
+	out := ListStateEventsOutput{Events: []StateEventOutput{
+		{ID: 1, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 7, CreatedAt: "2026-01-01T00:00:00Z"},
+		{ID: 2, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", CreatedAt: "2026-01-01T00:00:00Z"},
+		{ID: 3, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceID: 9, CreatedAt: "2026-01-01T00:00:00Z"},
+		{ID: 4, State: "closed", User: &EventUserOutput{Username: "alice"}, CreatedAt: "2026-01-01T00:00:00Z"},
+	}}
+
+	got := FormatStateEventsMarkdown(out)
+
+	want := "## State Events (4)\n\n" +
+		"| ID | State | User | Resource | Date |\n" +
+		"| --- | --- | --- | --- | --- |\n" +
+		"| 1 | closed | alice | Issue (ID 7) | 1 Jan 2026 00:00 UTC |\n" +
+		"| 2 | closed | alice | Issue | 1 Jan 2026 00:00 UTC |\n" +
+		"| 3 | closed | alice | ID 9 | 1 Jan 2026 00:00 UTC |\n" +
+		"| 4 | closed | alice |  | 1 Jan 2026 00:00 UTC |\n" +
+		stateListHints
+	if got != want {
+		t.Errorf(fmtGotWant, got, want)
+	}
+}
+
 // TestFormatStateEventMarkdown pins the whole card of one state event.
 func TestFormatStateEventMarkdown(t *testing.T) {
 	out := StateEventOutput{ID: 40, State: "closed", User: &EventUserOutput{Username: "alice"}, ResourceType: "Issue", ResourceID: 1, CreatedAt: "2026-01-01T00:00:00Z"}
@@ -1183,14 +1354,18 @@ func TestListIssueWeightEvents_MissingIssueIID(t *testing.T) {
 	}
 }
 
-// TestGetIssueIterationEvent_Success verifies GetIssueIterationEvent returns correct fields.
+// TestGetIssueIterationEvent_Success verifies GetIssueIterationEvent returns
+// correct fields. The event id and the resource id are deliberately different
+// numbers, and the object the event hangs on is asserted, because with both at
+// 1 and neither read a converter assigning one from the other published the
+// same answer.
 func TestGetIssueIterationEvent_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/issues/1/resource_iteration_events/1" {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"action":"add","created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":7,"user":{"id":5,"username":"alice"},"iteration":{"id":10,"iid":1,"sequence":1,"group_id":5,"title":"Sprint 1","state":3,"web_url":"https://gitlab.example.com/iterations/10"}}`)
 	}))
 
 	out, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IssueIID: 1, IterationEventID: 1})
@@ -1199,6 +1374,12 @@ func TestGetIssueIterationEvent_Success(t *testing.T) {
 	}
 	if out.ID != 1 {
 		t.Errorf("got ID %d, want 1", out.ID)
+	}
+	if out.Action != "add" || out.CreatedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("event = %+v, want action add and the created_at GitLab sent", out)
+	}
+	if out.ResourceType != "Issue" || out.ResourceID != 7 {
+		t.Errorf("resource = %q/%d, want Issue/7", out.ResourceType, out.ResourceID)
 	}
 	if out.Iteration == nil || out.Iteration.Title != "Sprint 1" {
 		t.Errorf("got iteration %v, want title %q", out.Iteration, "Sprint 1")
@@ -1217,7 +1398,12 @@ func TestGetIssueIterationEvent_ValidationError_MissingEventID(t *testing.T) {
 	}
 }
 
-// TestListIssueWeightEvents_Success verifies ListIssueWeightEvents returns correct fields.
+// TestListIssueWeightEvents_Success verifies ListIssueWeightEvents returns
+// correct fields. The event id, the issue id and the weight are three different
+// numbers and all three are asserted: with the id and the issue_id both at 1
+// and neither read, a converter that filled each from the other published the
+// same answer, and issue_id is the only thing on a weight event that says which
+// issue it belongs to.
 func TestListIssueWeightEvents_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/issues/1/resource_weight_events" {
@@ -1225,7 +1411,7 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 			return
 		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-			{"id":1,"created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"state":"weight_changed","issue_id":1,"weight":5,"user":{"id":5,"username":"alice"}}
+			{"id":7,"created_at":"2026-01-15T10:00:00Z","resource_type":"Issue","resource_id":1,"state":"weight_changed","issue_id":3,"weight":5,"user":{"id":5,"username":"alice"}}
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 
@@ -1236,11 +1422,15 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 	if len(out.Events) != 1 {
 		t.Fatalf("got %d events, want 1", len(out.Events))
 	}
-	if out.Events[0].Weight != 5 {
-		t.Errorf("got weight %d, want 5", out.Events[0].Weight)
+	got := out.Events[0]
+	if got.ID != 7 || got.IssueID != 3 || got.Weight != 5 {
+		t.Errorf("event = %+v, want id 7, issue_id 3 and weight 5", got)
 	}
-	if out.Events[0].User == nil || out.Events[0].User.Username != "alice" {
-		t.Errorf("got user %v, want username %q", out.Events[0].User, "alice")
+	if got.CreatedAt != "2026-01-15T10:00:00Z" {
+		t.Errorf("CreatedAt = %q, want the created_at GitLab sent", got.CreatedAt)
+	}
+	if got.User == nil || got.User.Username != "alice" {
+		t.Errorf("got user %v, want username %q", got.User, "alice")
 	}
 }
 
@@ -1260,7 +1450,7 @@ func TestListIssueIterationEvents_APIError(t *testing.T) {
 	}))
 	_, err := ListIssueIterationEvents(context.Background(), client, ListIssueIterationEventsInput{ProjectID: "42", IssueIID: 1})
 	if err == nil {
-		t.Fatal("expected error for 500, got nil")
+		t.Fatal("expected error for 403, got nil")
 	}
 }
 
@@ -1271,7 +1461,7 @@ func TestGetIssueIterationEvent_APIError(t *testing.T) {
 	}))
 	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IssueIID: 1, IterationEventID: 1})
 	if err == nil {
-		t.Fatal("expected error for 500, got nil")
+		t.Fatal("expected error for 403, got nil")
 	}
 }
 
@@ -1282,7 +1472,7 @@ func TestListIssueWeightEvents_APIError(t *testing.T) {
 	}))
 	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{ProjectID: "42", IssueIID: 1})
 	if err == nil {
-		t.Fatal("expected error for 500, got nil")
+		t.Fatal("expected error for 403, got nil")
 	}
 }
 
@@ -1414,6 +1604,11 @@ func TestListGroupEpicLabelEvents_Success(t *testing.T) {
 
 // TestGetGroupEpicLabelEvent_Validation verifies GetGroupEpicLabelEvent rejects
 // input missing any required field without reaching the API.
+//
+// Every case names the fields after the missing one too, so each guard is the
+// only thing that can refuse it: with epic_iid left at zero and nothing after
+// it, the label_event_id guard below refused instead and the epic_iid guard
+// could be widened to "< 0" with no test noticing.
 func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	cases := []struct {
@@ -1421,7 +1616,8 @@ func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
 		in   GetGroupEpicLabelEventInput
 	}{
 		{"empty_input", GetGroupEpicLabelEventInput{}},
-		{"missing_epic_iid", GetGroupEpicLabelEventInput{GroupID: covGID()}},
+		{"missing_group_id", GetGroupEpicLabelEventInput{EpicIID: 7, LabelEventID: 50}},
+		{"missing_epic_iid", GetGroupEpicLabelEventInput{GroupID: covGID(), LabelEventID: 50}},
 		{"missing_label_event_id", GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7}},
 	}
 	for _, tc := range cases {

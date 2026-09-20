@@ -80,9 +80,10 @@ func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing
 	}
 }
 
-// TestAuditDiscoveryTerms_NilAndSparseInputs verifies the AuditDiscoveryTerms_NilAndSparseInputs handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestAuditDiscoveryTerms_NilAndSparseInputs verifies that the discovery
+// audit answers nil for a nil catalog, a nil registry, and a catalog whose
+// only group is too small to be dense, since the audit only judges crowded
+// groups.
 func TestAuditDiscoveryTerms_NilAndSparseInputs(t *testing.T) {
 	if findings := AuditCatalogDiscoveryTerms(nil); findings != nil {
 		t.Fatalf("AuditCatalogDiscoveryTerms(nil) = %+v, want nil", findings)

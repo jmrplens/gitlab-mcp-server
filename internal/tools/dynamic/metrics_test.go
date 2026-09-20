@@ -69,9 +69,8 @@ func TestRecordSearchRuntimeMetrics_CountsEachEventOnItsOwn(t *testing.T) {
 	}
 }
 
-// TestMetrics_SearchIndexPostingCount verifies the Metrics_SearchIndexPostingCount handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMetrics_SearchIndexPostingCount verifies that the posting count sums
+// the entries under every token rather than counting the tokens.
 func TestMetrics_SearchIndexPostingCount(t *testing.T) {
 	index := searchIndex{byToken: map[string][]int{"project": {0, 2}, "delete": {1}}}
 	if got := searchIndexPostingCount(index); got != 3 {

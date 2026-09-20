@@ -402,6 +402,59 @@ func TestToRelationOutput_AllNestedObjects(t *testing.T) {
 	}
 }
 
+// TestToRelationOutput_OneFlagAtATime pins each boolean of a relation to the
+// field it is read from, one case per flag with everything else off.
+//
+// A fixture carrying every flag true cannot tell them apart: two of them
+// swapped render the same relation, so a relation could report an issue as
+// imported because it has tasks and nothing would fail. Comparing the whole
+// struct against one with only the field under test set distinguishes all of
+// them, and one flag at a time is also what GitLab answers.
+func TestToRelationOutput_OneFlagAtATime(t *testing.T) {
+	cases := []struct {
+		name     string
+		relation gl.IssueRelation
+		extra    relationExtra
+		want     RelationOutput
+	}{
+		{"confidential", gl.IssueRelation{Confidential: true}, relationExtra{}, RelationOutput{Confidential: true}},
+		{"discussion_locked", gl.IssueRelation{}, relationExtra{DiscussionLocked: true}, RelationOutput{DiscussionLocked: true}},
+		{"has_tasks", gl.IssueRelation{}, relationExtra{HasTasks: true}, RelationOutput{HasTasks: true}},
+		{"imported", gl.IssueRelation{}, relationExtra{Imported: true}, RelationOutput{Imported: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := toRelationOutput(&tc.relation, tc.extra); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("toRelationOutput(%s only) = %+v, want %+v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIssueRefOutput_OneFlagAtATime pins each boolean of the issue on a link
+// to the SDK field it is read from, for the reason the relation converter has
+// its own such test: the full fixture beside it sets all three true, which is
+// exactly the shape that hides a swap between them.
+func TestIssueRefOutput_OneFlagAtATime(t *testing.T) {
+	cases := []struct {
+		name  string
+		issue gl.Issue
+		want  IssueRefOutput
+	}{
+		{"confidential", gl.Issue{Confidential: true}, IssueRefOutput{Confidential: true}},
+		{"discussion_locked", gl.Issue{DiscussionLocked: true}, IssueRefOutput{DiscussionLocked: true}},
+		{"subscribed", gl.Issue{Subscribed: true}, IssueRefOutput{Subscribed: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := issueRefOutput(&tc.issue)
+			if got == nil || !reflect.DeepEqual(*got, tc.want) {
+				t.Errorf("issueRefOutput(%s only) = %+v, want %+v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestToRelationOutput_NilSubObjects verifies the relation converter handles a
 // relation with all optional sub-objects and timestamps absent.
 func TestToRelationOutput_NilSubObjects(t *testing.T) {

@@ -5,6 +5,7 @@
 package memberroles
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -174,10 +175,16 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestMarkdownInit_Registry verifies the init markdown formatters are registered.
+// TestMarkdownInit_Registry verifies both formatters this package registers in
+// init are reachable through the type-based registry, which is the only route
+// a tool result takes to them: one registered and one forgotten looks the same
+// from either formatter's own test.
 func TestMarkdownInit_Registry(t *testing.T) {
-	out := toolutil.MarkdownForResult(ListOutput{})
-	if out == nil {
-		t.Fatal("expected non-nil result for ListOutput")
+	for _, result := range []any{ListOutput{}, Output{ID: 1}} {
+		t.Run(fmt.Sprintf("%T", result), func(t *testing.T) {
+			if out := toolutil.MarkdownForResult(result); out == nil {
+				t.Fatalf("no registered formatter answered for %T", result)
+			}
+		})
 	}
 }

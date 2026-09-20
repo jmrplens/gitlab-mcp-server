@@ -476,7 +476,7 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			SemanticRole:     "issue_state_transition",
 			ValueSource:      "task intent when closing or reopening an issue",
 			CommonConfusions: []string{"Do not use state=closed/opened for transitions. Use state_event=close or state_event=reopen."},
-			ExampleBinding:   `{paramStateEvent:"close"}`,
+			ExampleBinding:   `params.state_event:"close"`,
 		},
 	}
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{

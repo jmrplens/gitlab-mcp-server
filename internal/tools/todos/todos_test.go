@@ -6,6 +6,7 @@ package todos
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -282,6 +283,12 @@ func TestTodoList_AllFilters(t *testing.T) {
 		if q.Get("group_id") != "3" {
 			t.Errorf("expected group_id=3, got %q", q.Get("group_id"))
 		}
+		if q.Get("page") != "2" {
+			t.Errorf("expected page=2, got %q", q.Get("page"))
+		}
+		if q.Get("per_page") != "30" {
+			t.Errorf("expected per_page=30, got %q", q.Get("per_page"))
+		}
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", Total: "0", TotalPages: "1", PerPage: "20"})
 	}))
 
@@ -381,121 +388,234 @@ func TestFormatMarkAllDoneMarkdown(t *testing.T) {
 // Full nested target object mapping (1:1 audit policy)
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_FullNestedTarget verifies that toOutput surfaces every nested
-// to-do sub-object (project, author, and a fully populated issue/MR target with
-// its milestone, time stats, links, task completion, assignees and reviewers).
-func TestToOutput_FullNestedTarget(t *testing.T) {
-	created := mustTime(t, "2026-01-15T10:00:00Z")
-	merged := mustTime(t, "2026-01-20T10:00:00Z")
-	start := mustISO(t, "2026-01-01")
-	due := mustISO(t, "2026-02-01")
+// TestToOutput_EveryField_ComesFromItsOwnSource verifies the whole converted
+// to-do against one expected value, for a to-do in which no two values agree.
+//
+// A converter is straight-line assignment, so no mutant and no uncovered
+// condition can report one that reads the field beside it; only a fixture in
+// which every value is distinct can. The assertions this replaces set eight of
+// the target's strings and read four of them back, so swapping the description
+// for the title, or the notes link for the award-emoji link, would have passed.
+func TestToOutput_EveryField_ComesFromItsOwnSource(t *testing.T) {
+	todoCreated := mustTime(t, "2026-01-15T10:00:00Z")
+	projectCreated := mustTime(t, "2026-01-02T02:00:00Z")
+	authorCreated := mustTime(t, "2026-01-03T03:00:00Z")
+	targetCreated := mustTime(t, "2026-01-04T04:00:00Z")
+	milestoneCreated := mustTime(t, "2026-01-05T05:00:00Z")
+	milestoneUpdated := mustTime(t, "2026-01-06T06:00:00Z")
+	targetUpdated := mustTime(t, "2026-01-07T07:00:00Z")
+	merged := mustTime(t, "2026-01-08T08:00:00Z")
+	todoUpdated := mustTime(t, "2026-01-09T09:00:00Z")
 	expired := true
+
 	todo := &gl.Todo{
 		ID:         7,
 		ActionName: gl.TodoAssigned,
 		TargetType: gl.TodoTargetIssue,
-		TargetURL:  "https://x/issues/7",
-		Body:       "body",
+		TargetURL:  "https://gitlab.example.com/org/project-path/-/issues/42",
+		Body:       "todo body",
 		State:      "pending",
-		CreatedAt:  &created,
+		CreatedAt:  &todoCreated,
 		Project: &gl.BasicProject{
-			ID: 3, Name: "proj", Description: "d", NameWithNamespace: "g / proj",
-			Path: "proj", PathWithNamespace: "g/proj", CreatedAt: &created,
+			ID: 3, Description: "project description", Name: "project name",
+			NameWithNamespace: "Org / project name", Path: "project-path",
+			PathWithNamespace: "org/project-path", CreatedAt: &projectCreated,
 		},
-		Author: &gl.BasicUser{ID: 1, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a", WebURL: "w", CreatedAt: &created},
+		Author: &gl.BasicUser{
+			ID: 11, Username: "author-username", Name: "Author Name", State: "active",
+			AvatarURL: "https://gitlab.example.com/avatar/author.png",
+			WebURL:    "https://gitlab.example.com/author-username", CreatedAt: &authorCreated,
+		},
 		Target: &gl.TodoTarget{
-			Assignees:            []*gl.BasicUser{{ID: 2, Username: "bob"}, nil},
-			Assignee:             &gl.BasicUser{ID: 2, Username: "bob"},
-			Author:               &gl.BasicUser{ID: 1, Username: "alice"},
-			CreatedAt:            &created,
-			Description:          "desc",
-			Downvotes:            1,
-			ID:                   float64(42),
-			IID:                  42,
-			Labels:               []string{"bug"},
-			Milestone:            &gl.Milestone{ID: 9, IID: 1, Title: "M1", StartDate: start, DueDate: due, CreatedAt: &created, UpdatedAt: &created, Expired: &expired},
-			ProjectID:            3,
+			// The nil element is deliberate: GitLab has sent one, and the
+			// converter drops it rather than publishing a null.
+			Assignees:   []*gl.BasicUser{{ID: 21, Username: "assignee-username"}, nil},
+			Assignee:    &gl.BasicUser{ID: 22, Username: "single-assignee-username"},
+			Author:      &gl.BasicUser{ID: 23, Username: "target-author-username"},
+			CreatedAt:   &targetCreated,
+			Description: "target description",
+			Downvotes:   31,
+			ID:          float64(41),
+			IID:         42,
+			Labels:      []string{"label-one", "label-two"},
+			Milestone: &gl.Milestone{
+				ID: 51, IID: 52, GroupID: 53, ProjectID: 54,
+				Title: "milestone title", Description: "milestone description",
+				State: "active", WebURL: "https://gitlab.example.com/milestone",
+				StartDate: mustISO(t, "2026-02-01"), DueDate: mustISO(t, "2026-03-02"),
+				CreatedAt: &milestoneCreated, UpdatedAt: &milestoneUpdated, Expired: &expired,
+			},
+			ProjectID:            61,
 			State:                "opened",
 			Subscribed:           true,
-			TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 4, CompletedCount: 2},
-			Title:                "Fix bug",
-			UpdatedAt:            &created,
-			Upvotes:              5,
-			UserNotesCount:       3,
-			WebURL:               "https://x/issues/7",
+			TaskCompletionStatus: &gl.TasksCompletionStatus{Count: 7, CompletedCount: 3},
+			Title:                "target title",
+			UpdatedAt:            &targetUpdated,
+			Upvotes:              33,
+			UserNotesCount:       34,
+			WebURL:               "https://gitlab.example.com/org/project-path/-/issues/42#note",
 			Confidential:         true,
-			DueDate:              "2026-02-01",
+			DueDate:              "2026-04-05",
 			HasTasks:             true,
-			Links:                &gl.IssueLinks{Self: "s", Notes: "n", AwardEmoji: "ae", Project: "p"},
-			MovedToID:            8,
-			TimeStats:            &gl.TimeStats{HumanTimeEstimate: "1h", HumanTotalTimeSpent: "30m", TimeEstimate: 3600, TotalTimeSpent: 1800},
-			Weight:               2,
-			MergedAt:             &merged,
-			ApprovalsBeforeMerge: 1,
-			MergeStatus:          "can_be_merged",
-			Reference:            "!1",
-			Reviewers:            []*gl.BasicUser{{ID: 4, Username: "carol"}, nil},
-			SHA:                  "abc",
-			SourceBranch:         "feat",
-			TargetBranch:         "main",
-			SourceProjectID:      3,
-			TargetProjectID:      3,
-			Squash:               true,
-			WorkInProgress:       false,
-			FileName:             "design.png",
-			ImageURL:             "https://x/design.png",
+			Links: &gl.IssueLinks{
+				Self: "https://gitlab.example.com/links/self", Notes: "https://gitlab.example.com/links/notes",
+				AwardEmoji: "https://gitlab.example.com/links/award_emoji", Project: "https://gitlab.example.com/links/project",
+			},
+			MovedToID: 71,
+			TimeStats: &gl.TimeStats{
+				HumanTimeEstimate: "2h", HumanTotalTimeSpent: "45m",
+				TimeEstimate: 7200, TotalTimeSpent: 2700,
+			},
+			Weight:                    8,
+			MergedAt:                  &merged,
+			ApprovalsBeforeMerge:      9,
+			ForceRemoveSourceBranch:   true,
+			MergeCommitSHA:            "merge-commit-sha",
+			MergeWhenPipelineSucceeds: true,
+			MergeStatus:               "can_be_merged",
+			Reference:                 "!81",
+			Reviewers:                 []*gl.BasicUser{{ID: 24, Username: "reviewer-username"}, nil},
+			SHA:                       "head-sha",
+			ShouldRemoveSourceBranch:  true,
+			SourceBranch:              "source-branch",
+			SourceProjectID:           82,
+			Squash:                    true,
+			TargetBranch:              "target-branch",
+			TargetProjectID:           83,
+			WorkInProgress:            true,
+			FileName:                  "design.png",
+			ImageURL:                  "https://gitlab.example.com/design.png",
 		},
 	}
-	out := toOutput(todo, toolutil.TodoExtra{})
-	if out.Project == nil || out.Project.PathWithNamespace != "g/proj" || out.Project.CreatedAt == "" {
-		t.Fatalf("project not mapped: %+v", out.Project)
+	extra := toolutil.TodoExtra{
+		UpdatedAt: &todoUpdated,
+		Group: &toolutil.NamespaceBasicOutput{
+			ID: 91, Name: "group name", Path: "group-path", Kind: "group",
+			FullPath: "org/group-path", ParentID: 92,
+			AvatarURL: "https://gitlab.example.com/avatar/group.png",
+			WebURL:    "https://gitlab.example.com/org/group-path",
+		},
 	}
-	if out.Author == nil || out.Author.Name != "Alice" {
-		t.Fatalf("author not mapped: %+v", out.Author)
+
+	want := Output{
+		ID: 7,
+		Project: &BasicProjectOut{
+			ID: 3, Description: "project description", Name: "project name",
+			NameWithNamespace: "Org / project name", Path: "project-path",
+			PathWithNamespace: "org/project-path", CreatedAt: "2026-01-02T02:00:00Z",
+		},
+		Author: &BasicUserOut{
+			ID: 11, Username: "author-username", Name: "Author Name", State: "active",
+			AvatarURL: "https://gitlab.example.com/avatar/author.png",
+			WebURL:    "https://gitlab.example.com/author-username", CreatedAt: "2026-01-03T03:00:00Z",
+		},
+		ActionName: gl.TodoAssigned,
+		TargetType: gl.TodoTargetIssue,
+		Target: &TodoTargetOut{
+			Assignees:   []*BasicUserOut{{ID: 21, Username: "assignee-username"}},
+			Assignee:    &BasicUserOut{ID: 22, Username: "single-assignee-username"},
+			Author:      &BasicUserOut{ID: 23, Username: "target-author-username"},
+			CreatedAt:   "2026-01-04T04:00:00Z",
+			Description: "target description",
+			Downvotes:   31,
+			ID:          float64(41),
+			IID:         42,
+			Labels:      []string{"label-one", "label-two"},
+			Milestone: &MilestoneOut{
+				ID: 51, IID: 52, GroupID: 53, ProjectID: 54,
+				Title: "milestone title", Description: "milestone description",
+				State: "active", WebURL: "https://gitlab.example.com/milestone",
+				StartDate: "2026-02-01", DueDate: "2026-03-02",
+				CreatedAt: "2026-01-05T05:00:00Z", UpdatedAt: "2026-01-06T06:00:00Z", Expired: &expired,
+			},
+			ProjectID:            61,
+			State:                "opened",
+			Subscribed:           true,
+			TaskCompletionStatus: &TaskCompletionStatusOut{Count: 7, CompletedCount: 3},
+			Title:                "target title",
+			UpdatedAt:            "2026-01-07T07:00:00Z",
+			Upvotes:              33,
+			UserNotesCount:       34,
+			WebURL:               "https://gitlab.example.com/org/project-path/-/issues/42#note",
+			Confidential:         true,
+			DueDate:              "2026-04-05",
+			HasTasks:             true,
+			Links: &IssueLinksOut{
+				Self: "https://gitlab.example.com/links/self", Notes: "https://gitlab.example.com/links/notes",
+				AwardEmoji: "https://gitlab.example.com/links/award_emoji", Project: "https://gitlab.example.com/links/project",
+			},
+			MovedToID: 71,
+			TimeStats: &TimeStatsOut{
+				HumanTimeEstimate: "2h", HumanTotalTimeSpent: "45m",
+				TimeEstimate: 7200, TotalTimeSpent: 2700,
+			},
+			Weight:                    8,
+			MergedAt:                  "2026-01-08T08:00:00Z",
+			ApprovalsBeforeMerge:      9,
+			ForceRemoveSourceBranch:   true,
+			MergeCommitSHA:            "merge-commit-sha",
+			MergeWhenPipelineSucceeds: true,
+			MergeStatus:               "can_be_merged",
+			Reference:                 "!81",
+			Reviewers:                 []*BasicUserOut{{ID: 24, Username: "reviewer-username"}},
+			SHA:                       "head-sha",
+			ShouldRemoveSourceBranch:  true,
+			SourceBranch:              "source-branch",
+			SourceProjectID:           82,
+			Squash:                    true,
+			TargetBranch:              "target-branch",
+			TargetProjectID:           83,
+			WorkInProgress:            true,
+			FileName:                  "design.png",
+			ImageURL:                  "https://gitlab.example.com/design.png",
+		},
+		TargetURL: "https://gitlab.example.com/org/project-path/-/issues/42",
+		Body:      "todo body",
+		State:     "pending",
+		CreatedAt: "2026-01-15T10:00:00Z",
+		UpdatedAt: "2026-01-09T09:00:00Z",
+		Group:     extra.Group,
 	}
-	assertFullTarget(t, out.Target)
+
+	if got := toOutput(todo, extra); !reflect.DeepEqual(got, want) {
+		t.Errorf("toOutput():\n got %+v\nwant %+v", got, want)
+	}
 }
 
-// assertFullTarget verifies the fully populated to-do target sub-objects,
-// including nil-element skipping in slices and nested object mapping.
-func assertFullTarget(t *testing.T, tgt *TodoTargetOut) {
-	t.Helper()
-	if tgt == nil {
-		t.Fatal("expected non-nil target")
+// TestTodoTargetOut_EachFlag_ComesFromItsOwnField verifies that every boolean a
+// to-do target publishes is read from the SDK field of the same name.
+//
+// A block of flags has no fixture in which no two values agree, so the test
+// above cannot distinguish them: with all eight set, a converter reading
+// Squash for WorkInProgress passes. Each is therefore driven alone and the
+// whole converted target compared with one carrying only that flag.
+func TestTodoTargetOut_EachFlag_ComesFromItsOwnField(t *testing.T) {
+	tests := []struct {
+		name string
+		set  func(*gl.TodoTarget)
+		want TodoTargetOut
+	}{
+		{"subscribed", func(tt *gl.TodoTarget) { tt.Subscribed = true }, TodoTargetOut{Subscribed: true}},
+		{"confidential", func(tt *gl.TodoTarget) { tt.Confidential = true }, TodoTargetOut{Confidential: true}},
+		{"has_tasks", func(tt *gl.TodoTarget) { tt.HasTasks = true }, TodoTargetOut{HasTasks: true}},
+		{"force_remove_source_branch", func(tt *gl.TodoTarget) { tt.ForceRemoveSourceBranch = true }, TodoTargetOut{ForceRemoveSourceBranch: true}},
+		{"merge_when_pipeline_succeeds", func(tt *gl.TodoTarget) { tt.MergeWhenPipelineSucceeds = true }, TodoTargetOut{MergeWhenPipelineSucceeds: true}},
+		{"should_remove_source_branch", func(tt *gl.TodoTarget) { tt.ShouldRemoveSourceBranch = true }, TodoTargetOut{ShouldRemoveSourceBranch: true}},
+		{"squash", func(tt *gl.TodoTarget) { tt.Squash = true }, TodoTargetOut{Squash: true}},
+		{"work_in_progress", func(tt *gl.TodoTarget) { tt.WorkInProgress = true }, TodoTargetOut{WorkInProgress: true}},
 	}
-	if len(tgt.Assignees) != 1 || tgt.Assignees[0].Username != "bob" {
-		t.Errorf("assignees not mapped (nil skipped): %+v", tgt.Assignees)
-	}
-	if len(tgt.Reviewers) != 1 || tgt.Reviewers[0].Username != "carol" {
-		t.Errorf("reviewers not mapped (nil skipped): %+v", tgt.Reviewers)
-	}
-	if tgt.Assignee == nil || tgt.Author == nil {
-		t.Errorf("assignee/author not mapped: %+v", tgt)
-	}
-	if tgt.MergedAt == "" {
-		t.Errorf("merged_at not mapped: %+v", tgt)
-	}
-	assertTargetNested(t, tgt)
-}
-
-// assertTargetNested verifies the deeper nested objects on a to-do target
-// (milestone, task completion, links, and time stats).
-func assertTargetNested(t *testing.T, tgt *TodoTargetOut) {
-	t.Helper()
-	if tgt.Milestone == nil || tgt.Milestone.StartDate != "2026-01-01" || tgt.Milestone.DueDate != "2026-02-01" {
-		t.Errorf("milestone not mapped: %+v", tgt.Milestone)
-	}
-	if tgt.Milestone == nil || tgt.Milestone.Expired == nil || !*tgt.Milestone.Expired {
-		t.Errorf("milestone expired not mapped: %+v", tgt.Milestone)
-	}
-	if tgt.TaskCompletionStatus == nil || tgt.TaskCompletionStatus.Count != 4 {
-		t.Errorf("task completion not mapped: %+v", tgt.TaskCompletionStatus)
-	}
-	if tgt.Links == nil || tgt.Links.Self != "s" {
-		t.Errorf("links not mapped: %+v", tgt.Links)
-	}
-	if tgt.TimeStats == nil || tgt.TimeStats.TimeEstimate != 3600 {
-		t.Errorf("time stats not mapped: %+v", tgt.TimeStats)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var target gl.TodoTarget
+			tc.set(&target)
+			got := todoTargetOut(&target)
+			if got == nil {
+				t.Fatal("todoTargetOut() = nil, want a target")
+			}
+			if !reflect.DeepEqual(*got, tc.want) {
+				t.Errorf("todoTargetOut() with only %s set:\n got %+v\nwant %+v", tc.name, *got, tc.want)
+			}
+		})
 	}
 }
 
@@ -570,7 +690,10 @@ func mustISO(t *testing.T, s string) *gl.ISOTime {
 	return &iso
 }
 
-// TestActionSpecs_Metadata verifies todo action spec metadata.
+// TestActionSpecs_Metadata verifies that this package declares three specs and
+// that each names its owner package and an individual tool. What each spec
+// carries for a model to read is asserted by
+// TestActionSpecs_DiscoveryMetadata_ReachesEverySpec below.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -583,6 +706,107 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "todos" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+	}
+}
+
+// specsByTool builds the ActionSpecs of this package indexed by individual
+// tool name, against a client no test here lets a handler reach.
+func specsByTool(t *testing.T) map[string]toolutil.ActionSpec {
+	t.Helper()
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
+}
+
+// TestActionSpecs_DiscoveryMetadata_ReachesEverySpec verifies that the usage,
+// aliases, related actions and individual-tool description the metadata table
+// holds for each to-do tool are the ones its spec carries, and that none of
+// them is left at the generic placeholder the options start with.
+//
+// It asserts the wiring rather than the wording: the table is what a reader
+// edits, and repeating its sentences here would freeze prose without holding
+// anything. Nothing asserted this before, so a decoration that never ran served
+// "Use to execute todos domain action." as the usage of all three actions and
+// attached no related actions at all, which is R-META's whole subject.
+func TestActionSpecs_DiscoveryMetadata_ReachesEverySpec(t *testing.T) {
+	byTool := specsByTool(t)
+	for tool, meta := range todoActionMeta {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("no ActionSpec projects %s", tool)
+			}
+			undecorated := userTodoOptions(tool)
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the table's %q", spec.Usage, meta.usage)
+			}
+			if spec.Usage == undecorated.Usage {
+				t.Errorf("Usage is still the generic placeholder %q", undecorated.Usage)
+			}
+			if !reflect.DeepEqual(spec.Aliases, meta.aliases) {
+				t.Errorf("Aliases = %v, want the table's %v", spec.Aliases, meta.aliases)
+			}
+			if !reflect.DeepEqual(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %v, want the table's %v", spec.RelatedActions, meta.related)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("IndividualTool.Description = %q, want the table's %q", spec.IndividualTool.Description, meta.description)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_FilterVocabularies_AreAttachedToTheListActionAlone verifies
+// that the fixed action, state and type enums reach the input schema of
+// gitlab_todo_list and of nothing else. The two mark-done actions take an ID
+// and no filter, so an override landing on them would publish an enum for a
+// parameter they do not have, and the guard that decides this was answerable
+// by no assertion in the package.
+func TestActionSpecs_FilterVocabularies_AreAttachedToTheListActionAlone(t *testing.T) {
+	byTool := specsByTool(t)
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			if tool != "gitlab_todo_list" {
+				if len(spec.InputSchemaOverrides) != 0 {
+					t.Errorf("%s carries %d input-schema override(s), want none", tool, len(spec.InputSchemaOverrides))
+				}
+				return
+			}
+			var paths []string
+			for _, override := range spec.InputSchemaOverrides {
+				paths = append(paths, override.PropertyPath)
+				if values, ok := override.Values["enum"].([]any); !ok || len(values) == 0 {
+					t.Errorf("override for %q carries no enum values: %+v", override.PropertyPath, override.Values)
+				}
+			}
+			if want := []string{"action", "state", "type"}; !reflect.DeepEqual(paths, want) {
+				t.Errorf("overridden properties = %v, want %v", paths, want)
+			}
+		})
+	}
+}
+
+// TestDecorateTodoMeta_AnEntryThatFillsNothing_KeepsTheGenericMetadata
+// verifies that each half of the decoration applies only when the table has
+// something to put there, so an entry filling one field cannot blank the
+// others.
+//
+// Every entry in the real table fills all four, so the skipping branch of each
+// guard is reachable only through an entry that does not, which is what this
+// installs. Without it those guards could be inverted or widened and no test
+// would notice.
+func TestDecorateTodoMeta_AnEntryThatFillsNothing_KeepsTheGenericMetadata(t *testing.T) {
+	const tool = "gitlab_todo_nothing_filled"
+	todoActionMeta[tool] = todoActionMetaEntry{}
+	t.Cleanup(func() { delete(todoActionMeta, tool) })
+
+	options := userTodoOptions(tool)
+	decorateTodoMeta(&options, tool)
+	if want := userTodoOptions(tool); !reflect.DeepEqual(options, want) {
+		t.Errorf("decorateTodoMeta() with an empty entry:\n got %+v\nwant %+v", options, want)
 	}
 }
 
@@ -605,6 +829,52 @@ func TestList_UnreadableCapturedGroup(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// TestList_CapturedFields_ArePairedWithTheirOwnTodo verifies that the two
+// fields client-go's Todo does not model are read off the captured answer per
+// item and in order: each to-do's own updated_at, and the group object GitLab
+// renders only on a to-do raised in a group rather than a project.
+//
+// Nothing drove the success path of that read before, only its failure, so a
+// handler pairing item i with another item's capture published one to-do's
+// group and timestamp on another and no assertion could see it.
+func TestList_CapturedFields_ArePairedWithTheirOwnTodo(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			{
+				"id": 1, "action_name": "assigned", "target_type": "Issue", "state": "pending",
+				"project": {"id": 3, "path_with_namespace": "org/project-path"},
+				"updated_at": "2026-01-10T10:00:00Z"
+			},
+			{
+				"id": 2, "action_name": "mentioned", "target_type": "Epic", "state": "pending",
+				"group": {"id": 91, "name": "group name", "path": "group-path", "kind": "group", "full_path": "org/group-path"},
+				"updated_at": "2026-01-11T11:00:00Z"
+			}
+		]`, testutil.PaginationHeaders{Page: "1", Total: "2", TotalPages: "1", PerPage: "20"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Todos) != 2 {
+		t.Fatalf("expected 2 todos, got %d", len(out.Todos))
+	}
+	if out.Todos[0].Group != nil {
+		t.Errorf("the project-scoped to-do carries a group: %+v", out.Todos[0].Group)
+	}
+	if out.Todos[0].UpdatedAt != "2026-01-10T10:00:00Z" {
+		t.Errorf("UpdatedAt of the first to-do = %q, want its own", out.Todos[0].UpdatedAt)
+	}
+	want := &toolutil.NamespaceBasicOutput{ID: 91, Name: "group name", Path: "group-path", Kind: "group", FullPath: "org/group-path"}
+	if !reflect.DeepEqual(out.Todos[1].Group, want) {
+		t.Errorf("group of the second to-do:\n got %+v\nwant %+v", out.Todos[1].Group, want)
+	}
+	if out.Todos[1].UpdatedAt != "2026-01-11T11:00:00Z" {
+		t.Errorf("UpdatedAt of the second to-do = %q, want its own", out.Todos[1].UpdatedAt)
+	}
 }
 
 // TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.

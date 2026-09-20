@@ -9,10 +9,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -8350,6 +8354,46 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 	}
 }
 
+// TestBuildUpdateOpts_EachDeprecatedToggle_BridgesToItsOwnAccessLevel sets
+// one of the four bool toggles at a time and holds exactly one access level
+// to it, the other three staying nil. Driven together, two toggles carrying
+// the same value cannot tell a swap of their targets apart, and the only
+// other test of this bridge held the levels to non-nil: swapping the wiki
+// and jobs lines in applyUpdateAccessLevelOpts passed the suite.
+func TestBuildUpdateOpts_EachDeprecatedToggle_BridgesToItsOwnAccessLevel(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		level string
+	}{
+		{name: "IssuesEnabled", input: UpdateInput{ProjectID: "1", IssuesEnabled: new(false)}, level: "IssuesAccessLevel"},
+		{name: "MergeRequestsEnabled", input: UpdateInput{ProjectID: "1", MergeRequestsEnabled: new(false)}, level: "MergeRequestsAccessLevel"},
+		{name: "WikiEnabled", input: UpdateInput{ProjectID: "1", WikiEnabled: new(false)}, level: "WikiAccessLevel"},
+		{name: "JobsEnabled", input: UpdateInput{ProjectID: "1", JobsEnabled: new(false)}, level: "BuildsAccessLevel"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := buildUpdateOpts(tc.input)
+			levels := map[string]*gl.AccessControlValue{
+				"IssuesAccessLevel":        opts.IssuesAccessLevel,
+				"MergeRequestsAccessLevel": opts.MergeRequestsAccessLevel,
+				"WikiAccessLevel":          opts.WikiAccessLevel,
+				"BuildsAccessLevel":        opts.BuildsAccessLevel,
+			}
+			for name, got := range levels {
+				t.Run(name, func(t *testing.T) {
+					switch {
+					case name == tc.level && (got == nil || *got != gl.DisabledAccessControl):
+						t.Errorf("%s = %v, want %s from %s", name, got, gl.DisabledAccessControl, tc.name)
+					case name != tc.level && got != nil:
+						t.Errorf("%s = %s, want nil: only %s was set", name, *got, tc.name)
+					}
+				})
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 1:1 audit (P2/P3): fork + user-scoped + keyset filter coverage
 // ---------------------------------------------------------------------------.
@@ -8664,4 +8708,1107 @@ func TestFormatListMarkdown_SimpleRowsRenderWithoutAnArchivedClaim(t *testing.T)
 	if empty := FormatListForksMarkdown(ListForksOutput{}); empty != "No forks found.\n" {
 		t.Errorf("an empty fork page = %q, want the empty line", empty)
 	}
+}
+
+// TestFormatListMarkdown_SimpleRowsAreCountedWithoutPagination renders a page
+// of BasicProjectDetails rows with no pagination block and holds the heading's
+// count to the rows shown: the count is the sum of the two row shapes, and a
+// page that carries only the simple one must not read as an empty or a
+// negative page.
+func TestFormatListMarkdown_SimpleRowsAreCountedWithoutPagination(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		SimpleProjects: []BasicOutput{{ID: 9, Name: "lean", PathWithNamespace: "g/lean"}, {ID: 10, Name: "leaner", PathWithNamespace: "g/leaner"}},
+	})
+	if !strings.HasPrefix(md, "## Projects (2)\n") {
+		t.Errorf("FormatListMarkdown() = %q, want a heading counting the two rows", md)
+	}
+}
+
+// TestFormatListMarkdown_LinkedRowsAskToPreserveLinks holds, for the three
+// list tables that link a row when GitLab sent its URL, that the footer asks
+// the model to preserve links exactly when some row carries one: the flag is
+// accumulated across rows, and a fold that could never turn on would drop the
+// instruction from every linked table.
+func TestFormatListMarkdown_LinkedRowsAskToPreserveLinks(t *testing.T) {
+	const webURL = "https://gitlab.example.com/x"
+	for _, testCase := range []struct {
+		name   string
+		render func(url string) string
+	}{
+		{"groups", func(url string) string {
+			return FormatListProjectGroupsMarkdown(ListProjectGroupsOutput{Groups: []ProjectGroupOutput{{ID: 1, Name: "g"}, {ID: 2, Name: "h", WebURL: url}}})
+		}},
+		{"starrers", func(url string) string {
+			return FormatListStarrersMarkdown(ListProjectStarrersOutput{Starrers: []StarrerOutput{{User: ProjectUserOutput{ID: 1, Username: "a"}}, {User: ProjectUserOutput{ID: 2, Username: "b", WebURL: url}}}})
+		}},
+		{"users", func(url string) string {
+			return FormatListProjectUsersMarkdown(ListProjectUsersOutput{Users: []ProjectUserOutput{{ID: 1, Username: "a"}, {ID: 2, Username: "b", WebURL: url}}})
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if md := testCase.render(webURL); !strings.Contains(md, toolutil.HintPreserveLinks) {
+				t.Errorf("a table whose second row links does not ask to preserve links:\n%s", md)
+			}
+			if md := testCase.render(""); strings.Contains(md, toolutil.HintPreserveLinks) {
+				t.Errorf("a table with no link asks to preserve links:\n%s", md)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The request a handler builds, held to exactly the keys the caller set
+// ---------------------------------------------------------------------------.
+
+// assertRequestBodyIs holds the JSON body of r to the document want, compared
+// as JSON so key order and spacing do not count. It runs inside an httptest
+// handler, so it reports and returns rather than aborting.
+func assertRequestBodyIs(t *testing.T, r *http.Request, want string) {
+	t.Helper()
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("reading the request body: %v", err)
+		return
+	}
+	var got, expected any
+	if err = json.Unmarshal(raw, &got); err != nil {
+		t.Errorf("request body is not JSON: %v\n%s", err, raw)
+		return
+	}
+	if err = json.Unmarshal([]byte(want), &expected); err != nil {
+		t.Errorf("the expected body is not JSON: %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("request body\n got: %s\nwant: %s", raw, want)
+	}
+}
+
+// bodyAssertingClient answers method on path with status and body, holding the
+// request body to wantBody, and refuses any other request.
+func bodyAssertingClient(t *testing.T, method, path, wantBody string, status int, body string) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method || r.URL.Path != path {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		assertRequestBodyIs(t, r, wantBody)
+		testutil.RespondJSON(w, status, body)
+	}))
+}
+
+// inputFromJSON fills an input the way a surface does, from the caller's
+// document, so a test can name a parameter by its JSON key.
+func inputFromJSON[T any](t *testing.T, document map[string]any) T {
+	t.Helper()
+	raw, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input T
+	if err = json.Unmarshal(raw, &input); err != nil {
+		t.Fatalf("%s does not decode into %T: %v", raw, input, err)
+	}
+	return input
+}
+
+// mustJSON renders v as the JSON document a test compares a body with.
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+// TestProjectCreate_MinimalInput_SendsTheNameAndNothingElse holds the create
+// request for an input naming only the project to a body of exactly the name:
+// a zero count, an empty list or an unset string that reached GitLab as 0,
+// null or "" would overwrite the instance default the caller never asked to
+// change.
+func TestProjectCreate_MinimalInput_SendsTheNameAndNothingElse(t *testing.T) {
+	client := bodyAssertingClient(t, http.MethodPost, pathProjects, `{"name":"`+testProjectName+`"}`, http.StatusCreated, `{"id":1,"name":"`+testProjectName+`"}`)
+	if _, err := Create(t.Context(), client, CreateInput{Name: testProjectName}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectUpdate_MinimalInput_SendsAnEmptyBody holds the update request for
+// an input naming only the project to an empty object, for the same reason as
+// the create case: an edit that names no setting must change none.
+func TestProjectUpdate_MinimalInput_SendsAnEmptyBody(t *testing.T) {
+	client := bodyAssertingClient(t, http.MethodPut, pathProject42, `{}`, http.StatusOK, `{"id":42}`)
+	if _, err := Update(t.Context(), client, UpdateInput{ProjectID: "42"}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectCreate_MergeRequestTitleRegexDescription_IsSent holds the one
+// create setting no other test reads back off the wire: the description that
+// accompanies a title regex.
+func TestProjectCreate_MergeRequestTitleRegexDescription_IsSent(t *testing.T) {
+	client := bodyAssertingClient(t, http.MethodPost, pathProjects,
+		`{"name":"p","merge_request_title_regex":"^feat","merge_request_title_regex_description":"starts with feat"}`,
+		http.StatusCreated, `{"id":1,"name":"p"}`)
+	_, err := Create(t.Context(), client, CreateInput{Name: "p", MergeRequestTitleRegex: "^feat", MergeRequestTitleRegexDescription: "starts with feat"})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectGet_Options_ReachTheQuery holds the three read options of a get
+// to the query string GitLab receives: each is a pointer copied under a nil
+// guard, and a guard that drops the copy leaves the option unsent while the
+// answer still decodes.
+func TestProjectGet_Options_ReachTheQuery(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathProject42)
+		testutil.AssertQueryParam(t, r, "statistics", "true")
+		testutil.AssertQueryParam(t, r, "license", "true")
+		testutil.AssertQueryParam(t, r, "with_custom_attributes", "true")
+		testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
+	}))
+	_, err := Get(t.Context(), client, GetInput{ProjectID: "42", Statistics: new(true), License: new(true), WithCustomAttributes: new(true)})
+	if err != nil {
+		t.Fatalf(fmtGetUnexpErr, err)
+	}
+}
+
+// TestProjectAddHook_EachEventFlagIsSentUnderItsOwnKey adds a webhook with one
+// event flag at a time and holds the body to the URL and that key alone, so a
+// flag dropped by its guard and a flag copied from a neighbor both fail; a
+// request with every flag set to true would hide both.
+func TestProjectAddHook_EachEventFlagIsSentUnderItsOwnKey(t *testing.T) {
+	for _, key := range flagKeys(reflect.TypeFor[HookOptionsInput]()) {
+		t.Run(key, func(t *testing.T) {
+			input := inputFromJSON[AddHookInput](t, map[string]any{"project_id": "42", "url": testHookURL, key: true})
+			client := bodyAssertingClient(t, http.MethodPost, pathProject42Hooks, mustJSON(t, map[string]any{"url": testHookURL, key: true}), http.StatusCreated, `{"id":1}`)
+			if _, err := AddHook(t.Context(), client, input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestProjectAddHook_EverySettingIsSentUnderItsOwnKey adds a webhook with
+// every scalar setting carrying its own key as its value, plus a custom
+// header, and holds the body to exactly the document the caller sent.
+func TestProjectAddHook_EverySettingIsSentUnderItsOwnKey(t *testing.T) {
+	sent := map[string]any{"url": testHookURL, "custom_headers": []map[string]string{{"key": "X-Trace", "value": "trace-1"}}}
+	typ := reflect.TypeFor[HookOptionsInput]()
+	for f := range typ.Fields() {
+		if f.Type.Kind() == reflect.String {
+			sent[jsonKey(f)] = jsonKey(f)
+		}
+	}
+	document := maps.Clone(sent)
+	document["project_id"] = "42"
+	client := bodyAssertingClient(t, http.MethodPost, pathProject42Hooks, mustJSON(t, sent), http.StatusCreated, `{"id":1}`)
+	if _, err := AddHook(t.Context(), client, inputFromJSON[AddHookInput](t, document)); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectEditHook_SendsOnlyWhatTheCallerSet holds an edit that names one
+// event flag and no URL to a body of that flag alone, since an edit that
+// re-sent an empty URL would be refused by GitLab, and one that re-sent every
+// flag would reset the events the caller did not mention.
+func TestProjectEditHook_SendsOnlyWhatTheCallerSet(t *testing.T) {
+	client := bodyAssertingClient(t, http.MethodPut, pathProject42Hook1, `{"note_events":true}`, http.StatusOK, `{"id":1}`)
+	input := EditHookInput{ProjectID: "42", HookID: 1, NoteEvents: new(true)}
+	if _, err := EditHook(t.Context(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+// TestProjectHooks_RefusedPayload_GetsTheURLAndEventsHint verifies that a
+// webhook GitLab refuses as unprocessable or as a bad request is answered with
+// the hint about the URL and the event flags, on add and on edit alike, since
+// the two statuses are one condition to a caller and a hint keyed on only one
+// of them leaves the other with the generic role advice.
+func TestProjectHooks_RefusedPayload_GetsTheURLAndEventsHint(t *testing.T) {
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadRequest} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"Url is blocked"}`)
+			}))
+			_, addErr := AddHook(t.Context(), client, AddHookInput{ProjectID: "42", URL: testHookURL})
+			if addErr == nil || !strings.Contains(addErr.Error(), "reachable HTTP/HTTPS URL") {
+				t.Errorf("AddHook error = %v, want the URL and event flags hint", addErr)
+			}
+			_, editErr := EditHook(t.Context(), client, EditHookInput{ProjectID: "42", HookID: 1})
+			if editErr == nil || !strings.Contains(editErr.Error(), "updated URL must be valid") {
+				t.Errorf("EditHook error = %v, want the URL and event flags hint", editErr)
+			}
+		})
+	}
+}
+
+// eachSettingAlone lists, for every optional field of an input type, its JSON
+// key and one value of its kind: a string carries its own key, a flag is
+// false, since a cleared flag dropped on the floor is the classic defect, and
+// a count is 7. The keys in skip are the required ones a test sets itself.
+func eachSettingAlone(typ reflect.Type, skip ...string) map[string]any {
+	settings := map[string]any{}
+	for f := range typ.Fields() {
+		key := jsonKey(f)
+		if key == "" || slices.Contains(skip, key) {
+			continue
+		}
+		ft := f.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		switch ft.Kind() {
+		case reflect.String:
+			settings[key] = key
+		case reflect.Bool:
+			settings[key] = false
+		case reflect.Int, reflect.Int64:
+			settings[key] = 7
+		}
+	}
+	return settings
+}
+
+// TestAddPushRule_EachSettingAloneIsSentUnderItsOwnKey adds a push rule with
+// one setting at a time and holds the body to that key alone. It holds two
+// things at once: that any single setting satisfies the rule that an add must
+// carry one, whichever of the thirteen it is, and that the setting reaches
+// GitLab under its own key rather than a neighbor's or not at all.
+func TestAddPushRule_EachSettingAloneIsSentUnderItsOwnKey(t *testing.T) {
+	for key, value := range eachSettingAlone(reflect.TypeFor[AddPushRuleInput](), paramProjectID) {
+		t.Run(key, func(t *testing.T) {
+			input := inputFromJSON[AddPushRuleInput](t, map[string]any{paramProjectID: "42", key: value})
+			client := bodyAssertingClient(t, http.MethodPost, pathPushRules42, mustJSON(t, map[string]any{key: value}), http.StatusCreated, pushRuleJSON)
+			if _, err := AddPushRule(t.Context(), client, input); err != nil {
+				t.Fatalf("%s alone: %v", key, err)
+			}
+		})
+	}
+}
+
+// TestEditPushRule_EachSettingAloneIsSentUnderItsOwnKey edits a push rule with
+// one setting at a time and holds the body to that key alone, so an edit
+// changes the one setting the caller named and nothing beside it.
+func TestEditPushRule_EachSettingAloneIsSentUnderItsOwnKey(t *testing.T) {
+	for key, value := range eachSettingAlone(reflect.TypeFor[EditPushRuleInput](), paramProjectID) {
+		t.Run(key, func(t *testing.T) {
+			input := inputFromJSON[EditPushRuleInput](t, map[string]any{paramProjectID: "42", key: value})
+			client := bodyAssertingClient(t, http.MethodPut, pathPushRules42, mustJSON(t, map[string]any{key: value}), http.StatusOK, pushRuleJSON)
+			if _, err := EditPushRule(t.Context(), client, input); err != nil {
+				t.Fatalf("%s alone: %v", key, err)
+			}
+		})
+	}
+}
+
+// TestEditPushRule_RefusedPayload_GetsTheRegexHint verifies that an edit
+// GitLab refuses as unprocessable or as a bad request is answered with the
+// hint about the regex patterns, on either status, while a not-found gets
+// the advice that no rules exist yet.
+func TestEditPushRule_RefusedPayload_GetsTheRegexHint(t *testing.T) {
+	for _, testCase := range []struct {
+		status int
+		want   string
+	}{
+		{http.StatusUnprocessableEntity, "regex patterns is invalid"},
+		{http.StatusBadRequest, "regex patterns is invalid"},
+		{http.StatusNotFound, "no push rules currently exist"},
+	} {
+		t.Run(http.StatusText(testCase.status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.status, `{"message":"rejected"}`)
+			}))
+			_, err := EditPushRule(t.Context(), client, EditPushRuleInput{ProjectID: "42", CommitMessageRegex: new(testCommitRegex)})
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Errorf("error = %v, want it to mention %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+// TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet holds the share body
+// to the group, the level and the expiry when one is given, and to a null
+// expiry when none is: client-go declares the option without omitempty, so
+// the key is always on the wire, and what the handler decides is that an
+// unset expiry reaches GitLab as null rather than as the empty string a date
+// parser refuses.
+func TestShareProjectWithGroup_SendsExactlyWhatTheCallerSet(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		expiresAt string
+		want      string
+	}{
+		{"with an expiry", testDate20260601, `{"group_id":7,"group_access":30,"expires_at":"` + testDate20260601 + `"}`},
+		{"without an expiry", "", `{"group_id":7,"group_access":30,"expires_at":null}`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := bodyAssertingClient(t, http.MethodPost, pathProject42+"/share", testCase.want, http.StatusCreated, `{"id":1}`)
+			_, err := ShareProjectWithGroup(t.Context(), client, ShareProjectInput{ProjectID: "42", GroupID: 7, GroupAccess: 30, ExpiresAt: testCase.expiresAt})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestShareProjectWithGroup_RefusedShare_GetsTheLevelHint verifies that a
+// share GitLab refuses as unprocessable or as a bad request is answered with
+// the hint about the access levels and the expiry format on either status.
+func TestShareProjectWithGroup_RefusedShare_GetsTheLevelHint(t *testing.T) {
+	for _, status := range []int{http.StatusUnprocessableEntity, http.StatusBadRequest} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, status, `{"message":"group_access is not valid"}`)
+			}))
+			_, err := ShareProjectWithGroup(t.Context(), client, ShareProjectInput{ProjectID: "42", GroupID: 7, GroupAccess: 25})
+			if err == nil || !strings.Contains(err.Error(), "group_access must be 10/20/30/40") {
+				t.Errorf("error = %v, want the access level hint", err)
+			}
+		})
+	}
+}
+
+// assertQueryIs holds the query string of r to exactly want, so a filter the
+// caller never set cannot reach GitLab as its zero value and one the caller
+// set cannot be dropped. It runs inside an httptest handler.
+func assertQueryIs(t *testing.T, r *http.Request, want url.Values) {
+	t.Helper()
+	if got := r.URL.Query(); !reflect.DeepEqual(got, want) {
+		t.Errorf("query = %v, want %v", got, want)
+	}
+}
+
+// TestProjectListGroups_Filters_ReachTheQuery holds the group listing's
+// filters to the query GitLab receives: every one when all are set, and none
+// when none is, since a minimum access level of zero would narrow the list
+// to nothing GitLab recognizes.
+func TestProjectListGroups_Filters_ReachTheQuery(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ListProjectGroupsInput
+		want  url.Values
+	}{
+		{
+			name:  "no filter",
+			input: ListProjectGroupsInput{ProjectID: "42"},
+			want:  url.Values{},
+		},
+		{
+			name: "every filter",
+			input: ListProjectGroupsInput{
+				ProjectID: "42", Search: "sec", WithShared: new(true), SharedVisibleOnly: new(false),
+				SkipGroups: []int64{3, 4}, SharedMinAccessLevel: 30, OrderBy: "name", Sort: "desc",
+			},
+			want: url.Values{
+				"search": {"sec"}, "with_shared": {"true"}, "shared_visible_only": {"false"},
+				"skip_groups": {"3", "4"}, "shared_min_access_level": {"30"}, "order_by": {"name"}, "sort": {"desc"},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathProject42+"/groups")
+				assertQueryIs(t, r, testCase.want)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			if _, err := ListProjectGroups(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestProjectListInvitedGroups_Filters_ReachTheQuery holds the invited-group
+// listing's filters to the query GitLab receives, every one and none.
+func TestProjectListInvitedGroups_Filters_ReachTheQuery(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ListInvitedGroupsInput
+		want  url.Values
+	}{
+		{
+			name:  "no filter",
+			input: ListInvitedGroupsInput{ProjectID: "42"},
+			want:  url.Values{},
+		},
+		{
+			name: "every filter",
+			input: ListInvitedGroupsInput{
+				ProjectID: "42", Search: "ops", MinAccessLevel: 20, Relation: []string{"direct", "inherited"},
+				WithCustomAttributes: new(true), OrderBy: "id", Sort: testSortAsc,
+			},
+			want: url.Values{
+				"search": {"ops"}, "min_access_level": {"20"}, "relation": {"direct", "inherited"},
+				"with_custom_attributes": {"true"}, "order_by": {"id"}, "sort": {testSortAsc},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathProject42+"/invited_groups")
+				assertQueryIs(t, r, testCase.want)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			if _, err := ListInvitedGroups(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestProjectListStarrers_Search_ReachesTheQuery holds the starrer listing's
+// search to the query, and to no query when none was given.
+func TestProjectListStarrers_Search_ReachesTheQuery(t *testing.T) {
+	for _, testCase := range []struct {
+		search string
+		want   url.Values
+	}{
+		{"jo", url.Values{"search": {"jo"}}},
+		{"", url.Values{}},
+	} {
+		t.Run("search="+testCase.search, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestPath(t, r, pathProject42+"/starrers")
+				assertQueryIs(t, r, testCase.want)
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+			if _, err := ListProjectStarrers(t.Context(), client, ListProjectStarrersInput{ProjectID: "42", Search: testCase.search}); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestProjectList_NoFilter_SendsNoQuery holds a filterless project listing to
+// an empty query: a minimum access level or an id bound of zero would each
+// narrow the list rather than leave it alone.
+func TestProjectList_NoFilter_SendsNoQuery(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathProjects)
+		assertQueryIs(t, r, url.Values{})
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	if _, err := List(t.Context(), client, ListInput{}); err != nil {
+		t.Fatalf(fmtProjectListErr, err)
+	}
+}
+
+// requestLog records what a handler sent GitLab, in order, as "METHOD path?query"
+// lines, from the httptest goroutine.
+type requestLog struct {
+	mu   sync.Mutex
+	seen []string
+}
+
+// record writes one request down.
+func (l *requestLog) record(r *http.Request) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.seen = append(l.seen, r.Method+" "+r.URL.RequestURI())
+}
+
+// lines returns the requests seen so far.
+func (l *requestLog) lines() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.seen)
+}
+
+// TestProjectDelete_PermanentRemoval_SendsTheConfirmedPath holds an immediate
+// removal to the query GitLab reads it from: permanently_remove with the
+// full_path the caller confirmed, and an empty full_path when none was given.
+// The empty key is client-go's, whose delete options carry no omitempty, so
+// what the handler decides is only that the caller's path reaches the wire
+// when there is one.
+func TestProjectDelete_PermanentRemoval_SendsTheConfirmedPath(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		fullPath string
+		want     string
+	}{
+		{"with the confirmed path", "ns/proj", "DELETE /api/v4/projects/42?full_path=ns%2Fproj&permanently_remove=true"},
+		{"without a path", "", "DELETE /api/v4/projects/42?full_path=&permanently_remove=true"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var log requestLog
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.record(r)
+				w.WriteHeader(http.StatusAccepted)
+			}))
+			out, err := Delete(t.Context(), client, DeleteInput{ProjectID: "42", PermanentlyRemove: true, FullPath: testCase.fullPath})
+			if err != nil {
+				t.Fatalf(fmtDeleteUnexpErr, err)
+			}
+			if !out.PermanentlyRemoved {
+				t.Error("PermanentlyRemoved = false, want true")
+			}
+			if got := log.lines(); !slices.Equal(got, []string{testCase.want}) {
+				t.Errorf("requests = %v, want [%s]", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestProjectDelete_TwoStepRemoval_ReadsThePathBackBetweenTheSteps drives a
+// permanent removal on an instance that demands marking first, and holds the
+// requests it takes to their order and their queries. With a confirmed path
+// the project is read back between the steps, because GitLab renames a marked
+// project and refuses the path the caller confirmed; without one there is
+// nothing to read back and the second step carries the empty full_path
+// client-go writes for an unset option. The marking step itself sends no
+// options at all.
+func TestProjectDelete_TwoStepRemoval_ReadsThePathBackBetweenTheSteps(t *testing.T) {
+	const marker = `{"message":"Project must be marked for deletion first"}`
+	for _, testCase := range []struct {
+		name     string
+		fullPath string
+		want     []string
+	}{
+		{"with the confirmed path", "ns/proj", []string{
+			"DELETE /api/v4/projects/42?full_path=ns%2Fproj&permanently_remove=true",
+			"DELETE /api/v4/projects/42",
+			"GET /api/v4/projects/42",
+			"DELETE /api/v4/projects/42?full_path=ns%2Fproj-deletion_scheduled-42&permanently_remove=true",
+		}},
+		{"without a path", "", []string{
+			"DELETE /api/v4/projects/42?full_path=&permanently_remove=true",
+			"DELETE /api/v4/projects/42",
+			"DELETE /api/v4/projects/42?full_path=&permanently_remove=true",
+		}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var log requestLog
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.record(r)
+				switch {
+				case r.Method == http.MethodGet:
+					testutil.RespondJSON(w, http.StatusOK, `{"id":42,"path_with_namespace":"ns/proj-deletion_scheduled-42"}`)
+				case len(log.lines()) == 1:
+					testutil.RespondJSON(w, http.StatusBadRequest, marker)
+				default:
+					w.WriteHeader(http.StatusAccepted)
+				}
+			}))
+			out, err := Delete(t.Context(), client, DeleteInput{ProjectID: "42", PermanentlyRemove: true, FullPath: testCase.fullPath})
+			if err != nil {
+				t.Fatalf(fmtDeleteUnexpErr, err)
+			}
+			if !out.PermanentlyRemoved || !strings.Contains(out.Message, "two-step") {
+				t.Errorf("output = %+v, want a permanent two-step removal", out)
+			}
+			if got := log.lines(); !slices.Equal(got, testCase.want) {
+				t.Errorf("requests\n got: %q\nwant: %q", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestProjectDelete_PermanentRemovalRefused_IsNotRetriedAsTwoStep verifies
+// that a refusal which does not ask for marking first is returned as it came,
+// after one request: only the marking demand justifies the second attempt,
+// and retrying a forbidden removal would reach GitLab twice for one answer.
+func TestProjectDelete_PermanentRemovalRefused_IsNotRetriedAsTwoStep(t *testing.T) {
+	var log requestLog
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.record(r)
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := Delete(t.Context(), client, DeleteInput{ProjectID: "42", PermanentlyRemove: true, FullPath: "ns/proj"})
+	if err == nil || strings.Contains(err.Error(), "(mark)") {
+		t.Errorf("error = %v, want the refusal itself rather than a failed marking step", err)
+	}
+	if got := log.lines(); len(got) != 1 {
+		t.Errorf("requests = %v, want the one refused removal", got)
+	}
+}
+
+// TestProjectFork_SendsExactlyWhatTheCallerSet holds the fork body to the
+// caller's own settings: a fork naming only the source sends an empty object,
+// since a namespace_id of zero names no namespace, and one naming every
+// setting sends each under its own key, the deprecated namespace among them.
+func TestProjectFork_SendsExactlyWhatTheCallerSet(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		input ForkInput
+		want  string
+	}{
+		{
+			name:  "source only",
+			input: ForkInput{ProjectID: "42"},
+			want:  `{}`,
+		},
+		{
+			name: "every setting",
+			input: ForkInput{
+				ProjectID: "42", Name: "forked", Path: "forked-path", NamespaceID: 9, NamespacePath: "group/sub",
+				Namespace: "legacy-group", Description: "a fork", Visibility: testPrivate, Branches: "main",
+				MergeRequestDefaultTargetSelf: new(true),
+			},
+			want: `{"name":"forked","path":"forked-path","namespace_id":9,"namespace_path":"group/sub","namespace":"legacy-group",` +
+				`"description":"a fork","visibility":"private","branches":"main","mr_default_target_self":true}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := bodyAssertingClient(t, http.MethodPost, pathProject42Fork, testCase.want, http.StatusCreated, `{"id":99}`)
+			if _, err := Fork(t.Context(), client, testCase.input); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
+// TestProjectHandlers_RefusedPayload_GetsTheDedicatedHint verifies, for the
+// two handlers that key a hint on a payload refusal, that an unprocessable
+// and a bad request both get the dedicated hint, and that the status each
+// keys its other hint on gets that one instead: the two statuses are one
+// condition to a caller and a hint keyed on only one of them leaves the
+// other guessing.
+func TestProjectHandlers_RefusedPayload_GetsTheDedicatedHint(t *testing.T) {
+	for _, handler := range []struct {
+		name            string
+		call            func(*gitlabclient.Client) error
+		refused         string
+		otherwiseStatus int
+		otherwise       string
+	}{
+		{
+			name: "hook test",
+			call: func(client *gitlabclient.Client) error {
+				_, err := TriggerTestHook(t.Context(), client, TriggerTestHookInput{ProjectID: "42", HookID: 1, Event: "push_events"})
+				return err
+			},
+			refused:         "event must be one this hook subscribes to",
+			otherwiseStatus: http.StatusNotFound,
+			otherwise:       "hook may have been deleted",
+		},
+		{
+			name: "avatar upload",
+			call: func(client *gitlabclient.Client) error {
+				_, err := UploadAvatar(t.Context(), client, UploadAvatarInput{ProjectID: "42", Filename: "a.png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("png"))})
+				return err
+			},
+			refused:         "avatar must be JPG/PNG/GIF",
+			otherwiseStatus: http.StatusForbidden,
+			otherwise:       "requires Maintainer/Owner role",
+		},
+	} {
+		for _, testCase := range []struct {
+			status int
+			want   string
+		}{
+			{http.StatusUnprocessableEntity, handler.refused},
+			{http.StatusBadRequest, handler.refused},
+			{handler.otherwiseStatus, handler.otherwise},
+		} {
+			t.Run(handler.name+" "+http.StatusText(testCase.status), func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, testCase.status, `{"message":"refused"}`)
+				}))
+				err := handler.call(client)
+				if err == nil || !strings.Contains(err.Error(), testCase.want) {
+					t.Errorf("error = %v, want it to mention %q", err, testCase.want)
+				}
+			})
+		}
+	}
+}
+
+// TestActionSpecs_ProjectGetRoute_OtherRefusalsAreErrors verifies that the
+// get route turns only a not-found into the informational card: a forbidden
+// project is still an error, since a card saying the project may not exist
+// would send a caller looking for a typo in a path GitLab refused to show.
+func TestActionSpecs_ProjectGetRoute_OtherRefusalsAreErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	byTool := projectSpecsByTool(t, ActionSpecs(client, false))
+	result, err := byTool["gitlab_project_get"].Route.Handler(t.Context(), map[string]any{paramProjectID: "42"})
+	if err == nil {
+		t.Fatalf("Route.Handler returned %#v and no error for a forbidden project", result)
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error = %v, want GitLab's refusal", err)
+	}
+}
+
+// TestActionSpecs_PushRuleGuidance_NamesTheRegexOnAddAndEditOnly verifies the
+// commit_message_regex and reject_unsigned_commits guidance reaches the two
+// push rule actions that take them, and neither of the two that do not: a
+// get or a delete carrying guidance about a parameter it has no field for
+// would teach a model to send it.
+func TestActionSpecs_PushRuleGuidance_NamesTheRegexOnAddAndEditOnly(t *testing.T) {
+	byTool := projectSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)), true))
+	for tool, want := range map[string]bool{
+		toolProjectAddPushRule:            true,
+		toolProjectEditPushRule:           true,
+		"gitlab_project_get_push_rules":   false,
+		"gitlab_project_delete_push_rule": false,
+	} {
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("%s is not a project action", tool)
+			}
+			_, regex := spec.ParameterGuidance["commit_message_regex"]
+			_, unsigned := spec.ParameterGuidance["reject_unsigned_commits"]
+			if regex != want || unsigned != want {
+				t.Errorf("%s: guidance for commit_message_regex=%v, reject_unsigned_commits=%v, want %v", tool, regex, unsigned, want)
+			}
+		})
+	}
+}
+
+// TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions pins the
+// property decorateProjectMeta relies on: every entry of the metadata table
+// carries at least one alias, one related action and a description, so the
+// table never overwrites the default alias a spec starts with. The copy
+// guards in decorateProjectMeta are unreachable at zero only while this holds.
+func TestProjectActionMeta_EveryEntryNamesAliasesAndRelatedActions(t *testing.T) {
+	for tool, meta := range projectActionMeta {
+		if len(meta.aliases) == 0 || len(meta.related) == 0 || meta.description == "" {
+			t.Errorf("%s: aliases=%d related=%d description=%q, want all three filled", tool, len(meta.aliases), len(meta.related), meta.description)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The answer a handler publishes, held key for key to what GitLab sent
+// ---------------------------------------------------------------------------.
+
+// Both gates score branches, and a converter that copies a neighbor's field
+// has none to flip; nor can a fixture whose values repeat tell the two apart.
+// The tests below serve an answer in which no two values agree and hold every
+// key GitLab sent to the same key and value on the output, which is the
+// property the one-to-one policy makes of a converter. The keys come from the
+// SDK struct's own tags, so a spelling the fixture invented cannot pass
+// vacuously, and a field client-go grows is reported the day it appears.
+
+// jsonKey is the key encoding/json reads field f under, or "" for none.
+func jsonKey(f reflect.StructField) string {
+	tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+	if tag == "-" || f.Anonymous {
+		return ""
+	}
+	return tag
+}
+
+// jsonObject renders v as encoding/json would and reads it back as the generic
+// object a client receives.
+func jsonObject(t *testing.T, v any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshaling %T: %v", v, err)
+	}
+	var out map[string]any
+	if err = json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("%T does not marshal to an object: %v", v, err)
+	}
+	return out
+}
+
+// distinctScalarFixture builds, over the scalar fields of the given SDK
+// structs, a JSON object in which no two values agree: a string carries its
+// own key, a number its own figure, a timestamp an instant of its own, and a
+// list of strings two entries spelled from the key. Flags are left out, since
+// a block of them is held one flag at a time by assertFlagsPublishedOneAtATime,
+// and so are nested objects, whose converters shapes_test.go holds whole.
+func distinctScalarFixture(types ...reflect.Type) map[string]any {
+	fixture := map[string]any{}
+	base := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	for _, typ := range types {
+		for f := range typ.Fields() {
+			key := jsonKey(f)
+			if key == "" {
+				continue
+			}
+			n := len(fixture) + 1
+			ft := f.Type
+			if ft.Kind() == reflect.Pointer {
+				ft = ft.Elem()
+			}
+			switch {
+			case ft == reflect.TypeFor[time.Time]():
+				fixture[key] = base.Add(time.Duration(n) * time.Hour).Format(time.RFC3339)
+			case ft == reflect.TypeFor[gl.ISOTime]():
+				fixture[key] = base.AddDate(0, 0, n).Format(time.DateOnly)
+			case ft.Kind() == reflect.String:
+				fixture[key] = key
+			case ft.Kind() == reflect.Int || ft.Kind() == reflect.Int64:
+				fixture[key] = n*100 + 1
+			case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
+				fixture[key] = []string{key + "-1", key + "-2"}
+			}
+		}
+	}
+	return fixture
+}
+
+// assertPublishedAsSent holds every key of fixture to the same value on out,
+// except the keys named in except, each with the reason it is not a straight
+// copy. An exception that names no fixture key is itself reported, so the
+// list cannot outlive what it excuses.
+func assertPublishedAsSent(t *testing.T, fixture map[string]any, out any, except map[string]string) {
+	t.Helper()
+	got := jsonObject(t, out)
+	want := jsonObject(t, fixture)
+	for key, wantValue := range want {
+		if _, skip := except[key]; skip {
+			continue
+		}
+		gotValue, published := got[key]
+		if !published {
+			t.Errorf("%s: GitLab sent %v and the output carries no such key", key, wantValue)
+			continue
+		}
+		if !reflect.DeepEqual(gotValue, wantValue) {
+			t.Errorf("%s: GitLab sent %v, published %v", key, wantValue, gotValue)
+		}
+	}
+	for key, why := range except {
+		if _, sent := want[key]; !sent {
+			t.Errorf("exception %q (%s) names no key of the fixture", key, why)
+		}
+	}
+}
+
+// flagOutcome names what one flag GitLab sends becomes on the answer when it
+// is not the same key true: the keys published true, and why.
+type flagOutcome struct {
+	publishes []string
+	why       string
+}
+
+// flagKeys lists the JSON keys of the boolean fields of typ, pointers included.
+func flagKeys(typ reflect.Type) []string {
+	var keys []string
+	for f := range typ.Fields() {
+		ft := f.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem()
+		}
+		if key := jsonKey(f); key != "" && ft.Kind() == reflect.Bool {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+// trueFlags lists, sorted, the keys of obj whose value is the JSON true.
+func trueFlags(obj map[string]any) []string {
+	var keys []string
+	for key, value := range obj {
+		if on, ok := value.(bool); ok && on {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// assertFlagsPublishedOneAtATime serves, once per boolean key of the SDK
+// structs and once per extra case, an answer carrying only that key, and
+// holds the output's true flags to that key alone or to what derived says it
+// becomes. A block of flags has no fixture where no two values agree, and
+// setting them all is what hides a converter that reads a neighbor's, so
+// they are driven one at a time, which is also what GitLab really answers.
+// The answer is served by serve with the one key rendered as JSON, and read
+// through call, so what is held is what a caller sees.
+func assertFlagsPublishedOneAtATime(t *testing.T, sdk []reflect.Type, extra map[string]string, derived map[string]flagOutcome, serve func(key, value string) string, call func(*gitlabclient.Client) (any, error)) {
+	t.Helper()
+	cases := map[string]string{}
+	for _, typ := range sdk {
+		for _, key := range flagKeys(typ) {
+			cases[key] = "true"
+		}
+	}
+	maps.Copy(cases, extra)
+	for key := range derived {
+		if _, known := cases[key]; !known {
+			t.Errorf("derived[%q] names no flag the fixture drives", key)
+		}
+	}
+	for key, value := range cases {
+		t.Run(key, func(t *testing.T) {
+			answer := serve(key, value)
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, answer)
+			}))
+			out, err := call(client)
+			if err != nil {
+				t.Fatalf("%s: %v", key, err)
+			}
+			want, why := []string{key}, "a flag is published under its own key"
+			if outcome, ok := derived[key]; ok {
+				want, why = append([]string(nil), outcome.publishes...), outcome.why
+			}
+			slices.Sort(want)
+			if got := trueFlags(jsonObject(t, out)); !slices.Equal(got, want) {
+				t.Errorf("sent %s=%s: published true %v, want %v (%s)", key, value, got, want, why)
+			}
+		})
+	}
+}
+
+// oneKeyJSON renders an answer that carries id and one more key with a raw
+// JSON value.
+func oneKeyJSON(key, value string) string {
+	return `{"id":42,"` + key + `":` + value + `}`
+}
+
+// TestProjectGet_EachScalarIsPublishedUnderItsOwnKey holds the full project
+// entity to what GitLab sent, key for key, through the get handler and its
+// captured extras, with no two values alike. The two keys it excepts are the
+// ones the one-to-one policy has already ruled on: client-go carries both and
+// no GitLab entity sends either.
+func TestProjectGet_EachScalarIsPublishedUnderItsOwnKey(t *testing.T) {
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.Project](), reflect.TypeFor[toolutil.ProjectExtra]())
+	answer, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, string(answer))
+	}))
+	out, err := Get(t.Context(), client, GetInput{ProjectID: "42"})
+	if err != nil {
+		t.Fatalf(fmtGetUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, map[string]string{
+		"build_coverage_regex":    "client-go models it and no GitLab entity sends it (upstream-bugs.md)",
+		"operations_access_level": "client-go models the name GitLab renamed to monitor_access_level (upstream-bugs.md)",
+	})
+}
+
+// TestProjectGet_EachFlagIsPublishedUnderItsOwnKey drives every flag of the
+// project entity one at a time through the get handler, and the six access
+// levels whose enabled value the older flags derive from. The outcomes it
+// declares are the entity's own: public_builds is the older spelling of
+// public_jobs, the six enabled flags follow their access level rather than
+// the copy client-go keeps of the deprecated key, and two flags client-go
+// models are not published, one because no GitLab entity sends it and one
+// still on the client-go 3.12 backlog.
+func TestProjectGet_EachFlagIsPublishedUnderItsOwnKey(t *testing.T) {
+	derivedFromLevel := "the entity computes it from the access level; the deprecated copy client-go decodes is not read"
+	derived := map[string]flagOutcome{
+		"public_jobs":                     {publishes: []string{"public_builds", "public_jobs"}, why: "public_builds is the older spelling GitLab sends with the same value"},
+		"public_builds":                   {why: "read from public_jobs, the current spelling"},
+		"issues_enabled":                  {why: derivedFromLevel},
+		"merge_requests_enabled":          {why: derivedFromLevel},
+		"jobs_enabled":                    {why: derivedFromLevel},
+		"wiki_enabled":                    {why: derivedFromLevel},
+		"snippets_enabled":                {why: derivedFromLevel},
+		"container_registry_enabled":      {why: derivedFromLevel},
+		"ci_opt_in_jwt":                   {why: "client-go models it and no GitLab entity sends it (upstream-bugs.md)"},
+		"automatic_rebase_enabled":        {why: "not published yet: plan/clientgo-v3-12-surface.md"},
+		"issues_access_level":             {publishes: []string{"issues_enabled"}, why: "an enabled level is what the older flag reports"},
+		"merge_requests_access_level":     {publishes: []string{"merge_requests_enabled"}, why: "an enabled level is what the older flag reports"},
+		"builds_access_level":             {publishes: []string{"jobs_enabled"}, why: "an enabled level is what the older flag reports"},
+		"wiki_access_level":               {publishes: []string{"wiki_enabled"}, why: "an enabled level is what the older flag reports"},
+		"snippets_access_level":           {publishes: []string{"snippets_enabled"}, why: "an enabled level is what the older flag reports"},
+		"container_registry_access_level": {publishes: []string{"container_registry_enabled"}, why: "an enabled level is what the older flag reports"},
+	}
+	levels := map[string]string{}
+	for _, level := range []string{"issues", "merge_requests", "builds", "wiki", "snippets", "container_registry"} {
+		levels[level+"_access_level"] = `"enabled"`
+	}
+	assertFlagsPublishedOneAtATime(t,
+		[]reflect.Type{reflect.TypeFor[gl.Project](), reflect.TypeFor[toolutil.ProjectExtra]()},
+		levels, derived, oneKeyJSON,
+		func(client *gitlabclient.Client) (any, error) {
+			return Get(t.Context(), client, GetInput{ProjectID: "42"})
+		},
+	)
+}
+
+// TestProjectGet_DerivedEnabledFlags_FollowTheAccessLevel holds the six older
+// enabled flags to both sides of the rule that derives them from an access
+// level: a private level is as enabled as a public one, so the flag is on for
+// anything but disabled, and a disabled level turns it off and turns nothing
+// else on. The enabled level alone cannot tell "not disabled" from "equals
+// enabled", which is why the test above leaves this side open.
+func TestProjectGet_DerivedEnabledFlags_FollowTheAccessLevel(t *testing.T) {
+	for level, flag := range map[string]string{
+		"issues_access_level":             "issues_enabled",
+		"merge_requests_access_level":     "merge_requests_enabled",
+		"builds_access_level":             "jobs_enabled",
+		"wiki_access_level":               "wiki_enabled",
+		"snippets_access_level":           "snippets_enabled",
+		"container_registry_access_level": "container_registry_enabled",
+	} {
+		for _, testCase := range []struct {
+			value string
+			want  []string
+		}{
+			{"private", []string{flag}},
+			{"disabled", nil},
+		} {
+			t.Run(level+"="+testCase.value, func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusOK, oneKeyJSON(level, `"`+testCase.value+`"`))
+				}))
+				out, err := Get(t.Context(), client, GetInput{ProjectID: "42"})
+				if err != nil {
+					t.Fatalf(fmtGetUnexpErr, err)
+				}
+				if got := trueFlags(jsonObject(t, out)); !slices.Equal(got, testCase.want) {
+					t.Errorf("%s=%s: published true %v, want %v", level, testCase.value, got, testCase.want)
+				}
+			})
+		}
+	}
+}
+
+// TestProjectGetHook_EachKeyIsPublishedUnderItsOwnName holds the webhook
+// entity to what GitLab sent, its twenty-two flags one at a time (the
+// nineteen event subscriptions, the SSL check and the two token markers) and
+// its scalars all together with no two alike. The URL variables and custom
+// headers are nested lists the fixture does not build, so nothing here holds
+// them; the converter publishes their keys and deliberately not their values,
+// which are secrets, and a straight copy is not what they should be.
+func TestProjectGetHook_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
+	get := func(client *gitlabclient.Client) (any, error) {
+		return GetHook(t.Context(), client, GetHookInput{ProjectID: "42", HookID: 1})
+	}
+	assertFlagsPublishedOneAtATime(t, []reflect.Type{reflect.TypeFor[gl.ProjectHook]()}, nil, nil, oneKeyJSON, get)
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.ProjectHook]())
+	answer, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, string(answer))
+	}))
+	out, err := get(client)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, nil)
+}
+
+// TestGetPushRules_EachKeyIsPublishedUnderItsOwnName holds the push rule to
+// what GitLab sent: its seven flags one at a time and its scalars together.
+func TestGetPushRules_EachKeyIsPublishedUnderItsOwnName(t *testing.T) {
+	get := func(client *gitlabclient.Client) (any, error) {
+		return GetPushRules(t.Context(), client, GetPushRulesInput{ProjectID: "42"})
+	}
+	assertFlagsPublishedOneAtATime(t, []reflect.Type{reflect.TypeFor[gl.ProjectPushRules]()}, nil, nil, oneKeyJSON, get)
+	fixture := distinctScalarFixture(reflect.TypeFor[gl.ProjectPushRules]())
+	answer, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, string(answer))
+	}))
+	out, err := get(client)
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	assertPublishedAsSent(t, fixture, out, nil)
 }

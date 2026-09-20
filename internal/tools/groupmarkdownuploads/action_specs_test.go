@@ -14,9 +14,10 @@ import (
 
 const registerUploadListJSON = `[{"id":1,"size":1024,"filename":"image.png","created_at":"2026-01-01T00:00:00Z"}]`
 
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallAllRoutes drives every route this domain publishes
+// through the catalog surface, with the mux routing on the whole path.
+// A route that builds the wrong path reaches the mux's 404 and fails here,
+// which is what holds the secret and the filename in that order.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/groups/5/uploads", func(w http.ResponseWriter, _ *http.Request) {
@@ -53,9 +54,10 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestActionSpecs_ErrorPaths verifies that a 403 from GitLab reaches the caller
+// as an error through every route rather than as an empty success.
+// What the error says is asserted in
+// TestHandlers_NotFound_CarryTheRouteThatRecovers, not here.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	byTool := groupMarkdownUploadSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -81,9 +83,9 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_DeleteOutput verifies that both delete routes answer a 204
+// with a toolutil.DeleteOutput carrying the confirmation a model reads,
+// rather than with a bare nil the surface would render as nothing.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("DELETE /api/v4/groups/5/uploads/1", func(w http.ResponseWriter, _ *http.Request) {
@@ -118,9 +120,10 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalogSurface_DeleteConfirmDeclined verifies that a declined
+// elicitation ends each destructive route with a result rather than a
+// transport error, and that nothing reaches GitLab: the client is built on
+// testutil.ForbiddenHandler, which fails the test if a request arrives.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := groupMarkdownUploadSpecsByTool(t, ActionSpecs(client))
@@ -172,9 +175,9 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 
 // The formatter itself is covered whole-output in markdown_test.go.
 
-// TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMarkdownInit_Registry verifies that this package's init registered a
+// formatter for ListOutput, so the registry can find one at runtime.
+// It contacts no GitLab: the registry lookup is the whole subject.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListOutput{})
 	if out == nil {
