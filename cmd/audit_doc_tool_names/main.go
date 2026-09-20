@@ -16,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 )
 
@@ -275,7 +276,9 @@ func (s *docScan) scanRoot(root string) error {
 			return walkErr
 		}
 		if d.IsDir() {
-			if d.Name() == "node_modules" {
+			// The root is entered whatever it is called, so a root that is
+			// itself a checkout or a dot-directory is still scanned.
+			if path != root && (d.Name() == "node_modules" || sourcewalk.SkipDirBelowRoot(path)) {
 				return filepath.SkipDir
 			}
 			return nil

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/sourcewalk"
 )
 
 // FileSuffix is what makes a Go file a test file.
@@ -96,8 +98,13 @@ func (p Policy) selects(name string) bool {
 
 // SkipDir reports whether a directory of this base name is left out of a walk
 // that descends into it: a generated or vendored tree, a tool's own fixtures,
-// or a dot directory. The relative names "." and ".." are exempt because they
-// name a tree the caller is already in rather than one to descend into.
+// or anything [sourcewalk.SkipDir] says is not this repository's source.
+//
+// The three names here are this corpus's own business, which is why they stay
+// here: node_modules and dist are generated or vendored, and testdata holds Go
+// files that are inputs to a test rather than source this repository holds to
+// its conventions. What is not this corpus's business is which directories are
+// not ours at all, and that answer lives in one place for every walk.
 //
 // A walk root is exempt too, but that is WalkFiles' decision rather than this
 // one: a scan pointed at a fixtures directory scans it, and only what lies
@@ -106,10 +113,8 @@ func SkipDir(name string) bool {
 	switch name {
 	case "node_modules", "dist", "testdata":
 		return true
-	case ".", "..":
-		return false
 	default:
-		return strings.HasPrefix(name, ".")
+		return sourcewalk.SkipDir(name)
 	}
 }
 
@@ -156,13 +161,18 @@ func walkRoot(root string, policy Policy, visit func(path string) error) error {
 			return err
 		}
 		atRoot := path == target
+		walked := path
 		if target != root && !atRoot {
 			// WalkDir builds every path below the root by joining it onto the
 			// root it was given, so trimming that prefix is exact.
 			path = filepath.Join(root, strings.TrimPrefix(path, target))
 		}
 		if d.IsDir() {
-			if !atRoot && SkipDir(d.Name()) {
+			// The nested-checkout half of the rule is asked of the path the
+			// walk is really at, never of the caller-facing name rebuilt
+			// above: a root reached through a symlink has the two spelled
+			// differently, and only one of them can be stated.
+			if !atRoot && (SkipDir(d.Name()) || sourcewalk.IsNestedCheckout(walked)) {
 				return fs.SkipDir
 			}
 			return nil

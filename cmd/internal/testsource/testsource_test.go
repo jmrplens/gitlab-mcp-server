@@ -193,6 +193,52 @@ func TestWalkFiles_PrunedRoot_IsStillWalked(t *testing.T) {
 	}
 }
 
+// TestWalkFiles_NestedCheckout_IsNotPartOfTheCorpus verifies that a git
+// worktree or clone living inside the tree contributes none of its files, and
+// that a root which is itself a checkout is still walked.
+//
+// The name rule already prunes the .claude/worktrees the parallel-agent
+// tooling uses, so the case that matters here is the worktree under an
+// ordinary name: its files parse, they are real test files, and folding them
+// in would move every count this corpus feeds without saying so.
+func TestWalkFiles_NestedCheckout_IsNotPartOfTheCorpus(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walks below
+	writeFile(t, base, "widget_test.go")
+	writeFile(t, base, "scratch/copy_test.go")
+	writeFile(t, base, "scratch/.git")
+	writeFile(t, base, ".claude/worktrees/agent-1/other_test.go")
+	writeFile(t, base, ".claude/worktrees/agent-1/.git")
+
+	cases := []struct {
+		name string
+		root string
+		want []string
+	}{
+		{name: "the tree above them", root: ".", want: []string{"widget_test.go"}},
+		{name: "a checkout named as the root", root: "scratch", want: []string{"copy_test.go"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			if err := WalkFiles([]string{filepath.Join(base, tc.root)}, TestFiles, func(path string) error {
+				got = append(got, filepath.Base(path))
+				return nil
+			}); err != nil {
+				t.Fatalf("WalkFiles: %v", err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("WalkFiles visited %v, want %v", got, tc.want)
+			}
+			for i, want := range tc.want {
+				if got[i] != want {
+					t.Errorf("visit %d = %q, want %q", i, got[i], want)
+				}
+			}
+		})
+	}
+}
+
 // TestWalkFiles_SymlinkedRoot_IsFollowedAndReportedUnderItsOwnName verifies
 // that a root which is a symlink to a directory is walked as that directory,
 // with every path reported under the name the caller gave. filepath.WalkDir
