@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // docRoots are the trees whose Markdown mentions are audited.
@@ -63,7 +64,7 @@ var historicalDocs = []string{
 }
 
 func main() {
-	check := flag.Bool("check", false, "exit non-zero when the docs name a tool that does not exist")
+	check := flag.Bool("check", false, "exit non-zero when the docs name a tool the server does not register or an action ID the catalog does not publish, or when a declaration excuses neither")
 	flag.Parse()
 
 	os.Exit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))
@@ -275,7 +276,9 @@ func (s *docScan) scanRoot(root string) error {
 			return walkErr
 		}
 		if d.IsDir() {
-			if d.Name() == "node_modules" {
+			// The root is entered whatever it is called, so a root that is
+			// itself a checkout or a dot-directory is still scanned.
+			if path != root && (d.Name() == "node_modules" || sourcewalk.SkipDirBelowRoot(path)) {
 				return filepath.SkipDir
 			}
 			return nil

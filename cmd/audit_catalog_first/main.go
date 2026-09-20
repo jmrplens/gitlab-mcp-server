@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
@@ -544,7 +545,7 @@ func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
 func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
 	fileSet := token.NewFileSet()
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		skip, skipErr := skipSelectorAuditEntry(entry, err)
+		skip, skipErr := skipSelectorAuditEntry(path == root, path, entry, err)
 		if skipErr != nil {
 			return skipErr
 		}
@@ -562,12 +563,17 @@ func assertNoProductionSelectorCall(root, qualifier, selectorName string) error 
 	})
 }
 
-func skipSelectorAuditEntry(entry fs.DirEntry, err error) (bool, error) {
+// skipSelectorAuditEntry decides what the selector audit does with one entry
+// the walk reached. atRoot is true for the directory the walk was pointed at,
+// which is entered whatever it is called: the repository root holds .git, so a
+// root judged by the same rule as everything below it would be skipped and the
+// audit would certify a tree it never read.
+func skipSelectorAuditEntry(atRoot bool, path string, entry fs.DirEntry, err error) (bool, error) {
 	if err != nil {
 		return false, err
 	}
 	if entry.IsDir() {
-		if isSelectorAuditSkippedDir(entry.Name()) {
+		if !atRoot && isSelectorAuditSkippedDir(path, entry.Name()) {
 			return true, filepath.SkipDir
 		}
 		return true, nil
@@ -575,12 +581,23 @@ func skipSelectorAuditEntry(entry fs.DirEntry, err error) (bool, error) {
 	return !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix), nil
 }
 
-func isSelectorAuditSkippedDir(name string) bool {
+// isSelectorAuditSkippedDir reports whether the audit leaves a directory below
+// its root out. dist and site are this audit's own business, holding generated
+// output and an Astro site rather than production Go; everything else is
+// [sourcewalk.SkipDirBelowRoot], the one answer to which directories are not
+// this repository's source at all.
+//
+// That second half is why this exists. The audit is pointed at the repository
+// root, and the parallel-agent tooling puts a complete checkout of this
+// repository per agent under .claude/worktrees/, so a list naming only .git,
+// dist and site walked a hundred and more copies of internal/tools on a
+// hundred and more branches and folded their verdicts into this one.
+func isSelectorAuditSkippedDir(path, name string) bool {
 	switch name {
-	case ".git", "dist", "site":
+	case "dist", "site":
 		return true
 	default:
-		return false
+		return sourcewalk.SkipDirBelowRoot(path)
 	}
 }
 

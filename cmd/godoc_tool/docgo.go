@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // packageDocFile is the file a package comment lives in. A package comment
@@ -33,8 +35,10 @@ var (
 )
 
 // movePackageDocs applies movePackageDoc to a directory and everything below
-// it, or to the directory of a file. Hidden directories, testdata and vendor
-// trees are skipped, since none of them holds a package of this repository.
+// it, or to the directory of a file. testdata, vendor and node_modules trees
+// are skipped because none of them holds a package this repository publishes,
+// and so is anything [sourcewalk.SkipDirBelowRoot] says is not this
+// repository's source at all, a nested worktree included.
 func movePackageDocs(path string) error {
 	cleanPath := filepath.Clean(path)
 	info, err := os.Stat(cleanPath)
@@ -52,7 +56,7 @@ func movePackageDocs(path string) error {
 		if !d.IsDir() {
 			return nil
 		}
-		if name := d.Name(); p != cleanPath && (strings.HasPrefix(name, ".") || name == "testdata" || name == "vendor" || name == "node_modules") {
+		if name := d.Name(); p != cleanPath && (name == "testdata" || name == "vendor" || name == "node_modules" || sourcewalk.SkipDirBelowRoot(p)) {
 			return fs.SkipDir
 		}
 		if moveErr := movePackageDoc(p); moveErr != nil {

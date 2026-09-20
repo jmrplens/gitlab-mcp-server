@@ -449,39 +449,39 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,294 |     282,318 |
-| Unit tests (`_test.go`)  |       874 |     514,465 |
-| End-to-end tests         |       492 |      94,161 |
-| **Total**                | **2,660** | **890,944** |
+| Source (`.go`, non-test) |     1,290 |     284,907 |
+| Unit tests (`_test.go`)  |       870 |     515,759 |
+| End-to-end tests         |       492 |      94,202 |
+| **Total**                | **2,652** | **894,868** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  9,987 |
-| . Exported (public)             |  3,177 |
-| . Unexported (private)          |  6,810 |
-| Unit test functions (`TestXxx`) | 16,137 |
-| Subtests (`t.Run(...)`)         |  5,407 |
-| End-to-end test functions       |  1,197 |
+| Source functions                |  9,988 |
+| . Exported (public)             |  3,171 |
+| . Unexported (private)          |  6,817 |
+| Unit test functions (`TestXxx`) | 16,199 |
+| Subtests (`t.Run(...)`)         |  5,430 |
+| End-to-end test functions       |  1,198 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.82× more tests than code |
-| Average source file length         |                 ~218 lines |
-| Average test file length           |                 ~589 lines |
-| Comment lines in source            |  62,394 (~22.1% of source) |
+| Test lines vs source lines         | 1.81× more tests than code |
+| Average source file length         |                 ~221 lines |
+| Average test file length           |                 ~593 lines |
+| Comment lines in source            |  64,021 (~22.5% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 8,876 |
-| `defer` statements                 | 1,088 |
-| `struct` types defined             | 3,271 |
+| `if err != nil` checks             | 8,845 |
+| `defer` statements                 | 1,089 |
+| `struct` types defined             | 3,292 |
 | `//nolint` suppressions            |   223 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
@@ -489,7 +489,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   288 |
+| Go packages                    |   291 |
 | Direct dependencies (`go.mod`) |    34 |
 | Indirect dependencies          |    37 |
 
@@ -504,8 +504,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~5,133 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 14,693 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~5,180 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 14,504 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestNewOperationIndex_TwoRoutesMountedAtOnePath_KeepTheFirstAnswerAndMergeThePagination` (87 chars) |
 

@@ -774,6 +774,55 @@ func TestBuildCoverageReport_FixtureRoot_ReportsSourceOnlyDomains(t *testing.T) 
 	}
 }
 
+// TestBuildCoverageReport_NestedWorktrees_AreNotReadAsThisTree verifies that
+// the source audits read this repository and nothing else that merely lives
+// inside the checkout.
+//
+// The parallel-agent tooling puts a complete worktree of this repository under
+// .claude/worktrees/ per running agent, and a developer may put one anywhere
+// with `git worktree add`. Each case below plants one carrying a production
+// file that calls the forbidden selector: the file is real, it parses, and it
+// would fail the audit outright if the walk read it. Asserting only that the
+// walk does not crash would be the weaker test, because the crash was the
+// benign outcome; what must hold is that the files inside are not counted, so
+// a gate's verdict cannot depend on whether an agent happened to be running.
+//
+// Both rules are exercised. The .claude case is caught by name, the ordinary
+// name by the .git marker a worktree carries, which is the case a skip list
+// naming today's directory would have folded in without a word.
+func TestBuildCoverageReport_NestedWorktrees_AreNotReadAsThisTree(t *testing.T) {
+	const callsForbiddenSelector = "package beta\n\nfunc f() { toolutil.CaptureMetaToolDefinitions() }\n"
+
+	cases := []struct {
+		name     string
+		worktree string
+	}{
+		{name: "under the agent tooling's directory", worktree: ".claude/worktrees/agent-1"},
+		{name: "under an ordinary name", worktree: "scratch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := catalogFirstFixtureFiles()
+			files[tc.worktree+"/.git"] = "gitdir: /elsewhere/.git/worktrees/agent-1\n"
+			files[tc.worktree+"/internal/tools/beta/beta.go"] = callsForbiddenSelector
+			root := writeCatalogFirstFixture(t, files)
+
+			report, err := buildCoverageReport(root)
+			if err != nil {
+				t.Fatalf("buildCoverageReport() error = %v, want the worktree left unread", err)
+			}
+			if report.Summary.DomainCount != 2 {
+				t.Errorf("summary domain count = %d, want 2: the worktree's domains are not ours", report.Summary.DomainCount)
+			}
+			for _, domain := range report.Domains {
+				if domain.Package == "beta" {
+					t.Errorf("report counts %q, a domain that exists only inside the worktree", domain.Package)
+				}
+			}
+		})
+	}
+}
+
 // TestBuildCoverageReport_BrokenFixtures_ReportsFirstFailingAssertion
 // verifies each source assertion and invariant of buildCoverageReport on a
 // synthetic repository broken in exactly one way, checking that the error
@@ -982,7 +1031,7 @@ func TestAIContextFiles_Fixture_ListsMarkdownSorted(t *testing.T) {
 // handed back unchanged instead of being skipped.
 func TestSkipSelectorAuditEntry_WalkError_IsReturned(t *testing.T) {
 	walkErr := errors.New("walk failed")
-	skip, err := skipSelectorAuditEntry(nil, walkErr)
+	skip, err := skipSelectorAuditEntry(false, "", nil, walkErr)
 	if skip || !errors.Is(err, walkErr) {
 		t.Fatalf("skipSelectorAuditEntry() = %v, %v; want false and the walk error", skip, err)
 	}

@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/sourcewalk"
 )
 
 // buttonConfig is the part of a client's MCP entry the buttons carry. Fields
@@ -144,7 +146,9 @@ func collectRoot(dir, path string) ([]button, error) {
 			return walkErr
 		}
 		if d.IsDir() {
-			if skipDirs[d.Name()] {
+			// The root is entered whatever it is called: .vscode is one of
+			// [scanRoots], and a name rule applied to the root would drop it.
+			if p != path && (skipDirs[d.Name()] || sourcewalk.SkipDirBelowRoot(p)) {
 				return fs.SkipDir
 			}
 			return nil
