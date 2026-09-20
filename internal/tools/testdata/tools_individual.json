@@ -29008,7 +29008,7 @@
   },
   {
     "name": "gitlab_discover_project",
-    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
+    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use search.projects), listing a user's projects (use project.list_user_projects), verifying GitLab connectivity or authentication (use server.status), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -120290,7 +120290,7 @@
   },
   {
     "name": "gitlab_list_resource_group_upcoming_jobs",
-    "description": "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_list_resource_group_upcoming_jobs.",
+    "description": "List the upcoming CI jobs queued for one resource group by key. Returns: each pending job's ID, name, status, and stage, ordered as they will run under the resource group's process mode. See also: gitlab_get_resource_group, gitlab_list_resource_groups, gitlab_job_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -153380,12 +153380,11 @@
           ]
         },
         "level": {
-          "description": "Notification level: disabled, participating, watch, global, mention, custom",
+          "description": "Notification level: disabled, participating, watch, mention, custom",
           "enum": [
             "disabled",
             "participating",
             "watch",
-            "global",
             "mention",
             "custom"
           ],
@@ -202798,7 +202797,7 @@
   },
   {
     "name": "gitlab_release_link_create",
-    "description": "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
+    "description": "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -202895,7 +202894,7 @@
   },
   {
     "name": "gitlab_release_link_create_batch",
-    "description": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
+    "description": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -203041,7 +203040,7 @@
   },
   {
     "name": "gitlab_release_link_delete",
-    "description": "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.",
+    "description": "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -203118,7 +203117,7 @@
   },
   {
     "name": "gitlab_release_link_get",
-    "description": "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
+    "description": "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -203190,7 +203189,7 @@
   },
   {
     "name": "gitlab_release_link_list",
-    "description": "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
+    "description": "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -203349,7 +203348,7 @@
   },
   {
     "name": "gitlab_release_link_update",
-    "description": "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
+    "description": "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -204834,7 +204833,7 @@
   },
   {
     "name": "gitlab_repository_archive",
-    "description": "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.",
+    "description": "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -204877,6 +204876,9 @@
             "null",
             "array"
           ]
+        },
+        "path": {
+          "type": "string"
         },
         "project_id": {
           "type": "string"
@@ -219035,7 +219037,7 @@
   },
   {
     "name": "gitlab_snippet_note_create",
-    "description": "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_snippet_get.",
+    "description": "Add a comment (note) to a project snippet. Returns: the created note with id, author, body, and timestamps. See also: gitlab_snippet_note_list, gitlab_snippet_note_get, gitlab_project_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -220254,7 +220256,7 @@
   },
   {
     "name": "gitlab_snippet_note_list",
-    "description": "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get.",
+    "description": "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_project_snippet_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -227082,13 +227084,13 @@
   },
   {
     "name": "gitlab_update_settings",
-    "description": "Update GitLab application settings. Returns: the full updated application settings object. See also: gitlab_get_settings, gitlab_update_appearance.",
+    "description": "Update GitLab application settings. Returns: the application settings object GitLab answered with. A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing. See also: gitlab_get_settings, gitlab_update_appearance.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "settings": {
           "additionalProperties": true,
-          "description": "Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size).",
+          "description": "Map of setting_name to new value. Use snake_case keys matching GitLab API fields (e.g. signup_enabled, default_project_visibility, max_artifacts_size). A key the GitLab API client does not model is refused by name and nothing is sent, so the patch is all or nothing.",
           "properties": {},
           "type": "object"
         }
