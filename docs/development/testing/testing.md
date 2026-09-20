@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 17,747 |
-| Unit test functions                                   | 16,549 |
+| Total test functions                                  | 17,765 |
+| Unit test functions                                   | 16,567 |
 | E2E test functions                                    |  1,198 |
 | cmd test functions                                    |  2,917 |
 | Test files (internal/)                                |    649 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,330 | 69.5% |
-| `TestFunc` (no underscore)             |    907 |  5.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,510 | 25.4% |
+| `TestFunc_Scenario` (2-part)           | 12,340 | 69.5% |
+| `TestFunc` (no underscore)             |    905 |  5.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,520 | 25.4% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,189 |        185 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,076 |        448 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |         10,094 |        448 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,198 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,917 |        216 | server entry point and developer command utilities                                              |
-| **Total**               |     **17,747** |  **1,249** |                                                                                                 |
+| **Total**               |     **17,765** |  **1,249** |                                                                                                 |
 
 ### Core Packages
 
@@ -289,14 +289,14 @@
 | snippets                |        111 |          3 |    99.1% |        15 |
 | snippetstoragemoves     |         48 |          2 |   100.0% |         6 |
 | surfaces                |         16 |          1 |   100.0% |         0 |
-| systemhooks             |         35 |          2 |    99.6% |         8 |
+| systemhooks             |         41 |          2 |    99.6% |         8 |
 | tags                    |         83 |          2 |   100.0% |         9 |
-| terraformstates         |         19 |          1 |    98.5% |         6 |
+| terraformstates         |         30 |          1 |    98.5% |         6 |
 | todos                   |         46 |          4 |    98.8% |         3 |
 | toolvisibility          |         11 |          1 |   100.0% |         0 |
-| topics                  |         26 |          2 |   100.0% |         5 |
+| topics                  |         23 |          2 |   100.0% |         5 |
 | uploads                 |         56 |          3 |   100.0% |         4 |
-| usagedata               |         33 |          1 |   100.0% |         6 |
+| usagedata               |         37 |          1 |   100.0% |         6 |
 | useremails              |         30 |          2 |   100.0% |         6 |
 | usergpgkeys             |         53 |          2 |   100.0% |         8 |
 | users                   |        252 |          7 |    99.3% |        38 |
@@ -305,7 +305,7 @@
 | wikis                   |         71 |          2 |    99.5% |         6 |
 | workitems               |        128 |          5 |    99.5% |         6 |
 | workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,076** |    **448** |          | **1,187** |
+| **Total**               | **10,094** |    **448** |          | **1,187** |
 
 </details>
 
