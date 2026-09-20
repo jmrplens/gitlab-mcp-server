@@ -441,6 +441,12 @@ func assertEpicBoardDetails(t *testing.T, out Output) {
 	if out.Labels[0].Title != "Priority" || out.Labels[0].GroupID != 7 {
 		t.Errorf("Labels[0] superset = %+v, want title/group_id populated", out.Labels[0])
 	}
+	// The label's own id is what a model is handed on the `id` key, and this
+	// fixture is a group label GitLab sends project_id null for, so an id read
+	// from project_id surfaces as 0 across the whole decode and convert path.
+	if out.Labels[0].ID != 10 || out.Labels[0].ProjectID != 0 || out.Labels[0].Template {
+		t.Errorf("Labels[0] identity = %+v, want id 10, no project scope, not a template", out.Labels[0])
+	}
 	// Each timestamp is held to its own key: the two carry different instants
 	// in the fixture, so reading one in the other's place fails here.
 	if out.Labels[0].CreatedAt != labelCreatedAt || out.Labels[0].UpdatedAt != labelUpdatedAt {

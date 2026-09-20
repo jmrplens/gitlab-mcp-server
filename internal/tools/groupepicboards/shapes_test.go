@@ -1,7 +1,8 @@
 // shapes_test.go validates the documented group-epic-board sub-object mirrors
 // (group, label details with the raw-superset fields, and board list label
 // scope), covering both the fully-populated and nil branches of every
-// converter per the doc-grounded reconcile.
+// converter per the doc-grounded reconcile, and holding each published label
+// key to the raw-superset field of the same name.
 package groupepicboards
 
 import (
@@ -94,6 +95,12 @@ func assertFullLabels(t *testing.T, out Output) {
 	if l.Title != "Priority" || l.GroupID != 7 {
 		t.Errorf("LabelDetails superset = %+v", l)
 	}
+	// The label's own id, its absent project scope and the template flag are
+	// held here too: this fixture is a group label, so an id read from
+	// project_id surfaces as 0 and a project_id read from id surfaces as 10.
+	if l.ID != 10 || l.ProjectID != 0 || l.Template {
+		t.Errorf("LabelDetails identity = %+v, want id 10, no project scope, not a template", l)
+	}
 	// Distinct instants, so a converter that reads created_at where it should
 	// read updated_at is caught here rather than passing on equal values.
 	if l.CreatedAt != labelCreatedAt || l.UpdatedAt != labelUpdatedAt {
@@ -115,6 +122,67 @@ func assertFullList(t *testing.T, out Output) {
 	}
 	if bl.Collapsed == nil || *bl.Collapsed {
 		t.Errorf("Collapsed = %v, want non-nil false", bl.Collapsed)
+	}
+}
+
+// TestLabelDetailsOutputEachKeyFromItsOwnField verifies that labelDetailsOutput
+// publishes every key from the raw-superset field of the same name, comparing
+// the whole converted struct rather than a chosen few fields. Two cases are
+// needed to separate the three int64 fields the label entity carries: a group
+// label leaves project_id at zero while id and group_id differ, and a
+// project-scoped template label leaves group_id at zero while id and project_id
+// differ, so an assignment reading an adjacent field cannot pass both. The
+// second case describes the label entity GitLab serializes, not a claim that an
+// epic board scopes a project label; it is what gives project_id and template
+// values of their own to be read back.
+func TestLabelDetailsOutputEachKeyFromItsOwnField(t *testing.T) {
+	tests := []struct {
+		name string
+		in   *labelDetailsAPI
+		want LabelDetailsOutput
+	}{
+		{
+			name: "group label",
+			in: &labelDetailsAPI{
+				ID: 10, Name: "Priority", Color: "#f00", Description: "p",
+				DescriptionHTML: "<p>p</p>", TextColor: "#fff",
+				Title: "Priority", GroupID: 7, ProjectID: 0, Template: false,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+			want: LabelDetailsOutput{
+				ID: 10, Name: "Priority", Title: "Priority", Color: "#f00",
+				Description: "p", DescriptionHTML: "<p>p</p>", TextColor: "#fff",
+				GroupID: 7, ProjectID: 0, Template: false,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+		},
+		{
+			name: "project scoped template label",
+			in: &labelDetailsAPI{
+				ID: 11, Name: "Bug", Color: "#00f", Description: "b",
+				DescriptionHTML: "<p>b</p>", TextColor: "#000",
+				Title: "Bug", GroupID: 0, ProjectID: 42, Template: true,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+			want: LabelDetailsOutput{
+				ID: 11, Name: "Bug", Title: "Bug", Color: "#00f",
+				Description: "b", DescriptionHTML: "<p>b</p>", TextColor: "#000",
+				GroupID: 0, ProjectID: 42, Template: true,
+				CreatedAt: labelCreatedAt, UpdatedAt: labelUpdatedAt,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := labelDetailsOutput(tt.in)
+			if got == nil {
+				t.Fatal("labelDetailsOutput() = nil, want a converted label")
+			}
+			if *got != tt.want {
+				t.Errorf("labelDetailsOutput() = %+v, want %+v", *got, tt.want)
+			}
+		})
 	}
 }
 
