@@ -163,16 +163,16 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success",
-				"user":{"id":7,"username":"admin","name":"Admin","state":"active","web_url":"https://gl/admin"},
+				"user":{"id":7,"username":"admin","name":"Admin","state":"active","avatar_url":"https://gl/avatar/admin.png","web_url":"https://gl/admin"},
 				"environment":{"id":3,"name":"production","slug":"prod","state":"available","tier":"production","external_url":"https://app","auto_stop_setting":"always"},
 				"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T01:00:00Z",
 				"deployable":{
 					"id":10,"status":"success","stage":"deploy","name":"deploy-prod","ref":"main","tag":false,"coverage":92.5,
-					"created_at":"2026-01-01T00:00:00Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
+					"created_at":"2026-01-01T00:00:10Z","started_at":"2026-01-01T00:01:00Z","finished_at":"2026-01-01T00:05:00Z","duration":240.0,
 					"project":{"ci_job_token_scope_enabled":true},
-					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"active","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru-on-linkedin","twitter":"ru-on-twitter","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
-					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","web_url":"https://gl/c/abc"},
-					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:05:00Z"},
+					"user":{"id":8,"username":"runner-user","name":"Runner User","state":"blocked","avatar_url":"https://gl/avatar/ru.png","web_url":"https://gl/ru","bio":"builds things","location":"Earth","public_email":"ru@x","linkedin":"ru-on-linkedin","twitter":"ru-on-twitter","website_url":"https://ru","organization":"GL","created_at":"2025-01-01T00:00:00Z"},
+					"commit":{"id":"abc123","short_id":"abc","title":"Fix","message":"Fix bug","author_name":"Dev","author_email":"dev@x","authored_date":"2025-12-31T23:50:00Z","created_at":"2025-12-31T23:55:00Z","web_url":"https://gl/c/abc"},
+					"pipeline":{"id":55,"sha":"abc123","ref":"main","status":"success","web_url":"https://gl/p/55","created_at":"2026-01-01T00:00:05Z","updated_at":"2026-01-01T00:05:30Z"},
 					"runner":{"id":99,"description":"shared","name":"runner-1","runner_type":"instance_type","status":"online","online":true,"paused":false,"is_shared":true}
 				}
 			}`)
@@ -185,17 +185,38 @@ func TestDeploymentGet_FullDeployable(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.User == nil || out.User.ID != 7 || out.User.WebURL != "https://gl/admin" {
-		t.Errorf("user mismatch: %+v", out.User)
-	}
+	assertDeploymentUser(t, out.User)
 	if out.Environment == nil || out.Environment.ID != 3 || out.Environment.Name != "production" || out.Environment.ExternalURL != "https://app" {
 		t.Errorf("environment mismatch: %+v", out.Environment)
 	}
 	assertDeployable(t, out.Deployable)
 }
 
-// assertDeployable verifies a fully populated deployable and its nested
-// user, commit, pipeline, and runner objects.
+// assertDeploymentUser verifies the deployment-level user object.
+//
+// The account state and the avatar URL are read apart from the rest because
+// they are neighboring assignments of one type in projectUserOutput with no
+// branch between them: until this test read both, exchanging them published a
+// state where the picture belongs and no gate in the package could see it.
+func assertDeploymentUser(t *testing.T, u *UserOutput) {
+	t.Helper()
+	if u == nil {
+		t.Fatalf("deployment user is nil")
+	}
+	if u.ID != 7 || u.Name != "Admin" || u.Username != "admin" || u.WebURL != "https://gl/admin" {
+		t.Errorf("deployment user mismatch: %+v", u)
+	}
+	if u.State != "active" {
+		t.Errorf("deployment user State = %q, want %q", u.State, "active")
+	}
+	if u.AvatarURL != "https://gl/avatar/admin.png" {
+		t.Errorf("deployment user AvatarURL = %q, want %q", u.AvatarURL, "https://gl/avatar/admin.png")
+	}
+}
+
+// assertDeployable verifies a fully populated deployable: its own scalars and
+// timestamps, and its nested user, commit, pipeline, runner, and project
+// objects.
 func assertDeployable(t *testing.T, d *DeployableOutput) {
 	t.Helper()
 	if d == nil {
@@ -204,13 +225,10 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	if d.ID != 10 || d.Name != "deploy-prod" || d.Coverage != 92.5 {
 		t.Errorf("deployable scalar mismatch: %+v", d)
 	}
+	assertDeployableTimes(t, d)
 	assertDeployableUser(t, d.User)
-	if d.Commit == nil || d.Commit.ShortID != "abc" || d.Commit.AuthorEmail != "dev@x" || d.Commit.Message != "Fix bug" {
-		t.Errorf("deployable commit mismatch: %+v", d.Commit)
-	}
-	if d.Pipeline == nil || d.Pipeline.ID != 55 || d.Pipeline.WebURL != "https://gl/p/55" {
-		t.Errorf("deployable pipeline mismatch: %+v", d.Pipeline)
-	}
+	assertDeployableCommit(t, d.Commit)
+	assertDeployablePipeline(t, d.Pipeline)
 	if d.Runner == nil || d.Runner.ID != 99 || d.Runner.RunnerType != "instance_type" || !d.Runner.Online || !d.Runner.IsShared {
 		t.Errorf("deployable runner mismatch: %+v", d.Runner)
 	}
@@ -219,20 +237,99 @@ func assertDeployable(t *testing.T, d *DeployableOutput) {
 	}
 }
 
+// assertDeployableTimes holds each of the job's three timestamps to the key
+// GitLab sent it under.
+//
+// They are three neighboring assignments of one type in deployableOutput, so
+// exchanging any two of them compiles and publishes a job that started before
+// it was created. The fixture gives each one its own instant and each is read
+// here on its own, which is what makes such an exchange fail.
+func assertDeployableTimes(t *testing.T, d *DeployableOutput) {
+	t.Helper()
+	if d.CreatedAt != "2026-01-01T00:00:10Z" {
+		t.Errorf("deployable CreatedAt = %q, want %q", d.CreatedAt, "2026-01-01T00:00:10Z")
+	}
+	if d.StartedAt != "2026-01-01T00:01:00Z" {
+		t.Errorf("deployable StartedAt = %q, want %q", d.StartedAt, "2026-01-01T00:01:00Z")
+	}
+	if d.FinishedAt != "2026-01-01T00:05:00Z" {
+		t.Errorf("deployable FinishedAt = %q, want %q", d.FinishedAt, "2026-01-01T00:05:00Z")
+	}
+}
+
+// assertDeployableCommit verifies the commit the job built.
+//
+// The title and the author's name are neighboring assignments of one type in
+// deployableCommitOutput, and the commit date sits beside the message: each
+// carries a value of its own in the fixture and is read on its own here, so a
+// commit attributed to its own subject line fails rather than passing.
+func assertDeployableCommit(t *testing.T, c *DeployableCommitOutput) {
+	t.Helper()
+	if c == nil {
+		t.Fatalf("deployable commit is nil")
+	}
+	if c.ID != "abc123" || c.ShortID != "abc" || c.AuthorEmail != "dev@x" || c.Message != "Fix bug" {
+		t.Errorf("deployable commit mismatch: %+v", c)
+	}
+	if c.Title != "Fix" {
+		t.Errorf("commit Title = %q, want %q", c.Title, "Fix")
+	}
+	if c.AuthorName != "Dev" {
+		t.Errorf("commit AuthorName = %q, want %q", c.AuthorName, "Dev")
+	}
+	if c.CreatedAt != "2025-12-31T23:55:00Z" {
+		t.Errorf("commit CreatedAt = %q, want %q", c.CreatedAt, "2025-12-31T23:55:00Z")
+	}
+}
+
+// assertDeployablePipeline verifies the pipeline that ran the job.
+//
+// Its two timestamps are neighboring assignments of one type in
+// deployablePipelineOutput, and neither was read anywhere in the package: the
+// fixture dates the update five minutes of pipeline time after the creation,
+// so exchanging them fails here.
+func assertDeployablePipeline(t *testing.T, p *DeployablePipelineOutput) {
+	t.Helper()
+	if p == nil {
+		t.Fatalf("deployable pipeline is nil")
+	}
+	if p.ID != 55 || p.SHA != "abc123" || p.Ref != "main" || p.Status != "success" || p.WebURL != "https://gl/p/55" {
+		t.Errorf("deployable pipeline mismatch: %+v", p)
+	}
+	if p.CreatedAt != "2026-01-01T00:00:05Z" {
+		t.Errorf("pipeline CreatedAt = %q, want %q", p.CreatedAt, "2026-01-01T00:00:05Z")
+	}
+	if p.UpdatedAt != "2026-01-01T00:05:30Z" {
+		t.Errorf("pipeline UpdatedAt = %q, want %q", p.UpdatedAt, "2026-01-01T00:05:30Z")
+	}
+}
+
 // assertDeployableUser verifies the documented deployable user profile fields.
 //
 // The two social links carry values that differ from each other, because they
 // are neighboring assignments in the converter with no branch between them:
 // with one fixture value for both, a profile published under the wrong link
-// would read exactly like the right one and no gate could see it.
+// would read exactly like the right one and no gate could see it. The account
+// state and the avatar URL are the same shape one pair down, and the account
+// is blocked in the fixture where the deployment's own user is active, so the
+// two converters cannot be told apart by their answers either.
 func assertDeployableUser(t *testing.T, u *DeployableUserOutput) {
 	t.Helper()
 	if u == nil {
 		t.Fatalf("deployable user is nil")
 	}
 	if u.Username != "runner-user" || u.Bio != "builds things" || u.Location != "Earth" ||
-		u.PublicEmail != "ru@x" || u.WebsiteURL != "https://ru" || u.Organization != "GL" || u.CreatedAt == "" {
+		u.PublicEmail != "ru@x" || u.WebsiteURL != "https://ru" || u.Organization != "GL" {
 		t.Errorf("deployable user mismatch: %+v", u)
+	}
+	if u.CreatedAt != "2025-01-01T00:00:00Z" {
+		t.Errorf("deployable user CreatedAt = %q, want %q", u.CreatedAt, "2025-01-01T00:00:00Z")
+	}
+	if u.State != "blocked" {
+		t.Errorf("deployable user State = %q, want %q", u.State, "blocked")
+	}
+	if u.AvatarURL != "https://gl/avatar/ru.png" {
+		t.Errorf("deployable user AvatarURL = %q, want %q", u.AvatarURL, "https://gl/avatar/ru.png")
 	}
 	if u.Linkedin != "ru-on-linkedin" {
 		t.Errorf("Linkedin = %q, want %q", u.Linkedin, "ru-on-linkedin")
