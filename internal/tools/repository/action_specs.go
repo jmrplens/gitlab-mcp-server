@@ -95,7 +95,7 @@ func repositoryOptionsForAction(individualTool string) toolutil.ActionSpecOption
 		options.Usage = "Build a downloadable archive URL (zip/tar.gz/tar.bz2/tar) for a repository ref or SHA. Use to export a snapshot of the source tree at a point in time."
 		options.Aliases = []string{"download repository as zip", "export source snapshot", "get tarball url", "archive repo at ref"}
 		options.RelatedActions = []string{actionTree, actionTagList}
-		options.IndividualTool.Description = "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, and archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list."
+		options.IndividualTool.Description = "Build the download URL for a repository archive. Returns: the project, ref/SHA, format, the subdirectory when one was asked for, and the archive download URL (binary content is not returned). See also: gitlab_repository_tree, gitlab_tag_list."
 	case "gitlab_repository_changelog_generate":
 		options.Usage = "Render changelog notes for a version range from conventional commits without committing them. Use to preview release notes before writing them to a changelog file."
 		options.Aliases = []string{"preview changelog notes", "generate release notes from commits", "build changelog for version", "render changelog without committing"}

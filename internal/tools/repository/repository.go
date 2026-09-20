@@ -409,12 +409,16 @@ type ArchiveInput struct {
 	Path      string               `json:"path,omitempty"   jsonschema:"Subdirectory path to archive (omit for entire repo)"`
 }
 
-// ArchiveOutput holds archive metadata and download URL.
+// ArchiveOutput holds archive metadata and download URL. Path is echoed back
+// because it is the one input a caller cannot otherwise confirm: the address is
+// the same shape whether the subdirectory reached the query or was dropped, so
+// without this field the only evidence is the URL's own query string.
 type ArchiveOutput struct {
 	toolutil.HintableOutput
 	ProjectID string `json:"project_id"`
 	SHA       string `json:"sha,omitempty"`
 	Format    string `json:"format"`
+	Path      string `json:"path,omitempty"`
 	URL       string `json:"url"`
 }
 
@@ -457,6 +461,7 @@ func Archive(ctx context.Context, client *gitlabclient.Client, input ArchiveInpu
 		ProjectID: pid,
 		SHA:       input.SHA,
 		Format:    format,
+		Path:      input.Path,
 		URL:       archiveURL,
 	}, nil
 }
