@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
@@ -67,30 +69,65 @@ func main() {
 	os.Exit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))
 }
 
-// run audits roots against the names collectNames returns and reports on stdout,
-// returning the process exit code: 1 when the scan cannot be built, 1 under
-// check when any unregistered name is referenced, 0 otherwise.
+// run audits roots against the names collectNames returns and the action IDs
+// the catalog builds, reports on stdout, and returns the process exit code: 1
+// when the scan cannot be made, 1 under check when the documentation names
+// anything a model cannot call, 0 otherwise.
 //
-// collectNames reads registration compiled into this binary and so cannot fail;
-// the documentation tree is the only thing here that lives outside the process,
-// and it is the only thing that can send run home with a 1 it did not intend.
+// collectNames reads registration compiled into this binary and so cannot
+// fail; the catalog and the documentation tree are the two things here that
+// can, and they are the only things that can send run home with a 1 it did not
+// intend.
 func run(check bool, roots []string, collectNames func() map[string]struct{}, stdout, stderr io.Writer) int {
+	ids, err := actionids.Build()
+	if err != nil {
+		fmt.Fprintf(stderr, "build the action catalog: %v\n", err)
+		return 1
+	}
 	registered := collectNames()
 
-	findings, scanned, err := scanDocs(roots, registered)
-	if err != nil {
-		fmt.Fprintf(stderr, "scan docs: %v\n", err)
+	scan := newDocScan(registered, ids)
+	if scanErr := scan.scanDocs(roots); scanErr != nil {
+		fmt.Fprintf(stderr, "scan docs: %v\n", scanErr)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "audit_doc_tool_names: %d registered tool names, %d documentation files scanned\n",
-		len(registered), scanned)
+	fmt.Fprintf(stdout, "audit_doc_tool_names: %d registered tool names, %d catalog action IDs, %d documentation files scanned\n",
+		len(registered), ids.Count(), scan.files)
 
-	if len(findings) == 0 {
-		fmt.Fprintln(stdout, "no documentation names an unregistered tool")
+	// The declaration table can only be held to the documentation by a run
+	// that read all of it: over one page every entry excuses nothing, and
+	// reporting them all stale would be an answer about the roots rather than
+	// about the declarations.
+	var stale []string
+	if slices.Equal(roots, docRoots) {
+		stale = staleAllowedIDs(scan.usedIDExemptions)
+	} else {
+		fmt.Fprintln(stdout, "  the declaration table was not judged: only a run over every documentation root can tell a stale entry from a narrowed run")
+	}
+	writeToolFindings(stdout, scan.tools)
+	writeIDFindings(stdout, scan.actions, ids)
+	writeStaleIDs(stdout, stale)
+	if len(scan.tools) == 0 && len(scan.actions) == 0 && len(stale) == 0 {
+		fmt.Fprintln(stdout, "no documentation names an unregistered tool or an action the catalog does not have")
 		return 0
 	}
 
+	if check {
+		fmt.Fprintf(stderr,
+			"\nERROR: the documentation names %d tool(s) the server does not register and %d action ID(s) the catalog does not publish; %d declaration(s) excuse nothing\n",
+			len(scan.tools), len(scan.actions), len(stale))
+		return 1
+	}
+	return 0
+}
+
+// writeToolFindings prints the unregistered tool names under the files that
+// mention each.
+func writeToolFindings(out io.Writer, findings map[string][]string) {
+	if len(findings) == 0 {
+		return
+	}
 	names := make([]string, 0, len(findings))
 	for name := range findings {
 		names = append(names, name)
@@ -102,21 +139,50 @@ func run(check bool, roots []string, collectNames func() map[string]struct{}, st
 		return names[i] < names[j]
 	})
 
-	fmt.Fprintf(stdout, "\n%d unregistered tool name(s) referenced:\n", len(names))
+	fmt.Fprintf(out, "\n%d unregistered tool name(s) referenced:\n", len(names))
 	for _, name := range names {
 		files := findings[name]
 		sort.Strings(files)
-		fmt.Fprintf(stdout, "  %-38s %d file(s)\n", name, len(files))
-		for _, f := range files {
-			fmt.Fprintf(stdout, "      %s\n", f)
+		fmt.Fprintf(out, "  %-38s %d file(s)\n", name, len(files))
+		for _, file := range files {
+			fmt.Fprintf(out, "      %s\n", file)
 		}
 	}
+}
 
-	if check {
-		fmt.Fprintf(stderr, "\nERROR: the documentation names %d tool(s) the server does not register\n", len(names))
-		return 1
+// writeIDFindings prints the action IDs the documentation teaches that the
+// catalog does not publish, each with the nearest ID it does, since the usual
+// cause is a domain the page invented for a real action.
+func writeIDFindings(out io.Writer, findings map[string]idFinding, ids *actionids.IDs) {
+	if len(findings) == 0 {
+		return
 	}
-	return 0
+	fmt.Fprintf(out, "\n%d action ID(s) the catalog does not publish:\n", len(findings))
+	for _, token := range sortedTokens(findings) {
+		finding := findings[token]
+		sort.Strings(finding.Files)
+		suffix := ""
+		if closest := ids.Closest(token); finding.Canonical == "" && closest != "" {
+			suffix = "; closest: " + closest
+		}
+		fmt.Fprintf(out, "  %-38s %d file(s) %s%s\n", token, len(finding.Files), finding.describe(token), suffix)
+		for _, file := range finding.Files {
+			fmt.Fprintf(out, "      %s\n", file)
+		}
+	}
+}
+
+// writeStaleIDs prints the declarations that excused nothing, which is a
+// finding of its own: a declaration that has stopped describing the
+// documentation is one a reader would otherwise trust.
+func writeStaleIDs(out io.Writer, stale []string) {
+	if len(stale) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\n%d declaration(s) excuse nothing:\n", len(stale))
+	for _, token := range stale {
+		fmt.Fprintf(out, "  %s is no longer spelled in any documentation file. Remove the entry from allowedIDs.\n", token)
+	}
 }
 
 // registeredToolNames builds every surface in memory and returns the union of
@@ -149,36 +215,62 @@ func collect(listed []*mcp.Tool, names map[string]struct{}) {
 	}
 }
 
-// scanDocs walks the documentation roots and returns unregistered names mapped
-// to the files that mention them, plus the number of files scanned.
-func scanDocs(roots []string, registered map[string]struct{}) (findingsByName map[string][]string, filesScanned int, err error) {
-	findingsByName = make(map[string][]string)
+// docScan is one pass over the documentation roots: what a mention is judged
+// against, and what the pass found.
+//
+// The two questions are asked of the same files in the same read, because they
+// are one question about one sentence. A page teaching a call names the tool
+// on the individual surface and the canonical ID on the dynamic one, and until
+// this command could see the second half, a page could pair the right tool
+// name with an ID no surface resolves and audit clean. Three of those shipped.
+type docScan struct {
+	registered map[string]struct{}
+	ids        *actionids.IDs
+	// tools maps an unregistered tool name to the files that mention it, and
+	// actions does the same for a dotted ID the catalog does not hold.
+	tools   map[string][]string
+	actions map[string]idFinding
+	// usedIDExemptions is what the run excused, which the stale list is
+	// computed against.
+	usedIDExemptions map[string]struct{}
+	files            int
+}
 
-	for _, root := range roots {
-		n, rootErr := scanRoot(root, registered, findingsByName)
-		if rootErr != nil {
-			return nil, 0, rootErr
-		}
-		filesScanned += n
+// newDocScan prepares a pass over the documentation.
+func newDocScan(registered map[string]struct{}, ids *actionids.IDs) *docScan {
+	return &docScan{
+		registered:       registered,
+		ids:              ids,
+		tools:            map[string][]string{},
+		actions:          map[string]idFinding{},
+		usedIDExemptions: map[string]struct{}{},
 	}
-	return findingsByName, filesScanned, nil
+}
+
+// scanDocs walks the documentation roots and records what it found.
+func (s *docScan) scanDocs(roots []string) error {
+	for _, root := range roots {
+		if err := s.scanRoot(root); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // scanRoot scans one entry of docRoots, which may be a single file or a tree.
-func scanRoot(root string, registered map[string]struct{}, findings map[string][]string) (int, error) {
+func (s *docScan) scanRoot(root string) error {
 	info, err := os.Stat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, nil
+			return nil
 		}
-		return 0, err
+		return err
 	}
 	if !info.IsDir() {
-		return scanFile(root, registered, findings)
+		return s.scanFile(root)
 	}
 
-	scanned := 0
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -191,33 +283,40 @@ func scanRoot(root string, registered map[string]struct{}, findings map[string][
 		if ext := filepath.Ext(path); ext != ".md" && ext != ".mdx" {
 			return nil
 		}
-		n, fileErr := scanFile(path, registered, findings)
-		scanned += n
-		return fileErr
+		return s.scanFile(path)
 	})
-	return scanned, err
 }
 
-// scanFile records unregistered tool names mentioned by one file.
-func scanFile(path string, registered map[string]struct{}, findings map[string][]string) (int, error) {
+// scanFile records the unregistered tool names and the unresolvable action IDs
+// one file mentions.
+func (s *docScan) scanFile(path string) error {
 	for _, prefix := range historicalDocs {
 		if strings.HasPrefix(filepath.ToSlash(path), prefix) {
-			return 0, nil
+			return nil
 		}
 	}
 
 	data, err := os.ReadFile(path) //#nosec G304 -- audit tool reading repository docs
 	if err != nil {
-		return 0, err
+		return err
 	}
+	s.files++
 
+	s.scanToolNames(filepath.ToSlash(path), string(data))
+	s.scanActionIDs(filepath.ToSlash(path), string(data))
+	return nil
+}
+
+// scanToolNames records the gitlab_* names one file mentions that no surface
+// registers.
+func (s *docScan) scanToolNames(path, text string) {
 	seen := make(map[string]struct{})
-	for _, token := range toolToken.FindAllString(string(data), -1) {
-		if _, ok := seen[token]; ok {
+	for _, token := range toolToken.FindAllString(text, -1) {
+		if _, repeated := seen[token]; repeated {
 			continue
 		}
 		seen[token] = struct{}{}
-		if _, ok := registered[token]; ok {
+		if _, ok := s.registered[token]; ok {
 			continue
 		}
 		if _, ok := allowed[token]; ok {
@@ -226,9 +325,34 @@ func scanFile(path string, registered map[string]struct{}, findings map[string][
 		if hasAllowedPrefix(token) || strings.HasSuffix(token, wildcardSuffix) {
 			continue
 		}
-		findings[token] = append(findings[token], filepath.ToSlash(path))
+		s.tools[token] = append(s.tools[token], path)
 	}
-	return 1, nil
+}
+
+// scanActionIDs records the dotted tokens one file offers as action IDs that
+// the catalog does not hold.
+//
+// Which tokens are offered as IDs is the shared rule in cmd/internal/actionids,
+// the same one the source gate applies to a Usage line, so a spelling cannot be
+// a cross-link in the code and prose in the docs.
+func (s *docScan) scanActionIDs(path, text string) {
+	for _, token := range s.ids.Candidates(text) {
+		if s.ids.IsID(token) || isIDFamilyPrefix(token) {
+			continue
+		}
+		if declared, tracked := exemptID(token); declared {
+			if tracked {
+				s.usedIDExemptions[token] = struct{}{}
+			}
+			continue
+		}
+		finding := s.actions[token]
+		if canonical, isAlias := s.ids.Alias(token); isAlias {
+			finding.Canonical = canonical
+		}
+		finding.Files = append(finding.Files, path)
+		s.actions[token] = finding
+	}
 }
 
 // hasAllowedPrefix reports whether token belongs to an exempted family.

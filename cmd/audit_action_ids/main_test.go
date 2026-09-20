@@ -21,7 +21,7 @@ func TestRun_WholeCommand_ReportsAndWritesTheWorkList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "action-ids.json")
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{auditedPattern}, path, false, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, jsonPath: path}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), toolName+":") {
@@ -42,7 +42,7 @@ func TestRun_NoWorkListPath_WritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{auditedPattern}, "", false, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	if strings.Contains(stdout.String(), "wrote ") {
@@ -61,7 +61,7 @@ func TestRun_NoWorkListPath_WritesNothing(t *testing.T) {
 func TestRun_UnloadableSource_ExitsOne(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{"./cmd/audit_action_ids/nothing/..."}, "", false, &stdout, &stderr); code != 1 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{"./cmd/audit_action_ids/nothing/..."}}, &stdout, &stderr); code != 1 {
 		t.Fatalf("run = %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), toolName+":") {
@@ -79,12 +79,56 @@ func TestRun_UnwritableWorkList_ExitsOne(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 
-	code := run(repoRoot(t), []string{auditedPattern}, filepath.Join(blocker, "action-ids.json"), false, &stdout, &stderr)
+	code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, jsonPath: filepath.Join(blocker, "action-ids.json")}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run = %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), toolName+":") {
 		t.Errorf("stderr = %q, want the failure named", stderr.String())
+	}
+}
+
+// TestRun_Check_DeadCrossLink_FailsAndNamesIt drives the gate over a fixture
+// that publishes an ID the catalog does not have, which is the whole point of
+// the flip: the command reported this and now refuses it. A gate only ever
+// exercised on a clean tree is one nobody has watched fail.
+func TestRun_Check_DeadCrossLink_FailsAndNamesIt(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+// Spec publishes a cross-link to an action the catalog does not have.
+var Spec = toolutil.ActionSpecOptions{RelatedActions: []string{"project.no_such_action"}}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: fixturePatterns, overlay: overlay, check: true}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("run with -check = %d over a dead cross-link, want 1", code)
+	}
+	if !strings.Contains(stdout.String(), "project.no_such_action") {
+		t.Errorf("stdout = %q, want the dead ID named", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "ERROR:") {
+		t.Errorf("stderr = %q, want the gate's own failure line", stderr.String())
+	}
+}
+
+// TestRun_Check_CleanPackage_Passes holds the other side of the switch: with
+// nothing to refuse, -check is silent and exits 0, so the flag cannot be one
+// that fails on everything.
+func TestRun_Check_CleanPackage_Passes(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, check: true}, &stdout, &stderr); code != 0 {
+		t.Fatalf("run with -check = %d over a package publishing no IDs, stderr %q", code, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "ERROR:") {
+		t.Errorf("stderr = %q, want nothing from a clean run", stderr.String())
 	}
 }
 

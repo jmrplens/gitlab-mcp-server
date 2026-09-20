@@ -12,8 +12,8 @@ import (
 )
 
 // Individual tool names that appear in multiple places (ActionSpecs
-// registrations, runnerActionMeta map keys, and related-action slices).
-// Centralizing them here lets the compiler catch typos at build time.
+// registrations and runnerActionMeta map keys). Centralizing them here lets
+// the compiler catch typos at build time.
 const (
 	toolRunnerListProject      = "gitlab_runner_list_project"
 	toolRunnerEnableProject    = "gitlab_runner_enable_project"
@@ -24,6 +24,46 @@ const (
 	toolRunnerResetGroupReg    = "gitlab_runner_reset_group_reg_token"
 	toolRunnerResetProjectReg  = "gitlab_runner_reset_project_reg_token"
 	toolRunnerListManagers     = "gitlab_runner_list_managers"
+)
+
+// Canonical catalog IDs, the one form every surface resolves: what a
+// RelatedActions list carries and what the Markdown hints name.
+//
+// They are separate constants from the individual tool names above because the
+// two are different names for the same action: the tool name is what the
+// individual surface registers, and the ID is what gitlab_find_action
+// publishes and gitlab_execute_action takes. Every related list in this file
+// used to be spelled with the tool names, which resolve through the alias each
+// spec declares, so the cross-links worked when a model followed one and none
+// of them could be looked up in a listing. The hints had it right from the
+// start, which is what made the split easy to miss: both sets of constants
+// existed, in two files, and only one named IDs.
+const (
+	domainRunner = "runner."
+
+	// actionJobGet belongs to another group, and is named here because a
+	// runner's job list cross-links to it.
+	actionJobGet = "job.get"
+
+	actionRunnerList             = domainRunner + "list"
+	actionRunnerListAll          = domainRunner + "list_all"
+	actionRunnerGet              = domainRunner + "get"
+	actionRunnerUpdate           = domainRunner + "update"
+	actionRunnerRemove           = domainRunner + "remove"
+	actionRunnerJobs             = domainRunner + "jobs"
+	actionRunnerListProject      = domainRunner + "list_project"
+	actionRunnerEnableProject    = domainRunner + "enable_project"
+	actionRunnerDisableProject   = domainRunner + "disable_project"
+	actionRunnerListGroup        = domainRunner + "list_group"
+	actionRunnerRegister         = domainRunner + "register"
+	actionRunnerDeleteRegistered = domainRunner + "delete_registered"
+	actionRunnerDeleteByToken    = domainRunner + "delete_by_token"
+	actionRunnerVerify           = domainRunner + "verify"
+	actionRunnerResetToken       = domainRunner + "reset_token"
+	actionRunnerResetInstanceReg = domainRunner + "reset_instance_reg_token"
+	actionRunnerResetGroupReg    = domainRunner + "reset_group_reg_token"
+	actionRunnerResetProjectReg  = domainRunner + "reset_project_reg_token"
+	actionRunnerListManagers     = domainRunner + "list_managers"
 )
 
 // ActionSpecs returns canonical specs for runner and runner controller actions.
@@ -196,20 +236,20 @@ type runnerActionMetaEntry struct {
 // sentence structure; only the scope name, the scope-ID parameter name, and the
 // two siblings differ.
 //
-// Each sibling arrives as two parameters because it is published under two
-// names: the canonical action ID the cross-link carries, which is what the
-// discovery tools list, and the individual tool name the "See also" sentence
-// names, which is what a model can call on that surface.
+// Each sibling arrives under both of its names: the canonical ID the related
+// list carries, which is what the discovery tools publish, and the individual
+// tool name the description's "See also" spells, which is what a model can
+// call on that surface.
 //
-// Two plain strings rather than one struct carrying both, and the ID halves
-// keep the "related" prefix in their names, because both are what
-// cmd/audit_action_ids reads them through: it folds a helper's arguments back
-// to the constants its callers pass and cannot fold a field selected off a
-// struct, and it follows a parameter out to its callers only when the
-// parameter's own name says it carries action IDs. Tidied either way, these
-// two cross-links leave the audit's sight and are reported as sites it could
-// not read.
-func resetScopedRegTokenEntry(scope, scopeParam, relatedFirstAction, firstTool, relatedSecondAction, secondTool string) runnerActionMetaEntry {
+// Two shapes here are load-bearing for `make check-action-ids`, which folds a
+// cross-link with the type checker rather than matching text. The siblings are
+// six plain strings rather than two structs, because a field read off a struct
+// parameter is a value that gate cannot fold; and the two that carry IDs are
+// named for what they carry, because the gate follows a parameter out to its
+// callers only when the name says it holds related actions. Hidden either way,
+// these two entries would be the only cross-links in the tree nothing judges,
+// and under the gate an unfoldable site fails rather than passing in silence.
+func resetScopedRegTokenEntry(scope, scopeParam, relatedFirst, firstTool, relatedSecond, secondTool string) runnerActionMetaEntry {
 	return runnerActionMetaEntry{
 		usage: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated registration flow). "+
@@ -222,7 +262,7 @@ func resetScopedRegTokenEntry(scope, scopeParam, relatedFirstAction, firstTool, 
 			"renew " + scope + " registration token",
 			"regenerate " + scope + " runner token",
 		},
-		related: []string{relatedFirstAction, relatedSecondAction},
+		related: []string{relatedFirst, relatedSecond},
 		description: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated). "+
 				"Returns: the new registration token and its expiry. See also: %s, %s.",

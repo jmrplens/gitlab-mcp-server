@@ -19,23 +19,47 @@
 // whole reason for the loader: the IDs are written as package-local constants
 // (actionGet, actionListProject), two packages build one by concatenation
 // ("group." + actionGroupExportDownload), and a scan over literals reports the
-// prefix "group." as a finding while passing the folded value in silence. A
-// value this cannot fold is counted and named rather than passed over, since a
-// site the audit could not see must not be reported clean.
+// prefix "group." as a finding while passing the folded value in silence.
 //
 // # What it compares against
 //
-// The catalog this tree builds, at the Ultimate tier, twice: once against a
-// self-managed stub instance and once against GitLab.com. The union is the
-// oracle. Orbit registers only for GitLab.com, so a single self-managed build
-// reports its six IDs as dead; taking the union rather than the GitLab.com
-// build alone means an action gated the other way would not read as dead
-// either. The standalone dynamic actions are added the way cmd/server adds
-// them, because gitlab_execute_action takes those IDs too.
+// cmd/internal/actionids, shared with the documentation gate so that one
+// spelling cannot be right in a Usage line and wrong on the page that teaches
+// it: the catalog this tree builds, at the Ultimate tier, self-managed and
+// GitLab.com unioned, with the standalone dynamic actions added the way
+// cmd/server adds them.
 //
-// # Two limits
+// # What -check refuses
 //
-// A clean run must not be read for more than it is.
+// Four things, and the first two are the whole point of the rule.
+//
+// A published ID that resolves to nothing is a cross-link a model cannot
+// follow.
+//
+// A published ID that resolves only as a **registered alias** is refused too,
+// which is the demand this gate exists to make: not that the ID resolve, but
+// that it be the canonical one. gitlab_execute_action resolves an alias, so
+// such a link does work when it is followed, and that is exactly what made the
+// class invisible for so long. gitlab_find_action publishes canonical IDs, so
+// a model that looks the name up in a listing does not find it; and the
+// spellings that were sitting in this bucket were individual tool names
+// (gitlab_runner_get in a RelatedActions list), which is a third naming scheme
+// in a field documented as carrying catalog IDs. Demanding mere resolvability
+// would have left all sixty of them in place. The one shape this would be
+// wrong for is a sentence whose subject is the alias, and those are declared
+// in declarations.go, consulted for prose alone.
+//
+// A declaration that excuses nothing is a finding, on the terms every
+// declaration table in this repository is held to.
+//
+// A site the type checker could not fold is a finding as well. It is the
+// audit's own blind spot rather than a defect of the tree, and it fails anyway
+// because a gate whose blind spot is silent is one any future site can step
+// into: an ID assembled at run time would be reported as unreadable and pass.
+// The remedy is to spell the ID as a constant, which every site in the tree
+// does today.
+//
+// # The limit of a clean run
 //
 // It answers whether an ID resolves, never whether it is the right ID. The
 // catalog has both snippet.get, which reads a personal snippet, and
@@ -53,28 +77,10 @@
 // (Registry.publishedRelatedActions in internal/tools/dynamic) instead of
 // leaving that to a gate here.
 //
-// An alias is judged by where it is written, which is the one thing this used
-// to leave open. Both facts about an alias are true: gitlab_execute_action
-// resolves one, and gitlab_find_action publishes canonical IDs and so lists it
-// under no name. In a RelatedActions entry or a HintAction argument the second
-// decides, because those are handed to a model as the ID to call next and an
-// alias there can be followed once and never looked up, so it is a finding
-// with the canonical ID named beside it as the fix. In a Usage line or a
-// description the first decides, because naming an alias can be the substance
-// of the sentence: issue.update's usage says that dynamic execute also accepts
-// issue.close and issue.reopen. Those stay reported apart, under "alias", and
-// are not counted as findings.
-//
-// # It reports and does not gate
-//
-// The findings are spread over packages no single change touches, so a gate
-// that failed today would fail on code the change introducing it never went
-// near. The fixes land in later layers, and the flag that turns this into a
-// gate belongs to the layer that can pass it.
-//
 // Usage:
 //
 //	go run ./cmd/audit_action_ids/                        # report, work list to plan/action-ids.json
-//	go run ./cmd/audit_action_ids/ -v                     # also the aliases and what could not be folded
+//	go run ./cmd/audit_action_ids/ -check                 # the gate: make check-action-ids
+//	go run ./cmd/audit_action_ids/ -v                     # also what a clean run judged, by kind
 //	go run ./cmd/audit_action_ids/ ./internal/tools/issues # one package
 package main
