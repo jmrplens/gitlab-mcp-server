@@ -39,7 +39,7 @@ const (
 func TestReleaseLinkCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -87,7 +87,7 @@ func TestReleaseLinkCreate_MissingRelease(t *testing.T) {
 func TestReleaseLinkDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathReleaseLinkByID {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -112,7 +112,7 @@ func TestReleaseLinkDelete_Success(t *testing.T) {
 func TestReleaseLinkList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathReleaseLinks {
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"Binary amd64","url":"https://example.com/amd64","link_type":"package","external":true},{"id":11,"name":"Binary arm64","url":"https://example.com/arm64","link_type":"package","external":true}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"Binary amd64","url":"https://example.com/amd64","link_type":"package"},{"id":11,"name":"Binary arm64","url":"https://example.com/arm64","link_type":"package"}]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -140,7 +140,7 @@ func TestReleaseLinkList_PaginationQueryParamsAndMetadata(t *testing.T) {
 				t.Errorf("query param per_page = %q, want %q", got, "5")
 			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK,
-				`[{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"package","external":true}]`,
+				`[{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"package"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "3", TotalPages: "1"})
 			return
 		}
@@ -164,7 +164,7 @@ func TestReleaseLinkList_PaginationQueryParamsAndMetadata(t *testing.T) {
 func TestReleaseLinkGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathReleaseLinkByID {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","external":true,"direct_asset_url":"https://example.com/direct"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","direct_asset_url":"https://example.com/direct"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -211,7 +211,7 @@ func TestReleaseLinkGet_NotFound(t *testing.T) {
 func TestReleaseLinkUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathReleaseLinkByID {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Updated Binary","url":"https://example.com/bin/v2","link_type":"runbook","external":false,"direct_asset_url":""}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"Updated Binary","url":"https://example.com/bin/v2","link_type":"runbook","direct_asset_url":""}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -323,7 +323,7 @@ func TestReleaseLinkCreateBatch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
 			callCount++
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+strconv.Itoa(callCount)+`,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+strconv.Itoa(callCount)+`,"name":"link","url":"https://example.com","link_type":"package"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -385,7 +385,7 @@ func TestReleaseLinkCreateBatch_PartialFailure(t *testing.T) {
 				testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"duplicate link"}`)
 				return
 			}
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"link","url":"https://example.com","link_type":"package"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -416,7 +416,7 @@ func TestReleaseLinkCreateBatch_PartialFailure(t *testing.T) {
 func TestReleaseLinkCreateBatch_SkipsInvalidEntries(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"ok","url":"https://example.com","link_type":"other","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"ok","url":"https://example.com","link_type":"other"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -551,7 +551,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 func TestCreate_WithoutLinkType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/releases/v1.0.0/assets/links" {
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"Docs","url":"https://docs.example.com","link_type":"other","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"Docs","url":"https://docs.example.com","link_type":"other"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -691,7 +691,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/42/releases/v1.0.0/assets/links/10" {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"New Name","url":"https://new.example.com","link_type":"image","external":false,"direct_asset_url":"https://direct.example.com/pkg"}`)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"name":"New Name","url":"https://new.example.com","link_type":"image","direct_asset_url":"https://direct.example.com/pkg"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1034,7 +1034,7 @@ func TestFormatBatchMarkdown_Empty(t *testing.T) {
 
 // TestToOutput_AllFields verifies ToOutput when all fields.
 func TestToOutput_AllFields(t *testing.T) {
-	rl := mockReleaseLink(20, "Pkg", "https://example.com/pkg", "package", true, "https://direct.example.com")
+	rl := mockReleaseLink(20, "Pkg", "https://example.com/pkg", "package", "https://direct.example.com")
 	out := ToOutput(&rl)
 	if out.ID != 20 {
 		t.Errorf("ID = %d, want 20", out.ID)
@@ -1055,7 +1055,7 @@ func TestToOutput_AllFields(t *testing.T) {
 
 // TestToOutput_ZeroValue verifies ToOutput when zero value.
 func TestToOutput_ZeroValue(t *testing.T) {
-	rl := mockReleaseLink(0, "", "", "", false, "")
+	rl := mockReleaseLink(0, "", "", "", "")
 	out := ToOutput(&rl)
 	if out.ID != 0 {
 		t.Errorf("ID = %d, want 0", out.ID)
@@ -1109,13 +1109,17 @@ func TestCreateBatch_ContextCancelledMidLoop(t *testing.T) {
 }
 
 // mockReleaseLink builds a minimal gl.ReleaseLink for unit tests.
-func mockReleaseLink(id int64, name, url, linkType string, external bool, directURL string) gl.ReleaseLink {
+//
+// It used to take an `external` flag and set gl.ReleaseLink.External from it.
+// GitLab has not sent that key since 16.0, so no response can fill the SDK
+// field and no caller of ToOutput reads it: the parameter only let a test
+// describe a link no instance can serve.
+func mockReleaseLink(id int64, name, url, linkType, directURL string) gl.ReleaseLink {
 	return gl.ReleaseLink{
 		ID:             id,
 		Name:           name,
 		URL:            url,
 		LinkType:       gl.LinkTypeValue(linkType),
-		External:       external,
 		DirectAssetURL: directURL,
 	}
 }
@@ -1128,7 +1132,7 @@ func TestReleaseLinkCreate_DirectAssetPathAndFilePath(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
 			b, _ := io.ReadAll(r.Body)
 			body = string(b)
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"other","external":false,"direct_asset_url":"https://example.com/x/releases/v1.2.0/downloads/bin"}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"other","direct_asset_url":"https://example.com/x/releases/v1.2.0/downloads/bin"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1164,7 +1168,7 @@ func TestReleaseLinkCreateBatch_DirectAssetPathAndFilePath(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
 			b, _ := io.ReadAll(r.Body)
 			bodies = append(bodies, string(b))
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"link","url":"https://example.com","link_type":"package"}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1213,7 +1217,7 @@ func TestReleaseLinkList_KeysetAndOrdering(t *testing.T) {
 			if got := q.Get("sort"); got != "desc" {
 				t.Errorf("sort = %q, want desc", got)
 			}
-			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"package","external":true}]`)
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"name":"Binary","url":"https://example.com/bin","link_type":"package"}]`)
 			return
 		}
 		http.NotFound(w, r)

@@ -121,14 +121,21 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 	}
 	if actionName == "link_create_batch" {
-		options.Usage = "Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets."
+		// The batch case is the one a model gets wrong by looping link_create,
+		// so the usage says what to pass and the first two confusions say what
+		// not to do. That text was written once in a duplicate block a later
+		// assignment overwrote in full, so it reached no model at all until the
+		// duplicate went and it was promoted here.
+		options.Usage = "Create multiple release asset links in one call. Provide the release tag_name and a links array, each entry with a name and an absolute url. Use this instead of repeated link_create when attaching several assets at once, for example one link per file uploaded by package.publish_directory. Use absolute URLs returned by package publish actions for package assets."
 		options.Aliases = []string{"batch release links", "release package asset links", "link package files to release", "create multiple release assets"}
-		options.RelatedActions = []string{actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, actionLinkList}
+		options.RelatedActions = []string{actionLinkCreate, actionReleaseCreate, actionPackagePublishDir, actionPackagePublish, actionLinkList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_links",
 				ValueSource:  "Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute.",
 				CommonConfusions: []string{
+					"Do not call link_create once per asset when several are requested. Pass them all in the links array of link_create_batch.",
+					"Do not put a single name and url at top level. Each link goes inside the links array.",
 					"Prefer direct_asset_path over the deprecated filepath when setting a direct asset link.",
 					"For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.",
 				},
@@ -159,12 +166,24 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 // releaseLinkDescriptions maps each release-link action to its
 // "Returns: … See also: …" individual-tool description (R-META; 1:1 audit).
 // Returned objects mirror the GitLab ReleaseLink schema: id, name, url,
-// direct_asset_url, link_type, and external.
+// direct_asset_url and link_type.
+//
+// All six promised `external` beside those five until the live oracle was read
+// against them. GitLab removed it from the Link entity in 16.0, and
+// API::Entities::Releases::Link in docs/development/gitlab-api-live.json (19.3.1)
+// exposes those five keys and nothing else, so the word named a field no
+// response carries. client-go still models ReleaseLink.External, which is what
+// makes the other reading tempting and wrong: filling an output field from it
+// would publish a bool that is false for every link on every instance, which is
+// the class of defect [issue 580] was about. The stale SDK field is recorded in
+// docs/development/upstream-bugs.md instead.
+//
+// [issue 580]: https://github.com/jmrplens/gitlab-mcp-server/issues/580
 var releaseLinkDescriptions = map[string]string{
-	"link_create":       "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
-	"link_create_batch": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type, external) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
-	"link_get":          "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
-	"link_list":         "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type, external) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
-	"link_update":       "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
-	"link_delete":       "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, link_type, and external. See also: gitlab_release_link_get, gitlab_release_link_list.",
+	"link_create":       "Create a single release asset link. Returns: the created link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_create_batch, gitlab_release_link_list, gitlab_release_link_update.",
+	"link_create_batch": "Create multiple release asset links in one call. Returns: the created links (id, name, url, direct_asset_url, link_type) and any failed entries. See also: gitlab_release_link_create, gitlab_release_link_list, gitlab_package_publish.",
+	"link_get":          "Get one release asset link by link_id. Returns: the link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_list, gitlab_release_link_update, gitlab_release_link_delete.",
+	"link_list":         "List asset links for a release with offset or keyset pagination. Returns: matching links (id, name, url, direct_asset_url, link_type) and pagination metadata. See also: gitlab_release_link_get, gitlab_release_link_create, gitlab_release_link_create_batch.",
+	"link_update":       "Update an existing release asset link by link_id. Returns: the updated link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list, gitlab_release_link_delete.",
+	"link_delete":       "Delete a release asset link by link_id. Returns: the deleted link with id, name, url, direct_asset_url, and link_type. See also: gitlab_release_link_get, gitlab_release_link_list.",
 }

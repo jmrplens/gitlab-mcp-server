@@ -103,7 +103,7 @@ Create multiple release asset links in one call. Accepts a `links` array where e
 
 ### `gitlab_release_link_get`
 
-Get details of a specific release asset link by its ID, including name, URL, type, and whether it is external.
+Get details of a specific release asset link by its ID, including name, URL, direct asset URL, and link type.
 
 | Annotation | **Read** |
 | ---------- | -------- |

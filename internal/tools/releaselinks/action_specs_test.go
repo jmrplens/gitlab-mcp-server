@@ -5,18 +5,20 @@ import (
 	"context"
 	"maps"
 	"net/http"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const releaseLinkActionJSON = `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","external":true,"direct_asset_url":""}`
+const releaseLinkActionJSON = `{"id":10,"name":"Binary amd64","url":"https://example.com/bin/amd64","link_type":"package","direct_asset_url":""}`
 
 // TestActionSpecs_CallAllRoutes exercises every release link tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
@@ -298,6 +300,65 @@ func TestActionSpecs_LinkHintsNameActionsThisPackageDeclares(t *testing.T) {
 			t.Errorf("a hint names %q, which this package does not declare", id)
 		}
 	}
+}
+
+// TestReleaseLinkDescriptions_NameOnlyKeysTheOutputPublishes holds the six
+// served descriptions against the JSON keys [Output] writes, taking the
+// candidates from client-go's own struct.
+//
+// All six promised `external` for as long as this package had descriptions.
+// client-go models ReleaseLink.External and GitLab stopped sending the key in
+// 16.0, so the sentence named a field no response carries, and the SDK field a
+// reader would reach for to make it true decodes to false on every link from
+// every instance. Deriving the forbidden set from the SDK struct rather than
+// naming `external` is what makes the guard outlive this one field: any other
+// key client-go models and this server does not publish is caught the moment a
+// description promises it.
+func TestReleaseLinkDescriptions_NameOnlyKeysTheOutputPublishes(t *testing.T) {
+	published := publishedJSONKeys(reflect.TypeFor[Output]())
+	sdkKeys := publishedJSONKeys(reflect.TypeFor[gl.ReleaseLink]())
+
+	unpublished := make([]string, 0, len(sdkKeys))
+	for _, key := range slices.Sorted(maps.Keys(sdkKeys)) {
+		if !published[key] {
+			unpublished = append(unpublished, key)
+		}
+	}
+	if len(unpublished) == 0 {
+		t.Fatal("every key client-go models is published, so this guard has nothing to look for; publishedJSONKeys is reading something wrong")
+	}
+
+	for _, action := range slices.Sorted(maps.Keys(releaseLinkDescriptions)) {
+		t.Run(action, func(t *testing.T) {
+			description := releaseLinkDescriptions[action]
+			for _, key := range unpublished {
+				if strings.Contains(description, key) {
+					t.Errorf("%s promises %q, which Output does not publish: %s", action, key, description)
+				}
+			}
+		})
+	}
+}
+
+// publishedJSONKeys answers the JSON keys a struct writes, which is the set a
+// description may name. An embedded struct contributes its own keys, since
+// encoding/json promotes them rather than nesting them under one.
+func publishedJSONKeys(structType reflect.Type) map[string]bool {
+	keys := make(map[string]bool, structType.NumField())
+	for field := range structType.Fields() {
+		if field.Anonymous && field.Type.Kind() == reflect.Struct {
+			maps.Copy(keys, publishedJSONKeys(field.Type))
+			continue
+		}
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "" {
+			name = field.Name
+		}
+		if name != "-" {
+			keys[name] = true
+		}
+	}
+	return keys
 }
 
 func releaseLinksActionHandler() http.Handler {
