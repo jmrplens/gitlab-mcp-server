@@ -1858,12 +1858,16 @@ func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 // TestBranchGet_FullCommitMirror verifies that a branch's embedded commit object
 // is surfaced in full (id, dates, stats, last_pipeline, trailers, status) on the
 // canonical commit key rather than a flattened commit_id scalar.
+//
+// The fixture gives every field a value of its own, the two timestamps that
+// used to share one instant included, so that the converter's assignments can
+// be told apart from each other.
 func TestBranchGet_FullCommitMirror(t *testing.T) {
 	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gl/-/tree/main","commit":{` +
 		`"id":"abc123","short_id":"abc","title":"feat: x","message":"feat: x\n","author_name":"Ada","author_email":"ada@x.io",` +
 		`"authored_date":"2024-01-01T10:00:00Z","committer_name":"Bob","committer_email":"bob@x.io","committed_date":"2024-01-02T10:00:00Z",` +
-		`"created_at":"2024-01-02T10:00:00Z","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
-		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Signed-off-by":"Ada"},` +
+		`"created_at":"2024-01-03T11:30:00Z","web_url":"https://gl/-/commit/abc123","parent_ids":["p1","p2"],"status":"success","project_id":42,` +
+		`"trailers":{"Signed-off-by":"Ada"},"extended_trailers":{"Reviewed-by":"Bob"},` +
 		`"stats":{"additions":5,"deletions":2,"total":7},` +
 		`"last_pipeline":{"id":9,"iid":3,"project_id":42,"status":"success","source":"push","ref":"main","sha":"abc123","name":"build","web_url":"https://gl/pipelines/9","created_at":"2024-01-02T10:00:00Z","updated_at":"2024-01-02T11:00:00Z"}}}`
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1883,6 +1887,14 @@ func TestBranchGet_FullCommitMirror(t *testing.T) {
 
 // assertFullCommitMirror asserts that a CommitOutput surfaces every mirrored
 // gl.Commit field, including nested stats and last_pipeline sub-objects.
+//
+// Every field is held to a value of its own, which is what the fixture is
+// built for: the two name fields and the two address fields used to be read
+// back one apiece, so the author's address and the committer's name could
+// trade places in the converter and nothing would notice, and the three
+// timestamps were read back only for being non-empty while two of them
+// carried the same instant. A caller reads these keys out of the JSON result,
+// so a pair that trades places shows them the committer under author_email.
 func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 	t.Helper()
 	if c == nil {
@@ -1892,8 +1904,15 @@ func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 		"id":              {c.ID, "abc123"},
 		"short_id":        {c.ShortID, "abc"},
 		"title":           {c.Title, "feat: x"},
+		"message":         {c.Message, "feat: x\n"},
 		"author_name":     {c.AuthorName, "Ada"},
+		"author_email":    {c.AuthorEmail, "ada@x.io"},
+		"committer_name":  {c.CommitterName, "Bob"},
 		"committer_email": {c.CommitterEmail, "bob@x.io"},
+		"authored_date":   {c.AuthoredDate, "2024-01-01T10:00:00Z"},
+		"committed_date":  {c.CommittedDate, "2024-01-02T10:00:00Z"},
+		"created_at":      {c.CreatedAt, "2024-01-03T11:30:00Z"},
+		"web_url":         {c.WebURL, "https://gl/-/commit/abc123"},
 		"status":          {c.Status, "success"},
 	}
 	for field, v := range wantStr {
@@ -1904,11 +1923,17 @@ func assertFullCommitMirror(t *testing.T, c *CommitOutput) {
 	if c.ProjectID != 42 {
 		t.Errorf("commit project_id = %d, want 42", c.ProjectID)
 	}
-	if c.AuthoredDate == "" || c.CommittedDate == "" || c.CreatedAt == "" {
-		t.Errorf("commit dates not surfaced: %+v", c)
+	if got, want := toolutil.FormatTime(c.CommittedDate), "2 Jan 2024 10:00 UTC"; got != want {
+		t.Errorf("the display helper reads the committed date as %q, want %q", got, want)
 	}
-	if len(c.ParentIDs) != 2 || c.Trailers["Signed-off-by"] != "Ada" || len(c.ExtendedTrailers) != 1 {
-		t.Errorf("commit parent/trailers = %+v", c)
+	if len(c.ParentIDs) != 2 || c.ParentIDs[0] != "p1" || c.ParentIDs[1] != "p2" {
+		t.Errorf("commit parent_ids = %v, want [p1 p2]", c.ParentIDs)
+	}
+	if len(c.Trailers) != 1 || c.Trailers["Signed-off-by"] != "Ada" {
+		t.Errorf("commit trailers = %v, want Signed-off-by from Ada", c.Trailers)
+	}
+	if len(c.ExtendedTrailers) != 1 || c.ExtendedTrailers["Reviewed-by"] != "Bob" {
+		t.Errorf("commit extended_trailers = %v, want Reviewed-by from Bob", c.ExtendedTrailers)
 	}
 	assertCommitStats(t, c.Stats)
 	assertCommitLastPipeline(t, c.LastPipeline)

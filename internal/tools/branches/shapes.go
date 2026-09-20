@@ -58,6 +58,13 @@ type CommitOutput struct {
 
 // commitToOutput maps gl.Commit to *CommitOutput, or nil when the branch has no
 // embedded commit.
+//
+// The three timestamps go out in RFC 3339, the form every other date this
+// server publishes takes and the one toolutil.FormatTime reads back. They used
+// to be written with time.Time.String(), which is not RFC 3339, so nothing
+// could parse them: the card's Committed line fell through to the display
+// helper's escape branch and printed "2024-01-02 10:00:00 +0000 UTC" where
+// every other card shows a date a reader can read.
 func commitToOutput(c *gl.Commit) *CommitOutput {
 	if c == nil {
 		return nil
@@ -69,23 +76,17 @@ func commitToOutput(c *gl.Commit) *CommitOutput {
 		Message:          c.Message,
 		AuthorName:       c.AuthorName,
 		AuthorEmail:      c.AuthorEmail,
+		AuthoredDate:     toolutil.RFC3339Ptr(c.AuthoredDate),
 		CommitterName:    c.CommitterName,
 		CommitterEmail:   c.CommitterEmail,
+		CommittedDate:    toolutil.RFC3339Ptr(c.CommittedDate),
+		CreatedAt:        toolutil.RFC3339Ptr(c.CreatedAt),
 		WebURL:           c.WebURL,
 		ParentIDs:        c.ParentIDs,
 		ProjectID:        c.ProjectID,
 		Trailers:         c.Trailers,
 		ExtendedTrailers: c.ExtendedTrailers,
 		LastPipeline:     pipelineInfoToOutput(c.LastPipeline),
-	}
-	if c.AuthoredDate != nil {
-		out.AuthoredDate = c.AuthoredDate.String()
-	}
-	if c.CommittedDate != nil {
-		out.CommittedDate = c.CommittedDate.String()
-	}
-	if c.CreatedAt != nil {
-		out.CreatedAt = c.CreatedAt.String()
 	}
 	if c.Status != nil {
 		out.Status = string(*c.Status)
