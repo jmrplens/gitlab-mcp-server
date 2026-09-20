@@ -4,6 +4,10 @@ package geo
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -11,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -111,17 +118,77 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestCreate_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-
-	_, err := Create(context.Background(), client, CreateInput{})
-	if err == nil {
-		t.Fatal("expected error on API failure")
+// TestGeo_StatusHint_AttachesOnlyToTheStatusItDescribes verifies each
+// handler's suggestion is attached on the one status it was written for and
+// withheld on any other: a get answered 404 says to verify the id, and the
+// same get answered 500 says nothing about the id, since that advice would be
+// wrong there. The status each hint is keyed on is a literal no mutator
+// touches, so this is the only thing holding it.
+func TestGeo_StatusHint_AttachesOnlyToTheStatusItDescribes(t *testing.T) {
+	name := "primary-site"
+	handlers := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(client *gitlabclient.Client) error
+	}{
+		{name: "create", status: http.StatusBadRequest, hint: "only one site may have primary=true", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{Name: &name})
+			return err
+		}},
+		{name: "list", status: http.StatusForbidden, hint: "ensure the instance is configured for Geo", call: func(client *gitlabclient.Client) error {
+			_, err := List(context.Background(), client, ListInput{})
+			return err
+		}},
+		{name: "get", status: http.StatusNotFound, hint: "verify id with gitlab_list_geo_sites; requires admin access", call: func(client *gitlabclient.Client) error {
+			_, err := Get(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{name: "edit", status: http.StatusBadRequest, hint: "cannot toggle primary status (recreate site instead)", call: func(client *gitlabclient.Client) error {
+			_, err := Edit(context.Background(), client, EditInput{ID: 1, Name: &name})
+			return err
+		}},
+		{name: "delete", status: http.StatusForbidden, hint: "cannot delete the primary site while secondaries exist", call: func(client *gitlabclient.Client) error {
+			return Delete(context.Background(), client, IDInput{ID: 1})
+		}},
+		{name: "repair", status: http.StatusNotFound, hint: "repair re-creates the OAuth application for the secondary site", call: func(client *gitlabclient.Client) error {
+			_, err := Repair(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+		{name: "list_status", status: http.StatusForbidden, hint: "status data is collected by the primary site", call: func(client *gitlabclient.Client) error {
+			_, err := ListStatus(context.Background(), client, ListStatusInput{})
+			return err
+		}},
+		{name: "get_status", status: http.StatusNotFound, hint: "the site must have reported status at least once", call: func(client *gitlabclient.Client) error {
+			_, err := GetStatus(context.Background(), client, IDInput{ID: 1})
+			return err
+		}},
+	}
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			answers := []struct {
+				name   string
+				status int
+				hinted bool
+			}{
+				{name: "on its status", status: handler.status, hinted: true},
+				{name: "on another status", status: http.StatusInternalServerError, hinted: false},
+			}
+			for _, answer := range answers {
+				t.Run(answer.name, func(t *testing.T) {
+					client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						w.WriteHeader(answer.status)
+					}))
+					err := handler.call(client)
+					if err == nil {
+						t.Fatalf("no error on a %d answer", answer.status)
+					}
+					if strings.Contains(err.Error(), handler.hint) != answer.hinted {
+						t.Errorf("error = %v, want the hint %q carried: %t", err, handler.hint, answer.hinted)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -149,9 +216,10 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies the List_Empty handler.
-// The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK.
-// It asserts the returned output matches the expected fields.
+// TestList_Empty verifies an instance with no Geo site is answered as an
+// empty list rather than an error.
+// The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK and [].
+// It asserts List returns no error and no site.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites" {
@@ -167,20 +235,6 @@ func TestList_Empty(t *testing.T) {
 	}
 	if len(out.Sites) != 0 {
 		t.Fatalf("expected 0 sites, got %d", len(out.Sites))
-	}
-}
-
-// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestList_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-
-	_, err := List(context.Background(), client, ListInput{})
-	if err == nil {
-		t.Fatal("expected error on API failure")
 	}
 }
 
@@ -208,31 +262,44 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingID verifies that Get_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestGet_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	_, err := Get(context.Background(), client, IDInput{})
-	if err == nil {
-		t.Fatal("expected error for missing id")
+// TestGeo_MissingID_RefusedBeforeGitLabIsAsked verifies the five handlers that
+// take a site id refuse a zero one themselves, naming the field a caller has
+// to fill. The mock forbids every request, so the refusal can only be the
+// handler's: the earlier form of these tests answered 404, which is an error
+// whichever layer produced it.
+func TestGeo_MissingID_RefusedBeforeGitLabIsAsked(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	handlers := []struct {
+		name string
+		call func() error
+	}{
+		{name: "get", call: func() error {
+			_, err := Get(context.Background(), client, IDInput{})
+			return err
+		}},
+		{name: "edit", call: func() error {
+			_, err := Edit(context.Background(), client, EditInput{})
+			return err
+		}},
+		{name: "delete", call: func() error {
+			return Delete(context.Background(), client, IDInput{})
+		}},
+		{name: "repair", call: func() error {
+			_, err := Repair(context.Background(), client, IDInput{})
+			return err
+		}},
+		{name: "get_status", call: func() error {
+			_, err := GetStatus(context.Background(), client, IDInput{})
+			return err
+		}},
 	}
-}
-
-// TestGet_NotFound verifies that Get_NotFound returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestGet_NotFound(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	_, err := Get(context.Background(), client, IDInput{ID: 999})
-	if err == nil {
-		t.Fatal("expected error for not found site")
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			err := handler.call()
+			if err == nil || err.Error() != "id is required" {
+				t.Errorf("error = %v, want the field named as required", err)
+			}
+		})
 	}
 }
 
@@ -258,37 +325,9 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
-// TestEdit_MissingID verifies that Edit_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestEdit_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	_, err := Edit(context.Background(), client, EditInput{})
-	if err == nil {
-		t.Fatal("expected error for missing id")
-	}
-}
-
-// TestEdit_APIError verifies that Edit returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestEdit_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusUnprocessableEntity)
-	}))
-
-	_, err := Edit(context.Background(), client, EditInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error on API failure")
-	}
-}
-
-// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
-// The mock GitLab API at /api/v4/geo_sites/1 (DELETE) returns a representative success body.
-// It asserts the returned output matches the expected fields.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API accepts the removal.
+// The mock GitLab API at /api/v4/geo_sites/1 (DELETE) answers 204 with no body.
+// It asserts Delete returns no error.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -301,34 +340,6 @@ func TestDelete_Success(t *testing.T) {
 	err := Delete(context.Background(), client, IDInput{ID: 1})
 	if err != nil {
 		t.Fatalf("Delete() error: %v", err)
-	}
-}
-
-// TestDelete_MissingID verifies that Delete_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestDelete_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	err := Delete(context.Background(), client, IDInput{})
-	if err == nil {
-		t.Fatal("expected error for missing id")
-	}
-}
-
-// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestDelete_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-
-	err := Delete(context.Background(), client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error on API failure")
 	}
 }
 
@@ -376,34 +387,6 @@ func TestRepair_NullResponse(t *testing.T) {
 	}
 }
 
-// TestRepair_MissingID verifies that Repair_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestRepair_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	_, err := Repair(context.Background(), client, IDInput{})
-	if err == nil {
-		t.Fatal("expected error for missing id")
-	}
-}
-
-// TestRepair_APIError verifies that Repair returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestRepair_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-
-	_, err := Repair(context.Background(), client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error on API failure")
-	}
-}
-
 // TestListStatus_Success verifies that ListStatus succeeds when the GitLab API returns a valid response.
 // The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
@@ -434,9 +417,10 @@ func TestListStatus_Success(t *testing.T) {
 	}
 }
 
-// TestListStatus_Empty verifies the ListStatus_Empty handler.
-// The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
-// It asserts the returned output matches the expected fields.
+// TestListStatus_Empty verifies an instance with no Geo site is answered as
+// an empty status list rather than an error.
+// The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK and [].
+// It asserts ListStatus returns no error and no status.
 func TestListStatus_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites/status" {
@@ -452,20 +436,6 @@ func TestListStatus_Empty(t *testing.T) {
 	}
 	if len(out.Statuses) != 0 {
 		t.Fatalf("expected 0 statuses, got %d", len(out.Statuses))
-	}
-}
-
-// TestListStatus_APIError verifies that ListStatus returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestListStatus_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-
-	_, err := ListStatus(context.Background(), client, ListStatusInput{})
-	if err == nil {
-		t.Fatal("expected error on API failure")
 	}
 }
 
@@ -496,163 +466,58 @@ func TestGetStatus_Success(t *testing.T) {
 	}
 }
 
-// TestGetStatus_MissingID verifies that GetStatus_MissingID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestGetStatus_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	_, err := GetStatus(context.Background(), client, IDInput{})
-	if err == nil {
-		t.Fatal("expected error for missing id")
-	}
-}
-
-// TestGetStatus_APIError verifies that GetStatus returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestGetStatus_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
-	_, err := GetStatus(context.Background(), client, IDInput{ID: 999})
-	if err == nil {
-		t.Fatal("expected error on API failure")
-	}
-}
-
-// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
+// TestGeo_CancelledContext_RefusedBeforeGitLabIsAsked verifies every handler
+// answers a cancelled context with the cancellation itself and sends nothing.
+// The mock forbids every request: the earlier form of these tests said the
+// call happened "without contacting GitLab" over a mock that would have
+// answered 404 had it been contacted, so that half was claimed and never
+// checked.
+func TestGeo_CancelledContext_RefusedBeforeGitLabIsAsked(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
-
-	_, err := Create(ctx, client, CreateInput{})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
+	name := "primary-site"
+	handlers := []struct {
+		name string
+		call func() error
+	}{
+		{name: "create", call: func() error {
+			_, err := Create(ctx, client, CreateInput{Name: &name})
+			return err
+		}},
+		{name: "list", call: func() error {
+			_, err := List(ctx, client, ListInput{})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := Get(ctx, client, IDInput{ID: 1})
+			return err
+		}},
+		{name: "edit", call: func() error {
+			_, err := Edit(ctx, client, EditInput{ID: 1, Name: &name})
+			return err
+		}},
+		{name: "delete", call: func() error {
+			return Delete(ctx, client, IDInput{ID: 1})
+		}},
+		{name: "repair", call: func() error {
+			_, err := Repair(ctx, client, IDInput{ID: 1})
+			return err
+		}},
+		{name: "list_status", call: func() error {
+			_, err := ListStatus(ctx, client, ListStatusInput{})
+			return err
+		}},
+		{name: "get_status", call: func() error {
+			_, err := GetStatus(ctx, client, IDInput{ID: 1})
+			return err
+		}},
 	}
-}
-
-// TestList_CancelledContext verifies the List_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := List(ctx, client, ListInput{})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Context cancellation — Get, Edit, Delete, Repair, ListStatus, GetStatus
-// ---------------------------------------------------------------------------
-
-// TestGet_CancelledContext verifies the Get_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := Get(ctx, client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// TestEdit_CancelledContext verifies the Edit_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestEdit_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := Edit(ctx, client, EditInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	err := Delete(ctx, client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// TestRepair_CancelledContext verifies the Repair_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestRepair_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := Repair(ctx, client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// TestListStatus_CancelledContext verifies the ListStatus_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestListStatus_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := ListStatus(ctx, client, ListStatusInput{})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
-	}
-}
-
-// TestGetStatus_CancelledContext verifies the GetStatus_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestGetStatus_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := GetStatus(ctx, client, IDInput{ID: 1})
-	if err == nil {
-		t.Fatal("expected error for cancelled context")
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			if err := handler.call(); !errors.Is(err, context.Canceled) {
+				t.Errorf("error = %v, want the cancellation", err)
+			}
+		})
 	}
 }
 
@@ -660,12 +525,16 @@ func TestGetStatus_CancelledContext(t *testing.T) {
 // Pagination — List and ListStatus with pagination headers
 // ---------------------------------------------------------------------------
 
-// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// TestList_WithPagination verifies that List forwards the offset page the
+// caller asked for to the GitLab API and parses the response metadata.
 // The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// It asserts the page and per_page reach the query, and the response headers
+// are propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
+	var query url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
+			query = r.URL.Query()
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+geoSiteJSON+`]`, testutil.PaginationHeaders{
 				Page:       "1",
 				PerPage:    "20",
@@ -678,9 +547,15 @@ func TestList_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{})
+	out, err := List(context.Background(), client, ListInput{Page: 3, PerPage: 25})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
+	}
+	if got := query.Get("page"); got != "3" {
+		t.Errorf("page = %q, want 3", got)
+	}
+	if got := query.Get("per_page"); got != "25" {
+		t.Errorf("per_page = %q, want 25", got)
 	}
 	if len(out.Sites) != 1 {
 		t.Fatalf("expected 1 site, got %d", len(out.Sites))
@@ -699,12 +574,16 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListStatus_WithPagination verifies that ListStatus_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// TestListStatus_WithPagination verifies that ListStatus forwards the offset
+// page the caller asked for to the GitLab API and parses the response metadata.
 // The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// It asserts the page and per_page reach the query, and the response headers
+// are propagated to the [toolutil.PaginationOutput].
 func TestListStatus_WithPagination(t *testing.T) {
+	var query url.Values
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
+			query = r.URL.Query()
 			testutil.RespondJSONWithPagination(w, http.StatusOK, `[`+geoSiteStatusJSON+`]`, testutil.PaginationHeaders{
 				Page:       "2",
 				PerPage:    "10",
@@ -717,9 +596,15 @@ func TestListStatus_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListStatus(context.Background(), client, ListStatusInput{})
+	out, err := ListStatus(context.Background(), client, ListStatusInput{Page: 2, PerPage: 10})
 	if err != nil {
 		t.Fatalf("ListStatus() error: %v", err)
+	}
+	if got := query.Get("page"); got != "2" {
+		t.Errorf("page = %q, want 2", got)
+	}
+	if got := query.Get("per_page"); got != "10" {
+		t.Errorf("per_page = %q, want 10", got)
 	}
 	if len(out.Statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(out.Statuses))
@@ -760,7 +645,9 @@ const geoStatusHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 // TestFormatOutputMarkdown_AllFields verifies the whole card a fully populated
 // Geo site renders, the selective-sync scope and the replication details link
 // included: the type alone used to say that the site syncs a subset and never
-// which subset, and the replication page was never linked at all.
+// which subset, and the replication page was never linked at all. Both scope
+// rows are filled although a site carries one or the other, so a dropped row
+// shows.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:                                      1,
@@ -776,6 +663,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		ContainerRepositoriesMaxCapacity:        10,
 		SyncObjectStorage:                       false,
 		SelectiveSyncType:                       "namespaces",
+		SelectiveSyncShards:                     []string{"default", "nvme"},
 		SelectiveSyncNamespaceIDs:               []int64{7, 9},
 		WebEditURL:                              "https://primary.example.com/admin/geo/sites/1/edit",
 		WebGeoReplicationDetailsURL:             "https://primary.example.com/admin/geo/replication",
@@ -800,6 +688,7 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"- **Checksum Mismatch Self-Heal Cooldown**: 60 min\n"+
 		"- **Sync Object Storage**: ❌\n"+
 		"- **Selective Sync Type**: namespaces\n"+
+		"- **Selective Sync Shards**: default, nvme\n"+
 		"- **Selective Sync Namespace IDs**: 7, 9\n"+
 		"- **Web Edit URL**: [https://primary.example.com/admin/geo/sites/1/edit](https://primary.example.com/admin/geo/sites/1/edit)\n"+
 		"- **Replication Details**: [https://primary.example.com/admin/geo/replication](https://primary.example.com/admin/geo/replication)\n"+
@@ -1243,11 +1132,13 @@ func TestGet_PublishesTheSiteFieldsTheSDKDrops(t *testing.T) {
 }
 
 // TestList_PublishesTheSiteFieldsTheSDKDrops verifies the list handler pairs
-// each site with its own captured extras rather than dropping them.
+// each site with its own captured extras rather than dropping them, or
+// handing every site the first one's: two sites with different timeouts, so
+// the pairing is observable.
 func TestList_PublishesTheSiteFieldsTheSDKDrops(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
-			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteJSON+`]`)
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteJSON+`,`+distinctGeoSiteJSON+`]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1257,11 +1148,14 @@ func TestList_PublishesTheSiteFieldsTheSDKDrops(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
 	}
-	if len(out.Sites) != 1 {
-		t.Fatalf("expected 1 site, got %d", len(out.Sites))
+	if len(out.Sites) != 2 {
+		t.Fatalf("expected 2 sites, got %d", len(out.Sites))
 	}
-	if out.Sites[0].BlobDownloadTimeout != 28800 {
-		t.Errorf("BlobDownloadTimeout = %d, want 28800", out.Sites[0].BlobDownloadTimeout)
+	if out.Sites[0].ID != 1 || out.Sites[0].BlobDownloadTimeout != 28800 {
+		t.Errorf("Sites[0] = id %d, BlobDownloadTimeout %d; want 1 and 28800", out.Sites[0].ID, out.Sites[0].BlobDownloadTimeout)
+	}
+	if out.Sites[1].ID != 11 || out.Sites[1].BlobDownloadTimeout != 26 {
+		t.Errorf("Sites[1] = id %d, BlobDownloadTimeout %d; want 11 and 26", out.Sites[1].ID, out.Sites[1].BlobDownloadTimeout)
 	}
 }
 
@@ -1326,11 +1220,14 @@ func TestGetStatus_PublishesTheReplicableMatrix(t *testing.T) {
 }
 
 // TestListStatus_PublishesTheReplicableMatrix verifies the status list handler
-// decomposes each element rather than only the first.
+// decomposes each element and pairs it with its own matrix rather than the
+// first one's: two statuses with different LFS counts, so the pairing is
+// observable.
 func TestListStatus_PublishesTheReplicableMatrix(t *testing.T) {
+	second := strings.NewReplacer(`"geo_node_id": 1`, `"geo_node_id": 2`, `"lfs_objects_count": 120`, `"lfs_objects_count": 240`).Replace(geoSiteStatusJSON)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
-			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteStatusJSON+`]`)
+			testutil.RespondJSON(w, http.StatusOK, `[`+geoSiteStatusJSON+`,`+second+`]`)
 			return
 		}
 		http.NotFound(w, r)
@@ -1340,11 +1237,14 @@ func TestListStatus_PublishesTheReplicableMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListStatus() error: %v", err)
 	}
-	if len(out.Statuses) != 1 {
-		t.Fatalf("expected 1 status, got %d", len(out.Statuses))
+	if len(out.Statuses) != 2 {
+		t.Fatalf("expected 2 statuses, got %d", len(out.Statuses))
 	}
-	if out.Statuses[0].Replicables["lfs_objects"].Count != 120 {
-		t.Errorf("Replicables = %+v, want the matrix of the one status", out.Statuses[0].Replicables)
+	if out.Statuses[0].GeoNodeID != 1 || out.Statuses[0].Replicables["lfs_objects"].Count != 120 {
+		t.Errorf("Statuses[0] = node %d, lfs_objects %+v; want node 1 with 120", out.Statuses[0].GeoNodeID, out.Statuses[0].Replicables["lfs_objects"])
+	}
+	if out.Statuses[1].GeoNodeID != 2 || out.Statuses[1].Replicables["lfs_objects"].Count != 240 {
+		t.Errorf("Statuses[1] = node %d, lfs_objects %+v; want node 2 with 240", out.Statuses[1].GeoNodeID, out.Statuses[1].Replicables["lfs_objects"])
 	}
 }
 
@@ -1392,6 +1292,416 @@ func TestGeo_UnreadableCapturedFields(t *testing.T) {
 			return err
 		}},
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Every field under its own name: the converters and the request bodies
+// ---------------------------------------------------------------------------
+//
+// Both gates score branches, and a converter that copies a field from its
+// neighbor, or a request that drops one of the caller's values, has no branch
+// to flip. Only an assertion naming each field against a fixture in which no
+// two values agree can catch that, and geoSiteJSON cannot serve: it sends 10
+// as both files_max_capacity and container_repositories_max_capacity, 1 as the
+// id, and true for three of the four flags.
+
+// distinctGeoSiteJSON is a site in which no two values agree, the four flags
+// aside, which the tests below drive one at a time.
+const distinctGeoSiteJSON = `{
+	"id": 11,
+	"name": "distinct-site",
+	"url": "https://distinct.example.com",
+	"internal_url": "https://distinct.internal",
+	"primary": false,
+	"enabled": false,
+	"current": false,
+	"files_max_capacity": 21,
+	"repos_max_capacity": 22,
+	"verification_max_capacity": 23,
+	"container_repositories_max_capacity": 24,
+	"sync_object_storage": false,
+	"selective_sync_type": "shards",
+	"selective_sync_shards": ["shard-a", "shard-b"],
+	"selective_sync_namespace_ids": [31, 32],
+	"selective_sync_organization_ids": [41, 42],
+	"minimum_reverification_interval": 25,
+	"blob_download_timeout": 26,
+	"checksum_mismatch_report_threshold": 27,
+	"checksum_mismatch_self_heal_cooldown_minutes": 28,
+	"web_edit_url": "https://distinct.example.com/admin/geo/sites/11/edit",
+	"web_geo_replication_details_url": "https://distinct.example.com/admin/geo/replication",
+	"_links": {
+		"self": "https://distinct.example.com/api/v4/geo_sites/11",
+		"status": "https://distinct.example.com/api/v4/geo_sites/11/status",
+		"repair": "https://distinct.example.com/api/v4/geo_sites/11/repair"
+	}
+}`
+
+// distinctGeoSite is the Output distinctGeoSiteJSON has to arrive as, every
+// flag off.
+func distinctGeoSite() Output {
+	return Output{
+		ID:                                      11,
+		Name:                                    "distinct-site",
+		URL:                                     "https://distinct.example.com",
+		InternalURL:                             "https://distinct.internal",
+		FilesMaxCapacity:                        21,
+		ReposMaxCapacity:                        22,
+		VerificationMaxCapacity:                 23,
+		ContainerRepositoriesMaxCapacity:        24,
+		SelectiveSyncType:                       "shards",
+		SelectiveSyncShards:                     []string{"shard-a", "shard-b"},
+		SelectiveSyncNamespaceIDs:               []int64{31, 32},
+		SelectiveSyncOrganizationIDs:            []int64{41, 42},
+		MinimumReverificationInterval:           25,
+		BlobDownloadTimeout:                     26,
+		ChecksumMismatchReportThreshold:         27,
+		ChecksumMismatchSelfHealCooldownMinutes: 28,
+		WebEditURL:                              "https://distinct.example.com/admin/geo/sites/11/edit",
+		WebGeoReplicationDetailsURL:             "https://distinct.example.com/admin/geo/replication",
+		Links: Links{
+			Self:   "https://distinct.example.com/api/v4/geo_sites/11",
+			Status: "https://distinct.example.com/api/v4/geo_sites/11/status",
+			Repair: "https://distinct.example.com/api/v4/geo_sites/11/repair",
+		},
+	}
+}
+
+// TestGet_EveryFieldArrivesUnderItsOwnName pins which source field each
+// published site field is read from, the three links included, which the
+// mirror test above only holds to being non-empty. The four flags are driven
+// one at a time: four bools take two values, so setting them together always
+// leaves a pair agreeing, and a swap of that pair would pass.
+func TestGet_EveryFieldArrivesUnderItsOwnName(t *testing.T) {
+	cases := []struct {
+		name string
+		flag string
+		want func(*Output)
+	}{
+		{name: "no flag set", want: func(*Output) {}},
+		{name: "primary", flag: "primary", want: func(o *Output) { o.Primary = true }},
+		{name: "enabled", flag: "enabled", want: func(o *Output) { o.Enabled = true }},
+		{name: "current", flag: "current", want: func(o *Output) { o.Current = true }},
+		{name: "sync_object_storage", flag: "sync_object_storage", want: func(o *Output) { o.SyncObjectStorage = true }},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := distinctGeoSiteJSON
+			if testCase.flag != "" {
+				body = strings.Replace(body, `"`+testCase.flag+`": false`, `"`+testCase.flag+`": true`, 1)
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/11" {
+					testutil.RespondJSON(w, http.StatusOK, body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			got, err := Get(context.Background(), client, IDInput{ID: 11})
+			if err != nil {
+				t.Fatalf("Get() error: %v", err)
+			}
+			want := distinctGeoSite()
+			testCase.want(&want)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("Get() = %+v\nwant %+v", got, want)
+			}
+		})
+	}
+}
+
+// statusFieldName is the json name a field of StatusOutput publishes under,
+// or "" for the embed and for a field that publishes none.
+func statusFieldName(field reflect.StructField) string {
+	if field.Anonymous {
+		return ""
+	}
+	name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+	if name == "-" {
+		return ""
+	}
+	return name
+}
+
+// distinctStatusAnswer builds a status answer in which no two values agree,
+// keyed by the names StatusOutput publishes: every count its own number, every
+// text its own string, every flag false, and the two maps derived from the
+// rest left out. Built off the struct rather than written down, because two
+// hundred keys spelled by hand would be checked by nobody.
+func distinctStatusAnswer(t *testing.T) map[string]any {
+	t.Helper()
+	answer := map[string]any{}
+	n := int64(0)
+	for field := range reflect.TypeFor[StatusOutput]().Fields() {
+		name := statusFieldName(field)
+		if name == "" {
+			continue
+		}
+		n++
+		switch field.Type {
+		case reflect.TypeFor[int64]():
+			answer[name] = 1000 + n
+		case reflect.TypeFor[string]():
+			answer[name] = fmt.Sprintf("%s %d", name, n)
+		case reflect.TypeFor[bool]():
+			answer[name] = false
+		case reflect.TypeFor[time.Time]():
+			answer[name] = "2026-01-15T10:30:00Z"
+		case reflect.TypeFor[[]string]():
+			answer[name] = []string{fmt.Sprintf("%s-%d-a", name, n), fmt.Sprintf("%s-%d-b", name, n)}
+		case reflect.TypeFor[StatusLinks]():
+			answer[name] = StatusLinks{Self: "https://distinct.example.com/status", Site: "https://distinct.example.com/site"}
+		case reflect.TypeFor[[]StorageShard]():
+			answer[name] = []StorageShard{{Name: "shard-a"}, {Name: "shard-b"}}
+		case reflect.TypeFor[map[string]ReplicableStatus](), reflect.TypeFor[map[string]any]():
+			// Folded from the keys above by the handler, never sent.
+		default:
+			t.Fatalf("no distinct value for %s of type %s", name, field.Type)
+		}
+	}
+	return answer
+}
+
+// statusFlagNames is the json name of every flag StatusOutput publishes.
+func statusFlagNames() []string {
+	var names []string
+	for field := range reflect.TypeFor[StatusOutput]().Fields() {
+		if name := statusFieldName(field); name != "" && field.Type == reflect.TypeFor[bool]() {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// assertStatusFields holds every published field of got to want by name, the
+// two derived from the rest apart: the matrix has to hold the fifteen
+// resources the type spells out, under the counts they were folded from, and
+// nothing may be left over from an answer whose every key the type publishes.
+func assertStatusFields(t *testing.T, got, want StatusOutput) {
+	t.Helper()
+	gotValue, wantValue := reflect.ValueOf(got), reflect.ValueOf(want)
+	for field := range reflect.TypeFor[StatusOutput]().Fields() {
+		name := statusFieldName(field)
+		if name == "" || name == "replicables" || name == "additional_fields" {
+			continue
+		}
+		g, w := gotValue.FieldByIndex(field.Index).Interface(), wantValue.FieldByIndex(field.Index).Interface()
+		if instant, ok := g.(time.Time); ok {
+			if !instant.Equal(w.(time.Time)) {
+				t.Errorf("%s = %v, want %v", name, instant, w)
+			}
+			continue
+		}
+		if !reflect.DeepEqual(g, w) {
+			t.Errorf("%s = %v, want %v", name, g, w)
+		}
+	}
+	if len(got.Replicables) != 15 {
+		t.Errorf("Replicables has %d entries, want the fifteen resources StatusOutput spells out", len(got.Replicables))
+	}
+	if lfs := got.Replicables["lfs_objects"]; lfs.Count != want.LFSObjectsCount || lfs.VerifiedInPercentage != want.LFSObjectsVerifiedInPercentage {
+		t.Errorf("Replicables[lfs_objects] = %+v, want count %d and verified %q", lfs, want.LFSObjectsCount, want.LFSObjectsVerifiedInPercentage)
+	}
+	if wiki := got.Replicables["project_wiki_repositories"]; wiki.VerificationFailedCount != want.ProjectWikiRepositoriesVerificationFailedCount {
+		t.Errorf("Replicables[project_wiki_repositories] = %+v, want verification failed %d", wiki, want.ProjectWikiRepositoriesVerificationFailedCount)
+	}
+	if len(got.AdditionalFields) != 0 {
+		t.Errorf("AdditionalFields = %+v, want nothing: every key sent is one the type publishes", got.AdditionalFields)
+	}
+}
+
+// TestGetStatus_EveryFieldArrivesUnderItsOwnName pins which source field each
+// of the two hundred published status fields is read from, against an answer
+// in which no two values agree: with geoSiteStatusJSON a count copied from its
+// neighbor is invisible, since most of them are absent there and read as the
+// same zero. What each field should hold is the same answer decoded through
+// StatusOutput's own tags, so the check is the handler's path against the
+// type's declaration, and a name client-go spells differently from this type
+// is reported as the zero it decodes to. The four flags are driven one at a
+// time, since two flags carrying one value cannot tell a swap apart.
+func TestGetStatus_EveryFieldArrivesUnderItsOwnName(t *testing.T) {
+	flags := []string{""}
+	flags = append(flags, statusFlagNames()...)
+	for _, flag := range flags {
+		name := flag
+		if name == "" {
+			name = "no flag set"
+		}
+		t.Run(name, func(t *testing.T) {
+			answer := distinctStatusAnswer(t)
+			if flag != "" {
+				answer[flag] = true
+			}
+			body, err := json.Marshal(answer)
+			if err != nil {
+				t.Fatalf("marshal the answer: %v", err)
+			}
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1/status" {
+					testutil.RespondJSON(w, http.StatusOK, string(body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			got, err := GetStatus(context.Background(), client, IDInput{ID: 1})
+			if err != nil {
+				t.Fatalf("GetStatus() error: %v", err)
+			}
+			var want StatusOutput
+			if err = json.Unmarshal(body, &want); err != nil {
+				t.Fatalf("decode the answer through StatusOutput: %v", err)
+			}
+			assertStatusFields(t, got, want)
+		})
+	}
+}
+
+// decodeGeoRequest reads the JSON body a site write sent GitLab into the
+// option struct client-go encoded it from. Every option is a pointer with
+// omitempty, so a nil pointer after the decode is the assertion that the
+// handler declined to send that key.
+func decodeGeoRequest(t *testing.T, body []byte, into any) {
+	t.Helper()
+	if err := json.Unmarshal(body, into); err != nil {
+		t.Fatalf("request body is not JSON: %v (body=%q)", err, body)
+	}
+}
+
+// TestCreate_EveryFieldReachesTheRequestUnderItsOwnName verifies the create
+// handler forwards each input to the option GitLab reads it from, with the
+// caller's own value, and sends no key the caller left unset: the success test
+// discards the body, so a value copied from its neighbor or dropped never
+// reached an assertion. The three flags are driven one at a time.
+func TestCreate_EveryFieldReachesTheRequestUnderItsOwnName(t *testing.T) {
+	cases := []struct {
+		name string
+		in   CreateInput
+		want gl.CreateGeoSitesOptions
+	}{
+		{
+			name: "every value supplied",
+			in: CreateInput{
+				Name:                             new("distinct-site"),
+				URL:                              new("https://distinct.example.com"),
+				InternalURL:                      new("https://distinct.internal"),
+				FilesMaxCapacity:                 new(int64(21)),
+				ReposMaxCapacity:                 new(int64(22)),
+				VerificationMaxCapacity:          new(int64(23)),
+				ContainerRepositoriesMaxCapacity: new(int64(24)),
+				SelectiveSyncType:                new("shards"),
+				SelectiveSyncShards:              new([]string{"shard-a", "shard-b"}),
+				SelectiveSyncNamespaceIDs:        new([]int64{31, 32}),
+				MinimumReverificationInterval:    new(int64(25)),
+			},
+			want: gl.CreateGeoSitesOptions{
+				Name:                             new("distinct-site"),
+				URL:                              new("https://distinct.example.com"),
+				InternalURL:                      new("https://distinct.internal"),
+				FilesMaxCapacity:                 new(int64(21)),
+				ReposMaxCapacity:                 new(int64(22)),
+				VerificationMaxCapacity:          new(int64(23)),
+				ContainerRepositoriesMaxCapacity: new(int64(24)),
+				SelectiveSyncType:                new("shards"),
+				SelectiveSyncShards:              new([]string{"shard-a", "shard-b"}),
+				SelectiveSyncNamespaceIDs:        new([]int64{31, 32}),
+				MinimumReverificationInterval:    new(int64(25)),
+			},
+		},
+		{name: "primary alone", in: CreateInput{Primary: new(true)}, want: gl.CreateGeoSitesOptions{Primary: new(true)}},
+		{name: "enabled alone", in: CreateInput{Enabled: new(true)}, want: gl.CreateGeoSitesOptions{Enabled: new(true)}},
+		{name: "sync_object_storage alone", in: CreateInput{SyncObjectStorage: new(true)}, want: gl.CreateGeoSitesOptions{SyncObjectStorage: new(true)}},
+		{name: "nothing supplied"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var body []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites" {
+					body, _ = io.ReadAll(r.Body)
+					testutil.RespondJSON(w, http.StatusCreated, geoSiteJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			if _, err := Create(context.Background(), client, testCase.in); err != nil {
+				t.Fatalf("Create() error: %v", err)
+			}
+			var sent gl.CreateGeoSitesOptions
+			decodeGeoRequest(t, body, &sent)
+			if !reflect.DeepEqual(sent, testCase.want) {
+				t.Errorf("request = %s, want the caller's values under their own keys and nothing else", body)
+			}
+		})
+	}
+}
+
+// TestEdit_EveryFieldReachesTheRequestUnderItsOwnName is Create's assertion
+// for the PUT. Edit builds its own copy of the mapping, so a field the create
+// side forwards is no evidence about this one.
+func TestEdit_EveryFieldReachesTheRequestUnderItsOwnName(t *testing.T) {
+	cases := []struct {
+		name string
+		in   EditInput
+		want gl.EditGeoSiteOptions
+	}{
+		{
+			name: "every value supplied",
+			in: EditInput{
+				ID:                               11,
+				Name:                             new("distinct-site"),
+				URL:                              new("https://distinct.example.com"),
+				InternalURL:                      new("https://distinct.internal"),
+				FilesMaxCapacity:                 new(int64(21)),
+				ReposMaxCapacity:                 new(int64(22)),
+				VerificationMaxCapacity:          new(int64(23)),
+				ContainerRepositoriesMaxCapacity: new(int64(24)),
+				SelectiveSyncType:                new("namespaces"),
+				SelectiveSyncShards:              new([]string{"shard-a", "shard-b"}),
+				SelectiveSyncNamespaceIDs:        new([]int64{31, 32}),
+				MinimumReverificationInterval:    new(int64(25)),
+			},
+			want: gl.EditGeoSiteOptions{
+				Name:                             new("distinct-site"),
+				URL:                              new("https://distinct.example.com"),
+				InternalURL:                      new("https://distinct.internal"),
+				FilesMaxCapacity:                 new(int64(21)),
+				ReposMaxCapacity:                 new(int64(22)),
+				VerificationMaxCapacity:          new(int64(23)),
+				ContainerRepositoriesMaxCapacity: new(int64(24)),
+				SelectiveSyncType:                new("namespaces"),
+				SelectiveSyncShards:              new([]string{"shard-a", "shard-b"}),
+				SelectiveSyncNamespaceIDs:        new([]int64{31, 32}),
+				MinimumReverificationInterval:    new(int64(25)),
+			},
+		},
+		{name: "enabled alone", in: EditInput{ID: 11, Enabled: new(true)}, want: gl.EditGeoSiteOptions{Enabled: new(true)}},
+		{name: "nothing supplied", in: EditInput{ID: 11}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var body []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPut && r.URL.Path == "/api/v4/geo_sites/11" {
+					body, _ = io.ReadAll(r.Body)
+					testutil.RespondJSON(w, http.StatusOK, distinctGeoSiteJSON)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			if _, err := Edit(context.Background(), client, testCase.in); err != nil {
+				t.Fatalf("Edit() error: %v", err)
+			}
+			var sent gl.EditGeoSiteOptions
+			decodeGeoRequest(t, body, &sent)
+			if !reflect.DeepEqual(sent, testCase.want) {
+				t.Errorf("request = %s, want the caller's values under their own keys and nothing else", body)
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

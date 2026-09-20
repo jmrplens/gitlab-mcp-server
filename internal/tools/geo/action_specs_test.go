@@ -4,6 +4,7 @@ package geo
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -12,9 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallAllRoutes drives every Geo route through the catalog
+// surface with the arguments a model would send, against a mock answering
+// each of the eight endpoints. It asserts each route decodes its arguments
+// and returns a result rather than an error.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/geo_sites", func(w http.ResponseWriter, _ *http.Request) {
@@ -70,13 +72,14 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
-// The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestActionSpecs_DeleteError validates the delete route through the catalog
+// surface when GitLab refuses the DELETE with 403. It asserts the error the
+// route returns carries GitLab's own message and the hint written for that
+// status, since a model reads both to decide what to do next.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	byTool := geoSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
-			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"primary node cannot be removed"}`)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -86,11 +89,18 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from delete with failing backend")
 	}
+	for _, fragment := range []string{"primary node cannot be removed", "cannot delete the primary site while secondaries exist"} {
+		t.Run(fragment, func(t *testing.T) {
+			if !strings.Contains(err.Error(), fragment) {
+				t.Errorf("error = %v, want it to carry %q", err, fragment)
+			}
+		})
+	}
 }
 
-// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
-// The mock GitLab API at /api/v4/geo_sites/1 (DELETE) returns a representative success body.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_DeleteOutput validates the delete route through the catalog surface.
+// The mock GitLab API at /api/v4/geo_sites/1 (DELETE) answers 204 with no body.
+// It asserts the route answers a typed DeleteOutput naming the site removed.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/geo_sites/1" || r.Method != http.MethodDelete {
@@ -114,9 +124,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalogSurface_DeleteConfirmDeclined verifies a destructive Geo delete
+// asks the client for confirmation and, declined, answers with an error
+// result and sends GitLab nothing: the mock forbids every request.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := geoSpecsByTool(t, ActionSpecs(client))
@@ -156,6 +166,9 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result when confirmation is declined")
+	}
+	if !result.IsError {
+		t.Errorf("declined confirmation answered a success result: %+v", result)
 	}
 }
 
