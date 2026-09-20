@@ -8866,9 +8866,9 @@ func TestProjectCreate_MergeRequestTitleRegexDescription_IsSent(t *testing.T) {
 func TestProjectGet_Options_ReachTheQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, pathProject42)
-		for _, param := range []string{"statistics", "license", "with_custom_attributes"} {
-			testutil.AssertQueryParam(t, r, param, "true")
-		}
+		testutil.AssertQueryParam(t, r, "statistics", "true")
+		testutil.AssertQueryParam(t, r, "license", "true")
+		testutil.AssertQueryParam(t, r, "with_custom_attributes", "true")
 		testutil.RespondJSON(w, http.StatusOK, `{"id":42}`)
 	}))
 	_, err := Get(t.Context(), client, GetInput{ProjectID: "42", Statistics: new(true), License: new(true), WithCustomAttributes: new(true)})
@@ -9449,15 +9449,17 @@ func TestActionSpecs_PushRuleGuidance_NamesTheRegexOnAddAndEditOnly(t *testing.T
 		"gitlab_project_get_push_rules":   false,
 		"gitlab_project_delete_push_rule": false,
 	} {
-		spec, ok := byTool[tool]
-		if !ok {
-			t.Fatalf("%s is not a project action", tool)
-		}
-		_, regex := spec.ParameterGuidance["commit_message_regex"]
-		_, unsigned := spec.ParameterGuidance["reject_unsigned_commits"]
-		if regex != want || unsigned != want {
-			t.Errorf("%s: guidance for commit_message_regex=%v, reject_unsigned_commits=%v, want %v", tool, regex, unsigned, want)
-		}
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("%s is not a project action", tool)
+			}
+			_, regex := spec.ParameterGuidance["commit_message_regex"]
+			_, unsigned := spec.ParameterGuidance["reject_unsigned_commits"]
+			if regex != want || unsigned != want {
+				t.Errorf("%s: guidance for commit_message_regex=%v, reject_unsigned_commits=%v, want %v", tool, regex, unsigned, want)
+			}
+		})
 	}
 }
 
