@@ -261,27 +261,27 @@ Beyond running the server in pipelines, GitLab MCP Server provides comprehensive
 
 ### Pipelines
 
-The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipeline.<action>` IDs for `gitlab_execute_action` on the default dynamic surface (the schedule actions carry `pipeline_schedule.` instead, as noted below) and the `action` values of the `gitlab_pipeline` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`:
+The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipeline.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_pipeline` meta-tool with `GITLAB_MCP_TOOL_SURFACE=meta`:
 
-| Action                | Description                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list`                | List pipelines with filtering by status, ref                                                                                                                  |
-| `get`                 | Get pipeline details and status                                                                                                                               |
-| `create`              | Trigger a new pipeline with variables                                                                                                                         |
-| `cancel`              | Cancel a running pipeline                                                                                                                                     |
-| `retry`               | Retry a failed pipeline                                                                                                                                       |
-| `delete`              | Delete a pipeline                                                                                                                                             |
-| `variables`           | List pipeline variables                                                                                                                                       |
-| `test_report`         | Get test report for a pipeline                                                                                                                                |
-| `wait`                | **Wait for pipeline completion** with polling                                                                                                                 |
-| `latest`              | Get the latest pipeline for a ref                                                                                                                             |
-| `test_report_summary` | Get the test report summary for a pipeline                                                                                                                    |
-| `update_metadata`     | Update a pipeline's metadata (name)                                                                                                                           |
-| `trigger_*`           | Pipeline trigger token management (list, get, create, update, delete, run)                                                                                    |
-| `schedule_*`          | Pipeline schedule CRUD (list, get, create, update, delete, run, take ownership, list triggered pipelines); `pipeline_schedule.` prefix on the dynamic surface |
-| `schedule_*_variable` | Schedule variable CRUD (create, edit, delete); same prefix on the dynamic surface                                                                             |
+| Action                | Description                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------- |
+| `list`                | List pipelines with filtering by status, ref                                                              |
+| `get`                 | Get pipeline details and status                                                                           |
+| `create`              | Trigger a new pipeline with variables                                                                     |
+| `cancel`              | Cancel a running pipeline                                                                                 |
+| `retry`               | Retry a failed pipeline                                                                                   |
+| `delete`              | Delete a pipeline                                                                                         |
+| `variables`           | List pipeline variables                                                                                   |
+| `test_report`         | Get test report for a pipeline                                                                            |
+| `wait`                | **Wait for pipeline completion** with polling                                                             |
+| `latest`              | Get the latest pipeline for a ref                                                                         |
+| `test_report_summary` | Get the test report summary for a pipeline                                                                |
+| `update_metadata`     | Update a pipeline's metadata (name)                                                                       |
+| `trigger_*`           | Pipeline trigger token management (list, get, create, update, delete, run)                                |
+| `schedule_*`          | Pipeline schedule CRUD (list, get, create, update, delete, run, take ownership, list triggered pipelines) |
+| `schedule_*_variable` | Schedule variable CRUD (create, edit, delete)                                                             |
 
-The schedule rows belong to the `pipeline_schedule` domain, so on the dynamic surface their IDs read `pipeline_schedule.schedule_list`, `pipeline_schedule.schedule_run`, `pipeline_schedule.schedule_take_ownership`, `pipeline_schedule.schedule_list_triggered_pipelines`, `pipeline_schedule.schedule_create_variable`, `pipeline_schedule.schedule_edit_variable` and so on; on the meta surface they are `action` values of `gitlab_pipeline` like the rest of the table.
+The schedule rows belong to the same `gitlab_pipeline` group as every other row, so on the dynamic surface their IDs read `pipeline.schedule_list`, `pipeline.schedule_run`, `pipeline.schedule_take_ownership`, `pipeline.schedule_list_triggered_pipelines`, `pipeline.schedule_create_variable`, `pipeline.schedule_edit_variable` and so on; on the meta surface they are `action` values of `gitlab_pipeline` like the rest of the table.
 
 :::tip[Wait for pipeline]
 The `wait` action polls a pipeline until it reaches a terminal state (success, failed, canceled). This is especially useful in CI scripts that need to block until a triggered pipeline finishes.
