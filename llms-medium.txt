@@ -1105,7 +1105,7 @@ Enabled with `GITLAB_MCP_TOOL_SURFACE=individual`: 1091 tools, one per operation
 - gitlab_mr_delete: Delete a merge request permanently.
 - gitlab_mr_dependencies_list: List a merge request's blocking dependencies.
 - gitlab_mr_dependency_create: Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR.
-- gitlab_mr_dependency_delete: Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project.
+- gitlab_mr_dependency_delete: Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project.
 - gitlab_mr_diff_version_get: Get a single merge request diff version with its commits and file diffs.
 - gitlab_mr_diff_versions_list: List all diff versions (historical snapshots) of a merge request. Returns: an array of diff versions with id, head/base/start SHAs, state, real_size, and create...
 - gitlab_mr_discussion_create: Create a new discussion thread on a merge request, optionally as an inline diff comment.

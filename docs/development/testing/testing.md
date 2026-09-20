@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 17,738 |
-| Unit test functions                                   | 16,540 |
+| Total test functions                                  | 17,747 |
+| Unit test functions                                   | 16,549 |
 | E2E test functions                                    |  1,198 |
 | cmd test functions                                    |  2,917 |
 | Test files (internal/)                                |    649 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,324 | 69.5% |
-| `TestFunc` (no underscore)             |    906 |  5.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,508 | 25.4% |
+| `TestFunc_Scenario` (2-part)           | 12,330 | 69.5% |
+| `TestFunc` (no underscore)             |    907 |  5.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,510 | 25.4% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,189 |        185 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,067 |        448 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |         10,076 |        448 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,198 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,917 |        216 | server entry point and developer command utilities                                              |
-| **Total**               |     **17,738** |  **1,249** |                                                                                                 |
+| **Total**               |     **17,747** |  **1,249** |                                                                                                 |
 
 ### Core Packages
 
@@ -95,7 +95,7 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   456 |   100.0% |    57 |
 | groups            |   301 |   100.0% |    37 |
-| mergerequests     |   288 |   100.0% |    30 |
+| mergerequests     |   289 |   100.0% |    30 |
 | dynamic           |   283 |    99.8% |     2 |
 | issues            |   264 |    99.9% |    21 |
 | users             |   252 |    99.3% |    38 |
@@ -162,7 +162,7 @@
 | dependencyfirewall      |         21 |          3 |   100.0% |         1 |
 | dependencyproxy         |          4 |          1 |   100.0% |         1 |
 | deploykeys              |         79 |          3 |    98.2% |         9 |
-| deploymentmergerequests |         36 |          3 |    99.1% |         1 |
+| deploymentmergerequests |         37 |          3 |    99.1% |         1 |
 | deployments             |         84 |          4 |    99.1% |         6 |
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
@@ -174,7 +174,7 @@
 | environments            |         74 |          2 |    99.7% |         6 |
 | epicdiscussions         |         29 |          2 |   100.0% |         6 |
 | epicissues              |         22 |          2 |   100.0% |         4 |
-| epicnotes               |         17 |          2 |   100.0% |         5 |
+| epicnotes               |         21 |          2 |   100.0% |         5 |
 | epics                   |         81 |          3 |   100.0% |         6 |
 | epicworkitems           |          5 |          1 |   100.0% |         0 |
 | errortracking           |         23 |          2 |   100.0% |         5 |
@@ -190,7 +190,7 @@
 | groupanalytics          |         10 |          2 |   100.0% |         3 |
 | groupboards             |         70 |          2 |    99.4% |        10 |
 | groupcredentials        |         45 |          3 |   100.0% |         4 |
-| groupepicboards         |         18 |          3 |    98.4% |         2 |
+| groupepicboards         |         19 |          3 |    98.4% |         2 |
 | groupimportexport       |         28 |          4 |   100.0% |         3 |
 | groupiterations         |         23 |          1 |   100.0% |         1 |
 | grouplabels             |         62 |          3 |   100.0% |         7 |
@@ -230,9 +230,9 @@
 | license                 |         16 |          1 |   100.0% |         3 |
 | licensetemplates        |         28 |          2 |   100.0% |         2 |
 | markdown                |         10 |          1 |   100.0% |         1 |
-| memberroles             |         53 |          4 |   100.0% |         6 |
+| memberroles             |         55 |          4 |   100.0% |         6 |
 | members                 |         71 |          3 |   100.0% |         6 |
-| mergerequests           |        288 |          5 |   100.0% |        30 |
+| mergerequests           |        289 |          5 |   100.0% |        30 |
 | mergetrains             |         18 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |         78 |          2 |   100.0% |         7 |
@@ -305,7 +305,7 @@
 | wikis                   |         71 |          2 |    99.5% |         6 |
 | workitems               |        128 |          5 |    99.5% |         6 |
 | workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,067** |    **448** |          | **1,187** |
+| **Total**               | **10,076** |    **448** |          | **1,187** |
 
 </details>
 

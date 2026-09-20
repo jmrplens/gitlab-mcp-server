@@ -126324,13 +126324,6 @@
           "description": "New location",
           "type": "string"
         },
-        "locked": {
-          "description": "Lock or unlock the user account",
-          "type": [
-            "null",
-            "boolean"
-          ]
-        },
         "name": {
           "description": "New display name",
           "type": "string"
@@ -134015,12 +134008,12 @@
   },
   {
     "name": "gitlab_mr_dependency_delete",
-    "description": "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
+    "description": "Remove a blocking dependency from a merge request. Returns: a success confirmation naming the dependency, the MR, and the project. See also: gitlab_mr_dependency_create, gitlab_mr_dependencies_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "blocking_merge_request_id": {
-          "description": "ID of the blocking merge request to remove",
+          "description": "ID of the dependency to remove: the id of a dependencies_list entry, not the blocking merge request's own id",
           "type": "integer"
         },
         "confirm": {
@@ -151616,7 +151609,10 @@
         },
         "milestone_id": {
           "description": "Milestone ID (0 to unset)",
-          "type": "integer"
+          "type": [
+            "null",
+            "integer"
+          ]
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
