@@ -76,7 +76,14 @@ func TestCollectorHTTPSpan_CarriesNoClientControlledValue(t *testing.T) {
 	)
 
 	c := startCollector(t)
-	srv := startServer(t, collectorEnv(c))
+	// The log batch too, at the pace of the spans and the metrics: the host
+	// guard's refusal is a log record, and with the default one-second delay
+	// this assertion ran before the batch left on every run but one, which
+	// is how a Host header reached a collector from 3.0.0 on while the test
+	// that says it cannot stayed green.
+	env := collectorEnv(c)
+	env["OTEL_BLRP_SCHEDULE_DELAY"] = "100"
+	srv := startServer(t, env)
 
 	srv.do(t, request{
 		method: http.MethodGet,

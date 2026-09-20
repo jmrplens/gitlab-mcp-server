@@ -804,6 +804,50 @@ func TestSlogHandler_TheTokenSuffixIsNotExported(t *testing.T) {
 	}
 }
 
+// TestSlogHandler_TheRefusedHostIsNotExported closes the third instance of
+// that shape.
+//
+// The host guard logs the Host header of a request it refuses, because a proxy
+// that forwards the wrong host is diagnosed by reading what arrived. On a
+// published endpoint that value is chosen by whoever is probing, and the
+// guide's line covers it: "any header a client sent" never leaves the process.
+// It did, for as long as the guard had logged it, and the end-to-end test
+// meant to catch it won its race against the one-second log batch on every
+// run but one.
+func TestSlogHandler_TheRefusedHostIsNotExported(t *testing.T) {
+	const spoofed = "attacker-chosen-host.example"
+	tests := []struct {
+		name  string
+		write func(*slog.Logger)
+	}{
+		{
+			name: "flat",
+			write: func(logger *slog.Logger) {
+				logger.Warn("request blocked: invalid Host header", slog.String(LogFieldRequestHost, spoofed), slog.Int("host_len", len(spoofed)))
+			},
+		},
+		{
+			name: "inside a group",
+			write: func(logger *slog.Logger) {
+				logger.Warn("request blocked", slog.Group("request", slog.String(LogFieldRequestHost, spoofed)))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exported, terminal := bothLegs(t, newRedactor(t, IdentityNone), tt.write)
+
+			if strings.Contains(exported, spoofed) {
+				t.Errorf("a Host header the caller chose reached the collector: %s", exported)
+			}
+			if !strings.Contains(terminal, spoofed) {
+				t.Errorf("stderr lost the host, which is what an operator reads to fix a proxy: %s", terminal)
+			}
+		})
+	}
+}
+
 // TestSlogHandler_AnOversizedAttributeIsBoundedOnTheExportedLeg keeps a single
 // record from being sized by whoever supplied its content.
 //
@@ -816,8 +860,10 @@ func TestSlogHandler_AnOversizedAttributeIsBoundedOnTheExportedLeg(t *testing.T)
 	const marker = "TAILMARKERZZ"
 	huge := strings.Repeat("Q", 64*1024) + marker
 
+	// Under a key the exported leg keeps: "host" is stripped outright now,
+	// which would pass this test without truncating anything.
 	exported, terminal := bothLegs(t, nil, func(logger *slog.Logger) {
-		logger.Info("request rejected", "host", huge)
+		logger.Info("request rejected", "tool", huge)
 	})
 
 	if len(exported) > 4*maxExportedAttrValue {

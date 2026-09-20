@@ -166,8 +166,15 @@ func redactRecord(record slog.Record, identity *Redactor) slog.Record {
 //
 // The call sites keep writing it: stderr is the operator's own terminal, and
 // the suffix is what they correlate a refusal by.
+//
+// The refused Host header is the third instance, and the one that showed the
+// list was the right shape: the value is whatever a caller put on the wire,
+// which the guide says never leaves the process, and it went to the collector
+// for as long as the host guard had logged it, caught only by a test that
+// won its race against the log batch on every run but one.
 var exportStrippedFields = map[string]bool{
 	LogFieldTokenSuffix: true,
+	LogFieldRequestHost: true,
 }
 
 // exportAttrs returns what the exported copy of an attribute set may carry.
