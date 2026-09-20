@@ -5,11 +5,38 @@ import (
 	"testing"
 )
 
-// TestDeclarationKey_IsThePackageAndTheName is the one spelling both the
-// report and the table use, so a mismatch here silently excuses nothing.
-func TestDeclarationKey_IsThePackageAndTheName(t *testing.T) {
-	if got := declarationKey("internal/tools/dynamic", "aliasSourceCatalog"); got != "internal/tools/dynamic:aliasSourceCatalog" {
-		t.Fatalf("declarationKey = %q, want internal/tools/dynamic:aliasSourceCatalog", got)
+// TestDeclarationKey_IsThePackageTheFunctionAndTheName is the one spelling
+// both the report and the table use, so a mismatch here silently excuses
+// nothing. A local constant carries its function, so an entry for the
+// package-level one of the same name cannot excuse it.
+func TestDeclarationKey_IsThePackageTheFunctionAndTheName(t *testing.T) {
+	cases := []struct {
+		name     string
+		constant Constant
+		want     string
+	}{
+		{
+			name:     "package level",
+			constant: Constant{Package: "internal/tools/dynamic", Name: "aliasSourceCatalog"},
+			want:     "internal/tools/dynamic:aliasSourceCatalog",
+		},
+		{
+			name:     "inside a function",
+			constant: Constant{Package: "internal/tools/dynamic", Func: "search", Name: "limit"},
+			want:     "internal/tools/dynamic:search.limit",
+		},
+		{
+			name:     "inside a method",
+			constant: Constant{Package: "internal/tools/dynamic", Func: "Registry.Find", Name: "limit"},
+			want:     "internal/tools/dynamic:Registry.Find.limit",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := declarationKey(tc.constant); got != tc.want {
+				t.Fatalf("declarationKey = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

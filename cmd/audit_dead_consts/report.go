@@ -37,7 +37,7 @@ func buildReport(found []Constant, declaredCount int, scanned map[string]struct{
 	report := Report{Summary: Summary{Packages: len(scanned), Declared: declaredCount}}
 	excused := map[string]struct{}{}
 	for _, constant := range found {
-		key := declarationKey(constant.Package, constant.Name)
+		key := declarationKey(constant)
 		if _, allowed := unreadOnPurpose[key]; allowed {
 			excused[key] = struct{}{}
 			continue

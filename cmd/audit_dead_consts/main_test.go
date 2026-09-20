@@ -123,10 +123,10 @@ func TestReadOtherPlatforms_NoConstrainedPackage_LoadsNothingAgain(t *testing.T)
 	found := newScanner(repoRoot(t))
 	var out strings.Builder
 	err := readOtherPlatforms(auditConfig{
-		dir:       repoRoot(t),
-		platforms: []string{"plan9"},
-		verbose:   true,
-		out:       &out,
+		dir:     repoRoot(t),
+		targets: []target{{"plan9", "amd64"}},
+		verbose: true,
+		out:     &out,
 	}, found)
 	if err != nil {
 		t.Fatalf("readOtherPlatforms: %v", err)
@@ -145,38 +145,51 @@ func TestReadOtherPlatforms_UnknownPlatform_FailsRatherThanPassingQuietly(t *tes
 	found.platformPackages["github.com/jmrplens/gitlab-mcp-server/v3/cmd/server"] = struct{}{}
 	var out strings.Builder
 	err := readOtherPlatforms(auditConfig{
-		dir:       root,
-		platforms: []string{"notanoperatingsystem"},
-		verbose:   true,
-		out:       &out,
+		dir:     root,
+		targets: []target{{"notanoperatingsystem", runtime.GOARCH}},
+		verbose: true,
+		out:     &out,
 	}, found)
 	if err == nil {
 		t.Fatal("readOtherPlatforms error = nil, want the load failure")
 	}
-	if !strings.Contains(err.Error(), "notanoperatingsystem") {
-		t.Fatalf("error = %v, want it to name the platform", err)
+	if !strings.Contains(err.Error(), "notanoperatingsystem/"+runtime.GOARCH) {
+		t.Fatalf("error = %v, want it to name the target", err)
 	}
-	if !strings.Contains(out.String(), "re-reading 1 package(s) as notanoperatingsystem") {
-		t.Fatalf("verbose output = %q, want the platform load named", out.String())
+	if !strings.Contains(out.String(), "re-reading 1 package(s) as notanoperatingsystem/"+runtime.GOARCH) {
+		t.Fatalf("verbose output = %q, want the target load named", out.String())
 	}
 }
 
-// TestReadOtherPlatforms_TheHostPlatform_IsNotReadTwice.
-func TestReadOtherPlatforms_TheHostPlatform_IsNotReadTwice(t *testing.T) {
+// TestReadOtherPlatforms_TheHostTarget_IsNotReadTwice: the exact pair the run
+// is on was read by the first load, and only that pair. The host's operating
+// system under another architecture is a different target and is read.
+func TestReadOtherPlatforms_TheHostTarget_IsNotReadTwice(t *testing.T) {
 	root := repoRoot(t)
 	found := newScanner(root)
 	found.platformPackages["github.com/jmrplens/gitlab-mcp-server/v3/cmd/server"] = struct{}{}
 	var out strings.Builder
 	if err := readOtherPlatforms(auditConfig{
-		dir:       root,
-		platforms: []string{runtime.GOOS},
-		verbose:   true,
-		out:       &out,
+		dir:     root,
+		targets: []target{{runtime.GOOS, runtime.GOARCH}},
+		verbose: true,
+		out:     &out,
 	}, found); err != nil {
 		t.Fatalf("readOtherPlatforms: %v", err)
 	}
 	if out.String() != "" {
-		t.Fatalf("out = %q, want nothing: the first load already read this platform", out.String())
+		t.Fatalf("out = %q, want nothing: the first load already read this target", out.String())
+	}
+	if err := readOtherPlatforms(auditConfig{
+		dir:     root,
+		targets: []target{{runtime.GOOS, otherArch}},
+		verbose: true,
+		out:     &out,
+	}, found); err != nil {
+		t.Fatalf("readOtherPlatforms under %s/%s: %v", runtime.GOOS, otherArch, err)
+	}
+	if want := "re-reading 1 package(s) as " + runtime.GOOS + "/" + otherArch; !strings.Contains(out.String(), want) {
+		t.Fatalf("verbose output = %q, want %q: another architecture is not the host", out.String(), want)
 	}
 }
 
@@ -215,14 +228,19 @@ func TestDefaultPatterns_CoverTheRepositorysOwnSource(t *testing.T) {
 	}
 }
 
-// TestBuildPlatforms_AreTheOnesThisProjectShips: a platform missing here is a
-// package half nothing re-reads, and its constants read as dead.
-func TestBuildPlatforms_AreTheOnesThisProjectShips(t *testing.T) {
-	for _, want := range []string{"linux", "darwin", "windows"} {
-		t.Run(want, func(t *testing.T) {
-			if !slices.Contains(buildPlatforms, want) {
-				t.Fatalf("buildPlatforms = %v, want it to include %q", buildPlatforms, want)
-			}
-		})
+// TestBuildTargets_AreTheOnesThisProjectShips: a pair missing here is a
+// package half nothing re-reads, and its constants read as dead. Both halves
+// are held, since an operating system alone would keep the host's
+// architecture and leave every `_arm64.go` file out on an amd64 runner.
+func TestBuildTargets_AreTheOnesThisProjectShips(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		for _, goarch := range []string{"amd64", "arm64"} {
+			want := target{goos, goarch}
+			t.Run(want.String(), func(t *testing.T) {
+				if !slices.Contains(buildTargets, want) {
+					t.Fatalf("buildTargets = %v, want it to include %s", buildTargets, want)
+				}
+			})
+		}
 	}
 }

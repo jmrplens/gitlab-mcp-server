@@ -50,11 +50,16 @@
 // it simply did not look at.
 //
 // The platforms are the other way round: the packages that carry a
-// GOOS-constrained file are read again under each operating system this
-// project builds for, because a constant read only by the Windows half of a
-// package is read, and a gate that failed a Linux run over it would be failing
-// over code doing its job. Only the packages whose files this load actually
-// left out are re-read, which is three of them.
+// GOOS- or GOARCH-constrained file are read again under each operating system
+// and architecture pair this project builds for, because a constant read only
+// by the Windows half of a package is read, and so is one only its arm64 half
+// reads, and a gate that failed a Linux amd64 run over either would be failing
+// over code doing its job. Both halves of the pair are set on each reload,
+// since setting the operating system alone keeps the host's architecture and
+// leaves an `_arm64.go` file out exactly as the first load did. Only the
+// packages whose files this load actually left out are re-read: two on a
+// Linux host (cmd/server and internal/toolutil) and three on Windows, where
+// the unix-only test in internal/tools/packages is left out as well.
 //
 // # Why it is its own command
 //

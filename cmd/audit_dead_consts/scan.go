@@ -18,6 +18,12 @@ type Constant struct {
 	File    string `json:"file"`
 	Line    int    `json:"line"`
 	Name    string `json:"name"`
+	// Func is the function a constant is declared inside, as the file spells
+	// it (`Type.Method` for a method), and empty for one at package scope. It
+	// is part of the constant's identity in the declaration table: a local
+	// constant and a package-level one may share a name, and a declaration
+	// excusing the one must not excuse the other.
+	Func string `json:"func,omitempty"`
 	// GroupSize is how many constants the declaration it sits in declares.
 	// Anything above one is the shape staticcheck's unused cannot see, and the
 	// report says so per finding rather than only in prose, because that
@@ -91,10 +97,30 @@ func (s *scanner) observe(loaded []*packages.Package) {
 // scope and inside a function alike: an unread constant in a function body is
 // no more read than one beside it, and the compiler refuses neither.
 func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
+	// ast.Inspect announces a node's end with a nil call and names no node, so
+	// the path of open nodes is kept here to know which function a
+	// declaration sits in and when that function has been left.
+	var open []ast.Node
+	var funcs []string
 	ast.Inspect(file, func(node ast.Node) bool {
+		if node == nil {
+			if _, wasFunc := open[len(open)-1].(*ast.FuncDecl); wasFunc {
+				funcs = funcs[:len(funcs)-1]
+			}
+			open = open[:len(open)-1]
+			return true
+		}
+		open = append(open, node)
+		if fn, isFunc := node.(*ast.FuncDecl); isFunc {
+			funcs = append(funcs, funcDeclName(fn))
+		}
 		decl, isDecl := node.(*ast.GenDecl)
 		if !isDecl || decl.Tok != token.CONST {
 			return true
+		}
+		enclosing := ""
+		if len(funcs) > 0 {
+			enclosing = funcs[len(funcs)-1]
 		}
 		names := constNames(decl)
 		for _, name := range names {
@@ -108,11 +134,34 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 				File:      relativePath(at.file, s.root),
 				Line:      at.line,
 				Name:      constant.Name(),
+				Func:      enclosing,
 				GroupSize: len(names),
 			}
 		}
 		return true
 	})
+}
+
+// funcDeclName spells a function the way its file does: the bare name, or
+// `Type.Method` with the receiver's type stripped of its pointer.
+func funcDeclName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return fn.Name.Name
+	}
+	receiver := fn.Recv.List[0].Type
+	if star, isPointer := receiver.(*ast.StarExpr); isPointer {
+		receiver = star.X
+	}
+	switch generic := receiver.(type) {
+	case *ast.IndexExpr:
+		receiver = generic.X
+	case *ast.IndexListExpr:
+		receiver = generic.X
+	}
+	if ident, isIdent := receiver.(*ast.Ident); isIdent {
+		return ident.Name + "." + fn.Name.Name
+	}
+	return fn.Name.Name
 }
 
 // dead is every declared constant no load recorded a use of, in source order.
