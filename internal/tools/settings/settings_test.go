@@ -6,9 +6,12 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -308,7 +311,7 @@ func TestUpdate_MarshalInputError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 
 	_, err := Update(t.Context(), client, UpdateInput{
-		Settings: map[string]any{"bad_value": math.NaN()},
+		Settings: map[string]any{"max_artifacts_size": math.NaN()},
 	})
 	if err == nil {
 		t.Fatal("expected error for unmarshalable input, got nil")
@@ -449,11 +452,15 @@ func TestUpdate_APIError(t *testing.T) {
 
 // TestUpdate_BadRequest verifies Update includes the settings-key guidance for
 // GitLab validation errors.
+//
+// The patch names a setting the client models, so the refusal below is not in
+// the way and GitLab is the one saying no: a key the client does not model
+// never reaches the instance at all.
 func TestUpdate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"unknown setting"}`)
 	}))
-	_, err := Update(context.Background(), client, UpdateInput{Settings: map[string]any{"unknown_setting": true}})
+	_, err := Update(context.Background(), client, UpdateInput{Settings: map[string]any{"default_branch_name": "trunk"}})
 	if err == nil {
 		t.Fatal("expected error for 400")
 	}
@@ -463,11 +470,12 @@ func TestUpdate_BadRequest(t *testing.T) {
 }
 
 // TestGet_UnmarshalResponseError documents the contract for Get when the
-// API returns a body that the GitLab SDK cannot decode into the Settings
-// struct (e.g. a bare number). The SDK rejects it before our json.Unmarshal
-// runs, so the in-package json.Unmarshal error branch (settings.go:40-42)
-// is defense-in-depth. We assert that an error is returned, which is the
-// externally observable contract regardless of which layer surfaces it.
+// API returns a body that is not the settings object (e.g. a bare number).
+// The SDK decodes the same bytes into its own struct first and rejects them
+// there, so capturedSettings never sees such a body through the transport and
+// is driven directly by TestCapturedSettings_BodyThatIsNotAnObject_IsAnError.
+// What is asserted here is the externally observable contract, whichever layer
+// surfaces it.
 func TestGet_UnmarshalResponseError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// A bare JSON number is invalid for the Settings object type.
@@ -479,12 +487,9 @@ func TestGet_UnmarshalResponseError(t *testing.T) {
 	}
 }
 
-// TestUpdate_UnmarshalResponseError documents the contract for Update when
-// the API returns a body that cannot be decoded into map[string]any. The
-// SDK rejects the non-object body before our json.Unmarshal runs, so the
-// in-package json.Unmarshal error branch (settings.go:89-91) is
-// defense-in-depth. We assert that an error is returned, satisfying the
-// contract regardless of which layer surfaces the failure.
+// TestUpdate_UnmarshalResponseError documents the same contract for Update:
+// a body that is not the settings object is an error, and the SDK's own decode
+// is what refuses it before capturedSettings reads the same bytes.
 func TestUpdate_UnmarshalResponseError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `42`)
@@ -548,17 +553,23 @@ func TestUpdate_Request_CarriesTheCallersSettingsAsTheBody(t *testing.T) {
 	}
 }
 
-// TestGet_SettingsMap_IsTheWholeSettingsObject verifies that Get answers with
-// the settings object re-keyed the way GitLab spells it: a false and a zero
-// GitLab sent survive as themselves, and a key GitLab left out still arrives,
-// at its zero value.
+// TestGet_SettingsMap_IsWhatGitLabSent verifies that Get answers with the
+// object the instance sent and with nothing else: a false and a zero survive as
+// themselves, a key GitLab sent that client-go's Settings struct does not model
+// arrives, and a key that struct carries and GitLab did not send is absent.
 //
-// That last part is also why the two error branches on this round trip cannot
-// fire: what is marshaled is the SDK's struct, so it always encodes, and it
-// always encodes as an object, which always decodes into a map.
-func TestGet_SettingsMap_IsTheWholeSettingsObject(t *testing.T) {
+// All three used to be wrong in the same place. The map was built by marshaling
+// *gl.Settings and unmarshaling the result, so its key set was the struct's:
+// measured against the pinned live record (GitLab 19.3.1-ee) the entity exposes
+// 648 names and the struct carries 424, so 253 of what the instance said was
+// dropped and 29 names the instance never mentioned were emitted at their zero
+// values, since one field in the whole struct has omitempty. A model asking
+// whether a setting was configured read a convincing empty string for a setting
+// GitLab had said nothing about.
+func TestGet_SettingsMap_IsWhatGitLabSent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":false,"max_artifacts_size":0}`)
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"signup_enabled":false,"max_artifacts_size":0,"allow_possible_spam":true}`)
 	}))
 
 	out, err := Get(t.Context(), client, GetInput{})
@@ -566,27 +577,67 @@ func TestGet_SettingsMap_IsTheWholeSettingsObject(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 
-	want := []struct {
+	sent := []struct {
 		key   string
 		value any
 	}{
 		{"signup_enabled", false},
 		{"max_artifacts_size", float64(0)},
-		{"default_branch_name", ""},
+		// A setting GitLab exposes that client-go's struct does not model, so
+		// the round trip this replaced could not carry it at all.
+		{"allow_possible_spam", true},
 	}
-	for _, tt := range want {
+	for _, tt := range sent {
 		t.Run(tt.key, func(t *testing.T) {
 			got, ok := out.Settings[tt.key]
 			if !ok {
-				t.Fatalf("Settings has no %q", tt.key)
+				t.Fatalf("Settings has no %q; GitLab sent it", tt.key)
 			}
 			if got != tt.value {
 				t.Errorf("Settings[%q] = %v, want %v", tt.key, got, tt.value)
 			}
 		})
 	}
-	if len(out.Settings) <= len(want) {
-		t.Errorf("len(Settings) = %d, want the whole settings object rather than the keys GitLab happened to send", len(out.Settings))
+
+	// The first is a setting the SDK models and this instance did not send; the
+	// second is one the SDK carries that no GitLab sends at all.
+	for _, key := range []string{"default_branch_name", "admin_notification_email"} {
+		t.Run("absent "+key, func(t *testing.T) {
+			if value, ok := out.Settings[key]; ok {
+				t.Errorf("Settings[%q] = %v, want it absent: GitLab said nothing about it", key, value)
+			}
+		})
+	}
+
+	if len(out.Settings) != len(sent) {
+		t.Errorf("len(Settings) = %d, want %d: the keys GitLab sent and no others", len(out.Settings), len(sent))
+	}
+}
+
+// TestGet_CoverageNote_CountsTheKeysGitLabSent verifies that the sentence under
+// the card is about the answer rather than about the client.
+//
+// The note reads "Showing %d of %d settings; the remaining keys are in the
+// structured result", and its total is len(GetOutput.Settings). While that map
+// was the re-encoded SDK struct the total was 424 on every instance, every
+// version and every tier, and the promise about the remaining keys was false of
+// the 253 the round trip had dropped. Taking the map from the answer is what
+// makes the sentence true, so the guard belongs on the whole path rather than
+// on the formatter, which was always honest about what it was given.
+func TestGet_CoverageNote_CountsTheKeysGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK,
+			`{"signup_enabled":true,"default_branch_name":"main","allow_possible_spam":false,"autocomplete_users_limit":300}`)
+	}))
+
+	out, err := Get(t.Context(), client, GetInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+
+	const want = "Showing 2 of 4 settings; the remaining keys are in the structured result."
+	if got := markdownText(t, FormatGetMarkdown(out)); !strings.Contains(got, want) {
+		t.Errorf("card =\n%s\nwant it to contain %q", got, want)
 	}
 }
 
@@ -765,5 +816,269 @@ func TestFormatGetMarkdown_EveryCuratedKey_RendersUnderTheCategoryThatOwnsIt(t *
 	}
 	if wantHeadings := []string{"General", "CI/CD", "Authentication", "Repository", "Rate Limits"}; !slices.Equal(headings, wantHeadings) {
 		t.Errorf("headings = %v, want %v", headings, wantHeadings)
+	}
+}
+
+// TestUpdate_KeyTheClientDoesNotModel_RefusedBeforeAnythingIsSent verifies that
+// a patch naming a setting client-go's options do not carry is refused by name,
+// and that GitLab is not asked at all.
+//
+// This is the write-side half of the read-side gap, and the more dangerous one.
+// encoding/json drops a member the target struct does not declare without a
+// word, so the patch used to be sent with that key missing, GitLab answered 200
+// for the keys that survived, and the tool rendered a settings card: nothing in
+// the exchange said the change had not been made, and the model reported the
+// instance reconfigured. Measured against the pinned live record, the PUT route
+// declares 660 params and the options struct models 422 of them.
+func TestUpdate_KeyTheClientDoesNotModel_RefusedBeforeAnythingIsSent(t *testing.T) {
+	var asked atomic.Bool
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked.Store(true)
+		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+	}))
+
+	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{
+		"signup_enabled":      false,
+		"allow_possible_spam": true,
+	}})
+	if err == nil {
+		t.Fatal("Update() = nil error, want a refusal naming the key the client does not model")
+	}
+	if asked.Load() {
+		t.Error("Update() reached GitLab; a patch that cannot be sent whole is refused before the request")
+	}
+
+	for _, want := range []string{
+		"settings_update: ",
+		"allow_possible_spam",
+		"nothing was sent",
+		"1 of the 2 keys",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Update() error = %q, want it to contain %q", err, want)
+			}
+		})
+	}
+	if strings.Contains(err.Error(), "signup_enabled") {
+		t.Errorf("Update() error = %q, want it to name only the keys that could not be sent", err)
+	}
+}
+
+// TestUpdate_ManyKeysTheClientDoesNotModel_NamesTwentyAndCountsTheRest verifies
+// that the refusal stays readable when a patch names far more keys the client
+// cannot send than a reader needs to see, that the count still covers all of
+// them, and that a patch sitting exactly on the bound is spelled out whole.
+//
+// 238 of GitLab's settable params are outside the client's options today, so
+// "all of them" is a wall of names a model pays tokens to read before learning
+// the one thing it has to do, which is drop them. The bound case is here
+// because a cap written with the wrong comparison passes every test that only
+// ever exceeds it, and answers "and 0 more" to a patch it named in full.
+func TestUpdate_ManyKeysTheClientDoesNotModel_NamesTwentyAndCountsTheRest(t *testing.T) {
+	tests := []struct {
+		name  string
+		keys  int
+		named int
+		tail  string
+	}{
+		{name: "exactly the bound", keys: maxNamedUnmodeledKeys, named: maxNamedUnmodeledKeys},
+		{name: "over the bound", keys: maxNamedUnmodeledKeys + 5, named: maxNamedUnmodeledKeys, tail: "and 5 more"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.NotFoundHandler())
+
+			patch := make(map[string]any, tt.keys)
+			for i := range tt.keys {
+				patch[fmt.Sprintf("not_a_gitlab_setting_%02d", i)] = true
+			}
+
+			_, err := Update(t.Context(), client, UpdateInput{Settings: patch})
+			if err == nil {
+				t.Fatal("Update() = nil error, want a refusal")
+			}
+
+			if named := strings.Count(err.Error(), "not_a_gitlab_setting_"); named != tt.named {
+				t.Errorf("Update() error names %d keys, want %d", named, tt.named)
+			}
+			switch {
+			case tt.tail == "" && strings.Contains(err.Error(), " more"):
+				t.Errorf("Update() error = %q, want no tail: every key was named", err)
+			case tt.tail != "" && !strings.Contains(err.Error(), tt.tail):
+				t.Errorf("Update() error = %q, want it to count the keys it did not name as %q", err, tt.tail)
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("%d of the %d keys", tt.keys, tt.keys)) {
+				t.Errorf("Update() error = %q, want it to say the whole patch was outside what the client models", err)
+			}
+		})
+	}
+}
+
+// TestUpdate_SettingsMap_IsWhatGitLabSent verifies that the object an update
+// answers with is read from GitLab's answer, like the read's.
+//
+// Both handlers used to re-encode the SDK struct, so an update's card and its
+// structured result were as partial and as invented as a read's, and the
+// coverage sentence under the card counted the same constant.
+func TestUpdate_SettingsMap_IsWhatGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/application/settings" || r.Method != http.MethodPut {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":false,"allow_possible_spam":true}`)
+	}))
+
+	out, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if got, ok := out.Settings["allow_possible_spam"]; !ok || got != true {
+		t.Errorf("Settings[allow_possible_spam] = %v (present %t), want true: GitLab sent it", got, ok)
+	}
+	if len(out.Settings) != 2 {
+		t.Errorf("len(Settings) = %d, want the 2 keys GitLab sent", len(out.Settings))
+	}
+}
+
+// TestSettings_UnreadableCapturedAnswer_IsTheSDKsOwnRefusal documents why the
+// handlers' capture-decode branches cannot be driven through the transport, and
+// pins the fact they rest on.
+//
+// Elsewhere a captured read is failed by poisoning a field client-go does not
+// model, since the SDK skips that member and the capture's own type does not.
+// That cannot work here twice over: the capture's type is a map, which holds
+// every object GitLab could send but for a number outside float64, and
+// client-go's Settings.UnmarshalJSON decodes the whole body into a
+// map[string]any of its own before it touches its struct, so the SDK refuses
+// exactly the bodies this reader would. The guards stay because the reader is
+// answerable for what it decodes; nothing on the wire can reach them.
+func TestSettings_UnreadableCapturedAnswer_IsTheSDKsOwnRefusal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"signup_enabled":true,"allow_possible_spam":1e999}`)
+	}))
+
+	_, err := Get(t.Context(), client, GetInput{})
+	if err == nil {
+		t.Fatal("Get() = nil error, want the body refused")
+	}
+	if strings.Contains(err.Error(), "decode the captured response") {
+		t.Errorf("Get() error = %q, want the SDK's own refusal: it decodes through a map before its struct", err)
+	}
+}
+
+// TestCapturedSettings_NoResponse_IsAnError verifies that a capture nothing was
+// recorded into is reported rather than read as an instance with no settings.
+//
+// No handler can reach this through the transport, since a request that
+// succeeded was recorded by definition, which is why the reader is driven
+// directly here.
+func TestCapturedSettings_NoResponse_IsAnError(t *testing.T) {
+	_, untouched := gitlabclient.WithResponseCapture(t.Context())
+
+	values, err := capturedSettings(untouched)
+	if err == nil {
+		t.Fatalf("capturedSettings() = %v, nil error; want the no-response error", values)
+	}
+	if !errors.Is(err, gitlabclient.ErrNoResponseCaptured) {
+		t.Errorf("capturedSettings() error = %v, want ErrNoResponseCaptured", err)
+	}
+}
+
+// TestCapturedSettings_BodyThatIsNotAnObject_IsAnError verifies that a body the
+// settings map cannot hold is reported rather than answered as an empty map.
+//
+// The SDK decodes the same bytes into its own struct first and refuses such a
+// body there, so this branch is defense in depth and is driven from a capture
+// built by hand.
+func TestCapturedSettings_BodyThatIsNotAnObject_IsAnError(t *testing.T) {
+	values, err := capturedSettings(gitlabclient.CapturedBody([]byte("42")))
+	if err == nil {
+		t.Fatalf("capturedSettings() = %v, nil error; want the decode to be reported", values)
+	}
+}
+
+// TestModeledSettingKeys_ReadTheOptionsStructRatherThanAList verifies that the
+// accepted key set is the one client-go's update options actually model.
+//
+// The set is read from the struct so that a client-go release modeling more
+// settings widens what this tool accepts with no edit here, which is the whole
+// reason it is not a literal list: a list would have to be maintained against
+// every bump, and a stale one refuses settings the client can send.
+func TestModeledSettingKeys_ReadTheOptionsStructRatherThanAList(t *testing.T) {
+	modeled := modeledSettingKeys()
+
+	if len(modeled) < 400 {
+		t.Errorf("modeledSettingKeys() holds %d names, want the several hundred the options struct carries", len(modeled))
+	}
+	for _, key := range []string{"signup_enabled", "default_branch_name", "max_artifacts_size"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := modeled[key]; !ok {
+				t.Errorf("modeledSettingKeys() has no %q, which client-go models", key)
+			}
+		})
+	}
+	if _, ok := modeled["allow_possible_spam"]; ok {
+		t.Error("modeledSettingKeys() holds allow_possible_spam, which client-go does not model")
+	}
+}
+
+// TestCollectModeledKeys_EveryFieldShape_BindsTheNameEncodingJSONWould verifies
+// the walk over one options struct: an embedded struct and an embedded pointer
+// to one contribute their promoted members, a tagged field its tag, an untagged
+// field and a tag carrying only options their Go names, and `json:"-"` and an
+// unexported field nothing at all.
+//
+// The walk is exercised on a fixture rather than only on client-go's struct
+// because that struct has no embedded field today: the descent exists so that a
+// release which factors settings into one widens the accepted set instead of
+// quietly refusing settings the client can send, and a branch nothing drives is
+// a branch nothing holds to that promise.
+func TestCollectModeledKeys_EveryFieldShape_BindsTheNameEncodingJSONWould(t *testing.T) {
+	// A group of settings a client-go release could factor into an embedded
+	// struct, and the same thing embedded by pointer.
+	type promotedGroup struct {
+		Promoted *bool `json:"promoted,omitempty"`
+	}
+	type deepGroup struct {
+		Deep *bool `json:"deep,omitempty"`
+	}
+	// An embedded struct carrying a json name, which encoding/json places
+	// under that name instead of promoting, and an embedded non-struct type,
+	// which it binds by the type's own name.
+	type namedGroup struct {
+		Inner *bool `json:"inner,omitempty"`
+	}
+	type EmbeddedScalar string
+	type keyShapes struct {
+		promotedGroup
+		*deepGroup
+		namedGroup `json:"asgroup"`
+		EmbeddedScalar
+		Tagged      *bool `json:"tagged,omitempty"`
+		Untagged    *bool
+		OptionsOnly *bool          `json:",omitempty"`
+		Skipped     *bool          `json:"-"`
+		Nested      *promotedGroup `json:"nested,omitempty"`
+		unexported  *bool
+	}
+	// A field encoding/json never writes and whose name it never binds; read
+	// here because it is the fixture's reason for existing.
+	_ = keyShapes{}.unexported
+
+	keys := make(map[string]struct{})
+	collectModeledKeys(reflect.TypeFor[keyShapes](), keys)
+
+	got := make([]string, 0, len(keys))
+	for key := range keys {
+		got = append(got, key)
+	}
+	slices.Sort(got)
+
+	want := []string{"asgroup", "deep", "embeddedscalar", "nested", "optionsonly", "promoted", "tagged", "untagged"}
+	if !slices.Equal(got, want) {
+		t.Errorf("collectModeledKeys() = %v, want %v", got, want)
 	}
 }
