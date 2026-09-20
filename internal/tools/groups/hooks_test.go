@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1097,5 +1098,188 @@ func TestApplyGroupHookIdentityOptions_CarriesEachFieldOnlyWhenGiven(t *testing.
 	applyGroupHookIdentityOptions(HookInput{}, bare)
 	if bare.URL != nil || bare.Name != nil || bare.Description != nil || bare.Token != nil || bare.EnableSSLVerification != nil {
 		t.Errorf("options = %+v, want nothing set from an empty input", bare)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Every field the hook converter copies, and every flag the writes send
+// ---------------------------------------------------------------------------.
+
+// getDistinctHook answers a hook request with body and returns what GetHook
+// published for it.
+func getDistinctHook(t *testing.T, body string) HookOutput {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathGroupHook10 {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := GetHook(context.Background(), client, GetHookInput{GroupID: "99", HookID: 10})
+	if err != nil {
+		t.Fatalf("GetHook() unexpected error: %v", err)
+	}
+	return out
+}
+
+// TestGetHook_PublishesEachFieldGitLabSent verifies the whole hook a
+// single-hook route answers with, against an answer in which no two values
+// agree, the two secret-bearing lists reduced to their keys. The flags are
+// left to the one-at-a-time test below.
+func TestGetHook_PublishesEachFieldGitLabSent(t *testing.T) {
+	out := getDistinctHook(t, `{"id":10,"url":"https://ci.example.com/hook","name":"CI Hook","description":"Triggers CI",`+
+		`"group_id":99,"alert_status":"temporarily_disabled","disabled_until":"2026-01-16T10:00:00Z",`+
+		`"created_at":"2026-01-15T10:00:00Z","push_events_branch_filter":"release/*","branch_filter_strategy":"wildcard",`+
+		`"custom_webhook_template":"{\"a\":1}","url_variables":[{"key":"env","value":"prod"}],`+
+		`"custom_headers":[{"key":"X-Env","value":"prod"}]}`)
+	want := HookOutput{
+		ID: 10, URL: "https://ci.example.com/hook", Name: "CI Hook", Description: "Triggers CI", GroupID: 99,
+		AlertStatus: "temporarily_disabled", DisabledUntil: "2026-01-16T10:00:00Z", CreatedAt: "2026-01-15T10:00:00Z",
+		PushEventsBranchFilter: "release/*", BranchFilterStrategy: "wildcard", CustomWebhookTemplate: `{"a":1}`,
+		URLVariables:  []HookURLVariable{{Key: "env"}},
+		CustomHeaders: []HookCustomHeaderOutput{{Key: "X-Env"}},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetHook() published\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestGetHook_PublishesEachFlagOnItsOwn verifies each of the twenty-four
+// booleans a hook carries lands on the field named after it when sent alone,
+// the one read off the capture included.
+//
+// The hook fixture sets twelve flags true and the rest false, so a converter
+// reading a neighbor's flag passed whenever the two happened to agree, which
+// is about half of all pairs.
+func TestGetHook_PublishesEachFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want HookOutput
+	}{
+		{key: "push_events", want: HookOutput{ID: 10, PushEvents: true}},
+		{key: "tag_push_events", want: HookOutput{ID: 10, TagPushEvents: true}},
+		{key: "merge_requests_events", want: HookOutput{ID: 10, MergeRequestsEvents: true}},
+		{key: "issues_events", want: HookOutput{ID: 10, IssuesEvents: true}},
+		{key: "note_events", want: HookOutput{ID: 10, NoteEvents: true}},
+		{key: "job_events", want: HookOutput{ID: 10, JobEvents: true}},
+		{key: "pipeline_events", want: HookOutput{ID: 10, PipelineEvents: true}},
+		{key: "wiki_page_events", want: HookOutput{ID: 10, WikiPageEvents: true}},
+		{key: "deployment_events", want: HookOutput{ID: 10, DeploymentEvents: true}},
+		{key: "releases_events", want: HookOutput{ID: 10, ReleasesEvents: true}},
+		{key: "subgroup_events", want: HookOutput{ID: 10, SubGroupEvents: true}},
+		{key: "member_events", want: HookOutput{ID: 10, MemberEvents: true}},
+		{key: "confidential_issues_events", want: HookOutput{ID: 10, ConfidentialIssuesEvents: true}},
+		{key: "confidential_note_events", want: HookOutput{ID: 10, ConfidentialNoteEvents: true}},
+		{key: "enable_ssl_verification", want: HookOutput{ID: 10, EnableSSLVerification: true}},
+		{key: "feature_flag_events", want: HookOutput{ID: 10, FeatureFlagEvents: true}},
+		{key: "milestone_events", want: HookOutput{ID: 10, MilestoneEvents: true}},
+		{key: "vulnerability_events", want: HookOutput{ID: 10, VulnerabilityEvents: true}},
+		{key: "emoji_events", want: HookOutput{ID: 10, EmojiEvents: true}},
+		{key: "resource_access_token_events", want: HookOutput{ID: 10, ResourceAccessTokenEvents: true}},
+		{key: "project_events", want: HookOutput{ID: 10, ProjectEvents: true}},
+		{key: "token_present", want: HookOutput{ID: 10, TokenPresent: true}},
+		{key: "signing_token_present", want: HookOutput{ID: 10, SigningTokenPresent: true}},
+		{key: "repository_update_events", want: HookOutput{ID: 10, RepositoryUpdateEvents: true}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := getDistinctHook(t, `{"id":10,"`+tc.key+`":true}`)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("GetHook() published %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// hookEventFlags is every event flag a hook write takes, keyed by the name
+// GitLab takes it under, each input naming only that flag.
+func hookEventFlags() map[string]HookInput {
+	return map[string]HookInput{
+		"push_events":                  {PushEvents: new(true)},
+		"tag_push_events":              {TagPushEvents: new(true)},
+		"merge_requests_events":        {MergeRequestsEvents: new(true)},
+		"issues_events":                {IssuesEvents: new(true)},
+		"note_events":                  {NoteEvents: new(true)},
+		"job_events":                   {JobEvents: new(true)},
+		"pipeline_events":              {PipelineEvents: new(true)},
+		"wiki_page_events":             {WikiPageEvents: new(true)},
+		"deployment_events":            {DeploymentEvents: new(true)},
+		"releases_events":              {ReleasesEvents: new(true)},
+		"milestone_events":             {MilestoneEvents: new(true)},
+		"feature_flag_events":          {FeatureFlagEvents: new(true)},
+		"subgroup_events":              {SubGroupEvents: new(true)},
+		"member_events":                {MemberEvents: new(true)},
+		"vulnerability_events":         {VulnerabilityEvents: new(true)},
+		"confidential_issues_events":   {ConfidentialIssuesEvents: new(true)},
+		"confidential_note_events":     {ConfidentialNoteEvents: new(true)},
+		"emoji_events":                 {EmojiEvents: new(true)},
+		"resource_access_token_events": {ResourceAccessTokenEvents: new(true)},
+		"project_events":               {ProjectEvents: new(true)},
+		"enable_ssl_verification":      {EnableSSLVerification: new(true)},
+	}
+}
+
+// TestHookWrites_EachFlagReachesTheRequestOnItsOwn verifies each event flag,
+// named alone, produces an add body of the URL and exactly that flag, and an
+// edit body of exactly that flag: one flag written under a neighbor's key
+// cannot pass a body held to one key.
+//
+// The add options pair each input flag with its destination in a table, and
+// the edit options are copied field by field off the add options, so there
+// are two places a pair can cross, and the earlier tests sent seven flags true
+// at once and searched the body for their names.
+func TestHookWrites_EachFlagReachesTheRequestOnItsOwn(t *testing.T) {
+	for key, input := range hookEventFlags() {
+		t.Run("add/"+key, func(t *testing.T) {
+			add := input
+			add.URL = testHookURL
+			body := recordedJSONBody(t, http.StatusCreated, groupHookJSON, func(client *gitlabclient.Client) error {
+				_, err := AddHook(context.Background(), client, AddHookInput{GroupID: "99", HookInput: add})
+				return err
+			})
+			want := map[string]any{"url": testHookURL, key: true}
+			if !reflect.DeepEqual(body, want) {
+				t.Errorf("add body = %v, want %v", body, want)
+			}
+		})
+		t.Run("edit/"+key, func(t *testing.T) {
+			body := recordedJSONBody(t, http.StatusOK, groupHookJSON, func(client *gitlabclient.Client) error {
+				_, err := EditHook(context.Background(), client, EditHookInput{GroupID: "99", HookID: 10, HookInput: input})
+				return err
+			})
+			want := map[string]any{key: true}
+			if !reflect.DeepEqual(body, want) {
+				t.Errorf("edit body = %v, want %v", body, want)
+			}
+		})
+	}
+}
+
+// TestEditHook_CarriesEveryIdentityFieldUnderItsOwnKey verifies the whole edit
+// body for an input naming every non-flag field with a value of its own, since
+// the edit options are copied off the add options one field at a time and the
+// two tokens, the two filters and the two texts are each of a kind a copy
+// could cross.
+func TestEditHook_CarriesEveryIdentityFieldUnderItsOwnKey(t *testing.T) {
+	body := recordedJSONBody(t, http.StatusOK, groupHookJSON, func(client *gitlabclient.Client) error {
+		_, err := EditHook(context.Background(), client, EditHookInput{
+			GroupID: "99", HookID: 10,
+			URL: "https://ci.example.com/hook", Name: "CI Hook", Description: "Triggers CI",
+			Token: "shared-secret", SigningToken: "signing-secret",
+			PushEventsBranchFilter: "release/*", BranchFilterStrategy: "wildcard",
+			CustomWebhookTemplate: `{"a":1}`,
+			CustomHeaders:         []HookCustomHeaderInput{{Key: "X-Env", Value: "prod"}},
+		})
+		return err
+	})
+	want := map[string]any{
+		"url": "https://ci.example.com/hook", "name": "CI Hook", "description": "Triggers CI",
+		"token": "shared-secret", "signing_token": "signing-secret",
+		"push_events_branch_filter": "release/*", "branch_filter_strategy": "wildcard",
+		"custom_webhook_template": `{"a":1}`,
+		"custom_headers":          []any{map[string]any{"key": "X-Env", "value": "prod"}},
+	}
+	if !reflect.DeepEqual(body, want) {
+		t.Errorf("edit body = %v, want %v", body, want)
 	}
 }

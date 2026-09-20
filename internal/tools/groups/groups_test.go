@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2480,7 +2481,7 @@ func TestDeleteHook_MissingGroupID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // TestEnabledEvents_All verifies that every event flag HookOutput carries is
-// named, all eighteen of them: six were missing until the markdown audit
+// named, all twenty-one of them: six were missing until the markdown audit
 // (issue 697), so a hook subscribed only to those read as "none".
 func TestEnabledEvents_All(t *testing.T) {
 	h := HookOutput{
@@ -3971,5 +3972,646 @@ func TestGroupHandlers_ACaptureThatDoesNotDecode_IsAnError(t *testing.T) {
 				t.Error("handler succeeded on a captured answer its extra cannot hold")
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Every field a converter copies, held to the value GitLab sent
+// ---------------------------------------------------------------------------.
+
+// distinctGroupJSON is a single-group answer in which no two values agree:
+// the name is not the path, every count is its own number, and each nested
+// object carries values none of its siblings do. Its flags are left for the
+// one-at-a-time test below, since a block of booleans has no such fixture.
+const distinctGroupJSON = `{
+	"id":61,"name":"Platform","path":"plat","full_path":"acme/plat","full_name":"Acme / Platform",
+	"description":"The platform group","visibility":"internal",
+	"web_url":"https://gl.example.com/groups/acme/plat","parent_id":3,"organization_id":5,
+	"default_branch":"trunk","created_at":"2026-02-03T04:05:06Z","marked_for_deletion_on":"2026-07-08",
+	"avatar_url":"https://gl.example.com/uploads/plat.png",
+	"project_creation_level":"maintainer","subgroup_creation_level":"owner",
+	"shared_runners_setting":"disabled_and_overridable","duo_availability":"default_off",
+	"max_artifacts_size":128,"repository_storage":"nfs-02","file_template_project_id":17,
+	"two_factor_grace_period":72,"ldap_cn":"cn=plat","ldap_access":20,"wiki_access_level":"private",
+	"default_branch_protection":4,"enabled_git_access_protocol":"ssh","runners_token":"glrt-plat",
+	"shared_runners_minutes_limit":1500,"extra_shared_runners_minutes_limit":250,
+	"ip_restriction_ranges":"192.168.0.0/16","allowed_email_domains_list":"acme.example",
+	"statistics":{"commit_count":21,"storage_size":22,"repository_size":23,"wiki_size":24,
+		"lfs_objects_size":25,"job_artifacts_size":26,"pipeline_artifacts_size":27,"packages_size":28,
+		"snippets_size":29,"uploads_size":30,"container_registry_size":31},
+	"root_storage_statistics":{"build_artifacts_size":41,"container_registry_size":42,
+		"dependency_proxy_size":43,"lfs_objects_size":44,"packages_size":45,"pipeline_artifacts_size":46,
+		"repository_size":47,"snippets_size":48,"storage_size":49,"uploads_size":50,"wiki_size":51},
+	"custom_attributes":[{"key":"team","value":"platform"}],
+	"default_branch_protection_defaults":{"allowed_to_push":[{"access_level":40}],"allowed_to_merge":[{"access_level":30}]},
+	"shared_with_groups":[{"group_id":81,"group_name":"security","group_full_path":"acme/sec",
+		"group_access_level":30,"expires_at":"2026-12-31","member_role_id":2}],
+	"ldap_group_links":[{"cn":"cn=link","filter":"(uid=*)","group_access":30,"provider":"ldapmain","member_role_id":3}],
+	"saml_group_links":[{"name":"saml-link","access_level":40,"member_role_id":4,"provider":"okta"}],
+	"projects":[{"id":71,"name":"api","path_with_namespace":"acme/plat/api","description":"the api",
+		"visibility":"private","web_url":"https://gl.example.com/acme/plat/api","default_branch":"main",
+		"archived":true,"created_at":"2026-01-15T10:00:00Z"}],
+	"shared_projects":[{"id":72,"name":"docs","path_with_namespace":"acme/other/docs","description":"the docs",
+		"visibility":"public","web_url":"https://gl.example.com/acme/other/docs","default_branch":"pages",
+		"archived":false,"created_at":"2026-01-16T11:00:00Z"}],
+	"duo_namespace_access_rules":[{"through_namespace":{"id":83,"name":"Acme","full_path":"acme"},"features":["duo_chat"]}],
+	"step_up_auth_required_oauth_provider":"okta",
+	"ai_settings":{"duo_agent_platform_enabled":true,"minimum_access_level_manage":"owner"},
+	"unique_project_download_limit":9,"unique_project_download_limit_interval_in_seconds":600,
+	"unique_project_download_limit_allowlist":["alice","bob"],"unique_project_download_limit_alertlist":[31,32]
+}`
+
+// distinctGroupDetail is what [distinctGroupJSON] publishes as, every field of
+// it, so the comparison is of whole values rather than of the handful a
+// reader happened to name.
+func distinctGroupDetail() DetailOutput {
+	return DetailOutput{
+		ID: 61, Name: "Platform", Path: "plat", FullPath: "acme/plat", FullName: "Acme / Platform",
+		Description: "The platform group", Visibility: "internal",
+		WebURL: "https://gl.example.com/groups/acme/plat", ParentID: 3, OrganizationID: 5,
+		DefaultBranch: "trunk", CreatedAt: "2026-02-03T04:05:06Z", MarkedForDeletion: "2026-07-08",
+		AvatarURL:            "https://gl.example.com/uploads/plat.png",
+		ProjectCreationLevel: "maintainer", SubGroupCreationLevel: "owner",
+		SharedRunnersSetting: "disabled_and_overridable", DuoAvailability: "default_off",
+		MaxArtifactsSize: 128, RepositoryStorage: "nfs-02", FileTemplateProjectID: 17,
+		TwoFactorGracePeriod: 72, LDAPCN: "cn=plat", LDAPAccess: 20, WikiAccessLevel: "private",
+		DefaultBranchProtection: 4,
+		Statistics: &StatisticsOutput{
+			CommitCount: 21, StorageSize: 22, RepositorySize: 23, WikiSize: 24, LFSObjectsSize: 25,
+			JobArtifactsSize: 26, PipelineArtifactsSize: 27, PackagesSize: 28, SnippetsSize: 29,
+			UploadsSize: 30, ContainerRegistrySize: 31,
+		},
+		RootStorageStatistics: &RootStorageStatisticsOutput{
+			BuildArtifactsSize: 41, ContainerRegistrySize: 42, DependencyProxySize: 43, LFSObjectsSize: 44,
+			PackagesSize: 45, PipelineArtifactsSize: 46, RepositorySize: 47, SnippetsSize: 48,
+			StorageSize: 49, UploadsSize: 50, WikiSize: 51,
+		},
+		CustomAttributes: []CustomAttributeOutput{{Key: "team", Value: "platform"}},
+		DefaultBranchProtectionDefaults: &BranchProtectionDefaults{
+			AllowedToPush:  []GroupAccessLevelOutput{{AccessLevel: 40}},
+			AllowedToMerge: []GroupAccessLevelOutput{{AccessLevel: 30}},
+		},
+		LDAPGroupLinks: []LDAPGroupLinkOutput{{CN: "cn=link", Filter: "(uid=*)", GroupAccess: 30, Provider: "ldapmain", MemberRoleID: 3}},
+		SAMLGroupLinks: []SAMLGroupLinkOutput{{Name: "saml-link", AccessLevel: 40, MemberRoleID: 4, Provider: "okta"}},
+		DuoNamespaceAccessRules: []toolutil.DuoNamespaceAccessRuleOutput{{
+			ThroughNamespace: &toolutil.DuoAccessRuleNamespaceOutput{ID: 83, Name: "Acme", FullPath: "acme"},
+			Features:         []string{"duo_chat"},
+		}},
+		EnabledGitAccessProtocol: "ssh", RunnersToken: "glrt-plat",
+		SharedWithGroups: []SharedWithGroupOutput{{
+			GroupID: 81, GroupName: "security", GroupFullPath: "acme/sec", GroupAccessLevel: 30,
+			ExpiresAt: "2026-12-31", MemberRoleID: 2,
+		}},
+		SharedRunnersMinutesLimit: 1500, ExtraSharedRunnersMinutesLimit: 250,
+		IPRestrictionRanges: "192.168.0.0/16", AllowedEmailDomainsList: "acme.example",
+		Projects: []ProjectItem{{
+			ID: 71, Name: "api", PathWithNamespace: "acme/plat/api", Description: "the api", Visibility: "private",
+			WebURL: "https://gl.example.com/acme/plat/api", DefaultBranch: "main", Archived: new(true),
+			CreatedAt: "2026-01-15T10:00:00Z",
+		}},
+		SharedProjects: []ProjectItem{{
+			ID: 72, Name: "docs", PathWithNamespace: "acme/other/docs", Description: "the docs", Visibility: "public",
+			WebURL: "https://gl.example.com/acme/other/docs", DefaultBranch: "pages", Archived: new(false),
+			CreatedAt: "2026-01-16T11:00:00Z",
+		}},
+		StepUpAuthRequiredOAuthProvider: "okta",
+		AISettings:                      &toolutil.AISettingsOutput{DuoAgentPlatformEnabled: true, MinimumAccessLevelManage: "owner"},
+		UniqueProjectDownloadLimit:      new(int64(9)), UniqueProjectDownloadLimitIntervalSecs: new(int64(600)),
+		UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"},
+		UniqueProjectDownloadLimitAlertlist: []int64{31, 32},
+	}
+}
+
+// getDistinctGroup answers a group request with body and returns what Get
+// published for it.
+func getDistinctGroup(t *testing.T, body string) DetailOutput {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/61" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := Get(context.Background(), client, GetInput{GroupID: "61"})
+	if err != nil {
+		t.Fatalf(fmtGroupGetErr, err)
+	}
+	return out
+}
+
+// TestGet_PublishesEachFieldGitLabSent verifies the whole group a single-group
+// route answers with against [distinctGroupJSON], field for field and nested
+// object for nested object.
+//
+// A converter that copies a neighbor's field has no branch to flip, so both
+// gates pass it, and the fixtures before this one could not tell: they held
+// the name equal to the path, asserted two of the eleven statistics, and
+// named neither the level, branch and avatar strings nor the keys read off
+// the capture.
+func TestGet_PublishesEachFieldGitLabSent(t *testing.T) {
+	out := getDistinctGroup(t, distinctGroupJSON)
+	if want := distinctGroupDetail(); !reflect.DeepEqual(out, want) {
+		t.Errorf("Get() published\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestGet_PublishesEachFlagOnItsOwn verifies each boolean a single-group route
+// can send lands on the field named after it, by sending one flag at a time
+// and comparing the whole group against one carrying only that field.
+//
+// A block of flags has no fixture where no two values agree, and the earlier
+// fixture set ten of them true at once, so a converter reading the neighbor's
+// flag passed as long as the neighbor happened to agree.
+func TestGet_PublishesEachFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want DetailOutput
+	}{
+		{key: "request_access_enabled", want: DetailOutput{ID: 61, RequestAccessEnabled: true}},
+		{key: "lfs_enabled", want: DetailOutput{ID: 61, LFSEnabled: true}},
+		{key: "archived", want: DetailOutput{ID: 61, Archived: true}},
+		{key: "math_rendering_limits_enabled", want: DetailOutput{ID: 61, MathRenderingLimitsEnabled: true}},
+		{key: "lock_math_rendering_limits_enabled", want: DetailOutput{ID: 61, LockMathRenderingLimitsEnabled: true}},
+		{key: "duo_features_enabled", want: DetailOutput{ID: 61, DuoFeaturesEnabled: true}},
+		{key: "lock_duo_features_enabled", want: DetailOutput{ID: 61, LockDuoFeaturesEnabled: true}},
+		{key: "share_with_group_lock", want: DetailOutput{ID: 61, ShareWithGroupLock: true}},
+		{key: "require_two_factor_authentication", want: DetailOutput{ID: 61, RequireTwoFactorAuth: true}},
+		{key: "auto_devops_enabled", want: DetailOutput{ID: 61, AutoDevopsEnabled: true}},
+		{key: "emails_enabled", want: DetailOutput{ID: 61, EmailsEnabled: true}},
+		{key: "emails_disabled", want: DetailOutput{ID: 61, EmailsDisabled: true}},
+		{key: "mentions_disabled", want: DetailOutput{ID: 61, MentionsDisabled: true}},
+		{key: "crm_enabled", want: DetailOutput{ID: 61, CRMEnabled: true}},
+		{key: "show_diff_preview_in_email", want: DetailOutput{ID: 61, ShowDiffPreviewInEmail: true}},
+		{key: "resource_access_token_notify_inherited", want: DetailOutput{ID: 61, ResourceAccessTokenNotifyInherited: new(true)}},
+		{key: "lock_resource_access_token_notify_inherited", want: DetailOutput{ID: 61, LockResourceAccessTokenNotifyInherited: true}},
+		{key: "duo_core_features_enabled", want: DetailOutput{ID: 61, DuoCoreFeaturesEnabled: new(true)}},
+		{key: "auto_duo_code_review_enabled", want: DetailOutput{ID: 61, AutoDuoCodeReviewEnabled: new(true)}},
+		{key: "built_in_project_templates_enabled", want: DetailOutput{ID: 61, BuiltInProjectTemplatesEnabled: new(true)}},
+		{key: "lock_built_in_project_templates_enabled", want: DetailOutput{ID: 61, LockBuiltInProjectTemplatesEnabled: new(true)}},
+		{key: "web_based_commit_signing_enabled", want: DetailOutput{ID: 61, WebBasedCommitSigningEnabled: new(true)}},
+		{key: "allow_personal_snippets", want: DetailOutput{ID: 61, AllowPersonalSnippets: new(true)}},
+		{key: "prevent_sharing_groups_outside_hierarchy", want: DetailOutput{ID: 61, PreventSharingGroupsOutsideHierarchy: true}},
+		{key: "experiment_features_enabled", want: DetailOutput{ID: 61, ExperimentFeaturesEnabled: true}},
+		{key: "membership_lock", want: DetailOutput{ID: 61, MembershipLock: true}},
+		{key: "prevent_forking_outside_group", want: DetailOutput{ID: 61, PreventForkingOutsideGroup: true}},
+		{key: "only_allow_merge_if_pipeline_succeeds", want: DetailOutput{ID: 61, OnlyAllowMergeIfPipelineSucceeds: true}},
+		{key: "allow_merge_on_skipped_pipeline", want: DetailOutput{ID: 61, AllowMergeOnSkippedPipeline: true}},
+		{key: "only_allow_merge_if_all_discussions_are_resolved", want: DetailOutput{ID: 61, OnlyAllowMergeIfAllDiscussionsAreResolved: true}},
+		{key: "service_access_tokens_expiration_enforced", want: DetailOutput{ID: 61, ServiceAccessTokensExpirationEnforced: new(true)}},
+		{key: "auto_ban_user_on_excessive_projects_download", want: DetailOutput{ID: 61, AutoBanUserOnExcessiveProjectsDownload: new(true)}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := getDistinctGroup(t, `{"id":61,"`+tc.key+`":true}`)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("Get() published %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestGet_PublishesEachBranchProtectionFlagOnItsOwn verifies the three flags
+// of the default branch protection object the same way, since the fixture
+// that reaches it sets all three true and a swapped pair would pass.
+func TestGet_PublishesEachBranchProtectionFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want BranchProtectionDefaults
+	}{
+		{key: "allow_force_push", want: BranchProtectionDefaults{AllowForcePush: true}},
+		{key: "developer_can_initial_push", want: BranchProtectionDefaults{DeveloperCanInitialPush: true}},
+		{key: "code_owner_approval_required", want: BranchProtectionDefaults{CodeOwnerApprovalRequired: true}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := getDistinctGroup(t, `{"id":61,"default_branch_protection_defaults":{"`+tc.key+`":true}}`)
+			if out.DefaultBranchProtectionDefaults == nil || !reflect.DeepEqual(*out.DefaultBranchProtectionDefaults, tc.want) {
+				t.Errorf("Get() published %+v, want %+v", out.DefaultBranchProtectionDefaults, tc.want)
+			}
+		})
+	}
+}
+
+// distinctMemberJSON is a group member in which no two values agree, with the
+// keys the capture reads beside the SDK's own decode set alongside them.
+const distinctMemberJSON = `[{"id":10,"username":"devops1","name":"DevOps One","state":"blocked",
+	"avatar_url":"https://gl.example.com/uploads/10.png","web_url":"https://gl.example.com/devops1",
+	"created_at":"2026-02-03T04:05:06Z","expires_at":"2026-09-30","access_level":40,
+	"email":"dev@acme.example","public_email":"devops@acme.example",
+	"created_by":{"id":1,"username":"admin","name":"Admin","state":"active",
+		"avatar_url":"https://gl.example.com/uploads/1.png","web_url":"https://gl.example.com/admin"},
+	"group_saml_identity":{"extern_uid":"x1","provider":"okta","saml_provider_id":3},
+	"group_scim_identity":{"extern_uid":"s1","group_id":99,"active":true},
+	"member_role":{"id":2,"name":"Role"},"membership_state":"awaiting"}]`
+
+// listDistinctMembers answers a member list with body and returns the one
+// member the list published.
+func listDistinctMembers(t *testing.T, body string) MemberOutput {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathGroupMembers {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+	out, err := MembersList(context.Background(), client, MembersListInput{GroupID: "99"})
+	if err != nil {
+		t.Fatalf(fmtGroupMembersListErr, err)
+	}
+	if len(out.Members) != 1 {
+		t.Fatalf("len(out.Members) = %d, want 1", len(out.Members))
+	}
+	return out.Members[0]
+}
+
+// TestMembersList_PublishesEachFieldGitLabSent verifies the whole member a
+// list publishes against [distinctMemberJSON], the captured keys included, for
+// the reason [TestGet_PublishesEachFieldGitLabSent] gives: the member fixtures
+// before this one named the username, the access level and the sub-objects
+// and left the two addresses, the avatar and the dates to chance.
+func TestMembersList_PublishesEachFieldGitLabSent(t *testing.T) {
+	out := listDistinctMembers(t, distinctMemberJSON)
+	want := MemberOutput{
+		ID: 10, Username: "devops1", Name: "DevOps One", State: "blocked",
+		AvatarURL: "https://gl.example.com/uploads/10.png", AccessLevel: 40,
+		WebURL: "https://gl.example.com/devops1", CreatedAt: "2026-02-03T04:05:06Z",
+		CreatedBy: &MemberUserOutput{
+			ID: 1, Username: "admin", Name: "Admin", State: "active",
+			AvatarURL: "https://gl.example.com/uploads/1.png", WebURL: "https://gl.example.com/admin",
+		},
+		ExpiresAt: "2026-09-30", Email: "dev@acme.example", PublicEmail: "devops@acme.example",
+		GroupSAMLIdentity: &SAMLIdentityOutput{ExternUID: "x1", Provider: "okta", SAMLProviderID: 3},
+		GroupSCIMIdentity: &SCIMIdentityOutput{ExternUID: "s1", GroupID: 99, Active: true},
+		MembershipState:   "awaiting",
+		MemberRole:        &MemberRoleOutput{ID: 2, Name: "Role"},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("MembersList() published\n%+v\nwant\n%+v", out, want)
+	}
+}
+
+// TestMembersList_PublishesEachFlagOnItsOwn verifies the four booleans a
+// member carries, two decoded by the SDK and two read off the capture, each
+// land on their own field when sent alone.
+func TestMembersList_PublishesEachFlagOnItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want MemberOutput
+	}{
+		{key: "locked", want: MemberOutput{ID: 10, Locked: true}},
+		{key: "is_using_seat", want: MemberOutput{ID: 10, IsUsingSeat: true}},
+		{key: "two_factor_enabled", want: MemberOutput{ID: 10, TwoFactorEnabled: new(true)}},
+		{key: "override", want: MemberOutput{ID: 10, Override: new(true)}},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			out := listDistinctMembers(t, `[{"id":10,"`+tc.key+`":true}]`)
+			if !reflect.DeepEqual(out, tc.want) {
+				t.Errorf("MembersList() published %+v, want %+v", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestTransferLocationsList_PublishesEachFieldGitLabSent verifies the whole
+// transfer location against an answer in which no two of its six values
+// agree; the earlier fixture asserted the id and the full path and left the
+// two names, the URL and the avatar unread.
+func TestTransferLocationsList_PublishesEachFieldGitLabSent(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/7/transfer_locations" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"name":"Target","full_name":"Acme / Target",`+
+			`"full_path":"acme/target","web_url":"https://gl.example.com/groups/acme/target",`+
+			`"avatar_url":"https://gl.example.com/uploads/target.png"}]`)
+	}))
+
+	out, err := TransferLocationsList(context.Background(), client, TransferLocationsListInput{GroupID: "7"})
+	if err != nil {
+		t.Fatalf("TransferLocationsList() unexpected error: %v", err)
+	}
+	want := []TransferLocationOutput{{
+		ID: 99, Name: "Target", FullName: "Acme / Target", FullPath: "acme/target",
+		WebURL: "https://gl.example.com/groups/acme/target", AvatarURL: "https://gl.example.com/uploads/target.png",
+	}}
+	if !reflect.DeepEqual(out.Locations, want) {
+		t.Errorf("TransferLocationsList() published %+v, want %+v", out.Locations, want)
+	}
+}
+
+// recordedJSONBody answers one request with status and answer and returns the
+// body the handler sent, decoded, so a test can hold the whole request to a
+// value rather than search it for a substring.
+func recordedJSONBody(t *testing.T, status int, answer string, send func(*gitlabclient.Client) error) map[string]any {
+	t.Helper()
+	var sent []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		read, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+		sent = read
+		testutil.RespondJSON(w, status, answer)
+	}))
+	if err := send(client); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(sent, &body); err != nil {
+		t.Fatalf("decode the request body %q: %v", sent, err)
+	}
+	return body
+}
+
+// groupWriteSetting is one optional setting of a group write: the key GitLab
+// takes it under, the value it should carry, and the inputs that name it. A
+// setting only an update takes leaves create at its zero value.
+type groupWriteSetting struct {
+	name   string
+	key    string
+	value  any
+	create CreateInput
+	update UpdateInput
+}
+
+// groupWriteSettings is every optional setting a group write takes, each with
+// a value no other setting in the table carries, so a setting written under a
+// neighbor's key or with a neighbor's value cannot pass.
+func groupWriteSettings() []groupWriteSetting {
+	return []groupWriteSetting{
+		{"path", "path", "team", CreateInput{Path: "team"}, UpdateInput{Path: "team"}},
+		{"description", "description", "the team", CreateInput{Description: "the team"}, UpdateInput{Description: "the team"}},
+		{"visibility", "visibility", "internal", CreateInput{Visibility: "internal"}, UpdateInput{Visibility: "internal"}},
+		{"default_branch", "default_branch", "trunk", CreateInput{DefaultBranch: "trunk"}, UpdateInput{DefaultBranch: "trunk"}},
+		{"duo_availability", "duo_availability", "default_off", CreateInput{DuoAvailability: "default_off"}, UpdateInput{DuoAvailability: "default_off"}},
+		{"enabled_git_access_protocol", "enabled_git_access_protocol", "ssh", CreateInput{EnabledGitAccessProtocol: "ssh"}, UpdateInput{EnabledGitAccessProtocol: "ssh"}},
+		{"project_creation_level", "project_creation_level", "maintainer", CreateInput{ProjectCreationLevel: "maintainer"}, UpdateInput{ProjectCreationLevel: "maintainer"}},
+		{"subgroup_creation_level", "subgroup_creation_level", "owner", CreateInput{SubGroupCreationLevel: "owner"}, UpdateInput{SubGroupCreationLevel: "owner"}},
+		{"wiki_access_level", "wiki_access_level", "private", CreateInput{WikiAccessLevel: "private"}, UpdateInput{WikiAccessLevel: "private"}},
+		{"request_access_enabled", "request_access_enabled", true, CreateInput{RequestAccessEnabled: new(true)}, UpdateInput{RequestAccessEnabled: new(true)}},
+		{"lfs_enabled", "lfs_enabled", true, CreateInput{LFSEnabled: new(true)}, UpdateInput{LFSEnabled: new(true)}},
+		{"math_rendering_limits_enabled", "math_rendering_limits_enabled", true, CreateInput{MathRenderingLimitsEnabled: new(true)}, UpdateInput{MathRenderingLimitsEnabled: new(true)}},
+		{"web_based_commit_signing_enabled", "web_based_commit_signing_enabled", true, CreateInput{WebBasedCommitSigningEnabled: new(true)}, UpdateInput{WebBasedCommitSigningEnabled: new(true)}},
+		{"allow_personal_snippets", "allow_personal_snippets", true, CreateInput{AllowPersonalSnippets: new(true)}, UpdateInput{AllowPersonalSnippets: new(true)}},
+		{"crm_enabled", "crm_enabled", true, CreateInput{CRMEnabled: new(true)}, UpdateInput{CRMEnabled: new(true)}},
+		{"auto_devops_enabled", "auto_devops_enabled", true, CreateInput{AutoDevopsEnabled: new(true)}, UpdateInput{AutoDevopsEnabled: new(true)}},
+		{"emails_enabled", "emails_enabled", true, CreateInput{EmailsEnabled: new(true)}, UpdateInput{EmailsEnabled: new(true)}},
+		{"emails_disabled", "emails_disabled", true, CreateInput{EmailsDisabled: new(true)}, UpdateInput{EmailsDisabled: new(true)}},
+		{"experiment_features_enabled", "experiment_features_enabled", true, CreateInput{ExperimentFeaturesEnabled: new(true)}, UpdateInput{ExperimentFeaturesEnabled: new(true)}},
+		{"membership_lock", "membership_lock", true, CreateInput{MembershipLock: new(true)}, UpdateInput{MembershipLock: new(true)}},
+		{"mentions_disabled", "mentions_disabled", true, CreateInput{MentionsDisabled: new(true)}, UpdateInput{MentionsDisabled: new(true)}},
+		{"require_two_factor_authentication", "require_two_factor_authentication", true, CreateInput{RequireTwoFactorAuth: new(true)}, UpdateInput{RequireTwoFactorAuth: new(true)}},
+		{"share_with_group_lock", "share_with_group_lock", true, CreateInput{ShareWithGroupLock: new(true)}, UpdateInput{ShareWithGroupLock: new(true)}},
+		{"auto_ban_user_on_excessive_projects_download", "auto_ban_user_on_excessive_projects_download", true, CreateInput{AutoBanUserOnExcessiveProjectsDownload: new(true)}, UpdateInput{AutoBanUserOnExcessiveProjectsDownload: new(true)}},
+		{"default_branch_protection", "default_branch_protection", float64(4), CreateInput{DefaultBranchProtection: new(int64(4))}, UpdateInput{DefaultBranchProtection: new(int64(4))}},
+		{"extra_shared_runners_minutes_limit", "extra_shared_runners_minutes_limit", float64(250), CreateInput{ExtraSharedRunnersMinutesLimit: new(int64(250))}, UpdateInput{ExtraSharedRunnersMinutesLimit: new(int64(250))}},
+		{"shared_runners_minutes_limit", "shared_runners_minutes_limit", float64(1500), CreateInput{SharedRunnersMinutesLimit: new(int64(1500))}, UpdateInput{SharedRunnersMinutesLimit: new(int64(1500))}},
+		{"two_factor_grace_period", "two_factor_grace_period", float64(72), CreateInput{TwoFactorGracePeriod: new(int64(72))}, UpdateInput{TwoFactorGracePeriod: new(int64(72))}},
+		{"unique_project_download_limit", "unique_project_download_limit", float64(9), CreateInput{UniqueProjectDownloadLimit: new(int64(9))}, UpdateInput{UniqueProjectDownloadLimit: new(int64(9))}},
+		{"unique_project_download_limit_interval_in_seconds", "unique_project_download_limit_interval_in_seconds", float64(600), CreateInput{UniqueProjectDownloadLimitIntervalInSeconds: new(int64(600))}, UpdateInput{UniqueProjectDownloadLimitIntervalInSeconds: new(int64(600))}},
+		{"unique_project_download_limit_allowlist", "unique_project_download_limit_allowlist", []any{"alice", "bob"}, CreateInput{UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"}}, UpdateInput{UniqueProjectDownloadLimitAllowlist: []string{"alice", "bob"}}},
+		{"unique_project_download_limit_alertlist", "unique_project_download_limit_alertlist", []any{float64(31), float64(32)}, CreateInput{UniqueProjectDownloadLimitAlertlist: []int64{31, 32}}, UpdateInput{UniqueProjectDownloadLimitAlertlist: []int64{31, 32}}},
+		{
+			"default_branch_protection_defaults.allow_force_push", "default_branch_protection_defaults",
+			map[string]any{"allow_force_push": true},
+			CreateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{AllowForcePush: new(true)}},
+			UpdateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{AllowForcePush: new(true)}},
+		},
+		{
+			"default_branch_protection_defaults.developer_can_initial_push", "default_branch_protection_defaults",
+			map[string]any{"developer_can_initial_push": true},
+			CreateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{DeveloperCanInitialPush: new(true)}},
+			UpdateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{DeveloperCanInitialPush: new(true)}},
+		},
+		{
+			"default_branch_protection_defaults.code_owner_approval_required", "default_branch_protection_defaults",
+			map[string]any{"code_owner_approval_required": true},
+			CreateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{CodeOwnerApprovalRequired: new(true)}},
+			UpdateInput{DefaultBranchProtectionDefaults: &BranchProtectionDefaultsInput{CodeOwnerApprovalRequired: new(true)}},
+		},
+		// What only a create takes.
+		{"parent_id", "parent_id", float64(3), CreateInput{ParentID: 3}, UpdateInput{}},
+		{"organization_id", "organization_id", float64(5), CreateInput{OrganizationID: new(int64(5))}, UpdateInput{}},
+		// What only an update takes.
+		{"name", "name", "Renamed", CreateInput{}, UpdateInput{Name: "Renamed"}},
+		{"duo_features_enabled", "duo_features_enabled", true, CreateInput{}, UpdateInput{DuoFeaturesEnabled: new(true)}},
+		{"lock_duo_features_enabled", "lock_duo_features_enabled", true, CreateInput{}, UpdateInput{LockDuoFeaturesEnabled: new(true)}},
+		{"lock_math_rendering_limits_enabled", "lock_math_rendering_limits_enabled", true, CreateInput{}, UpdateInput{LockMathRenderingLimitsEnabled: new(true)}},
+		{"prevent_forking_outside_group", "prevent_forking_outside_group", true, CreateInput{}, UpdateInput{PreventForkingOutsideGroup: new(true)}},
+		{"prevent_sharing_groups_outside_hierarchy", "prevent_sharing_groups_outside_hierarchy", true, CreateInput{}, UpdateInput{PreventSharingGroupsOutside: new(true)}},
+		{"only_allow_merge_if_pipeline_succeeds", "only_allow_merge_if_pipeline_succeeds", true, CreateInput{}, UpdateInput{OnlyAllowMergeIfPipelineSucceeds: new(true)}},
+		{"allow_merge_on_skipped_pipeline", "allow_merge_on_skipped_pipeline", true, CreateInput{}, UpdateInput{AllowMergeOnSkippedPipeline: new(true)}},
+		{"only_allow_merge_if_all_discussions_are_resolved", "only_allow_merge_if_all_discussions_are_resolved", true, CreateInput{}, UpdateInput{OnlyAllowMergeIfAllDiscussionsAreResolved: new(true)}},
+		{"file_template_project_id", "file_template_project_id", float64(17), CreateInput{}, UpdateInput{FileTemplateProjectID: new(int64(17))}},
+		{"max_artifacts_size", "max_artifacts_size", float64(128), CreateInput{}, UpdateInput{MaxArtifactsSize: new(int64(128))}},
+		{"ip_restriction_ranges", "ip_restriction_ranges", "192.168.0.0/16", CreateInput{}, UpdateInput{IPRestrictionRanges: "192.168.0.0/16"}},
+		{"allowed_email_domains_list", "allowed_email_domains_list", "acme.example", CreateInput{}, UpdateInput{AllowedEmailDomainsList: "acme.example"}},
+		{"step_up_auth_required_oauth_provider", "step_up_auth_required_oauth_provider", "okta", CreateInput{}, UpdateInput{StepUpAuthRequiredOAuthProvider: "okta"}},
+		{"shared_runners_setting", "shared_runners_setting", "disabled_and_overridable", CreateInput{}, UpdateInput{SharedRunnersSetting: "disabled_and_overridable"}},
+	}
+}
+
+// TestGroupLists_EachFlagReachesTheQueryOnItsOwn verifies each boolean filter
+// a list handler takes, named alone, produces a query of exactly that flag: a
+// flag sent under a neighbor's name cannot pass a query held to one pair.
+//
+// The filter tests before this one set every flag of a handler true at once
+// and read each back by name, which a handler sending owned under starred
+// and starred under owned passes.
+func TestGroupLists_EachFlagReachesTheQueryOnItsOwn(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		key  string
+		send func(*gitlabclient.Client) error
+	}{
+		{"list", "owned", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{Owned: true}); return err }},
+		{"list", "top_level_only", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{TopLevelOnly: true}); return err }},
+		{"list", "all_available", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{AllAvailable: true}); return err }},
+		{"list", "statistics", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{Statistics: true}); return err }},
+		{"list", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{WithCustomAttributes: true})
+			return err
+		}},
+		{"list", "active", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{Active: new(true)}); return err }},
+		{"list", "archived", func(c *gitlabclient.Client) error { _, err := List(ctx, c, ListInput{Archived: new(true)}); return err }},
+		{"subgroups", "all_available", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", AllAvailable: true})
+			return err
+		}},
+		{"subgroups", "owned", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", Owned: true})
+			return err
+		}},
+		{"subgroups", "statistics", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", Statistics: true})
+			return err
+		}},
+		{"subgroups", "top_level_only", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", TopLevelOnly: true})
+			return err
+		}},
+		{"subgroups", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", WithCustomAttributes: true})
+			return err
+		}},
+		{"subgroups", "active", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", Active: new(true)})
+			return err
+		}},
+		{"subgroups", "archived", func(c *gitlabclient.Client) error {
+			_, err := SubgroupsList(ctx, c, SubgroupsListInput{GroupID: "99", Archived: new(true)})
+			return err
+		}},
+		{"projects", "archived", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", Archived: new(true)})
+			return err
+		}},
+		{"projects", "simple", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", Simple: true})
+			return err
+		}},
+		{"projects", "owned", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", Owned: true})
+			return err
+		}},
+		{"projects", "starred", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", Starred: true})
+			return err
+		}},
+		{"projects", "include_subgroups", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", IncludeSubGroups: true})
+			return err
+		}},
+		{"projects", "with_shared", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", WithShared: new(true)})
+			return err
+		}},
+		{"projects", "active", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", Active: new(true)})
+			return err
+		}},
+		{"projects", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", WithCustomAttributes: true})
+			return err
+		}},
+		{"projects", "with_issues_enabled", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", WithIssuesEnabled: new(true)})
+			return err
+		}},
+		{"projects", "with_merge_requests_enabled", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", WithMergeRequestsEnabled: new(true)})
+			return err
+		}},
+		{"projects", "with_security_reports", func(c *gitlabclient.Client) error {
+			_, err := ListProjects(ctx, c, ListProjectsInput{GroupID: "99", WithSecurityReports: new(true)})
+			return err
+		}},
+		{"shared_projects", "archived", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", Archived: new(true)})
+			return err
+		}},
+		{"shared_projects", "simple", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", Simple: new(true)})
+			return err
+		}},
+		{"shared_projects", "starred", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", Starred: new(true)})
+			return err
+		}},
+		{"shared_projects", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", WithCustomAttributes: new(true)})
+			return err
+		}},
+		{"shared_projects", "with_issues_enabled", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", WithIssuesEnabled: new(true)})
+			return err
+		}},
+		{"shared_projects", "with_merge_requests_enabled", func(c *gitlabclient.Client) error {
+			_, err := ListSharedProjects(ctx, c, ListSharedProjectsInput{GroupID: "99", WithMergeRequestsEnabled: new(true)})
+			return err
+		}},
+		{"shared_with", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := SharedWithList(ctx, c, SharedWithListInput{GroupID: "99", WithCustomAttributes: true})
+			return err
+		}},
+		{"invited", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := InvitedList(ctx, c, InvitedListInput{GroupID: "99", WithCustomAttributes: true})
+			return err
+		}},
+		{"members", "show_seat_info", func(c *gitlabclient.Client) error {
+			_, err := MembersList(ctx, c, MembersListInput{GroupID: "99", ShowSeatInfo: new(true)})
+			return err
+		}},
+		{"provisioned_users", "active", func(c *gitlabclient.Client) error {
+			_, err := ListProvisionedUsers(ctx, c, ListProvisionedUsersInput{GroupID: "99", Active: new(true)})
+			return err
+		}},
+		{"provisioned_users", "blocked", func(c *gitlabclient.Client) error {
+			_, err := ListProvisionedUsers(ctx, c, ListProvisionedUsersInput{GroupID: "99", Blocked: new(true)})
+			return err
+		}},
+		{"get", "with_custom_attributes", func(c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "99", WithCustomAttributes: true})
+			return err
+		}},
+		{"get", "with_projects", func(c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{GroupID: "99", WithProjects: new(true)})
+			return err
+		}},
+	} {
+		t.Run(tc.name+"/"+tc.key, func(t *testing.T) {
+			answer := "[]"
+			if tc.name == "get" {
+				answer = `{"id":99}`
+			}
+			query, _ := recordGroupRequest(t, answer, tc.send)
+			if want := tc.key + "=true"; query != want {
+				t.Errorf("query = %q, want %q", query, want)
+			}
+		})
+	}
+}
+
+// TestGroupWrites_EachSettingReachesTheRequestOnItsOwn verifies each optional
+// setting of a create or an update, named alone, produces a body of exactly
+// that setting under its own key with its own value, beside the name a create
+// always carries.
+//
+// The audit fixtures set every flag true and two of the limits to 500, so a
+// setting written under a neighbor's key passed whenever the neighbor was
+// set too; a body held to one key at a time has no neighbor to hide behind.
+func TestGroupWrites_EachSettingReachesTheRequestOnItsOwn(t *testing.T) {
+	const answer = `{"id":9,"name":"Team","path":"team","web_url":"https://gl/team"}`
+	for _, setting := range groupWriteSettings() {
+		if !reflect.DeepEqual(setting.create, CreateInput{}) {
+			t.Run("create/"+setting.name, func(t *testing.T) {
+				input := setting.create
+				input.Name = "Team"
+				body := recordedJSONBody(t, http.StatusCreated, answer, func(client *gitlabclient.Client) error {
+					_, err := Create(context.Background(), client, input)
+					return err
+				})
+				want := map[string]any{"name": "Team", setting.key: setting.value}
+				if !reflect.DeepEqual(body, want) {
+					t.Errorf("create body = %v, want %v", body, want)
+				}
+			})
+		}
+		if !reflect.DeepEqual(setting.update, UpdateInput{}) {
+			t.Run("update/"+setting.name, func(t *testing.T) {
+				input := setting.update
+				input.GroupID = "9"
+				body := recordedJSONBody(t, http.StatusOK, answer, func(client *gitlabclient.Client) error {
+					_, err := Update(context.Background(), client, input)
+					return err
+				})
+				want := map[string]any{setting.key: setting.value}
+				if !reflect.DeepEqual(body, want) {
+					t.Errorf("update body = %v, want %v", body, want)
+				}
+			})
+		}
 	}
 }
