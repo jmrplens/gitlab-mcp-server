@@ -69,67 +69,6 @@ func TestPurge_Error(t *testing.T) {
 	}
 }
 
-// ---------- Tests consolidated from coverage_test.go ----------.
-
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 1 {
-		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
-	}
-	if specs[0].OwnerPackage != "dependencyproxy" || specs[0].IndividualTool.Name != "gitlab_purge_dependency_proxy" {
-		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
-	}
-	if specs[0].Usage == "" {
-		t.Fatal("dependency proxy ActionSpec should define usage")
-	}
-	if len(specs[0].Aliases) == 0 {
-		t.Fatal("dependency proxy ActionSpec should define aliases")
-	}
-	if specs[0].ParameterGuidance["group_id"].SemanticRole == "" {
-		t.Fatal("dependency proxy ActionSpec should define group_id parameter guidance")
-	}
-}
-
-// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoute(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusAccepted)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	spec := ActionSpecs(client)[0]
-	res, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "5"})
-	if err != nil {
-		t.Fatalf("Route.Handler: %v", err)
-	}
-	if res == nil {
-		t.Fatal("nil result")
-	}
-}
-
-// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_CallRouteError(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
-	})
-
-	client := testutil.NewTestClient(t, handler)
-	spec := ActionSpecs(client)[0]
-	if _, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "5"}); err == nil {
-		t.Fatal("expected route error")
-	}
-}
-
 // TestPurge_Forbidden_NamesTheToolAndSuggestsTheRoleTheCallerNeeds asserts what
 // a caller refused by GitLab is actually told: the error names the tool they
 // invoked, and it carries corrective advice.
@@ -154,8 +93,8 @@ func TestPurge_Forbidden_NamesTheToolAndSuggestsTheRoleTheCallerNeeds(t *testing
 	}
 
 	msg := err.Error()
-	if tool := ActionSpecs(client)[0].IndividualTool.Name; !strings.Contains(msg, tool) {
-		t.Errorf("error does not name the tool %q: %s", tool, msg)
+	if !strings.Contains(msg, purgeTool) {
+		t.Errorf("error does not name the tool %q: %s", purgeTool, msg)
 	}
 	advice, found := suggestionIn(msg)
 	if !found {
@@ -197,34 +136,12 @@ func TestPurge_FailureThatIsNotForbidden_ReportsItWithoutTheRoleSuggestion(t *te
 			}
 
 			msg := err.Error()
-			if tool := ActionSpecs(client)[0].IndividualTool.Name; !strings.Contains(msg, tool) {
-				t.Errorf("error does not name the tool %q: %s", tool, msg)
+			if !strings.Contains(msg, purgeTool) {
+				t.Errorf("error does not name the tool %q: %s", purgeTool, msg)
 			}
 			if advice, found := suggestionIn(msg); found {
 				t.Errorf("a %d carries the permission suggestion %q: %s", tc.status, advice, msg)
 			}
 		})
-	}
-}
-
-// TestActionSpecs_CallRoute_PurgesTheGroupTheParamsName asserts that the group
-// a caller names in params is the group whose cache the route clears.
-//
-// The route is how every surface reaches this handler, and the existing route
-// tests answer any path at all, so a route that dropped group_id — or bound
-// some other field to it — would purge nothing and still be reported a success.
-// Answering only the one endpoint is what turns that into a failure.
-func TestActionSpecs_CallRoute_PurgesTheGroupTheParamsName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != purgeCachePath || r.Method != http.MethodDelete {
-			http.NotFound(w, r)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-	}))
-
-	spec := ActionSpecs(client)[0]
-	if _, err := spec.Route.Handler(t.Context(), map[string]any{"group_id": "5"}); err != nil {
-		t.Fatalf("Route.Handler: %v", err)
 	}
 }

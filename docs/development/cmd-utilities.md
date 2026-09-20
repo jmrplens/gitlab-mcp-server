@@ -208,6 +208,8 @@ This single binary replaces four former binaries. The legacy Make targets remain
 
 Generates the source-discovered inventory of ActionSpec catalog-first coverage. It reports `RegisterTools`/`RegisterMeta`/`ActionSpecs` presence, surface classification, and dynamic-catalog counts, plus catalog-first invariant checks.
 
+It also holds every exported `ActionSpecs` under `internal/tools` to something that aggregates it. That rule is separate from the inventory and reads the tree differently: the inventory sees a function of that name and treats its presence as health, while this asks whether anything calls it, resolved through the type checker (`cmd/internal/goprogram`) rather than by a text scan. A package whose specs nothing aggregates publishes usage lines, aliases, tags and parameter guidance that no surface serves, so a maintainer editing the obvious file changes nothing a model reads and gets a green build for it. The join cannot be `OwnerPackage`: an admin action's owner is the domain package its handler lives in, so a package can own catalog actions while its own `ActionSpecs` reaches nothing. A package deliberately in that state is declared in `cmd/audit_catalog_first/declarations.go`, where a declaration matching nothing is itself a finding.
+
 #### Usage
 
 ```bash
@@ -231,6 +233,7 @@ A JSON report with invariant checks. The binary exits non-zero on catalog-first 
 #### Make targets
 
 - `make audit-catalog-first`
+- `make analyze` (step 17)
 
 #### Notes
 

@@ -87,6 +87,192 @@ func TestActionSpecs_OwnerPackage_IsThePackageTheHandlerComesFrom(t *testing.T) 
 	}
 }
 
+// TestActionSpecs_MarkMigration_IsProjectedAsNonDestructive verifies the one
+// place this group deliberately disagrees with itself: marking a migration is
+// registered through NewDeleteActionSpec, so the action stays destructive for
+// the confirmation prompt and the read-only filter, while the tool an
+// individual-surface client is listed declares destructiveHint false.
+//
+// Both halves are asserted together because either one alone is satisfied by
+// deleting the override: with it gone the annotation simply follows the
+// catalog, and every other test here still passes. The assertion reads the
+// projected tool rather than the override field, because what a client is told
+// is the annotation, and the projection may narrow an override on its way out.
+func TestActionSpecs_MarkMigration_IsProjectedAsNonDestructive(t *testing.T) {
+	spec := specsByName(t, ActionSpecs(nil))["db_migration_mark"]
+	if !spec.Destructive {
+		t.Fatal("db_migration_mark should stay destructive in the catalog")
+	}
+
+	tool, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{
+		Description: "Mark a pending database migration as successfully executed.",
+	})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
+		t.Fatalf("individual tool declares no destructive hint: %+v", tool.Annotations)
+	}
+	if *tool.Annotations.DestructiveHint {
+		t.Error("destructiveHint = true, want false: the individual projection overrides the catalog classification")
+	}
+}
+
+// TestActionSpecs_Tags_CarryTheDomainTagsOfTheirOwnerPackage verifies every
+// admin action is tagged with the domain tags its owner package contributes,
+// and that adminOwnerTags describes the tree in both directions.
+//
+// Those tags were the one part of the discovery metadata this group had no copy
+// of. Each of the twenty-three owner packages used to declare a full set of
+// specs that nothing aggregated, tagged for its own domain, while the served
+// spec carried "admin" and nothing else: a model searching for "sidekiq" or
+// "secure file" matched a spec no surface would ever register. The table is
+// checked from both ends so an owner that loses its last action fails here
+// rather than leaving behind an entry nothing reads.
+func TestActionSpecs_Tags_CarryTheDomainTagsOfTheirOwnerPackage(t *testing.T) {
+	specs := ActionSpecs(nil)
+	owners := make(map[string]bool, len(adminOwnerTags))
+	for _, spec := range specs {
+		owners[spec.OwnerPackage] = true
+		t.Run(spec.Name, func(t *testing.T) {
+			for _, tag := range adminOwnerTags[spec.OwnerPackage] {
+				if !slices.Contains(spec.Tags, tag) {
+					t.Errorf("Tags = %v, want the %s tag %q", spec.Tags, spec.OwnerPackage, tag)
+				}
+			}
+			seen := make(map[string]bool, len(spec.Tags))
+			for _, tag := range spec.Tags {
+				if seen[tag] {
+					t.Errorf("Tags = %v, want %q once", spec.Tags, tag)
+				}
+				seen[tag] = true
+			}
+		})
+	}
+
+	for owner := range adminOwnerTags {
+		if !owners[owner] {
+			t.Errorf("adminOwnerTags names %q, which owns no admin action", owner)
+		}
+	}
+	for owner := range owners {
+		if _, ok := adminOwnerTags[owner]; !ok {
+			t.Errorf("owner %q contributes no domain tag; every owner of an admin action belongs in adminOwnerTags", owner)
+		}
+	}
+}
+
+// TestActionSpecs_Usage_NamesEachActionsOwnOperation verifies that no two
+// admin actions publish the same usage line.
+//
+// The usage is what a model reads to choose between siblings, and a pair that
+// shares one sentence tells it nothing: reading the plan limits and writing
+// them were described identically until each got a sentence of its own, and
+// every surface still registered, routed and answered while the text was
+// wrong. That is a discovery defect rather than a runtime one, which is the
+// worse half to leave.
+func TestActionSpecs_Usage_NamesEachActionsOwnOperation(t *testing.T) {
+	byUsage := map[string]string{}
+	for _, spec := range ActionSpecs(nil) {
+		if previous, shared := byUsage[spec.Usage]; shared {
+			t.Errorf("%s and %s publish the same usage %q", previous, spec.Name, spec.Usage)
+			continue
+		}
+		byUsage[spec.Usage] = spec.Name
+	}
+}
+
+// TestActionSpecs_ParameterGuidance_NamesOnlyParametersTheActionDeclares
+// verifies that no admin action carries guidance for a parameter its own input
+// schema has no property for.
+//
+// The projection refuses such a spec outright, so this asserts the same rule
+// where a maintainer edits rather than where the catalog is assembled. It is
+// also the rule the deleted per-package copies of these specs broke without
+// anybody noticing: one guidance map was written per package and applied to
+// every action in it, so a list action advertised guidance for the identifier
+// only its get, update and delete siblings take. Nothing validated them,
+// because nothing built them.
+func TestActionSpecs_ParameterGuidance_NamesOnlyParametersTheActionDeclares(t *testing.T) {
+	for _, spec := range ActionSpecs(nil) {
+		if len(spec.ParameterGuidance) == 0 {
+			continue
+		}
+		t.Run(spec.Name, func(t *testing.T) {
+			properties, _ := spec.Route.InputSchema["properties"].(map[string]any)
+			for parameter := range spec.ParameterGuidance {
+				if _, ok := properties[parameter]; !ok {
+					t.Errorf("guidance names parameter %q, which %s does not declare", parameter, spec.Name)
+				}
+			}
+		})
+	}
+}
+
+// TestApplyAdminMeta_Guidance_IsAddedBesideWhatTheBuilderWrote verifies that an
+// entry's guidance is merged into whatever guidance the options already carry
+// rather than replacing the map, and that an entry stating none leaves it
+// alone. Both halves matter: the dedicated builders that write their own
+// guidance run after this, and an entry that silently emptied the map would
+// still produce a valid spec.
+func TestApplyAdminMeta_Guidance_IsAddedBesideWhatTheBuilderWrote(t *testing.T) {
+	built := toolutil.ParameterGuidance{SemanticRole: "built_role"}
+	fromEntry := toolutil.ParameterGuidance{SemanticRole: "entry_role"}
+
+	tests := []struct {
+		name string
+		meta adminActionMetaEntry
+		want map[string]toolutil.ParameterGuidance
+	}{
+		{
+			name: "entry states guidance",
+			meta: adminActionMetaEntry{guidance: map[string]toolutil.ParameterGuidance{"entry_param": fromEntry}},
+			want: map[string]toolutil.ParameterGuidance{"built_param": built, "entry_param": fromEntry},
+		},
+		{
+			name: "entry states none",
+			meta: adminActionMetaEntry{usage: "Usage stated by the table entry."},
+			want: map[string]toolutil.ParameterGuidance{"built_param": built},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			options := toolutil.ActionSpecOptions{
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{"built_param": built},
+			}
+			applyAdminMeta(&options, tt.meta)
+			if len(options.ParameterGuidance) != len(tt.want) {
+				t.Fatalf("ParameterGuidance = %v, want %v", options.ParameterGuidance, tt.want)
+			}
+			for parameter, want := range tt.want {
+				if got := options.ParameterGuidance[parameter]; got.SemanticRole != want.SemanticRole {
+					t.Errorf("ParameterGuidance[%q].SemanticRole = %q, want %q", parameter, got.SemanticRole, want.SemanticRole)
+				}
+			}
+		})
+	}
+}
+
+// TestApplyAdminMeta_Guidance_OnOptionsThatCarryNone_StartsAMapOfItsOwn
+// verifies the nil case: an action whose builder wrote no guidance gains
+// exactly the entry's, in a map the table does not share. Writing into the
+// table's own map would leak one action's later edits into every sibling that
+// names the same shared guidance value.
+func TestApplyAdminMeta_Guidance_OnOptionsThatCarryNone_StartsAMapOfItsOwn(t *testing.T) {
+	entry := adminActionMetaEntry{guidance: map[string]toolutil.ParameterGuidance{"entry_param": {SemanticRole: "entry_role"}}}
+	var options toolutil.ActionSpecOptions
+	applyAdminMeta(&options, entry)
+
+	if got := options.ParameterGuidance["entry_param"].SemanticRole; got != "entry_role" {
+		t.Fatalf("ParameterGuidance[\"entry_param\"].SemanticRole = %q, want %q", got, "entry_role")
+	}
+	options.ParameterGuidance["added_after"] = toolutil.ParameterGuidance{SemanticRole: "added_role"}
+	if _, ok := entry.guidance["added_after"]; ok {
+		t.Error("writing to the options guidance reached the entry's own map")
+	}
+}
+
 // TestActionSpecs_SelectedActionSemantics verifies representative admin actions
 // retain their canonical read-only, destructive, and idempotency classifications.
 func TestActionSpecs_SelectedActionSemantics(t *testing.T) {

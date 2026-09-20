@@ -17,13 +17,6 @@ const (
 	actionTokenList   = "admin.cluster_agent_token_list"
 	actionTokenCreate = "admin.cluster_agent_token_create"
 	actionTokenRevoke = "admin.cluster_agent_token_revoke"
-
-	// A cluster agent is what deploys to an environment, so the two sibling
-	// reads worth naming from here are the environments and the deployments
-	// that ran against them. The deployment actions are aggregated into the
-	// environment group, which is why the ID is not "deployment.list".
-	actionEnvironmentList = "environment.list"
-	actionDeploymentList  = "environment.deployment_list"
 )
 
 // publishedActionIDs returns every canonical action ID this package hands a
@@ -37,7 +30,5 @@ func publishedActionIDs() []string {
 		actionTokenList,
 		actionTokenCreate,
 		actionTokenRevoke,
-		actionEnvironmentList,
-		actionDeploymentList,
 	}
 }

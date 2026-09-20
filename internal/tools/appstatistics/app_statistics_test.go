@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -223,64 +222,5 @@ func TestFormatGetMarkdown_Cov_Coverage(t *testing.T) {
 	want := statisticsCard(80, 100, 50, 15, 20, 30, 40, 10, 5, 3, 7)
 	if got != want {
 		t.Errorf("FormatGetMarkdown() =\n%q\nwant:\n%q", got, want)
-	}
-}
-
-// TestActionSpecs_Metadata_Coverage validates the Metadata_Coverage route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata_Coverage(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 1 {
-		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
-	}
-	if specs[0].OwnerPackage != "appstatistics" || specs[0].IndividualTool.Name != "gitlab_get_application_statistics" {
-		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
-	}
-	if !strings.Contains(specs[0].Usage, "instance-wide application statistics") {
-		t.Fatalf("Usage = %q, want instance statistics guidance", specs[0].Usage)
-	}
-	if !slices.Contains(specs[0].Aliases, "instance statistics") {
-		t.Fatalf("Aliases = %v, want instance statistics alias", specs[0].Aliases)
-	}
-	if !strings.Contains(specs[0].IndividualTool.Description, "Returns:") || !strings.Contains(specs[0].IndividualTool.Description, "See also:") {
-		t.Fatalf("Description = %q, want Returns/See also guidance", specs[0].IndividualTool.Description)
-	}
-}
-
-// TestActionSpecs_CallRoute_Coverage validates the CallRoute_Coverage route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoute_Coverage(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
-	})
-	client := testutil.NewTestClient(t, handler)
-	spec := ActionSpecs(client)[0]
-	res, err := spec.Route.Handler(t.Context(), map[string]any{})
-	if err != nil {
-		t.Fatalf("Route.Handler: %v", err)
-	}
-	if res == nil {
-		t.Fatal("nil result")
-	}
-}
-
-// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_CallRouteError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-
-	client := testutil.NewTestClient(t, mux)
-	spec := ActionSpecs(client)[0]
-	if _, err := spec.Route.Handler(t.Context(), map[string]any{}); err == nil {
-		t.Fatal("expected route error")
 	}
 }

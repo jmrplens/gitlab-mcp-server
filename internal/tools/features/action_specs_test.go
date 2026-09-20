@@ -1,287 +1,83 @@
-// action_specs_test.go contains canonical-route tests for feature flag actions.
+// action_specs_test.go covers the route this package contributes to the
+// canonical action catalog. The specs themselves live in
+// internal/tools/adminspecs and are tested there.
 package features
 
 import (
-	"context"
 	"net/http"
 	"slices"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const actionSpecFeatureJSON = `{"name":"flag1","state":"on","gates":[{"key":"boolean","value":true}]}`
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
-	if len(byTool) != 4 {
-		t.Fatalf("unique individual tools = %d, want 4", len(byTool))
-	}
-	for toolName, spec := range byTool {
-		if spec.OwnerPackage != "features" {
-			t.Fatalf("OwnerPackage for %s = %q, want features", toolName, spec.OwnerPackage)
-		}
-		if spec.Usage == "" {
-			t.Fatalf("Usage for %s should not be empty", toolName)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Fatalf("Aliases for %s should not be empty", toolName)
-		}
-	}
-	if byTool["gitlab_set_feature_flag"].ParameterGuidance["name"].SemanticRole == "" {
-		t.Fatal("gitlab_set_feature_flag should define name parameter guidance")
-	}
-	if !byTool["gitlab_delete_feature_flag"].Route.Destructive {
-		t.Fatal("gitlab_delete_feature_flag should be destructive")
-	}
-}
+// TestSetRoute_InputSchema_AcceptsTheThreeShapesAGateTakes verifies that the
+// route widens the reflected schema for `value`.
+//
+// It is the reason this route exists at all: a feature gate is set to a
+// boolean, a percentage or a string, and the schema reflection over SetInput
+// produces one type for the field. A model reading a schema that names a single
+// type sends only that shape, so the widening is what makes two thirds of the
+// endpoint reachable.
+func TestSetRoute_InputSchema_AcceptsTheThreeShapesAGateTakes(t *testing.T) {
+	route := SetRoute(testutil.NewTestClient(t, featureActionHandler()))
 
-// TestActionSpecs_Metadata_DescribesTheActionItIsAttachedTo holds each action's
-// usage line and parameter guidance to the action itself, rather than to the
-// weaker claim that both are non-empty. featureOptions decides all four from one
-// actionName, so a guard that names the wrong action there moves the metadata
-// wholesale: a delete tool would advertise the list usage, or a read tool would
-// ask a model for a `name` it takes no such parameter for. That is a discovery
-// defect and not a runtime one, which is the worse half to leave — the usage
-// line and the guidance are what a model reads to decide the call is possible,
-// and every handler would keep working while they said the wrong thing. The
-// reads are asserted to carry no guidance at all for the same reason: the
-// absence is the property, and only naming it makes an over-broad guard fail.
-func TestActionSpecs_Metadata_DescribesTheActionItIsAttachedTo(t *testing.T) {
-	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
-
-	const (
-		listUsage   = "List instance feature flags and definitions."
-		setUsage    = "Set or update an instance feature flag value (bool/int/string)."
-		deleteUsage = "Delete an instance feature flag override by name."
-	)
-
-	tests := []struct {
-		tool          string
-		usage         string
-		guidanceNames []string
-	}{
-		{tool: "gitlab_list_features", usage: listUsage},
-		{tool: "gitlab_list_feature_definitions", usage: listUsage},
-		{tool: "gitlab_set_feature_flag", usage: setUsage, guidanceNames: []string{"name", "value"}},
-		{tool: "gitlab_delete_feature_flag", usage: deleteUsage, guidanceNames: []string{"name"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.tool, func(t *testing.T) {
-			spec := byTool[tt.tool]
-			if spec.Usage != tt.usage {
-				t.Errorf("Usage = %q, want %q", spec.Usage, tt.usage)
-			}
-			got := make([]string, 0, len(spec.ParameterGuidance))
-			for param := range spec.ParameterGuidance {
-				got = append(got, param)
-			}
-			slices.Sort(got)
-			want := slices.Clone(tt.guidanceNames)
-			slices.Sort(want)
-			if !slices.Equal(got, want) {
-				t.Errorf("guided parameters = %v, want %v", got, want)
-			}
-			for _, param := range tt.guidanceNames {
-				if spec.ParameterGuidance[param].SemanticRole == "" {
-					t.Errorf("guidance for %q carries no SemanticRole", param)
-				}
-			}
-		})
-	}
-}
-
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallRoutes(t *testing.T) {
-	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
-
-	tests := []struct {
-		tool string
-		args map[string]any
-	}{
-		{"gitlab_list_features", map[string]any{}},
-		{"gitlab_list_feature_definitions", map[string]any{}},
-		{"gitlab_set_feature_flag", map[string]any{"name": "flag1", "value": true}},
-		{"gitlab_delete_feature_flag", map[string]any{"name": "flag1"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.tool, func(t *testing.T) {
-			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-// TestActionSpecs_SetRouteSchema validates the SetRouteSchema route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_SetRouteSchema(t *testing.T) {
-	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
-
-	properties, ok := byTool["gitlab_set_feature_flag"].Route.InputSchema["properties"].(map[string]any)
+	properties, ok := route.InputSchema["properties"].(map[string]any)
 	if !ok {
-		t.Fatalf("properties schema has type %T", byTool["gitlab_set_feature_flag"].Route.InputSchema["properties"])
+		t.Fatalf("properties schema has type %T, want map[string]any", route.InputSchema["properties"])
 	}
 	value, ok := properties["value"].(map[string]any)
 	if !ok {
-		t.Fatalf("value schema has type %T", properties["value"])
+		t.Fatalf("value schema has type %T, want map[string]any", properties["value"])
+	}
+	if _, typed := value["type"]; typed {
+		t.Errorf("value schema still names one type: %v", value)
 	}
 	oneOf, ok := value["oneOf"].([]any)
 	if !ok {
-		t.Fatalf("value oneOf has type %T", value["oneOf"])
+		t.Fatalf("value oneOf has type %T, want []any", value["oneOf"])
 	}
-	if len(oneOf) != 3 {
-		t.Fatalf("value oneOf length = %d, want 3", len(oneOf))
+	// The set and not the count: three alternatives that repeat a type, or
+	// name one a gate cannot take, would still be three.
+	var got []string
+	for _, alternative := range oneOf {
+		shape, isMap := alternative.(map[string]any)
+		if !isMap {
+			t.Fatalf("value oneOf alternative has type %T, want map[string]any", alternative)
+		}
+		kind, isString := shape["type"].(string)
+		if !isString {
+			t.Fatalf("value oneOf alternative %v names no type", shape)
+		}
+		got = append(got, kind)
+	}
+	slices.Sort(got)
+	if want := []string{"boolean", "integer", "string"}; !slices.Equal(got, want) {
+		t.Fatalf("value oneOf types = %v, want %v", got, want)
 	}
 }
 
-// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_DeleteOutput(t *testing.T) {
-	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
+// TestSetRoute_Handler_SetsTheFlag verifies that the widened route still
+// reaches the handler it wraps, so the schema rewrite is not paid for with a
+// route that cannot run.
+func TestSetRoute_Handler_SetsTheFlag(t *testing.T) {
+	route := SetRoute(testutil.NewTestClient(t, featureActionHandler()))
 
-	result, err := byTool["gitlab_delete_feature_flag"].Route.Handler(t.Context(), map[string]any{"name": "flag1"})
+	result, err := route.Handler(t.Context(), map[string]any{"name": "flag1", "value": true})
 	if err != nil {
-		t.Fatalf("Route.Handler(gitlab_delete_feature_flag) error: %v", err)
-	}
-	out, ok := result.(toolutil.DeleteOutput)
-	if !ok {
-		t.Fatalf("Route.Handler(gitlab_delete_feature_flag) returned %T, want toolutil.DeleteOutput", result)
-	}
-	if out.Message != "Successfully deleted feature flag." {
-		t.Fatalf("delete message = %q", out.Message)
-	}
-}
-
-// TestActionSpecs_DeleteOutputError validates the DeleteOutputError route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_DeleteOutputError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
-	}))
-	_, err := deleteOutput(t.Context(), client, DeleteInput{Name: "flag1"})
-	if err == nil {
-		t.Fatal("deleteOutput() error = nil, want backend error")
-	}
-}
-
-// TestActionSpecs_ErrorsPropagate validates the ErrorsPropagate route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_ErrorsPropagate(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	}))
-	byTool := featureSpecsByTool(t, ActionSpecs(client))
-
-	tests := []struct {
-		tool string
-		args map[string]any
-	}{
-		{"gitlab_list_features", map[string]any{}},
-		{"gitlab_set_feature_flag", map[string]any{"name": "test_flag", "value": "true"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.tool, func(t *testing.T) {
-			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
-			if err == nil {
-				t.Fatalf("Route.Handler(%s) expected error", tt.tool)
-			}
-		})
-	}
-}
-
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	byTool := featureSpecsByTool(t, ActionSpecs(client))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_feature_flag"], toolutil.SurfaceToolRegisterOptions{
-		Description: "Test feature flag destructive confirmation.",
-		Icons:       toolutil.IconConfig,
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		session.Close()
-		_ = serverSession.Wait()
-	})
-
-	result, callErr := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_feature_flag",
-		Arguments: map[string]any{"name": "test_flag"},
-	})
-	if callErr != nil {
-		t.Fatalf("CallTool error: %v", callErr)
+		t.Fatalf("Handler() error = %v, want nil", err)
 	}
 	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
+		t.Fatal("Handler() returned nil")
 	}
 }
 
 func featureActionHandler() http.Handler {
 	handler := http.NewServeMux()
-	handler.HandleFunc("GET /api/v4/features", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[`+actionSpecFeatureJSON+`]`)
-	})
-	handler.HandleFunc("GET /api/v4/features/definitions", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"name":"def1","type":"development","group":"group::ide","milestone":"15.0","default_enabled":true,"log_state_changes":false}]`)
-	})
 	handler.HandleFunc("POST /api/v4/features/flag1", func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, actionSpecFeatureJSON)
 	})
-	handler.HandleFunc("DELETE /api/v4/features/flag1", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
 	return handler
-}
-
-func featureSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	t.Helper()
-	byTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		toolName := spec.IndividualTool.Name
-		if toolName == "" {
-			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
-		}
-		if _, exists := byTool[toolName]; exists {
-			t.Fatalf("duplicate individual tool %q", toolName)
-		}
-		byTool[toolName] = spec
-	}
-	return byTool
 }

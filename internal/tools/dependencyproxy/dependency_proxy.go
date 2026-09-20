@@ -10,6 +10,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// purgeTool is the individual tool name a refused purge names back to the
+// caller. The spec that registers it is declared in internal/tools/adminspecs,
+// so this is the one spelling in this package and what its tests read, rather
+// than a literal written twice.
+const purgeTool = "gitlab_purge_dependency_proxy"
+
 // PurgeInput contains parameters for purging the dependency proxy cache.
 type PurgeInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
@@ -19,7 +25,7 @@ type PurgeInput struct {
 func Purge(ctx context.Context, client *gitlabclient.Client, input PurgeInput) error {
 	_, err := client.GL().DependencyProxy.PurgeGroupDependencyProxy(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("gitlab_purge_dependency_proxy", err, http.StatusForbidden,
+		return toolutil.WrapErrWithStatusHint(purgeTool, err, http.StatusForbidden,
 			"purging the dependency proxy cache requires group Owner role; verify group_id with gitlab_group_get; the dependency proxy must be enabled at group level")
 	}
 	return nil

@@ -302,44 +302,44 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ActionSpec route execution — all 6 individual tools
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
-func TestActionSpecs_CallRoutes(t *testing.T) {
+// TestTerraformStates_EachHandlerReachesItsOwnEndpoint drives all six handlers
+// against the endpoints GitLab serves them on, so one pointed at a sibling's
+// path fails rather than being answered by a catch-all.
+func TestTerraformStates_EachHandlerReachesItsOwnEndpoint(t *testing.T) {
 	client := testutil.NewTestClient(t, terraformHandler())
-	specs := ActionSpecs(client)
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
 
-	tools := []struct {
+	tests := []struct {
 		name string
-		tool string
-		args map[string]any
+		call func() error
 	}{
-		{"list", "gitlab_list_terraform_states", map[string]any{"project_path": "group/project"}},
-		{"get", "gitlab_get_terraform_state", map[string]any{"project_path": "group/project", "name": "state1"}},
-		{"delete", "gitlab_delete_terraform_state", map[string]any{"project_id": "1", "name": "state1"}},
-		{"delete_version", "gitlab_delete_terraform_state_version", map[string]any{"project_id": "1", "name": "state1", "serial": float64(5)}},
-		{"lock", "gitlab_lock_terraform_state", map[string]any{"project_id": "1", "name": "state1"}},
-		{"unlock", "gitlab_unlock_terraform_state", map[string]any{"project_id": "1", "name": "state1"}},
+		{name: "list", call: func() error {
+			_, err := List(t.Context(), client, ListInput{ProjectPath: "group/project"})
+			return err
+		}},
+		{name: "get", call: func() error {
+			_, err := Get(t.Context(), client, GetInput{ProjectPath: "group/project", Name: "state1"})
+			return err
+		}},
+		{name: "delete", call: func() error {
+			return Delete(t.Context(), client, DeleteInput{ProjectID: "1", Name: "state1"})
+		}},
+		{name: "delete_version", call: func() error {
+			return DeleteVersion(t.Context(), client, DeleteVersionInput{ProjectID: "1", Name: "state1", Serial: 5})
+		}},
+		{name: "lock", call: func() error {
+			_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+			return err
+		}},
+		{name: "unlock", call: func() error {
+			_, err := Unlock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+			return err
+		}},
 	}
 
-	for _, tt := range tools {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.tool]
-			if !ok {
-				t.Fatalf("missing ActionSpec for %s", tt.tool)
-			}
-			result, err := spec.Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
+			if err := tt.call(); err != nil {
+				t.Fatalf("%s error = %v, want nil", tt.name, err)
 			}
 		})
 	}

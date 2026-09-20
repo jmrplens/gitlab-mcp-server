@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -531,155 +529,6 @@ func TestFormatSetMarkdown_Coverage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ActionSpecs — metadata
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	specs := ActionSpecs(client)
-	byTool := customAttributeSpecsByTool(t, specs)
-
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
-	}
-	if len(byTool) != len(specs) {
-		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
-	}
-	if !byTool["gitlab_delete_custom_attribute"].Route.Destructive {
-		t.Fatal("gitlab_delete_custom_attribute should be destructive")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ActionSpecs route coverage
-// ---------------------------------------------------------------------------.
-
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
-func TestActionSpecs_CallAllRoutes(t *testing.T) {
-	byTool := newCustomAttributeRouteSpecs(t)
-
-	tools := []struct {
-		name string
-		tool string
-		args map[string]any
-	}{
-		{"list", "gitlab_list_custom_attributes", map[string]any{
-			"resource_type": "user", "resource_id": float64(1),
-		}},
-		{"get", "gitlab_get_custom_attribute", map[string]any{
-			"resource_type": "user", "resource_id": float64(1), "key": "dept",
-		}},
-		{"set", "gitlab_set_custom_attribute", map[string]any{
-			"resource_type": "user", "resource_id": float64(1), "key": "dept", "value": "eng",
-		}},
-		{"delete", "gitlab_delete_custom_attribute", map[string]any{
-			"resource_type": "user", "resource_id": float64(1), "key": "dept",
-		}},
-	}
-
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler(%s) error: %v", tt.tool, err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
-			}
-		})
-	}
-}
-
-// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestActionSpecs_ErrorPaths(t *testing.T) {
-	handler := http.NewServeMux()
-	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	byTool := customAttributeSpecsByTool(t, ActionSpecs(client))
-
-	tools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_list_custom_attributes", map[string]any{"resource_type": "users", "resource_id": float64(1)}},
-		{"gitlab_get_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k"}},
-		{"gitlab_set_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k", "value": "v"}},
-		{"gitlab_delete_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k"}},
-	}
-	for _, tt := range tools {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := byTool[tt.name].Route.Handler(t.Context(), tt.args)
-			if err == nil {
-				t.Fatalf("expected error for %s with failing backend", tt.name)
-			}
-		})
-	}
-}
-
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	handler := http.NewServeMux()
-	client := testutil.NewTestClient(t, handler)
-	byTool := customAttributeSpecsByTool(t, ActionSpecs(client))
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	toolutil.RegisterSurfaceToolFromSpec(server, byTool["gitlab_delete_custom_attribute"], toolutil.SurfaceToolRegisterOptions{
-		Description: "Test custom attribute destructive confirmation.",
-		Icons:       toolutil.IconConfig,
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
-		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-			return &mcp.ElicitResult{Action: "decline"}, nil
-		},
-	})
-	session, connectErr := mcpClient.Connect(ctx, ct, nil)
-	if connectErr != nil {
-		t.Fatalf("client connect: %v", connectErr)
-	}
-	t.Cleanup(func() {
-		session.Close()
-		_ = serverSession.Wait()
-	})
-
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "gitlab_delete_custom_attribute",
-		Arguments: map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected non-nil result for declined confirmation")
-	}
-	found := false
-	for _, c := range result.Content {
-		if tc, ok := c.(*mcp.TextContent); ok && tc.Text != "" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected non-empty text content in cancellation result")
-	}
-}
-
 // ---------------------------------------------------------------------------
 // What the switch, the refusal and the confirmation have to hold
 // ---------------------------------------------------------------------------.
@@ -845,40 +694,18 @@ func TestDeleteOutput_IsTheConfirmationEveryDestructiveActionGives(t *testing.T)
 	}
 }
 
-// newCustomAttributeRouteSpecs constructs custom attribute route specs test fixtures.
-func newCustomAttributeRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
-	t.Helper()
+// TestDeleteOutput_Refused_ReportsTheRefusalRatherThanTheConfirmation verifies
+// the other half of the adapter: the confirmation shape is returned only when
+// GitLab actually deleted the attribute, so a refusal cannot reach a model as
+// a success.
+func TestDeleteOutput_Refused_ReportsTheRefusalRatherThanTheConfirmation(t *testing.T) {
+	client := testutil.NewTestClient(t, statusHandler(http.StatusForbidden))
 
-	handler := http.NewServeMux()
-	handler.HandleFunc("GET /api/v4/users/1/custom_attributes", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"key":"dept","value":"eng"}]`)
-	})
-	handler.HandleFunc("GET /api/v4/users/1/custom_attributes/dept", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"key":"dept","value":"eng"}`)
-	})
-	handler.HandleFunc("PUT /api/v4/users/1/custom_attributes/dept", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"key":"dept","value":"eng"}`)
-	})
-	handler.HandleFunc("DELETE /api/v4/users/1/custom_attributes/dept", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	return customAttributeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
-}
-
-// customAttributeSpecsByTool supports custom attribute specs by tool assertions in customattributes tests.
-func customAttributeSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
-	t.Helper()
-	byTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		toolName := spec.IndividualTool.Name
-		if toolName == "" {
-			t.Fatalf("spec %s missing IndividualTool.Name", spec.Name)
-		}
-		if _, exists := byTool[toolName]; exists {
-			t.Fatalf("duplicate individual tool %q", toolName)
-		}
-		byTool[toolName] = spec
+	got, err := DeleteOutput(t.Context(), client, DeleteInput{ResourceType: testTypeUser, ResourceID: 1, Key: testKeyDept})
+	if err == nil {
+		t.Fatal("DeleteOutput() error = nil, want the instance refusal")
 	}
-	return byTool
+	if got.Status != "" {
+		t.Errorf("DeleteOutput() = %+v, want the zero output beside the error", got)
+	}
 }
