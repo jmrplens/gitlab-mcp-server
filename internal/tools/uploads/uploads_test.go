@@ -988,7 +988,16 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_WithTimestampAndUploader verifies List maps CreatedAt and UploadedBy.
+// TestList_WithTimestampAndUploader verifies List maps CreatedAt and
+// UploadedBy, and that the timestamp is published in the wire form GitLab
+// sent rather than in Go's own rendering of a time.Time.
+//
+// The value is asserted exactly, and the Markdown the same output renders is
+// asserted beside it, because those are the two readers and the previous
+// assertion — that the field is not empty — could not tell them apart.
+// time.Time.String() produces "2026-01-01 00:00:00 +0000 UTC", which a caller
+// cannot parse as a timestamp and which toolutil.FormatTime cannot parse
+// either, so the table printed that text in the Created column.
 func TestList_WithTimestampAndUploader(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
@@ -1015,8 +1024,11 @@ func TestList_WithTimestampAndUploader(t *testing.T) {
 	if out.Uploads[0].UploadedBy.ID != 7 || out.Uploads[0].UploadedBy.Name != "Admin User" {
 		t.Errorf("UploadedBy fields not mapped to documented subset: %+v", out.Uploads[0].UploadedBy)
 	}
-	if out.Uploads[0].CreatedAt == "" {
-		t.Error("expected CreatedAt to be set")
+	if out.Uploads[0].CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt = %q, want the wire form GitLab sent", out.Uploads[0].CreatedAt)
+	}
+	if md := FormatListMarkdown(out); !strings.Contains(md, "| 1 Jan 2026 00:00 UTC |") {
+		t.Errorf("FormatListMarkdown() =\n%q\nwant the Created column in the display form", md)
 	}
 }
 
@@ -1324,11 +1336,15 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // TestFormatListMarkdown_Populated verifies the whole table: the guidance sits
 // after the rows rather than between the heading and the header row, where it
 // used to swallow the table entirely, and the date renders in the display form.
+//
+// The timestamp is the wire form List publishes, not a bare date: a fixture
+// carrying a value the handler never produces asserts a rendering that never
+// happens.
 func TestFormatListMarkdown_Populated(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{
 		Uploads: []ListItem{
 			{
-				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01",
+				ID: 1, Size: 1024, Filename: "a.png", CreatedAt: "2026-01-01T09:30:00Z",
 				UploadedBy: &UploadedByOutput{Username: "admin", Name: "Admin User"},
 			},
 		},
@@ -1336,7 +1352,7 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 	want := "## Project Markdown Uploads (1)\n\n" +
 		"| ID | Filename | Size (bytes) | Created | Uploaded By |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| 1 | a.png | 1024 | 1 Jan 2026 | Admin User (@admin) |\n" +
+		"| 1 | a.png | 1024 | 1 Jan 2026 09:30 UTC | Admin User (@admin) |\n" +
 		uploadListHints
 	if got != want {
 		t.Errorf("FormatListMarkdown() =\n%q\nwant:\n%q", got, want)

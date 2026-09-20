@@ -217,16 +217,20 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 
 	items := make([]ListItem, 0, len(uploads))
 	for _, u := range uploads {
-		item := ListItem{
+		// The timestamp is published in the wire form, as the group upload
+		// sibling publishes it. time.Time's own String gives "2026-01-01
+		// 00:00:00 +0000 UTC", which is neither what GitLab sent nor anything
+		// toolutil.FormatTime can parse, so the JSON carried a stamp no caller
+		// could read as a time and the table printed that same text where the
+		// display form belongs. RFC3339Ptr answers "" for the nil GitLab sends
+		// when it has no timestamp, which is what the guard here used to do.
+		items = append(items, ListItem{
 			ID:         u.ID,
 			Size:       u.Size,
 			Filename:   u.Filename,
+			CreatedAt:  toolutil.RFC3339Ptr(u.CreatedAt),
 			UploadedBy: uploadedByOutput(u.UploadedBy),
-		}
-		if u.CreatedAt != nil {
-			item.CreatedAt = u.CreatedAt.String()
-		}
-		items = append(items, item)
+		})
 	}
 
 	return ListOutput{
