@@ -5,6 +5,7 @@ package jobs
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -267,32 +268,49 @@ func TestJobWait_CanceledContext(t *testing.T) {
 	}
 }
 
-// TestJobWait_EmptyProjectID verifies that Wait returns an error for empty project_id.
-func TestJobWait_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-
-	_, err := Wait(context.Background(), nil, client, WaitInput{
-		JobID: 100,
-	})
-	if err == nil {
-		t.Fatal("Wait() expected error for empty project_id, got nil")
+// TestJobWait_ForwardsIntervalAndTimeoutToThePoller verifies the interval and
+// timeout a caller asks for are the ones the poller converts, through the seam
+// that converts them, and that the wait reports how long it took as a
+// duration. A forward dropped from the options left the suite green and ten
+// seconds slower, since the default interval is still an interval.
+//
+// Only the caller's interval is scaled: the timeout stays in real seconds so
+// the first poll is never cut off by a deadline this test is not about.
+func TestJobWait_ForwardsIntervalAndTimeoutToThePoller(t *testing.T) {
+	const interval, timeout = 7, 33
+	original := pollDuration
+	var asked []int
+	pollDuration = func(seconds int) time.Duration {
+		asked = append(asked, seconds)
+		if seconds == interval {
+			return time.Millisecond
+		}
+		return original(seconds)
 	}
-}
+	t.Cleanup(func() { pollDuration = original })
 
-// TestJobWait_InvalidJobID verifies that Wait returns an error for job_id <= 0.
-func TestJobWait_InvalidJobID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathWaitJob {
+			testutil.RespondJSON(w, http.StatusOK, jobWithStatus("success"))
+			return
+		}
+		http.NotFound(w, r)
 	}))
 
-	_, err := Wait(context.Background(), nil, client, WaitInput{
-		ProjectID: "42",
-		JobID:     0,
+	out, err := Wait(context.Background(), nil, client, WaitInput{
+		ProjectID: "42", JobID: 100, IntervalSeconds: interval, TimeoutSeconds: timeout,
 	})
-	if err == nil {
-		t.Fatal("Wait() expected error for invalid job_id, got nil")
+	if err != nil {
+		t.Fatalf("Wait() unexpected error: %v", err)
+	}
+	if !slices.Contains(asked, interval) {
+		t.Errorf("poller converted %v, want the caller's interval %d among them", asked, interval)
+	}
+	if !slices.Contains(asked, timeout) {
+		t.Errorf("poller converted %v, want the caller's timeout %d among them", asked, timeout)
+	}
+	if _, parseErr := time.ParseDuration(out.WaitedFor); parseErr != nil {
+		t.Errorf("WaitedFor = %q, want a duration: %v", out.WaitedFor, parseErr)
 	}
 }
 

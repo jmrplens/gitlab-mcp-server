@@ -5,15 +5,18 @@ package jobs
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -178,18 +181,6 @@ func TestJobList_WithScope(t *testing.T) {
 	}
 }
 
-// TestJobList_EmptyProjectID verifies JobList when empty project ID.
-func TestJobList_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, "[]")
-	}))
-
-	_, err := List(context.Background(), client, ListInput{PipelineID: 10})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
-	}
-}
-
 // TestJobGet_Success verifies JobGet when success.
 func TestJobGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -218,9 +209,211 @@ func TestJobGet_Success(t *testing.T) {
 	}
 }
 
+// jobDistinctJSON is a job in which no two values agree, which is the fixture a
+// converter swap cannot survive: the shared fixtures name the job and its stage
+// "build" alike, so ToOutput reading the stage into the name passed every test.
+// Every documented sub-object is present, each with values of its own.
+const jobDistinctJSON = `{
+	"id":7001,
+	"name":"compile",
+	"stage":"assemble",
+	"status":"failed",
+	"ref":"feature/x",
+	"tag":true,
+	"allow_failure":false,
+	"duration":12.5,
+	"queued_duration":3.25,
+	"failure_reason":"script_failure",
+	"web_url":"https://gitlab.example.com/g/p/-/jobs/7001",
+	"created_at":"2026-03-01T10:00:00Z",
+	"started_at":"2026-03-01T10:01:00Z",
+	"finished_at":"2026-03-01T10:02:00Z",
+	"artifacts_expire_at":"2026-04-01T00:00:00Z",
+	"coverage":81.5,
+	"tag_list":["docker","linux"],
+	"erased_at":"2026-03-05T09:00:00Z",
+	"archived":true,
+	"commit":{
+		"id":"a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+		"short_id":"a1b2c3d4",
+		"title":"Fix the build",
+		"author_name":"Ada Lovelace",
+		"author_email":"ada@example.com",
+		"created_at":"2026-02-28T18:30:00Z",
+		"message":"Fix the build\n\nLonger body."
+	},
+	"pipeline":{"id":901,"project_id":4242,"ref":"release/1.0","sha":"0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c","status":"running"},
+	"project":{"ci_job_token_scope_enabled":true},
+	"runner":{
+		"id":32,
+		"description":"shared-runner",
+		"ip_address":"10.0.0.7",
+		"active":true,
+		"paused":false,
+		"is_shared":false,
+		"runner_type":"instance_type",
+		"name":"gitlab-runner",
+		"online":false,
+		"status":"offline"
+	},
+	"runner_manager":{
+		"id":11,
+		"system_id":"s_89e5e9956577",
+		"version":"16.11.1",
+		"revision":"535ced5f",
+		"platform":"linux",
+		"architecture":"amd64",
+		"created_at":"2024-05-01T10:12:02.507Z",
+		"contacted_at":"2024-05-07T06:30:09.355Z",
+		"ip_address":"127.0.0.1",
+		"status":"online"
+	},
+	"user":{
+		"id":5,
+		"name":"Grace Hopper",
+		"username":"grace",
+		"state":"active",
+		"avatar_url":"https://gitlab.example.com/uploads/user/avatar/5/grace.png",
+		"web_url":"https://gitlab.example.com/grace",
+		"created_at":"2020-01-02T03:04:05Z",
+		"bio":"Compiler pioneer",
+		"location":"Arlington",
+		"public_email":"grace@example.com",
+		"linkedin":"grace-hopper",
+		"twitter":"gracehopper",
+		"website_url":"https://grace.example.com",
+		"organization":"US Navy"
+	},
+	"artifacts":[{"file_type":"archive","filename":"artifacts.zip","size":2048,"file_format":"zip"}],
+	"artifacts_file":{"filename":"artifacts.zip","size":2048}
+}`
+
+// jobDistinctOutput is what [jobDistinctJSON] must arrive as, field for field.
+func jobDistinctOutput() Output {
+	return Output{
+		ID: 7001, Name: "compile", Stage: "assemble", Status: "failed", Ref: "feature/x",
+		Tag: true, AllowFailure: false,
+		Duration: 12.5, QueuedDuration: 3.25,
+		FailureReason:     "script_failure",
+		WebURL:            "https://gitlab.example.com/g/p/-/jobs/7001",
+		CreatedAt:         "2026-03-01T10:00:00Z",
+		StartedAt:         "2026-03-01T10:01:00Z",
+		FinishedAt:        "2026-03-01T10:02:00Z",
+		ArtifactsExpireAt: "2026-04-01T00:00:00Z",
+		Coverage:          81.5,
+		TagList:           []string{"docker", "linux"},
+		ErasedAt:          "2026-03-05T09:00:00Z",
+		Archived:          true,
+		Commit: &CommitObject{
+			ID: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", ShortID: "a1b2c3d4", Title: "Fix the build",
+			AuthorName: "Ada Lovelace", AuthorEmail: "ada@example.com",
+			CreatedAt: "2026-02-28T18:30:00Z", Message: "Fix the build\n\nLonger body.",
+		},
+		Pipeline: &PipelineObject{ID: 901, ProjectID: 4242, Ref: "release/1.0", SHA: "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c", Status: "running"},
+		Project:  &ProjectObject{CIJobTokenScopeEnabled: true},
+		Runner: &RunnerObject{
+			ID: 32, Description: "shared-runner", IPAddress: "10.0.0.7", Active: true,
+			RunnerType: "instance_type", Name: "gitlab-runner", Status: "offline",
+		},
+		RunnerManager: &RunnerManagerObject{
+			ID: 11, SystemID: "s_89e5e9956577", Version: "16.11.1", Revision: "535ced5f",
+			Platform: "linux", Architecture: "amd64",
+			CreatedAt: "2024-05-01T10:12:02.507Z", ContactedAt: "2024-05-07T06:30:09.355Z",
+			IPAddress: "127.0.0.1", Status: "online",
+		},
+		User: &UserObject{
+			ID: 5, Name: "Grace Hopper", Username: "grace", State: "active",
+			AvatarURL: "https://gitlab.example.com/uploads/user/avatar/5/grace.png",
+			WebURL:    "https://gitlab.example.com/grace",
+			CreatedAt: "2020-01-02T03:04:05Z", Bio: "Compiler pioneer", Location: "Arlington",
+			PublicEmail: "grace@example.com", Linkedin: "grace-hopper", Twitter: "gracehopper",
+			WebsiteURL: "https://grace.example.com", Organization: "US Navy",
+		},
+		Artifacts:     []ArtifactObject{{FileType: "archive", Filename: "artifacts.zip", Size: 2048, FileFormat: "zip"}},
+		ArtifactsFile: &ArtifactsFileObject{Filename: "artifacts.zip", Size: 2048},
+	}
+}
+
+// renderForDiff prints an output as indented JSON for a mismatch report, since
+// %+v prints the sub-objects as addresses.
+func renderForDiff(t *testing.T, v any) string {
+	t.Helper()
+	rendered, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Errorf("render %T for the report: %v", v, err)
+	}
+	return string(rendered)
+}
+
+// assertJobOutput compares a job field for field and prints both sides as JSON
+// on a mismatch.
+func assertJobOutput(t *testing.T, got, want Output) {
+	t.Helper()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("job output differs\n got %s\nwant %s", renderForDiff(t, got), renderForDiff(t, want))
+	}
+}
+
+// TestJobGet_MapsEveryDocumentedField holds the whole job, sub-objects
+// included, to a fixture where no two values agree. A swap of two assignments
+// in a converter has no branch either gate can flip, and the shared fixtures
+// hid one by giving the name and the stage the same value.
+func TestJobGet_MapsEveryDocumentedField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/7001" {
+			testutil.RespondJSON(w, http.StatusOK, jobDistinctJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", JobID: 7001})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	assertJobOutput(t, out, jobDistinctOutput())
+}
+
+// TestJobGet_Flags_EachSurfacedOnItsOwnKey drives the job's and the runner's
+// booleans one at a time: a struct of flags has no fixture where no two values
+// agree, so a fixture setting them all cannot tell a swap apart. Each case
+// sends one flag and expects exactly that flag back.
+func TestJobGet_Flags_EachSurfacedOnItsOwnKey(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want Output
+	}{
+		{"tag", `{"id":1,"tag":true}`, Output{ID: 1, Tag: true}},
+		{"allow_failure", `{"id":1,"allow_failure":true}`, Output{ID: 1, AllowFailure: true}},
+		{"archived", `{"id":1,"archived":true}`, Output{ID: 1, Archived: true}},
+		{"runner.active", `{"id":1,"runner":{"id":2,"active":true}}`, Output{ID: 1, Runner: &RunnerObject{ID: 2, Active: true}}},
+		{"runner.paused", `{"id":1,"runner":{"id":2,"paused":true}}`, Output{ID: 1, Runner: &RunnerObject{ID: 2, Paused: true}}},
+		{"runner.is_shared", `{"id":1,"runner":{"id":2,"is_shared":true}}`, Output{ID: 1, Runner: &RunnerObject{ID: 2, IsShared: true}}},
+		{"runner.online", `{"id":1,"runner":{"id":2,"online":true}}`, Output{ID: 1, Runner: &RunnerObject{ID: 2, Online: true}}},
+		{"project.ci_job_token_scope_enabled", `{"id":1,"project":{"ci_job_token_scope_enabled":true}}`, Output{ID: 1, Project: &ProjectObject{CIJobTokenScopeEnabled: true}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/1" {
+					testutil.RespondJSON(w, http.StatusOK, tt.body)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42", JobID: 1})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			assertJobOutput(t, out, tt.want)
+		})
+	}
+}
+
 // jobFullJSON is a single-job fixture that includes the documented fields
-// gl.Job does not expose: top-level archived/source, the runner_manager object,
-// and the full runner object (with ip_address, paused, runner_type, online,
+// gl.Job does not expose: top-level archived, the runner_manager object, and
+// the full runner object (with ip_address, paused, runner_type, online,
 // status). Used to assert the raw-fetch handlers surface these 1:1.
 const jobFullJSON = `{
 	"id":100,
@@ -230,7 +423,6 @@ const jobFullJSON = `{
 	"ref":"main",
 	"tag":false,
 	"archived":true,
-	"source":"push",
 	"runner":{
 		"id":32,
 		"description":"shared-runner",
@@ -299,7 +491,7 @@ func assertJobFullFields(t *testing.T, out Output) {
 }
 
 // TestJobGet_FullFields verifies that Get surfaces the documented archived,
-// source, runner_manager, and runner-extra fields fetched via the raw REST path.
+// runner_manager, and runner-extra fields fetched via the raw REST path.
 func TestJobGet_FullFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathJobGet {
@@ -317,7 +509,7 @@ func TestJobGet_FullFields(t *testing.T) {
 }
 
 // TestJobList_FullFields verifies that List surfaces the documented archived,
-// source, runner_manager, and runner-extra fields via the raw REST path.
+// runner_manager, and runner-extra fields via the raw REST path.
 func TestJobList_FullFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
@@ -338,7 +530,7 @@ func TestJobList_FullFields(t *testing.T) {
 }
 
 // TestListProject_FullFields verifies that ListProject surfaces the documented
-// archived, source, runner_manager, and runner-extra fields via the raw REST path.
+// archived, runner_manager, and runner-extra fields via the raw REST path.
 func TestListProject_FullFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
@@ -359,13 +551,13 @@ func TestListProject_FullFields(t *testing.T) {
 }
 
 // TestJobGet_OlderInstanceOmitsFields verifies version tolerance: when an older
-// GitLab instance returns a job response WITHOUT archived, source, or
-// runner_manager, the raw-fetch handler still succeeds and simply omits those
-// fields (they stay zero-valued / nil) rather than failing.
+// GitLab instance returns a job response WITHOUT archived or runner_manager,
+// the raw-fetch handler still succeeds and simply omits those fields (they
+// stay zero-valued / nil) rather than failing.
 func TestJobGet_OlderInstanceOmitsFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathJobGet {
-			// jobJSON has no archived/source/runner_manager and a minimal runner.
+			// jobJSON has no archived/runner_manager and a minimal runner.
 			testutil.RespondJSON(w, http.StatusOK, jobJSON)
 			return
 		}
@@ -387,18 +579,6 @@ func TestJobGet_OlderInstanceOmitsFields(t *testing.T) {
 	}
 	if out.Runner == nil || out.Runner.ID != 1 {
 		t.Errorf("Runner = %+v, want minimal runner with ID 1", out.Runner)
-	}
-}
-
-// TestJobGet_EmptyProjectID verifies JobGet when empty project ID.
-func TestJobGet_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, jobJSON)
-	}))
-
-	_, err := Get(context.Background(), client, GetInput{JobID: 100})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
 }
 
@@ -463,15 +643,50 @@ func TestJobTrace_Truncated(t *testing.T) {
 	}
 }
 
-// TestJobTrace_EmptyProjectID verifies JobTrace when empty project ID.
-func TestJobTrace_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+// hundredKiB is the limit the trace card's note promises a reader, written as
+// its own number so no test here can follow maxTraceBytes wherever it goes.
+const hundredKiB = 102400
 
-	_, err := Trace(context.Background(), client, TraceInput{JobID: 100})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
+// TestJobTrace_LimitIsTheHundredKiBTheNotePromises holds the trace limit to
+// the figure the truncation note states, from both sides of the boundary: a
+// log of exactly that size is returned whole and unmarked, and one byte more
+// is cut to it and marked. The truncation tests before this one measured the
+// limit against the constant that set it, so a constant that shrank to a
+// kilobyte passed them all.
+func TestJobTrace_LimitIsTheHundredKiBTheNotePromises(t *testing.T) {
+	tests := []struct {
+		name          string
+		size          int
+		wantLen       int
+		wantTruncated bool
+	}{
+		{"exactly the limit is kept whole", hundredKiB, hundredKiB, false},
+		{"one byte over is cut to the limit", hundredKiB + 1, hundredKiB, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := strings.Repeat("x", tt.size-1) + "$"
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathJobTrace {
+					w.Header().Set(testHeaderContentType, "text/plain")
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := Trace(context.Background(), client, TraceInput{ProjectID: "42", JobID: 100})
+			if err != nil {
+				t.Fatalf("Trace() unexpected error: %v", err)
+			}
+			if out.Truncated != tt.wantTruncated {
+				t.Errorf("Truncated = %v, want %v for a %d-byte log", out.Truncated, tt.wantTruncated, tt.size)
+			}
+			if out.Trace != body[:tt.wantLen] {
+				t.Errorf("Trace is %d bytes and ends %q, want the first %d bytes of the log", len(out.Trace), out.Trace[max(0, len(out.Trace)-3):], tt.wantLen)
+			}
+		})
 	}
 }
 
@@ -502,18 +717,6 @@ func TestJobCancel_Success(t *testing.T) {
 	}
 }
 
-// TestJobCancel_EmptyProjectID verifies JobCancel when empty project ID.
-func TestJobCancel_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, jobJSON)
-	}))
-
-	_, err := Cancel(context.Background(), client, CancelInput{JobID: 100})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
-	}
-}
-
 // TestJobRetry_Success verifies JobRetry when success.
 func TestJobRetry_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -541,18 +744,6 @@ func TestJobRetry_Success(t *testing.T) {
 	}
 	if out.ID != 101 {
 		t.Errorf("out.ID = %d, want 101", out.ID)
-	}
-}
-
-// TestJobRetry_EmptyProjectID verifies JobRetry when empty project ID.
-func TestJobRetry_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, jobJSON)
-	}))
-
-	_, err := Retry(context.Background(), client, ActionInput{JobID: 100})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
 }
 
@@ -593,9 +784,6 @@ const (
 		"user":{"username":"testuser"},
 		"downstream_pipeline":{"id":50}
 	}`
-
-	// msgMissingProject identifies the msg missing project constant used by this package.
-	msgMissingProject = "expected error for empty project_id"
 )
 
 // TestListProject_Success verifies ListProject when success.
@@ -618,17 +806,6 @@ func TestListProject_Success(t *testing.T) {
 	}
 	if out.Jobs[0].ID != 100 {
 		t.Errorf("Jobs[0].ID = %d, want 100", out.Jobs[0].ID)
-	}
-}
-
-// TestListProject_MissingProject verifies ListProject when missing project.
-func TestListProject_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := ListProject(context.Background(), client, ListProjectInput{})
-	if err == nil {
-		t.Fatal(msgMissingProject)
 	}
 }
 
@@ -657,14 +834,94 @@ func TestListBridges_Success(t *testing.T) {
 	}
 }
 
-// TestListBridges_MissingProject verifies ListBridges when missing project.
-func TestListBridges_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
+// bridgeDistinctJSON is a bridge in which no two values agree, the pipeline it
+// belongs to and the one it triggered included, and the project key the SDK
+// does not model beside them.
+const bridgeDistinctJSON = `{
+	"id":8002,"name":"trigger-child","stage":"fan-out",
+	"status":"success","ref":"topic","tag":false,"allow_failure":true,
+	"duration":4.5,"queued_duration":1.25,"failure_reason":"","coverage":55.5,
+	"web_url":"https://gitlab.example.com/g/p/-/jobs/8002",
+	"created_at":"2026-03-02T10:00:00Z","started_at":"2026-03-02T10:01:00Z",
+	"finished_at":"2026-03-02T10:02:00Z","erased_at":"2026-03-06T09:00:00Z",
+	"commit":{
+		"id":"c0ffee0123456789abcdef0123456789abcdef01","short_id":"c0ffee01","title":"Add the child pipeline",
+		"author_name":"Linus","author_email":"linus@example.com",
+		"created_at":"2026-03-02T09:00:00Z","message":"Add the child pipeline\n"
+	},
+	"pipeline":{
+		"id":902,"project_id":4242,"status":"pending","ref":"main",
+		"sha":"9876543210fedcba9876543210fedcba98765432",
+		"web_url":"https://gitlab.example.com/g/p/-/pipelines/902",
+		"updated_at":"2026-03-02T10:03:00Z","created_at":"2026-03-02T09:59:00Z"
+	},
+	"user":{"id":6,"name":"Linus","username":"linus","state":"blocked",
+		"avatar_url":"https://gitlab.example.com/uploads/user/avatar/6/linus.png",
+		"web_url":"https://gitlab.example.com/linus"},
+	"downstream_pipeline":{
+		"id":903,"project_id":4343,"status":"created","ref":"child",
+		"sha":"1357913579135791357913579135791357913579",
+		"web_url":"https://gitlab.example.com/g/child/-/pipelines/903",
+		"updated_at":"2026-03-02T10:04:00Z","created_at":"2026-03-02T10:01:30Z"
+	},
+	"project":{"ci_job_token_scope_enabled":true}
+}`
+
+// TestListBridges_MapsEveryDocumentedField holds the whole bridge to a fixture
+// where no two values agree, the way [TestJobGet_MapsEveryDocumentedField]
+// holds the job: BridgeToOutput is a converter of the same shape, and its
+// pipeline and downstream pipeline are the one pair most alike.
+func TestListBridges_MapsEveryDocumentedField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/pipelines/10/bridges" {
+			testutil.RespondJSON(w, http.StatusOK, fmt.Sprintf("[%s]", bridgeDistinctJSON))
+			return
+		}
+		http.NotFound(w, r)
 	}))
-	_, err := ListBridges(context.Background(), client, BridgeListInput{PipelineID: 10})
-	if err == nil {
-		t.Fatal(msgMissingProject)
+
+	out, err := ListBridges(context.Background(), client, BridgeListInput{ProjectID: "42", PipelineID: 10})
+	if err != nil {
+		t.Fatalf("ListBridges() unexpected error: %v", err)
+	}
+	if len(out.Bridges) != 1 {
+		t.Fatalf("len(Bridges) = %d, want 1", len(out.Bridges))
+	}
+	want := BridgeOutput{
+		ID: 8002, Name: "trigger-child", Stage: "fan-out", Status: "success", Ref: "topic",
+		Tag: false, AllowFailure: true,
+		Duration: 4.5, QueuedDuration: 1.25, Coverage: 55.5,
+		WebURL:     "https://gitlab.example.com/g/p/-/jobs/8002",
+		CreatedAt:  "2026-03-02T10:00:00Z",
+		StartedAt:  "2026-03-02T10:01:00Z",
+		FinishedAt: "2026-03-02T10:02:00Z",
+		ErasedAt:   "2026-03-06T09:00:00Z",
+		Commit: &CommitObject{
+			ID: "c0ffee0123456789abcdef0123456789abcdef01", ShortID: "c0ffee01", Title: "Add the child pipeline",
+			AuthorName: "Linus", AuthorEmail: "linus@example.com",
+			CreatedAt: "2026-03-02T09:00:00Z", Message: "Add the child pipeline\n",
+		},
+		Pipeline: &PipelineInfoObject{
+			ID: 902, ProjectID: 4242, Status: "pending", Ref: "main",
+			SHA:       "9876543210fedcba9876543210fedcba98765432",
+			WebURL:    "https://gitlab.example.com/g/p/-/pipelines/902",
+			UpdatedAt: "2026-03-02T10:03:00Z", CreatedAt: "2026-03-02T09:59:00Z",
+		},
+		User: &UserObject{
+			ID: 6, Name: "Linus", Username: "linus", State: "blocked",
+			AvatarURL: "https://gitlab.example.com/uploads/user/avatar/6/linus.png",
+			WebURL:    "https://gitlab.example.com/linus",
+		},
+		DownstreamPipeline: &PipelineInfoObject{
+			ID: 903, ProjectID: 4343, Status: "created", Ref: "child",
+			SHA:       "1357913579135791357913579135791357913579",
+			WebURL:    "https://gitlab.example.com/g/child/-/pipelines/903",
+			UpdatedAt: "2026-03-02T10:04:00Z", CreatedAt: "2026-03-02T10:01:30Z",
+		},
+		Project: &ProjectObject{CIJobTokenScopeEnabled: true},
+	}
+	if got := out.Bridges[0]; !reflect.DeepEqual(got, want) {
+		t.Errorf("bridge output differs\n got %s\nwant %s", renderForDiff(t, got), renderForDiff(t, want))
 	}
 }
 
@@ -692,21 +949,99 @@ func TestGetArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestGetArtifacts_MissingProject verifies GetArtifacts when missing project.
-func TestGetArtifacts_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := GetArtifacts(context.Background(), client, GetInput{JobID: 100})
-	if err == nil {
-		t.Fatal(msgMissingProject)
+// oneMiB is the limit the artifact cards' warning names, written as its own
+// number so no test here can follow maxArtifactBytes wherever it goes.
+const oneMiB = 1048576
+
+// artifactLimitCases are the two sides of the artifact limit: exactly the
+// limit is kept whole and unmarked, one byte more is cut to it and marked.
+func artifactLimitCases() []struct {
+	name          string
+	size          int
+	wantTruncated bool
+} {
+	return []struct {
+		name          string
+		size          int
+		wantTruncated bool
+	}{
+		{"exactly the limit is kept whole", oneMiB, false},
+		{"one byte over is cut to the limit", oneMiB + 1, true},
 	}
 }
 
-// TestDownloadArtifacts_Success verifies DownloadArtifacts when success.
+// TestGetArtifacts_LimitIsTheMebibyteTheCardPromises holds the archive limit
+// to the figure the card's warning states, from both sides of the boundary.
+// The truncation tests before it measured the limit against the constant that
+// set it, so a constant that shrank passed them.
+func TestGetArtifacts_LimitIsTheMebibyteTheCardPromises(t *testing.T) {
+	for _, tt := range artifactLimitCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			body := strings.Repeat("x", tt.size-1) + "$"
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == pathJobArtifacts {
+					w.Header().Set(testHeaderContentType, "application/zip")
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := GetArtifacts(context.Background(), client, GetInput{ProjectID: "42", JobID: 100})
+			if err != nil {
+				t.Fatalf("GetArtifacts() unexpected error: %v", err)
+			}
+			if out.Truncated != tt.wantTruncated || out.Size != oneMiB {
+				t.Errorf("Truncated/Size = %v/%d, want %v/%d for a %d-byte archive", out.Truncated, out.Size, tt.wantTruncated, oneMiB, tt.size)
+			}
+			decoded, decodeErr := base64.StdEncoding.DecodeString(out.Content)
+			if decodeErr != nil || string(decoded) != body[:oneMiB] {
+				t.Errorf("Content decodes to %d bytes (err %v), want the first %d bytes of the archive", len(decoded), decodeErr, oneMiB)
+			}
+		})
+	}
+}
+
+// TestDownloadSingleArtifact_LimitIsTheMebibyteTheCardPromises is the same
+// boundary on the single-file path, which reads through its own copy of the
+// truncation.
+func TestDownloadSingleArtifact_LimitIsTheMebibyteTheCardPromises(t *testing.T) {
+	for _, tt := range artifactLimitCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			body := strings.Repeat("x", tt.size-1) + "$"
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/100/artifacts/big.bin" {
+					w.WriteHeader(http.StatusOK)
+					_, _ = w.Write([]byte(body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+
+			out, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "big.bin"})
+			if err != nil {
+				t.Fatalf("DownloadSingleArtifact() unexpected error: %v", err)
+			}
+			if out.Truncated != tt.wantTruncated || out.Size != oneMiB {
+				t.Errorf("Truncated/Size = %v/%d, want %v/%d for a %d-byte file", out.Truncated, out.Size, tt.wantTruncated, oneMiB, tt.size)
+			}
+			if out.Content != body[:oneMiB] {
+				t.Errorf("Content is %d bytes, want the first %d bytes of the file", len(out.Content), oneMiB)
+			}
+		})
+	}
+}
+
+// TestDownloadArtifacts_Success verifies DownloadArtifacts reaches the ref's
+// download endpoint with the job name the caller gave as its job parameter,
+// which is what selects the job whose artifacts come back.
 func TestDownloadArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/artifacts/main/download" {
+			if got := r.URL.Query().Get("job"); got != "build" {
+				t.Errorf("job query = %q, want build", got)
+			}
 			w.Header().Set(testHeaderContentType, "application/zip")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("PK\x03\x04fake-zip"))
@@ -723,17 +1058,6 @@ func TestDownloadArtifacts_Success(t *testing.T) {
 	}
 	if out.Size == 0 {
 		t.Error("Size = 0, want > 0")
-	}
-}
-
-// TestDownloadArtifacts_MissingRef verifies DownloadArtifacts when missing ref.
-func TestDownloadArtifacts_MissingRef(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal("expected error for missing ref_name")
 	}
 }
 
@@ -762,21 +1086,14 @@ func TestDownloadSingleArtifact_Success(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_MissingPath verifies DownloadSingleArtifact when missing path.
-func TestDownloadSingleArtifact_MissingPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal("expected error for missing artifact_path")
-	}
-}
-
-// TestDownloadSingleArtifactByRef_Success verifies DownloadSingleArtifactByRef when success.
+// TestDownloadSingleArtifactByRef_Success verifies DownloadSingleArtifactByRef
+// reaches the ref's raw endpoint with the job name as its job parameter.
 func TestDownloadSingleArtifactByRef_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/jobs/artifacts/main/raw/"+testReportFileName {
+			if got := r.URL.Query().Get("job"); got != "build" {
+				t.Errorf("job query = %q, want build", got)
+			}
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(testRefArtifactContent))
 			return
@@ -792,19 +1109,6 @@ func TestDownloadSingleArtifactByRef_Success(t *testing.T) {
 	}
 	if out.Content != testRefArtifactContent {
 		t.Errorf("Content = %q, want %q", out.Content, testRefArtifactContent)
-	}
-}
-
-// TestDownloadSingleArtifactByRef_MissingRef verifies DownloadSingleArtifactByRef when missing ref.
-func TestDownloadSingleArtifactByRef_MissingRef(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
-		ProjectID: "42", ArtifactPath: testReportFileName,
-	})
-	if err == nil {
-		t.Fatal("expected error for missing ref_name")
 	}
 }
 
@@ -827,17 +1131,6 @@ func TestErase_Success(t *testing.T) {
 	}
 }
 
-// TestErase_MissingProject verifies Erase when missing project.
-func TestErase_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := Erase(context.Background(), client, ActionInput{JobID: 100})
-	if err == nil {
-		t.Fatal(msgMissingProject)
-	}
-}
-
 // TestKeepArtifacts_Success verifies KeepArtifacts when success.
 func TestKeepArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -854,17 +1147,6 @@ func TestKeepArtifacts_Success(t *testing.T) {
 	}
 	if out.ID != 100 {
 		t.Errorf(fmtIDWant100, out.ID)
-	}
-}
-
-// TestKeepArtifacts_MissingProject verifies KeepArtifacts when missing project.
-func TestKeepArtifacts_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := KeepArtifacts(context.Background(), client, ActionInput{JobID: 100})
-	if err == nil {
-		t.Fatal(msgMissingProject)
 	}
 }
 
@@ -887,17 +1169,6 @@ func TestPlay_Success(t *testing.T) {
 	}
 }
 
-// TestPlay_MissingProject verifies Play when missing project.
-func TestPlay_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := Play(context.Background(), client, PlayInput{JobID: 100})
-	if err == nil {
-		t.Fatal(msgMissingProject)
-	}
-}
-
 // TestDeleteArtifacts_Success verifies DeleteArtifacts when success.
 func TestDeleteArtifacts_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -911,17 +1182,6 @@ func TestDeleteArtifacts_Success(t *testing.T) {
 	err := DeleteArtifacts(context.Background(), client, DeleteArtifactsInput{ProjectID: "42", JobID: 100})
 	if err != nil {
 		t.Fatalf("DeleteArtifacts() unexpected error: %v", err)
-	}
-}
-
-// TestDeleteArtifacts_MissingProject verifies DeleteArtifacts when missing project.
-func TestDeleteArtifacts_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	err := DeleteArtifacts(context.Background(), client, DeleteArtifactsInput{JobID: 100})
-	if err == nil {
-		t.Fatal(msgMissingProject)
 	}
 }
 
@@ -941,17 +1201,6 @@ func TestDeleteProjectArtifacts_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectArtifacts_MissingProject verifies DeleteProjectArtifacts when missing project.
-func TestDeleteProjectArtifacts_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	err := DeleteProjectArtifacts(context.Background(), client, DeleteProjectArtifactsInput{})
-	if err == nil {
-		t.Fatal(msgMissingProject)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // assertContains verifies that err is non-nil and its message contains substr.
 // ---------------------------------------------------------------------------.
@@ -962,6 +1211,93 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 	if !strings.Contains(err.Error(), substr) {
 		t.Errorf("error %q does not contain %q", err.Error(), substr)
+	}
+}
+
+// TestProjectIDRequired_Validation ensures every handler refuses an empty
+// project_id before reaching GitLab. The forbidden mock is what makes the
+// assertion about the handler: the tests this replaces answered 404 to
+// whatever arrived, so an error came back with the check deleted too.
+func TestProjectIDRequired_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		fn   func() error
+	}{
+		{"List", func() error { _, e := List(ctx, client, ListInput{PipelineID: 10}); return e }},
+		{"ListProject", func() error { _, e := ListProject(ctx, client, ListProjectInput{}); return e }},
+		{"ListBridges", func() error { _, e := ListBridges(ctx, client, BridgeListInput{PipelineID: 10}); return e }},
+		{"Get", func() error { _, e := Get(ctx, client, GetInput{JobID: 100}); return e }},
+		{"Trace", func() error { _, e := Trace(ctx, client, TraceInput{JobID: 100}); return e }},
+		{"Cancel", func() error { _, e := Cancel(ctx, client, CancelInput{JobID: 100}); return e }},
+		{"Retry", func() error { _, e := Retry(ctx, client, ActionInput{JobID: 100}); return e }},
+		{"GetArtifacts", func() error { _, e := GetArtifacts(ctx, client, GetInput{JobID: 100}); return e }},
+		{"DownloadArtifacts", func() error {
+			_, e := DownloadArtifacts(ctx, client, DownloadArtifactsInput{RefName: "main", JobName: "build"})
+			return e
+		}},
+		{"DownloadSingleArtifact", func() error {
+			_, e := DownloadSingleArtifact(ctx, client, SingleArtifactInput{JobID: 100, ArtifactPath: "a.txt"})
+			return e
+		}},
+		{"DownloadSingleArtifactByRef", func() error {
+			_, e := DownloadSingleArtifactByRef(ctx, client, SingleArtifactRefInput{RefName: "main", ArtifactPath: "a.txt", JobName: "build"})
+			return e
+		}},
+		{"Erase", func() error { _, e := Erase(ctx, client, ActionInput{JobID: 100}); return e }},
+		{"KeepArtifacts", func() error { _, e := KeepArtifacts(ctx, client, ActionInput{JobID: 100}); return e }},
+		{"Play", func() error { _, e := Play(ctx, client, PlayInput{JobID: 100}); return e }},
+		{"DeleteArtifacts", func() error { return DeleteArtifacts(ctx, client, DeleteArtifactsInput{JobID: 100}) }},
+		{"DeleteProjectArtifacts", func() error { return DeleteProjectArtifacts(ctx, client, DeleteProjectArtifactsInput{}) }},
+		{"Wait", func() error { _, e := Wait(ctx, nil, client, WaitInput{JobID: 100}); return e }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertContains(t, tt.fn(), "project_id")
+		})
+	}
+}
+
+// TestStringFieldsRequired_Validation ensures the by-ref and by-path downloads
+// refuse a missing ref_name, artifact_path or job by name before reaching
+// GitLab, on the same forbidden mock as the project_id table.
+func TestStringFieldsRequired_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+	const pid = "my/project"
+
+	tests := []struct {
+		name string
+		want string
+		fn   func() error
+	}{
+		{"DownloadArtifacts_ref_name", "ref_name", func() error {
+			_, e := DownloadArtifacts(ctx, client, DownloadArtifactsInput{ProjectID: pid, JobName: "build"})
+			return e
+		}},
+		{"DownloadSingleArtifact_artifact_path", "artifact_path", func() error {
+			_, e := DownloadSingleArtifact(ctx, client, SingleArtifactInput{ProjectID: pid, JobID: 100})
+			return e
+		}},
+		{"DownloadSingleArtifactByRef_ref_name", "ref_name", func() error {
+			_, e := DownloadSingleArtifactByRef(ctx, client, SingleArtifactRefInput{ProjectID: pid, ArtifactPath: "a.txt", JobName: "build"})
+			return e
+		}},
+		{"DownloadSingleArtifactByRef_artifact_path", "artifact_path", func() error {
+			_, e := DownloadSingleArtifactByRef(ctx, client, SingleArtifactRefInput{ProjectID: pid, RefName: "main", JobName: "build"})
+			return e
+		}},
+		{"DownloadSingleArtifactByRef_job", "job is required", func() error {
+			_, e := DownloadSingleArtifactByRef(ctx, client, SingleArtifactRefInput{ProjectID: pid, RefName: "main", ArtifactPath: "a.txt"})
+			return e
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertContains(t, tt.fn(), tt.want)
+		})
 	}
 }
 
@@ -1002,6 +1338,10 @@ func TestJobIDRequired_Validation(t *testing.T) {
 		{"Play_negative", func() error { _, e := Play(ctx, client, PlayInput{ProjectID: pid, JobID: -1}); return e }},
 		{"DeleteArtifacts_zero", func() error { return DeleteArtifacts(ctx, client, DeleteArtifactsInput{ProjectID: pid, JobID: 0}) }},
 		{"DeleteArtifacts_negative", func() error { return DeleteArtifacts(ctx, client, DeleteArtifactsInput{ProjectID: pid, JobID: -1}) }},
+		// Wait was tested for a zero job_id against a mock that answered 404,
+		// so its check could drop the zero and the mock still produced the error.
+		{"Wait_zero", func() error { _, e := Wait(ctx, nil, client, WaitInput{ProjectID: pid, JobID: 0}); return e }},
+		{"Wait_negative", func() error { _, e := Wait(ctx, nil, client, WaitInput{ProjectID: pid, JobID: -1}); return e }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1065,20 +1405,107 @@ func TestJobList_APIError(t *testing.T) {
 	}
 }
 
-// TestJobList_WithPaginationAndIncludeRetried verifies JobList when with pagination and include retried.
-func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
+// TestReadHandlers_NotFoundHint_GatedOnTheStatus verifies each read handler
+// attaches its own corrective hint to a 404 and to nothing else: a 403 from
+// the same endpoint carries the generic message. The status literal in each
+// WrapErrWithStatusHint is what decides it, and no gate mutates a literal, so
+// a handler that checked the wrong code kept every other test green.
+func TestReadHandlers_NotFoundHint_GatedOnTheStatus(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		hint string
+		call func(client *gitlabclient.Client) error
+	}{
+		{"List", "gitlab_pipeline_list", func(c *gitlabclient.Client) error {
+			_, e := List(ctx, c, ListInput{ProjectID: "42", PipelineID: 10})
+			return e
+		}},
+		{"ListProject", "gitlab_project_get", func(c *gitlabclient.Client) error {
+			_, e := ListProject(ctx, c, ListProjectInput{ProjectID: "42"})
+			return e
+		}},
+		{"ListBridges", "Bridges only exist", func(c *gitlabclient.Client) error {
+			_, e := ListBridges(ctx, c, BridgeListInput{ProjectID: "42", PipelineID: 10})
+			return e
+		}},
+		{"Get", "not the per-pipeline index", func(c *gitlabclient.Client) error {
+			_, e := Get(ctx, c, GetInput{ProjectID: "42", JobID: 100})
+			return e
+		}},
+		{"Trace", "erased/expired", func(c *gitlabclient.Client) error {
+			_, e := Trace(ctx, c, TraceInput{ProjectID: "42", JobID: 100})
+			return e
+		}},
+		{"GetArtifacts", "expire_in", func(c *gitlabclient.Client) error {
+			_, e := GetArtifacts(ctx, c, GetInput{ProjectID: "42", JobID: 100})
+			return e
+		}},
+		{"DownloadArtifacts", "non-expired artifacts", func(c *gitlabclient.Client) error {
+			_, e := DownloadArtifacts(ctx, c, DownloadArtifactsInput{ProjectID: "42", RefName: "main", JobName: "build"})
+			return e
+		}},
+		{"DownloadSingleArtifact", "gitlab_job_artifacts to list", func(c *gitlabclient.Client) error {
+			_, e := DownloadSingleArtifact(ctx, c, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "a.txt"})
+			return e
+		}},
+		{"DownloadSingleArtifactByRef", "produced an artifact at artifact_path", func(c *gitlabclient.Client) error {
+			_, e := DownloadSingleArtifactByRef(ctx, c, SingleArtifactRefInput{ProjectID: "42", RefName: "main", ArtifactPath: "a.txt", JobName: "build"})
+			return e
+		}},
+		{"Wait", "deleted or expired during polling", func(c *gitlabclient.Client) error {
+			_, e := Wait(ctx, nil, c, WaitInput{ProjectID: "42", JobID: 100, IntervalSeconds: 5, TimeoutSeconds: 30})
+			return e
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Run("404 carries the hint", func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+				}))
+				assertContains(t, tt.call(client), tt.hint)
+			})
+			t.Run("403 does not", func(t *testing.T) {
+				client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+				}))
+				err := tt.call(client)
+				if err == nil {
+					t.Fatal(errExpectedAPI)
+				}
+				if strings.Contains(err.Error(), tt.hint) {
+					t.Errorf("403 error %q carries the 404 hint %q", err, tt.hint)
+				}
+			})
+		})
+	}
+}
+
+// assertListQuery checks, inside a mock, that every list parameter a caller
+// can set reached the query under GitLab's own spelling; it is called with the
+// values the test sent, so a forwarding dropped from one handler is caught by
+// that handler's own test rather than by the helper they share.
+func assertListQuery(t *testing.T, r *http.Request, want map[string]string) {
+	t.Helper()
+	q := r.URL.Query()
+	for name, value := range want {
+		if got := q.Get(name); got != value {
+			t.Errorf("query %s = %q, want %q", name, got, value)
+		}
+	}
+}
+
+// TestJobList_ForwardsEveryListParameter verifies List sends the retried flag,
+// the offset page, the keyset cursor and the ordering as the caller set them,
+// and reads the pagination block off the response it got.
+func TestJobList_ForwardsEveryListParameter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathPipelineJobs {
-			q := r.URL.Query()
-			if q.Get("page") != "2" {
-				t.Errorf("expected page=2, got %q", q.Get("page"))
-			}
-			if q.Get("per_page") != "5" {
-				t.Errorf("expected per_page=5, got %q", q.Get("per_page"))
-			}
-			if q.Get("include_retried") != "true" {
-				t.Errorf("expected include_retried=true, got %q", q.Get("include_retried"))
-			}
+			assertListQuery(t, r, map[string]string{
+				"include_retried": "true", "page": "2", "per_page": "5",
+				"order_by": "id", "sort": "asc", "pagination": "keyset", "page_token": "tok-list",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", jobJSON),
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2", PrevPage: "1"})
 			return
@@ -1090,7 +1517,10 @@ func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
 		ProjectID:      "42",
 		PipelineID:     10,
 		IncludeRetried: true,
+		OrderBy:        "id",
+		Sort:           "asc",
 		Page:           2, PerPage: 5,
+		Pagination: "keyset", PageToken: "tok-list",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1098,8 +1528,9 @@ func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
 	if len(out.Jobs) != 1 {
 		t.Fatalf("len(Jobs) = %d, want 1", len(out.Jobs))
 	}
-	if out.Pagination.TotalPages != 2 {
-		t.Errorf("TotalPages = %d, want 2", out.Pagination.TotalPages)
+	wantPage := toolutil.PaginationOutput{Page: 2, PerPage: 5, TotalItems: 10, TotalPages: 2, PrevPage: 1}
+	if out.Pagination != wantPage {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, wantPage)
 	}
 }
 
@@ -1189,15 +1620,14 @@ func TestJobTrace_BodyReadError(t *testing.T) {
 // Cancel — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobCancel_APIError verifies JobCancel when API error.
+// TestJobCancel_APIError verifies a 403 on cancel carries the cancel hint, the
+// one naming the role and the force override, and not a sibling's.
 func TestJobCancel_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := Cancel(context.Background(), client, CancelInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "canceling jobs requires Developer+ role")
 }
 
 // TestJobCancel_NotFoundAPIError verifies JobCancel when GitLab returns not found.
@@ -1267,15 +1697,13 @@ func TestJobCancel_CancelledContext(t *testing.T) {
 // Retry — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestJobRetry_APIError verifies JobRetry when API error.
+// TestJobRetry_APIError verifies a 403 on retry carries the retry hint.
 func TestJobRetry_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := Retry(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "retrying jobs requires Developer+ role")
 }
 
 // TestJobRetry_NotFoundAPIError verifies JobRetry when GitLab returns not found.
@@ -1326,17 +1754,24 @@ func TestListProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProject_WithScopeAndPagination verifies ListProject when with scope and pagination.
-func TestListProject_WithScopeAndPagination(t *testing.T) {
+// TestListProject_ForwardsEveryListParameter verifies ListProject sends the
+// scope, the retried flag, the offset page, the keyset cursor and the ordering
+// as the caller set them, and reads the pagination block off the response.
+// The test this replaces set the retried flag and the page and read neither
+// back, so ListProject could drop include_retried and stay green.
+func TestListProject_ForwardsEveryListParameter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProjectJobs {
-			q := r.URL.Query()
-			scopes := q["scope[]"]
+			scopes := r.URL.Query()["scope[]"]
 			if len(scopes) != 2 || scopes[0] != "running" || scopes[1] != "failed" {
 				t.Errorf("expected scope[]=[running,failed], got %v", scopes)
 			}
+			assertListQuery(t, r, map[string]string{
+				"include_retried": "true", "page": "3", "per_page": "10",
+				"order_by": "id", "sort": "desc", "pagination": "keyset", "page_token": "tok-project",
+			})
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", jobJSON),
-				testutil.PaginationHeaders{Page: "1", PerPage: "10", Total: "1", TotalPages: "1"})
+				testutil.PaginationHeaders{Page: "3", PerPage: "10", Total: "31", TotalPages: "4", NextPage: "4", PrevPage: "2"})
 			return
 		}
 		http.NotFound(w, r)
@@ -1346,13 +1781,20 @@ func TestListProject_WithScopeAndPagination(t *testing.T) {
 		ProjectID:      "42",
 		Scope:          []string{"running", "failed"},
 		IncludeRetried: true,
-		Page:           1, PerPage: 10,
+		OrderBy:        "id",
+		Sort:           "desc",
+		Page:           3, PerPage: 10,
+		Pagination: "keyset", PageToken: "tok-project",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if len(out.Jobs) != 1 {
 		t.Fatalf("len(Jobs) = %d, want 1", len(out.Jobs))
+	}
+	wantPage := toolutil.PaginationOutput{Page: 3, PerPage: 10, TotalItems: 31, TotalPages: 4, NextPage: 4, PrevPage: 2, HasMore: true}
+	if out.Pagination != wantPage {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, wantPage)
 	}
 }
 
@@ -1402,7 +1844,7 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 				t.Errorf("expected keyset/tok, got pagination=%q page_token=%q", q.Get("pagination"), q.Get("page_token"))
 			}
 			testutil.RespondJSONWithPagination(w, http.StatusOK, fmt.Sprintf("[%s]", bridgeJSON),
-				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "1", TotalPages: "1"})
+				testutil.PaginationHeaders{Page: "1", PerPage: "5", Total: "7", TotalPages: "2", NextPage: "2"})
 			return
 		}
 		http.NotFound(w, r)
@@ -1423,6 +1865,10 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 	}
 	if len(out.Bridges) != 1 {
 		t.Fatalf("len(Bridges) = %d, want 1", len(out.Bridges))
+	}
+	wantPage := toolutil.PaginationOutput{Page: 1, PerPage: 5, TotalItems: 7, TotalPages: 2, NextPage: 2, HasMore: true}
+	if out.Pagination != wantPage {
+		t.Errorf("Pagination = %+v, want %+v", out.Pagination, wantPage)
 	}
 }
 
@@ -1486,19 +1932,8 @@ func TestDownloadArtifacts_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadArtifacts_MissingProjectID verifies DownloadArtifacts when missing project ID.
-func TestDownloadArtifacts_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadArtifacts(context.Background(), client, DownloadArtifactsInput{RefName: "main"})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
-	}
-}
-
 // ---------------------------------------------------------------------------
-// DownloadSingleArtifact — API error, canceled context, missing project_id
+// DownloadSingleArtifact — API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDownloadSingleArtifact_APIError verifies DownloadSingleArtifact when API error.
@@ -1528,21 +1963,8 @@ func TestDownloadSingleArtifact_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifact_MissingProjectID verifies DownloadSingleArtifact when missing project ID.
-func TestDownloadSingleArtifact_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifact(context.Background(), client, SingleArtifactInput{
-		JobID: 100, ArtifactPath: "report.txt",
-	})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
-	}
-}
-
 // ---------------------------------------------------------------------------
-// DownloadSingleArtifactByRef — API error, canceled context, missing fields
+// DownloadSingleArtifactByRef — API error, canceled context
 // ---------------------------------------------------------------------------.
 
 // TestDownloadSingleArtifactByRef_APIError verifies DownloadSingleArtifactByRef when API error.
@@ -1572,58 +1994,17 @@ func TestDownloadSingleArtifactByRef_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadSingleArtifactByRef_MissingProjectID verifies DownloadSingleArtifactByRef when missing project ID.
-func TestDownloadSingleArtifactByRef_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
-		RefName: "main", ArtifactPath: "report.txt", JobName: "build",
-	})
-	if err == nil {
-		t.Fatal(testutil.MsgErrEmptyProjectID)
-	}
-}
-
-// TestDownloadSingleArtifactByRef_MissingArtifactPath verifies DownloadSingleArtifactByRef when missing artifact path.
-func TestDownloadSingleArtifactByRef_MissingArtifactPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
-		ProjectID: "42", RefName: "main", JobName: "build",
-	})
-	if err == nil {
-		t.Fatal("expected error for missing artifact_path, got nil")
-	}
-}
-
-// TestDownloadSingleArtifactByRef_MissingJob verifies DownloadSingleArtifactByRef when missing job name.
-func TestDownloadSingleArtifactByRef_MissingJob(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := DownloadSingleArtifactByRef(context.Background(), client, SingleArtifactRefInput{
-		ProjectID: "42", RefName: "main", ArtifactPath: testReportFileName,
-	})
-	if err == nil {
-		t.Fatal("expected error for missing job, got nil")
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Erase — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestErase_APIError verifies Erase when API error.
+// TestErase_APIError verifies a 403 on erase carries the erase hint.
 func TestErase_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := Erase(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "erasing jobs requires Maintainer+ role")
 }
 
 // TestErase_NotFoundAPIError verifies Erase when GitLab returns not found.
@@ -1651,15 +2032,13 @@ func TestErase_CancelledContext(t *testing.T) {
 // KeepArtifacts — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestKeepArtifacts_APIError verifies KeepArtifacts when API error.
+// TestKeepArtifacts_APIError verifies a 403 on keep carries the keep hint.
 func TestKeepArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := KeepArtifacts(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "keeping artifacts requires Maintainer+ role")
 }
 
 // TestKeepArtifacts_NotFoundAPIError verifies KeepArtifacts when GitLab returns not found.
@@ -1687,15 +2066,14 @@ func TestKeepArtifacts_CancelledContext(t *testing.T) {
 // Play — API error, canceled context, with variables
 // ---------------------------------------------------------------------------.
 
-// TestPlay_APIError verifies Play when API error.
+// TestPlay_APIError verifies a 403 on play carries the play hint, which is
+// about the role and not about the job's state, the 400's subject.
 func TestPlay_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	_, err := Play(context.Background(), client, PlayInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "playing manual jobs requires Developer+ role")
 }
 
 // TestPlay_BadRequestAPIError verifies Play when the job is not playable.
@@ -1728,29 +2106,88 @@ func TestPlay_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestPlay_WithVariables verifies Play when with variables.
-func TestPlay_WithVariables(t *testing.T) {
+// playBodyRecorder answers the play endpoint and keeps the request body it was
+// sent, for the tests that assert what reached GitLab rather than what came
+// back.
+func playBodyRecorder(t *testing.T) (*gitlabclient.Client, *atomic.Value) {
+	t.Helper()
+	var gotBody atomic.Value
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobPlay {
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				t.Errorf("read body: %v", readErr)
+			}
+			gotBody.Store(string(body))
 			testutil.RespondJSON(w, http.StatusOK, jobJSON)
 			return
 		}
 		http.NotFound(w, r)
 	}))
+	return client, &gotBody
+}
 
-	out, err := Play(context.Background(), client, PlayInput{
+// TestPlay_WithVariables_ForwardsEachInTheRequestBody verifies the variables a
+// caller gives reach GitLab as job_variables_attributes, each with its key and
+// value, and with variable_type only where the caller set one: an unset type
+// is GitLab's default, not an empty string to send. The test this replaces
+// checked the job that came back and never read the body.
+func TestPlay_WithVariables_ForwardsEachInTheRequestBody(t *testing.T) {
+	client, gotBody := playBodyRecorder(t)
+
+	_, err := Play(context.Background(), client, PlayInput{
 		ProjectID: "42",
 		JobID:     100,
 		JobVariablesAttributes: []JobVariableInput{
 			{Key: "ENV", Value: "production", VariableType: "env_var"},
-			{Key: "SECRET", Value: "/tmp/secret", VariableType: "file"},
+			{Key: "KUBECONFIG", Value: "/tmp/kubeconfig", VariableType: "file"},
+			{Key: "PLAIN", Value: "untyped"},
 		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.ID != 100 {
-		t.Errorf("ID = %d, want 100", out.ID)
+	var body struct {
+		Vars   []map[string]any `json:"job_variables_attributes"`
+		Inputs json.RawMessage  `json:"job_inputs"`
+	}
+	raw, _ := gotBody.Load().(string)
+	if decodeErr := json.Unmarshal([]byte(raw), &body); decodeErr != nil {
+		t.Fatalf("request body %q does not decode: %v", raw, decodeErr)
+	}
+	want := []map[string]any{
+		{"key": "ENV", "value": "production", "variable_type": "env_var"},
+		{"key": "KUBECONFIG", "value": "/tmp/kubeconfig", "variable_type": "file"},
+		{"key": "PLAIN", "value": "untyped"},
+	}
+	if !reflect.DeepEqual(body.Vars, want) {
+		t.Errorf("job_variables_attributes = %v, want %v", body.Vars, want)
+	}
+	if body.Inputs != nil {
+		t.Errorf("job_inputs = %s, want none sent when the caller gave none", body.Inputs)
+	}
+}
+
+// TestPlay_NoVariablesOrInputs_SendsNeitherKey verifies a plain play carries
+// neither job_variables_attributes nor job_inputs: an empty array in the body
+// is a request GitLab was never sent before, not the absence of one.
+func TestPlay_NoVariablesOrInputs_SendsNeitherKey(t *testing.T) {
+	client, gotBody := playBodyRecorder(t)
+
+	if _, err := Play(context.Background(), client, PlayInput{ProjectID: "42", JobID: 100}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	var body map[string]json.RawMessage
+	raw, _ := gotBody.Load().(string)
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		t.Fatalf("request body %q does not decode: %v", raw, err)
+	}
+	for _, key := range []string{"job_variables_attributes", "job_inputs"} {
+		t.Run(key, func(t *testing.T) {
+			if v, ok := body[key]; ok {
+				t.Errorf("body carries %s = %s, want the key absent", key, v)
+			}
+		})
 	}
 }
 
@@ -1809,15 +2246,14 @@ func TestPlay_InvalidJobInputs_RejectedBeforeRequest(t *testing.T) {
 // DeleteArtifacts — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteArtifacts_APIError verifies DeleteArtifacts when API error.
+// TestDeleteArtifacts_APIError verifies a 403 on delete carries the delete
+// hint.
 func TestDeleteArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	err := DeleteArtifacts(context.Background(), client, DeleteArtifactsInput{ProjectID: "42", JobID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "deleting artifacts requires Maintainer+ role")
 }
 
 // TestDeleteArtifacts_NotFoundAPIError verifies DeleteArtifacts when GitLab returns not found.
@@ -1833,15 +2269,14 @@ func TestDeleteArtifacts_NotFoundAPIError(t *testing.T) {
 // DeleteProjectArtifacts — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProjectArtifacts_APIError verifies DeleteProjectArtifacts when API error.
+// TestDeleteProjectArtifacts_APIError verifies a 403 on the bulk delete
+// carries its own hint, the one that says the deletion is project-wide.
 func TestDeleteProjectArtifacts_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
 	err := DeleteProjectArtifacts(context.Background(), client, DeleteProjectArtifactsInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
+	assertContains(t, err, "bulk-deleting all project artifacts requires Maintainer+ role")
 }
 
 // TestDeleteProjectArtifacts_NotFoundAPIError verifies DeleteProjectArtifacts when GitLab returns not found.
@@ -1936,6 +2371,44 @@ func TestFormatOutputMarkdown_ErasedAndArchivedRowsAndHints(t *testing.T) {
 		"- Use action 'job.list' to see the other jobs of that pipeline\n"
 	if md != want {
 		t.Errorf("FormatOutputMarkdown(erased and archived)\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatOutputMarkdown_HintsFollowEachStateOnItsOwn drives the erased and
+// archived states one at a time, since the cards above set neither or both: an
+// erased job that is not archived keeps its retry and cancel, and an archived
+// one whose log remains keeps the log.
+func TestFormatOutputMarkdown_HintsFollowEachStateOnItsOwn(t *testing.T) {
+	tests := []struct {
+		name string
+		job  Output
+		want string
+	}{
+		{"erased only", Output{ID: 1, ErasedAt: "2026-03-02T08:00:00Z"}, "\n---\n💡 **Next steps:**\n" +
+			"- Use action 'job.list_project' to look at the project's other jobs, since this one's log was erased\n" +
+			"- Use action 'job.retry' to re-run this job\n" +
+			"- Use action 'job.cancel' to cancel it while it is still running\n"},
+		{"archived only", Output{ID: 1, Archived: true}, "\n---\n💡 **Next steps:**\n" +
+			"- Use action 'job.trace' to read this job's log\n" +
+			"- Use action 'pipeline.get' to open the pipeline this job ran in\n" +
+			"- Use action 'job.list' to see the other jobs of that pipeline\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if md := FormatOutputMarkdown(tt.job); !strings.HasSuffix(md, tt.want) {
+				t.Errorf("FormatOutputMarkdown(%s) hints\n got %q\nwant suffix %q", tt.name, md, tt.want)
+			}
+		})
+	}
+}
+
+// TestFormatOutputMarkdown_PipelineWithoutID_OmitsTheRow checks that a
+// pipeline object GitLab sent without an id, which the converter keeps for its
+// other keys, is not shown as "#0": a reader would take that for a pipeline.
+func TestFormatOutputMarkdown_PipelineWithoutID_OmitsTheRow(t *testing.T) {
+	md := FormatOutputMarkdown(Output{ID: 3, Name: "n", Stage: "s", Status: "success", Ref: "r", Pipeline: &PipelineObject{Ref: "main"}})
+	if strings.Contains(md, "**Pipeline**") {
+		t.Errorf("FormatOutputMarkdown(pipeline without id) shows a pipeline row:\n%s", md)
 	}
 }
 

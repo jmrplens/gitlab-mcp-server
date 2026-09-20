@@ -84,8 +84,9 @@ func TestCommitObject_DocumentedFields(t *testing.T) {
 	}
 }
 
-// TestPipelineInfoObject_FullFields verifies pipelineInfoObject formats the
-// optional updated_at/created_at timestamps.
+// TestPipelineInfoObject_FullFields verifies pipelineInfoObject sets the
+// optional updated_at/created_at timestamps. Both hold one value here, so
+// which lands where is held by TestListBridges_MapsEveryDocumentedField.
 func TestPipelineInfoObject_FullFields(t *testing.T) {
 	now := time.Now()
 	out := pipelineInfoObject(&gl.PipelineInfo{ID: 9, UpdatedAt: &now, CreatedAt: &now})
