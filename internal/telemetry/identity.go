@@ -117,6 +117,13 @@ const (
 	// The name of a field, never a credential: the value it names is four
 	// masked characters, and this constant is what removes them.
 	LogFieldTokenSuffix = "token_suffix" //nolint:gosec // a log field name, not a secret
+	// LogFieldRequestHost is the Host header of a request the host guard
+	// refused, as the caller sent it. It is written to stderr because a proxy
+	// misconfiguration is diagnosed by reading it, and stripped from the
+	// exported copy because a header a client sent is what the guide says
+	// never leaves the process: on a published endpoint the value is chosen by
+	// whoever is probing, and a collector is not the place to keep it.
+	LogFieldRequestHost = "host"
 )
 
 // identitySaltBytes sizes the pseudonymisation key.

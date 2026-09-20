@@ -25,6 +25,8 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/telemetry"
 )
 
 // hostGuard is a deployment's policy on the Host header a request may carry.
@@ -210,8 +212,11 @@ func hostValidationMiddleware(guard hostGuard, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// The host goes to stderr under the field name the exported leg
+		// strips: it is what an operator reads to fix a proxy, and what a
+		// caller chose, which the telemetry guide says never leaves here.
 		slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
-			"host", loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
+			telemetry.LogFieldRequestHost, loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
 		// JSON-RPC rather than http.Error's plain text, for the same
 		// reason the cross-origin refusal is: an unparseable 4xx body
 		// reads to a Streamable HTTP client as a pre-negotiation server.

@@ -365,9 +365,17 @@ Not by default and not by any setting, because there is no setting:
   refusal by on their own terminal, and it is stripped from the exported copy of
   every log record at any depth: it authenticates nothing and correlates
   everything, which is not a distinction a telemetry backend can make for you.
+- The `Host` header of a request the host guard refused. It stays on stderr,
+  where it is what you read to find out which host a misconfigured proxy is
+  forwarding, and it is stripped from the exported copy the same way: on a
+  published endpoint the value is whatever a caller chose to send, and it
+  reached collectors from 3.0.0 until 3.1.0, because the test that says it
+  cannot was winning its race against the log batch.
 
 An end-to-end test drives real traffic carrying a distinctive project path, a
-search query and a token, then searches every exported payload for all three.
+search query and a token, then searches every exported payload for all three;
+another sends a spoofed `Host`, a spoofed `X-Forwarded-For` and a probe path
+and does the same.
 
 ## Recording who made a call
 
