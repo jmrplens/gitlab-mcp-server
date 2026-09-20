@@ -103,6 +103,64 @@ func TestFormatListMarkdown_UpcomingAndCreatedFallback(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_ReleasedPrecedenceAndUndatedUpcoming pins the two
+// answers of the Released column the fallback test leaves open: a release
+// carrying both dates is dated by released_at rather than by when GitLab
+// created the record, and an upcoming release GitLab sent no date for renders
+// an empty cell instead of a calendar glyph standing on its own.
+func TestFormatListMarkdown_ReleasedPrecedenceAndUndatedUpcoming(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{TagName: "v4.0.0", Name: "Both Dates", ReleasedAt: "2026-08-02T12:00:00Z", CreatedAt: "2026-01-05T08:30:00Z"},
+			{TagName: "v4.1.0-rc1", Name: "Undated", UpcomingRelease: true},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
+	})
+
+	want := "## Group Releases (2)\n\n" +
+		listHeader +
+		"| v4.0.0 | Both Dates | 2 Aug 2026 12:00 UTC |  |\n" +
+		"| v4.1.0-rc1 | Undated |  |  |\n" +
+		"\n2 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatListMarkdown_SelfLinkPrecedenceAndAuthorProfile pins the other two:
+// a release carrying both links is linked to its self URL rather than to the
+// page behind the edit form, and an author with a profile is rendered as the
+// handle linked to it, the plain handle staying the answer for one without.
+func TestFormatListMarkdown_SelfLinkPrecedenceAndAuthorProfile(t *testing.T) {
+	got := FormatListMarkdown(ListOutput{
+		Releases: []Output{
+			{
+				TagName: "v6.0.0", Name: "Both Links",
+				Author: &toolutil.AuthorOutput{Username: "rel", WebURL: "https://git.example.com/rel"},
+				Links: &toolutil.LinksOutput{
+					Self:    "https://git.example.com/g/p/-/releases/v6.0.0",
+					EditURL: "https://git.example.com/g/other/-/releases/v6.0.0/edit",
+				},
+			},
+			{TagName: "v6.1.0", Name: "Handle Only", Author: &toolutil.AuthorOutput{Username: "dev"}},
+		},
+		Pagination: toolutil.PaginationOutput{TotalItems: 2, TotalPages: 1},
+	})
+
+	want := "## Group Releases (2)\n\n" +
+		listHeader +
+		"| [v6.0.0](https://git.example.com/g/p/-/releases/v6.0.0) | Both Links |  | [@rel](https://git.example.com/rel) |\n" +
+		"| v6.1.0 | Handle Only |  | @dev |\n" +
+		"\n2 items total\n" +
+		listHints
+
+	if got != want {
+		t.Errorf("list mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatListMarkdown_HostileTagAndEditURLFallback pins both halves of the
 // Tag column: a tag name carrying a pipe and a bracket cannot split the row or
 // close a link label, and a release whose only link is the edit URL is linked
