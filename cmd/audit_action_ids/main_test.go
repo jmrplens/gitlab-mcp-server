@@ -21,7 +21,7 @@ func TestRun_WholeCommand_ReportsAndWritesTheWorkList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "action-ids.json")
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{auditedPattern}, nil, path, false, false, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, jsonPath: path}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), toolName+":") {
@@ -42,7 +42,7 @@ func TestRun_NoWorkListPath_WritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{auditedPattern}, nil, "", false, false, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run = %d, stderr %q", code, stderr.String())
 	}
 	if strings.Contains(stdout.String(), "wrote ") {
@@ -61,7 +61,7 @@ func TestRun_NoWorkListPath_WritesNothing(t *testing.T) {
 func TestRun_UnloadableSource_ExitsOne(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{"./cmd/audit_action_ids/nothing/..."}, nil, "", false, false, &stdout, &stderr); code != 1 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{"./cmd/audit_action_ids/nothing/..."}}, &stdout, &stderr); code != 1 {
 		t.Fatalf("run = %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), toolName+":") {
@@ -79,7 +79,7 @@ func TestRun_UnwritableWorkList_ExitsOne(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 
-	code := run(repoRoot(t), []string{auditedPattern}, nil, filepath.Join(blocker, "action-ids.json"), false, false, &stdout, &stderr)
+	code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, jsonPath: filepath.Join(blocker, "action-ids.json")}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run = %d, want 1", code)
 	}
@@ -105,7 +105,7 @@ var Spec = toolutil.ActionSpecOptions{RelatedActions: []string{"project.no_such_
 	}
 	var stdout, stderr bytes.Buffer
 
-	code := run(root, fixturePatterns, overlay, "", false, true, &stdout, &stderr)
+	code := run(auditConfig{dir: root, patterns: fixturePatterns, overlay: overlay, check: true}, &stdout, &stderr)
 
 	if code != 1 {
 		t.Fatalf("run with -check = %d over a dead cross-link, want 1", code)
@@ -124,7 +124,7 @@ var Spec = toolutil.ActionSpecOptions{RelatedActions: []string{"project.no_such_
 func TestRun_Check_CleanPackage_Passes(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	if code := run(repoRoot(t), []string{auditedPattern}, nil, "", false, true, &stdout, &stderr); code != 0 {
+	if code := run(auditConfig{dir: repoRoot(t), patterns: []string{auditedPattern}, check: true}, &stdout, &stderr); code != 0 {
 		t.Fatalf("run with -check = %d over a package publishing no IDs, stderr %q", code, stderr.String())
 	}
 	if strings.Contains(stderr.String(), "ERROR:") {
