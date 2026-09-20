@@ -89,8 +89,16 @@ func TestActionSpecs_UpdateStateEventGuidance(t *testing.T) {
 	if !ok {
 		t.Fatal("state_event parameter guidance missing")
 	}
-	if guidance.SemanticRole != "issue_state_transition" || !strings.Contains(guidance.ExampleBinding, "close") {
-		t.Fatalf("state_event guidance = %+v, want transition role and close example", guidance)
+	if guidance.SemanticRole != "issue_state_transition" {
+		t.Fatalf("state_event guidance = %+v, want transition role", guidance)
+	}
+	// The binding is served verbatim to a model, so it has to name the
+	// parameter as the caller spells it. Asking only that it contains "close"
+	// admitted `{paramStateEvent:"close"}`, which is the Go constant's
+	// identifier rather than its value, and told a model to send a key that
+	// does not exist.
+	if guidance.ExampleBinding != `params.`+paramStateEvent+`:"close"` {
+		t.Fatalf("state_event ExampleBinding = %q, want the parameter named as a caller spells it", guidance.ExampleBinding)
 	}
 
 	properties, ok := spec.Route.InputSchema["properties"].(map[string]any)
