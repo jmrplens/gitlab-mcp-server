@@ -5,6 +5,8 @@ package issuelinks
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,20 +17,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// errExpMissingProjectID identifies the err exp missing project ID constant used by this package.
-const errExpMissingProjectID = "expected error for missing project_id"
-
-// errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
-const errExpCancelledCtx = "expected error for canceled context"
-
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
 // testPathIssueLinks identifies the test path issue links constant used by this package.
 const testPathIssueLinks = "/api/v4/projects/10/issues/5/links"
 
-// errExpMissingIssueIID identifies the err exp missing issue IID constant used by this package.
-const errExpMissingIssueIID = "expected error for missing issue_iid"
+// testFieldIssueLinkID is the field name the link handlers spell in their
+// refusals; the handlers keep it as a literal rather than a constant of their
+// own, so the tests hold the spelling once here.
+const testFieldIssueLinkID = "issue_link_id"
 
 // testProjectID identifies the test project ID constant used by this package.
 const testProjectID = "10"
@@ -212,38 +210,31 @@ func TestIssueLinkList_CaptureUnreadable(t *testing.T) {
 	}
 }
 
-// TestIssueLinkList_MissingProjectID verifies IssueLinkList when missing project ID.
+// TestIssueLinkList_MissingProjectID verifies that List refuses a call naming
+// no project without reaching GitLab, and says which field it refused on.
 func TestIssueLinkList_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{IssueIID: 5})
-	if err == nil {
-		t.Fatal(errExpMissingProjectID)
-	}
+	assertContains(t, err, fieldProjectID)
 }
 
-// TestIssueLinkList_MissingIssueIID verifies IssueLinkList when missing issue IID.
+// TestIssueLinkList_MissingIssueIID verifies that an unset issue_iid is refused
+// by the handler rather than sent to GitLab as issue 0, which is the shape a
+// missing field arrives in: the zero value, not a negative one.
 func TestIssueLinkList_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
-	if err == nil {
-		t.Fatal(errExpMissingIssueIID)
-	}
+	assertContains(t, err, fieldIssueIID)
 }
 
-// TestIssueLinkList_CancelledContext verifies IssueLinkList when cancelled context.
+// TestIssueLinkList_CancelledContext verifies that a context already cancelled
+// ends the call in the handler, before a request is issued, and that the
+// refusal names the operation.
 func TestIssueLinkList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{ProjectID: testProjectID, IssueIID: 5})
-	if err == nil {
-		t.Fatal(errExpCancelledCtx)
-	}
+	assertContains(t, err, toolListIssueLinks)
 }
 
 // ---------------------------------------------------------------------------
@@ -287,49 +278,37 @@ func TestIssueLinkGet_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkGet_MissingProjectID verifies IssueLinkGet when missing project ID.
+// TestIssueLinkGet_MissingProjectID verifies that Get refuses a call naming no
+// project without reaching GitLab, and says which field it refused on.
 func TestIssueLinkGet_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{IssueIID: 5, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpMissingProjectID)
-	}
+	assertContains(t, err, fieldProjectID)
 }
 
-// TestIssueLinkGet_MissingIssueIID verifies IssueLinkGet when missing issue IID.
+// TestIssueLinkGet_MissingIssueIID verifies that an unset issue_iid is refused
+// by the handler rather than sent to GitLab as issue 0.
 func TestIssueLinkGet_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpMissingIssueIID)
-	}
+	assertContains(t, err, fieldIssueIID)
 }
 
-// TestIssueLinkGet_MissingLinkID verifies IssueLinkGet when missing link ID.
+// TestIssueLinkGet_MissingLinkID verifies that an unset issue_link_id is
+// refused by the handler rather than fetched as link 0.
 func TestIssueLinkGet_MissingLinkID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, IssueIID: 5})
-	if err == nil {
-		t.Fatal("expected error for missing issue_link_id")
-	}
+	assertContains(t, err, testFieldIssueLinkID)
 }
 
-// TestIssueLinkGet_CancelledContext verifies IssueLinkGet when cancelled context.
+// TestIssueLinkGet_CancelledContext verifies that a context already cancelled
+// ends the call in the handler, before a request is issued.
 func TestIssueLinkGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpCancelledCtx)
-	}
+	assertContains(t, err, toolGetIssueLink)
 }
 
 // ---------------------------------------------------------------------------
@@ -404,60 +383,121 @@ func TestIssueLinkCreate_WithoutLinkType(t *testing.T) {
 	}
 }
 
-// TestIssueLinkCreate_MissingProjectID verifies IssueLinkCreate when missing project ID.
+// createSentBody drives Create against a stub instance and returns the
+// top-level fields of the JSON body that reached it.
+//
+// link_type is the one optional field of the create request, guarded by
+// `if input.LinkType != ""`, and the link these tests get back is a fixture of
+// their own writing, so no assertion on the output can tell whether the guard
+// fired. Inverting it drops the type the caller asked for and sends an empty
+// one instead, which GitLab would store as the default relationship, and the
+// request is the only place that is visible.
+func createSentBody(t *testing.T, input CreateInput) map[string]any {
+	t.Helper()
+	var captured string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "unreadable body", http.StatusInternalServerError)
+			return
+		}
+		captured = string(raw)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"link_type":"relates_to"}`)
+	}))
+	if _, err := Create(context.Background(), client, input); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	fields := map[string]any{}
+	if err := json.Unmarshal([]byte(captured), &fields); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", captured, err)
+	}
+	return fields
+}
+
+// TestIssueLinkCreate_SendsTheLinkTypeTheCallerAsked checks that a link_type
+// the caller supplied reaches GitLab as that value, and that the two target
+// fields travel with it. Without this the handler could send no link_type at
+// all and every assertion on the response, which the fixture writes, would
+// still pass.
+func TestIssueLinkCreate_SendsTheLinkTypeTheCallerAsked(t *testing.T) {
+	body := createSentBody(t, CreateInput{
+		ProjectID:       testProjectID,
+		IssueIID:        5,
+		TargetProjectID: "20",
+		TargetIssueIID:  "12",
+		LinkType:        "is_blocked_by",
+	})
+	sent := map[string]any{
+		"link_type":         "is_blocked_by",
+		"target_project_id": "20",
+		"target_issue_iid":  "12",
+	}
+	for field, want := range sent {
+		t.Run(field, func(t *testing.T) {
+			if body[field] != want {
+				t.Errorf("request sent %s = %v, want %v", field, body[field], want)
+			}
+		})
+	}
+}
+
+// TestIssueLinkCreate_SendsNoLinkTypeWhenUnset checks that a caller who named
+// no link type has none chosen for them: the SDK's field carries no omitempty,
+// so the key is on the wire either way, and what the guard decides is whether
+// it carries null or the empty string GitLab has no relationship for.
+func TestIssueLinkCreate_SendsNoLinkTypeWhenUnset(t *testing.T) {
+	body := createSentBody(t, CreateInput{
+		ProjectID:       testProjectID,
+		IssueIID:        5,
+		TargetProjectID: "20",
+		TargetIssueIID:  "12",
+	})
+	if got, ok := body["link_type"]; !ok || got != nil {
+		t.Errorf("request sent link_type = %v (present: %t), want null", got, ok)
+	}
+}
+
+// TestIssueLinkCreate_MissingProjectID verifies that Create refuses a call
+// naming no source project without reaching GitLab.
 func TestIssueLinkCreate_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{IssueIID: 5, TargetProjectID: "20", TargetIssueIID: "12"})
-	if err == nil {
-		t.Fatal(errExpMissingProjectID)
-	}
+	assertContains(t, err, fieldProjectID)
 }
 
-// TestIssueLinkCreate_MissingIssueIID verifies IssueLinkCreate when missing issue IID.
+// TestIssueLinkCreate_MissingIssueIID verifies that an unset issue_iid is
+// refused by the handler rather than sent to GitLab as issue 0, which would
+// link the target issue to nothing.
 func TestIssueLinkCreate_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, TargetProjectID: "20", TargetIssueIID: "12"})
-	if err == nil {
-		t.Fatal(errExpMissingIssueIID)
-	}
+	assertContains(t, err, fieldIssueIID)
 }
 
-// TestIssueLinkCreate_MissingTargetProject verifies IssueLinkCreate when missing target project.
+// TestIssueLinkCreate_MissingTargetProject verifies that a call naming no
+// target project is refused by the handler, not by GitLab.
 func TestIssueLinkCreate_MissingTargetProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, IssueIID: 5, TargetIssueIID: "12"})
-	if err == nil {
-		t.Fatal("expected error for missing target_project_id")
-	}
+	assertContains(t, err, "target_project_id")
 }
 
-// TestIssueLinkCreate_MissingTargetIssue verifies IssueLinkCreate when missing target issue.
+// TestIssueLinkCreate_MissingTargetIssue verifies that a call naming no target
+// issue is refused by the handler, not by GitLab.
 func TestIssueLinkCreate_MissingTargetIssue(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, IssueIID: 5, TargetProjectID: "20"})
-	if err == nil {
-		t.Fatal("expected error for missing target_issue_iid")
-	}
+	assertContains(t, err, "target_issue_iid")
 }
 
-// TestIssueLinkCreate_CancelledContext verifies IssueLinkCreate when cancelled context.
+// TestIssueLinkCreate_CancelledContext verifies that a context already
+// cancelled ends the call in the handler, before a link is created.
 func TestIssueLinkCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: testProjectID, IssueIID: 5, TargetProjectID: "20", TargetIssueIID: "12"})
-	if err == nil {
-		t.Fatal(errExpCancelledCtx)
-	}
+	assertContains(t, err, toolCreateIssueLink)
 }
 
 // ---------------------------------------------------------------------------
@@ -489,49 +529,37 @@ func TestIssueLinkDelete_Success(t *testing.T) {
 	}
 }
 
-// TestIssueLinkDelete_MissingProjectID verifies IssueLinkDelete when missing project ID.
+// TestIssueLinkDelete_MissingProjectID verifies that Delete refuses a call
+// naming no project without reaching GitLab.
 func TestIssueLinkDelete_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{IssueIID: 5, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpMissingProjectID)
-	}
+	assertContains(t, err, fieldProjectID)
 }
 
-// TestIssueLinkDelete_MissingIssueIID verifies IssueLinkDelete when missing issue IID.
+// TestIssueLinkDelete_MissingIssueIID verifies that an unset issue_iid is
+// refused by the handler rather than sent as issue 0 on a DELETE.
 func TestIssueLinkDelete_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpMissingIssueIID)
-	}
+	assertContains(t, err, fieldIssueIID)
 }
 
-// TestIssueLinkDelete_MissingLinkID verifies IssueLinkDelete when missing link ID.
+// TestIssueLinkDelete_MissingLinkID verifies that an unset issue_link_id is
+// refused by the handler rather than sent as link 0 on a DELETE.
 func TestIssueLinkDelete_MissingLinkID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, IssueIID: 5})
-	if err == nil {
-		t.Fatal("expected error for missing issue_link_id")
-	}
+	assertContains(t, err, testFieldIssueLinkID)
 }
 
-// TestIssueLinkDelete_CancelledContext verifies IssueLinkDelete when cancelled context.
+// TestIssueLinkDelete_CancelledContext verifies that a context already
+// cancelled ends the call in the handler, before a link is removed.
 func TestIssueLinkDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// no response needed: validation fails before reaching API
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: testProjectID, IssueIID: 5, IssueLinkID: 1})
-	if err == nil {
-		t.Fatal(errExpCancelledCtx)
-	}
+	assertContains(t, err, toolDeleteIssueLink)
 }
 
 // ---------------------------------------------------------------------------
@@ -597,7 +625,7 @@ func TestIssueLinkIDNegative_Validation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "issue_link_id")
+			assertContains(t, tt.fn(), testFieldIssueLinkID)
 		})
 	}
 }
@@ -710,6 +738,56 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	want := "No linked issues found.\n"
 	if got := FormatListMarkdown(ListOutput{}); got != want {
 		t.Errorf("FormatListMarkdown(empty) = %q, want %q", got, want)
+	}
+}
+
+// TestFormatListMarkdown_NoState checks the row of a relation whose state the
+// response did not carry: the State cell is empty. Without the guard the cell
+// would read "❓", the emoji for a state that is none of the ones GitLab
+// names, which claims an unknown state where GitLab said nothing at all.
+func TestFormatListMarkdown_NoState(t *testing.T) {
+	want := "## Issue Relations (1)\n\n" +
+		"| ID | IID | Title | State | Link Type | Link ID | Author |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| 3 | 4 | [Stateless](https://gitlab.example.com/g/p/-/issues/4) |  | blocks | 6 |  |\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- " + toolutil.HintPreserveLinks + "\n" +
+		"- Use action 'issue.link_create' to add a new link between issues\n"
+	got := FormatListMarkdown(ListOutput{Relations: []RelationOutput{
+		{
+			ID: 3, IID: 4, Title: "Stateless", LinkType: "blocks", IssueLinkID: 6,
+			WebURL: "https://gitlab.example.com/g/p/-/issues/4",
+		},
+	}})
+	if got != want {
+		t.Errorf("FormatListMarkdown(no state)\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestFormatOutputMarkdown_NoState checks the card of a link whose issue
+// carries no state: the nested object has no State row rather than one holding
+// the emoji for an unknown state.
+func TestFormatOutputMarkdown_NoState(t *testing.T) {
+	want := "## Issue Link\n\n" +
+		"- **ID**: 11\n" +
+		"- **Link Type**: relates_to\n" +
+		"- **Source Issue**:\n" +
+		"  - **IID**: 5\n" +
+		"  - **Project ID**: 10\n" +
+		"  - **Title**: [Stateless](https://gitlab.example.com/g/p/-/issues/5)\n" +
+		"- **Target Issue**: (not available)\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- Use action 'issue.link_list' to see all links for this issue\n"
+	got := FormatOutputMarkdown(Output{
+		ID:       11,
+		LinkType: testLinkRelatesTo,
+		SourceIssue: &IssueRefOutput{
+			IID: 5, ProjectID: 10, Title: "Stateless",
+			WebURL: "https://gitlab.example.com/g/p/-/issues/5",
+		},
+	})
+	if got != want {
+		t.Errorf("FormatOutputMarkdown(no state)\n got %q\nwant %q", got, want)
 	}
 }
 
