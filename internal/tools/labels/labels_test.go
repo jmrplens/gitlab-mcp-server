@@ -397,6 +397,36 @@ func TestLabelCreate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 	}
 }
 
+// TestLabelCreate_RequiredFields_ReachTheBodyUnderTheirOwnKeys asserts that a
+// create sends the caller's name as "name" and their color as "color". Nothing
+// else here can see the two exchanged: GitLab answers a create with the label it
+// made, so every test reading the answer back is reading the mock's own fixture,
+// and swapping the two assignments leaves the whole suite green while the label
+// GitLab is asked for is named after its color.
+func TestLabelCreate_RequiredFields_ReachTheBodyUnderTheirOwnKeys(t *testing.T) {
+	var captured string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != pathProjectLabels {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		captured = string(body)
+		testutil.RespondJSON(w, http.StatusCreated, labelJSON)
+	}))
+
+	if _, err := Create(t.Context(), client, CreateInput{ProjectID: "42", Name: "bug", Color: "#d9534f"}); err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	assertRequestBodyFields(t, captured, []string{`"name":"bug"`, `"color":"#d9534f"`}, nil)
+}
+
 // TestLabelCreate_MissingProject verifies LabelCreate when missing project.
 func TestLabelCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -506,14 +536,6 @@ func TestLabelUpdate_NameBodyField(t *testing.T) {
 	}
 }
 
-// TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied asserts that an
-// update carries exactly the fields the caller named. It matters more here than
-// on a create, because GitLab applies what an update sends and leaves the rest
-// alone: a guard that let an unsupplied field through would send the Go zero and
-// blank the label's description or rename it to the empty string, and the answer
-// a test reads back would still be a label. The priority case pins the shape the
-// handler really has: a priority of 0 is treated as "unsaid" and never reaches
-// GitLab, so the input's own "0 to remove" cannot work through this path.
 // TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab verifies that
 // a priority below zero is a parameter error rather than a removal.
 //
@@ -543,6 +565,14 @@ func TestLabelUpdate_NegativePriority_IsRefusedWithoutReachingGitLab(t *testing.
 	}
 }
 
+// TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied asserts that an
+// update carries exactly the fields the caller named. It matters more here than
+// on a create, because GitLab applies what an update sends and leaves the rest
+// alone: a guard that let an unsupplied field through would send the Go zero and
+// blank the label's description or rename it to the empty string, and the answer
+// a test reads back would still be a label. The two priority cases separate the
+// meanings the field carries: unset leaves the label's own priority alone, and
+// zero travels as an explicit null, which is how GitLab removes one.
 func TestLabelUpdate_OptionalFields_ReachTheBodyOnlyWhenSupplied(t *testing.T) {
 	archived := true
 	cases := []struct {
