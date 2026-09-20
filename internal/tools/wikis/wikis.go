@@ -68,7 +68,7 @@ type ListOutput struct {
 	WikiPages []Output `json:"wiki_pages"`
 }
 
-// wikiToOutput converts a GitLab API [gl.Wiki] to MCP output format, filling
+// toOutput converts a GitLab API [gl.Wiki] to MCP output format, filling
 // from the decoded page and from what the capture read beside it.
 func toOutput(w *gl.Wiki, extra toolutil.WikiExtra) Output {
 	return Output{

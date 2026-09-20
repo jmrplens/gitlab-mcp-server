@@ -1,5 +1,6 @@
 // action_specs_test.go contains route and catalog-surface tests for behavior that
-// used to live in register.go: not-found output and destructive confirmation.
+// used to live in register.go — not-found output and destructive confirmation —
+// alongside the discovery metadata and input-schema assertions each spec carries.
 package wikis
 
 import (
@@ -76,6 +77,70 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_GetRoute_ServerErrorIsNotReportedAsNotFound covers the other
+// half of the same condition: only a 404 becomes the structured not-found
+// output, and every other failure is handed back as the error it is. The route
+// reads the error and its status together, and a route that stopped asking for
+// the status would answer a 403 with "no such wiki page", sending a model to
+// look for a slug that exists and it may not read.
+func TestActionSpecs_GetRoute_ServerErrorIsNotReportedAsNotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_wiki_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "slug": "Home"})
+	if err == nil {
+		t.Fatalf("Route.Handler() = %#v with nil error, want the 403 passed through", result)
+	}
+	if _, ok := result.(wikiNotFoundOutput); ok {
+		t.Errorf("403 answered with %T, want no not-found output", result)
+	}
+	if got := err.Error(); !contains(got, "wikiGet") {
+		t.Errorf("error = %q, want it to name the wikiGet operation", got)
+	}
+}
+
+// TestActionSpecs_MetadataEntriesAreComplete pins what decorateWikiMeta's
+// guards rest on: every entry of wikiActionMeta fills usage, aliases, related
+// and description, which is why none of those four guards is ever seen false.
+// It holds each spec to the entry's own values rather than to "not empty",
+// because the placeholder metadata wikiOptions builds is non-empty too, so a
+// spec that quietly fell back to it would have passed either way.
+func TestActionSpecs_MetadataEntriesAreComplete(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := wikiSpecsByTool(t, ActionSpecs(client))
+
+	for name, meta := range wikiActionMeta {
+		t.Run(name, func(t *testing.T) {
+			spec, ok := byTool[name]
+			if !ok {
+				t.Fatalf("wikiActionMeta names %s, which ActionSpecs does not register", name)
+			}
+			if meta.usage == "" || meta.description == "" {
+				t.Errorf("usage = %q, description = %q, want both filled", meta.usage, meta.description)
+			}
+			if len(meta.aliases) == 0 || len(meta.related) == 0 {
+				t.Errorf("aliases = %v, related = %v, want both filled", meta.aliases, meta.related)
+			}
+			if spec.Usage != meta.usage {
+				t.Errorf("Usage = %q, want the entry's own %q", spec.Usage, meta.usage)
+			}
+			if spec.IndividualTool.Description != meta.description {
+				t.Errorf("Description = %q, want the entry's own %q", spec.IndividualTool.Description, meta.description)
+			}
+			if !slices.Equal(spec.Aliases, meta.aliases) {
+				t.Errorf("Aliases = %v, want the entry's own %v", spec.Aliases, meta.aliases)
+			}
+			if !slices.Equal(spec.RelatedActions, meta.related) {
+				t.Errorf("RelatedActions = %v, want the entry's own %v", spec.RelatedActions, meta.related)
+			}
+		})
+	}
+}
+
 // TestWikiCreate_BadRequest covers the IsHTTPStatus(400) branch in Create
 // that returns a hint about slug collisions or invalid content format.
 func TestWikiCreate_BadRequest(t *testing.T) {
@@ -120,7 +185,8 @@ func TestResolveAttachmentReader_InvalidFilePath(t *testing.T) {
 }
 
 // TestResolveAttachmentReader_ValidFile covers the successful file-read branch
-// in resolveAttachmentReader.
+// of the shared toolutil.ReadFileOrBase64 helper as used by the wiki
+// attachment upload, and that the bytes it hands back are the file's own.
 func TestResolveAttachmentReader_ValidFile(t *testing.T) {
 	tmp := t.TempDir()
 	path := tmp + "/test.txt"

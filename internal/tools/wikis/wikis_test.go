@@ -4,9 +4,11 @@ package wikis
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -909,6 +911,43 @@ func TestFormatOutputMarkdownString_Minimal(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdownString_BlankTitle pins the heading of a page GitLab
+// sent no title for: the card is headed with the bare word, never with
+// "Wiki: " and nothing after the colon. Nothing drove that branch before, so
+// the heading a titleless page gets was decided and never read back.
+func TestFormatOutputMarkdownString_BlankTitle(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{Title: "   ", Slug: "orphan", Format: "markdown"})
+
+	want := "## Wiki\n\n" +
+		"- **Slug**: orphan\n" +
+		"- **Format**: markdown\n" +
+		wikiCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatOutputMarkdownString_EmptyFormatIsQuotedAsMarkdown pins that a
+// page carrying content but no format is quoted like a Markdown page rather
+// than fenced with an empty info string, which is what a fence built from an
+// unset format would open with.
+func TestFormatOutputMarkdownString_EmptyFormatIsQuotedAsMarkdown(t *testing.T) {
+	got := FormatOutputMarkdownString(Output{Title: "T", Slug: "t", Content: "# Body\n\nSecond paragraph."})
+
+	want := "## Wiki: T\n\n" +
+		"- **Slug**: t\n" +
+		"- **Content**:\n" +
+		"  > # Body\n" +
+		"  >\n" +
+		"  > Second paragraph.\n" +
+		wikiCardHints
+
+	if got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatOutputMarkdown_NonNil verifies FormatOutputMarkdown when non nil.
 func TestFormatOutputMarkdown_NonNil(t *testing.T) {
 	r := FormatOutputMarkdown(Output{Title: "T"})
@@ -1115,6 +1154,241 @@ func TestWikis_UnreadableCapturedMetaID(t *testing.T) {
 			_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", Slug: "home", Content: "hello again"})
 			return err
 		}},
+	})
+}
+
+// ---------------------------------------------------------------------------
+// What the request carries
+// ---------------------------------------------------------------------------.
+
+// assertWikiBody holds the JSON body a create or update request carried to the
+// keys the caller was expected to send: a want of nil means the key must be
+// absent, since GitLab applies a wiki write key by key and an empty string is
+// a value rather than "leave this alone". It runs on the httptest server's
+// goroutine, so it reports with t.Errorf and never aborts.
+func assertWikiBody(t *testing.T, r *http.Request, want map[string]any) {
+	t.Helper()
+	var got map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+		t.Errorf("decode request body: %v", err)
+		return
+	}
+	for key, wantValue := range want {
+		gotValue, present := got[key]
+		if wantValue == nil {
+			if present {
+				t.Errorf("request carried %s = %#v, want no %s key at all", key, gotValue, key)
+			}
+			continue
+		}
+		if gotValue != wantValue {
+			t.Errorf("request %s = %#v, want %#v", key, gotValue, wantValue)
+		}
+	}
+}
+
+// TestWikiCreate_Format_SentOnlyWhenTheCallerChoseOne asserts what the create
+// request carries rather than what the fixture answers: the format a caller
+// named reaches GitLab, and a caller who named none sends no format key, so
+// GitLab applies its own default instead of being told the empty string.
+// Reading the format back off the response proves neither, because the mock is
+// what wrote it.
+func TestWikiCreate_Format_SentOnlyWhenTheCallerChoseOne(t *testing.T) {
+	cases := []struct {
+		name   string
+		format string
+		want   map[string]any
+	}{
+		{
+			name:   "caller chose asciidoc",
+			format: "asciidoc",
+			want:   map[string]any{"title": "New Page", "content": "Hello world", "format": "asciidoc"},
+		},
+		{
+			name:   "caller chose no format",
+			format: "",
+			want:   map[string]any{"title": "New Page", "content": "Hello world", "format": nil},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathProjectWikis {
+					http.NotFound(w, r)
+					return
+				}
+				assertWikiBody(t, r, tc.want)
+				testutil.RespondJSON(w, http.StatusCreated,
+					`{"title":"New Page","slug":"new-page","format":"markdown"}`)
+			}))
+
+			if _, err := Create(context.Background(), client, CreateInput{
+				ProjectID: "42", Title: "New Page", Content: "Hello world", Format: tc.format,
+			}); err != nil {
+				t.Fatalf("Create() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestWikiUpdate_OptionalFields_SentOnlyWhenTheCallerChangedThem asserts that
+// each of the three optional update fields reaches GitLab when the caller set
+// it and stays out of the request when the caller did not. A PUT is applied
+// key by key, so a title sent as the empty string renames the page to nothing;
+// each case therefore names one field and pins the other two absent, and the
+// last case gives all three distinct values so no two can be confused.
+func TestWikiUpdate_OptionalFields_SentOnlyWhenTheCallerChangedThem(t *testing.T) {
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  map[string]any
+	}{
+		{
+			name:  "title only",
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Title: "Renamed"},
+			want:  map[string]any{"title": "Renamed", "content": nil, "format": nil},
+		},
+		{
+			name:  "content only",
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Content: "Fresh body"},
+			want:  map[string]any{"title": nil, "content": "Fresh body", "format": nil},
+		},
+		{
+			name:  "format only",
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Format: "org"},
+			want:  map[string]any{"title": nil, "content": nil, "format": "org"},
+		},
+		{
+			name:  "all three, each a distinct value",
+			input: UpdateInput{ProjectID: "42", Slug: "my-page", Title: "Renamed", Content: "Fresh body", Format: "rdoc"},
+			want:  map[string]any{"title": "Renamed", "content": "Fresh body", "format": "rdoc"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != pathProjectWikiSlug {
+					http.NotFound(w, r)
+					return
+				}
+				assertWikiBody(t, r, tc.want)
+				testutil.RespondJSON(w, http.StatusOK,
+					`{"title":"Renamed","slug":"my-page","format":"markdown"}`)
+			}))
+
+			if _, err := Update(context.Background(), client, tc.input); err != nil {
+				t.Fatalf("Update() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestUploadAttachment_Branch_SentOnlyWhenTheCallerNamedOne asserts that the
+// branch reaches GitLab as a multipart field when the caller named one and
+// that no branch field is sent otherwise, so GitLab commits the attachment to
+// the wiki's default branch rather than to one called the empty string.
+func TestUploadAttachment_Branch_SentOnlyWhenTheCallerNamedOne(t *testing.T) {
+	cases := []struct {
+		name       string
+		branch     string
+		wantBranch []string
+	}{
+		{name: "caller named a branch", branch: "release-1", wantBranch: []string{"release-1"}},
+		{name: "caller named no branch", branch: "", wantBranch: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != pathProjectWikiAttachments {
+					http.NotFound(w, r)
+					return
+				}
+				form, err := testutil.ReadMultipartForm(r, 1<<20)
+				if err != nil {
+					t.Errorf("read multipart form: %v", err)
+					http.Error(w, "bad form", http.StatusBadRequest)
+					return
+				}
+				if got := form.Value["branch"]; !slices.Equal(got, tc.wantBranch) {
+					t.Errorf("multipart branch = %#v, want %#v", got, tc.wantBranch)
+				}
+				testutil.RespondJSON(w, http.StatusOK,
+					`{"file_name":"diagram.png","file_path":"uploads/abc/diagram.png","branch":"release-1","link":{"url":"/u","markdown":"m"}}`)
+			}))
+
+			if _, err := UploadAttachment(context.Background(), client, UploadAttachmentInput{
+				ProjectID: "42", Filename: "diagram.png", ContentBase64: "aGVsbG8=", Branch: tc.branch,
+			}); err != nil {
+				t.Fatalf("UploadAttachment() unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestWikis_CapturedFieldsReachTheOutput asserts that the two fields client-go
+// does not model — the page's metadata id and its front matter — are read off
+// the captured response and published, for every handler that returns a page
+// (ADR-0021). Nothing else held them: the poisoned-body test asserts a decode
+// failure, so assigning a zero and a nil in their place left the suite green.
+// The list case gives each page its own pair so the per-index pairing is
+// pinned too, which a converter reading the wrong neighbor would break.
+func TestWikis_CapturedFieldsReachTheOutput(t *testing.T) {
+	const homePage = `{"title":"Home","slug":"home","format":"markdown","wiki_page_meta_id":77,"front_matter":{"tags":"ops"}}`
+	const faqPage = `{"title":"FAQ","slug":"faq","format":"markdown","wiki_page_meta_id":78,"front_matter":{"tags":"docs"}}`
+
+	answering := func(body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, body)
+		}))
+	}
+	assertExtras := func(t *testing.T, out Output, wantID int64, wantTag string) {
+		t.Helper()
+		if out.WikiPageMetaID != wantID {
+			t.Errorf("WikiPageMetaID = %d, want %d", out.WikiPageMetaID, wantID)
+		}
+		if got := out.FrontMatter["tags"]; got != wantTag {
+			t.Errorf("FrontMatter[tags] = %#v, want %q", got, wantTag)
+		}
+	}
+
+	t.Run("get", func(t *testing.T) {
+		out, err := Get(context.Background(), answering(homePage), GetInput{ProjectID: "42", Slug: "home"})
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		assertExtras(t, out, 77, "ops")
+	})
+
+	t.Run("create", func(t *testing.T) {
+		out, err := Create(context.Background(), answering(homePage), CreateInput{
+			ProjectID: "42", Title: "Home", Content: "hello",
+		})
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		assertExtras(t, out, 77, "ops")
+	})
+
+	t.Run("update", func(t *testing.T) {
+		out, err := Update(context.Background(), answering(homePage), UpdateInput{
+			ProjectID: "42", Slug: "home", Content: "hello again",
+		})
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		assertExtras(t, out, 77, "ops")
+	})
+
+	t.Run("list", func(t *testing.T) {
+		out, err := List(context.Background(), answering(`[`+homePage+`,`+faqPage+`]`), ListInput{ProjectID: "42"})
+		if err != nil {
+			t.Fatalf(fmtUnexpectedErr, err)
+		}
+		if len(out.WikiPages) != 2 {
+			t.Fatalf("len(WikiPages) = %d, want 2", len(out.WikiPages))
+		}
+		assertExtras(t, out.WikiPages[0], 77, "ops")
+		assertExtras(t, out.WikiPages[1], 78, "docs")
 	})
 }
 
