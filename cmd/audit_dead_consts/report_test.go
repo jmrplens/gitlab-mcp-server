@@ -99,9 +99,11 @@ func TestReportWrite_Findings_NameTheFileLineAndWhetherTheLinterCouldSeeIt(t *te
 		"internal/tools/issues/a.go:9: hidden is never read (1 of 4 in its const declaration)",
 		"2 never read (1 of those in a group the linter cannot see)",
 	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("report does not contain %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("report does not contain %q:\n%s", want, text)
+			}
+		})
 	}
 }
 
@@ -146,9 +148,11 @@ func TestSortConstants_FileThenLine_IsTheOrderFindingsAreRead(t *testing.T) {
 	sortConstants(found)
 	want := []string{"first", "later", "second"}
 	for index, name := range want {
-		if found[index].Name != name {
-			t.Fatalf("order = %v, want %v", deadNames(found), want)
-		}
+		t.Run(name, func(t *testing.T) {
+			if found[index].Name != name {
+				t.Fatalf("order = %v, want %v", deadNames(found), want)
+			}
+		})
 	}
 }
 
