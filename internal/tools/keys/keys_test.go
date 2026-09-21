@@ -5,6 +5,7 @@ package keys
 
 import (
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,14 +16,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestGetKeyWithUser_Success verifies GetKeyWithUser when success.
+// TestGetKeyWithUser_Success pins the whole Output a by-ID lookup builds, from
+// an answer in which no two values agree, so a field taken from its neighbor
+// is visible. Two pairs here have nothing to tell them apart otherwise: the
+// title and the public key are both strings off the key, and the owning user's
+// ID sits beside the key's own. Checking the ID and the username alone left
+// both pairs free to trade places, and crossing either kept the suite green.
 func TestGetKeyWithUser_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/keys/42" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z","user":{"id":1,"username":"admin","name":"Admin"}}`)
+			`{"id":42,"title":"My Key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z","user":{"id":7,"username":"admin","name":"Root Admin"}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -30,11 +36,15 @@ func TestGetKeyWithUser_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.ID != 42 {
-		t.Errorf("ID = %d, want 42", out.ID)
+	want := Output{
+		ID:        42,
+		Title:     "My Key",
+		Key:       "ssh-rsa AAAA...",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		User:      UserOutput{ID: 7, Username: "admin", Name: "Root Admin"},
 	}
-	if out.User.Username != "admin" {
-		t.Errorf("user = %q, want %q", out.User.Username, "admin")
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetKeyWithUser() = %+v, want %+v", out, want)
 	}
 }
 
@@ -77,25 +87,38 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	})
 }
 
-// TestGetKeyWithUser_MissingID verifies GetKeyWithUser when missing ID.
+// TestGetKeyWithUser_MissingID asserts the handler refuses a key_id it was not
+// given, names the field itself, and never reaches GitLab.
+//
+// All three halves matter. The mock was a bare 200 with an empty body, so
+// deleting the guard entirely left this green: GET /keys/0 came back
+// undecodable and an error arrived either way. It proved an error existed, not
+// that this handler produced it, and a model would have been answered about a
+// malformed response instead of about the field it omitted.
 func TestGetKeyWithUser_MissingID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{})
 	if err == nil {
 		t.Fatal("expected error for missing key_id")
 	}
+	if !strings.Contains(err.Error(), "key_id") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
 }
 
-// TestGetKeyByFingerprint_Success verifies GetKeyByFingerprint when success.
+// TestGetKeyByFingerprint_Success pins the whole Output of the fingerprint
+// lookup, and the fingerprint it sent, against an answer whose values are all
+// distinct. Both handlers share one converter, so the same crossings are
+// reachable here; asserting only the ID left every other field of this route
+// unread, and GitLab answers a fingerprint lookup with no creation time, which
+// is what makes this the case that pins the empty-timestamp side.
 func TestGetKeyByFingerprint_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("fingerprint") != "SHA256:abc123" {
 			t.Errorf("unexpected fingerprint param: %s", r.URL.Query().Get("fingerprint"))
 		}
 		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":10,"title":"Deploy Key","key":"ssh-rsa BBBB...","user":{"id":2,"username":"deploy","name":"Deploy"}}`)
+			`{"id":10,"title":"Deploy Key","key":"ssh-rsa BBBB...","user":{"id":2,"username":"deploy-bot","name":"Deploy Service"}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 
@@ -103,23 +126,39 @@ func TestGetKeyByFingerprint_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if out.ID != 10 {
-		t.Errorf("ID = %d, want 10", out.ID)
+	want := Output{
+		ID:    10,
+		Title: "Deploy Key",
+		Key:   "ssh-rsa BBBB...",
+		User:  UserOutput{ID: 2, Username: "deploy-bot", Name: "Deploy Service"},
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("GetKeyByFingerprint() = %+v, want %+v", out, want)
 	}
 }
 
-// TestGetKeyByFingerprint_MissingFingerprint verifies GetKeyByFingerprint when missing fingerprint.
+// TestGetKeyByFingerprint_MissingFingerprint asserts the same of the other
+// handler: it names the field and sends nothing. Its guard was equally free,
+// and an empty fingerprint is worse than a missing key ID, since GET /keys
+// with no fingerprint is a request GitLab may well answer.
 func TestGetKeyByFingerprint_MissingFingerprint(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{})
 	if err == nil {
 		t.Fatal("expected error for missing fingerprint")
 	}
+	if !strings.Contains(err.Error(), "fingerprint") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
 }
 
-// TestGetKeyWithUser_APIError verifies GetKeyWithUser when API error.
+// TestGetKeyWithUser_APIError asserts that a refusal GitLab produced is
+// attributed to this action, by the operation label the error carries.
+//
+// The label is a bare string in each error branch, so the two handlers can
+// exchange theirs and keep compiling; asserting only that an error came back
+// let them. A model told "key_get_by_fingerprint failed" after asking for a
+// key by ID is being told about a call it never made.
 func TestGetKeyWithUser_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -129,6 +168,32 @@ func TestGetKeyWithUser_APIError(t *testing.T) {
 	_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 99})
 	if err == nil {
 		t.Fatal("expected error for API error response")
+	}
+	if !strings.HasPrefix(err.Error(), "key_get:") {
+		t.Errorf("error %q is not attributed to key_get", err)
+	}
+}
+
+// TestGetKeyWithUser_NotFound_HintsAtTheKeyID asserts the corrective hint a
+// 404 carries is the one that belongs to a lookup by ID.
+//
+// The hint is the only part of the answer a model can act on, and it is the
+// other half of what the two handlers could exchange: crossing the two error
+// branches handed a caller who searched by fingerprint advice about verifying
+// a key_id it never supplied, and every test still passed. Only the 404 branch
+// carries a hint at all, which is why it needs a case of its own beside the
+// 403 above.
+func TestGetKeyWithUser_NotFound_HintsAtTheKeyID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	_, err := GetKeyWithUser(t.Context(), client, GetByIDInput{KeyID: 99})
+	if err == nil {
+		t.Fatal("expected error for a key GitLab does not hold")
+	}
+	if !strings.Contains(err.Error(), "verify key_id") {
+		t.Errorf("error %q does not hint at the key ID", err)
 	}
 }
 
@@ -228,7 +293,9 @@ func TestFormatMarkdownString_NoUser(t *testing.T) {
 // GetKeyByFingerprint — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetKeyByFingerprint_APIError verifies GetKeyByFingerprint when API error.
+// TestGetKeyByFingerprint_APIError asserts the other handler attributes a
+// GitLab refusal to its own operation, which is the half of the crossing the
+// by-ID test cannot see on its own.
 func TestGetKeyByFingerprint_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -238,15 +305,43 @@ func TestGetKeyByFingerprint_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for API error response")
 	}
+	if !strings.HasPrefix(err.Error(), "key_get_by_fingerprint:") {
+		t.Errorf("error %q is not attributed to key_get_by_fingerprint", err)
+	}
+}
+
+// TestGetKeyByFingerprint_NotFound_HintsAtTheFingerprintFormat asserts the 404
+// hint names the two fingerprint spellings GitLab accepts, since a fingerprint
+// that matches nothing is far more often mistyped than absent.
+func TestGetKeyByFingerprint_NotFound_HintsAtTheFingerprintFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	_, err := GetKeyByFingerprint(t.Context(), client, GetByFingerprintInput{Fingerprint: "SHA256:abc123"})
+	if err == nil {
+		t.Fatal("expected error for a fingerprint GitLab matches to no key")
+	}
+	if !strings.Contains(err.Error(), "SHA256:base64") || !strings.Contains(err.Error(), "MD5:") {
+		t.Errorf("error %q does not hint at the accepted fingerprint formats", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
 // toOutput — CreatedAt populated and nil
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_WithCreatedAt verifies ToOutput when with created at.
+// TestToOutput_WithCreatedAt pins every field the converter writes at once,
+// the SDK's and the captured ones together, from a key and an extra that share
+// no value. It is the direct guard on the crossings the handler tests reach
+// only through a round trip: both sources feed one struct literal, so the
+// expiry and the last use are interchangeable there as surely as the title and
+// the public key are, and a converter that assigns a neighbor has no branch
+// for either gate to flip.
 func TestToOutput_WithCreatedAt(t *testing.T) {
 	now := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
+	expires := time.Date(2027, 8, 9, 10, 11, 0, 0, time.UTC)
+	lastUsed := time.Date(2026, 4, 5, 6, 7, 0, 0, time.UTC)
 	key := &gl.Key{
 		ID:        1,
 		Title:     "Test",
@@ -259,19 +354,20 @@ func TestToOutput_WithCreatedAt(t *testing.T) {
 		},
 	}
 
-	out := toOutput(key, toolutil.KeyExtra{})
+	out := toOutput(key, toolutil.KeyExtra{ExpiresAt: &expires, LastUsedAt: &lastUsed, UsageType: "signing"})
 
-	if out.CreatedAt == "" {
-		t.Fatal("expected non-empty CreatedAt")
+	want := Output{
+		ID:         1,
+		Title:      "Test",
+		Key:        "ssh-rsa AAAA...",
+		CreatedAt:  "2026-03-15T00:00:00Z",
+		ExpiresAt:  "2027-08-09T10:11:00Z",
+		LastUsedAt: "2026-04-05T06:07:00Z",
+		UsageType:  "signing",
+		User:       UserOutput{ID: 10, Username: "tester", Name: "Test User"},
 	}
-	if !strings.Contains(out.CreatedAt, "2026") {
-		t.Errorf("CreatedAt = %q, expected to contain 2026", out.CreatedAt)
-	}
-	if out.ID != 1 {
-		t.Errorf("ID = %d, want 1", out.ID)
-	}
-	if out.User.Username != "tester" {
-		t.Errorf("User.Username = %q, want %q", out.User.Username, "tester")
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("toOutput() = %+v, want %+v", out, want)
 	}
 }
 
@@ -515,6 +611,54 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Metadata_DescribesItsOwnLookup asserts that the discovery
+// metadata each tool serves describes the lookup that tool performs, using the
+// one word that tells the two apart: the fingerprint tool says "fingerprint"
+// in its usage, its description and every alias, and the by-ID tool says it
+// nowhere.
+//
+// TestActionSpecs_Metadata above checks that the metadata has the right shape
+// and never that it landed on the right tool, so exchanging the two entries of
+// keyActionMeta wholesale kept every test green. What that ships is a
+// discovery surface telling a model the by-ID tool searches by fingerprint,
+// which is worse than the generic placeholder it replaced: a model reading
+// "Use when you have only a key fingerprint" calls it with the one parameter
+// it cannot take.
+func TestActionSpecs_Metadata_DescribesItsOwnLookup(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	specByTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	tests := []struct {
+		name string
+		tool string
+		// byFingerprint says whether every served string of this tool must
+		// mention the fingerprint, or none of them may.
+		byFingerprint bool
+	}{
+		{name: "by id", tool: "gitlab_get_key_with_user", byFingerprint: false},
+		{name: "by fingerprint", tool: "gitlab_get_key_by_fingerprint", byFingerprint: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, ok := specByTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.tool)
+			}
+			served := append([]string{spec.Usage, spec.IndividualTool.Description}, spec.Aliases...)
+			for _, text := range served {
+				if got := strings.Contains(text, "fingerprint"); got != tc.byFingerprint {
+					t.Errorf("%s serves %q: mentions fingerprint = %v, want %v",
+						tc.tool, text, got, tc.byFingerprint)
+				}
+			}
+		})
+	}
+}
+
 // TestDecorateKeyMeta_UnknownTool verifies the no-op branch leaves generic metadata.
 func TestDecorateKeyMeta_UnknownTool(t *testing.T) {
 	options := toolutil.ActionSpecOptions{
@@ -571,7 +715,20 @@ func TestDecorateKeyMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone(t *test
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates all key canonical routes.
+// TestActionSpecs_CallRoutes drives each canonical route and holds three
+// things about it that only agree by construction: the canonical action name
+// the catalog registers, the individual tool name it is published under, and
+// which of the two endpoints the route really reaches, read off the returned
+// output by the key ID only that endpoint's answer carries.
+//
+// The name is asserted because nothing else in the package reads it. Crossing
+// the two names over their routes — registering user.key_get_by_fingerprint
+// for the by-ID handler and the reverse — compiles, leaves both IDs resolvable
+// in the catalog, and kept the whole suite green. keys_catalog_test.go cannot
+// see it either: it asks whether a published ID resolves, and after the
+// crossing both still do. An ID that resolves to the wrong handler is worse
+// than one that resolves to nothing, because the model is answered rather
+// than corrected, and the card's own hint names one of these two IDs.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -595,17 +752,28 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	tests := []struct {
 		name string
 		tool string
-		args map[string]any
+		// action is the canonical name the catalog registers this route
+		// under, which becomes user.<action> once the specs are aggregated
+		// into the gitlab_user group.
+		action string
+		args   map[string]any
+		// wantsKeyID is the key only this route's endpoint answers with, so
+		// the output says which handler ran rather than only that one did.
+		wantsKeyID int64
 	}{
 		{
-			name: "get_key_with_user",
-			tool: "gitlab_get_key_with_user",
-			args: map[string]any{"key_id": 42},
+			name:       "get_key_with_user",
+			tool:       "gitlab_get_key_with_user",
+			action:     "key_get_with_user",
+			args:       map[string]any{"key_id": 42},
+			wantsKeyID: 42,
 		},
 		{
-			name: "get_key_by_fingerprint",
-			tool: "gitlab_get_key_by_fingerprint",
-			args: map[string]any{"fingerprint": "SHA256:abc123"},
+			name:       "get_key_by_fingerprint",
+			tool:       "gitlab_get_key_by_fingerprint",
+			action:     "key_get_by_fingerprint",
+			args:       map[string]any{"fingerprint": "SHA256:abc123"},
+			wantsKeyID: 99,
 		},
 	}
 
@@ -615,12 +783,23 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 			if !ok {
 				t.Fatalf("missing ActionSpec for %s", tc.tool)
 			}
+			if spec.Name != tc.action {
+				t.Errorf("%s registers action %q, want %q", tc.tool, spec.Name, tc.action)
+			}
 			result, err := spec.Route.Handler(t.Context(), tc.args)
 			if err != nil {
 				t.Fatalf("Route.Handler(%s) error: %v", tc.tool, err)
 			}
 			if result == nil {
 				t.Fatalf("Route.Handler(%s) returned nil", tc.tool)
+			}
+			out, ok := result.(Output)
+			if !ok {
+				t.Fatalf("Route.Handler(%s) returned %T, want keys.Output", tc.tool, result)
+			}
+			if out.ID != tc.wantsKeyID {
+				t.Errorf("Route.Handler(%s) fetched key %d, want %d: the route reached the other endpoint",
+					tc.tool, out.ID, tc.wantsKeyID)
 			}
 		})
 	}
