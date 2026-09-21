@@ -59,7 +59,7 @@ func GetApprovalConfig(ctx context.Context, client *gitlabclient.Client, input G
 	approvals, _, err := client.GL().Projects.GetApprovalConfiguration(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalConfigOutput{}, toolutil.WrapErrWithStatusHint("projectGetApprovalConfig", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_list; approval rules are GitLab Premium/Ultimate; requires Reporter role minimum")
+			"verify project_id with project.list; approval rules are GitLab Premium/Ultimate; requires Reporter role minimum")
 	}
 	return approvalConfigToOutput(approvals), nil
 }
@@ -189,7 +189,7 @@ func ListApprovalRules(ctx context.Context, client *gitlabclient.Client, input L
 	rules, resp, err := client.GL().Projects.GetProjectApprovalRules(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListApprovalRulesOutput{}, toolutil.WrapErrWithStatusHint("projectListApprovalRules", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_list; approval rules require Premium/Ultimate license")
+			"verify project_id with project.list; approval rules require Premium/Ultimate license")
 	}
 	extras, err := toolutil.CapturedProjectApprovalRules(captured, len(rules))
 	if err != nil {
@@ -223,7 +223,7 @@ func GetApprovalRule(ctx context.Context, client *gitlabclient.Client, input Get
 	rule, _, err := client.GL().Projects.GetProjectApprovalRule(string(input.ProjectID), input.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalRuleOutput{}, toolutil.WrapErrWithStatusHint("projectGetApprovalRule", err, http.StatusNotFound,
-			"verify approval_rule_id with gitlab_project_approval_rule_list; rule may have been deleted")
+			"verify approval_rule_id with project.approval_rule_list; rule may have been deleted")
 	}
 	return approvalRuleOutput("projectGetApprovalRule", rule, captured)
 }
@@ -337,7 +337,7 @@ func UpdateApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	rule, _, err := client.GL().Projects.UpdateProjectApprovalRule(string(input.ProjectID), input.RuleID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalRuleOutput{}, toolutil.WrapErrWithStatusHint("projectUpdateApprovalRule", err, http.StatusNotFound,
-			"verify approval_rule_id with gitlab_project_approval_rule_list; requires Maintainer role; cannot change rule_type after creation")
+			"verify approval_rule_id with project.approval_rule_list; requires Maintainer role; cannot change rule_type after creation")
 	}
 	return approvalRuleOutput("projectUpdateApprovalRule", rule, captured)
 }
@@ -362,7 +362,7 @@ func DeleteApprovalRule(ctx context.Context, client *gitlabclient.Client, input 
 	_, err := client.GL().Projects.DeleteProjectApprovalRule(string(input.ProjectID), input.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteApprovalRule", err, http.StatusForbidden,
-			"requires Maintainer role; verify approval_rule_id with gitlab_project_approval_rule_list; deletion is irreversible")
+			"requires Maintainer role; verify approval_rule_id with project.approval_rule_list; deletion is irreversible")
 	}
 	return nil
 }

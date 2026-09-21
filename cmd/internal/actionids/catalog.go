@@ -41,6 +41,13 @@ type IDs struct {
 	// sorted is the canonical ID set in order, which is what a suggestion is
 	// searched over and what makes the suggestion deterministic.
 	sorted []string
+	// tools maps an individual tool's name to the canonical ID of the action
+	// it projects. It exists because a rule that refuses a gitlab_* name in
+	// served prose has to be able to say what should have been written there,
+	// and that answer is the catalog's rather than a table anybody keeps: the
+	// individual surface is one tool per action, so the name resolves to
+	// exactly one ID or to none.
+	tools map[string]string
 }
 
 // Build builds the catalog twice, self-managed and GitLab.com, and returns the
@@ -64,6 +71,7 @@ func Build() (*IDs, error) {
 		aliases: map[string]string{},
 		domains: map[string]struct{}{},
 		members: map[string]struct{}{},
+		tools:   map[string]string{},
 	}
 	for _, client := range []*gitlabclient.Client{selfManaged, mcpsurface.NewGitLabComClient()} {
 		catalog, err := catalogFor(client)
@@ -88,17 +96,32 @@ func Build() (*IDs, error) {
 // read from the catalog cannot disagree: an alias that is also a canonical ID
 // stays an ID, and the halves of every ID are what the prose rule filters on.
 func New(ids []string, aliases map[string]string) *IDs {
+	return NewWithTools(ids, aliases, nil)
+}
+
+// NewWithTools is [New] with the individual tool names too, for a caller whose
+// rule asks what a tool name should have been written as.
+//
+// A tool naming an ID this set does not hold is dropped rather than recorded,
+// because the whole value of the map is that what comes out of it is a
+// canonical ID: a caller that had to re-check the answer would be keeping the
+// invariant itself, which is what putting it here avoids.
+func NewWithTools(ids []string, aliases map[string]string, tools map[string]string) *IDs {
 	built := &IDs{
 		ids:     map[string]struct{}{},
 		aliases: map[string]string{},
 		domains: map[string]struct{}{},
 		members: map[string]struct{}{},
+		tools:   map[string]string{},
 	}
 	for _, id := range ids {
 		built.addID(id)
 	}
 	for alias, canonical := range aliases {
 		built.addAlias(alias, canonical)
+	}
+	for tool, id := range tools {
+		built.addTool(tool, id)
 	}
 	built.finish()
 	return built
@@ -135,7 +158,30 @@ func (o *IDs) addCatalog(catalog *actioncatalog.Catalog) {
 		for _, alias := range action.Compatibility.ActionAliases {
 			o.addAlias(alias.Alias, id)
 		}
+		o.addTool(action.IndividualTool.Name, id)
 	}
+}
+
+// addTool records the individual tool name one action projects.
+//
+// First recording wins, like an alias, because the two catalogs this is built
+// from overlap almost entirely and the second pass would otherwise rewrite
+// every entry with the same value. A name the individual surface does not
+// publish, which is what an empty one means, is not a name a rule can be asked
+// about.
+func (o *IDs) addTool(tool, id string) {
+	name := strings.TrimSpace(tool)
+	canonical := Normalize(id)
+	if name == "" || canonical == "" {
+		return
+	}
+	if _, isID := o.ids[canonical]; !isID {
+		return
+	}
+	if _, recorded := o.tools[name]; recorded {
+		return
+	}
+	o.tools[name] = canonical
 }
 
 // addID records one canonical ID and the two halves the prose rule filters on,
@@ -209,6 +255,19 @@ func (o *IDs) HasMember(member string) bool {
 	_, ok := o.members[member]
 	return ok
 }
+
+// ToolID is the canonical action ID the named individual tool projects.
+//
+// It answers only for a name the individual surface really registers, so a
+// caller that gets false is being told the token it found is not a tool of
+// this server rather than that the lookup was unlucky.
+func (o *IDs) ToolID(tool string) (string, bool) {
+	id, ok := o.tools[strings.TrimSpace(tool)]
+	return id, ok
+}
+
+// ToolCount is how many individual tool names resolve to an action.
+func (o *IDs) ToolCount() int { return len(o.tools) }
 
 // Count is how many canonical IDs the catalog holds, which is what a report
 // says it judged against.

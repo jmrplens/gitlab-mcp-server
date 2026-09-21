@@ -17,7 +17,7 @@ type projectNotFoundOutput struct {
 func formatProjectNotFound(out projectNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Project", out.Identifier,
-		"Use gitlab_project_list to search for projects by name or path",
+		"Use project.list to search for projects by name or path",
 		"Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')",
 		"The project may have been deleted or you may lack access",
 	)

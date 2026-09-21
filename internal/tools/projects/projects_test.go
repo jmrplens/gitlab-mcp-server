@@ -3032,7 +3032,10 @@ func TestFormatProjectNotFound(t *testing.T) {
 		t.Fatal("expected not-found result content")
 	}
 	content := result.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{"Project", "Not Found", "group%2Fmissing", "gitlab_project_list"} {
+	// The capability the card sends the reader to is named by its canonical
+	// action ID, which is the form every surface resolves: the individual tool
+	// name it used to carry is registered on one surface of the three.
+	for _, want := range []string{"Project", "Not Found", "group%2Fmissing", "project.list"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(content, want) {
 				t.Errorf("not-found markdown missing %q", want)
