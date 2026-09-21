@@ -106,22 +106,7 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		return 1
 	}
 
-	// Positions come out of the loader absolute and with every symlink
-	// resolved, so the root a finding is trimmed against has to be both,
-	// whatever -dir was written as. Absolute alone is not enough: os.Getwd
-	// answers with the logical path when PWD names the same directory, so on
-	// a macOS temp directory the root reads /var/folders/... while the same
-	// file reads /private/var/folders/... in the finding, and the trim
-	// silently does nothing. EvalSymlinks fails only on a path that is not
-	// there, which the loader has just read, and the absolute form is the
-	// right answer if it ever does.
-	root := cfg.dir
-	if absolute, absErr := filepath.Abs(cfg.dir); absErr == nil {
-		root = absolute
-		if resolved, linkErr := filepath.EvalSymlinks(absolute); linkErr == nil {
-			root = resolved
-		}
-	}
+	roots := trimRoots(cfg.dir)
 
 	if cfg.verbose {
 		refused := refusedDocuments(result)
@@ -132,7 +117,7 @@ func run(cfg auditRun, out, errOut io.Writer) int {
 		}
 	}
 	for _, refusal := range result.Refusals {
-		fmt.Fprint(errOut, finding(root, refusal))
+		fmt.Fprint(errOut, finding(roots, refusal))
 	}
 
 	// Drift is reported whether or not a document was refused, and it is not
@@ -200,24 +185,54 @@ func refusedDocuments(result graphqldocs.Result) map[token.Position]bool {
 }
 
 // finding renders one refused document with every reason under it.
-func finding(root string, refusal graphqldocs.Refusal) string {
+func finding(roots []string, refusal graphqldocs.Refusal) string {
 	var report strings.Builder
 	fmt.Fprintf(&report, "%s %s (%s)\n",
-		refusal.Document.Package, refusal.Document.Label(), relative(refusal.Document.Position, root))
+		refusal.Document.Package, refusal.Document.Label(), relative(refusal.Document.Position, roots))
 	for _, reason := range refusal.Reasons {
 		fmt.Fprintf(&report, "    - %s\n", reason)
 	}
 	return report.String()
 }
 
+// trimRoots returns every spelling of -dir a position might be trimmed
+// against, most specific first.
+//
+// Positions come out of the loader absolute, so the root has to be absolute
+// too, whatever the flag was written as. One spelling is not enough, and the
+// two platforms that prove it disagree about which one is right. On macOS the
+// loader resolves symlinks while os.Getwd answers with the logical path when
+// PWD names the same directory, so the root reads /var/folders/... and the
+// finding /private/var/folders/...; resolving the root fixes that. On Windows
+// the runner's temp directory is reached through the 8.3 short name
+// RUNNER~1 and EvalSymlinks rewrites it to the long one, which is the same
+// failure the other way round. So both are offered and the first that trims
+// wins, rather than one being guessed at.
+func trimRoots(dir string) []string {
+	absolute, err := filepath.Abs(dir)
+	if err != nil {
+		return []string{dir}
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil || resolved == absolute {
+		return []string{absolute}
+	}
+
+	return []string{resolved, absolute}
+}
+
 // relative trims a position to the repository root so a finding reads as a
-// path a person can open.
-func relative(position token.Position, root string) string {
-	path := position.Filename
-	if root != "" {
-		if trimmed, err := filepath.Rel(root, path); err == nil && !strings.HasPrefix(trimmed, "..") {
-			path = filepath.ToSlash(trimmed)
+// path a person can open. The first root that contains it wins; a position
+// under none of them is named in full.
+func relative(position token.Position, roots []string) string {
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if trimmed, err := filepath.Rel(root, position.Filename); err == nil && !strings.HasPrefix(trimmed, "..") {
+			return fmt.Sprintf("%s:%d", filepath.ToSlash(trimmed), position.Line)
 		}
 	}
-	return fmt.Sprintf("%s:%d", path, position.Line)
+
+	return fmt.Sprintf("%s:%d", position.Filename, position.Line)
 }

@@ -499,7 +499,7 @@ func TestFinding_EveryReason_IsListedUnderTheDocument(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			report := finding("", graphqldocs.Refusal{
+			report := finding(nil, graphqldocs.Refusal{
 				Document: graphqldocs.Document{Package: "x/y", Name: "queryThing"},
 				Reasons:  testCase.reasons,
 			})
@@ -521,39 +521,90 @@ func TestRelative_PositionsUnderTheRoot_AreTrimmed(t *testing.T) {
 	cases := []struct {
 		name     string
 		position token.Position
-		root     string
+		roots    []string
 		want     string
 	}{
 		{
 			name:     "under the root",
 			position: token.Position{Filename: filepath.Join("/repo", "internal", "tools", "x.go"), Line: 12},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     "internal/tools/x.go:12",
 		},
 		{
 			name:     "outside the root",
 			position: token.Position{Filename: filepath.Join("/elsewhere", "x.go"), Line: 3},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     filepath.Join("/elsewhere", "x.go") + ":3",
 		},
 		{
 			name:     "no root to trim against",
 			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 1},
-			root:     "",
+			roots:    nil,
 			want:     filepath.Join("/repo", "x.go") + ":1",
 		},
 		{
 			name:     "a filename that is not a path under the root",
 			position: token.Position{Filename: "relative.go", Line: 7},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     "relative.go:7",
+		},
+		{
+			// The two spellings of one directory, which is what macOS and
+			// Windows each produce in the opposite order. Trimming against
+			// the first alone would leave the finding absolute.
+			name:     "under the second spelling of the root",
+			position: token.Position{Filename: filepath.Join("/private", "repo", "x.go"), Line: 4},
+			roots:    []string{"/repo", filepath.Join("/private", "repo")},
+			want:     "x.go:4",
+		},
+		{
+			name:     "an empty spelling among the roots is skipped",
+			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 5},
+			roots:    []string{"", "/repo"},
+			want:     "x.go:5",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := relative(testCase.position, testCase.root); got != testCase.want {
+			if got := relative(testCase.position, testCase.roots); got != testCase.want {
 				t.Errorf("relative() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
+}
+
+// TestTrimRoots_ARelativeDir_OffersEverySpellingOfIt verifies the list a
+// finding is trimmed against: absolute always, and the resolved form beside it
+// only where the two differ.
+//
+// The second is not decoration. The loader positions a finding with symlinks
+// resolved, and the two platforms that expose it disagree about which spelling
+// wins, so offering one and guessing which leaves the finding absolute on the
+// other. A duplicate is left out rather than offered twice, since a second
+// identical root can only ever repeat the first one's answer.
+func TestTrimRoots_ARelativeDir_OffersEverySpellingOfIt(t *testing.T) {
+	t.Run("a directory that is not a link offers one spelling", func(t *testing.T) {
+		dir := t.TempDir()
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%q) error = %v", dir, err)
+		}
+
+		got := trimRoots(resolved)
+
+		if len(got) != 1 || got[0] != resolved {
+			t.Errorf("trimRoots(%q) = %v, want just the one absolute spelling", resolved, got)
+		}
+	})
+
+	t.Run("a relative dir is made absolute", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		got := trimRoots(".")
+
+		if len(got) == 0 || !filepath.IsAbs(got[0]) {
+			t.Errorf("trimRoots(\".\") = %v, want an absolute root first", got)
+		}
+	})
 }
