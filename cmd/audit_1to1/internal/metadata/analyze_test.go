@@ -3,9 +3,11 @@ package metadata
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -47,8 +49,11 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 // alias clears the flag.
 func TestAliasesOnlyToolname(t *testing.T) {
 	bare := toolutil.ActionSpec{
-		Name:           "branch.create",
-		Aliases:        []string{"gitlab_branch_create", "branch.create"},
+		Name: "branch.create",
+		// The blank entries are the third way an alias says nothing: a spec
+		// whose alias list holds only empty strings is as bare as one holding
+		// only its own two names, and nothing else here has a blank alias.
+		Aliases:        []string{"gitlab_branch_create", "branch.create", "", "   "},
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_branch_create"},
 	}
 	if !aliasesOnlyToolname(bare) {
@@ -101,12 +106,48 @@ func TestBuildReport_DetectsKnownMetadataGaps(t *testing.T) {
 	if rep.Summary.WeakIndividualDescription > 50 {
 		t.Errorf("weak_individual_description = %d, expected a small number (curated descriptions)", rep.Summary.WeakIndividualDescription)
 	}
+	// The header must be the count of what the report carries rather than a
+	// number of its own: the two figures are far apart on the real catalog,
+	// so a summary that read one off the other would say so here.
+	var actions int
 	var prev string
 	for _, pr := range rep.Packages {
+		actions += pr.Actions
 		if pr.Package < prev {
 			t.Errorf("packages not sorted: %q before %q", prev, pr.Package)
 		}
 		prev = pr.Package
+	}
+	if rep.Summary.Packages != len(rep.Packages) || rep.Summary.Actions != actions {
+		t.Errorf("summary = %d packages / %d actions, want %d / %d", rep.Summary.Packages, rep.Summary.Actions, len(rep.Packages), actions)
+	}
+}
+
+// TestBuildReport_GapsOnly_DropsThePackagesThatRaiseNothing verifies the flag
+// the command takes reaches the grouping rather than being forwarded wrongly
+// or not at all, which no gate can see because it is one argument passed
+// along. The full report carries every owner package of the catalog and the
+// gaps-only one only those that raise a finding, so the two disagree while any
+// package is clean; a forward that dropped or inverted the flag makes them
+// agree. The curated catalog raises nothing today, which is why the second
+// assertion holds vacuously and the first is what does the work.
+func TestBuildReport_GapsOnly_DropsThePackagesThatRaiseNothing(t *testing.T) {
+	full := buildReport(false)
+	gaps := buildReport(true)
+	if len(full.Packages) <= len(gaps.Packages) {
+		t.Fatalf("full report = %d packages, gaps-only = %d; want the full one to keep packages gaps-only drops", len(full.Packages), len(gaps.Packages))
+	}
+	kept := map[string]bool{}
+	for _, pr := range gaps.Packages {
+		kept[pr.Package] = true
+		if len(pr.Findings) == 0 {
+			t.Errorf("gaps-only kept %q, which raises no finding", pr.Package)
+		}
+	}
+	for _, pr := range full.Packages {
+		if len(pr.Findings) > 0 && !kept[pr.Package] {
+			t.Errorf("gaps-only dropped %q, which raises %d findings", pr.Package, len(pr.Findings))
+		}
 	}
 }
 
@@ -219,16 +260,23 @@ func TestAnalyzeSpec_Flags_RaiseEachFinding(t *testing.T) {
 // TestSummarize_Findings_CountsEachFlag verifies the summary tallies the
 // packages, their action counts and every flag by name, and ignores a flag
 // it does not know rather than miscounting it.
+//
+// No two of the six counts agree, because a figure a sibling shares is one
+// the two fields could trade places over unseen: three flags reading 1 let any
+// pair of the four cases swap counters, and an empty_related tally equal to the
+// package count let the summary's own header trade places with it.
 func TestSummarize_Findings_CountsEachFlag(t *testing.T) {
 	s := summarize([]packageReport{
 		{Package: "a", Actions: 3, Findings: []actionFinding{
-			{Action: "a.x", Flags: []string{"generic_usage", "empty_related"}},
-			{Action: "a.y", Flags: []string{"aliases_only_toolname", "weak_individual_description", "unknown_flag"}},
+			{Action: "a.x", Flags: []string{"generic_usage", "empty_related", "empty_related"}},
+			{Action: "a.y", Flags: []string{"aliases_only_toolname", "aliases_only_toolname", "weak_individual_description", "unknown_flag"}},
 		}},
 		{Package: "b", Actions: 2},
-		{Package: "c", Actions: 1, Findings: []actionFinding{{Action: "c.z", Flags: []string{"empty_related"}}}},
+		{Package: "c", Actions: 1, Findings: []actionFinding{
+			{Action: "c.z", Flags: []string{"empty_related", "empty_related", "empty_related", "weak_individual_description", "weak_individual_description", "weak_individual_description"}},
+		}},
 	})
-	want := reportSummary{Packages: 3, Actions: 6, GenericUsage: 1, AliasesOnlyToolname: 1, EmptyRelated: 2, WeakIndividualDescription: 1}
+	want := reportSummary{Packages: 3, Actions: 6, GenericUsage: 1, AliasesOnlyToolname: 2, EmptyRelated: 5, WeakIndividualDescription: 4}
 	if s != want {
 		t.Errorf("summarize = %+v, want %+v", s, want)
 	}
@@ -249,7 +297,15 @@ func TestCollectPackages_Groups_GroupByOwnerAndSort(t *testing.T) {
 	}
 	groups := []tools.ActionSpecGroup{
 		{BaseDomain: "zeta", Actions: []toolutil.ActionSpec{cleanSpec, flagged("zeta.b", "")}},
-		{BaseDomain: "alpha", OwnerPackage: "grouped", Actions: []toolutil.ActionSpec{flagged("custom.b", "custom"), flagged("custom.a", "custom")}},
+		// grouped.a is the middle tier of the precedence: a spec with no owner
+		// of its own in a group that has one. Without it the group's owner is
+		// never the answer, since both of its siblings override it and the
+		// base domain would have served them just as well.
+		{BaseDomain: "alpha", OwnerPackage: "grouped", Actions: []toolutil.ActionSpec{flagged("custom.b", "custom"), flagged("custom.a", "custom"), flagged("grouped.a", "")}},
+		// omega's two flagged actions arrive in the order the report wants
+		// them, which is the case custom cannot show: a sort is only known to
+		// decide anything once it has also left something alone.
+		{BaseDomain: "omega", Actions: []toolutil.ActionSpec{flagged("omega.a", ""), flagged("omega.b", "")}},
 		{BaseDomain: "clean", Actions: []toolutil.ActionSpec{cleanSpec}},
 	}
 
@@ -258,8 +314,8 @@ func TestCollectPackages_Groups_GroupByOwnerAndSort(t *testing.T) {
 		gapsOnly     bool
 		wantPackages []string
 	}{
-		{name: "full_report_keeps_clean_packages", gapsOnly: false, wantPackages: []string{"clean", "custom", "zeta"}},
-		{name: "gaps_only_drops_clean_packages", gapsOnly: true, wantPackages: []string{"custom", "zeta"}},
+		{name: "full_report_keeps_clean_packages", gapsOnly: false, wantPackages: []string{"clean", "custom", "grouped", "omega", "zeta"}},
+		{name: "gaps_only_drops_clean_packages", gapsOnly: true, wantPackages: []string{"custom", "grouped", "omega", "zeta"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -278,26 +334,45 @@ func TestCollectPackages_Groups_GroupByOwnerAndSort(t *testing.T) {
 	}
 }
 
-// assertPackageShape checks one grouped package against what the fixture
-// declares for it: the action count it collected and the findings it kept,
-// in action order.
+// groupedPackageShapes is what each package of the grouping fixture must come
+// out as: the actions it collected and the findings it kept, in the order the
+// report writes them.
+var groupedPackageShapes = map[string]struct {
+	actions  int
+	findings []string
+}{
+	// Its one action raises nothing, so it is the package the full report
+	// keeps and the gaps-only one drops.
+	"clean": {actions: 1},
+	// Both specs override their group's owner, and they arrive reversed, so
+	// this is the package whose findings the sort has to move.
+	"custom": {actions: 2, findings: []string{"custom.a", "custom.b"}},
+	// The one action that reaches the middle tier of the owner precedence.
+	"grouped": {actions: 1, findings: []string{"grouped.a"}},
+	// Already in order on arrival: a sort is only known to decide anything
+	// once it has also left something alone.
+	"omega": {actions: 2, findings: []string{"omega.a", "omega.b"}},
+	// Two actions, one of them clean, so the count and the findings cannot be
+	// read off each other.
+	"zeta": {actions: 2, findings: []string{"zeta.b"}},
+}
+
+// assertPackageShape checks one grouped package against the whole record
+// groupedPackageShapes declares for it, and reports a package the fixture
+// never planted rather than passing over it.
 func assertPackageShape(t *testing.T, pr packageReport) {
 	t.Helper()
-	switch pr.Package {
-	case "custom":
-		if pr.Actions != 2 || len(pr.Findings) != 2 || pr.Findings[0].Action != "custom.a" || pr.Findings[1].Action != "custom.b" {
-			t.Errorf("custom = %+v, want 2 actions with findings sorted custom.a, custom.b", pr)
-		}
-	case "zeta":
-		if pr.Actions != 2 || len(pr.Findings) != 1 || pr.Findings[0].Action != "zeta.b" {
-			t.Errorf("zeta = %+v, want 2 actions and the one flagged finding", pr)
-		}
-	case "clean":
-		if pr.Actions != 1 || len(pr.Findings) != 0 {
-			t.Errorf("clean = %+v, want 1 action and no finding", pr)
-		}
-	default:
+	want, planted := groupedPackageShapes[pr.Package]
+	if !planted {
 		t.Errorf("unexpected package %q in the grouped report", pr.Package)
+		return
+	}
+	found := make([]string, 0, len(pr.Findings))
+	for _, finding := range pr.Findings {
+		found = append(found, finding.Action)
+	}
+	if pr.Actions != want.actions || !slices.Equal(found, want.findings) {
+		t.Errorf("%s = %d actions with findings %v, want %d with %v", pr.Package, pr.Actions, found, want.actions, want.findings)
 	}
 }
 
@@ -314,8 +389,8 @@ func TestRun_GapsOnly_EmitsIndentedJSON(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(content, &rep); unmarshalErr != nil {
 		t.Fatalf("report is not JSON: %v", unmarshalErr)
 	}
-	if rep.SchemaVersion != 1 {
-		t.Errorf("schema_version = %d, want 1", rep.SchemaVersion)
+	if rep.SchemaVersion != shared.SchemaVersion {
+		t.Errorf("schema_version = %d, want %d", rep.SchemaVersion, shared.SchemaVersion)
 	}
 	if !strings.Contains(string(content), "\"packages\": [") {
 		t.Errorf("report should list packages as an array, got:\n%s", content)
