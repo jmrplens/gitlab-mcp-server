@@ -1,7 +1,9 @@
 package graphqldocs
 
 import (
+	"errors"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -383,7 +385,12 @@ func use() { undefinedHelper() }
 			dir:      repoRoot(t),
 			patterns: []string{fixturePattern},
 			overlay:  fixtureOverlay(t, map[string]string{"broken": broken}),
-			want:     "load ",
+			// The package is named rather than the verb, because "load " is what
+			// the wrong-patterns failure above says too: a test that cannot tell
+			// the two apart proves only that something went wrong, and which of
+			// them it was is the whole difference between a mistyped pattern and
+			// a tree whose constants fold to nothing.
+			want: fixtureDir + "/broken",
 		},
 	}
 	for _, testCase := range cases {
@@ -446,6 +453,15 @@ func TestDocumentLabel_UnnamedDocument_SaysSo(t *testing.T) {
 // report one fewer document and still exit 0. Reading the files directly closes
 // that. The pinned schema is the one .graphql file that must be skipped, since
 // it is an SDL and not a document anybody sends.
+//
+// Every field is asserted rather than the name alone, because the four strings
+// this shape fills are all derived from the one walk entry and nothing else
+// tells them apart: the package is the document's directory and the name is its
+// file, and a reader that filled the package from the file name would be wrong
+// about every finding filed against it while the name it prints stayed right.
+// The same holds of the position, whose filename has to be the path rooted at
+// the tree the audit was pointed at rather than the walk-relative one, or a
+// reader cannot open what a refusal names.
 func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing.T) {
 	root := t.TempDir()
 	tree := filepath.Join(root, "internal", "tools", "customemoji")
@@ -458,7 +474,8 @@ func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing
 			t.Fatalf("prepare the fixture: %v", err)
 		}
 	}
-	write(tree, "create.graphql", "mutation($p: ID!) {\n  createCustomEmoji(input: {groupPath: $p}) { errors }\n}\n")
+	const document = "mutation($p: ID!) {\n  createCustomEmoji(input: {groupPath: $p}) { errors }\n}\n"
+	write(tree, "create.graphql", document)
 	write(tree, "helper.go", "package customemoji\n")
 	write(tree, "notes.txt", "mutation { nothing }\n")
 	write(filepath.Join(root, "internal"), graphqlschema.SDLFileName, "type Query {\n  ok: Boolean\n}\n")
@@ -470,18 +487,86 @@ func TestStandalone_DocumentsInFilesOfTheirOwn_AreFoundAndThePinIsNot(t *testing
 	if len(found) != 1 {
 		t.Fatalf("Standalone() found %d document(s), want 1: %+v", len(found), found)
 	}
-	if found[0].Name != "create.graphql" {
-		t.Errorf("Standalone() named the document %q, want %q", found[0].Name, "create.graphql")
+	want := Document{
+		Package:  filepath.ToSlash(tree),
+		Name:     "create.graphql",
+		Position: token.Position{Filename: filepath.Join(tree, "create.graphql"), Line: 1},
+		Text:     document,
 	}
-	if !strings.Contains(found[0].Text, "createCustomEmoji") {
-		t.Errorf("Standalone() read %q, want the document's text", found[0].Text)
+	if found[0] != want {
+		t.Errorf("Standalone() read\n%+v\nwant\n%+v", found[0], want)
 	}
-	if found[0].Position.Filename == "" || found[0].Position.Line != 1 {
-		t.Errorf("Standalone() positioned the document at %+v, want its file at line 1", found[0].Position)
-	}
+	// Called out on its own because it is the one field whose right answer is
+	// nothing: a file of its own is declared by nothing, which is what
+	// cmd/audit_readonly_graphql reports rather than resolves.
 	if found[0].Object != nil {
-		t.Errorf("Standalone() carried object %v, want none: a file of its own is declared by nothing, "+
-			"which is what cmd/audit_readonly_graphql reports rather than resolves", found[0].Object)
+		t.Errorf("Standalone() carried object %v, want none", found[0].Object)
+	}
+}
+
+// TestStandalone_ADirectoryNamedLikeADocument_IsWalkedRatherThanRead verifies
+// the guard that tells an entry from a tree.
+//
+// A .graphql extension is what selects a document, and a directory may carry
+// one: nothing stops a domain from keeping its operations under queries.graphql/.
+// Without the directory check the walk would hand that name to the reader, the
+// read would fail with "is a directory", and the whole audit would stop over a
+// tree it was supposed to descend into, so the documents inside it, which are
+// exactly the ones the name promised, would go unjudged.
+func TestStandalone_ADirectoryNamedLikeADocument_IsWalkedRatherThanRead(t *testing.T) {
+	root := t.TempDir()
+	tree := filepath.Join(root, "internal", "tools", "customemoji", "queries.graphql")
+	if err := os.MkdirAll(tree, 0o750); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	const document = "query {\n  currentUser {\n    id\n  }\n}\n"
+	if err := os.WriteFile(filepath.Join(tree, "list.graphql"), []byte(document), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	found, err := Standalone(root, []string{"./internal/..."})
+	if err != nil {
+		t.Fatalf("Standalone() error = %v, want the directory walked rather than read", err)
+	}
+	if len(found) != 1 || found[0].Name != "list.graphql" {
+		t.Fatalf("Standalone() found %+v, want only the document inside the directory", found)
+	}
+	if found[0].Text != document {
+		t.Errorf("Standalone() read %q, want the document inside the directory", found[0].Text)
+	}
+}
+
+// TestDocumentsUnder_ATreeItCannotWalk_ReportsRatherThanSkips verifies the one
+// arm of the walk callback that no fixture on disk can reach.
+//
+// A directory the walk cannot read is a directory whose documents go unjudged,
+// and [Standalone] promises that such a failure is propagated rather than
+// skipped. Every other way to provoke it needs a permission the suite does not
+// have, since it runs as root and root reads a mode-0 directory anyway, so the
+// tree is closed under the walk instead, which is the same thing from the
+// walk's side: fs.WalkDir cannot stat its root, hands the callback that error,
+// and the callback must give it back unchanged rather than report an empty
+// tree.
+func TestDocumentsUnder_ATreeItCannotWalk_ReportsRatherThanSkips(t *testing.T) {
+	base := t.TempDir()
+	root, err := os.OpenRoot(base)
+	if err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	if closeErr := root.Close(); closeErr != nil {
+		t.Fatalf("prepare the fixture: %v", closeErr)
+	}
+
+	found, walkErr := documentsUnder(root, base)
+
+	if walkErr == nil {
+		t.Fatal("documentsUnder() error = nil, want the tree it could not walk reported")
+	}
+	if !errors.Is(walkErr, fs.ErrClosed) {
+		t.Errorf("documentsUnder() error = %v, want the walk's own failure passed back unchanged", walkErr)
+	}
+	if found != nil {
+		t.Errorf("documentsUnder() returned %+v, want nothing from a tree it could not read", found)
 	}
 }
 
@@ -518,8 +603,12 @@ func TestStandalone_ARootThatIsNotADirectory_Fails(t *testing.T) {
 	if found != nil {
 		t.Errorf("Standalone() returned %+v, want nothing on failure", found)
 	}
-	if !strings.Contains(err.Error(), "open ") {
-		t.Errorf("Standalone() error = %q, want it to name the root it could not open", err)
+	// The prefix rather than a substring: the wrapped os error names the same
+	// path with the same verb in front of it, so a Contains check here passes
+	// whatever the wrapper itself says, and the wrapper is the only part of the
+	// message this package writes.
+	if want := "open " + filepath.Join(root, "internal"); !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("Standalone() error = %q, want it to open with %q, which is the path a reader has to go and look at", err, want)
 	}
 }
 
@@ -545,8 +634,12 @@ func TestStandalone_AFileItCannotRead_Fails(t *testing.T) {
 	if err == nil {
 		t.Fatal("Standalone() error = nil, want the read failure")
 	}
-	if !strings.Contains(err.Error(), "read ") {
-		t.Errorf("Standalone() error = %q, want it to name the file it could not read", err)
+	// The path is asserted rather than the verb, because the failure is only
+	// actionable if the reader can open what it names: the message is built by
+	// rejoining the walk's own relative name onto the tree's base, and the two
+	// joined the other way round spell a path that exists nowhere.
+	if want := "read " + filepath.Join(tree, "dangling.graphql"); !strings.Contains(err.Error(), want) {
+		t.Errorf("Standalone() error = %q, want it to name %q", err, want)
 	}
 }
 
@@ -594,8 +687,8 @@ func TestCollect_AStandaloneDocumentItCannotRead_StopsBeforeTypeChecking(t *test
 	if found != nil {
 		t.Errorf("Collect() returned %+v, want nothing on failure", found)
 	}
-	if !strings.Contains(err.Error(), "read ") {
-		t.Errorf("Collect() error = %q, want it to name the file it could not read", err)
+	if want := "read " + filepath.Join(root, "dangling.graphql"); !strings.Contains(err.Error(), want) {
+		t.Errorf("Collect() error = %q, want it to name %q", err, want)
 	}
 }
 

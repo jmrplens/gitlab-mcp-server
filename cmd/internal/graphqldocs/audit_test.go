@@ -2,6 +2,7 @@ package graphqldocs
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -186,9 +187,20 @@ func TestAudit_SourceItCannotRead_Fails(t *testing.T) {
 // entry the live re-probe uses. The pin can only report a document that was
 // already broken when it was taken, never one GitLab has narrowed since, which
 // is how every defect this gate was built for arose.
+//
+// The whole provenance line is compared rather than the disclaimer at the end
+// of it, because the two values in front of that disclaimer are what a reader of
+// a refusal actually needs: which schema refused the document, and how big it
+// was, since a schema that loaded almost nothing refuses almost everything and
+// says so only through that count.
 func TestAudit_ASchemaTheCallerSupplies_JudgesByThatSchemaAndSaysSo(t *testing.T) {
+	const sdl = "type Query {\n  ok: Boolean\n}\n"
 	narrowed := filepath.Join(t.TempDir(), "narrow.graphql")
-	if err := os.WriteFile(narrowed, []byte("type Query {\n  ok: Boolean\n}\n"), 0o600); err != nil {
+	if err := os.WriteFile(narrowed, []byte(sdl), 0o600); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+	loaded, err := graphqlschema.Load([]byte(sdl))
+	if err != nil {
 		t.Fatalf("prepare the fixture: %v", err)
 	}
 
@@ -199,8 +211,9 @@ func TestAudit_ASchemaTheCallerSupplies_JudgesByThatSchemaAndSaysSo(t *testing.T
 	if len(result.Refusals) != 1 {
 		t.Fatalf("Audit() refused %d document(s), want 1: the supplied schema has no vulnerability field", len(result.Refusals))
 	}
-	if !strings.Contains(result.Provenance, "not the pinned schema") {
-		t.Errorf("Audit() provenance = %q, want it to say which schema judged the documents", result.Provenance)
+	want := fmt.Sprintf("%d types from %s, not the pinned schema", len(loaded.Types), narrowed)
+	if result.Provenance != want {
+		t.Errorf("Audit() provenance = %q, want %q", result.Provenance, want)
 	}
 }
 
