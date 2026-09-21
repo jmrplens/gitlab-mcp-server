@@ -276,6 +276,10 @@ type serverProcess struct {
 
 	exited chan struct{}
 	state  atomic.Pointer[os.ProcessState]
+	// waitErr is why the reaper has no state, when it has none. Stored before
+	// exited is closed, like state, so a reader that saw the channel close
+	// sees whichever of the two the wait produced.
+	waitErr atomic.Pointer[string]
 }
 
 // newServerProcess describes a child without starting it.
@@ -312,6 +316,7 @@ func (p *serverProcess) transport(ctx context.Context) mcp.Transport {
 	p.sink = sink
 	p.exited = make(chan struct{})
 	p.state.Store(nil)
+	p.waitErr.Store(nil)
 
 	return &childTransport{proc: p, cmd: cmd, exited: p.exited}
 }
@@ -351,6 +356,7 @@ func (p *serverProcess) httpTransport(ctx context.Context, addr string) (mcp.Tra
 	p.sink = sink
 	p.exited = make(chan struct{})
 	p.state.Store(nil)
+	p.waitErr.Store(nil)
 	exited := p.exited
 	p.mu.Unlock()
 
@@ -563,9 +569,22 @@ func (p *serverProcess) stopChild(cmd *exec.Cmd) {
 // The benefit of collecting here rather than there is that the harness can
 // say whether the server is still running before anybody has asked it to
 // stop: without that, a child killed by a panic looks exactly like a slow one.
+// The reason a wait failed is kept rather than dropped, because it is the one
+// thing that tells a recurrence of the two-waiter defect from anything else:
+// the loser of that race is told the child is not its to collect, and
+// reporting only that no exit was recorded left the class to be diagnosed from
+// first principles. The exact sentence is the runtime's and differs by
+// platform and by wait path (a wait4 ECHILD reads "wait: no child processes",
+// the pidfd path answers ErrProcessDone, Windows differs again), so what is
+// promised here is that whatever it said is carried into the failure, not any
+// particular wording.
 func (p *serverProcess) reap(cmd *exec.Cmd, exited chan struct{}) {
 	go func() {
-		state, _ := cmd.Process.Wait()
+		state, err := cmd.Process.Wait()
+		if err != nil {
+			reason := err.Error()
+			p.waitErr.Store(&reason)
+		}
 		p.state.Store(state)
 		close(exited)
 	}()
@@ -589,9 +608,20 @@ func (p *serverProcess) alive() bool {
 
 // exitStatus describes how the child ended, in terms that make sense whether
 // or not the reaper had recorded it when it was asked.
+//
+// Three answers, and the middle one is the one worth spelling: the state the
+// reaper collected, "exit status not recorded" with the reason the wait
+// failed, or the bare phrase when the reaper has not answered yet. The middle
+// one is new, and it exists because the bare phrase is what a failing
+// lifecycle test used to report when a second waiter had taken the exit, and
+// it names neither the race nor the child. The bare phrase stays for the case
+// it actually describes, a reaper that has not answered.
 func (p *serverProcess) exitStatus() string {
 	if state := p.state.Load(); state != nil {
 		return state.String()
+	}
+	if reason := p.waitErr.Load(); reason != nil {
+		return "exit status not recorded: " + *reason
 	}
 	return "exit status not recorded"
 }
