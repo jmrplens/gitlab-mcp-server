@@ -307,7 +307,11 @@ func Get() error {
 	if code == 0 {
 		t.Fatalf("run with -fix-hints = 0 over source it cannot open, want a refusal; stdout %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), fixtureDir) {
+	// The path is compared in the spelling the platform prints. The message
+	// carries what the filesystem was asked for, which is separated by
+	// backslashes on Windows, so a slash-separated expectation would pass on
+	// Unix and fail there for the separator rather than for the message.
+	if !strings.Contains(stderr.String(), filepath.FromSlash(fixtureDir)) {
 		t.Errorf("stderr = %q, want it to name what could not be read", stderr.String())
 	}
 }
