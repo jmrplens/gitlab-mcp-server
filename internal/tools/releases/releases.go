@@ -176,7 +176,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "a release for this tag may already exist. Use gitlab_release_update to modify it, or choose a different tag_name")
+			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "a release for this tag may already exist. Use release.update to modify it, or choose a different tag_name")
 		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
 			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "creating releases requires Developer role or higher")
 		default:
@@ -215,7 +215,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	r, _, err := client.GL().Releases.UpdateRelease(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("releaseUpdate", err, http.StatusNotFound,
-			"verify tag_name with gitlab_release_list; updating releases requires Developer role or higher")
+			"verify tag_name with release.list; updating releases requires Developer role or higher")
 	}
 	return ToOutput(r), nil
 }
@@ -232,7 +232,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	r, _, err := client.GL().Releases.DeleteRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("releaseDelete", err, http.StatusForbidden,
-			"deleting releases requires Maintainer role or higher; verify tag_name with gitlab_release_list")
+			"deleting releases requires Maintainer role or higher; verify tag_name with release.list")
 	}
 	return ToOutput(r), nil
 }
@@ -248,7 +248,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	r, _, err := client.GL().Releases.GetRelease(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("releaseGet", err, http.StatusNotFound,
-			"verify tag_name with gitlab_release_list; tag_name is case-sensitive")
+			"verify tag_name with release.list; tag_name is case-sensitive")
 	}
 	return ToOutput(r), nil
 }
@@ -264,7 +264,7 @@ func GetLatest(ctx context.Context, client *gitlabclient.Client, input GetLatest
 	r, _, err := client.GL().Releases.GetLatestRelease(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("releaseGetLatest", err, http.StatusNotFound,
-			"the project has no releases; create one with gitlab_release_create")
+			"the project has no releases; create one with release.create")
 	}
 	return ToOutput(r), nil
 }
@@ -292,7 +292,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	releases, resp, err := client.GL().Releases.ListReleases(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("releaseList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; the project may have no releases yet")
+			"verify project_id with project.get; the project may have no releases yet")
 	}
 	out := make([]Output, len(releases))
 	for i, r := range releases {

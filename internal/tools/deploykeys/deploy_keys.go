@@ -287,7 +287,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	keys, resp, err := client.GL().DeployKeys.ListProjectDeployKeys(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_project", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; deploy keys list requires Maintainer role")
+			"verify project_id with project.get; deploy keys list requires Maintainer role")
 	}
 	return projectKeyListOutput("deploy_key_list_project", keys, resp, captured)
 }
@@ -305,7 +305,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	key, _, err := client.GL().DeployKeys.GetDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_get", err, http.StatusNotFound,
-			"verify deploy_key_id with gitlab_deploy_key_list_project; the key must currently be enabled on this project")
+			"verify deploy_key_id with access.deploy_key_list_project; the key must currently be enabled on this project")
 	}
 	extra, err := toolutil.CapturedDeployKey(captured)
 	if err != nil {
@@ -420,7 +420,7 @@ func Enable(ctx context.Context, client *gitlabclient.Client, input EnableInput)
 	key, _, err := client.GL().DeployKeys.EnableDeployKey(string(input.ProjectID), input.DeployKeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_key_enable", err, http.StatusNotFound,
-			"verify deploy_key_id exists at instance level via gitlab_deploy_key_list_all; the key may already be enabled")
+			"verify deploy_key_id exists at instance level via access.deploy_key_list_all; the key may already be enabled")
 	}
 	extra, err := toolutil.CapturedDeployKey(captured)
 	if err != nil {
@@ -497,7 +497,7 @@ func ListUserProject(ctx context.Context, client *gitlabclient.Client, input Lis
 	keys, resp, err := client.GL().DeployKeys.ListUserProjectDeployKeys(string(input.UserID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_key_list_user_project", err, http.StatusNotFound,
-			"verify user_id with gitlab_get_user; admin token required to query other users' deploy keys")
+			"verify user_id with user.get; admin token required to query other users' deploy keys")
 	}
 	return projectKeyListOutput("deploy_key_list_user_project", keys, resp, captured)
 }

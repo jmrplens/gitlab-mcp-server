@@ -74,7 +74,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	t, _, err := client.GL().GitIgnoreTemplates.GetTemplate(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_gitignore_template", err, http.StatusNotFound, "verify name with gitlab_list_gitignore_templates")
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_gitignore_template", err, http.StatusNotFound, "verify name with template.gitignore_list")
 	}
 	return GetOutput{Name: t.Name, Content: t.Content}, nil
 }

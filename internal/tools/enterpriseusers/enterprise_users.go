@@ -12,7 +12,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const hintVerifyEnterpriseUser = "verify user_id with gitlab_enterprise_user action 'list' or gitlab_list_enterprise_users; enterprise user actions only apply to users managed by the group's enterprise namespace"
+const hintVerifyEnterpriseUser = "verify user_id with enterprise_user.list; enterprise user actions only apply to users managed by the group's enterprise namespace"
 
 // ListInput holds parameters for listing enterprise users.
 type ListInput struct {

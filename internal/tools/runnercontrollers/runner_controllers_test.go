@@ -448,7 +448,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpAPIErr)
 	}
-	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+	if !strings.Contains(err.Error(), "runner.controller_list") {
 		t.Fatalf("error = %v, want list hint", err)
 	}
 }

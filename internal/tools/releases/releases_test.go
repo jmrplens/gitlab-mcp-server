@@ -1218,7 +1218,7 @@ func TestCreate_RefusedAsExisting_CarriesTheHint(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected an error for %d", tc.status)
 			}
-			if !strings.Contains(err.Error(), "gitlab_release_update") {
+			if !strings.Contains(err.Error(), "release.update") {
 				t.Errorf("error should hint at updating the existing release: %v", err)
 			}
 		})

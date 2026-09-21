@@ -646,7 +646,7 @@ func TestDeploymentCreate_Generic400_HintsInputChecks(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for generic 400")
 	}
-	if !strings.Contains(err.Error(), "gitlab_environment_list") {
+	if !strings.Contains(err.Error(), "environment.list") {
 		t.Errorf("error = %q, want generic input-verification hint", err.Error())
 	}
 }
@@ -985,7 +985,7 @@ func TestDeploymentGet_APIError(t *testing.T) {
 	if !strings.Contains(err.Error(), "get deployment") || !strings.Contains(err.Error(), "403 Forbidden") {
 		t.Errorf("error = %v, want the read named and GitLab's message kept", err)
 	}
-	if strings.Contains(err.Error(), "gitlab_deployment_list") {
+	if strings.Contains(err.Error(), "environment.deployment_list") {
 		t.Errorf("error = %v, want no not-found hint on a 403", err)
 	}
 }
@@ -1117,7 +1117,7 @@ func TestDeploymentUpdate_APIError(t *testing.T) {
 	if !strings.Contains(err.Error(), opUpdateDeployment) || !strings.Contains(err.Error(), "403 Forbidden") {
 		t.Errorf("error = %v, want the write named and GitLab's message kept", err)
 	}
-	if strings.Contains(err.Error(), "Transitions out of terminal states") || strings.Contains(err.Error(), "gitlab_deployment_list") {
+	if strings.Contains(err.Error(), "Transitions out of terminal states") || strings.Contains(err.Error(), "environment.deployment_list") {
 		t.Errorf("error = %v, want no 400 or 404 hint on a 403", err)
 	}
 }
@@ -1183,7 +1183,7 @@ func TestDeploymentDelete_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_deployment_list") {
+	if !strings.Contains(err.Error(), "environment.deployment_list") {
 		t.Fatalf("error = %v, want list hint", err)
 	}
 }

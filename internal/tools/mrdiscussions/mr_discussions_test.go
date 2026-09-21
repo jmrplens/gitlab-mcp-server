@@ -727,7 +727,7 @@ func TestUpdateNote_NotFoundAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_mr_discussion_get") {
+	if !strings.Contains(err.Error(), "mr_review.discussion_get") {
 		t.Fatalf("error = %q, want discussion get hint", err.Error())
 	}
 }

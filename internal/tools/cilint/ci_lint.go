@@ -121,7 +121,7 @@ func LintProject(ctx context.Context, client *gitlabclient.Client, input Project
 	result, _, err := client.GL().Validate.ProjectLint(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(opLintProject, err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; project must have a .gitlab-ci.yml at the specified ref; ref/content_ref must be a valid branch or tag")
+			"verify project_id with project.get; project must have a .gitlab-ci.yml at the specified ref; ref/content_ref must be a valid branch or tag")
 	}
 	extra, err := toolutil.CapturedLint(captured)
 	if err != nil {

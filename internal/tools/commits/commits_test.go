@@ -1709,7 +1709,7 @@ func TestPostComment_NotFoundAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing commit")
 	}
-	if !strings.Contains(err.Error(), "gitlab_commit_get") {
+	if !strings.Contains(err.Error(), "repository.commit_get") {
 		t.Fatalf("error = %q, want commit get hint", err.Error())
 	}
 }
@@ -1855,7 +1855,7 @@ func TestSetStatus_NotFoundAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing commit")
 	}
-	if !strings.Contains(err.Error(), "gitlab_commit_get") {
+	if !strings.Contains(err.Error(), "repository.commit_get") {
 		t.Fatalf("error = %q, want commit get hint", err.Error())
 	}
 }

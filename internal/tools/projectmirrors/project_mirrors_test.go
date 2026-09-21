@@ -230,7 +230,7 @@ func TestList_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 404")
 	}
-	if !strings.Contains(err.Error(), "gitlab_project_get") {
+	if !strings.Contains(err.Error(), "project.get") {
 		t.Fatalf("error missing project lookup hint: %v", err)
 	}
 }

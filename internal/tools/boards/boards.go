@@ -238,7 +238,7 @@ func ListBoards(ctx context.Context, client *gitlabclient.Client, input ListBoar
 	boards, resp, err := client.GL().Boards.ListIssueBoards(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardsOutput{}, toolutil.WrapErrWithStatusHint("board_list", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get. Issue boards must be enabled in project settings")
+			"verify the project exists with project.get. Issue boards must be enabled in project settings")
 	}
 	extras, err := toolutil.CapturedBoards(captured, len(boards))
 	if err != nil {
@@ -270,7 +270,7 @@ func GetBoard(ctx context.Context, client *gitlabclient.Client, input GetBoardIn
 	board, _, err := rawGetBoard(ctx, client, string(input.ProjectID), input.BoardID)
 	if err != nil {
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_get", err, http.StatusNotFound,
-			"verify board_id with gitlab_board_list. board_id is the global board ID, not an IID")
+			"verify board_id with project.board_list. board_id is the global board ID, not an IID")
 	}
 	return convertBoardAPI(board), nil
 }
@@ -300,7 +300,7 @@ func CreateBoard(ctx context.Context, client *gitlabclient.Client, input CreateB
 				"creating multiple boards per project requires GitLab Premium or Ultimate; on Free tier each project supports a single board")
 		}
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_create", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get and that you have Reporter+ role")
+			"verify the project exists with project.get and that you have Reporter+ role")
 	}
 	extra, err := toolutil.CapturedBoard(captured)
 	if err != nil {
@@ -361,7 +361,7 @@ func UpdateBoard(ctx context.Context, client *gitlabclient.Client, input UpdateB
 				"board scope (assignee/milestone/labels/weight) requires GitLab Premium or Ultimate; on Free tier only name and hide_*_list are mutable")
 		}
 		return BoardOutput{}, toolutil.WrapErrWithStatusHint("board_update", err, http.StatusNotFound,
-			"verify board_id with gitlab_board_list")
+			"verify board_id with project.board_list")
 	}
 	extra, err := toolutil.CapturedBoard(captured)
 	if err != nil {
@@ -391,7 +391,7 @@ func DeleteBoard(ctx context.Context, client *gitlabclient.Client, input DeleteB
 				"deleting boards requires Maintainer+ role; the default board cannot be deleted on Free tier")
 		}
 		return toolutil.WrapErrWithStatusHint("board_delete", err, http.StatusNotFound,
-			"verify board_id with gitlab_board_list")
+			"verify board_id with project.board_list")
 	}
 	return nil
 }
@@ -428,7 +428,7 @@ func ListBoardLists(ctx context.Context, client *gitlabclient.Client, input List
 	lists, resp, err := rawListBoardLists(ctx, client, string(input.ProjectID), input.BoardID, opts)
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("board_list_list", err, http.StatusNotFound,
-			"verify project_id and board_id with gitlab_board_list")
+			"verify project_id and board_id with project.board_list")
 	}
 	out := ListBoardListsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, l := range lists {
@@ -458,7 +458,7 @@ func GetBoardList(ctx context.Context, client *gitlabclient.Client, input GetBoa
 	list, _, err := client.GL().Boards.GetIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_get", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_lists")
+			"verify board_id and list_id with project.board_list_list")
 	}
 	return convertBoardList(list), nil
 }
@@ -505,7 +505,7 @@ func CreateBoardList(ctx context.Context, client *gitlabclient.Client, input Cre
 				"exactly one of label_id, assignee_id, milestone_id, or iteration_id must be set; verify the referenced ID exists in this project's scope")
 		}
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_create", err, http.StatusNotFound,
-			"verify project_id and board_id with gitlab_board_list")
+			"verify project_id and board_id with project.board_list")
 	}
 	return convertBoardList(list), nil
 }
@@ -535,7 +535,7 @@ func UpdateBoardList(ctx context.Context, client *gitlabclient.Client, input Upd
 	list, _, err := client.GL().Boards.UpdateIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("board_list_update", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_lists. Position is 0-based and must be within the current list count")
+			"verify board_id and list_id with project.board_list_list. Position is 0-based and must be within the current list count")
 	}
 	return convertBoardList(list), nil
 }
@@ -561,7 +561,7 @@ func DeleteBoardList(ctx context.Context, client *gitlabclient.Client, input Del
 	_, err := client.GL().Boards.DeleteIssueBoardList(string(input.ProjectID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("board_list_delete", err, http.StatusNotFound,
-			"verify board_id and list_id with gitlab_board_list_lists")
+			"verify board_id and list_id with project.board_list_list")
 	}
 	return nil
 }

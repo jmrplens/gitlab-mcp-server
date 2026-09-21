@@ -625,7 +625,7 @@ func TestCIVariableUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_ci_variable_list") {
+	if !strings.Contains(err.Error(), actionCIVariableList) {
 		t.Fatalf("error = %v, want list hint", err)
 	}
 }

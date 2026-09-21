@@ -135,8 +135,8 @@ func TestUnshareGroupFromGroup_NotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	err := UnshareGroupFromGroup(context.Background(), client, UnshareGroupInput{GroupID: "99", SharedGroupID: 1})
-	if err == nil || !strings.Contains(err.Error(), "shared_with_list") {
-		t.Fatalf("expected shared_with_list hint, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "group.shared_with") {
+		t.Fatalf("expected group.shared_with hint, got: %v", err)
 	}
 }
 
@@ -252,7 +252,7 @@ func TestTransferSubGroup_Forbidden(t *testing.T) {
 
 // TestTransferSubGroup_NotFound verifies that a status which is neither 403
 // nor 400 (here, 404) falls through both dedicated hint branches to the
-// final gitlab_group_get verification hint. Without this test the fallback
+// final group.get verification hint. Without this test the fallback
 // WrapErrWithStatusHint call at the end of TransferSubGroup's error handling
 // is never exercised, and a regression there (e.g. losing the hint) would go
 // unnoticed since only err != nil would be implicitly checked elsewhere.
@@ -267,8 +267,8 @@ func TestTransferSubGroup_NotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "groupTransferSubGroup") {
 		t.Errorf("expected operation name in error, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "gitlab_group_get") {
-		t.Errorf("expected gitlab_group_get verification hint, got: %v", err)
+	if !strings.Contains(err.Error(), "group.get") {
+		t.Errorf("expected group.get verification hint, got: %v", err)
 	}
 	if strings.Contains(err.Error(), "Owner role") || strings.Contains(err.Error(), "destination") {
 		t.Errorf("404 should not use the 403/400 hints, got: %v", err)
@@ -451,7 +451,7 @@ func TestTransferSubGroup_BadRequestHint(t *testing.T) {
 	}))
 	parentID := int64(7)
 	_, err := TransferSubGroup(t.Context(), client, TransferSubGroupInput{GroupID: "42", ParentID: &parentID})
-	if err == nil || !strings.Contains(err.Error(), "gitlab_group_transfer_locations") {
+	if err == nil || !strings.Contains(err.Error(), "group.transfer_locations") {
 		t.Errorf("TransferSubGroup 400 err = %v, want invalid-destination hint", err)
 	}
 }

@@ -95,7 +95,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	rules, resp, err := client.GL().ProtectedPackages.ListPackageProtectionRules(string(in.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; package protection rules require GitLab 16.7+ and the package_protection_rule feature")
+			"verify project_id with project.get; package protection rules require GitLab 16.7+ and the package_protection_rule feature")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
@@ -173,7 +173,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 				"send package_name_pattern and package_type on every update, including one that changes only an access level: a field left unnamed reaches GitLab as null and is read as blank")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("packageProtectionRuleUpdate", err, http.StatusNotFound,
-			"verify rule_id with gitlab_list_package_protection_rules; pattern uniqueness still applies on rename")
+			"verify rule_id with package.protection_rule_list; pattern uniqueness still applies on rename")
 	}
 	return toOutput(rule), nil
 }
@@ -192,7 +192,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	_, err := client.GL().ProtectedPackages.DeletePackageProtectionRules(string(in.ProjectID), in.RuleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("packageProtectionRuleDelete", err, http.StatusNotFound,
-			"verify rule_id with gitlab_list_package_protection_rules; managing protection rules requires Maintainer role or higher")
+			"verify rule_id with package.protection_rule_list; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

@@ -99,7 +99,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	n, _, err := client.GL().Notes.CreateIssueNote(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueNoteCreate", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get; creating notes requires Reporter role or higher")
+			"verify project_id and issue_iid with issue.get; creating notes requires Reporter role or higher")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {
@@ -133,7 +133,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().Notes.ListIssueNotes(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueNoteList", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			"verify project_id and issue_iid with issue.get")
 	}
 	extras, err := toolutil.CapturedNotes(captured, len(notes))
 	if err != nil {
@@ -166,7 +166,7 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 	n, _, err := client.GL().Notes.GetIssueNote(string(input.ProjectID), input.IssueIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueNoteGet", err, http.StatusNotFound,
-			"verify note_id with gitlab_issue_note_list")
+			"verify note_id with issue.note_list")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {

@@ -118,7 +118,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	files, resp, err := client.GL().SecureFiles.ListProjectSecureFiles(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_secure_files", err, http.StatusNotFound, "verify project_id with project.get")
 	}
 	items := make([]SecureFileItem, 0, len(files))
 	for _, f := range files {
@@ -145,7 +145,7 @@ func Show(ctx context.Context, client *gitlabclient.Client, input ShowInput) (Se
 	}
 	f, _, err := client.GL().SecureFiles.ShowSecureFileDetails(string(input.ProjectID), input.FileID, gl.WithContext(ctx))
 	if err != nil {
-		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_show_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
+		return SecureFileItem{}, toolutil.WrapErrWithStatusHint("gitlab_show_secure_file", err, http.StatusNotFound, "verify file_id with admin.secure_file_list")
 	}
 	return newSecureFileItem(f), nil
 }
@@ -193,7 +193,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	}
 	_, err := client.GL().SecureFiles.RemoveSecureFile(string(input.ProjectID), input.FileID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("gitlab_remove_secure_file", err, http.StatusNotFound, "verify file_id with gitlab_list_secure_files")
+		return toolutil.WrapErrWithStatusHint("gitlab_remove_secure_file", err, http.StatusNotFound, "verify file_id with admin.secure_file_list")
 	}
 	return nil
 }

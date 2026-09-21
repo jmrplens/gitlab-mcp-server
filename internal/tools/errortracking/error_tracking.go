@@ -32,7 +32,7 @@ func GetSettings(ctx context.Context, client *gitlabclient.Client, input GetSett
 	s, _, err := client.GL().ErrorTracking.GetErrorTrackingSettings(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return SettingsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_error_tracking_settings", err, http.StatusForbidden,
-			"requires Maintainer role on the project; verify project_id with gitlab_project_list; error tracking must be enabled at the instance level (Sentry integration or GitLab-integrated)")
+			"requires Maintainer role on the project; verify project_id with project.list; error tracking must be enabled at the instance level (Sentry integration or GitLab-integrated)")
 	}
 	return SettingsOutput{
 		Active:            s.Active,
@@ -169,7 +169,7 @@ func DeleteClientKey(ctx context.Context, client *gitlabclient.Client, input Del
 	_, err := client.GL().ErrorTracking.DeleteClientKey(string(input.ProjectID), input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_error_tracking_client_key", err, http.StatusForbidden,
-			"requires Maintainer role; verify key_id with gitlab_list_error_tracking_client_keys; deletion is irreversible. SDK clients using the key will stop receiving events")
+			"requires Maintainer role; verify key_id with admin.error_tracking_list; deletion is irreversible. SDK clients using the key will stop receiving events")
 	}
 	return nil
 }

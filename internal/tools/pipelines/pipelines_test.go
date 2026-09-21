@@ -1327,7 +1327,7 @@ func TestUpdateMetadata_NotFoundAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_pipeline_list") {
+	if !strings.Contains(err.Error(), "pipeline.list") {
 		t.Fatalf("error = %q, want pipeline list hint", err.Error())
 	}
 }

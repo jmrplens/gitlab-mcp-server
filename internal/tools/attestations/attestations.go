@@ -99,7 +99,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 				return ListOutput{Attestations: []Output{}}, nil
 			}
 		}
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_project_get. Attestations require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with project.get. Attestations require Ultimate license")
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts))}
 	for _, a := range atts {
@@ -122,7 +122,7 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	data, _, err := client.GL().Attestations.DownloadAttestation(in.ProjectID.String(), in.AttestationIID, gl.WithContext(ctx))
 	if err != nil {
 		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound,
-			"verify attestation_iid and project_id are valid; use gitlab_attestation action 'list' or gitlab_list_attestations to find valid IIDs")
+			"verify attestation_iid and project_id are valid; use attestation.list to find valid IIDs")
 	}
 	return DownloadOutput{
 		AttestationIID: in.AttestationIID,

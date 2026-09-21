@@ -111,7 +111,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	labels, resp, err := client.GL().Labels.ListLabels(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("labelList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get")
+			"verify project_id with project.get")
 	}
 	extras, err := toolutil.CapturedLabels(captured, len(labels))
 	if err != nil {
@@ -138,7 +138,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	l, _, err := client.GL().Labels.GetLabel(string(input.ProjectID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelGet", err, http.StatusNotFound,
-			"verify label_id (numeric ID or name) with gitlab_label_list; label names are case-sensitive")
+			"verify label_id (numeric ID or name) with project.label_list; label names are case-sensitive")
 	}
 	return capturedOutput("labelGet", l, captured)
 }
@@ -171,7 +171,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "a label with this name already exists. Use gitlab_label_update to modify it, or gitlab_label_list to see existing labels")
+			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "a label with this name already exists. Use project.label_update to modify it, or project.label_list to see existing labels")
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "check the color format (#RRGGBB) and that the name is not empty")
 		default:
@@ -227,7 +227,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	l, _, err := client.GL().Labels.UpdateLabel(string(input.ProjectID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("labelUpdate", err, http.StatusBadRequest,
-			"verify label_id (numeric ID or name) with gitlab_label_list; new_name must be unique; color must be 6-digit hex (e.g. #FF0000)")
+			"verify label_id (numeric ID or name) with project.label_list; new_name must be unique; color must be 6-digit hex (e.g. #FF0000)")
 	}
 	return capturedOutput("labelUpdate", l, captured)
 }
@@ -310,7 +310,7 @@ func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInpu
 			return toolutil.WrapErrWithHint("labelPromote", err, "label promotion requires group-level Maintainer or higher access")
 		}
 		return toolutil.WrapErrWithStatusHint("labelPromote", err, http.StatusNotFound,
-			"verify label_id with gitlab_label_list; project must belong to a group (cannot promote labels in personal projects)")
+			"verify label_id with project.label_list; project must belong to a group (cannot promote labels in personal projects)")
 	}
 	return nil
 }

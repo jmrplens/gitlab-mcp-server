@@ -159,7 +159,7 @@ func TestGetProjectMetrics(t *testing.T) {
 			handler: metricsStatusHandler(http.StatusNotFound, `{"message":"404 Project Not Found"}`),
 			wantErr: []string{
 				"doraProjectMetrics",
-				"verify project_id with gitlab_project_get",
+				"verify project_id with project.get",
 				"DORA metrics require Ultimate license",
 			},
 		},
@@ -395,7 +395,7 @@ func TestGetGroupMetrics(t *testing.T) {
 			handler: metricsStatusHandler(http.StatusNotFound, `{"message":"404 Group Not Found"}`),
 			wantErr: []string{
 				"doraGroupMetrics",
-				"verify group_id with gitlab_group_get",
+				"verify group_id with group.get",
 				"DORA metrics require Ultimate license",
 			},
 		},

@@ -297,7 +297,7 @@ func ListProvisionedUsers(ctx context.Context, client *gitlabclient.Client, inpu
 	users, resp, err := client.GL().Groups.ListProvisionedUsers(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProvisionedUsersListOutput{}, toolutil.WrapErrWithStatusHint("ListProvisionedUsers", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; provisioned users require a SAML/SCIM-enabled group and Owner role (Premium/Ultimate)")
+			"verify group_id with group.get; provisioned users require a SAML/SCIM-enabled group and Owner role (Premium/Ultimate)")
 	}
 
 	extras, err := toolutil.CapturedUsers(captured, len(users))

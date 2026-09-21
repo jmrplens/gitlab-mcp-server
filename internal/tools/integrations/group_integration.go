@@ -46,7 +46,7 @@ func ListGroupIntegrations(ctx context.Context, client *gitlabclient.Client, inp
 	integrations, _, err := client.GL().Integrations.ListActiveGroupIntegrations(string(input.GroupID), nil, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupIntegrationsOutput{}, toolutil.WrapErrWithStatusHint("list_group_integrations", err, http.StatusForbidden,
-			"requires Owner role on the group; verify group_id with gitlab_group_get; lists active integrations only")
+			"requires Owner role on the group; verify group_id with group.get; lists active integrations only")
 	}
 	items := make([]IntegrationItem, 0, len(integrations))
 	for _, s := range integrations {
@@ -85,7 +85,7 @@ func GetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	var integration gl.Integration
 	if _, err = client.GL().Do(req, &integration); err != nil {
 		return GetGroupIntegrationOutput{}, toolutil.WrapErrWithStatusHint("get_group_integration", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; the integration must be active on the group; use gitlab_list_group_integrations to enumerate enabled integrations; requires Owner role")
+			"verify group_id with group.get; the integration must be active on the group; use project.integration_list_group to enumerate enabled integrations; requires Owner role")
 	}
 	return GetGroupIntegrationOutput{Integration: integrationToItem(&integration)}, nil
 }
@@ -122,7 +122,7 @@ func SetGroupIntegration(ctx context.Context, client *gitlabclient.Client, input
 	var integration gl.Integration
 	if _, err = client.GL().Do(req, &integration); err != nil {
 		return SetGroupIntegrationOutput{}, toolutil.WrapErrWithStatusHint("set_group_integration", err, http.StatusForbidden,
-			"requires Owner role on the group; verify group_id with gitlab_group_get; verify slug is supported (see doc/api/group_integrations.md); supply the integration's documented config fields; some integrations require GitLab Premium/Ultimate")
+			"requires Owner role on the group; verify group_id with group.get; verify slug is supported (see doc/api/group_integrations.md); supply the integration's documented config fields; some integrations require GitLab Premium/Ultimate")
 	}
 	return SetGroupIntegrationOutput{Integration: integrationToItem(&integration)}, nil
 }
@@ -147,7 +147,7 @@ func DeleteGroupIntegration(ctx context.Context, client *gitlabclient.Client, in
 	}
 	if _, err = client.GL().Do(req, nil); err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_group_integration", err, http.StatusForbidden,
-			"requires Owner role on the group; verify slug with gitlab_list_group_integrations; deactivates the integration (configuration is removed)")
+			"requires Owner role on the group; verify slug with project.integration_list_group; deactivates the integration (configuration is removed)")
 	}
 	return nil
 }

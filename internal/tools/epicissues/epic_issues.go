@@ -15,7 +15,7 @@ import (
 )
 
 // hintEpicGIDResolution is the shared hint when epic GID resolution fails.
-const hintEpicGIDResolution = "could not resolve epic GID; verify full_path with gitlab_group_get and iid with gitlab_epic_list"
+const hintEpicGIDResolution = "could not resolve epic GID; verify full_path with group.get and iid with group.epic_list"
 
 // GraphQL queries and mutations for work item hierarchy operations.
 
@@ -317,7 +317,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicIssueList", err,
-			"verify full_path (group path) with gitlab_group_get and iid with gitlab_epic_list; epics require GitLab Premium or Ultimate")
+			"verify full_path (group path) with group.get and iid with group.epic_list; epics require GitLab Premium or Ultimate")
 	}
 
 	// GitLab answers a rejected document with HTTP 200 and a top-level errors
@@ -375,7 +375,7 @@ func Assign(ctx context.Context, client *gitlabclient.Client, input AssignInput)
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueAssign", err,
-			"could not resolve child issue GID; verify child_project_path with gitlab_project_get and child_iid with gitlab_issue_list")
+			"could not resolve child issue GID; verify child_project_path with project.get and child_iid with issue.list")
 	}
 
 	var resp gqlMutationResponse
@@ -425,7 +425,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	childGID, err := resolveWorkItemGID(ctx, client, input.ChildProjectPath, input.ChildIID)
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
-			"could not resolve child issue GID; verify child_project_path with gitlab_project_get and child_iid with gitlab_issue_list")
+			"could not resolve child issue GID; verify child_project_path with project.get and child_iid with issue.list")
 	}
 
 	var resp gqlMutationResponse
@@ -437,7 +437,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return AssignOutput{}, toolutil.WrapErrWithHint("epicIssueRemove", err,
-			"the issue may not be linked to this epic; verify with gitlab_epic_issue_list; removing requires Reporter role")
+			"the issue may not be linked to this epic; verify with group.epic_issue_list; removing requires Reporter role")
 	}
 
 	if len(resp.Data.WorkItemUpdate.Errors) > 0 {

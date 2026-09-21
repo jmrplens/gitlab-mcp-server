@@ -14,7 +14,7 @@ import (
 )
 
 // hintVerifyMirrorID is the 404 hint shared by project mirror tools.
-const hintVerifyMirrorID = "verify mirror_id with gitlab_list_project_mirrors"
+const hintVerifyMirrorID = "verify mirror_id with project.mirror_list"
 
 var credentialedURLPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^\s/@]+@)`)
 
@@ -157,7 +157,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 				"push mirroring requires GitLab Premium/Ultimate. Verify the project tier and that you have Maintainer+ role")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorList", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	out := ListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, m := range mirrors {
@@ -180,7 +180,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	m, _, err := client.GL().ProjectMirrors.GetProjectMirror(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("projectMirrorGet", err, http.StatusNotFound,
-			"verify mirror_id with gitlab_list_project_mirrors. Push mirrors require GitLab Premium/Ultimate")
+			"verify mirror_id with project.mirror_list. Push mirrors require GitLab Premium/Ultimate")
 	}
 	return toOutput(m), nil
 }
@@ -199,7 +199,7 @@ func GetPublicKey(ctx context.Context, client *gitlabclient.Client, in GetPublic
 	pk, _, err := client.GL().ProjectMirrors.GetProjectMirrorPublicKey(string(in.ProjectID), in.MirrorID, gl.WithContext(ctx))
 	if err != nil {
 		return PublicKeyOutput{}, toolutil.WrapErrWithStatusHint("projectMirrorGetPublicKey", err, http.StatusNotFound,
-			"verify mirror_id with gitlab_list_project_mirrors. SSH public keys are only available for mirrors using SSH authentication")
+			"verify mirror_id with project.mirror_list. SSH public keys are only available for mirrors using SSH authentication")
 	}
 	return PublicKeyOutput{PublicKey: pk.PublicKey}, nil
 }

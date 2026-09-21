@@ -82,7 +82,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (*L
 	uploads, resp, err := client.GL().GroupMarkdownUploads.ListGroupMarkdownUploads(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_list_group_markdown_uploads", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; listing markdown uploads requires Maintainer role or higher")
+			"verify group_id with group.get; listing markdown uploads requires Maintainer role or higher")
 	}
 	items := make([]UploadItem, 0, len(uploads))
 	for _, u := range uploads {
@@ -124,7 +124,7 @@ func DeleteByID(ctx context.Context, client *gitlabclient.Client, input DeleteBy
 	_, err := client.GL().GroupMarkdownUploads.DeleteGroupMarkdownUploadByID(string(input.GroupID), input.UploadID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_group_markdown_upload_by_id", err, http.StatusNotFound,
-			"verify upload_id with gitlab_list_group_markdown_uploads; deleting requires Maintainer role or higher")
+			"verify upload_id with group.group_upload_list; deleting requires Maintainer role or higher")
 	}
 	return nil
 }

@@ -549,7 +549,10 @@ func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 	if err == nil {
 		t.Fatal("Get() expected error, got nil")
 	}
-	for _, want := range []string{"epic_board_list", "gitlab_group", "configure an epic board"} {
+	// The hint names the capability by its canonical action ID rather than by
+	// the group meta tool and the action on it, which is the one spelling the
+	// dynamic and individual surfaces cannot resolve.
+	for _, want := range []string{"group.epic_board_list", "configure an epic board"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("Get() error missing %q: %v", want, err)

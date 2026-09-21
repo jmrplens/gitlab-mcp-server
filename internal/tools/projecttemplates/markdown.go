@@ -15,7 +15,7 @@ func FormatListMarkdown(out ListOutput) string {
 		EmptyMessage:    "No templates found.",
 		AttributeHeader: "Popular",
 		Pagination:      out.Pagination,
-		Hints:           []string{"Use `gitlab_get_project_template` to view a specific template"},
+		Hints:           []string{"Use `template.project_template_get` to view a specific template"},
 	})
 }
 

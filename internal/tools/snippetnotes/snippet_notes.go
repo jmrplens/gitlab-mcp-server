@@ -94,7 +94,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().Notes.ListSnippetNotes(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippetNoteList", err, http.StatusNotFound,
-			"verify project_id and snippet_id with gitlab_project_snippet_list; private snippets require Reporter role on the project")
+			"verify project_id and snippet_id with snippet.project_list; private snippets require Reporter role on the project")
 	}
 	extras, err := toolutil.CapturedNotes(captured, len(notes))
 	if err != nil {
@@ -125,7 +125,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	n, _, err := client.GL().Notes.GetSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteGet", err, http.StatusNotFound,
-			"verify project_id, snippet_id, and note_id with gitlab_snippet_note_list")
+			"verify project_id, snippet_id, and note_id with snippet.note_list")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {
@@ -189,7 +189,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippetNoteUpdate", err, http.StatusForbidden,
-			"only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_snippet_note_list; system notes cannot be edited")
+			"only the note author or a Maintainer/Owner can edit; verify note_id with snippet.note_list; system notes cannot be edited")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {

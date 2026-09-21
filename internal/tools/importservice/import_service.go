@@ -95,7 +95,7 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 	result, _, err := client.GL().Import.ImportRepositoryFromGitHub(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_github", err, http.StatusBadRequest,
-			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab. Import is async, poll status with gitlab_project_get")
+			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab. Import is async, poll status with project.get")
 	}
 	return &GitHubImportOutput{
 		ID:                    result.ID,
@@ -142,7 +142,7 @@ func CancelGitHubImport(ctx context.Context, client *gitlabclient.Client, input 
 	result, _, err := client.GL().Import.CancelGitHubProjectImport(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_cancel_github_import", err, http.StatusBadRequest,
-			"verify project_id with gitlab_project_list; cancellation only works while import is in progress (status=started); completed/failed imports cannot be cancelled")
+			"verify project_id with project.list; cancellation only works while import is in progress (status=started); completed/failed imports cannot be cancelled")
 	}
 	return &CancelledImportOutput{
 		ID:                    result.ID,

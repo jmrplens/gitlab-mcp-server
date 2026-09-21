@@ -16,7 +16,7 @@ import (
 )
 
 // hintVerifyProjectExists is the 404 hint shared by project tools.
-const hintVerifyProjectExists = "verify the project exists with gitlab_project_get"
+const hintVerifyProjectExists = "verify the project exists with project.get"
 
 // boolToAccessLevel converts a bool pointer to an AccessControlValue pointer
 // for bridging legacy bool-based tool inputs to the modern AccessLevel API.
@@ -1188,7 +1188,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "check that the project name/path is unique in the target namespace and all required fields are valid")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "a project with this name already exists in the namespace. Use gitlab_project_list to verify")
+			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "a project with this name already exists in the namespace. Use project.list to verify")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("projectCreate", err)
 		}
@@ -1219,7 +1219,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("projectGet", err,
-				"verify project_id (numeric ID or URL-encoded full path like 'group%2Fsubgroup%2Fproject'); use gitlab_project_list with a search term to discover the correct ID")
+				"verify project_id (numeric ID or URL-encoded full path like 'group%2Fsubgroup%2Fproject'); use project.list with a search term to discover the correct ID")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectGet", err)
 	}
@@ -1404,10 +1404,10 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return Output{}, toolutil.WrapErrWithHint("projectRestore", err,
-				"project must be in pending_delete state to restore. Use gitlab_project_list with include_pending_delete=true to verify, or gitlab_project_get to inspect marked_for_deletion_on")
+				"project must be in pending_delete state to restore. Use project.list with include_pending_delete=true to verify, or project.get to inspect marked_for_deletion_on")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectRestore", err, http.StatusNotFound,
-			"verify project_id; restoring requires the project to be in pending_delete state. Use gitlab_project_list with include_pending_delete=true")
+			"verify project_id; restoring requires the project to be in pending_delete state. Use project.list with include_pending_delete=true")
 	}
 	return projectOutput("projectRestore", p, captured)
 }
@@ -1828,7 +1828,7 @@ func Fork(ctx context.Context, client *gitlabclient.Client, input ForkInput) (Ou
 	p, _, err := client.GL().Projects.ForkProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
-			return Output{}, toolutil.WrapErrWithHint("projectFork", err, "a fork of this project already exists in your namespace. Use gitlab_project_list to find it")
+			return Output{}, toolutil.WrapErrWithHint("projectFork", err, "a fork of this project already exists in your namespace. Use project.list to find it")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectFork", err)
 	}
@@ -1859,7 +1859,7 @@ func Star(ctx context.Context, client *gitlabclient.Client, input StarInput) (Ou
 			return Get(ctx, client, GetInput{ProjectID: input.ProjectID})
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectStar", err, http.StatusNotModified,
-			"project is already starred by the authenticated user. Use gitlab_project_get to inspect star_count and gitlab_project_list_user_starred to list current stars")
+			"project is already starred by the authenticated user. Use project.get to inspect star_count and project.list_user_starred to list current stars")
 	}
 	return projectOutput("projectStar", p, captured)
 }
@@ -1971,7 +1971,7 @@ func Transfer(ctx context.Context, client *gitlabclient.Client, input TransferIn
 				"transferring a project requires Owner role on the source AND permission to create projects in the target namespace")
 		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
 			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
-				"verify the target namespace exists. Use gitlab_group_list or gitlab_get_user; namespace must be a numeric ID or full path")
+				"verify the target namespace exists. Use group.list or user.get; namespace must be a numeric ID or full path")
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("projectTransfer", err,
 				"target namespace may already contain a project with this name/path; consider renaming the project before transferring")
@@ -2078,7 +2078,7 @@ func ListForks(ctx context.Context, client *gitlabclient.Client, input ListForks
 	forks, resp, err := client.GL().Projects.ListProjectForks(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListForksOutput{}, toolutil.WrapErrWithStatusHint("projectListForks", err, http.StatusNotFound,
-			"verify the parent project exists with gitlab_project_get")
+			"verify the parent project exists with project.get")
 	}
 	full, basic, err := projectRows("projectListForks", input.Simple, forks, captured)
 	if err != nil {
@@ -2123,7 +2123,7 @@ func GetLanguages(ctx context.Context, client *gitlabclient.Client, input GetLan
 	langs, _, err := client.GL().Projects.GetProjectLanguages(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return LanguagesOutput{}, toolutil.WrapErrWithStatusHint("projectGetLanguages", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get; language detection requires repository content (empty repos return no languages)")
+			"verify the project exists with project.get; language detection requires repository content (empty repos return no languages)")
 	}
 	entries := make([]LanguageEntry, 0, len(*langs))
 	for name, pct := range *langs {
@@ -2334,7 +2334,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListHooksOutput{}, toolutil.WrapErrWithHint("projectListHooks", err,
-				"only Maintainers and Owners can list project webhooks. Verify your role with gitlab_project_members_list")
+				"only Maintainers and Owners can list project webhooks. Verify your role with project.members")
 		}
 		return ListHooksOutput{}, toolutil.WrapErrWithStatusHint("projectListHooks", err, http.StatusNotFound,
 			hintVerifyProjectExists)
@@ -2366,7 +2366,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	h, _, err := doProjectRequest[projectHookAPI](ctx, client, http.MethodGet, projectHookPath(string(input.ProjectID), input.HookID), nil)
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectGetHook", err, http.StatusNotFound,
-			"webhook may have been deleted. Use gitlab_project_hook_list to find current hook_id values")
+			"webhook may have been deleted. Use project.hook_list to find current hook_id values")
 	}
 	return hookOutputFromAPI(&h), nil
 }
@@ -2575,7 +2575,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 				"updated URL must be valid HTTP/HTTPS; verify token format and event flags")
 		}
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectEditHook", err, http.StatusNotFound,
-			"hook may have been deleted. Use gitlab_project_hook_list to find current hook_id")
+			"hook may have been deleted. Use project.hook_list to find current hook_id")
 	}
 	return hookOutputFromAPI(&h), nil
 }
@@ -2600,7 +2600,7 @@ func DeleteHook(ctx context.Context, client *gitlabclient.Client, input DeleteHo
 	_, err := client.GL().Projects.DeleteProjectHook(string(input.ProjectID), input.HookID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteHook", err, http.StatusNotFound,
-			"hook already deleted or never existed. Use gitlab_project_hook_list to verify hook_id")
+			"hook already deleted or never existed. Use project.hook_list to verify hook_id")
 	}
 	return nil
 }
@@ -2636,10 +2636,10 @@ func TriggerTestHook(ctx context.Context, client *gitlabclient.Client, input Tri
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return TriggerTestHookOutput{}, toolutil.WrapErrWithHint("projectTriggerTestHook", err,
-				"event must be one this hook subscribes to and the project must contain matching content (e.g. issues_events requires at least one issue). Use gitlab_project_hook_get to inspect enabled events")
+				"event must be one this hook subscribes to and the project must contain matching content (e.g. issues_events requires at least one issue). Use project.hook_get to inspect enabled events")
 		}
 		return TriggerTestHookOutput{}, toolutil.WrapErrWithStatusHint("projectTriggerTestHook", err, http.StatusNotFound,
-			"hook may have been deleted. Use gitlab_project_hook_list to verify hook_id")
+			"hook may have been deleted. Use project.hook_list to verify hook_id")
 	}
 	return TriggerTestHookOutput{Message: fmt.Sprintf("Test event '%s' triggered for hook %d", input.Event, input.HookID)}, nil
 }
@@ -2689,7 +2689,7 @@ type ListUserProjectsInput struct {
 // ListUserProjects lists projects owned by the given user.
 func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input ListUserProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserProjects", "projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id (numeric ID or exact username)", input.toFilter(),
+		"user not found - use user.get to verify user_id (numeric ID or exact username)", input.toFilter(),
 		client.GL().Projects.ListUserProjects)
 }
 
@@ -2973,10 +2973,10 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ShareProjectOutput{}, toolutil.WrapErrWithHint("projectShareWithGroup", err,
-				"group_access must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 25 (Security Manager) is not valid for project shares; expires_at must be YYYY-MM-DD; the project may already be shared with this group. Use gitlab_project_list_groups to verify")
+				"group_access must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 25 (Security Manager) is not valid for project shares; expires_at must be YYYY-MM-DD; the project may already be shared with this group. Use project.list_groups to verify")
 		}
 		return ShareProjectOutput{}, toolutil.WrapErrWithStatusHint("projectShareWithGroup", err, http.StatusNotFound,
-			"verify project_id and group_id with gitlab_project_get and gitlab_group_get")
+			"verify project_id and group_id with project.get and group.get")
 	}
 	roleName := toolutil.AccessLevelDescription(gl.AccessLevelValue(input.GroupAccess))
 	return ShareProjectOutput{
@@ -3008,7 +3008,7 @@ func DeleteSharedProjectFromGroup(ctx context.Context, client *gitlabclient.Clie
 	_, err := client.GL().Projects.DeleteSharedProjectFromGroup(string(input.ProjectID), input.GroupID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteSharedGroup", err, http.StatusNotFound,
-			"group is not currently shared with this project. Use gitlab_project_list_groups to verify")
+			"group is not currently shared with this project. Use project.list_groups to verify")
 	}
 	return nil
 }
@@ -3078,7 +3078,7 @@ type ListUserContributedProjectsInput struct {
 // ListUserContributedProjects lists projects a specific user has contributed to.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id", input.toFilter(),
+		"user not found - use user.get to verify user_id", input.toFilter(),
 		client.GL().Projects.ListUserContributedProjects)
 }
 
@@ -3095,7 +3095,7 @@ type ListUserStarredProjectsInput struct {
 // ListUserStarredProjects lists projects starred by a specific user.
 func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, input ListUserStarredProjectsInput) (ListOutput, error) {
 	return listUserScopedProjects(ctx, input.UserID, "projectListUserStarred", "projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID",
-		"user not found - use gitlab_get_user to verify user_id", input.toFilter(),
+		"user not found - use user.get to verify user_id", input.toFilter(),
 		client.GL().Projects.ListUserStarredProjects)
 }
 
@@ -3360,7 +3360,7 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return PushRuleOutput{}, toolutil.WrapErrWithHint("projectGetPushRules", err,
-				"no push rules configured on this project, or the feature requires GitLab Premium/Ultimate. Use gitlab_project_add_push_rule to create one")
+				"no push rules configured on this project, or the feature requires GitLab Premium/Ultimate. Use project.push_rule_add to create one")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("projectGetPushRules", err, http.StatusForbidden,
 			"reading push rules requires Premium/Ultimate licensing and at least Maintainer role on the project")
@@ -3445,7 +3445,7 @@ func AddPushRule(ctx context.Context, client *gitlabclient.Client, input AddPush
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return PushRuleOutput{}, toolutil.WrapErrWithHint("projectAddPushRule", err,
-				"push rules already exist on this project (use gitlab_project_edit_push_rule to update), one of the regex patterns is invalid, or the feature requires GitLab Premium/Ultimate")
+				"push rules already exist on this project (use project.push_rule_edit to update), one of the regex patterns is invalid, or the feature requires GitLab Premium/Ultimate")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("projectAddPushRule", err, http.StatusForbidden,
 			"adding push rules requires Maintainer/Owner role and Premium/Ultimate licensing")
@@ -3539,7 +3539,7 @@ func EditPushRule(ctx context.Context, client *gitlabclient.Client, input EditPu
 				"one of the regex patterns is invalid (use a Go-compatible regex syntax), or the field requires Premium/Ultimate")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("projectEditPushRule", err, http.StatusNotFound,
-			"no push rules currently exist on this project. Use gitlab_project_add_push_rule first")
+			"no push rules currently exist on this project. Use project.push_rule_add first")
 	}
 	return pushRuleOutputFromGL(rule), nil
 }
@@ -3590,7 +3590,7 @@ func SetCustomHeader(ctx context.Context, client *gitlabclient.Client, input Set
 	_, err := client.GL().Projects.SetProjectCustomHeader(string(input.ProjectID), input.HookID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectSetCustomHeader", err, http.StatusNotFound,
-			"webhook not found. Use gitlab_project_hook_list to verify hook_id")
+			"webhook not found. Use project.hook_list to verify hook_id")
 	}
 	return nil
 }
@@ -3619,7 +3619,7 @@ func DeleteCustomHeader(ctx context.Context, client *gitlabclient.Client, input 
 	_, err := client.GL().Projects.DeleteProjectCustomHeader(string(input.ProjectID), input.HookID, input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteCustomHeader", err, http.StatusNotFound,
-			"header key not currently set on this hook (or hook not found). Use gitlab_project_hook_get to inspect configured custom headers")
+			"header key not currently set on this hook (or hook not found). Use project.hook_get to inspect configured custom headers")
 	}
 	return nil
 }
@@ -3656,7 +3656,7 @@ func SetWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
 		}
 		return toolutil.WrapErrWithStatusHint("projectSetWebhookURLVariable", err, http.StatusNotFound,
-			"webhook not found. Use gitlab_project_hook_list to verify hook_id")
+			"webhook not found. Use project.hook_list to verify hook_id")
 	}
 	return nil
 }
@@ -3685,7 +3685,7 @@ func DeleteWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, 
 	_, err := client.GL().Projects.DeleteProjectWebhookURLVariable(string(input.ProjectID), input.HookID, input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteWebhookURLVariable", err, http.StatusNotFound,
-			"variable key not currently set on this hook (or hook not found). Use gitlab_project_hook_get to inspect configured URL variables")
+			"variable key not currently set on this hook (or hook not found). Use project.hook_get to inspect configured URL variables")
 	}
 	return nil
 }
@@ -3725,10 +3725,10 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return Output{}, toolutil.WrapErrWithHint("projectCreateForkRelation", err,
-				"a fork relation already exists for this project. Use gitlab_project_get to inspect forked_from_project, or call gitlab_project_delete_fork_relation first")
+				"a fork relation already exists for this project. Use project.get to inspect forked_from_project, or call project.delete_fork_relation first")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
-			"verify both project_id and forked_from_id reference existing projects with gitlab_project_get")
+			"verify both project_id and forked_from_id reference existing projects with project.get")
 	}
 	return projectOutput("projectCreateForkRelation", project, captured)
 }
@@ -3749,7 +3749,7 @@ func DeleteForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 	_, err := client.GL().Projects.DeleteProjectForkRelation(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("projectDeleteForkRelation", err, http.StatusNotFound,
-			"project is not currently a fork (no fork relation to remove). Use gitlab_project_get to inspect forked_from_project")
+			"project is not currently a fork (no fork relation to remove). Use project.get to inspect forked_from_project")
 	}
 	return nil
 }
@@ -3962,10 +3962,10 @@ func CreateForUser(ctx context.Context, client *gitlabclient.Client, input Creat
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("projectCreateForUser", err,
-				"creating a project on behalf of another user requires an admin token (instance-administrator scope). Use gitlab_project_create for the authenticated user instead")
+				"creating a project on behalf of another user requires an admin token (instance-administrator scope). Use project.create for the authenticated user instead")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("projectCreateForUser", err, http.StatusNotFound,
-			"target user_id not found. Use gitlab_get_user to verify")
+			"target user_id not found. Use user.get to verify")
 	}
 	return projectOutput("projectCreateForUser", p, captured)
 }

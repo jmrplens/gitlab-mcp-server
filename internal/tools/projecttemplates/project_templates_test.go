@@ -91,7 +91,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	want := "## Project Templates (1)\n\n" +
 		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
 		"| mit | MIT | " + toolutil.EmojiSuccess + " |\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_project_template` to view a specific template\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `template.project_template_get` to view a specific template\n"
 	if md != want {
 		t.Errorf("project template list:\n got %q\nwant %q", md, want)
 	}
@@ -139,7 +139,7 @@ func TestFormatListMarkdown_NonPopular(t *testing.T) {
 	want := "## Project Templates (1)\n\n" +
 		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
 		"| test | Test | " + toolutil.EmojiCross + " |\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_project_template` to view a specific template\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `template.project_template_get` to view a specific template\n"
 	if md != want {
 		t.Errorf("project template list:\n got %q\nwant %q", md, want)
 	}

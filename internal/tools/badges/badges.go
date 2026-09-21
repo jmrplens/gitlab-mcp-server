@@ -11,7 +11,7 @@ import (
 )
 
 // hintVerifyGroupBadgeID is the 404 hint shared by group badge tools.
-const hintVerifyGroupBadgeID = "verify badge_id with gitlab_list_group_badges"
+const hintVerifyGroupBadgeID = "verify badge_id with group.badge_list"
 
 // applyOrderSort copies the order_by and sort fields onto a gl.ListOptions,
 // setting only the values the caller supplied. These fields drive keyset
@@ -107,7 +107,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	badges, resp, err := client.GL().ProjectBadges.ListProjectBadges(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectOutput{}, toolutil.WrapErrWithStatusHint("list_project_badges", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	return ListProjectOutput{
 		Badges:     mapBadges(badges, projectBadgeToItem),
@@ -135,7 +135,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	badge, _, err := client.GL().ProjectBadges.GetProjectBadge(string(input.ProjectID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
 		return GetProjectOutput{}, toolutil.WrapErrWithStatusHint("get_project_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_project_badges. Inherited group badges have negative IDs and cannot be fetched at the project scope")
+			"verify badge_id with project.badge_list. Inherited group badges have negative IDs and cannot be fetched at the project scope")
 	}
 	return GetProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -215,7 +215,7 @@ func EditProject(ctx context.Context, client *gitlabclient.Client, input EditPro
 				"editing project badges requires Maintainer+ role; inherited group badges cannot be edited at project scope")
 		}
 		return EditProjectOutput{}, toolutil.WrapErrWithStatusHint("edit_project_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_project_badges")
+			"verify badge_id with project.badge_list")
 	}
 	return EditProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -238,7 +238,7 @@ func DeleteProject(ctx context.Context, client *gitlabclient.Client, input Delet
 				"deleting project badges requires Maintainer+ role; inherited group badges must be deleted at the group level")
 		}
 		return toolutil.WrapErrWithStatusHint("delete_project_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_project_badges")
+			"verify badge_id with project.badge_list")
 	}
 	return nil
 }
@@ -265,7 +265,7 @@ func PreviewProject(ctx context.Context, client *gitlabclient.Client, input Prev
 	badge, _, err := client.GL().ProjectBadges.PreviewProjectBadge(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return PreviewProjectOutput{}, toolutil.WrapErrWithStatusHint("preview_project_badge", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get; preview substitutes placeholders without persisting the badge")
+			"verify the project exists with project.get; preview substitutes placeholders without persisting the badge")
 	}
 	return PreviewProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }
@@ -302,7 +302,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	badges, resp, err := client.GL().GroupBadges.ListGroupBadges(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("list_group_badges", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get")
+			"verify group_id with group.get")
 	}
 	return ListGroupOutput{
 		Badges:     mapBadges(badges, groupBadgeToItem),
@@ -464,7 +464,7 @@ func PreviewGroup(ctx context.Context, client *gitlabclient.Client, input Previe
 	badge, _, err := client.GL().GroupBadges.PreviewGroupBadge(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return PreviewGroupOutput{}, toolutil.WrapErrWithStatusHint("preview_group_badge", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; preview substitutes placeholders without persisting the badge")
+			"verify group_id with group.get; preview substitutes placeholders without persisting the badge")
 	}
 	return PreviewGroupOutput{Badge: groupBadgeToItem(badge)}, nil
 }

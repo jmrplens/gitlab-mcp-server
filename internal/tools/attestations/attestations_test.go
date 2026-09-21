@@ -103,8 +103,8 @@ func TestToOutput(t *testing.T) {
 // attestationCardHints is the guidance section every attestation card closes
 // with.
 const attestationCardHints = "\n---\n💡 **Next steps:**\n" +
-	"- Use `gitlab_download_attestation` to download this attestation's content\n" +
-	"- Use `gitlab_list_attestations` to view all attestations for the project\n"
+	"- Use `attestation.download` to download this attestation's content\n" +
+	"- Use `attestation.list` to view all attestations for the project\n"
 
 // TestFormatOutputMarkdown validates the single-attestation markdown renderer.
 // Covers zero-ID (empty), full output with all optional fields, and partial
@@ -220,7 +220,7 @@ func TestFormatListMarkdown(t *testing.T) {
 				"| 1 | 1 | 100 | success | slsa_provenance | 1 Jan 2026 00:00 UTC |\n" +
 				"| 2 | 2 | 101 | failed |  | 1 Feb 2026 00:00 UTC |\n" +
 				"\n---\n💡 **Next steps:**\n" +
-				"- Use `gitlab_download_attestation` with an IID from the table to fetch one attestation's bundle\n",
+				"- Use `attestation.download` with an IID from the table to fetch one attestation's bundle\n",
 		},
 	}
 
@@ -260,7 +260,7 @@ func TestFormatDownloadMarkdown(t *testing.T) {
 				"- **Size**: 1024 bytes\n" +
 				"- **Content**: Base64-encoded in the `content_base64` field\n" +
 				"\n---\n💡 **Next steps:**\n" +
-				"- Use `gitlab_list_attestations` to view all attestations for the project\n",
+				"- Use `attestation.list` to view all attestations for the project\n",
 		},
 	}
 
@@ -383,7 +383,7 @@ func TestList_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 403 response, got nil")
 	}
-	if strings.Contains(err.Error(), "gitlab_project_get") {
+	if strings.Contains(err.Error(), "project.get") {
 		t.Errorf("403 error carries the 404-only project hint: %v", err)
 	}
 }
@@ -446,7 +446,7 @@ func TestList_NotFoundForMissingProject_ReturnsTheHintedError(t *testing.T) {
 		t.Fatalf("expected an error for a project that does not read back, got %+v", out)
 	}
 	errText := err.Error()
-	for _, want := range []string{"list attestations", "gitlab_project_get", "Ultimate"} {
+	for _, want := range []string{"list attestations", "project.get", "Ultimate"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errText, want) {
 				t.Errorf("error missing %q: %v", want, err)
@@ -585,7 +585,10 @@ func TestDownload_APIError(t *testing.T) {
 		t.Fatal("expected error for 404 response, got nil")
 	}
 	errText := err.Error()
-	for _, want := range []string{"attestation_iid", "gitlab_attestation", "gitlab_list_attestations"} {
+	// The hint names the capability once, by the canonical ID: it used to name
+	// the meta tool beside it, which is a spelling the dynamic and individual
+	// surfaces cannot resolve.
+	for _, want := range []string{"attestation_iid", "attestation.list"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errText, want) {
 				t.Fatalf("error missing %q: %v", want, err)

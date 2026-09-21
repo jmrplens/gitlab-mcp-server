@@ -861,7 +861,7 @@ func TestHandlers_TheHintIsAttachedToTheStatusItWasWrittenFor(t *testing.T) {
 	}{
 		{
 			name: "List", status: http.StatusNotFound,
-			hint: "verify project_id with gitlab_project_get and snippet_id with gitlab_project_snippet_list",
+			hint: "verify project_id with project.get and snippet_id with snippet.project_list",
 			call: func(client *gitlabclient.Client) error {
 				_, err := List(ctx, client, ListInput{ProjectID: "1", SnippetID: 5})
 				return err
@@ -869,7 +869,7 @@ func TestHandlers_TheHintIsAttachedToTheStatusItWasWrittenFor(t *testing.T) {
 		},
 		{
 			name: "Get", status: http.StatusNotFound,
-			hint: "verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)",
+			hint: "verify discussion_id with snippet.discussion_list (discussion IDs are 40-char hex strings)",
 			call: func(client *gitlabclient.Client) error {
 				_, err := Get(ctx, client, GetInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1"})
 				return err
@@ -885,7 +885,7 @@ func TestHandlers_TheHintIsAttachedToTheStatusItWasWrittenFor(t *testing.T) {
 		},
 		{
 			name: "AddNote", status: http.StatusNotFound,
-			hint: "verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet",
+			hint: "verify discussion_id with snippet.discussion_list; the discussion must exist on this snippet",
 			call: func(client *gitlabclient.Client) error {
 				_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "1", SnippetID: 5, DiscussionID: "d1", Body: "x"})
 				return err

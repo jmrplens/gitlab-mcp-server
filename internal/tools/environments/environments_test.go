@@ -979,7 +979,7 @@ func TestFormatEnvironmentNotFound(t *testing.T) {
 	}
 	for _, want := range []string{
 		"ID 99 in project 42",
-		"gitlab_environment_list",
+		actionEnvironmentList,
 		"Verify the environment_id is correct for this project",
 	} {
 		t.Run(want, func(t *testing.T) {

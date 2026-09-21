@@ -101,7 +101,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	wikiPages, _, err := client.GL().Wikis.ListWikis(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("wikiList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; the project's wiki feature may be disabled")
+			"verify project_id with project.get; the project's wiki feature may be disabled")
 	}
 	extras, err := toolutil.CapturedWikis(captured, len(wikiPages))
 	if err != nil {
@@ -139,7 +139,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	w, _, err := client.GL().Wikis.GetWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("wikiGet", err, http.StatusNotFound,
-			"verify slug with gitlab_wiki_list; slugs are case-sensitive and use hyphens for spaces")
+			"verify slug with wiki.list; slugs are case-sensitive and use hyphens for spaces")
 	}
 	extra, err := toolutil.CapturedWiki(captured)
 	if err != nil {
@@ -214,7 +214,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	w, _, err := client.GL().Wikis.EditWikiPage(string(input.ProjectID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("wikiUpdate", err, http.StatusNotFound,
-			"verify slug with gitlab_wiki_list; slugs are case-sensitive")
+			"verify slug with wiki.list; slugs are case-sensitive")
 	}
 	extra, err := toolutil.CapturedWiki(captured)
 	if err != nil {

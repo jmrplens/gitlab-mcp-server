@@ -438,7 +438,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	site, _, err := client.GL().GeoSites.GetGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get geo site", err, http.StatusNotFound,
-			"verify id with gitlab_list_geo_sites; requires admin access")
+			"verify id with geo.list; requires admin access")
 	}
 	extra, err := capturedSite(captured)
 	if err != nil {
@@ -474,7 +474,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, in EditInput) (Outpu
 	site, _, err := client.GL().GeoSites.EditGeoSite(in.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("edit geo site", err, http.StatusBadRequest,
-			"verify id with gitlab_list_geo_sites; cannot toggle primary status (recreate site instead); selective_sync_type must be 'namespaces' or 'shards'")
+			"verify id with geo.list; cannot toggle primary status (recreate site instead); selective_sync_type must be 'namespaces' or 'shards'")
 	}
 	extra, err := capturedSite(captured)
 	if err != nil {
@@ -512,7 +512,7 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 	site, _, err := client.GL().GeoSites.RepairGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("repair geo site", err, http.StatusNotFound,
-			"verify id with gitlab_list_geo_sites; repair re-creates the OAuth application for the secondary site. Must be run from the primary")
+			"verify id with geo.list; repair re-creates the OAuth application for the secondary site. Must be run from the primary")
 	}
 	if site == nil {
 		return Output{
@@ -572,7 +572,7 @@ func GetStatus(ctx context.Context, client *gitlabclient.Client, in IDInput) (St
 	status, _, err := client.GL().GeoSites.GetStatusOfGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return StatusOutput{}, toolutil.WrapErrWithStatusHint("get geo site status", err, http.StatusNotFound,
-			"verify id with gitlab_list_geo_sites; the site must have reported status at least once for data to be available")
+			"verify id with geo.list; the site must have reported status at least once for data to be available")
 	}
 	extra, err := capturedStatus(captured)
 	if err != nil {

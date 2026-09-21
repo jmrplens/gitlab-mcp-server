@@ -156,7 +156,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	v, _, err := client.GL().InstanceVariables.GetVariable(input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(opGetInstanceVariable, err, http.StatusNotFound,
-			"verify the variable key exists with gitlab_instance_variable_list; admin-only API")
+			"verify the variable key exists with ci_variable.instance_list; admin-only API")
 	}
 	extra, err := toolutil.CapturedCIVariable(captured)
 	if err != nil {
@@ -253,7 +253,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating instance variables requires admin privileges")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateInstanceVariable, err, http.StatusNotFound,
-			"verify the variable key exists with gitlab_instance_variable_list")
+			"verify the variable key exists with ci_variable.instance_list")
 	}
 	extra, err := toolutil.CapturedCIVariable(captured)
 	if err != nil {
@@ -278,7 +278,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting instance variables requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint(opDeleteInstanceVariable, err, http.StatusNotFound,
-			"the variable may already be deleted. Verify with gitlab_instance_variable_list")
+			"the variable may already be deleted. Verify with ci_variable.instance_list")
 	}
 	return nil
 }

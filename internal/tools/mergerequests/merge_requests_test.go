@@ -1585,7 +1585,7 @@ func TestMRCreate_LabelAndStatusBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"source branch is invalid"}`)
 		}))
 		_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, SourceBranch: testBranchFeat, TargetBranch: testBranchMain, Title: testMRTitle})
-		assertContains(t, err, "gitlab_branch_list")
+		assertContains(t, err, "branch.list")
 	})
 }
 
@@ -1609,7 +1609,7 @@ func TestMRGenericErrorBranches(t *testing.T) {
 				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"project not found"}`)
 			}))
 			_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
-			assertContains(t, err, "gitlab_project_get")
+			assertContains(t, err, "project.get")
 		}},
 		{"delete", func(t *testing.T) {
 			t.Helper()
@@ -1651,7 +1651,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"group not found"}`)
 		}))
 		_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "99"})
-		assertContains(t, err, "gitlab_group_get")
+		assertContains(t, err, "group.get")
 	})
 
 	t.Run("reviewers missing project", func(t *testing.T) {
@@ -1667,7 +1667,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 		}))
 		err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
-		assertContains(t, err, "gitlab_mr_approve")
+		assertContains(t, err, "merge_request.approve")
 	})
 
 	t.Run("create pipeline forbidden", func(t *testing.T) {
@@ -1683,7 +1683,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid pipeline"}`)
 		}))
 		_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
-		assertContains(t, err, "gitlab_ci_lint")
+		assertContains(t, err, "template.lint")
 	})
 
 	t.Run("create pipeline not found", func(t *testing.T) {
@@ -1691,7 +1691,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 		}))
 		_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
-		assertContains(t, err, "gitlab_mr_get")
+		assertContains(t, err, "merge_request.get")
 	})
 
 	t.Run("cancel auto merge not found", func(t *testing.T) {
@@ -1699,7 +1699,7 @@ func TestMRStatusHintBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 		}))
 		_, err := CancelAutoMerge(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
-		assertContains(t, err, "gitlab_mr_get")
+		assertContains(t, err, "merge_request.get")
 	})
 }
 
@@ -1777,7 +1777,7 @@ func TestMRDependencyStatusBranches(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
 		}))
 		_, err := GetDependencies(context.Background(), client, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
-		assertContains(t, err, "gitlab_mr_get")
+		assertContains(t, err, "merge_request.get")
 	})
 }
 
@@ -4486,7 +4486,7 @@ func TestUnsubscribe_APIError(t *testing.T) {
 }
 
 // TestUpdate_NotFound verifies that Update returns an error containing a
-// gitlab_mr_list hint when the GitLab API responds with 404.
+// merge_request.list hint when the GitLab API responds with 404.
 func TestUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
@@ -4495,7 +4495,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "gitlab_mr_list") {
+	if !strings.Contains(err.Error(), "merge_request.list") {
 		t.Errorf("expected hint, got: %v", err)
 	}
 }

@@ -24,7 +24,7 @@ const (
 )
 
 // hintRunnerNotFound is the 404 hint shared by runner tools.
-const hintRunnerNotFound = "runner not found. Verify runner_id with gitlab_runner_list"
+const hintRunnerNotFound = "runner not found. Verify runner_id with runner.list"
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -425,7 +425,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	d, _, err := client.GL().Runners.GetRunnerDetails(int(input.RunnerID), gl.WithContext(ctx))
 	if err != nil {
 		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("get runner details", err, http.StatusNotFound,
-			"runner not found or already deleted. Use gitlab_runner_list_all (admin) or gitlab_runner_list to discover current runner_id values")
+			"runner not found or already deleted. Use runner.list_all (admin) or runner.list to discover current runner_id values")
 	}
 	extra, err := toolutil.CapturedRunner(captured)
 	if err != nil {
@@ -529,7 +529,7 @@ func Remove(ctx context.Context, client *gitlabclient.Client, input RemoveInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return toolutil.WrapErrWithHint("remove runner", err,
-				"removing instance runners requires an admin token; for project runners use gitlab_runner_disable_project instead, for group runners require Owner role")
+				"removing instance runners requires an admin token; for project runners use runner.disable_project instead, for group runners require Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint("remove runner", err, http.StatusNotFound,
 			"runner already deleted or never existed. Nothing to remove")
@@ -575,7 +575,7 @@ func ListJobs(ctx context.Context, client *gitlabclient.Client, input ListJobsIn
 	jobList, resp, err := client.GL().Runners.ListRunnerJobs(int(input.RunnerID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return JobListOutput{}, toolutil.WrapErrWithStatusHint("list runner jobs", err, http.StatusNotFound,
-			"runner not found. Verify runner_id with gitlab_runner_get or gitlab_runner_list")
+			"runner not found. Verify runner_id with runner.get or runner.list")
 	}
 
 	items := make([]jobs.Output, len(jobList))
@@ -606,7 +606,7 @@ type ListProjectInput struct {
 // ListProject returns runners assigned to a specific project.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
 	return listScopedRunners(ctx, input.ProjectID, "project_id", "list project runners",
-		"verify the project exists with gitlab_project_get - use namespace/project path or numeric ID",
+		"verify the project exists with project.get - use namespace/project path or numeric ID",
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList,
 			Scope: input.Scope, OrderBy: input.OrderBy, Sort: input.Sort,
@@ -648,10 +648,10 @@ func EnableProject(ctx context.Context, client *gitlabclient.Client, input Enabl
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint(opEnableProjectRunner, err,
-				"runner is locked to another project (set locked=false via gitlab_runner_update first), is a group/instance runner that cannot be enabled per-project, or you need Maintainer/Owner role")
+				"runner is locked to another project (set locked=false via runner.update first), is a group/instance runner that cannot be enabled per-project, or you need Maintainer/Owner role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opEnableProjectRunner, err, http.StatusNotFound,
-			"runner_id or project_id not found. Verify with gitlab_runner_list and gitlab_project_get")
+			"runner_id or project_id not found. Verify with runner.list and project.get")
 	}
 	extra, err := toolutil.CapturedRunner(captured)
 	if err != nil {
@@ -685,7 +685,7 @@ func DisableProject(ctx context.Context, client *gitlabclient.Client, input Disa
 	_, err := client.GL().Runners.DisableProjectRunner(string(input.ProjectID), input.RunnerID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("disable project runner", err, http.StatusNotFound,
-			"runner is not currently assigned to this project. Use gitlab_runner_list_project to see assigned runners")
+			"runner is not currently assigned to this project. Use runner.list_project to see assigned runners")
 	}
 	return nil
 }
@@ -711,7 +711,7 @@ type ListGroupInput struct {
 // ListGroup returns runners available in a specific group.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListOutput, error) {
 	return listScopedRunners(ctx, input.GroupID, "group_id", "list group runners",
-		"verify the group exists with gitlab_group_get - use group full_path or numeric ID",
+		"verify the group exists with group.get - use group full_path or numeric ID",
 		runnerListRequest{
 			Type: input.Type, Status: input.Status, TagList: input.TagList,
 			OrderBy: input.OrderBy, Sort: input.Sort,
@@ -833,7 +833,7 @@ func Register(ctx context.Context, client *gitlabclient.Client, input RegisterIn
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint(opRegisterRunner, err,
-				"registration token is invalid, expired, or has been revoked. Obtain a fresh token via gitlab_runner_reset_instance_reg_token (admin), gitlab_runner_reset_group_reg_token, or gitlab_runner_reset_project_reg_token")
+				"registration token is invalid, expired, or has been revoked. Obtain a fresh token via runner.reset_instance_reg_token (admin), runner.reset_group_reg_token, or runner.reset_project_reg_token")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opRegisterRunner, err, http.StatusUnprocessableEntity,
 			"validation failed. Ensure token is non-empty and any tag_list entries are valid")
@@ -895,7 +895,7 @@ func Verify(ctx context.Context, client *gitlabclient.Client, input VerifyInput)
 	_, err := client.GL().Runners.VerifyRegisteredRunner(opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("verify runner", err, http.StatusForbidden,
-			"runner authentication token is invalid, expired, or has been reset. Obtain a fresh token via gitlab_runner_reset_token or re-register the runner")
+			"runner authentication token is invalid, expired, or has been reset. Obtain a fresh token via runner.reset_token or re-register the runner")
 	}
 	return nil
 }
@@ -953,7 +953,7 @@ type ListAllInput struct {
 
 // ListAll returns all runners across the GitLab instance (admin endpoint).
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
-	return listRunners(ctx, runnerListRequest(input), "list all runners", "listing all instance runners requires an admin token - use gitlab_runner_list (scoped to your accessible runners) instead",
+	return listRunners(ctx, runnerListRequest(input), "list all runners", "listing all instance runners requires an admin token - use runner.list (scoped to your accessible runners) instead",
 		client.GL().Runners.ListAllRunners)
 }
 
@@ -981,7 +981,7 @@ func DeleteByToken(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().Runners.DeleteRegisteredRunner(opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete registered runner by token", err, http.StatusForbidden,
-			"authentication token is invalid or already revoked. If you have the runner_id, use gitlab_runner_delete_registered instead")
+			"authentication token is invalid or already revoked. If you have the runner_id, use runner.delete_registered instead")
 	}
 	return nil
 }
@@ -1004,7 +1004,7 @@ func ResetInstanceRegToken(ctx context.Context, client *gitlabclient.Client, _ R
 	t, _, err := client.GL().Runners.ResetInstanceRunnerRegistrationToken(gl.WithContext(ctx))
 	if err != nil {
 		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset instance runner registration token", err, http.StatusForbidden,
-			"resetting the instance-level registration token requires an admin token. For group/project scopes use gitlab_runner_reset_group_reg_token / gitlab_runner_reset_project_reg_token")
+			"resetting the instance-level registration token requires an admin token. For group/project scopes use runner.reset_group_reg_token / runner.reset_project_reg_token")
 	}
 	return toRegTokenOutput(t), nil
 }
@@ -1036,7 +1036,7 @@ func ResetGroupRegToken(ctx context.Context, client *gitlabclient.Client, input 
 				"resetting a group runner registration token requires Owner role on the group")
 		}
 		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset group runner registration token", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get")
+			"verify the group exists with group.get")
 	}
 	return toRegTokenOutput(t), nil
 }
@@ -1068,7 +1068,7 @@ func ResetProjectRegToken(ctx context.Context, client *gitlabclient.Client, inpu
 				"resetting a project runner registration token requires Maintainer or Owner role on the project")
 		}
 		return RegTokenOutput{}, toolutil.WrapErrWithStatusHint("reset project runner registration token", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	return toRegTokenOutput(t), nil
 }

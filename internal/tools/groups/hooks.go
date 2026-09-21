@@ -255,7 +255,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	hooks, resp, err := client.GL().Groups.ListGroupHooks(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookListOutput{}, toolutil.WrapErrWithStatusHint("ListHooks", err, http.StatusForbidden,
-			"requires Owner role on the group; verify group_id with gitlab_group_list; group webhooks fire for events in the group and all its subgroups/projects")
+			"requires Owner role on the group; verify group_id with group.list; group webhooks fire for events in the group and all its subgroups/projects")
 	}
 
 	extras, err := toolutil.CapturedGroupHooks(captured, len(hooks))
@@ -288,7 +288,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	h, _, err := client.GL().Groups.GetGroupHook(string(input.GroupID), input.HookID, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("GetHook", err, http.StatusNotFound,
-			"verify group_id + hook_id with gitlab_group_hook_list; requires Owner role")
+			"verify group_id + hook_id with group.hook_list; requires Owner role")
 	}
 	return hookOutput("GetHook", h, captured)
 }
@@ -469,7 +469,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	h, _, err := client.GL().Groups.EditGroupHook(string(input.GroupID), input.HookID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("EditHook", err, http.StatusNotFound,
-			"verify hook_id with gitlab_group_hook_list; requires Owner role; updates merge with existing config. Unset fields keep current values")
+			"verify hook_id with group.hook_list; requires Owner role; updates merge with existing config. Unset fields keep current values")
 	}
 	return hookOutput("EditHook", h, captured)
 }
@@ -489,7 +489,7 @@ func DeleteHook(ctx context.Context, client *gitlabclient.Client, input DeleteHo
 	_, err := client.GL().Groups.DeleteGroupHook(string(input.GroupID), input.HookID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("DeleteHook", err, http.StatusForbidden,
-			"requires Owner role; verify hook_id with gitlab_group_hook_list; deletion is irreversible")
+			"requires Owner role; verify hook_id with group.hook_list; deletion is irreversible")
 	}
 	return nil
 }
@@ -574,7 +574,7 @@ func SetHookCustomHeader(ctx context.Context, client *gitlabclient.Client, input
 	_, err := client.GL().Groups.SetGroupCustomHeader(string(input.GroupID), input.HookID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupSetHookCustomHeader", err, http.StatusNotFound,
-			"webhook not found. Use gitlab_group_hook_list to verify hook_id; requires Owner role")
+			"webhook not found. Use group.hook_list to verify hook_id; requires Owner role")
 	}
 	return nil
 }
@@ -603,7 +603,7 @@ func DeleteHookCustomHeader(ctx context.Context, client *gitlabclient.Client, in
 	_, err := client.GL().Groups.DeleteGroupCustomHeader(string(input.GroupID), input.HookID, input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupDeleteHookCustomHeader", err, http.StatusNotFound,
-			"header key not currently set on this hook (or hook not found). Use gitlab_group_hook_get to inspect configured custom headers")
+			"header key not currently set on this hook (or hook not found). Use group.hook_get to inspect configured custom headers")
 	}
 	return nil
 }
@@ -638,7 +638,7 @@ func SetHookURLVariable(ctx context.Context, client *gitlabclient.Client, input 
 				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
 		}
 		return toolutil.WrapErrWithStatusHint("groupSetHookURLVariable", err, http.StatusNotFound,
-			"webhook not found. Use gitlab_group_hook_list to verify hook_id; requires Owner role")
+			"webhook not found. Use group.hook_list to verify hook_id; requires Owner role")
 	}
 	return nil
 }
@@ -667,7 +667,7 @@ func DeleteHookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 	_, err := client.GL().Groups.DeleteGroupHookURLVariable(string(input.GroupID), input.HookID, input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupDeleteHookURLVariable", err, http.StatusNotFound,
-			"variable key not currently set on this hook (or hook not found). Use gitlab_group_hook_get to inspect configured URL variables")
+			"variable key not currently set on this hook (or hook not found). Use group.hook_get to inspect configured URL variables")
 	}
 	return nil
 }
@@ -696,7 +696,7 @@ func TestHook(ctx context.Context, client *gitlabclient.Client, input TestHookIn
 	_, err := client.GL().Groups.TriggerTestGroupHook(string(input.GroupID), input.HookID, gl.GroupHookTrigger(input.Trigger), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupTestHook", err, http.StatusNotFound,
-			"webhook not found, or trigger is not a valid event type. Use gitlab_group_hook_list to verify hook_id; requires Owner role")
+			"webhook not found, or trigger is not a valid event type. Use group.hook_list to verify hook_id; requires Owner role")
 	}
 	return nil
 }

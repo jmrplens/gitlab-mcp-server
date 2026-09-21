@@ -162,7 +162,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			name:      "get_access_settings",
 			operation: "get_job_token_access_settings",
 			status:    http.StatusNotFound,
-			hint:      "verify project_id with gitlab_project_get; CI/CD job token settings are at project level",
+			hint:      "verify project_id with project.get; CI/CD job token settings are at project level",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
 				_, err := GetAccessSettings(ctx, c, GetAccessSettingsInput{ProjectID: "42"})
 				return err
@@ -202,7 +202,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			name:      "remove_project_allowlist",
 			operation: "remove_project_job_token_allowlist",
 			status:    http.StatusNotFound,
-			hint:      "verify target_project_id is on the allowlist with gitlab_list_job_token_inbound_allowlist; requires Maintainer role",
+			hint:      "verify target_project_id is on the allowlist with job.token_scope_list_inbound; requires Maintainer role",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
 				return RemoveProjectAllowlist(ctx, c, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
 			},
@@ -231,7 +231,7 @@ func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) 
 			name:      "remove_group_allowlist",
 			operation: "remove_group_job_token_allowlist",
 			status:    http.StatusNotFound,
-			hint:      "verify target_group_id is on the allowlist with gitlab_list_job_token_group_allowlist; requires Maintainer role",
+			hint:      "verify target_group_id is on the allowlist with job.token_scope_list_groups; requires Maintainer role",
 			call: func(ctx context.Context, c *gitlabclient.Client) error {
 				return RemoveGroupAllowlist(ctx, c, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
 			},

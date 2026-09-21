@@ -70,7 +70,7 @@ func ListTagProtectionRules(ctx context.Context, client *gitlabclient.Client, in
 	)
 	if err != nil {
 		return TagProtectionRuleListOutput{}, toolutil.WrapErrWithStatusHint("registry_tag_protection_list", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; container registry tag protection requires GitLab 17.8+ and may need the container_registry_immutable_tags feature")
+			"verify project_id with project.get; container registry tag protection requires GitLab 17.8+ and may need the container_registry_immutable_tags feature")
 	}
 	out := TagProtectionRuleListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
@@ -154,7 +154,7 @@ func UpdateTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 	)
 	if err != nil {
 		return TagProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_tag_protection_update", err, http.StatusNotFound,
-			"verify rule_id with gitlab_registry_tag_protection_list; tag_name_pattern uniqueness still applies on rename")
+			"verify rule_id with package.registry_tag_rule_list; tag_name_pattern uniqueness still applies on rename")
 	}
 	return convertTagProtectionRule(rule), nil
 }
@@ -182,7 +182,7 @@ func DeleteTagProtectionRule(ctx context.Context, client *gitlabclient.Client, i
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("registry_tag_protection_delete", err, http.StatusNotFound,
-			"verify rule_id with gitlab_registry_tag_protection_list; managing tag protection rules requires Maintainer role or higher")
+			"verify rule_id with package.registry_tag_rule_list; managing tag protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

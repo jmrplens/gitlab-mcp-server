@@ -95,7 +95,7 @@ func TestFormatListMarkdown(t *testing.T) {
 	want := "## License Templates (1)\n\n" +
 		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
 		"| mit | MIT | " + toolutil.EmojiSuccess + " |\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `template.license_get` to view a specific template\n"
 	if md != want {
 		t.Errorf("license list:\n got %q\nwant %q", md, want)
 	}
@@ -239,7 +239,7 @@ func TestFormatListMarkdown_PaginatedPage_CountsTheTotalAndNamesThePage(t *testi
 		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
 		"| mit | MIT | " + toolutil.EmojiCross + " |\n" +
 		"\nPage 2 of 3 | 3 items total | 1 per page\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `template.license_get` to view a specific template\n"
 	if md != want {
 		t.Errorf("paginated license list:\n got %q\nwant %q", md, want)
 	}
@@ -504,7 +504,7 @@ func TestFormatListMarkdown_UnpopularLicense(t *testing.T) {
 	want := "## License Templates (1)\n\n" +
 		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
 		"| gpl-3.0 | GPL 3.0 | " + toolutil.EmojiCross + " |\n" +
-		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `template.license_get` to view a specific template\n"
 	if md != want {
 		t.Errorf("license list:\n got %q\nwant %q", md, want)
 	}
@@ -790,7 +790,7 @@ func TestGet_NotFoundSuggestsTheListAndOtherFailuresDoNot(t *testing.T) {
 			if err == nil {
 				t.Fatalf("status %d: expected an error", tt.status)
 			}
-			got := strings.Contains(err.Error(), "Suggestion: verify key with gitlab_list_license_templates")
+			got := strings.Contains(err.Error(), "Suggestion: verify key with template.license_list")
 			if got != tt.wantHint {
 				t.Errorf("status %d: list suggestion present = %v, want %v; error was %q", tt.status, got, tt.wantHint, err.Error())
 			}

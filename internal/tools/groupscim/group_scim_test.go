@@ -19,7 +19,10 @@ func assertSCIMIdentityHint(t *testing.T, err error) {
 		t.Fatal("expected SCIM identity error, got nil")
 	}
 	errText := err.Error()
-	for _, want := range []string{"uid", "gitlab_group_scim", "gitlab_list_group_scim_identities", "SAML SSO SCIM provisioning"} {
+	// The hint names the capability once, by the canonical ID: it used to name
+	// the meta tool beside it, which is a spelling the dynamic and individual
+	// surfaces cannot resolve.
+	for _, want := range []string{"uid", "group_scim.list", "SAML SSO SCIM provisioning"} {
 		if !strings.Contains(errText, want) {
 			t.Fatalf("error missing %q: %v", want, err)
 		}

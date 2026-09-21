@@ -251,7 +251,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	deployments, resp, err := rawListDeployments(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list deployments", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; deployments are populated by CI/CD jobs that run in environments")
+			"verify project_id with project.get; deployments are populated by CI/CD jobs that run in environments")
 	}
 
 	items := make([]Output, 0, len(deployments))
@@ -285,7 +285,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, err := rawGetDeployment(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list. Deployment IDs are project-scoped")
+			"verify deployment_id with environment.deployment_list. Deployment IDs are project-scoped")
 	}
 
 	return toOutputAPI(d), nil
@@ -341,7 +341,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 					"the API accepts status running, success, failed, or canceled when creating a deployment. GitLab 19 rejects 'created'; omit status or use an accepted value")
 			}
 			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
-				"verify environment exists with gitlab_environment_list, sha is a valid commit, and ref is an existing branch/tag")
+				"verify environment exists with environment.list, sha is a valid commit, and ref is an existing branch/tag")
 		}
 		return Output{}, toolutil.WrapErrWithMessage(opCreateDeployment, err)
 	}
@@ -381,7 +381,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"status must be one of: created, running, success, failed, canceled, blocked. Transitions out of terminal states are not allowed")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateDeployment, err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list")
+			"verify deployment_id with environment.deployment_list")
 	}
 	extra, err := toolutil.CapturedDeployment(captured)
 	if err != nil {
@@ -410,7 +410,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting deployments requires Maintainer+ role and the deployment must be in a final state (success, failed, canceled)")
 		}
 		return toolutil.WrapErrWithStatusHint("delete deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list")
+			"verify deployment_id with environment.deployment_list")
 	}
 	return nil
 }
@@ -463,7 +463,7 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 				"approving/rejecting deployments requires being a designated approver on the protected environment; status must be 'approved' or 'rejected'")
 		}
 		return ApproveOrRejectOutput{}, toolutil.WrapErrWithStatusHint("approve_or_reject_deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list. Only deployments awaiting approval can be acted on")
+			"verify deployment_id with environment.deployment_list. Only deployments awaiting approval can be acted on")
 	}
 
 	return ApproveOrRejectOutput{

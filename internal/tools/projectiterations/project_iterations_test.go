@@ -221,7 +221,7 @@ func TestList_APIError(t *testing.T) {
 // project and an unlicensed instance share and the only one where checking
 // either is the useful next step. [TestList_APIError] above asserts nothing
 // but that an error came back, so a hint moved to another status, or reworded
-// off gitlab_project_get and the license, leaves a model holding GitLab's bare
+// off project.get and the license, leaves a model holding GitLab's bare
 // message with nothing to do about it.
 func TestList_ErrorHint_OnlyA404NamesTheProjectAndTheLicense(t *testing.T) {
 	tests := []struct {
@@ -247,7 +247,7 @@ func TestList_ErrorHint_OnlyA404NamesTheProjectAndTheLicense(t *testing.T) {
 			if !strings.Contains(err.Error(), "gitlab_list_project_iterations") {
 				t.Errorf("error does not name the operation: %v", err)
 			}
-			hinted := strings.Contains(err.Error(), "gitlab_project_get") && strings.Contains(err.Error(), "Premium")
+			hinted := strings.Contains(err.Error(), "project.get") && strings.Contains(err.Error(), "Premium")
 			if hinted != tt.wantHint {
 				t.Errorf("hint present = %v, want %v; error: %v", hinted, tt.wantHint, err)
 			}

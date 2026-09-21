@@ -228,7 +228,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_project", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; listing access requests requires Maintainer role or higher")
+			"verify project_id with project.get; listing access requests requires Maintainer role or higher")
 	}
 	items, err := capturedAccessRequesters("access_request_list_project", requests, captured)
 	if err != nil {
@@ -262,7 +262,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_group", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; listing access requests requires Owner role")
+			"verify group_id with group.get; listing access requests requires Owner role")
 	}
 	items, err := capturedAccessRequesters("access_request_list_group", requests, captured)
 	if err != nil {
@@ -291,7 +291,7 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_project", err, http.StatusConflict,
-			"the authenticated user may already be a member or have a pending request; check gitlab_project_member_get; project must allow access requests in its settings")
+			"the authenticated user may already be a member or have a pending request; check project.member_get; project must allow access requests in its settings")
 	}
 	return capturedAccessRequester("access_request_request_project", ar, captured)
 }
@@ -351,7 +351,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 	)
 	if err != nil {
 		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
+			"verify user_id with access.request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
 	}
 	return capturedApprovedMember("access_request_approve_project", ar, captured)
 }
@@ -386,7 +386,7 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 	)
 	if err != nil {
 		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
+			"verify user_id with access.request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
 	}
 	return capturedApprovedMember("access_request_approve_group", ar, captured)
 }
@@ -414,7 +414,7 @@ func DenyProject(ctx context.Context, client *gitlabclient.Client, input DenyPro
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("access_request_deny_project", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_project; denying requires Maintainer role; the request must still be pending")
+			"verify user_id with access.request_list_project; denying requires Maintainer role; the request must still be pending")
 	}
 	return nil
 }
@@ -442,7 +442,7 @@ func DenyGroup(ctx context.Context, client *gitlabclient.Client, input DenyGroup
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("access_request_deny_group", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_group; denying requires Owner role; the request must still be pending")
+			"verify user_id with access.request_list_group; denying requires Owner role; the request must still be pending")
 	}
 	return nil
 }

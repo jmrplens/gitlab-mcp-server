@@ -148,7 +148,7 @@ func ListDeps(ctx context.Context, client *gitlabclient.Client, input ListInput)
 	deps, resp, err := client.GL().Dependencies.ListProjectDependencies(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("dependencyList", err, http.StatusForbidden,
-			"requires Developer role + Ultimate license (dependency scanning is Ultimate-only); verify project_id with gitlab_project_list; package_manager filter values: bundler, yarn, npm, maven, composer, pip, etc.")
+			"requires Developer role + Ultimate license (dependency scanning is Ultimate-only); verify project_id with project.list; package_manager filter values: bundler, yarn, npm, maven, composer, pip, etc.")
 	}
 	extras, err := toolutil.CapturedDependencies(captured, len(deps))
 	if err != nil {
@@ -177,10 +177,10 @@ func CreateExport(ctx context.Context, client *gitlabclient.Client, input Create
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return ExportOutput{}, toolutil.WrapErrWithHint("dependencyCreateExport", err,
-				"verify pipeline_id with gitlab_pipeline action 'latest' or 'list'; dependency list exports require an existing pipeline with dependency scanning or SBOM data and an Ultimate license")
+				"verify pipeline_id with pipeline.latest or pipeline.list; dependency list exports require an existing pipeline with dependency scanning or SBOM data and an Ultimate license")
 		}
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyCreateExport", err, http.StatusBadRequest,
-			"requires Developer + Ultimate; export_type defaults to sbom; the pipeline must contain dependency scanning or SBOM data; creation is async. Poll with gitlab_get_dependency_list_export until status=finished")
+			"requires Developer + Ultimate; export_type defaults to sbom; the pipeline must contain dependency scanning or SBOM data; creation is async. Poll with dependency.export_get until status=finished")
 	}
 	return toExportOutput(e), nil
 }
@@ -196,7 +196,7 @@ func GetExport(ctx context.Context, client *gitlabclient.Client, input GetExport
 	e, _, err := client.GL().DependencyListExport.GetDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyGetExport", err, http.StatusNotFound,
-			"verify export_id with the response from gitlab_create_dependency_list_export; status values: created, running, finished, failed; only finished exports can be downloaded")
+			"verify export_id with the response from dependency.export_create; status values: created, running, finished, failed; only finished exports can be downloaded")
 	}
 	return toExportOutput(e), nil
 }
@@ -212,7 +212,7 @@ func DownloadExport(ctx context.Context, client *gitlabclient.Client, input Down
 	rc, _, err := client.GL().DependencyListExport.DownloadDependencyListExport(input.ExportID, gl.WithContext(ctx))
 	if err != nil {
 		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("dependencyDownloadExport", err, http.StatusNotFound,
-			"verify export_id; export must be in status=finished (poll with gitlab_get_dependency_list_export); content is CycloneDX-format SBOM. Capped at 1MB")
+			"verify export_id; export must be in status=finished (poll with dependency.export_get); content is CycloneDX-format SBOM. Capped at 1MB")
 	}
 	defer rc.Close()
 

@@ -799,15 +799,15 @@ func TestSecureFiles_ErrorHints_NameTheActionThatFixesThem(t *testing.T) {
 		hint   string
 		call   func(client *gitlabclient.Client) error
 	}{
-		{"list", http.StatusNotFound, "verify project_id with gitlab_project_get", func(c *gitlabclient.Client) error {
+		{"list", http.StatusNotFound, "verify project_id with project.get", func(c *gitlabclient.Client) error {
 			_, err := List(t.Context(), c, ListInput{ProjectID: "1"})
 			return err
 		}},
-		{"show", http.StatusNotFound, "verify file_id with gitlab_list_secure_files", func(c *gitlabclient.Client) error {
+		{"show", http.StatusNotFound, "verify file_id with admin.secure_file_list", func(c *gitlabclient.Client) error {
 			_, err := Show(t.Context(), c, ShowInput{ProjectID: "1", FileID: 1})
 			return err
 		}},
-		{"remove", http.StatusNotFound, "verify file_id with gitlab_list_secure_files", func(c *gitlabclient.Client) error {
+		{"remove", http.StatusNotFound, "verify file_id with admin.secure_file_list", func(c *gitlabclient.Client) error {
 			return Remove(t.Context(), c, RemoveInput{ProjectID: "1", FileID: 1})
 		}},
 		{"create", http.StatusBadRequest, "check file content is valid base64 and name is unique within the project", func(c *gitlabclient.Client) error {

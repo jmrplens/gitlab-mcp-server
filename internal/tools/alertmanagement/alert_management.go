@@ -107,7 +107,7 @@ func UpdateMetricImage(ctx context.Context, client *gitlabclient.Client, input U
 	}
 	img, _, err := client.GL().AlertManagement.UpdateMetricImage(string(input.ProjectID), input.AlertIID, input.ImageID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_update_alert_metric_image", err, http.StatusNotFound, "verify image_id with gitlab_list_alert_metric_images")
+		return MetricImageItem{}, toolutil.WrapErrWithStatusHint("gitlab_update_alert_metric_image", err, http.StatusNotFound, "verify image_id with admin.alert_metric_image_list")
 	}
 	return newMetricImageItem(img), nil
 }
@@ -170,7 +170,7 @@ func DeleteMetricImage(ctx context.Context, client *gitlabclient.Client, input D
 	}
 	_, err := client.GL().AlertManagement.DeleteMetricImage(string(input.ProjectID), input.AlertIID, input.ImageID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("gitlab_delete_alert_metric_image", err, http.StatusNotFound, "verify image_id with gitlab_list_alert_metric_images")
+		return toolutil.WrapErrWithStatusHint("gitlab_delete_alert_metric_image", err, http.StatusNotFound, "verify image_id with admin.alert_metric_image_list")
 	}
 	return nil
 }

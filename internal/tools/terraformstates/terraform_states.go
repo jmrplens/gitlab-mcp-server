@@ -37,7 +37,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	states, _, err := client.GL().TerraformStates.List(input.ProjectPath, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_terraform_states", err, http.StatusNotFound,
-			"verify project_path with gitlab_project_get; uses GraphQL. Terraform states require Maintainer role to view")
+			"verify project_path with project.get; uses GraphQL. Terraform states require Maintainer role to view")
 	}
 	items := make([]StateItem, 0, len(states))
 	for _, s := range states {
@@ -63,7 +63,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Stat
 	s, _, err := client.GL().TerraformStates.Get(input.ProjectPath, input.Name, gl.WithContext(ctx))
 	if err != nil {
 		return StateItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_terraform_state", err, http.StatusNotFound,
-			"verify state name with gitlab_list_terraform_states; the state may not exist for this project")
+			"verify state name with admin.terraform_state_list; the state may not exist for this project")
 	}
 	return StateItem{
 		Name:         s.Name,
@@ -104,7 +104,7 @@ func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().TerraformStates.DeleteVersion(string(input.ProjectID), input.Name, input.Serial, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state_version", err, http.StatusNotFound,
-			"verify serial with gitlab_list_terraform_states; cannot delete the latest version. Use gitlab_delete_terraform_state to remove the entire state")
+			"verify serial with admin.terraform_state_list; cannot delete the latest version. Use admin.terraform_state_delete to remove the entire state")
 	}
 	return nil
 }
@@ -131,7 +131,7 @@ func Lock(ctx context.Context, client *gitlabclient.Client, input LockInput) (Lo
 		// client-go sends no Terraform lock-info body, so GitLab always
 		// rejects this call with 400; point to the working alternatives.
 		return LockOutput{}, toolutil.WrapErrWithStatusHint("gitlab_lock_terraform_state", err, http.StatusBadRequest,
-			"the Go client sends no Terraform lock-info body, so GitLab always rejects this call with 400. Run the terraform CLI against the GitLab HTTP backend for real locking; gitlab_unlock_terraform_state still works to clear stale locks")
+			"the Go client sends no Terraform lock-info body, so GitLab always rejects this call with 400. Run the terraform CLI against the GitLab HTTP backend for real locking; admin.terraform_state_unlock still works to clear stale locks")
 	}
 	return LockOutput{Success: true, Message: fmt.Sprintf("State '%s' locked", input.Name)}, nil
 }

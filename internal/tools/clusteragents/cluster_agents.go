@@ -89,7 +89,7 @@ func ListAgents(ctx context.Context, client *gitlabclient.Client, input ListAgen
 	agents, resp, err := client.GL().ClusterAgents.ListAgents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListAgentsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_cluster_agents", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; cluster agents require Maintainer role to view")
+			"verify project_id with project.get; cluster agents require Maintainer role to view")
 	}
 	items := make([]AgentItem, 0, len(agents))
 	for _, a := range agents {
@@ -114,7 +114,7 @@ func GetAgent(ctx context.Context, client *gitlabclient.Client, input GetAgentIn
 	a, _, err := client.GL().ClusterAgents.GetAgent(string(input.ProjectID), input.AgentID, gl.WithContext(ctx))
 	if err != nil {
 		return AgentItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent", err, http.StatusNotFound,
-			"verify agent_id with gitlab_list_cluster_agents; the agent may have been deleted")
+			"verify agent_id with admin.cluster_agent_list; the agent may have been deleted")
 	}
 	return agentItem(a), nil
 }
@@ -223,7 +223,7 @@ func ListAgentTokens(ctx context.Context, client *gitlabclient.Client, input Lis
 	tokens, resp, err := client.GL().ClusterAgents.ListAgentTokens(string(input.ProjectID), input.AgentID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListAgentTokensOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_cluster_agent_tokens", err, http.StatusNotFound,
-			"verify agent_id with gitlab_list_cluster_agents; requires Maintainer role")
+			"verify agent_id with admin.cluster_agent_list; requires Maintainer role")
 	}
 	items := make([]AgentTokenItem, 0, len(tokens))
 	for _, t := range tokens {
@@ -252,7 +252,7 @@ func GetAgentToken(ctx context.Context, client *gitlabclient.Client, input GetAg
 	t, _, err := client.GL().ClusterAgents.GetAgentToken(string(input.ProjectID), input.AgentID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent_token", err, http.StatusNotFound,
-			"verify token_id with gitlab_list_cluster_agent_tokens; the token value is only returned at creation. Stored tokens show metadata only")
+			"verify token_id with admin.cluster_agent_token_list; the token value is only returned at creation. Stored tokens show metadata only")
 	}
 	return agentTokenItem(t), nil
 }

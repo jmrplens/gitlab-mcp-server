@@ -88,7 +88,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	ctx, captured := gitlabclient.WithResponseCapture(ctx)
 	mrs, resp, err := client.GL().DeploymentMergeRequests.ListDeploymentMergeRequests(string(input.ProjectID), input.DeploymentID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_deployment_merge_requests", err, http.StatusNotFound, "verify project_id and deployment_id with gitlab_deployment_list")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_deployment_merge_requests", err, http.StatusNotFound, "verify project_id and deployment_id with environment.deployment_list")
 	}
 	extras, err := toolutil.CapturedMergeRequests(captured, len(mrs))
 	if err != nil {

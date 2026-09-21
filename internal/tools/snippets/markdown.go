@@ -16,7 +16,7 @@ type snippetNotFoundOutput struct {
 func formatSnippetNotFound(out snippetNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Snippet", out.Identifier,
-		"Use gitlab_snippet_list to list your snippets",
+		"Use snippet.list to list your snippets",
 		"Verify the snippet_id is correct",
 		"The snippet may be private or have been deleted",
 	)

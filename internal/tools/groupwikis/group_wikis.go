@@ -97,7 +97,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	pages, _, err := client.GL().GroupWikis.ListGroupWikis(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupWikis", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; group wikis require GitLab Premium or higher")
+			"verify group_id with group.get; group wikis require GitLab Premium or higher")
 	}
 	extras, err := toolutil.CapturedWikis(captured, len(pages))
 	if err != nil {
@@ -132,7 +132,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	w, _, err := client.GL().GroupWikis.GetGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("getGroupWikiPage", err, http.StatusNotFound,
-			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive and use hyphens for spaces")
+			"verify slug with group.wiki_list; slugs are case-sensitive and use hyphens for spaces")
 	}
 	extra, err := toolutil.CapturedWiki(captured)
 	if err != nil {
@@ -202,7 +202,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 	w, _, err := client.GL().GroupWikis.EditGroupWikiPage(string(input.GroupID), input.Slug, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("editGroupWikiPage", err, http.StatusNotFound,
-			"verify slug with gitlab_group_wiki_list; slugs are case-sensitive")
+			"verify slug with group.wiki_list; slugs are case-sensitive")
 	}
 	extra, err := toolutil.CapturedWiki(captured)
 	if err != nil {

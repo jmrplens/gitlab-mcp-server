@@ -26,7 +26,7 @@ func Purge(ctx context.Context, client *gitlabclient.Client, input PurgeInput) e
 	_, err := client.GL().DependencyProxy.PurgeGroupDependencyProxy(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint(purgeTool, err, http.StatusForbidden,
-			"purging the dependency proxy cache requires group Owner role; verify group_id with gitlab_group_get; the dependency proxy must be enabled at group level")
+			"purging the dependency proxy cache requires group Owner role; verify group_id with group.get; the dependency proxy must be enabled at group level")
 	}
 	return nil
 }

@@ -170,7 +170,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move", err, http.StatusNotFound,
-			"requires admin; verify id with gitlab_retrieve_all_project_storage_moves; the move record may have been pruned after completion")
+			"requires admin; verify id with storage_move.retrieve_all_project; the move record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
@@ -195,7 +195,7 @@ func GetForProject(ctx context.Context, client *gitlabclient.Client, in ProjectM
 	move, _, err := client.GL().ProjectRepositoryStorageMove.GetStorageMoveForProject(in.ProjectID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project storage move for project", err, http.StatusNotFound,
-			"requires admin; verify the project_id + id pair with gitlab_retrieve_project_storage_moves, which lists this project's own moves; a move id belonging to another project answers 404 here, and the record may have been pruned after completion")
+			"requires admin; verify the project_id + id pair with storage_move.retrieve_project, which lists this project's own moves; a move id belonging to another project answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {

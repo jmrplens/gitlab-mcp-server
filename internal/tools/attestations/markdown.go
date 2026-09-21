@@ -29,8 +29,8 @@ func FormatOutputMarkdown(o Output) string {
 	c.Time("Created", o.CreatedAt)
 	c.Time("Expires", o.ExpireAt)
 	c.End(
-		"Use `gitlab_download_attestation` to download this attestation's content",
-		"Use `gitlab_list_attestations` to view all attestations for the project",
+		"Use `attestation.download` to download this attestation's content",
+		"Use `attestation.list` to view all attestations for the project",
 	)
 	return b.String()
 }
@@ -59,7 +59,7 @@ func FormatListMarkdown(out ListOutput) string {
 	// The table carries no link, so the footer carries no instruction to keep
 	// the links of a table that has none.
 	toolutil.WriteListFooter(&b, toolutil.PaginationOutput{}, false,
-		"Use `gitlab_download_attestation` with an IID from the table to fetch one attestation's bundle")
+		"Use `attestation.download` with an IID from the table to fetch one attestation's bundle")
 	return b.String()
 }
 
@@ -73,7 +73,7 @@ func FormatDownloadMarkdown(o DownloadOutput) string {
 	c := toolutil.NewCard(&b, fmt.Sprintf("Attestation Download (IID %d)", o.AttestationIID))
 	c.Field("Size", fmt.Sprintf("%d bytes", o.Size))
 	c.Markdown("Content", "Base64-encoded in the `content_base64` field")
-	c.End("Use `gitlab_list_attestations` to view all attestations for the project")
+	c.End("Use `attestation.list` to view all attestations for the project")
 	return b.String()
 }
 

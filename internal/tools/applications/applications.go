@@ -129,7 +129,7 @@ func RenewSecret(ctx context.Context, client *gitlabclient.Client, input RenewSe
 	}
 	app, _, err := client.GL().Applications.RenewApplicationSecret(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return RenewSecretOutput{}, toolutil.WrapErrWithStatusHint("renew_application_secret", err, http.StatusNotFound, "verify application id with gitlab_list_applications. Requires administrator access")
+		return RenewSecretOutput{}, toolutil.WrapErrWithStatusHint("renew_application_secret", err, http.StatusNotFound, "verify application id with admin.application_list. Requires administrator access")
 	}
 	return RenewSecretOutput{ApplicationItem: toItem(app)}, nil
 }
@@ -154,7 +154,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		// application_id the list output also carries: that one is the OAuth
 		// client string, and a model told to "verify application_id" reads it
 		// off the same row and sends a string where an id belongs.
-		return toolutil.WrapErrWithStatusHint("delete_application", err, http.StatusNotFound, "verify application id with gitlab_list_applications")
+		return toolutil.WrapErrWithStatusHint("delete_application", err, http.StatusNotFound, "verify application id with admin.application_list")
 	}
 	return nil
 }

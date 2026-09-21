@@ -1,12 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
@@ -24,9 +25,10 @@ import (
 // and became the prose half of the same refusal, with declaredAliasMentions
 // the only thing that excuses one. It also adds declarations_judged, which is
 // about the run rather than the tree. Version 4 adds the `hints` section, the
-// staged rule over the corrective prose an error helper hands a model, which
-// reports and never gates. The counts move across all three lines, so a reader
-// comparing two runs across any of them is comparing two rules.
+// rule over the corrective prose an error helper hands a model, which was
+// staged at 785 findings and gates now that the tree is clean; its unfolded
+// sites are still only reported. The counts move across all three lines, so a
+// reader comparing two runs across any of them is comparing two rules.
 const schemaVersion = 4
 
 // Finding is one published action ID that is not a canonical catalog ID.
@@ -191,9 +193,8 @@ func (r *Report) judge(at site, candidate string, ids *actionids.IDs) {
 func (r *Report) finish() {
 	sortFindings(r.Findings)
 	sortFindings(r.AliasRefs)
-	sort.Slice(r.Unresolved, func(i, j int) bool {
-		return lessPosition(r.Unresolved[i].Package, r.Unresolved[i].File, r.Unresolved[i].Line,
-			r.Unresolved[j].Package, r.Unresolved[j].File, r.Unresolved[j].Line)
+	slices.SortFunc(r.Unresolved, func(left, right Unresolved) int {
+		return comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line)
 	})
 	packages := map[string]struct{}{}
 	for _, finding := range r.Findings {
@@ -212,42 +213,55 @@ func (r *Report) finish() {
 
 // Clean reports whether this run found nothing the gate refuses.
 //
-// Four things fail it, and the reason each is here rather than reported is the
+// Five things fail it, and the reason each is here rather than reported is the
 // same one: a published ID that is not a canonical catalog ID, an ID that
-// resolves only as an alias, a declaration that excuses nothing, and a site
-// the type checker could not fold. The last is the one that needs saying out
-// loud. It is the audit's own blind spot rather than a defect of the tree, and
-// it fails anyway, because a gate whose blind spot is silent is one any future
-// site can step into: an ID assembled at run time would be reported as
-// unreadable and pass, which is the shape every wrong ID would then take.
+// resolves only as an alias, a declaration that excuses nothing, a site the
+// type checker could not fold, and a hint that names a tool.
+//
+// The unfoldable site is the one that needs saying out loud. It is the audit's
+// own blind spot rather than a defect of the tree, and it fails anyway,
+// because a gate whose blind spot is silent is one any future site can step
+// into: an ID assembled at run time would be reported as unreadable and pass,
+// which is the shape every wrong ID would then take.
+//
+// The hint rule joined them when its count reached zero, which is the order
+// this had to happen in: it opened at 785 findings across 137 packages, and a
+// gate cannot land before the code it judges is clean. Its own unfoldable
+// sites are counted apart and do not fail, which is the one place this departs
+// from the paragraph above, because a hint the type checker cannot fold is
+// text a reader can still read: three sites build one from a function call or
+// a format string and carry no tool name between them.
 func (r *Report) Clean() bool {
 	return r.Summary.Findings == 0 && r.Summary.AliasHits == 0 &&
-		r.Summary.Unresolved == 0 && r.Summary.Stale == 0
+		r.Summary.Unresolved == 0 && r.Summary.Stale == 0 &&
+		r.Hints.Findings == 0
 }
 
 // sortFindings orders findings by position, then by the ID, so two runs over
 // one tree produce the same file.
 func sortFindings(findings []Finding) {
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Package != findings[j].Package ||
-			findings[i].File != findings[j].File ||
-			findings[i].Line != findings[j].Line {
-			return lessPosition(findings[i].Package, findings[i].File, findings[i].Line,
-				findings[j].Package, findings[j].File, findings[j].Line)
-		}
-		return findings[i].ID < findings[j].ID
+	slices.SortFunc(findings, func(left, right Finding) int {
+		return cmp.Or(
+			comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line),
+			cmp.Compare(left.ID, right.ID),
+		)
 	})
 }
 
-// lessPosition orders two source positions.
-func lessPosition(leftPkg, leftFile string, leftLine int, rightPkg, rightFile string, rightLine int) bool {
-	if leftPkg != rightPkg {
-		return leftPkg < rightPkg
-	}
-	if leftFile != rightFile {
-		return leftFile < rightFile
-	}
-	return leftLine < rightLine
+// comparePosition orders two source positions: package, then file, then line.
+//
+// A comparison rather than a "less" predicate, and the difference is not
+// style. The predicate form reads "if the packages differ, return leftPkg <
+// rightPkg", and that < carries a boundary no input reaches: inside "they
+// differ", < and <= cannot be told apart. Mutation testing reported one
+// survivor per field that way, in this function and at every call site that
+// repeated its shape, and none of them was a test anybody could have written.
+func comparePosition(leftPkg, leftFile string, leftLine int, rightPkg, rightFile string, rightLine int) int {
+	return cmp.Or(
+		cmp.Compare(leftPkg, rightPkg),
+		cmp.Compare(leftFile, rightFile),
+		cmp.Compare(leftLine, rightLine),
+	)
 }
 
 // candidateIDs picks the strings one site offers a model as an action ID.
@@ -382,17 +396,21 @@ func writeSummary(out io.Writer, summary Summary, verbose bool) {
 }
 
 // byCount renders a breakdown, biggest first, so a report opens with where the
-// work is.
+// work is. Two kinds with the same count are ordered by name, so two runs over
+// one tree print the same line.
+//
+// The order is expressed as a comparison rather than as a "less" predicate
+// guarded by an inequality. The guarded form reads the same and carries a
+// boundary no input reaches: inside "the counts differ", > and >= cannot be
+// told apart, so mutation testing reports a survivor that no test could ever
+// kill. A comparison has no boundary to get wrong.
 func byCount(counts map[string]int) string {
 	keys := make([]string, 0, len(counts))
 	for key := range counts {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		if counts[keys[i]] != counts[keys[j]] {
-			return counts[keys[i]] > counts[keys[j]]
-		}
-		return keys[i] < keys[j]
+	slices.SortFunc(keys, func(left, right string) int {
+		return cmp.Or(cmp.Compare(counts[right], counts[left]), cmp.Compare(left, right))
 	})
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {

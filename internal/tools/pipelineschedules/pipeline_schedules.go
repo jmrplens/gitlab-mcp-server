@@ -17,7 +17,7 @@ import (
 const (
 	opCreatePipelineSchedule = "create pipeline schedule"
 	opRunPipelineSchedule    = "run pipeline schedule"
-	hintVerifyScheduleID     = "verify schedule_id with gitlab_pipeline_schedule_list"
+	hintVerifyScheduleID     = "verify schedule_id with pipeline.schedule_list"
 )
 
 // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	schedules, resp, err := client.GL().PipelineSchedules.ListPipelineSchedules(string(input.ProjectID), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list pipeline schedules", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get and that you have Developer+ role")
+			"verify the project exists with project.get and that you have Developer+ role")
 	}
 
 	items := make([]Output, 0, len(schedules))
@@ -212,7 +212,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get pipeline schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list. schedule_id is the database ID, not a name")
+			"verify schedule_id with pipeline.schedule_list. schedule_id is the database ID, not a name")
 	}
 
 	return toOutputAPI(s), nil
@@ -261,7 +261,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 				"creating pipeline schedules requires Developer+ role on the project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opCreatePipelineSchedule, err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 
 	return toOutput(s), nil
@@ -302,7 +302,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("update pipeline schedule", err,
-				"only the schedule owner can edit. Use gitlab_pipeline_schedule_take_ownership first (requires Maintainer+) to become the owner")
+				"only the schedule owner can edit. Use pipeline.schedule_take_ownership first (requires Maintainer+) to become the owner")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update pipeline schedule", err, http.StatusNotFound,
 			hintVerifyScheduleID)
@@ -351,7 +351,7 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
-				"only the schedule owner can manually trigger a schedule. Use gitlab_pipeline_schedule_take_ownership first if you have Maintainer+ role")
+				"only the schedule owner can manually trigger a schedule. Use pipeline.schedule_take_ownership first if you have Maintainer+ role")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusTooManyRequests) {
 			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
@@ -450,7 +450,7 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,
-				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule. Use gitlab_pipeline_schedule_edit_variable to update existing keys")
+				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule. Use pipeline.schedule_edit_variable to update existing keys")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,
@@ -502,7 +502,7 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 				"only the schedule owner can manage variables. Take ownership first if you are Maintainer+")
 		}
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("edit_pipeline_schedule_variable", err, http.StatusNotFound,
-			"verify the variable key exists on this schedule with gitlab_pipeline_schedule_get")
+			"verify the variable key exists on this schedule with pipeline.schedule_get")
 	}
 	return VariableOutput{Key: v.Key, Value: v.Value, VariableType: string(v.VariableType)}, nil
 }
@@ -535,7 +535,7 @@ func DeleteVariable(ctx context.Context, client *gitlabclient.Client, input Dele
 				"only the schedule owner can manage variables")
 		}
 		return toolutil.WrapErrWithStatusHint("delete_pipeline_schedule_variable", err, http.StatusNotFound,
-			"verify the variable key exists on this schedule with gitlab_pipeline_schedule_get")
+			"verify the variable key exists on this schedule with pipeline.schedule_get")
 	}
 	return nil
 }

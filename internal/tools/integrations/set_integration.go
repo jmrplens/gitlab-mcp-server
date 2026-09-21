@@ -64,7 +64,7 @@ func SetIntegration(ctx context.Context, client *gitlabclient.Client, input SetI
 	var integration gl.Integration
 	if _, err = client.GL().Do(req, &integration); err != nil {
 		return SetIntegrationOutput{}, toolutil.WrapErrWithStatusHint("set_integration", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; verify slug is a supported integration (e.g. "+commonIntegrationSlugs+"); supply the integration's documented config fields (see doc/api/integrations.md); requires Maintainer role on the project")
+			"verify project_id with project.get; verify slug is a supported integration (e.g. "+commonIntegrationSlugs+"); supply the integration's documented config fields (see doc/api/integrations.md); requires Maintainer role on the project")
 	}
 	return SetIntegrationOutput{Integration: integrationToItem(&integration)}, nil
 }

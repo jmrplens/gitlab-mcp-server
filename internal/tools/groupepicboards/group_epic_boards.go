@@ -190,7 +190,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	b, _, err := rawGetBoard(ctx, client, string(input.GroupID), input.BoardID)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with epic_board_list on gitlab_group; if the list is empty, configure an epic board in GitLab first")
+		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with group.epic_board_list; if the list is empty, configure an epic board in GitLab first")
 	}
 	return toOutput(b), nil
 }

@@ -109,7 +109,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListSnippetDiscussions(string(input.ProjectID), input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_list", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get and snippet_id with gitlab_project_snippet_list")
+			"verify project_id with project.get and snippet_id with snippet.project_list")
 	}
 	threads, err := toolutil.CapturedThreads("snippet_discussion_list", discussions, captured)
 	if err != nil {
@@ -136,7 +136,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetSnippetDiscussion(string(input.ProjectID), input.SnippetID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)")
+			"verify discussion_id with snippet.discussion_list (discussion IDs are 40-char hex strings)")
 	}
 	return toolutil.CapturedThread("snippet_discussion_get", d, captured)
 }
@@ -187,7 +187,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	note, _, err := client.GL().Discussions.AddSnippetDiscussionNote(string(input.ProjectID), input.SnippetID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet")
+			"verify discussion_id with snippet.discussion_list; the discussion must exist on this snippet")
 	}
 	return toolutil.CapturedThreadNote("snippet_discussion_add_note", note, captured)
 }

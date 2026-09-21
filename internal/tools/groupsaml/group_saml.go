@@ -10,7 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const groupSAMLLinkHint = "verify group_id with gitlab_group_get; group SAML links require Premium/Ultimate, Owner access, and group SAML SSO configured for the group; self-managed instances without SAML SSO can return 401 or 404"
+const groupSAMLLinkHint = "verify group_id with group.get; group SAML links require Premium/Ultimate, Owner access, and group SAML SSO configured for the group; self-managed instances without SAML SSO can return 401 or 404"
 
 // Output represents a single group SAML link.
 type Output struct {

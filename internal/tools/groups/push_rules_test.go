@@ -228,7 +228,7 @@ func TestEditPushRule_InvalidRegex(t *testing.T) {
 	if !strings.Contains(err.Error(), "regex") {
 		t.Errorf("expected invalid-regex hint, got: %v", err)
 	}
-	if strings.Contains(err.Error(), "add_push_rule") {
+	if strings.Contains(err.Error(), "group.push_rule_add") {
 		t.Errorf("422 should not use the 404 add-first hint, got: %v", err)
 	}
 }
@@ -239,7 +239,7 @@ func TestEditPushRule_NotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	_, err := EditPushRule(context.Background(), client, EditPushRuleInput{GroupID: "99"})
-	if err == nil || !strings.Contains(err.Error(), "add_push_rule") {
+	if err == nil || !strings.Contains(err.Error(), "group.push_rule_add") {
 		t.Fatalf("expected add-first hint, got: %v", err)
 	}
 }

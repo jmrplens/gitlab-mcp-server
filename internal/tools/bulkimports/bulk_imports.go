@@ -167,7 +167,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Migr
 	m, _, err := client.GL().BulkImports.GetBulkImport(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return MigrationSummary{}, toolutil.WrapErrWithStatusHint("bulk_import_get", err, http.StatusNotFound,
-			"verify the migration id with gitlab_list_bulk_imports")
+			"verify the migration id with admin.bulk_import_list")
 	}
 	return toSummary(m), nil
 }
@@ -321,7 +321,7 @@ func GetEntity(ctx context.Context, client *gitlabclient.Client, input GetEntity
 	e, _, err := client.GL().BulkImports.GetBulkImportEntity(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
 	if err != nil {
 		return EntitySummary{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_get", err, http.StatusNotFound,
-			"verify bulk_import_id and entity_id with gitlab_list_bulk_import_entities")
+			"verify bulk_import_id and entity_id with admin.bulk_import_entity_list")
 	}
 	return toEntitySummary(e), nil
 }
@@ -365,7 +365,7 @@ func ListEntityFailures(ctx context.Context, client *gitlabclient.Client, input 
 	failures, _, err := client.GL().BulkImports.GetBulkImportEntityFailures(input.BulkImportID, input.EntityID, gl.WithContext(ctx))
 	if err != nil {
 		return ListEntityFailuresOutput{}, toolutil.WrapErrWithStatusHint("bulk_import_entity_failures", err, http.StatusNotFound,
-			"verify bulk_import_id and entity_id with gitlab_list_bulk_import_entities")
+			"verify bulk_import_id and entity_id with admin.bulk_import_entity_list")
 	}
 	out := ListEntityFailuresOutput{BulkImportID: input.BulkImportID, EntityID: input.EntityID}
 	for _, f := range failures {

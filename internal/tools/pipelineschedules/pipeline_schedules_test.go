@@ -982,7 +982,7 @@ func TestListTriggeredPipelines_ZeroScheduleID(t *testing.T) {
 func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
 	const (
 		hintOwnerManagesVariables = "only the schedule owner can manage variables"
-		hintVariableKeyExists     = "verify the variable key exists on this schedule with gitlab_pipeline_schedule_get"
+		hintVariableKeyExists     = "verify the variable key exists on this schedule with pipeline.schedule_get"
 	)
 	ctx := context.Background()
 
@@ -994,7 +994,7 @@ func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
 		hint string
 		call func(client *gitlabclient.Client) error
 	}{
-		{"list/404", http.StatusNotFound, "verify the project exists with gitlab_project_get and that you have Developer+ role", func(c *gitlabclient.Client) error {
+		{"list/404", http.StatusNotFound, "verify the project exists with project.get and that you have Developer+ role", func(c *gitlabclient.Client) error {
 			_, err := List(ctx, c, ListInput{ProjectID: "1"})
 			return err
 		}},
@@ -1002,7 +1002,7 @@ func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
 			_, err := List(ctx, c, ListInput{ProjectID: "1"})
 			return err
 		}},
-		{"get/404", http.StatusNotFound, "verify schedule_id with gitlab_pipeline_schedule_list. schedule_id is the database ID, not a name", func(c *gitlabclient.Client) error {
+		{"get/404", http.StatusNotFound, "verify schedule_id with pipeline.schedule_list. schedule_id is the database ID, not a name", func(c *gitlabclient.Client) error {
 			_, err := Get(ctx, c, GetInput{ProjectID: "1", ScheduleID: 1})
 			return err
 		}},
@@ -1018,7 +1018,7 @@ func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
 			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
 			return err
 		}},
-		{"create/404", http.StatusNotFound, "verify the project exists with gitlab_project_get", func(c *gitlabclient.Client) error {
+		{"create/404", http.StatusNotFound, "verify the project exists with project.get", func(c *gitlabclient.Client) error {
 			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
 			return err
 		}},
@@ -1026,7 +1026,7 @@ func TestScheduleHandlers_EachStatus_CarriesItsOwnHint(t *testing.T) {
 			_, err := Create(ctx, c, CreateInput{ProjectID: "1", Description: "d", Ref: "main", Cron: "0 4 * * *"})
 			return err
 		}},
-		{"update/403", http.StatusForbidden, "only the schedule owner can edit. Use gitlab_pipeline_schedule_take_ownership first", func(c *gitlabclient.Client) error {
+		{"update/403", http.StatusForbidden, "only the schedule owner can edit. Use pipeline.schedule_take_ownership first", func(c *gitlabclient.Client) error {
 			_, err := Update(ctx, c, UpdateInput{ProjectID: "1", ScheduleID: 1})
 			return err
 		}},
@@ -1529,7 +1529,7 @@ func TestPipelineScheduleCreate_StatusErrorBranches(t *testing.T) {
 		wantText   string
 	}{
 		{name: "bad request", statusCode: http.StatusBadRequest, wantText: "check cron expression"},
-		{name: "not found", statusCode: http.StatusNotFound, wantText: "gitlab_project_get"},
+		{name: "not found", statusCode: http.StatusNotFound, wantText: "project.get"},
 	}
 
 	for _, testCase := range testCases {

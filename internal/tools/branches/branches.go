@@ -137,7 +137,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		return ProtectedOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ProtectedOutput{}, errors.New("branchProtect: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ProtectedOutput{}, errors.New("branchProtect: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
 		return ProtectedOutput{}, toolutil.ErrRequiredString("branchProtect", "branch_name")
@@ -194,7 +194,7 @@ func protectedBranchAlreadyExists(
 	existing, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedOutput{}, toolutil.WrapErrWithHint("branchProtect", protectErr,
-			"protected branch rule already exists but could not retrieve current settings. Use gitlab_protected_branch_get to view current rules, or gitlab_protected_branch_update to modify them")
+			"protected branch rule already exists but could not retrieve current settings. Use branch.get_protected to view current rules, or branch.update_protected to modify them")
 	}
 	extra, err := toolutil.CapturedProtectedBranch(captured)
 	if err != nil {
@@ -218,7 +218,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 		return UnprotectOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return UnprotectOutput{}, errors.New("branchUnprotect: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return UnprotectOutput{}, errors.New("branchUnprotect: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
 		return UnprotectOutput{}, toolutil.ErrRequiredString("branchUnprotect", "branch_name")
@@ -248,7 +248,7 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 		return ProtectedListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ProtectedListOutput{}, errors.New("protectedBranchesList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ProtectedListOutput{}, errors.New("protectedBranchesList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListProtectedBranchesOptions{}
 	if input.Search != "" {
@@ -265,7 +265,7 @@ func ProtectedList(ctx context.Context, client *gitlabclient.Client, input Prote
 	branches, resp, err := client.GL().ProtectedBranches.ListProtectedBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedListOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchesList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get")
+			"verify project_id with project.get")
 	}
 	extras, err := toolutil.CapturedProtectedBranches(captured, len(branches))
 	if err != nil {
@@ -302,7 +302,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("branchCreate: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("branchCreate: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
 		return Output{}, toolutil.ErrRequiredString("branchCreate", "branch_name")
@@ -313,11 +313,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.ContainsAny(err, "invalid reference", "not found", "does not exist") {
-			return Output{}, fmt.Errorf("branchCreate: ref '%s' not found. Use gitlab_branch_list to see available branches or check the project's default branch: %w", input.Ref, err)
+			return Output{}, fmt.Errorf("branchCreate: ref '%s' not found. Use branch.list to see available branches or check the project's default branch: %w", input.Ref, err)
 		}
 		if toolutil.ContainsAny(err, "already exists") {
 			return Output{}, toolutil.WrapErrWithHint("branchCreate", err,
-				"a branch with this name already exists. Use gitlab_branch_get to check it, or choose a different name")
+				"a branch with this name already exists. Use branch.get to check it, or choose a different name")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("branchCreate", err, http.StatusBadRequest,
 			"the ref must be an existing branch name, tag name, or commit SHA; creating branches requires Developer role or higher")
@@ -332,7 +332,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	if input.ProjectID == "" {
-		return ListOutput{}, errors.New("branchList: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return ListOutput{}, errors.New("branchList: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListBranchesOptions{}
 	if input.Search != "" {
@@ -351,7 +351,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	branches, resp, err := client.GL().Branches.ListBranches(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("branchList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get")
+			"verify project_id with project.get")
 	}
 	out := make([]Output, len(branches))
 	for i, b := range branches {
@@ -372,7 +372,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, err
 	}
 	if input.ProjectID == "" {
-		return Output{}, errors.New("branchGet: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return Output{}, errors.New("branchGet: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
 		return Output{}, toolutil.ErrRequiredString("branchGet", "branch_name")
@@ -381,7 +381,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	b, _, err := client.GL().Branches.GetBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("branchGet", err, http.StatusNotFound,
-			"verify branch_name with gitlab_branch_list; branch names are case-sensitive")
+			"verify branch_name with branch.list; branch names are case-sensitive")
 	}
 	return ToOutput(b), nil
 }
@@ -398,7 +398,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		return err
 	}
 	if input.ProjectID == "" {
-		return errors.New("branchDelete: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
+		return errors.New("branchDelete: project_id is required. Use project.list to find the ID first, then pass it as project_id")
 	}
 	if input.BranchName == "" {
 		return toolutil.ErrRequiredString("branchDelete", "branch_name")
@@ -408,14 +408,14 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err != nil {
 		if toolutil.ContainsAny(err, "protected branch") {
 			return toolutil.WrapErrWithHint("branchDelete", err,
-				"use gitlab_branch_unprotect first, then retry deletion")
+				"use branch.unprotect first, then retry deletion")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return toolutil.WrapErrWithHint("branchDelete", err,
-				"branch not found. Use gitlab_branch_list to verify the branch name")
+				"branch not found. Use branch.list to verify the branch name")
 		}
 		return toolutil.WrapErrWithStatusHint("branchDelete", err, http.StatusForbidden,
-			"the branch may be protected or the default branch. Use gitlab_branch_unprotect first or change the default branch")
+			"the branch may be protected or the default branch. Use branch.unprotect first or change the default branch")
 	}
 	return nil
 }
@@ -463,7 +463,7 @@ func ProtectedGet(ctx context.Context, client *gitlabclient.Client, input Protec
 	b, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchGet", err, http.StatusNotFound,
-			"the branch may not be protected. Use gitlab_protected_branches_list to verify")
+			"the branch may not be protected. Use branch.list_protected to verify")
 	}
 	extra, err := toolutil.CapturedProtectedBranch(captured)
 	if err != nil {
@@ -520,7 +520,7 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 				"updating protected branch settings requires Maintainer or Owner role")
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchUpdate", err, http.StatusNotFound,
-			"the branch may not be protected. Use gitlab_branch_protect first")
+			"the branch may not be protected. Use branch.protect first")
 	}
 	extra, err := toolutil.CapturedProtectedBranch(captured)
 	if err != nil {

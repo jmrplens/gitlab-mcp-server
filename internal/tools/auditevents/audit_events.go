@@ -207,7 +207,7 @@ func GetInstance(ctx context.Context, client *gitlabclient.Client, input GetInst
 	e, _, err := client.GL().AuditEvents.GetInstanceAuditEvent(input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetInstance", err, http.StatusNotFound,
-			"verify id with gitlab_list_instance_audit_events; admin-only on self-managed Premium/Ultimate")
+			"verify id with audit_event.list_instance; admin-only on self-managed Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -224,7 +224,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	events, resp, err := client.GL().AuditEvents.ListGroupAuditEvents(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListGroup", err, http.StatusForbidden,
-			"requires Owner role + Premium/Ultimate; verify group_id with gitlab_group_list; created_after/created_before must be ISO 8601")
+			"requires Owner role + Premium/Ultimate; verify group_id with group.list; created_after/created_before must be ISO 8601")
 	}
 	out := make([]Output, len(events))
 	for i, e := range events {
@@ -247,7 +247,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	e, _, err := client.GL().AuditEvents.GetGroupAuditEvent(string(input.GroupID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetGroup", err, http.StatusNotFound,
-			"verify group_id + id combination with gitlab_list_group_audit_events; requires Owner + Premium/Ultimate")
+			"verify group_id + id combination with audit_event.list_group; requires Owner + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }
@@ -264,7 +264,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	events, resp, err := client.GL().AuditEvents.ListProjectAuditEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("auditListProject", err, http.StatusForbidden,
-			"requires Maintainer role + Premium/Ultimate; verify project_id with gitlab_project_list; created_after/created_before must be ISO 8601")
+			"requires Maintainer role + Premium/Ultimate; verify project_id with project.list; created_after/created_before must be ISO 8601")
 	}
 	out := make([]Output, len(events))
 	for i, e := range events {
@@ -287,7 +287,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	e, _, err := client.GL().AuditEvents.GetProjectAuditEvent(string(input.ProjectID), input.EventID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("auditGetProject", err, http.StatusNotFound,
-			"verify project_id + id combination with gitlab_list_project_audit_events; requires Maintainer + Premium/Ultimate")
+			"verify project_id + id combination with audit_event.list_project; requires Maintainer + Premium/Ultimate")
 	}
 	return toOutput(e), nil
 }

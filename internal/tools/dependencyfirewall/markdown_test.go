@@ -130,7 +130,7 @@ func TestFormatEvaluatePackageMarkdown_RegisteredForOutput(t *testing.T) {
 }
 
 // TestFormatNotFound verifies the 404 guidance names the feature flag, the
-// tier, the project, and the tool that checks the project reference.
+// tier, the project, and the action that checks the project reference.
 func TestFormatNotFound(t *testing.T) {
 	result := formatNotFound(notFoundOutput{ProjectID: "project group/app"})
 	if result == nil || !result.IsError {
@@ -143,7 +143,7 @@ func TestFormatNotFound(t *testing.T) {
 		FeatureFlag,
 		"19.4",
 		"Premium or Ultimate",
-		"gitlab_project_get",
+		"project.get",
 	} {
 		t.Run("mentions/"+want, func(t *testing.T) {
 			if !strings.Contains(text, want) {

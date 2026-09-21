@@ -22,7 +22,7 @@ type wikiNotFoundOutput struct {
 func formatWikiNotFound(out wikiNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Wiki Page", out.Identifier,
-		"Use gitlab_wiki_list with project_id to list wiki pages",
+		"Use wiki.list with project_id to list wiki pages",
 		"Wiki slugs are case-sensitive and may differ from the page title",
 	)
 }

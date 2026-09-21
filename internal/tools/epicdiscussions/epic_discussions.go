@@ -359,7 +359,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicDiscussionList", err,
-			"verify full_path (group path) and iid (project-scoped epic IID) with gitlab_epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
+			"verify full_path (group path) and iid (project-scoped epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -416,7 +416,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("epicDiscussionGet", err,
-			"verify full_path + iid with gitlab_epic_list; discussion_id may be hex (e.g. abc123) or full GID; use gitlab_list_epic_discussions to enumerate existing discussions")
+			"verify full_path + iid with group.epic_list; discussion_id may be hex (e.g. abc123) or full GID; use group.epic_discussion_list to enumerate existing discussions")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -459,7 +459,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("epicDiscussionCreate", err,
-			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
+			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	}
 
 	created, err := toolutil.ExecGraphQLNoteMutation[gqlCreatedNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -510,12 +510,12 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithHint("epicDiscussionAddNote", err,
-			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role")
+			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role")
 	}
 
 	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicDiscussionAddNote",
-		Hint:       "verify discussion_id with gitlab_list_epic_discussions; cannot reply to a system-generated discussion; body is GFM with 1MB max",
+		Hint:       "verify discussion_id with group.epic_discussion_list; cannot reply to a system-generated discussion; body is GFM with 1MB max",
 		PayloadKey: "createNote",
 		Query:      mutationCreateNoteReply,
 		Variables: map[string]any{
@@ -552,7 +552,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 
 	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicDiscussionUpdateNote",
-		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_list_epic_discussions; body is GFM with 1MB max",
+		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with group.epic_discussion_list; body is GFM with 1MB max",
 		PayloadKey: "updateNote",
 		Query:      mutationUpdateNote,
 		Variables: map[string]any{

@@ -140,7 +140,7 @@ func TestGeo_StatusHint_AttachesOnlyToTheStatusItDescribes(t *testing.T) {
 			_, err := List(context.Background(), client, ListInput{})
 			return err
 		}},
-		{name: "get", status: http.StatusNotFound, hint: "verify id with gitlab_list_geo_sites; requires admin access", call: func(client *gitlabclient.Client) error {
+		{name: "get", status: http.StatusNotFound, hint: "verify id with geo.list; requires admin access", call: func(client *gitlabclient.Client) error {
 			_, err := Get(context.Background(), client, IDInput{ID: 1})
 			return err
 		}},

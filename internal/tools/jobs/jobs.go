@@ -16,7 +16,7 @@ import (
 )
 
 // hintVerifyJobID is the 404 hint shared by job tools.
-const hintVerifyJobID = "verify job_id with gitlab_job_list"
+const hintVerifyJobID = "verify job_id with job.list"
 
 // maxTraceBytes limits the trace log returned by [Trace] so a single
 // response cannot exceed roughly 100 KB.
@@ -176,7 +176,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	jobs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobList", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list and that you have Reporter+ role on the project")
+			"verify pipeline_id with pipeline.list and that you have Reporter+ role on the project")
 	}
 
 	return rawJobsOutput(jobs, resp), nil
@@ -209,7 +209,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	j, _, err := rawGetJob(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("jobGet", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list. job_id is the global database ID, not the per-pipeline index")
+			"verify job_id with job.list. job_id is the global database ID, not the per-pipeline index")
 	}
 	return toOutputAPI(j), nil
 }
@@ -311,7 +311,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 				"canceling jobs requires Developer+ role on the project; the job may also be in a non-cancellable state (already finished/canceled). Use force:true to override (requires GitLab v17.2+)")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobCancel", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list. Only running/pending jobs can be cancelled; use force:true for non-cancellable states")
+			"verify job_id with job.list. Only running/pending jobs can be cancelled; use force:true for non-cancellable states")
 	}
 	return ToOutput(j), nil
 }
@@ -437,7 +437,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	jbs, resp, err := rawListJobs(ctx, client, path, opts)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("jobListProject", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get and that you have Reporter+ role")
+			"verify the project exists with project.get and that you have Reporter+ role")
 	}
 	return rawJobsOutput(jbs, resp), nil
 }
@@ -553,7 +553,7 @@ func ListBridges(ctx context.Context, client *gitlabclient.Client, input BridgeL
 	bridges, resp, err := client.GL().Jobs.ListPipelineBridges(string(input.ProjectID), input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BridgeListOutput{}, toolutil.WrapErrWithStatusHint("jobListBridges", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")
+			"verify pipeline_id with pipeline.list. Bridges only exist for pipelines that trigger downstream/multi-project pipelines")
 	}
 	extras, err := toolutil.CapturedBridges(captured, len(bridges))
 	if err != nil {
@@ -673,7 +673,7 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFile(string(input.ProjectID), input.JobID, input.ArtifactPath, gl.WithContext(ctx))
 	if err != nil {
 		return SingleArtifactOutput{}, toolutil.WrapErrWithStatusHint("jobDownloadSingleArtifact", err, http.StatusNotFound,
-			"artifact_path not found within the job artifact archive, or job artifacts have expired. Use gitlab_job_artifacts to list available paths")
+			"artifact_path not found within the job artifact archive, or job artifacts have expired. Use job.artifacts to list available paths")
 	}
 	return readSingleArtifactContent(reader, input.JobID, input.ArtifactPath)
 }
@@ -833,7 +833,7 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("jobPlay", err,
-				"job is not in a playable state. Only manual jobs (rules: when: manual) that have not yet run can be played; use gitlab_job_retry for finished jobs")
+				"job is not in a playable state. Only manual jobs (rules: when: manual) that have not yet run can be played; use job.retry for finished jobs")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("jobPlay", err,
@@ -892,7 +892,7 @@ func DeleteProjectArtifacts(ctx context.Context, client *gitlabclient.Client, in
 				"bulk-deleting all project artifacts requires Maintainer+ role. This is irreversible across all jobs in the project")
 		}
 		return toolutil.WrapErrWithStatusHint("jobDeleteProjectArtifacts", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	return nil
 }

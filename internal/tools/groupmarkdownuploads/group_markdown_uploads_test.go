@@ -668,13 +668,13 @@ func statusHandler(code int) http.Handler {
 func TestHandlers_NotFound_CarryTheRouteThatRecovers(t *testing.T) {
 	cases := []struct {
 		name string
-		// recovery is the tool or argument the hint must point the caller at.
+		// recovery is the action or argument the hint must point the caller at.
 		recovery string
 		call     func(t *testing.T, code int) error
 	}{
 		{
 			name:     "list",
-			recovery: "gitlab_group_get",
+			recovery: "group.get",
 			call: func(t *testing.T, code int) error {
 				t.Helper()
 				_, err := List(t.Context(), testutil.NewTestClient(t, statusHandler(code)), ListInput{GroupID: "5"})
@@ -683,7 +683,7 @@ func TestHandlers_NotFound_CarryTheRouteThatRecovers(t *testing.T) {
 		},
 		{
 			name:     "delete_by_id",
-			recovery: "gitlab_list_group_markdown_uploads",
+			recovery: "group.group_upload_list",
 			call: func(t *testing.T, code int) error {
 				t.Helper()
 				return DeleteByID(t.Context(), testutil.NewTestClient(t, statusHandler(code)),

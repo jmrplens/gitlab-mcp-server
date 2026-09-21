@@ -175,7 +175,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectMembersList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; lists direct + inherited members from parent groups")
+			"verify project_id with project.get; lists direct + inherited members from parent groups")
 	}
 	extras, err := toolutil.CapturedMembers(captured, len(members))
 	if err != nil {
@@ -247,7 +247,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	m, _, err := client.GL().ProjectMembers.GetProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("memberGet", err, http.StatusNotFound,
-			"user is not a direct member of this project; use gitlab_project_member_get_inherited to include parent-group inheritance, or gitlab_project_members_list to enumerate members")
+			"user is not a direct member of this project; use project.member_inherited to include parent-group inheritance, or project.members to enumerate members")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -271,7 +271,7 @@ func GetInherited(ctx context.Context, client *gitlabclient.Client, input GetInp
 	m, _, err := client.GL().ProjectMembers.GetInheritedProjectMember(string(input.ProjectID), input.UserID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("memberGetInherited", err, http.StatusNotFound,
-			"user is not a member of this project nor any parent group; verify user_id with gitlab_list_users")
+			"user is not a member of this project nor any parent group; verify user_id with user.list")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -317,9 +317,9 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project. Use gitlab_project_member_edit to change their access level")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project. Use project.member_edit to change their access level")
 		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found. Use gitlab_list_users to search for the user")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found. Use user.list to search for the user")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("memberAdd", err)
 		}

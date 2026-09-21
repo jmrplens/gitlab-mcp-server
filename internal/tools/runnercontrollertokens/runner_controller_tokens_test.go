@@ -193,7 +193,7 @@ func TestList_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpAPIErr)
 	}
-	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+	if !strings.Contains(err.Error(), "runner.controller_list") {
 		t.Fatalf("error = %v, want controller list hint", err)
 	}
 }
@@ -416,7 +416,7 @@ func TestCreate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpAPIErr)
 	}
-	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+	if !strings.Contains(err.Error(), "runner.controller_list") {
 		t.Fatalf("error = %v, want controller list hint", err)
 	}
 }
@@ -569,7 +569,7 @@ func TestRevoke_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpAPIErr)
 	}
-	if !strings.Contains(err.Error(), "gitlab_runner_controller_token_list") {
+	if !strings.Contains(err.Error(), "runner.controller_token_list") {
 		t.Fatalf("error = %v, want token list hint", err)
 	}
 }

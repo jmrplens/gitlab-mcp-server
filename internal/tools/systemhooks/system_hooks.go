@@ -326,7 +326,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	hook, _, err := client.GL().SystemHooks.GetHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("system_hook_get", err, http.StatusNotFound,
-			"verify hook_id with gitlab_list_system_hooks; admin-only on self-managed instances")
+			"verify hook_id with admin.system_hook_list; admin-only on self-managed instances")
 	}
 	extra, err := toolutil.CapturedSystemHook(captured)
 	if err != nil {
@@ -366,7 +366,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ed
 	hook, _, err := client.GL().SystemHooks.EditHook(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return EditOutput{}, toolutil.WrapErrWithStatusHint("system_hook_edit", err, http.StatusNotFound,
-			"verify hook_id with gitlab_list_system_hooks; admin-only on self-managed instances; unset fields keep current values")
+			"verify hook_id with admin.system_hook_list; admin-only on self-managed instances; unset fields keep current values")
 	}
 	extra, err := toolutil.CapturedSystemHook(captured)
 	if err != nil {
@@ -383,7 +383,7 @@ func Test(ctx context.Context, client *gitlabclient.Client, input TestInput) (Te
 	event, _, err := client.GL().SystemHooks.TestHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return TestOutput{}, toolutil.WrapErrWithStatusHint("system_hook_test", err, http.StatusNotFound,
-			"verify hook_id with gitlab_list_system_hooks; test triggers a sample push event. Verify the receiving endpoint is reachable")
+			"verify hook_id with admin.system_hook_list; test triggers a sample push event. Verify the receiving endpoint is reachable")
 	}
 	return TestOutput{Event: HookEventItem{
 		EventName:  event.EventName,
@@ -403,7 +403,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().SystemHooks.DeleteHook(input.ID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("system_hook_delete", err, http.StatusForbidden,
-			"requires administrator access; deletion is irreversible. Verify hook_id with gitlab_list_system_hooks before deleting")
+			"requires administrator access; deletion is irreversible. Verify hook_id with admin.system_hook_list before deleting")
 	}
 	return nil
 }
@@ -427,7 +427,7 @@ func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetU
 				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
 		}
 		return toolutil.WrapErrWithStatusHint("system_hook_set_url_variable", err, http.StatusNotFound,
-			"verify hook_id with gitlab_list_system_hooks; URL variable keys are case-sensitive and referenced by placeholders in the hook URL")
+			"verify hook_id with admin.system_hook_list; URL variable keys are case-sensitive and referenced by placeholders in the hook URL")
 	}
 	return nil
 }
@@ -443,7 +443,7 @@ func DeleteURLVariable(ctx context.Context, client *gitlabclient.Client, input D
 	_, err := client.GL().SystemHooks.DeleteHookURLVariable(input.ID, input.Key, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("system_hook_delete_url_variable", err, http.StatusNotFound,
-			"variable key not currently set on this hook, or hook not found; use gitlab_get_system_hook to inspect configured URL variables")
+			"variable key not currently set on this hook, or hook not found; use admin.system_hook_get to inspect configured URL variables")
 	}
 	return nil
 }

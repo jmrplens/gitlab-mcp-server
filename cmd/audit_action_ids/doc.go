@@ -81,19 +81,25 @@
 // figure is which. Three spellings are reported: a gitlab_* tool name, a
 // registered alias, and a dotted ID that resolves nowhere.
 //
-// It **reports and never gates**, and the reason is the size of it: 785
-// findings across 137 packages of the 1327 hints this tree writes, every one
-// of them a tool name. A gate cannot land before the code it judges is clean,
-// and until this rule existed nobody had the figure at all. Its own blind
-// spots are counted beside the findings rather than folded into the gate's,
-// so a hint the type checker cannot fold fails nothing.
+// It **gates**, and it was staged for exactly one release of the rule before
+// it did. The first whole-tree run reported 785 findings across 137 packages
+// of the 1327 hints this tree writes, every one of them a tool name, and a
+// gate cannot land before the code it judges is clean. -fix-hints closed 712
+// of them mechanically, the rest were judgement, and the flip is the layer
+// after the count reached zero.
 //
-// The dotted-ID half of it is already clean, and was not when the rule was
-// written: the five unresolvable IDs it found on its first run were one
-// constant in internal/tools/workitemsavedviews naming
-// "work_item_saved_view.list", where the catalog registers those actions as
-// routes on the issue domain. That one is fixed by spelling the ID through
-// the constant the catalog registers, which is the remedy for the class.
+// Its own blind spots are counted beside the findings and do NOT fail, which
+// is the one place this departs from the rule above. A hint the type checker
+// cannot fold is still text a reader can read, and the three sites in that
+// state build one from a function call or a format string and carry no tool
+// name between them.
+//
+// The dotted-ID half of it was never large: the five unresolvable IDs the
+// first run found were one constant in internal/tools/workitemsavedviews
+// naming "work_item_saved_view.list", where the catalog registers those
+// actions as routes on the issue domain. That one is fixed by spelling the ID
+// through the constant the catalog registers, which is the remedy for the
+// class.
 //
 // # The limit of a clean run
 //

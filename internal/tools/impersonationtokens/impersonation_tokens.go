@@ -160,7 +160,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	tokens, _, err := client.GL().Users.GetAllImpersonationTokens(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_impersonation_tokens", err, http.StatusForbidden,
-			"impersonation tokens require admin token; verify user_id with gitlab_get_user; state must be one of {all, active, inactive}")
+			"impersonation tokens require admin token; verify user_id with user.get; state must be one of {all, active, inactive}")
 	}
 	extras, err := toolutil.CapturedImpersonationTokens(captured, len(tokens))
 	if err != nil {
@@ -185,7 +185,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	token, _, err := client.GL().Users.GetImpersonationToken(input.UserID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_impersonation_token", err, http.StatusNotFound,
-			"verify token_id with gitlab_list_impersonation_tokens; admin token required; the token may have been revoked")
+			"verify token_id with user.list_impersonation_tokens; admin token required; the token may have been revoked")
 	}
 	return capturedOutput("get_impersonation_token", token, captured)
 }
@@ -243,7 +243,7 @@ func Revoke(ctx context.Context, client *gitlabclient.Client, input RevokeInput)
 	_, err := client.GL().Users.RevokeImpersonationToken(input.UserID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return RevokeOutput{}, toolutil.WrapErrWithStatusHint("revoke_impersonation_token", err, http.StatusNotFound,
-			"verify token_id with gitlab_list_impersonation_tokens; admin token required; the token may already be revoked")
+			"verify token_id with user.list_impersonation_tokens; admin token required; the token may already be revoked")
 	}
 	return RevokeOutput{UserID: input.UserID, TokenID: input.TokenID, Revoked: true}, nil
 }

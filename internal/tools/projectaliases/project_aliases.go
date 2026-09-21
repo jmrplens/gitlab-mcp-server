@@ -72,7 +72,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 
 	alias, _, err := client.GL().ProjectAliases.GetProjectAlias(in.Name, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get project alias", err, http.StatusNotFound, "verify the alias name with gitlab_list_project_aliases")
+		return Output{}, toolutil.WrapErrWithStatusHint("get project alias", err, http.StatusNotFound, "verify the alias name with project_alias.list")
 	}
 
 	return toOutput(alias), nil
@@ -113,7 +113,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 
 	_, err := client.GL().ProjectAliases.DeleteProjectAlias(in.Name, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete project alias", err, http.StatusNotFound, "verify the alias name with gitlab_list_project_aliases")
+		return toolutil.WrapErrWithStatusHint("delete project alias", err, http.StatusNotFound, "verify the alias name with project_alias.list")
 	}
 
 	return nil

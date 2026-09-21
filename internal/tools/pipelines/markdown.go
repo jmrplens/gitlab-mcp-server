@@ -28,7 +28,7 @@ type pipelineNotFoundOutput struct {
 func formatPipelineNotFound(out pipelineNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Pipeline", out.Identifier,
-		"Use gitlab_pipeline_list with project_id to list pipelines",
+		"Use pipeline.list with project_id to list pipelines",
 		"Verify the pipeline_id is correct for this project",
 	)
 }

@@ -178,7 +178,7 @@ func TestGetNonSQLMetrics_NotFound_HintsAlternatives(t *testing.T) {
 		t.Fatal(errExpectedNil)
 	}
 	if !strings.Contains(err.Error(), "unavailable on GitLab 19") ||
-		!strings.Contains(err.Error(), "gitlab_get_metric_definitions") {
+		!strings.Contains(err.Error(), "admin.usage_data_metric_definitions") {
 		t.Errorf("error = %q, want GitLab 19 unavailability hint with alternatives", err.Error())
 	}
 }

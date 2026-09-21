@@ -193,7 +193,7 @@ func topicHandlerCases() []topicHandlerCase {
 			_, err := List(ctx, c, ListInput{})
 			return err
 		}},
-		{"get", http.StatusNotFound, "verify topic id (numeric) with gitlab_list_topics", func(ctx context.Context, c *gitlabclient.Client) error {
+		{"get", http.StatusNotFound, "verify topic id (numeric) with admin.topic_list", func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := Get(ctx, c, GetInput{TopicID: 1})
 			return err
 		}},
@@ -201,7 +201,7 @@ func topicHandlerCases() []topicHandlerCase {
 			_, err := Create(ctx, c, CreateInput{Name: "go"})
 			return err
 		}},
-		{"update", http.StatusForbidden, "requires administrator access; verify id with gitlab_list_topics", func(ctx context.Context, c *gitlabclient.Client) error {
+		{"update", http.StatusForbidden, "requires administrator access; verify id with admin.topic_list", func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := Update(ctx, c, UpdateInput{TopicID: 1, Title: "Go"})
 			return err
 		}},

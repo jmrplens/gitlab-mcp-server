@@ -70,7 +70,7 @@ func ListProtectionRules(ctx context.Context, client *gitlabclient.Client, input
 	)
 	if err != nil {
 		return ProtectionRuleListOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_list", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; container registry protection requires GitLab 16.7+ and may need feature flag")
+			"verify project_id with project.get; container registry protection requires GitLab 16.7+ and may need feature flag")
 	}
 	out := ProtectionRuleListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, r := range rules {
@@ -154,7 +154,7 @@ func UpdateProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	)
 	if err != nil {
 		return ProtectionRuleOutput{}, toolutil.WrapErrWithStatusHint("registry_protection_update", err, http.StatusNotFound,
-			"verify rule_id with gitlab_registry_protection_list; pattern uniqueness still applies on rename")
+			"verify rule_id with package.registry_rule_list; pattern uniqueness still applies on rename")
 	}
 	return convertProtectionRule(rule), nil
 }
@@ -182,7 +182,7 @@ func DeleteProtectionRule(ctx context.Context, client *gitlabclient.Client, inpu
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("registry_protection_delete", err, http.StatusNotFound,
-			"verify rule_id with gitlab_registry_protection_list; managing protection rules requires Maintainer role or higher")
+			"verify rule_id with package.registry_rule_list; managing protection rules requires Maintainer role or higher")
 	}
 	return nil
 }

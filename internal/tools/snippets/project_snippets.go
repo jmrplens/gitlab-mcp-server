@@ -38,7 +38,7 @@ func ProjectList(ctx context.Context, client *gitlabclient.Client, input Project
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("project_snippet_list", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; the project must have snippets enabled")
+			"verify project_id with project.get; the project must have snippets enabled")
 	}
 	return snippetListOutput(snippets, resp), nil
 }
@@ -62,7 +62,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_get", err, http.StatusNotFound,
-			"verify snippet_id with gitlab_project_snippet_list; project_id must match the project that owns the snippet")
+			"verify snippet_id with snippet.project_list; project_id must match the project that owns the snippet")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -86,7 +86,7 @@ func ProjectContent(ctx context.Context, client *gitlabclient.Client, input Proj
 	)
 	if err != nil {
 		return ContentOutput{}, toolutil.WrapErrWithStatusHint("project_snippet_content", err, http.StatusNotFound,
-			"verify snippet_id with gitlab_project_snippet_list")
+			"verify snippet_id with snippet.project_list")
 	}
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
@@ -167,7 +167,7 @@ func ProjectUpdate(ctx context.Context, client *gitlabclient.Client, input Proje
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("project_snippet_update", err, http.StatusForbidden,
-			"updating a project snippet requires being the author or Maintainer role; verify snippet_id with gitlab_project_snippet_list")
+			"updating a project snippet requires being the author or Maintainer role; verify snippet_id with snippet.project_list")
 	}
 	return convertSnippet(snippet), nil
 }

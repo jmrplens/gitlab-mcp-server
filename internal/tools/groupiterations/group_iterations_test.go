@@ -252,7 +252,7 @@ func TestList_APIError(t *testing.T) {
 // A group iteration list fails two ways that read alike on the wire: the group
 // is not there, and the instance has no Premium license for iterations at all.
 // The 404 branch is the only one that can tell a caller which of the two to
-// check, so a hint moved to another status, or reworded off gitlab_group_get
+// check, so a hint moved to another status, or reworded off group.get
 // and the license, leaves a model holding GitLab's bare message with nothing
 // to do about it. [TestList_APIError] above cannot see any of this: every case
 // here returns a non-nil error whichever status the hint is bound to.
@@ -280,7 +280,7 @@ func TestList_ErrorHint_OnlyA404NamesTheGroupAndTheLicense(t *testing.T) {
 			if !strings.Contains(err.Error(), "gitlab_list_group_iterations") {
 				t.Errorf("error does not name the operation: %v", err)
 			}
-			hinted := strings.Contains(err.Error(), "gitlab_group_get") && strings.Contains(err.Error(), "Premium")
+			hinted := strings.Contains(err.Error(), "group.get") && strings.Contains(err.Error(), "Premium")
 			if hinted != tt.wantHint {
 				t.Errorf("hint present = %v, want %v; error: %v", hinted, tt.wantHint, err)
 			}

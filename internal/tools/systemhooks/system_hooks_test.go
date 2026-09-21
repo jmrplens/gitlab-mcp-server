@@ -369,7 +369,7 @@ func TestDelete_Error(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "gitlab_list_system_hooks") {
+	if !strings.Contains(err.Error(), actionList) {
 		t.Errorf("error = %v, want it to name the listing that verifies the hook id", err)
 	}
 }
@@ -560,7 +560,7 @@ func TestEdit_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_list_system_hooks") {
+	if !strings.Contains(err.Error(), actionList) {
 		t.Errorf("error = %v, want it to name the listing that verifies the hook id", err)
 	}
 }
@@ -830,7 +830,7 @@ func TestTest_APIError(t *testing.T) {
 // TestNotFoundHints_EachHandlerCarriesItsOwnSentence holds the four 404 hints
 // to the handler each was written for.
 //
-// All four open with "verify hook_id with gitlab_list_system_hooks", which is
+// All four open with "verify hook_id with admin.system_hook_list", which is
 // what the tests asserted, and every one of them satisfies that: the four
 // literals could trade places and nothing would fail. They differ in the tail,
 // and get's whole sentence is a prefix of edit's, so containment alone cannot
@@ -839,7 +839,7 @@ func TestTest_APIError(t *testing.T) {
 // the colon that introduces the wrapped error, which a longer hint cannot
 // satisfy.
 func TestNotFoundHints_EachHandlerCarriesItsOwnSentence(t *testing.T) {
-	const listing = "verify hook_id with gitlab_list_system_hooks"
+	const listing = "verify hook_id with admin.system_hook_list"
 	cases := []struct {
 		name string
 		hint string

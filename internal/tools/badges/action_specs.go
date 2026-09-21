@@ -243,7 +243,7 @@ func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		toolutil.RouteAction(client, GetProject),
 		"Project Badge", "project", "project_id",
 		[]string{
-			"Use gitlab_list_project_badges to list badges for this project",
+			"Use project.badge_list to list badges for this project",
 			"Verify the badge_id is correct",
 		},
 	)
@@ -254,7 +254,7 @@ func groupBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 		toolutil.RouteAction(client, GetGroup),
 		"Group Badge", "group", "group_id",
 		[]string{
-			"Use gitlab_list_group_badges to list badges for this group",
+			"Use group.badge_list to list badges for this group",
 			"Verify the badge_id and group_id are correct",
 		},
 	)

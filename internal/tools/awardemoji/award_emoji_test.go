@@ -399,7 +399,7 @@ func TestCreateMRAwardEmoji_NotFoundWithNoExistingAward_SurfacesTheRefusal(t *te
 	if err == nil {
 		t.Fatal("expected the 404 to reach the caller when no award of the current user matches")
 	}
-	assertErrContains(t, err, "verify the merge request exists with gitlab_mr_get")
+	assertErrContains(t, err, "verify the merge request exists with merge_request.get")
 }
 
 // mrAwardEmojiCreateRefusalHandler answers a create with the given refusal and

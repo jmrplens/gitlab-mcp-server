@@ -284,7 +284,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	notes, resp, err := client.GL().DraftNotes.ListDraftNotes(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("draftNoteList", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_list; draft notes are visible only to their author until published")
+			"verify project_id and merge_request_iid with merge_request.list; draft notes are visible only to their author until published")
 	}
 	out := ListOutput{
 		DraftNotes: make([]Output, 0, len(notes)),
@@ -313,7 +313,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	note, _, err := client.GL().DraftNotes.GetDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("draftNoteGet", err, http.StatusNotFound,
-			"verify draft_note_id with gitlab_mr_draft_note_list; draft notes are author-private until published")
+			"verify draft_note_id with mr_review.draft_note_list; draft notes are author-private until published")
 	}
 	return ToOutput(note), nil
 }
@@ -389,7 +389,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	note, _, err := client.GL().DraftNotes.UpdateDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("draftNoteUpdate", err, http.StatusForbidden,
-			"only the draft author can update; verify draft_note_id with gitlab_mr_draft_note_list; published notes cannot be updated via this endpoint")
+			"only the draft author can update; verify draft_note_id with mr_review.draft_note_list; published notes cannot be updated via this endpoint")
 	}
 	return ToOutput(note), nil
 }
@@ -411,7 +411,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().DraftNotes.DeleteDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNoteDelete", err, http.StatusForbidden,
-			"only the draft author can delete; verify draft_note_id with gitlab_mr_draft_note_list; published notes cannot be deleted via this endpoint")
+			"only the draft author can delete; verify draft_note_id with mr_review.draft_note_list; published notes cannot be deleted via this endpoint")
 	}
 	return nil
 }
@@ -433,7 +433,7 @@ func Publish(ctx context.Context, client *gitlabclient.Client, input PublishInpu
 	_, err := client.GL().DraftNotes.PublishDraftNote(string(input.ProjectID), input.MRIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublish", err, http.StatusForbidden,
-			"only the draft author can publish; verify draft_note_id with gitlab_mr_draft_note_list; once published the note becomes a regular MR note and cannot be unpublished")
+			"only the draft author can publish; verify draft_note_id with mr_review.draft_note_list; once published the note becomes a regular MR note and cannot be unpublished")
 	}
 	return nil
 }
@@ -452,7 +452,7 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	_, err := client.GL().DraftNotes.PublishAllDraftNotes(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublishAll", err, http.StatusForbidden,
-			"publishes all current user's draft notes on the MR. Cannot be undone; verify project_id + merge_request_iid; use gitlab_mr_draft_note_list first to review pending drafts")
+			"publishes all current user's draft notes on the MR. Cannot be undone; verify project_id + merge_request_iid; use mr_review.draft_note_list first to review pending drafts")
 	}
 	return nil
 }

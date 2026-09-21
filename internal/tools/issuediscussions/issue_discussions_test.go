@@ -990,7 +990,7 @@ func apiErrorCases() []apiErrorCase {
 		{
 			name: "List", op: opList,
 			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
-			hint: "verify project_id and issue_iid with gitlab_issue_get",
+			hint: "verify project_id and issue_iid with issue.get",
 			call: func(c *gitlabclient.Client) error {
 				_, err := List(context.Background(), c, ListInput{ProjectID: "42", IssueIID: 10})
 				return err
@@ -999,7 +999,7 @@ func apiErrorCases() []apiErrorCase {
 		{
 			name: "Get", op: opGet,
 			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
-			hint: "verify discussion_id with gitlab_list_issue_discussions",
+			hint: "verify discussion_id with issue.discussion_list",
 			call: func(c *gitlabclient.Client) error {
 				_, err := Get(context.Background(), c, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID})
 				return err
@@ -1008,7 +1008,7 @@ func apiErrorCases() []apiErrorCase {
 		{
 			name: "Create", op: opCreate,
 			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
-			hint: "verify project_id and issue_iid with gitlab_issue_get; creating discussions requires Reporter role or higher",
+			hint: "verify project_id and issue_iid with issue.get; creating discussions requires Reporter role or higher",
 			call: func(c *gitlabclient.Client) error {
 				_, err := Create(context.Background(), c, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
 				return err
@@ -1017,7 +1017,7 @@ func apiErrorCases() []apiErrorCase {
 		{
 			name: "AddNote", op: opAddNote,
 			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
-			hint: "verify discussion_id with gitlab_list_issue_discussions",
+			hint: "verify discussion_id with issue.discussion_list",
 			call: func(c *gitlabclient.Client) error {
 				_, err := AddNote(context.Background(), c, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, Body: "x"})
 				return err

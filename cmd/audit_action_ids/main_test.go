@@ -159,7 +159,7 @@ var Unfolded = toolutil.ActionSpecOptions{
 	if code != 1 {
 		t.Fatalf("run with -check = %d, want 1; stdout %q", code, stdout.String())
 	}
-	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing\n"
+	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 hint(s) name a tool rather than an action\n"
 	if stderr.String() != want {
 		t.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
@@ -182,16 +182,16 @@ func TestRun_Check_CleanPackage_Passes(t *testing.T) {
 	}
 }
 
-// TestRun_Check_HintNamingATool_IsReportedAndPasses drives the whole command
-// over a fixture whose only defect is a hint, and holds the staging decision
-// end to end: the row is in the report, the count is in the summary, and the
-// gate exits 0.
+// TestRun_Check_HintNamingATool_IsReportedAndFails drives the whole command
+// over a fixture whose only defect is a hint, and holds the flip end to end:
+// the row is in the report, the count is in the summary, and the gate exits
+// non-zero.
 //
-// It is the assertion that keeps this rule off the critical path. The class is
-// 790 findings wide, so a version of the gate that counted them would refuse
-// every push until the tree was clean, and there would be no run left to
-// measure the tree with.
-func TestRun_Check_HintNamingATool_IsReportedAndPasses(t *testing.T) {
+// It passed until the tree was clean, which was the staging: the class opened
+// at 785 findings, and a gate refusing them then would have refused every push
+// with no run left to measure the tree with. It fails now, which is what stops
+// the 786th being written.
+func TestRun_Check_HintNamingATool_IsReportedAndFails(t *testing.T) {
 	root := repoRoot(t)
 	overlay := map[string][]byte{
 		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
@@ -214,14 +214,17 @@ func Get() error {
 
 	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, check: true, verbose: true}, &stdout, &stderr)
 
-	if code != 0 {
-		t.Fatalf("run with -check = %d over a hint finding, want 0; stderr %q", code, stderr.String())
+	if code == 0 {
+		t.Fatalf("run with -check = 0 over a hint finding, want a refusal; stdout %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "gitlab_project_get") {
 		t.Errorf("stdout = %q, want the tool name named", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read") {
 		t.Errorf("stdout = %q, want the count of what the rule read", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "hint(s) name a tool rather than an action") {
+		t.Errorf("stderr = %q, want the failure line to name this rule rather than only the count", stderr.String())
 	}
 }
 
@@ -236,5 +239,79 @@ func TestPatternsOrDefault_NoArguments_AuditTheWholeTree(t *testing.T) {
 	}
 	if !slices.Contains(defaultPatterns, "./internal/tools/...") {
 		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs", defaultPatterns)
+	}
+}
+
+// TestRun_FixHints_ReportsWhatMovedAndJudgesNothing holds the shape of the
+// fixing mode: it rewrites and reports, and it does not also answer the
+// question -check answers.
+//
+// The two are deliberately not one flag. The gate says whether the tree is
+// clean and this changes the tree, so a flag that could do either is one
+// somebody eventually runs in CI.
+func TestRun_FixHints_ReportsWhatMovedAndJudgesNothing(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+// Usage names an action and nothing hands a model a hint.
+const Usage = "Read one with issue.get."
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, fixHints: true}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run with -fix-hints = %d, want 0; stderr %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "rewrote 0 tool name(s) in 0 file(s)") {
+		t.Errorf("stdout = %q, want the report of a run with nothing to move", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "published ID(s) to fix") {
+		t.Errorf("stdout = %q, want the fixing run to report rather than judge", stdout.String())
+	}
+}
+
+// TestRun_FixHints_ASourceItCannotRewrite_FailsTheRun holds the failure this
+// mode must not absorb. A rewrite that could not open what it was asked to
+// rewrite has not done the job, and a run reporting success there would leave
+// a tree half moved with a clean line above it.
+//
+// The arrangement is the fixture tree itself, which lives in an overlay and
+// not on disk: the walk folds its hints and the rewrite then has no directory
+// to open.
+func TestRun_FixHints_ASourceItCannotRewrite_FailsTheRun(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+// Get hands a model a tool name the dynamic surface does not register.
+func Get() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "verify project_id with gitlab_project_get")
+}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, fixHints: true}, &stdout, &stderr)
+
+	if code == 0 {
+		t.Fatalf("run with -fix-hints = 0 over source it cannot open, want a refusal; stdout %q", stdout.String())
+	}
+	// The path is compared in the spelling the platform prints. The message
+	// carries what the filesystem was asked for, which is separated by
+	// backslashes on Windows, so a slash-separated expectation would pass on
+	// Unix and fail there for the separator rather than for the message.
+	if !strings.Contains(stderr.String(), filepath.FromSlash(fixtureDir)) {
+		t.Errorf("stderr = %q, want it to name what could not be read", stderr.String())
 	}
 }
