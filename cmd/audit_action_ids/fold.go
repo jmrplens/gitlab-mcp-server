@@ -52,8 +52,11 @@ func (w *walker) foldCall(call *ast.CallExpr, argBound map[*types.Var]string, de
 	if !ok {
 		return "", false
 	}
-	signature, ok := callee.Type().(*types.Signature)
-	if !ok || signature.Params().Len() != len(call.Args) {
+	// A function's type is a signature and nothing else, so the assertion is
+	// read for the value rather than for the answer: an `ok` here would be a
+	// condition no program can make false.
+	signature := callee.Type().(*types.Signature) //nolint:errcheck,forcetypeassert // a *types.Func is always a signature
+	if signature.Params().Len() != len(call.Args) {
 		return "", false
 	}
 	bound := map[*types.Var]string{}

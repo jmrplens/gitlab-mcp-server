@@ -513,3 +513,32 @@ func TestFixHints_ATestFileThatDoesNotParse_IsReported(t *testing.T) {
 		t.Errorf("error = %v, want it to name the file", err)
 	}
 }
+
+// TestFixHints_LiteralsThatCarryNoProse_AreLeftWhereTheyAre holds the two
+// shapes the walk over a file declines before it ever looks for a tool name: a
+// literal that is not a string at all, and a string with nothing in it but
+// space. Neither can carry a hint, and the pass says so by moving nothing.
+func TestFixHints_LiteralsThatCarryNoProse_AreLeftWhereTheyAre(t *testing.T) {
+	const hint = "verify demo_id with gitlab_fetch_demo first"
+	const source = "package demo\n\n" +
+		"const retries = 3\n\n" +
+		"const padding = \"   \"\n\n" +
+		"const notFound = \"" + hint + "\"\n"
+	root := stagePackage(t, "demo", map[string]string{"demo.go": source})
+
+	report, err := fixHints(root, []site{fixerSite(hint)}, fixerCatalog(), false)
+	if err != nil {
+		t.Fatalf("fixHints() error = %v", err)
+	}
+
+	body := readStaged(t, root, "demo", "demo.go")
+	if !strings.Contains(body, "const retries = 3") {
+		t.Errorf("the number literal moved:\n%s", body)
+	}
+	if !strings.Contains(body, "const padding = \"   \"") {
+		t.Errorf("the blank literal moved:\n%s", body)
+	}
+	if len(report.Fixes) != 1 {
+		t.Errorf("fixes = %+v, want only the hint", report.Fixes)
+	}
+}

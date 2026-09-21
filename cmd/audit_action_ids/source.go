@@ -3,7 +3,6 @@ package main
 import (
 	"go/ast"
 	"go/constant"
-	"go/token"
 	"go/types"
 	"path/filepath"
 	"strings"
@@ -157,12 +156,17 @@ type funcDecl struct {
 // The overlay is how a test supplies source that is not on disk, so the walk
 // is exercised on the shapes it has to handle, type-checked against the real
 // toolutil, rather than on a mock of them. Production passes nil.
+// absolutePath resolves the walk root, swapped in tests. filepath.Abs fails
+// only when the process has no working directory, which a test cannot arrange
+// and which would otherwise leave the one branch that reports it unexercised.
+var absolutePath = filepath.Abs
+
 func collectSites(dir string, patterns []string, overlay map[string][]byte) ([]site, error) {
 	loaded, err := goprogram.Load(dir, patterns, overlay)
 	if err != nil {
 		return nil, err
 	}
-	root, err := filepath.Abs(dir)
+	root, err := absolutePath(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -220,10 +224,9 @@ func (p *program) indexFuncs(pkg *packages.Package, file *ast.File) {
 			continue
 		}
 		p.decls[obj] = funcDecl{pkg: pkg, decl: fn}
-		signature, isSignature := obj.Type().(*types.Signature)
-		if !isSignature {
-			continue
-		}
+		// A function's type is a signature, so the assertion reads the value
+		// and asks nothing.
+		signature := obj.Type().(*types.Signature) //nolint:errcheck,forcetypeassert // a *types.Func is always a signature
 		for index := range signature.Params().Len() {
 			p.params[signature.Params().At(index)] = paramRef{
 				fn:       obj,
@@ -377,7 +380,12 @@ func (w *walker) visitCall(call *ast.CallExpr) {
 // them to NotFoundResult that way.
 func (w *walker) recordErrorHintArgs(kind string, call *ast.CallExpr, first int) {
 	for index := first; index < len(call.Args); index++ {
-		if call.Ellipsis.IsValid() && index == len(call.Args)-1 {
+		// The spread is asked about and the position is not: Go lets only the
+		// last argument carry the ellipsis, and a spread call passes exactly
+		// one expression for the whole variadic part, which starts where the
+		// hints start. So every index this loop visits on a spread call is the
+		// last one, and testing for it is a condition no call can make false.
+		if call.Ellipsis.IsValid() {
 			w.recordHintList(kind, call.Args[index])
 			continue
 		}
@@ -419,15 +427,19 @@ func (w *walker) visitCompositeLit(lit *ast.CompositeLit) {
 			w.recordPositionalField(structType, index, element)
 			continue
 		}
-		key, isIdent := pair.Key.(*ast.Ident)
-		if !isIdent {
-			continue
+		// The key is read without asking whether it is an identifier or whether
+		// the struct has such a field: a keyed literal of a struct type names
+		// its fields by identifier, and a key naming no field of that struct
+		// does not compile. What is asked, once per field, is which field the
+		// key names, and that comparison is false for every other field of the
+		// struct.
+		key := pair.Key.(*ast.Ident) //nolint:errcheck,forcetypeassert // a struct literal's keys are field names
+		for field := range structType.Fields() {
+			if field.Name() == key.Name {
+				w.recordField(key.Name, field.Type(), pair.Value)
+				break
+			}
 		}
-		fieldType, found := structFieldType(structType, key.Name)
-		if !found {
-			continue
-		}
-		w.recordField(key.Name, fieldType, pair.Value)
 	}
 }
 
@@ -500,7 +512,10 @@ func (w *walker) structType(typ types.Type) (*types.Struct, bool) {
 	case *types.Struct:
 		return resolved, true
 	case *types.Named:
-		if resolved.Obj() == nil || resolved.Obj().Pkg() == nil {
+		// A named type always has an object; what is asked is whether that
+		// object belongs to a package, since the universe's named types
+		// (error and comparable) belong to none.
+		if resolved.Obj().Pkg() == nil {
 			return nil, false
 		}
 		if !strings.HasPrefix(resolved.Obj().Pkg().Path(), goprogram.ModulePath) {
@@ -511,16 +526,6 @@ func (w *walker) structType(typ types.Type) (*types.Struct, bool) {
 	default:
 		return nil, false
 	}
-}
-
-// structFieldType is the declared type of one field of a struct.
-func structFieldType(structType *types.Struct, fieldName string) (types.Type, bool) {
-	for field := range structType.Fields() {
-		if field.Name() == fieldName {
-			return field.Type(), true
-		}
-	}
-	return nil, false
 }
 
 // recordField routes one field write to the rule that judges it, by the
@@ -695,7 +700,10 @@ func (w *walker) recordArguments(kind string, param paramRef, caller callSite, r
 		return
 	}
 	for index := param.index; index < len(args); index++ {
-		if caller.call.Ellipsis.IsValid() && index == len(args)-1 {
+		// As in [walker.recordErrorHintArgs]: a spread call carries one
+		// expression for the whole variadic part, which begins at this
+		// parameter, so the position needs no test of its own.
+		if caller.call.Ellipsis.IsValid() {
 			record(inner, kind, args[index])
 			continue
 		}
@@ -753,7 +761,11 @@ func (w *walker) recordListCall(kind string, call *ast.CallExpr) {
 		w.recordAppend(kind, call)
 		return
 	}
-	if typed, ok := w.pkg.TypesInfo.Types[call.Fun]; ok && typed.IsType() && len(call.Args) == 1 {
+	// A conversion is recognized by what its callee denotes, and by nothing
+	// else: the zero TypeAndValue a missing entry yields is not a type, and a
+	// conversion that compiles takes exactly one operand, so neither the
+	// lookup nor the argument count is a question this can answer twice.
+	if w.pkg.TypesInfo.Types[call.Fun].IsType() {
 		w.recordIDList(kind, call.Args[0])
 		return
 	}
@@ -1031,9 +1043,11 @@ func (w *walker) foldProse(expr ast.Expr) (string, bool) {
 	}
 	switch typed := ast.Unparen(expr).(type) {
 	case *ast.BinaryExpr:
-		if typed.Op != token.ADD {
-			return "", false
-		}
+		// The operator is not asked about, unlike in [walker.foldExpr], which
+		// folds arguments of any type and so meets arithmetic. A hint is a
+		// string, and the only binary operator a string expression can carry
+		// is a concatenation: every other one yields a bool, which no hint
+		// parameter accepts.
 		left, leftFolded := w.foldProse(typed.X)
 		right, rightFolded := w.foldProse(typed.Y)
 		if !leftFolded && !rightFolded {

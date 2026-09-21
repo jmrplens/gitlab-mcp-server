@@ -425,7 +425,10 @@ func byCount(counts map[string]int) string {
 // The list is written even when it is empty, so a later run cannot read a file
 // a previous run left behind and take it for today's answer.
 func writeJSON(path string, report any) error {
-	if dir := filepath.Dir(path); dir != "" && dir != "." {
+	// filepath.Dir answers "." for a bare file name and never the empty
+	// string, so the only directory worth not creating is the one that means
+	// "here".
+	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("create %s: %w", dir, err)
 		}

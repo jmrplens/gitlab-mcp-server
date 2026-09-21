@@ -239,8 +239,12 @@ func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (cha
 		if !ok || lit.Kind != token.STRING {
 			return true
 		}
-		text, unquoteErr := strconv.Unquote(lit.Value)
-		if unquoteErr != nil || !admit(text) {
+		// The unquote answers for a literal the parser accepted, so its error
+		// is a branch no source reaches; the empty string it would leave is
+		// refused by admit anyway, which is why discarding it changes nothing
+		// rather than hiding something.
+		text, _ := strconv.Unquote(lit.Value)
+		if !admit(text) {
 			return true
 		}
 		line := fset.Position(lit.Pos()).Line
