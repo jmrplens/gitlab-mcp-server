@@ -1,4 +1,6 @@
-// action_specs_test.go contains unit tests for the DORA metrics [toolutil.ActionSpec] entries (project, group, instance scopes).
+// action_specs_test.go contains unit tests for the DORA metrics
+// [toolutil.ActionSpec] entries. GitLab serves DORA metrics at two scopes,
+// project and group, and the package publishes one spec for each.
 package dorametrics
 
 import (
@@ -6,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -100,14 +104,99 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	}
 }
 
-// TestMarkdownHints_Output verifies the MarkdownHints_Output handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestActionSpecs_ScopeProse verifies that the prose each spec serves names its
+// own scope: the usage line names the id field a caller must pass and not its
+// sibling's, and the description points a reader at the other scope's tool
+// rather than at itself. The two scopes' prose differs by those words alone, so
+// crossing them leaves every other assertion here passing and tells a model to
+// pass a group id to the project tool.
+func TestActionSpecs_ScopeProse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specByTool := doraMetricSpecsByTool(ActionSpecs(client))
+
+	cases := []struct {
+		tool        string
+		idField     string
+		siblingID   string
+		siblingTool string
+	}{
+		{"gitlab_get_project_dora_metrics", "project_id", "group_id", "gitlab_get_group_dora_metrics"},
+		{"gitlab_get_group_dora_metrics", "group_id", "project_id", "gitlab_get_project_dora_metrics"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			spec, ok := specByTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing ActionSpec for %s", tc.tool)
+			}
+			if !strings.Contains(spec.Usage, tc.idField) {
+				t.Errorf("%s usage does not name %s: %q", tc.tool, tc.idField, spec.Usage)
+			}
+			if strings.Contains(spec.Usage, tc.siblingID) {
+				t.Errorf("%s usage names the sibling scope's %s: %q", tc.tool, tc.siblingID, spec.Usage)
+			}
+			if want := "See also: " + tc.siblingTool; !strings.Contains(spec.IndividualTool.Description, want) {
+				t.Errorf("%s description does not carry %q: %q", tc.tool, want, spec.IndividualTool.Description)
+			}
+		})
+	}
+}
+
+// TestDoraMetricReadSpec_ScopeDecidesTheProseAndNothingElse pins what the scope
+// switch does and does not settle. Tags, edition, owner package, individual
+// tool and the metric and interval enums are the same whatever the scope, and
+// only the usage, the related action and the description are per scope, so a
+// scope the switch has no case for publishes a tool that is registered and
+// gated correctly and explains nothing, which is the state a third scope added
+// without its case would ship in.
+func TestDoraMetricReadSpec_ScopeDecidesTheProseAndNothingElse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	spec := doraMetricReadSpec("instance", toolutil.RouteAction(client, GetProjectMetrics), "gitlab_get_instance_dora_metrics")
+
+	if spec.OwnerPackage != "dorametrics" {
+		t.Errorf("owner package = %q, want dorametrics", spec.OwnerPackage)
+	}
+	if spec.Edition != "premium" {
+		t.Errorf("edition = %q, want premium", spec.Edition)
+	}
+	if spec.IndividualTool.Name != "gitlab_get_instance_dora_metrics" {
+		t.Errorf("individual tool = %q, want gitlab_get_instance_dora_metrics", spec.IndividualTool.Name)
+	}
+	if !slices.Contains(spec.Tags, "dora") || !slices.Contains(spec.Tags, "analytics") {
+		t.Errorf("tags = %v, want dora and analytics", spec.Tags)
+	}
+	if spec.Usage != "" {
+		t.Errorf("usage = %q, want empty for a scope the switch has no case for", spec.Usage)
+	}
+	if len(spec.RelatedActions) != 0 {
+		t.Errorf("related actions = %v, want none for a scope the switch has no case for", spec.RelatedActions)
+	}
+	if spec.IndividualTool.Description != "" {
+		t.Errorf("description = %q, want empty for a scope the switch has no case for", spec.IndividualTool.Description)
+	}
+}
+
+// TestMarkdownHints_Output verifies that an Output reaching the shared Markdown
+// registry renders the text the package's own formatter writes for a series
+// whose metric is unknown. The registry is the path a tool result really takes,
+// and it is registered with a closure: comparing the rendered text, rather than
+// checking that something came back, is what holds that closure to the generic
+// title the output alone can justify.
 func TestMarkdownHints_Output(t *testing.T) {
-	md := toolutil.MarkdownForResult(Output{
-		Metrics: []MetricOutput{{Date: "2026-01-01", Value: 42.5}},
-	})
-	if md == nil {
+	out := Output{Metrics: []MetricOutput{{Date: "2026-01-01", Value: 42.5}}}
+
+	result := toolutil.MarkdownForResult(out)
+	if result == nil {
 		t.Fatal("expected non-nil result from MarkdownForResult(Output{})")
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("content blocks = %d, want 1", len(result.Content))
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content block = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if want := FormatMarkdown(out, ""); text.Text != want {
+		t.Errorf("registered formatter rendered\n got %q\nwant %q", text.Text, want)
 	}
 }
