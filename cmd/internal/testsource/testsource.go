@@ -41,6 +41,12 @@ const (
 // naming convention and is classified apart so it can be counted and rewritten.
 var covPattern = regexp.MustCompile(`^TestCov[A-Z]`)
 
+// stat is a seam over os.Stat, so a test can drive the branch a filesystem the
+// tests own never produces: a path filepath.EvalSymlinks has just resolved and
+// that cannot then be stated. It is the same seam [sourcewalk.IsNestedCheckout]
+// keeps over os.Lstat, for the same reason.
+var stat = os.Stat
+
 // IsTestFunction reports whether name is a Go test entry point, by the rule the
 // testing package itself applies: the prefix "Test" followed by a rune that is
 // not lower case, or by nothing at all. "TestMain" is excluded because it is
@@ -164,14 +170,23 @@ func walkRoot(root string, policy Policy, visit func(path string) error) error {
 		walked := path
 		if target != root && !atRoot {
 			// WalkDir builds every path below the root by joining it onto the
-			// root it was given, so trimming that prefix is exact.
+			// root it was given, so trimming that prefix is exact. It is exact
+			// only because target is the cleaned path EvalSymlinks returned;
+			// below a root the walk used itself the two are the same string and
+			// nothing is rebuilt, which is what keeps a root spelled with a
+			// redundant element from being joined onto a path that carries it.
 			path = filepath.Join(root, strings.TrimPrefix(path, target))
 		}
 		if d.IsDir() {
 			// The nested-checkout half of the rule is asked of the path the
-			// walk is really at, never of the caller-facing name rebuilt
+			// walk is really at rather than of the caller-facing name rebuilt
 			// above: a root reached through a symlink has the two spelled
-			// differently, and only one of them can be stated.
+			// differently. Both can be stated, and today both answer the same,
+			// because the rebuilt name reaches the same entry back through the
+			// link; what the walked path buys is that the question is not asked
+			// through a link at all. A sweep crossed the two and nothing could
+			// tell them apart, so do not read this as a guard against a failure
+			// that has been observed.
 			if !atRoot && (SkipDir(d.Name()) || sourcewalk.IsNestedCheckout(walked)) {
 				return fs.SkipDir
 			}
@@ -197,7 +212,7 @@ func resolveRoot(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if target, statErr := os.Stat(resolved); statErr != nil || !target.IsDir() {
+	if target, statErr := stat(resolved); statErr != nil || !target.IsDir() {
 		return root, nil //nolint:nilerr // a link to a non-directory is walked as the file it is
 	}
 	return resolved, nil

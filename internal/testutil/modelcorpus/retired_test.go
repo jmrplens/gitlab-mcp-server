@@ -112,6 +112,56 @@ func TestRetired_CoversTheTwoClassesTheMoveCouldDecide(t *testing.T) {
 	}
 }
 
+// TestRetired_PublishesTheLabelAnOldReportsReaderReads holds each category to
+// the word [Retired] hands out, which nothing else here can see.
+//
+// Every other test in this file names the categories by their constants, so the
+// two that are carried by entries can have their spellings exchanged and all of
+// them still pass: the counts above are read through the same constants they
+// were written with. What changes is only what a reader gets, and it is the one
+// thing the table exists for: MT-201 would answer "simulated-result" for a
+// case whose whole reason for retiring was that it called a tool no client
+// registers.
+//
+// A representative of each carried category is named beside the spelling, so an
+// entry relabelled without its reason being rewritten fails here too.
+func TestRetired_PublishesTheLabelAnOldReportsReaderReads(t *testing.T) {
+	tests := []struct {
+		category  string
+		label     string
+		witness   string
+		witnessed bool
+	}{
+		{category: RetiredBridgeTool, label: "bridge-tool", witness: "MT-201", witnessed: true},
+		{category: RetiredSimulatedResult, label: "simulated-result", witness: "MF-001", witnessed: true},
+		{category: RetiredNoRecipe, label: "no-recipe"},
+	}
+	if len(tests) != len(retiredCategories) {
+		t.Fatalf("%d categories are held to a spelling and the table admits %d",
+			len(tests), len(retiredCategories))
+	}
+	for _, tc := range tests {
+		t.Run(tc.label, func(t *testing.T) {
+			if tc.category != tc.label {
+				t.Errorf("the category is published as %q, want %q", tc.category, tc.label)
+			}
+			if !tc.witnessed {
+				return
+			}
+			for _, one := range Retired() {
+				if one.ID != tc.witness {
+					continue
+				}
+				if one.Category != tc.label {
+					t.Errorf("%s is published as %q, want %q", tc.witness, one.Category, tc.label)
+				}
+				return
+			}
+			t.Errorf("%s is no longer retired, so this category has lost its witness", tc.witness)
+		})
+	}
+}
+
 // TestRetired_IsACopy checks that a caller cannot edit the table through the
 // slice it is handed, which is the same rule [Facts] follows and for the same
 // reason: the corpus is read by tests that run in any order.

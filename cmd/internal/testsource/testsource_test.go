@@ -2,6 +2,7 @@ package testsource
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -61,6 +62,32 @@ func TestClassifyTestName_Shapes_SelectTheBucket(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ClassifyTestName(tc.name); got != tc.want {
 				t.Errorf("ClassifyTestName(%q) = %q, want %q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestClassifyTestName_Buckets_KeepTheirPublishedSpellings pins the four bucket
+// names to the strings they are published under, which no test comparing a
+// classification against its own constant can do. The naming auditor prints
+// these verbatim as the labels of its summary and the testing reference joins
+// its table rows on them, so two of them trading values would relabel every
+// count in both while every other test here stayed green.
+func TestClassifyTestName_Buckets_KeepTheirPublishedSpellings(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "three part", input: "TestCreate_ValidInput_ReturnsIssue", want: "3-part"},
+		{name: "two part", input: "TestCreate_ReturnsIssue", want: "2-part"},
+		{name: "no underscore", input: "TestCreateIssue", want: "no-underscore"},
+		{name: "coverage helper", input: "TestCovBuildCatalog", want: "TestCov"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyTestName(tc.input); got != tc.want {
+				t.Errorf("ClassifyTestName(%q) = %q, want the published spelling %q", tc.input, got, tc.want)
 			}
 		})
 	}
@@ -324,6 +351,103 @@ func TestWalkFiles_SymlinkedRootTargets_DecideWhatIsWalked(t *testing.T) {
 				t.Errorf("WalkFiles visited %d file(s), want %d", visits, tc.want)
 			}
 		})
+	}
+}
+
+// TestWalkFiles_UncleanRoot_ReportsPathsThatNameTheFileVisited verifies that
+// the caller-facing rebuild is confined to a root the walk did not itself use.
+// Below a root WalkDir walks directly, every path must arrive exactly as WalkDir
+// spelled it, because rebuilding it there would join the root onto a path that
+// already carries it: a root spelled with a redundant element, which no
+// filepath.Join produces and every caller may write, would then hand the visitor
+// a path naming nothing. Each visited path is therefore stated, not compared,
+// since a gate's next act is to open it.
+func TestWalkFiles_UncleanRoot_ReportsPathsThatNameTheFileVisited(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walk below
+	writeFile(t, base, "tree/widget_test.go")
+	writeFile(t, base, "tree/sub/nested_test.go")
+
+	sep := string(filepath.Separator)
+	root := base + sep + "." + sep + "tree"
+
+	var got []string
+	if err := WalkFiles([]string{root}, TestFiles, func(path string) error {
+		if _, statErr := os.Stat(path); statErr != nil {
+			return fmt.Errorf("visited path %q names no file: %w", path, statErr)
+		}
+		got = append(got, filepath.Base(path))
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkFiles: %v", err)
+	}
+
+	want := []string{"nested_test.go", "widget_test.go"}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkFiles visited %v, want %v", got, want)
+	}
+}
+
+// TestWalkFiles_NestedCheckoutBelowASymlinkedRoot_IsPruned verifies that the
+// checkout rule still applies below a root reached through a symlink. The rule
+// asks the filesystem rather than the name, so it has to be asked about the path
+// the walk is really at; the tree below a symlinked root is the one place where
+// that path and the name reported to the caller are spelled differently.
+func TestWalkFiles_NestedCheckoutBelowASymlinkedRoot_IsPruned(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walk below
+	writeFile(t, base, "real/widget_test.go")
+	writeFile(t, base, "real/scratch/copy_test.go")
+	writeFile(t, base, "real/scratch/.git")
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	var got []string
+	if err := WalkFiles([]string{link}, TestFiles, func(path string) error {
+		got = append(got, filepath.ToSlash(path))
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkFiles: %v", err)
+	}
+
+	want := []string{filepath.ToSlash(filepath.Join(link, "widget_test.go"))}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkFiles visited %v, want %v", got, want)
+	}
+}
+
+// TestWalkFiles_SymlinkedRootThatCannotBeStated_IsWalkedAsTheLink verifies the
+// branch a filesystem the tests own never produces: a root whose symlink
+// resolves and whose target then refuses to be stated. Resolution has already
+// succeeded there, so the answer cannot be an error, and it must not be a nil
+// dereference either: the walk falls back to the link itself, exactly as it
+// does for a link to a plain file.
+func TestWalkFiles_SymlinkedRootThatCannotBeStated_IsWalkedAsTheLink(t *testing.T) {
+	base := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the walk below
+	writeFile(t, base, "real/widget_test.go")
+	link := filepath.Join(base, "link_test.go")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	original := stat
+	t.Cleanup(func() { stat = original })
+	stat = func(string) (os.FileInfo, error) { return nil, errors.New("permission denied") }
+
+	var got []string
+	if err := WalkFiles([]string{link}, TestFiles, func(path string) error {
+		got = append(got, filepath.ToSlash(path))
+		return nil
+	}); err != nil {
+		t.Fatalf("WalkFiles: %v", err)
+	}
+
+	want := []string{filepath.ToSlash(link)}
+	if !slices.Equal(got, want) {
+		t.Errorf("WalkFiles visited %v, want %v", got, want)
 	}
 }
 

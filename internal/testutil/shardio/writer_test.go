@@ -8,17 +8,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // recordingReporter stands in for *testing.T so the writer's failure paths can
 // be exercised without failing the test that asked for them.
+//
+// Errorf is guarded because one writer is shared by every caller in a process
+// and a reporter is taken per call, so a concurrent test hands the same
+// reporter to several goroutines. The messages themselves are read only after
+// those goroutines have been joined.
 type recordingReporter struct {
+	mu       sync.Mutex
 	messages []string
 }
 
 // Errorf records one reported failure.
 func (r *recordingReporter) Errorf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.messages = append(r.messages, fmt.Sprintf(format, args...))
 }
 
@@ -117,7 +126,10 @@ func TestShardsOpenDir_ReturnsOneWriterPerDirectory(t *testing.T) {
 // and a line already deduplicated against one of them is written again into
 // the other, which is exactly the double counting the seen set exists to
 // prevent. The spellings below are what a Makefile and an environment variable
-// actually produce between them.
+// actually produce between them, the padded one included: an exported value
+// carries whatever whitespace the line that set it had, and trimming it only to
+// decide whether recording is on would leave the padding in the key and in the
+// directory, where it fails the absolute-path rule and records nothing.
 func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
 	dir := t.TempDir()
 	shards := newFixture(t, plainSpec())
@@ -126,12 +138,24 @@ func TestShardsOpenDir_OneDirectorySpelledTwoWaysIsOneWriter(t *testing.T) {
 	if canonical == nil {
 		t.Fatal("OpenDir(dir) = nil, want a writer")
 	}
-	for _, spelling := range []string{dir + "/.", dir + "/", dir + "/sub/.."} {
+	for _, spelling := range []string{dir + "/.", dir + "/", dir + "/sub/..", " " + dir + " "} {
 		t.Run(spelling, func(t *testing.T) {
 			if got := shards.OpenDir(spelling); got != canonical {
 				t.Errorf("OpenDir(%q) returned a second writer for one directory", spelling)
 			}
 		})
+	}
+
+	// The writer the padded spelling hands back records into the directory that
+	// was meant, which is what the identity check above cannot say on its own:
+	// a registry that trimmed the key and kept the padding in the writer's own
+	// directory would pass it and then refuse every line.
+	reporter := &recordingReporter{}
+	shards.OpenDir(" "+dir+" ").Write(reporter, &note{Text: "recorded through a padded spelling"})
+
+	wantNoMessage(t, reporter)
+	if lines := shardLines(t, shards, dir); len(lines) != 1 {
+		t.Errorf("shard lines = %d, want the one line written through the padded spelling: %v", len(lines), lines)
 	}
 }
 
@@ -162,25 +186,88 @@ func TestWriterWrite_NilWriterWritesNothing(t *testing.T) {
 // bytes, which is the same equality relation and thirty-two bytes a line, so a
 // long run does not hold its whole shard in memory beside the file it was
 // already written to.
+//
+// Two notes that differ only in their text are what says the digest is taken
+// over the encoded record and not over something coarser: a set keyed on the
+// line type absorbs a repeat exactly as this one does, and silently drops the
+// second of every two lines of a kind, which is the one failure this record is
+// built not to have and which no run would ever report.
 func TestWriterWrite_WritesEachLineOnceAndDropsRepeats(t *testing.T) {
 	dir := t.TempDir()
 	shards := newFixture(t, plainSpec())
 	reporter := &recordingReporter{}
 	line := &note{Text: "offered twice"}
 
-	shards.OpenDir(dir).Write(reporter, &measure{Value: 1.5}, line)
+	shards.OpenDir(dir).Write(reporter, &measure{Value: 1.5}, line, &note{Text: "a note of its own"})
 	shards.OpenDir(dir).Write(reporter, line)
 
 	wantNoMessage(t, reporter)
 	lines := shardLines(t, shards, dir)
-	if len(lines) != 2 {
-		t.Fatalf("shard lines = %d, want 2: %v", len(lines), lines)
+	if len(lines) != 3 {
+		t.Fatalf("shard lines = %d, want 3: %v", len(lines), lines)
 	}
 	if !strings.Contains(lines[0], `"type":"measure"`) {
 		t.Errorf("first line = %s, want the measure line", lines[0])
 	}
 	if !strings.Contains(lines[1], `"text":"offered twice"`) {
-		t.Errorf("second line = %s, want the note line", lines[1])
+		t.Errorf("second line = %s, want the note line offered twice", lines[1])
+	}
+	if !strings.Contains(lines[2], `"text":"a note of its own"`) {
+		t.Errorf("third line = %s, want the second note, which differs from the first only in its text", lines[2])
+	}
+}
+
+// TestWriterWrite_ConcurrentCallersShareOneShardAndLoseNoLine verifies that
+// callers writing at once through the registry produce one shard holding every
+// line each of them offered, exactly once.
+//
+// This is the shape the package is used in: one writer is process-global and
+// taken by whichever caller records next, so the registry's lock and the
+// writer's are the only thing keeping two lines from interleaving or a seen set
+// from being read while it is written. A lock is invisible to both coverage
+// gates, which read operators and operands, so one that stopped being taken
+// would leave them green and corrupt a record only on the runs busy enough to
+// matter. Driving the writer from several goroutines is what lets -race say so.
+func TestWriterWrite_ConcurrentCallersShareOneShardAndLoseNoLine(t *testing.T) {
+	const (
+		callers        = 8
+		linesPerCaller = 16
+	)
+	dir := t.TempDir()
+	shards := newFixture(t, plainSpec())
+	reporter := &recordingReporter{}
+
+	var writing sync.WaitGroup
+	for caller := range callers {
+		writing.Go(func() {
+			// Opened per goroutine rather than once on the parent, so the
+			// registry is exercised concurrently too: every caller must be
+			// handed the one writer of this directory.
+			writer := shards.OpenDir(dir)
+			for line := range linesPerCaller {
+				writer.Write(reporter, &note{Text: fmt.Sprintf("caller %d line %d", caller, line)})
+			}
+		})
+	}
+	writing.Wait()
+
+	wantNoMessage(t, reporter)
+	records, err := shards.Read(dir)
+	if err != nil {
+		t.Fatalf("Read error = %v", err)
+	}
+	if len(records) != callers*linesPerCaller {
+		t.Fatalf("records = %d, want %d: every line each caller offered, and no line twice", len(records), callers*linesPerCaller)
+	}
+	texts := map[string]int{}
+	for _, record := range records {
+		if record.Note == nil {
+			t.Fatalf("record = %+v, want a note line", record)
+		}
+		texts[record.Note.Text]++
+	}
+	if len(texts) != callers*linesPerCaller {
+		t.Errorf("distinct lines = %d, want %d: a shard holding one line twice has lost another", len(texts), callers*linesPerCaller)
 	}
 }
 
@@ -193,15 +280,22 @@ func TestWriterWrite_WritesEachLineOnceAndDropsRepeats(t *testing.T) {
 // them. Resolving it would produce that scattering silently, which is why it is
 // refused instead. It stops the writer rather than costing one line, because no
 // later line can avoid it.
+//
+// The variable and the path it held are asserted apart, the path in the quoted
+// form the refusal writes it in. They are a pair nothing else here can tell
+// apart: crossed, the message says the directory must be absolute and quotes
+// the variable's name as the value, and it still carries the variable's name
+// and the word absolute that a laxer assertion looks for.
 func TestWriterWrite_RefusesARelativeDirectory(t *testing.T) {
+	relative := filepath.Join("dist", "fixtures")
 	shards := newFixture(t, plainSpec())
-	writer := shards.OpenDir(filepath.Join("dist", "fixtures"))
+	writer := shards.OpenDir(relative)
 	reporter := &recordingReporter{}
 
 	writer.Write(reporter, &note{Text: "first"})
 	writer.Write(reporter, &note{Text: "second"})
 
-	wantMessage(t, reporter, fixtureDirEnv, "absolute")
+	wantMessage(t, reporter, fixtureDirEnv, "absolute", fmt.Sprintf("%q", relative))
 }
 
 // TestWriterWrite_ReportsAnUnopenableShardOnce verifies that a directory the
@@ -212,6 +306,11 @@ func TestWriterWrite_RefusesARelativeDirectory(t *testing.T) {
 // this suite is often run as root, where a directory stripped of write
 // permission is still writable. The stub is on this test's own registry, so it
 // is never another test's.
+//
+// The directory is asserted beside the record's name because the two are a pair
+// a fixture cannot tell apart on its own: the message is the only account of a
+// shard that was never opened, and one naming some other string of the spec
+// reads exactly as well while sending a reader to a directory nobody wrote to.
 func TestWriterWrite_ReportsAnUnopenableShardOnce(t *testing.T) {
 	dir := t.TempDir()
 	shards := newFixture(t, plainSpec())
@@ -223,7 +322,7 @@ func TestWriterWrite_ReportsAnUnopenableShardOnce(t *testing.T) {
 	writer.Write(reporter, &note{Text: "first"})
 	writer.Write(reporter, &note{Text: "second"})
 
-	wantMessage(t, reporter, "no room", "a fixture shard")
+	wantMessage(t, reporter, "no room", "a fixture shard", dir)
 }
 
 // TestWriterWrite_ReportsAShardThatStopsAccepting verifies that a shard which

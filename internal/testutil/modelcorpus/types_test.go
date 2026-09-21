@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
@@ -682,6 +683,36 @@ func TestSurfaces_AreTheThreeTheContractsCover(t *testing.T) {
 		if _, known := Contract(surface); !known {
 			t.Errorf("surface %q has no contract", surface)
 		}
+	}
+}
+
+// TestSurfaces_AreSpelledAsTheServerSpellsThem pins the three strings this
+// package hands to the runner, which converts them to harness.Surface by
+// spelling and passes the result to the binary as GITLAB_MCP_TOOL_SURFACE.
+//
+// Nothing else here can see that join: this package is untagged and cannot
+// import the harness, the contract table is keyed by these same constants, and
+// the whole suite stays green with the meta and individual spellings
+// exchanged, which would run every meta-restricted case on the individual surface, and
+// introduce it with the wrong contract, in a run that costs money to take. The
+// server's own names are the oracle rather than a second copy of the literals.
+func TestSurfaces_AreSpelledAsTheServerSpellsThem(t *testing.T) {
+	served := map[Surface]string{
+		SurfaceDynamic:    config.ToolSurfaceDynamic,
+		SurfaceMeta:       config.ToolSurfaceMeta,
+		SurfaceIndividual: config.ToolSurfaceIndividual,
+	}
+	if len(served) != len(Surfaces()) {
+		t.Fatalf("%d surfaces are held to the server's spelling and this package publishes %d",
+			len(served), len(Surfaces()))
+	}
+	for surface, name := range served {
+		t.Run(name, func(t *testing.T) {
+			if string(surface) != name {
+				t.Errorf("this package spells the surface %q and the server spells it %q",
+					string(surface), name)
+			}
+		})
 	}
 }
 

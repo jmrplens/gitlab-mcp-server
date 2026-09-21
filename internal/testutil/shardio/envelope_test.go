@@ -1,6 +1,7 @@
 package shardio
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,11 @@ func TestValidateEnvelope_AcceptsARecordThatHoldsTogether(t *testing.T) {
 // cases are the reason the rule counts payloads instead of only checking the
 // named one: a line carrying two is two claims under one type, and a reader
 // that took the named half would have read half a record.
+//
+// The schema case names both numbers in order, because they are a pair no
+// fixture can tell apart: crossed, the refusal tells a reader the shard was
+// written at the version this package is, and that the version it is holds the
+// shard, which sends them to look at the wrong side of the mismatch.
 func TestValidateEnvelope_RefusesARecordThatDoesNotHoldTogether(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -35,7 +41,7 @@ func TestValidateEnvelope_RefusesARecordThatDoesNotHoldTogether(t *testing.T) {
 		{
 			name:    "another schema",
 			record:  fixtureRecord{Schema: fixtureSchema + 1, Type: typeNote, Note: &note{}},
-			wantErr: "schema",
+			wantErr: fmt.Sprintf("schema %d is not %d", fixtureSchema+1, fixtureSchema),
 		},
 		{
 			name:    "unknown type",

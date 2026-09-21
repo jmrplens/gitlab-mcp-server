@@ -1,6 +1,6 @@
-// markdown_hints_test.go exercises the hint collector against formatters this
-// file registers itself, so the expectations are fixed by the test rather than
-// by whatever the domain packages happen to publish today.
+// hints_test.go exercises the hint collector against formatters this file
+// registers itself, so the expectations are fixed by the test rather than by
+// whatever the domain packages happen to publish today.
 package hints
 
 import (
@@ -47,6 +47,33 @@ type hintsMixedContentOutput struct {
 	Name string `json:"name"`
 }
 
+// hintsSeveralBlocksOutput stands in for a formatter that writes a card and its
+// guidance as separate text blocks, which is how a hint can sit anywhere but
+// first in a result.
+type hintsSeveralBlocksOutput struct {
+	Name string `json:"name"`
+}
+
+// PaginationOutput carries the name and the fields testutil.FillFixture
+// recognizes the shared pagination shape by, so a fixture naming it is filled
+// with the page the requested state describes rather than field by field.
+type PaginationOutput struct {
+	Page       int  `json:"page"`
+	PerPage    int  `json:"per_page"`
+	TotalItems int  `json:"total_items"`
+	TotalPages int  `json:"total_pages"`
+	NextPage   int  `json:"next_page"`
+	HasMore    bool `json:"has_more"`
+}
+
+// hintsPaginatedOutput stands in for the list outputs the collector exists to
+// read: ones whose formatter writes guidance only once the response has rows,
+// and a further hint only once there is a page after this one.
+type hintsPaginatedOutput struct {
+	Items      []hintsItem      `json:"items"`
+	Pagination PaginationOutput `json:"pagination"`
+}
+
 func init() {
 	toolutil.RegisterMarkdown(func(hintsListOutput) string {
 		return "rows\n\n" +
@@ -61,6 +88,23 @@ func init() {
 			&mcp.ImageContent{MIMEType: "image/png", Data: []byte{0}},
 			&mcp.TextContent{Text: toolutil.HintAction("project.get", "read the project")},
 		}}
+	})
+	toolutil.RegisterMarkdownResult(func(hintsSeveralBlocksOutput) *mcp.CallToolResult {
+		return &mcp.CallToolResult{Content: []mcp.Content{
+			&mcp.TextContent{Text: toolutil.HintAction("branch.create", "start a branch")},
+			&mcp.ImageContent{MIMEType: "image/png", Data: []byte{0}},
+			&mcp.TextContent{Text: toolutil.HintAction("project.get", "read the project")},
+		}}
+	})
+	toolutil.RegisterMarkdown(func(o hintsPaginatedOutput) string {
+		if len(o.Items) == 0 {
+			return "no rows\n"
+		}
+		md := "rows\n\n" + toolutil.HintAction("project.get", "read one of them") + "\n"
+		if o.Pagination.HasMore {
+			md += toolutil.HintAction("issue.list", "read the next page") + "\n"
+		}
+		return md
 	})
 }
 
@@ -86,6 +130,32 @@ func TestHintedActionIDs_MixedContent_ReadsTheTextBlocks(t *testing.T) {
 	want := []string{"project.get"}
 	if got := hinted["hintsMixedContentOutput"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("HintedActionIDs()[hintsMixedContentOutput] = %v, want %v", got, want)
+	}
+}
+
+// TestHintedActionIDs_SeveralTextBlocks_AreAllRead checks that guidance is
+// collected from every text block and not only the first, since a formatter
+// that writes a card and its hints as separate blocks would otherwise have
+// everything after the first one dropped.
+func TestHintedActionIDs_SeveralTextBlocks_AreAllRead(t *testing.T) {
+	hinted := HintedActionIDs(t, hintsFixturePkgPath)
+
+	want := []string{"branch.create", "project.get"}
+	if got := hinted["hintsSeveralBlocksOutput"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("HintedActionIDs()[hintsSeveralBlocksOutput] = %v, want %v", got, want)
+	}
+}
+
+// TestHintedActionIDs_PaginatedList_IsDrivenWithRowsAndANextPage pins the
+// fixture state the collector renders with: a list formatter writes its
+// guidance only once it has rows, and its next-page hint only once a page
+// follows, so a zero or single-page fixture would collect neither.
+func TestHintedActionIDs_PaginatedList_IsDrivenWithRowsAndANextPage(t *testing.T) {
+	hinted := HintedActionIDs(t, hintsFixturePkgPath)
+
+	want := []string{"issue.list", "project.get"}
+	if got := hinted["hintsPaginatedOutput"]; !reflect.DeepEqual(got, want) {
+		t.Errorf("HintedActionIDs()[hintsPaginatedOutput] = %v, want %v", got, want)
 	}
 }
 

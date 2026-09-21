@@ -201,31 +201,82 @@ func TestRead_ReportsALineItCannotRead(t *testing.T) {
 	}
 }
 
-// TestRead_NamesTheLineTheBadRecordIsOn verifies that the error counts lines
-// from one and names the line the bad record is actually on, with a good record
+// TestRead_NamesTheLineTheBadRecordIsOn verifies that both refusals count lines
+// from one and name the line the bad record is actually on, with a good record
 // and a blank line ahead of it.
 //
 // The number is the whole value of the message: a shard is one line per event
 // and can hold thousands, so an error that names the file and not the line says
 // only that the run is unreadable. A blank line is skipped rather than counted,
 // because the writer ends every line with a newline and the last one therefore
-// reads as empty.
+// reads as empty, which is exactly what makes a counter of records rather than
+// of lines read correctly on a shard with nothing skipped and send a reader to
+// the wrong line on every other one. Both branches are driven because they hold
+// the same number and were not written together.
 func TestRead_NamesTheLineTheBadRecordIsOn(t *testing.T) {
-	dir := t.TempDir()
+	cases := []struct {
+		name string
+		bad  string
+	}{
+		{name: "a line that is not json", bad: "{"},
+		{name: "a line the spec refuses", bad: `{"schema":1,"type":"note"}`},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			shards := New(plainSpec())
+			writeShard(t, dir, "fixture-numbered.jsonl",
+				`{"schema":1,"type":"note","note":{"text":"a"}}`,
+				"",
+				testCase.bad,
+			)
+
+			_, err := shards.Read(dir)
+
+			if err == nil {
+				t.Fatal("Read error = nil, want one naming the third line")
+			}
+			if !strings.Contains(err.Error(), "line 3") {
+				t.Errorf("Read error = %v, want it to name line 3", err)
+			}
+		})
+	}
+}
+
+// TestReadShards_ReadsPastADirectoryNamedLikeAShard verifies that the walk
+// judges a directory by being one, so a directory whose name matches the
+// record's pattern is descended into rather than read as a file, and the shard
+// inside it is read.
+//
+// The name rule and the directory rule look like one filter and are two. A
+// record whose shards are written one subdirectory per target names those
+// directories after the same run the files are named after, so this is a shape
+// the tree produces rather than one invented for the test: read as a file, the
+// directory takes the whole walk down with an error about a shard nobody wrote.
+func TestReadShards_ReadsPastADirectoryNamedLikeAShard(t *testing.T) {
+	root := t.TempDir()
 	shards := New(plainSpec())
-	writeShard(t, dir, "fixture-numbered.jsonl",
-		`{"schema":1,"type":"note","note":{"text":"a"}}`,
-		"",
-		`{"schema":1,"type":"note"}`,
+
+	beside := writeShard(t, root, "fixture-beside.jsonl",
+		`{"schema":1,"type":"note","note":{"text":"beside"}}`,
+	)
+	// The directory itself carries a shard name, and holds a shard of its own.
+	inside := writeShard(t, filepath.Join(root, "fixture-a-directory.jsonl"), "fixture-inside.jsonl",
+		`{"schema":1,"type":"note","note":{"text":"inside"}}`,
 	)
 
-	_, err := shards.Read(dir)
-
-	if err == nil {
-		t.Fatal("Read error = nil, want one naming the third line")
+	read, err := shards.ReadShards(root)
+	if err != nil {
+		t.Fatalf("ReadShards error = %v, want the two shard files under the root", err)
 	}
-	if !strings.Contains(err.Error(), "line 3") {
-		t.Errorf("Read error = %v, want it to name line 3", err)
+	if len(read) != 2 {
+		t.Fatalf("shards = %d, want the 2 files: %+v", len(read), read)
+	}
+	// The walk visits a directory's contents before the entries that sort after
+	// it, and "fixture-a-directory.jsonl" sorts ahead of "fixture-beside.jsonl".
+	if read[0].Path != inside || read[1].Path != beside {
+		t.Errorf("paths = %q, %q; want %q then %q, and no directory among them", read[0].Path, read[1].Path, inside, beside)
 	}
 }
 

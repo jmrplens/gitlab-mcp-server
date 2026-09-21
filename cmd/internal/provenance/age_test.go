@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
-// today is the day every test below measures from, so an age is a fact about
-// the fixture rather than about the day the suite runs.
+// today is the day the tests below measure from, so an age is a fact about the
+// fixture rather than about the day the suite runs. It is noon, which is why
+// the one test that needs an exact age anchors itself to midnight instead.
 var today = time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
 
 // TestClock_NoFunctionSupplied_FallsBackToNow verifies the default every
@@ -71,12 +72,31 @@ func TestAge_ADateItCanRead_MeasuresElapsedTimeNotCalendarDays(t *testing.T) {
 }
 
 // TestAge_ADateNothingCanRead_ReportsWhy verifies that an unreadable date is
-// an error rather than a zero age. Every record's decoder accepts any string
-// in that field, so an age of zero would read as "taken today" and let a
-// record with a hand-edited date through the one check that asks about it.
+// an error, and that the age beside it is zero rather than whatever the failed
+// parse left behind. Every record's decoder accepts any string in that field,
+// and the empty one is what a record that simply omits it decodes to; a caller
+// that read the duration without the error would otherwise be handed the
+// distance from the zero time, saturated at the 292 years a Duration holds,
+// and call the record impossibly stale.
 func TestAge_ADateNothingCanRead_ReportsWhy(t *testing.T) {
-	if _, err := Age("one tuesday", today); err == nil {
-		t.Error("Age accepted a string that is not a date")
+	cases := []struct {
+		name        string
+		retrievedAt string
+	}{
+		{name: "a string that is not a date", retrievedAt: "one tuesday"},
+		{name: "the empty string a missing field decodes to", retrievedAt: ""},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			age, err := Age(testCase.retrievedAt, today)
+
+			if err == nil {
+				t.Errorf("Age(%q) returned no error", testCase.retrievedAt)
+			}
+			if age != 0 {
+				t.Errorf("Age(%q) = %s beside its error, want 0", testCase.retrievedAt, age)
+			}
+		})
 	}
 }
 
@@ -89,21 +109,52 @@ func TestDays_AnAgeInHours_TruncatesToWholeDays(t *testing.T) {
 	}
 }
 
-// TestProblems_ADateAGateCanRestOn_ReportsNothing verifies the quiet case: a
-// record taken inside the window adds no problem to the ones its command
-// found for itself.
+// TestProblems_ADateAGateCanRestOn_ReportsNothing verifies the quiet case and
+// both of its edges: a record taken inside the window adds no problem to the
+// ones its command found for itself, and neither edge is outside it. Both
+// refusals are written as strict comparisons, so either one loosened by an
+// instant would refuse a record it was meant to accept: the one taken as the
+// gate reads it as a regeneration that has not happened, the one exactly
+// [MaxAge] old as one that has aged out.
+//
+// The cases are measured from midnight rather than from today, because a
+// retrieval date parses to midnight UTC and an age of exactly zero or exactly
+// [MaxAge] cannot be expressed against an instant at noon.
 func TestProblems_ADateAGateCanRestOn_ReportsNothing(t *testing.T) {
 	subject := Subject{Noun: "record", Consequence: "it says nothing"}
+	midnight := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+	retrievedAt := midnight.Format(time.DateOnly)
 
-	if got := Problems(subject, today.Add(-MaxAge/2).Format(time.DateOnly), today); got != nil {
-		t.Errorf("Problems reported %v for a record inside the window", got)
+	cases := []struct {
+		name string
+		now  time.Time
+	}{
+		{name: "half the window ago", now: midnight.Add(MaxAge / 2)},
+		{name: "at the very instant the gate reads it", now: midnight},
+		{name: "exactly the window ago, which is still inside it", now: midnight.Add(MaxAge)},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := Problems(subject, retrievedAt, testCase.now); got != nil {
+				t.Errorf("Problems reported %v for a record taken %s", got, testCase.name)
+			}
+		})
 	}
 }
 
 // TestProblems_ADateAGateCannotRestOn_NamesTheSubject verifies the three
-// refusals and that each is written in the calling command's own words: the
-// verdict is shared, so a reader who meets one in CI output has to be able to
-// tell which of the pinned records it is about.
+// refusals whole, the unreadable date in both shapes it arrives in, and that
+// each is written in the calling command's own words: the verdict is shared,
+// so a reader who meets one in CI output has to be able to tell which of the
+// pinned records it is about.
+//
+// The sentence is compared entire rather than searched for a phrase, because
+// every part of it is a value something could get wrong without a phrase
+// search noticing: the stale message carries two day counts and a search for
+// the window matches a message that printed the window twice and never said
+// how old the record is, and the unreadable message quotes its date so that the
+// empty one a missing field decodes to leaves a visible "" rather than a hole
+// in the middle of the sentence.
 func TestProblems_ADateAGateCannotRestOn_NamesTheSubject(t *testing.T) {
 	subject := Subject{Noun: "pin", Consequence: "a document that broke since goes unreported"}
 
@@ -111,14 +162,27 @@ func TestProblems_ADateAGateCannotRestOn_NamesTheSubject(t *testing.T) {
 		name        string
 		retrievedAt string
 		want        string
-		// quotesDate is whether the message is about the date itself, and so
-		// has to show it. The stale message is about how far back it is, and
-		// shows the count of days and the window instead.
-		quotesDate bool
 	}{
-		{name: "a date nothing can read", retrievedAt: "one tuesday", want: "is not a date", quotesDate: true},
-		{name: "a date that has not happened", retrievedAt: "2026-09-09", want: "has not happened yet", quotesDate: true},
-		{name: "a date past the window", retrievedAt: "2020-01-01", want: "days old and the window is 180"},
+		{
+			name:        "a date nothing can read",
+			retrievedAt: "one tuesday",
+			want:        `the pin says it was taken on "one tuesday", which is not a date: nothing can then say how old the gate is`,
+		},
+		{
+			name:        "a date a missing field left empty",
+			retrievedAt: "",
+			want:        `the pin says it was taken on "", which is not a date: nothing can then say how old the gate is`,
+		},
+		{
+			name:        "a date that has not happened",
+			retrievedAt: "2026-09-09",
+			want:        "the pin says it was taken on 2026-09-09, which has not happened yet: no regeneration writes a day in the future",
+		},
+		{
+			name:        "a date past the window",
+			retrievedAt: "2020-01-01",
+			want:        "the pin is 2442 days old and the window is 180: a document that broke since goes unreported",
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -127,14 +191,8 @@ func TestProblems_ADateAGateCannotRestOn_NamesTheSubject(t *testing.T) {
 			if len(problems) != 1 {
 				t.Fatalf("Problems returned %d problems, want 1: %v", len(problems), problems)
 			}
-			if !strings.Contains(problems[0], testCase.want) {
-				t.Errorf("problem does not explain the refusal %q: %s", testCase.want, problems[0])
-			}
-			if !strings.HasPrefix(problems[0], "the pin ") {
-				t.Errorf("problem does not name the subject it is about: %s", problems[0])
-			}
-			if testCase.quotesDate && !strings.Contains(problems[0], testCase.retrievedAt) {
-				t.Errorf("problem does not quote the date it refused: %s", problems[0])
+			if problems[0] != testCase.want {
+				t.Errorf("Problems(%q) = %q, want %q", testCase.retrievedAt, problems[0], testCase.want)
 			}
 		})
 	}
