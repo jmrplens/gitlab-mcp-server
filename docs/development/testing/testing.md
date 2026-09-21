@@ -20,12 +20,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 18,027 |
-| Unit test functions                                   | 16,829 |
-| E2E test functions                                    |  1,198 |
-| cmd test functions                                    |  3,146 |
+| Total test functions                                  | 18,050 |
+| Unit test functions                                   | 16,851 |
+| E2E test functions                                    |  1,199 |
+| cmd test functions                                    |  3,166 |
 | Test files (internal/)                                |    649 |
-| Test files (cmd/)                                     |    217 |
+| Test files (cmd/)                                     |    218 |
 | Test files (test/e2e/)                                |    384 |
 | Tool sub-packages tested                              |    179 |
 | Core packages tested                                  |     29 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,373 | 68.6% |
+| `TestFunc_Scenario` (2-part)           | 12,375 | 68.6% |
 | `TestFunc` (no underscore)             |    905 |  5.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,749 | 26.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,770 | 26.4% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,189 |        185 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,127 |        448 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |          1,198 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
-| cmd packages            |          3,146 |        217 | server entry point and developer command utilities                                              |
-| **Total**               |     **18,027** |  **1,250** |                                                                                                 |
+| Tool sub-packages (179) |         10,129 |        448 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |          1,199 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
+| cmd packages            |          3,166 |        218 | server entry point and developer command utilities                                              |
+| **Total**               |     **18,050** |  **1,251** |                                                                                                 |
 
 ### Core Packages
 
@@ -300,12 +300,12 @@
 | useremails              |         30 |          2 |   100.0% |         6 |
 | usergpgkeys             |         53 |          2 |   100.0% |         8 |
 | users                   |        252 |          7 |    99.3% |        38 |
-| vulnerabilities         |         77 |          3 |    99.7% |         8 |
+| vulnerabilities         |         79 |          3 |    99.7% |         8 |
 | waitpoll                |         19 |          1 |    99.2% |         0 |
 | wikis                   |         71 |          2 |    99.5% |         6 |
 | workitems               |        128 |          5 |    99.5% |         6 |
 | workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,127** |    **448** |          | **1,187** |
+| **Total**               | **10,129** |    **448** |          | **1,187** |
 
 </details>
 

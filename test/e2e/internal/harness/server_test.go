@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -479,6 +480,46 @@ func TestServerProcess_WaitForExit_EachChildState_IsAnswered(t *testing.T) {
 				t.Fatalf("waitForExit() = %t, want %t", got, testCase.exited)
 			}
 		})
+	}
+}
+
+// TestServerProcess_ReaperLostTheWait_ExitStatusNamesTheReason checks that a
+// wait the reaper could not complete is reported with the reason it failed.
+//
+// The state is driven the way the defect drove it: something else waits on the
+// child first, so the reaper's own wait is answered that there is no such
+// child and it has no state to record. That is what a second waiter does, and
+// until this the harness answered a bare "exit status not recorded", which
+// names neither the race nor the child and cost one flake a whole
+// investigation.
+//
+// The reason itself is not asserted word for word: it is the operating
+// system's, and what matters is that one reaches the message at all.
+func TestServerProcess_ReaperLostTheWait_ExitStatusNamesTheReason(t *testing.T) {
+	bin, err := serverBinary("")
+	if err != nil {
+		t.Fatalf("building the server: %v", err)
+	}
+
+	// --version exits at once and needs no GitLab, so the child is only here
+	// to be a process that has ended.
+	cmd := exec.CommandContext(t.Context(), bin, "--version") //#nosec G204 -- the path is this package's own build
+	if startErr := cmd.Start(); startErr != nil {
+		t.Fatalf("starting the child: %v", startErr)
+	}
+	if waitErr := cmd.Wait(); waitErr != nil {
+		t.Fatalf("the first wait: %v", waitErr)
+	}
+
+	proc := newServerProcess("lost-the-wait", bin, childEnv{})
+	exited := make(chan struct{})
+	proc.reap(cmd, exited)
+	<-exited
+
+	const prefix = "exit status not recorded: "
+	got := proc.exitStatus()
+	if !strings.HasPrefix(got, prefix) || strings.TrimSpace(strings.TrimPrefix(got, prefix)) == "" {
+		t.Fatalf("exitStatus() = %q, want %q followed by the reason the wait failed", got, prefix)
 	}
 }
 
