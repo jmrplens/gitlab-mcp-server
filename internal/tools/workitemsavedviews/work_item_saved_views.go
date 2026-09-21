@@ -22,7 +22,12 @@ var emptyDisplaySettings = json.RawMessage(`{}`)
 // notFoundHint is appended to a lookup failure. Saved views are addressed by
 // their numeric database ID, not by an IID, and confusing the two is the most
 // likely reason a view that exists cannot be found.
-const notFoundHint = "verify saved_view_id is the view's numeric ID (from work_item_saved_view.list) and that namespace_path is the full group or project path"
+//
+// The action it sends the reader to is spelled by naming the constant the
+// catalog registers, not by writing the ID out: the hint used to say
+// "work_item_saved_view.list", which no surface resolves, because these
+// actions are routes on the issue domain and carry that prefix.
+const notFoundHint = "verify saved_view_id is the view's numeric ID (from " + actionList + ") and that namespace_path is the full group or project path"
 
 // Item is one work item saved view. It mirrors [gl.WorkItemSavedView].
 type Item struct {

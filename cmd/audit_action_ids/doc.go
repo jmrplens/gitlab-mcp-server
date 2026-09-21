@@ -81,12 +81,19 @@
 // figure is which. Three spellings are reported: a gitlab_* tool name, a
 // registered alias, and a dotted ID that resolves nowhere.
 //
-// It **reports and never gates**, and the reason is the size of it: 790
-// findings across 138 packages of the 1327 hints this tree writes. A gate
-// cannot land before the code it judges is clean, and until this rule existed
-// nobody had the figure at all. Its own blind spots are counted beside the
-// findings rather than folded into the gate's, so a hint the type checker
-// cannot fold fails nothing.
+// It **reports and never gates**, and the reason is the size of it: 785
+// findings across 137 packages of the 1327 hints this tree writes, every one
+// of them a tool name. A gate cannot land before the code it judges is clean,
+// and until this rule existed nobody had the figure at all. Its own blind
+// spots are counted beside the findings rather than folded into the gate's,
+// so a hint the type checker cannot fold fails nothing.
+//
+// The dotted-ID half of it is already clean, and was not when the rule was
+// written: the five unresolvable IDs it found on its first run were one
+// constant in internal/tools/workitemsavedviews naming
+// "work_item_saved_view.list", where the catalog registers those actions as
+// routes on the issue domain. That one is fixed by spelling the ID through
+// the constant the catalog registers, which is the remedy for the class.
 //
 // # The limit of a clean run
 //
