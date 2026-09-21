@@ -11,7 +11,7 @@ Grouped by domain:
 
 #### gitlab_access_request_approve_group
 
-Approve a pending group access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.
+Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -23,7 +23,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_approve_project
 
-Approve a pending project access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.
+Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -59,7 +59,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_access_request_list_group
 
-List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list.
+List pending access requests for a group. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -75,7 +75,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_list_project
 
-List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list.
+List pending access requests for a project. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list.
 
 **Parameters:**
 

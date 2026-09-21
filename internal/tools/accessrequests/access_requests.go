@@ -15,21 +15,57 @@ import (
 // Output types
 // ---------------------------------------------------------------------------.
 
-// Output represents a single access request: what [gl.AccessRequest] decodes,
-// plus what lib/api/entities/access_requester.rb sends that the SDK does not
-// carry, read from the captured response (ADR-0021). The entity inherits
-// Member and merges UserBasic into it, and the keys are in that order.
+// Output represents a single pending access request: what [gl.AccessRequest]
+// decodes of it, plus what lib/api/entities/access_requester.rb sends that the
+// SDK does not carry, read from the captured response (ADR-0021).
 //
-// public_email, locked, avatar_url, web_url, expires_at and membership_state
-// are on every access request; created_by, the two identities, email,
-// override and member_role wait on a condition and are absent otherwise.
+// That entity is short, and the shortness is the point. It exposes `user`,
+// merged from UserBasic, and `requested_at`, and nothing else: a pending
+// request is a person asking, not a membership, so there is no access level to
+// report, no expiry, no role, no membership state and no SAML or SCIM
+// identity. GitLab answers with a membership only once the request is
+// approved, which is [MemberOutput].
+//
+// This type carried all eleven Member keys until the entity was read rather
+// than assumed. They reached a caller empty on every list and every request,
+// and `access_level` reached one as a real-looking zero, which the list table
+// rendered as "No access (0)" for every row: a state the request was not in,
+// published from a key GitLab had not sent.
+//
+// public_email, locked, avatar_url and web_url are the UserBasic keys
+// client-go leaves out, and all four are on every access request. The same
+// UserBasic can send avatar_path and custom_attributes, and neither is
+// published: both wait on a presenter option, and no access-request route
+// declares only_path or with_custom_attributes, so publishing them would
+// advertise keys this endpoint cannot return.
+type Output struct {
+	toolutil.HintableOutput
+	ID          int64  `json:"id"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	PublicEmail string `json:"public_email,omitempty"`
+	State       string `json:"state"`
+	Locked      bool   `json:"locked"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	WebURL      string `json:"web_url,omitempty"`
+	RequestedAt string `json:"requested_at,omitempty"`
+}
+
+// MemberOutput represents the membership an approved access request became:
+// what [gl.AccessRequest] decodes, plus what lib/api/entities/member.rb sends
+// beside it, read from the captured response (ADR-0021).
+//
+// Approving is the one route of this family GitLab answers with Member instead
+// of AccessRequester, which is why it is the one shape here with an access
+// level in it. created_at, expires_at and membership_state are on every
+// member; created_by, the two identities, email, override and member_role wait
+// on a condition and are absent otherwise.
 //
 // The entity can also send avatar_path, custom_attributes and is_using_seat,
-// and none of them is published: each waits on a presenter option, and no
-// access-request route declares only_path, with_custom_attributes or
-// show_seat_info, so publishing them would advertise keys this endpoint
-// cannot return.
-type Output struct {
+// and none of them is published: each waits on a presenter option, and the
+// approve route declares neither only_path, with_custom_attributes nor
+// show_seat_info.
+type MemberOutput struct {
 	toolutil.HintableOutput
 	ID                int64                        `json:"id"`
 	Username          string                       `json:"username"`
@@ -49,7 +85,6 @@ type Output struct {
 	Override          *bool                        `json:"override,omitempty" tier:"premium"`
 	MembershipState   string                       `json:"membership_state,omitempty" tier:"premium"`
 	MemberRole        *toolutil.MemberRoleOutput   `json:"member_role,omitempty" tier:"ultimate"`
-	RequestedAt       string                       `json:"requested_at,omitempty"`
 }
 
 // ListOutput represents a paginated list of access requests.
@@ -73,10 +108,35 @@ func buildListOptions(page toolutil.PaginationInput, keyset toolutil.KeysetPagin
 	return opts
 }
 
-// convertAccessRequest maps a GitLab access request into the MCP output shape,
-// filling from the decoded request and from what the capture read beside it.
-func convertAccessRequest(ar *gl.AccessRequest, extra toolutil.AccessRequestExtra) Output {
+// convertAccessRequester maps a pending access request into the MCP output
+// shape, filling from the decoded request and from what the capture read
+// beside it.
+//
+// ar.AccessLevel is deliberately not read. client-go's AccessRequest models it
+// because approving answers with a member, and on a pending request GitLab
+// sends no such key, so it decodes to zero and publishing it would report
+// "no access" as though it were the state of the request.
+func convertAccessRequester(ar *gl.AccessRequest, extra toolutil.AccessRequesterExtra) Output {
 	o := Output{
+		ID:          ar.ID,
+		Username:    ar.Username,
+		Name:        ar.Name,
+		PublicEmail: extra.PublicEmail,
+		State:       ar.State,
+		Locked:      extra.Locked,
+		AvatarURL:   extra.AvatarURL,
+		WebURL:      extra.WebURL,
+	}
+	if ar.RequestedAt != nil {
+		o.RequestedAt = ar.RequestedAt.Format(time.RFC3339)
+	}
+	return o
+}
+
+// convertApprovedMember maps the membership an approved request became, which
+// is the one answer of this family that carries a membership at all.
+func convertApprovedMember(ar *gl.AccessRequest, extra toolutil.ApprovedMemberExtra) MemberOutput {
+	o := MemberOutput{
 		ID:                ar.ID,
 		Username:          ar.Username,
 		Name:              ar.Name,
@@ -98,28 +158,34 @@ func convertAccessRequest(ar *gl.AccessRequest, extra toolutil.AccessRequestExtr
 	if ar.CreatedAt != nil {
 		o.CreatedAt = ar.CreatedAt.Format(time.RFC3339)
 	}
-	if ar.RequestedAt != nil {
-		o.RequestedAt = ar.RequestedAt.Format(time.RFC3339)
-	}
 	return o
 }
 
-// capturedAccessRequest converts one access request with what its captured
-// answer carries beside the SDK's decode, or reports under op the answer the
-// type cannot hold. It is the whole tail of a handler that returns one
-// request, which is four of the six here.
-func capturedAccessRequest(op string, ar *gl.AccessRequest, capture *gitlabclient.ResponseCapture) (Output, error) {
-	extra, err := toolutil.CapturedAccessRequest(capture)
+// capturedAccessRequester converts one pending access request with what its
+// captured answer carries beside the SDK's decode, or reports under op the
+// answer the type cannot hold. It is the whole tail of the two handlers that
+// return one pending request.
+func capturedAccessRequester(op string, ar *gl.AccessRequest, capture *gitlabclient.ResponseCapture) (Output, error) {
+	extra, err := toolutil.CapturedAccessRequester(capture)
 	if err != nil {
 		return Output{}, toolutil.WrapErr(op, err)
 	}
-	return convertAccessRequest(ar, extra), nil
+	return convertAccessRequester(ar, extra), nil
 }
 
-// capturedAccessRequests does the same for a list, pairing each request with
+// capturedApprovedMember does the same for the two handlers that approve one.
+func capturedApprovedMember(op string, ar *gl.AccessRequest, capture *gitlabclient.ResponseCapture) (MemberOutput, error) {
+	extra, err := toolutil.CapturedApprovedMember(capture)
+	if err != nil {
+		return MemberOutput{}, toolutil.WrapErr(op, err)
+	}
+	return convertApprovedMember(ar, extra), nil
+}
+
+// capturedAccessRequesters does the same for a list, pairing each request with
 // the extra read at the same position.
-func capturedAccessRequests(op string, requests []*gl.AccessRequest, capture *gitlabclient.ResponseCapture) ([]Output, error) {
-	extras, err := toolutil.CapturedAccessRequests(capture, len(requests))
+func capturedAccessRequesters(op string, requests []*gl.AccessRequest, capture *gitlabclient.ResponseCapture) ([]Output, error) {
+	extras, err := toolutil.CapturedAccessRequesters(capture, len(requests))
 	if err != nil {
 		return nil, toolutil.WrapErr(op, err)
 	}
@@ -128,7 +194,7 @@ func capturedAccessRequests(op string, requests []*gl.AccessRequest, capture *gi
 	// them and what the pagination fields already distinguish.
 	var out []Output
 	for i, ar := range requests {
-		out = append(out, convertAccessRequest(ar, extras[i]))
+		out = append(out, convertAccessRequester(ar, extras[i]))
 	}
 	return out, nil
 }
@@ -164,7 +230,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_project", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; listing access requests requires Maintainer role or higher")
 	}
-	items, err := capturedAccessRequests("access_request_list_project", requests, captured)
+	items, err := capturedAccessRequesters("access_request_list_project", requests, captured)
 	if err != nil {
 		return ListOutput{}, err
 	}
@@ -198,7 +264,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_group", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; listing access requests requires Owner role")
 	}
-	items, err := capturedAccessRequests("access_request_list_group", requests, captured)
+	items, err := capturedAccessRequesters("access_request_list_group", requests, captured)
 	if err != nil {
 		return ListOutput{}, err
 	}
@@ -227,7 +293,7 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_project", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; check gitlab_project_member_get; project must allow access requests in its settings")
 	}
-	return capturedAccessRequest("access_request_request_project", ar, captured)
+	return capturedAccessRequester("access_request_request_project", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +318,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_group", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; group must allow access requests (Owner-controlled setting)")
 	}
-	return capturedAccessRequest("access_request_request_group", ar, captured)
+	return capturedAccessRequester("access_request_request_group", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -267,12 +333,12 @@ type ApproveProjectInput struct {
 }
 
 // ApproveProject approves a project access request.
-func ApproveProject(ctx context.Context, client *gitlabclient.Client, input ApproveProjectInput) (Output, error) {
+func ApproveProject(ctx context.Context, client *gitlabclient.Client, input ApproveProjectInput) (MemberOutput, error) {
 	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
+		return MemberOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
 	if input.UserID == 0 {
-		return Output{}, toolutil.ErrFieldRequired("user_id")
+		return MemberOutput{}, toolutil.ErrFieldRequired("user_id")
 	}
 	opts := &gl.ApproveAccessRequestOptions{}
 	if input.AccessLevel != 0 {
@@ -284,10 +350,10 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 		string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
+		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
 	}
-	return capturedAccessRequest("access_request_approve_project", ar, captured)
+	return capturedApprovedMember("access_request_approve_project", ar, captured)
 }
 
 // ---------------------------------------------------------------------------
@@ -302,12 +368,12 @@ type ApproveGroupInput struct {
 }
 
 // ApproveGroup approves a group access request.
-func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input ApproveGroupInput) (Output, error) {
+func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input ApproveGroupInput) (MemberOutput, error) {
 	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
+		return MemberOutput{}, toolutil.ErrFieldRequired("group_id")
 	}
 	if input.UserID == 0 {
-		return Output{}, toolutil.ErrFieldRequired("user_id")
+		return MemberOutput{}, toolutil.ErrFieldRequired("user_id")
 	}
 	opts := &gl.ApproveAccessRequestOptions{}
 	if input.AccessLevel != 0 {
@@ -319,10 +385,10 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
+		return MemberOutput{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
 	}
-	return capturedAccessRequest("access_request_approve_group", ar, captured)
+	return capturedApprovedMember("access_request_approve_group", ar, captured)
 }
 
 // ---------------------------------------------------------------------------

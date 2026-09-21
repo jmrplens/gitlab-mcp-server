@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -689,57 +690,99 @@ func TestDenyGroup_MissingGroupID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// convertAccessRequest — with date fields populated
+// the two converters: with and without date fields populated
 // ---------------------------------------------------------------------------.
 
-// TestConvertAccessRequest_WithDates verifies that convertAccessRequest
-// correctly formats the CreatedAt and RequestedAt time fields when they are
-// populated.
+// TestConvertAccessRequester_TakesTheRequestedAtAndNothingOfTheMembership
+// verifies the converter for a pending request on both halves of what it is
+// for: the one timestamp that entity sends is formatted, and the level
+// client-go decoded is not published at all.
 //
-// The test calls convertAccessRequest with a mock access request carrying
-// explicit time.Time values and asserts the formatted strings contain the
-// expected date prefix. This protects the date-formatting contract used by
-// every access-request output.
-func TestConvertAccessRequest_WithDates(t *testing.T) {
-	// gl.AccessRequest uses *time.Time for CreatedAt and RequestedAt
-	now := testTime(t, "2026-06-15T10:30:00Z")
-	later := testTime(t, "2026-06-16T08:00:00Z")
-
+// The second half is the one that needs a test. gl.AccessRequest models
+// AccessLevel because the approve route answers with a member, so a pending
+// request decodes to zero there whatever GitLab sent, and reading it would put
+// a level on a request that has none. The type is what enforces that now, and
+// the assertion here is what would have to be deleted to put it back.
+func TestConvertAccessRequester_TakesTheRequestedAtAndNothingOfTheMembership(t *testing.T) {
 	ar := mockAccessRequest(1, "alice", "Alice", "pending", 30)
-	ar.CreatedAt = now
-	ar.RequestedAt = later
+	ar.CreatedAt = testTime(t, "2026-06-15T10:30:00Z")
+	ar.RequestedAt = testTime(t, "2026-06-16T08:00:00Z")
 
-	out := convertAccessRequest(ar, toolutil.AccessRequestExtra{})
+	out := convertAccessRequester(ar, toolutil.AccessRequesterExtra{
+		Locked: true, PublicEmail: "alice@public.example.com",
+		AvatarURL: "https://example/a.png", WebURL: "https://example/alice",
+	})
 
-	if out.CreatedAt == "" {
-		t.Fatal("expected CreatedAt to be populated")
-	}
-	if !strings.Contains(out.CreatedAt, "2026-06-15") {
-		t.Errorf("unexpected CreatedAt: %s", out.CreatedAt)
-	}
-	if out.RequestedAt == "" {
-		t.Fatal("expected RequestedAt to be populated")
-	}
 	if !strings.Contains(out.RequestedAt, "2026-06-16") {
-		t.Errorf("unexpected RequestedAt: %s", out.RequestedAt)
+		t.Errorf("RequestedAt = %q, want the moment the request was made", out.RequestedAt)
+	}
+	want := Output{
+		ID: 1, Username: "alice", Name: "Alice", State: "pending",
+		Locked: true, PublicEmail: "alice@public.example.com",
+		AvatarURL: "https://example/a.png", WebURL: "https://example/alice",
+		RequestedAt: out.RequestedAt,
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("converted = %+v, want %+v", out, want)
 	}
 }
 
-// TestConvertAccessRequest_WithoutDates verifies the ConvertAccessRequest_WithoutDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestConvertAccessRequest_WithoutDates(t *testing.T) {
+// TestConvertAccessRequester_WithoutDates verifies that a request GitLab sent
+// no timestamp on reports none rather than the zero time formatted.
+func TestConvertAccessRequester_WithoutDates(t *testing.T) {
 	ar := mockAccessRequest(2, "bob", "Bob", "approved", 20)
-	out := convertAccessRequest(ar, toolutil.AccessRequestExtra{})
 
-	if out.CreatedAt != "" {
-		t.Errorf("expected empty CreatedAt, got %s", out.CreatedAt)
-	}
+	out := convertAccessRequester(ar, toolutil.AccessRequesterExtra{})
+
 	if out.RequestedAt != "" {
-		t.Errorf("expected empty RequestedAt, got %s", out.RequestedAt)
+		t.Errorf("RequestedAt = %q, want it empty", out.RequestedAt)
 	}
 	if out.ID != 2 {
-		t.Errorf("expected ID 2, got %d", out.ID)
+		t.Errorf("ID = %d, want 2", out.ID)
+	}
+}
+
+// TestConvertApprovedMember_TakesTheMembershipTheRequestBecame verifies the
+// other converter: approving is the one route here that answers with a
+// membership, so this is where the access level, the creation time and the
+// membership keys are read.
+func TestConvertApprovedMember_TakesTheMembershipTheRequestBecame(t *testing.T) {
+	ar := mockAccessRequest(1, "alice", "Alice", "active", 30)
+	ar.CreatedAt = testTime(t, "2026-06-15T10:30:00Z")
+
+	out := convertApprovedMember(ar, toolutil.ApprovedMemberExtra{
+		Locked: true, PublicEmail: "alice@public.example.com", MembershipState: "active",
+		AvatarURL: "https://example/a.png", WebURL: "https://example/alice",
+		CreatedBy: &toolutil.MemberUserOutput{Username: "carol"},
+		ExpiresAt: "2027-01-31", Email: "alice@example.com",
+		MemberRole: &toolutil.MemberRoleOutput{Name: "Auditor"},
+	})
+
+	if out.AccessLevel != 30 {
+		t.Errorf("AccessLevel = %d, want the level approving granted", out.AccessLevel)
+	}
+	if !strings.Contains(out.CreatedAt, "2026-06-15") {
+		t.Errorf("CreatedAt = %q, want the moment the membership was created", out.CreatedAt)
+	}
+	if out.MembershipState != "active" || out.Email != "alice@example.com" ||
+		out.ExpiresAt != "2027-01-31" || out.CreatedBy == nil || out.CreatedBy.Username != "carol" ||
+		out.MemberRole == nil || out.MemberRole.Name != "Auditor" {
+		t.Errorf("converted = %+v, want every membership key the capture carried", out)
+	}
+}
+
+// TestConvertApprovedMember_WithoutDates verifies the same nil-timestamp
+// contract on the membership side.
+func TestConvertApprovedMember_WithoutDates(t *testing.T) {
+	ar := mockAccessRequest(2, "bob", "Bob", "active", 20)
+
+	out := convertApprovedMember(ar, toolutil.ApprovedMemberExtra{})
+
+	if out.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want it empty", out.CreatedAt)
+	}
+	if out.ID != 2 {
+		t.Errorf("ID = %d, want 2", out.ID)
 	}
 }
 
@@ -759,48 +802,42 @@ const cardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 	"- Use action '" + actionAccessDenyProject + "' to deny this request at project scope\n" +
 	"- Use action '" + actionAccessDenyGroup + "' to deny this request at group scope\n"
 
+// memberCardHints is the guidance section the approved-membership card ends
+// with: from a membership the next thing to look at is what is still pending,
+// which is a different pair of actions from the four a pending request offers.
+const memberCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action '" + actionAccessRequestListProject + "' to list the requests still pending at project scope\n" +
+	"- Use action '" + actionAccessRequestListGroup + "' to list the requests still pending at group scope\n"
+
 // TestFormatOutputMarkdown_AllFields pins the whole card a fully populated
-// access request renders: every row in order, the access level as its role
-// name with the number, the locked warning, the nested creator, and the
+// pending request renders: every row in order, the locked warning, and the
 // guidance section. The assertion is the entire document rather than a set of
 // substrings, because a substring cannot see a row that landed outside the
 // block it belongs to.
+//
+// There is no access level, no membership state and no expiry on it, and that
+// is the shape of the entity rather than a choice of this card: a pending
+// request has a person and a moment, and nothing else.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
-		ID:              1,
-		Username:        "alice",
-		Name:            "Alice Smith",
-		State:           "approved",
-		Locked:          true,
-		AccessLevel:     30,
-		CreatedAt:       "2026-06-15T10:30:00Z",
-		CreatedBy:       &toolutil.MemberUserOutput{Name: "Carol Admin", Username: "carol", WebURL: "https://gitlab.example.com/carol"},
-		RequestedAt:     "2026-06-16T08:00:00Z",
-		Email:           "alice@example.com",
-		PublicEmail:     "alice@public.example.com",
-		MemberRole:      &toolutil.MemberRoleOutput{Name: "Auditor"},
-		MembershipState: "active",
-		ExpiresAt:       "2027-01-31T00:00:00Z",
-		WebURL:          "https://gitlab.example.com/alice",
+		ID:          1,
+		Username:    "alice",
+		Name:        "Alice Smith",
+		State:       "active",
+		Locked:      true,
+		PublicEmail: "alice@public.example.com",
+		RequestedAt: "2026-06-16T08:00:00Z",
+		WebURL:      "https://gitlab.example.com/alice",
 	}
 
 	want := "## Access Request #1\n\n" +
 		"- **ID**: 1\n" +
 		"- **Username**: @alice\n" +
 		"- **Name**: Alice Smith\n" +
-		"- **State**: approved\n" +
-		"- **Access Level**: Developer (30)\n" +
+		"- **State**: active\n" +
 		"- " + toolutil.EmojiWarning + " **Locked**\n" +
-		"- **Email**: alice@example.com\n" +
 		"- **Public Email**: alice@public.example.com\n" +
-		"- **Member Role**: Auditor\n" +
-		"- **Membership State**: active\n" +
-		"- **Created By**:\n" +
-		"  - **Name**: Carol Admin\n" +
-		"  - **Username**: [@carol](https://gitlab.example.com/carol)\n" +
-		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
 		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
-		"- **Expires At**: 31 Jan 2027 00:00 UTC\n" +
 		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
 		cardHints
 
@@ -814,11 +851,10 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 // with an empty value, and the unlocked request carries no warning line.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	out := Output{
-		ID:          5,
-		Username:    "bob",
-		Name:        "Bob",
-		State:       "pending",
-		AccessLevel: 10,
+		ID:       5,
+		Username: "bob",
+		Name:     "Bob",
+		State:    "pending",
 	}
 
 	want := "## Access Request #5\n\n" +
@@ -826,7 +862,6 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		"- **Username**: @bob\n" +
 		"- **Name**: Bob\n" +
 		"- **State**: pending\n" +
-		"- **Access Level**: Guest (10)\n" +
 		cardHints
 
 	if got := FormatOutputMarkdown(out); got != want {
@@ -834,21 +869,79 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_UnknownAccessLevel pins what a level GitLab has and
-// this server's table does not renders as: the number it sent, which is the
-// one thing a reader can act on.
-func TestFormatOutputMarkdown_UnknownAccessLevel(t *testing.T) {
-	out := Output{ID: 7, Username: "dana", Name: "Dana", State: "pending", AccessLevel: 35}
+// TestFormatMemberOutputMarkdown_AllFields pins the whole card the membership
+// an approved request became renders, which is where every key the pending
+// card no longer carries went.
+func TestFormatMemberOutputMarkdown_AllFields(t *testing.T) {
+	out := MemberOutput{
+		ID:              1,
+		Username:        "alice",
+		Name:            "Alice Smith",
+		State:           "active",
+		Locked:          true,
+		AccessLevel:     30,
+		CreatedAt:       "2026-06-15T10:30:00Z",
+		CreatedBy:       &toolutil.MemberUserOutput{Name: "Carol Admin", Username: "carol", WebURL: "https://gitlab.example.com/carol"},
+		Email:           "alice@example.com",
+		PublicEmail:     "alice@public.example.com",
+		MemberRole:      &toolutil.MemberRoleOutput{Name: "Auditor"},
+		MembershipState: "active",
+		ExpiresAt:       "2027-01-31T00:00:00Z",
+		WebURL:          "https://gitlab.example.com/alice",
+	}
 
-	want := "## Access Request #7\n\n" +
+	want := "## Access Request #1 Approved\n\n" +
+		"- **ID**: 1\n" +
+		"- **Username**: @alice\n" +
+		"- **Name**: Alice Smith\n" +
+		"- **State**: active\n" +
+		"- **Access Level**: Developer (30)\n" +
+		"- " + toolutil.EmojiWarning + " **Locked**\n" +
+		"- **Email**: alice@example.com\n" +
+		"- **Public Email**: alice@public.example.com\n" +
+		"- **Member Role**: Auditor\n" +
+		"- **Membership State**: active\n" +
+		"- **Created By**:\n" +
+		"  - **Name**: Carol Admin\n" +
+		"  - **Username**: [@carol](https://gitlab.example.com/carol)\n" +
+		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
+		"- **Expires At**: 31 Jan 2027 00:00 UTC\n" +
+		"- **URL**: [https://gitlab.example.com/alice](https://gitlab.example.com/alice)\n" +
+		memberCardHints
+
+	if got := FormatMemberOutputMarkdown(out); got != want {
+		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestFormatMemberOutputMarkdown_NoAccessLevel pins the guard the approve card
+// keeps: a membership GitLab answered without a level names no role rather
+// than reporting the role called "No access". The level is a key GitLab always
+// sends on Member, so this is the answer to a response that was not the one
+// documented rather than to an ordinary one.
+func TestFormatMemberOutputMarkdown_NoAccessLevel(t *testing.T) {
+	got := FormatMemberOutputMarkdown(MemberOutput{ID: 9, Username: "eve", Name: "Eve", State: "active"})
+
+	if strings.Contains(got, "Access Level") {
+		t.Errorf("the card names an access level GitLab did not send:\n%s", got)
+	}
+}
+
+// TestFormatMemberOutputMarkdown_UnknownAccessLevel pins what a level GitLab
+// has and this server's table does not renders as: the number it sent, which
+// is the one thing a reader can act on.
+func TestFormatMemberOutputMarkdown_UnknownAccessLevel(t *testing.T) {
+	out := MemberOutput{ID: 7, Username: "dana", Name: "Dana", State: "active", AccessLevel: 35}
+
+	want := "## Access Request #7 Approved\n\n" +
 		"- **ID**: 7\n" +
 		"- **Username**: @dana\n" +
 		"- **Name**: Dana\n" +
-		"- **State**: pending\n" +
+		"- **State**: active\n" +
 		"- **Access Level**: Level 35 (35)\n" +
-		cardHints
+		memberCardHints
 
-	if got := FormatOutputMarkdown(out); got != want {
+	if got := FormatMemberOutputMarkdown(out); got != want {
 		t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
@@ -863,8 +956,13 @@ func TestFormatOutputMarkdown_UnknownAccessLevel(t *testing.T) {
 // An absent key decodes to zero, and zero is a level [toolutil.AccessLevelDescription]
 // has a name for, so a card that printed it unconditionally would tell a
 // reader the requester holds "No access (0)" when GitLab said nothing of the
-// kind. Nothing held that guard before: every other card test passes a level,
-// so deleting the guard outright left the whole package green.
+// kind.
+//
+// The guard this was written for is gone, and so is the field: the requester
+// type carries no access level at all, which is what the entity says. The test
+// is kept because it drives the four real handlers rather than a literal, so
+// it is the one place that would notice the level coming back through a
+// decode.
 func TestFormatOutputMarkdown_PendingRequestNamesNoRole(t *testing.T) {
 	const pending = `{"id":3,"username":"raymond","name":"Raymond Smith","state":"active",` +
 		`"created_at":"2026-06-15T10:30:00Z","requested_at":"2026-06-16T08:00:00Z"}`
@@ -874,21 +972,14 @@ func TestFormatOutputMarkdown_PendingRequestNamesNoRole(t *testing.T) {
 		"- **Username**: @raymond\n" +
 		"- **Name**: Raymond Smith\n" +
 		"- **State**: active\n" +
-		"- **Created At**: 15 Jun 2026 10:30 UTC\n" +
 		"- **Requested At**: 16 Jun 2026 08:00 UTC\n" +
 		cardHints
 
-	for _, requestCall := range accessRequestCalls {
-		if !requestCall.pending {
-			continue
-		}
+	for _, requestCall := range accessRequesterCalls {
 		t.Run(requestCall.name, func(t *testing.T) {
 			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, pending)))
 			if err != nil {
 				t.Fatalf("%s: %v", requestCall.name, err)
-			}
-			if out.AccessLevel != 0 {
-				t.Fatalf("access_level = %d, want the zero a body without the key decodes to", out.AccessLevel)
 			}
 			if got := FormatOutputMarkdown(out); got != want {
 				t.Errorf("card mismatch:\ngot:\n%s\nwant:\n%s", got, want)
@@ -917,16 +1008,16 @@ const listHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		AccessRequests: []Output{
-			{ID: 1, Username: "alice", Name: "Alice", State: "pending", AccessLevel: 30, WebURL: "https://gitlab.example.com/alice"},
-			{ID: 2, Username: "bob", Name: "Bob", State: "approved", AccessLevel: 20},
+			{ID: 1, Username: "alice", Name: "Alice", State: "pending", RequestedAt: "2026-06-16T08:00:00Z", WebURL: "https://gitlab.example.com/alice"},
+			{ID: 2, Username: "bob", Name: "Bob", State: "approved", RequestedAt: "2026-06-17T09:15:00Z"},
 		},
 	}
 
 	want := "## Access Requests (2)\n\n" +
-		"| ID | Username | Name | State | Access Level |\n" +
+		"| ID | Username | Name | State | Requested At |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | pending | Developer (30) |\n" +
-		"| 2 | @bob | Bob | approved | Reporter (20) |\n" +
+		"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | pending | 16 Jun 2026 08:00 UTC |\n" +
+		"| 2 | @bob | Bob | approved | 17 Jun 2026 09:15 UTC |\n" +
 		listHints
 
 	if got := FormatListMarkdown(out); got != want {
@@ -939,15 +1030,15 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 // counted len() told the reader wrongly on every page but the last.
 func TestFormatListMarkdown_Paginated(t *testing.T) {
 	out := ListOutput{
-		AccessRequests: []Output{{ID: 1, Username: "alice", Name: "Alice", State: "pending", AccessLevel: 30}},
+		AccessRequests: []Output{{ID: 1, Username: "alice", Name: "Alice", State: "pending", RequestedAt: "2026-06-16T08:00:00Z"}},
 		Pagination:     toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalPages: 3, TotalItems: 3},
 	}
 
 	want := "## Access Requests (3)\n\n" +
 		"Showing 1 of 3 results (page 2 of 3)\n\n" +
-		"| ID | Username | Name | State | Access Level |\n" +
+		"| ID | Username | Name | State | Requested At |\n" +
 		"| --- | --- | --- | --- | --- |\n" +
-		"| 1 | @alice | Alice | pending | Developer (30) |\n\n" +
+		"| 1 | @alice | Alice | pending | 16 Jun 2026 08:00 UTC |\n\n" +
 		"Page 2 of 3 | 3 items total | 1 per page\n" +
 		listHints
 
@@ -1162,39 +1253,47 @@ const minimalAccessRequestJSON = `{"id":1,"username":"alice","public_email":"ali
 	`"created_at":"2026-06-15T10:30:00Z","expires_at":"2027-01-31","membership_state":"active",` +
 	`"requested_at":"2026-06-16T08:00:00Z"}`
 
-// accessRequestCalls are the six handlers that answer with an access request,
-// each returning the one request it published, saying whether its endpoint
-// answers with an array, and whether the request it answers with is still
-// pending.
+// accessRequesterCalls are the four handlers GitLab answers with
+// API::Entities::AccessRequester, each returning the one pending request it
+// published and saying whether its endpoint answers with an array.
 //
-// Pending is a property of the route rather than of the body: the list and
-// request routes render API::Entities::AccessRequester, the approve routes
-// render API::Entities::Member, and only the second of those is about a
-// membership that has a role.
-var accessRequestCalls = []struct {
-	name    string
-	call    func(client *gitlabclient.Client) (Output, error)
-	list    bool
-	pending bool
+// The split from [approvedMemberCalls] is the route's and not the body's: the
+// list and request routes render the requester entity, which says who asked
+// and when, and the approve routes render Member, which is the only one of
+// them about a membership with a role. One table over all six was what let
+// this package publish the membership keys on all of them.
+var accessRequesterCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (Output, error)
+	list bool
 }{
-	{name: "list_project", list: true, pending: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "list_project", list: true, call: func(client *gitlabclient.Client) (Output, error) {
 		out, err := ListProject(context.Background(), client, ListProjectInput{ProjectID: "10"})
 		return firstAccessRequest(out, err)
 	}},
-	{name: "list_group", list: true, pending: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "list_group", list: true, call: func(client *gitlabclient.Client) (Output, error) {
 		out, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "5"})
 		return firstAccessRequest(out, err)
 	}},
-	{name: "request_project", pending: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "request_project", call: func(client *gitlabclient.Client) (Output, error) {
 		return RequestProject(context.Background(), client, RequestProjectInput{ProjectID: "10"})
 	}},
-	{name: "request_group", pending: true, call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "request_group", call: func(client *gitlabclient.Client) (Output, error) {
 		return RequestGroup(context.Background(), client, RequestGroupInput{GroupID: "5"})
 	}},
-	{name: "approve_project", call: func(client *gitlabclient.Client) (Output, error) {
+}
+
+// approvedMemberCalls are the two handlers GitLab answers with
+// API::Entities::Member: the membership a request became. Neither endpoint
+// answers with an array.
+var approvedMemberCalls = []struct {
+	name string
+	call func(client *gitlabclient.Client) (MemberOutput, error)
+}{
+	{name: "approve_project", call: func(client *gitlabclient.Client) (MemberOutput, error) {
 		return ApproveProject(context.Background(), client, ApproveProjectInput{ProjectID: "10", UserID: 1})
 	}},
-	{name: "approve_group", call: func(client *gitlabclient.Client) (Output, error) {
+	{name: "approve_group", call: func(client *gitlabclient.Client) (MemberOutput, error) {
 		return ApproveGroup(context.Background(), client, ApproveGroupInput{GroupID: "5", UserID: 1})
 	}},
 }
@@ -1233,19 +1332,67 @@ func accessRequestClient(t *testing.T, body string) *gitlabclient.Client {
 	}))
 }
 
-// TestAccessRequests_SentFieldsReachEveryHandler verifies that every handler
-// answering with an access request publishes the fifteen keys GitLab sends
-// that client-go's AccessRequest does not model. Reading them off the SDK's
-// struct is impossible, so only the capture beside the decode can carry them,
-// and each handler had to be threaded separately.
-func TestAccessRequests_SentFieldsReachEveryHandler(t *testing.T) {
-	for _, requestCall := range accessRequestCalls {
+// TestAccessRequesters_SentFieldsReachEveryHandler verifies that the four
+// handlers answering with a pending request publish the four keys GitLab sends
+// that client-go's AccessRequest does not model, and nothing of the membership.
+//
+// The second half is the whole point. The body these are driven with carries
+// every membership key as well, because that is the body this package used to
+// be written against, and a shape that reads them would pass the first half
+// while publishing ten keys the requester entity has never sent.
+func TestAccessRequesters_SentFieldsReachEveryHandler(t *testing.T) {
+	for _, requestCall := range accessRequesterCalls {
 		t.Run(requestCall.name, func(t *testing.T) {
 			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, sentAccessRequestJSON)))
 			if err != nil {
 				t.Fatalf("%s: %v", requestCall.name, err)
 			}
-			assertSentAccessRequest(t, out)
+			assertSentAccessRequester(t, out)
+		})
+	}
+}
+
+// assertSentAccessRequester holds one published pending request to the four
+// UserBasic keys the capture carries, each under a subtest of its own so a
+// failure names the field that was dropped, and to publishing no membership
+// key and no option-gated key at all.
+func assertSentAccessRequester(t *testing.T, out Output) {
+	t.Helper()
+	for field, got := range map[string]string{
+		"public_email": out.PublicEmail,
+		"avatar_url":   out.AvatarURL,
+		"web_url":      out.WebURL,
+	} {
+		t.Run(field, func(t *testing.T) {
+			if want := sentAccessRequestStrings[field]; got != want {
+				t.Errorf("%s = %q, want %q", field, got, want)
+			}
+		})
+	}
+	t.Run("locked", func(t *testing.T) {
+		if !out.Locked {
+			t.Error("locked = false, want true")
+		}
+	})
+	assertPublishesNoKey(t, out, "a pending request",
+		"access_level", "created_at", "created_by", "expires_at", "email",
+		"group_saml_identity", "group_scim_identity", "override", "membership_state", "member_role",
+		"avatar_path", "custom_attributes", "is_using_seat")
+}
+
+// TestApprovedMembers_SentFieldsReachBothHandlers verifies that the two
+// handlers answering with a membership publish every key GitLab sends on
+// Member that client-go's AccessRequest does not model. Reading them off the
+// SDK's struct is impossible, so only the capture beside the decode can carry
+// them, and each handler had to be threaded separately.
+func TestApprovedMembers_SentFieldsReachBothHandlers(t *testing.T) {
+	for _, memberCall := range approvedMemberCalls {
+		t.Run(memberCall.name, func(t *testing.T) {
+			out, err := memberCall.call(accessRequestClient(t, sentAccessRequestJSON))
+			if err != nil {
+				t.Fatalf("%s: %v", memberCall.name, err)
+			}
+			assertSentApprovedMember(t, out)
 		})
 	}
 }
@@ -1261,11 +1408,11 @@ var sentAccessRequestStrings = map[string]string{
 	"membership_state": "active",
 }
 
-// assertSentAccessRequest holds one published request to every key
+// assertSentApprovedMember holds one published membership to every key
 // [sentAccessRequestJSON] carries that this endpoint can send, each under a
 // subtest of its own so a failure names the field that was dropped, and holds
 // the three option-gated keys in that body to nothing at all.
-func assertSentAccessRequest(t *testing.T, out Output) {
+func assertSentApprovedMember(t *testing.T, out MemberOutput) {
 	t.Helper()
 	for field, got := range map[string]string{
 		"public_email":     out.PublicEmail,
@@ -1286,38 +1433,43 @@ func assertSentAccessRequest(t *testing.T, out Output) {
 			t.Error("locked = false, want true")
 		}
 	})
-	assertSentAccessRequestObjects(t, out)
-	assertAccessRequestPublishesNoOptionGatedKey(t, out)
+	assertSentApprovedMemberObjects(t, out)
+	assertPublishesNoKey(t, out, "the approve route",
+		"avatar_path", "custom_attributes", "is_using_seat")
 }
 
-// assertAccessRequestPublishesNoOptionGatedKey holds the output to carrying no
-// trace of avatar_path, custom_attributes or is_using_seat even when the body
-// spelled all three.
+// assertPublishesNoKey holds a published output to carrying no trace of the
+// named keys, on the marshaled JSON because that is the surface a client sees.
 //
-// The access-request routes declare none of only_path, with_custom_attributes
-// or show_seat_info, so GitLab cannot send them here and the surface must not
-// claim it can. The audit answers the same three findings with
-// entity-option-no-endpoint-passes declarations; this is what stops the code
-// drifting back from them, and it is asserted on the marshaled JSON because
-// that is the surface a client sees.
-func assertAccessRequestPublishesNoOptionGatedKey(t *testing.T, out Output) {
+// Two classes go through here. The option-gated keys (avatar_path,
+// custom_attributes, is_using_seat) wait on presenter options no
+// access-request route declares, so GitLab cannot send them and the surface
+// must not claim it can; the audit answers those with
+// entity-option-no-endpoint-passes declarations and this is what stops the
+// code drifting back from them. The membership keys are the other class: the
+// requester entity does not send them at all, and publishing them was this
+// package's own defect rather than an option it never asked for.
+func assertPublishesNoKey(t *testing.T, out any, subject string, keys ...string) {
 	t.Helper()
 	encoded, err := json.Marshal(out)
 	if err != nil {
-		t.Fatalf("marshal the published request: %v", err)
+		t.Fatalf("marshal the published output: %v", err)
 	}
-	for _, key := range []string{"avatar_path", "custom_attributes", "is_using_seat"} {
+	// The key is matched with its quotes and colon, not as a bare word: "email"
+	// is a substring of "public_email", and a looser check reported the one
+	// key the requester does publish as one it must not.
+	for _, key := range keys {
 		t.Run("no "+key, func(t *testing.T) {
-			if strings.Contains(string(encoded), key) {
-				t.Errorf("published %s, which no access-request route can send:\n%s", key, encoded)
+			if strings.Contains(string(encoded), `"`+key+`":`) {
+				t.Errorf("published %s, which %s cannot carry:\n%s", key, subject, encoded)
 			}
 		})
 	}
 }
 
-// assertSentAccessRequestObjects holds the four object-valued keys, which the
+// assertSentApprovedMemberObjects holds the four object-valued keys, which the
 // SDK's AccessRequest models none of and the capture has to carry whole.
-func assertSentAccessRequestObjects(t *testing.T, out Output) {
+func assertSentApprovedMemberObjects(t *testing.T, out MemberOutput) {
 	t.Helper()
 	t.Run("created_by", func(t *testing.T) {
 		if out.CreatedBy == nil || out.CreatedBy.ID != 9 || out.CreatedBy.Username != "owner" {
@@ -1346,16 +1498,20 @@ func assertSentAccessRequestObjects(t *testing.T, out Output) {
 	})
 }
 
-// TestAccessRequests_ConditionalFieldsAbsentWhenGitLabOmitsThem verifies the
-// other side of every condition on the entity: a caller none of them hold for
-// gets the request without those keys, and the output leaves each at its zero
-// rather than inventing one. This is what makes the omitempty tags honest.
-func TestAccessRequests_ConditionalFieldsAbsentWhenGitLabOmitsThem(t *testing.T) {
-	for _, requestCall := range accessRequestCalls {
-		t.Run(requestCall.name, func(t *testing.T) {
-			out, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, minimalAccessRequestJSON)))
+// TestApprovedMembers_ConditionalFieldsAbsentWhenGitLabOmitsThem verifies the
+// other side of every condition on the Member entity: a caller none of them
+// hold for gets the membership without those keys, and the output leaves each
+// at its zero rather than inventing one. This is what makes the omitempty tags
+// honest.
+//
+// It asks only the approve handlers, because they are the only ones whose
+// entity has these keys to omit.
+func TestApprovedMembers_ConditionalFieldsAbsentWhenGitLabOmitsThem(t *testing.T) {
+	for _, memberCall := range approvedMemberCalls {
+		t.Run(memberCall.name, func(t *testing.T) {
+			out, err := memberCall.call(accessRequestClient(t, minimalAccessRequestJSON))
 			if err != nil {
-				t.Fatalf("%s: %v", requestCall.name, err)
+				t.Fatalf("%s: %v", memberCall.name, err)
 			}
 			for field, empty := range map[string]bool{
 				"created_by":          out.CreatedBy == nil,
@@ -1381,15 +1537,22 @@ func TestAccessRequests_ConditionalFieldsAbsentWhenGitLabOmitsThem(t *testing.T)
 }
 
 // TestAccessRequests_UnreadableCapturedFields verifies every handler reports
-// the captured response's decode failure rather than a half-filled request.
-// client-go's AccessRequest has no expires_at, so only the read beside it can
-// notice that GitLab sent an object where a date belongs.
+// the captured response's decode failure rather than a half-filled answer.
+// client-go's AccessRequest has no public_email, so only the read beside it
+// can notice that GitLab sent an object where a string belongs, and the key is
+// one both entities carry so one body drives all six handlers.
 func TestAccessRequests_UnreadableCapturedFields(t *testing.T) {
-	const poisoned = `{"id":1,"username":"alice","expires_at":{"not":"a date"}}`
-	cases := make([]testutil.CapturedCase, 0, len(accessRequestCalls))
-	for _, requestCall := range accessRequestCalls {
+	const poisoned = `{"id":1,"username":"alice","public_email":{"not":"an address"}}`
+	cases := make([]testutil.CapturedCase, 0, len(accessRequesterCalls)+len(approvedMemberCalls))
+	for _, requestCall := range accessRequesterCalls {
 		cases = append(cases, testutil.CapturedCase{Name: requestCall.name, Call: func() error {
 			_, err := requestCall.call(accessRequestClient(t, accessRequestBodyFor(requestCall.list, poisoned)))
+			return err
+		}})
+	}
+	for _, memberCall := range approvedMemberCalls {
+		cases = append(cases, testutil.CapturedCase{Name: memberCall.name, Call: func() error {
+			_, err := memberCall.call(accessRequestClient(t, poisoned))
 			return err
 		}})
 	}
@@ -1401,8 +1564,8 @@ func TestAccessRequests_UnreadableCapturedFields(t *testing.T) {
 // same one. A reader that took the first extra for every request would pass
 // every single-object test above and be wrong on the first page of two.
 func TestAccessRequests_ListPairsEachExtraWithItsOwnRequest(t *testing.T) {
-	const page = `[{"id":1,"username":"alice","email":"alice@example.com","web_url":"https://gl/alice"},` +
-		`{"id":2,"username":"bob","email":"bob@example.com","web_url":"https://gl/bob"}]`
+	const page = `[{"id":1,"username":"alice","public_email":"alice@public.example.com","web_url":"https://gl/alice"},` +
+		`{"id":2,"username":"bob","public_email":"bob@public.example.com","web_url":"https://gl/bob"}]`
 	out, err := ListProject(context.Background(), accessRequestClient(t, page), ListProjectInput{ProjectID: "10"})
 	if err != nil {
 		t.Fatalf("ListProject: %v", err)
@@ -1410,13 +1573,13 @@ func TestAccessRequests_ListPairsEachExtraWithItsOwnRequest(t *testing.T) {
 	if len(out.AccessRequests) != 2 {
 		t.Fatalf("published %d requests, want 2", len(out.AccessRequests))
 	}
-	for i, want := range []struct{ username, email, webURL string }{
-		{"alice", "alice@example.com", "https://gl/alice"},
-		{"bob", "bob@example.com", "https://gl/bob"},
+	for i, want := range []struct{ username, publicEmail, webURL string }{
+		{"alice", "alice@public.example.com", "https://gl/alice"},
+		{"bob", "bob@public.example.com", "https://gl/bob"},
 	} {
 		t.Run(want.username, func(t *testing.T) {
 			got := out.AccessRequests[i]
-			if got.Username != want.username || got.Email != want.email || got.WebURL != want.webURL {
+			if got.Username != want.username || got.PublicEmail != want.publicEmail || got.WebURL != want.webURL {
 				t.Errorf("request %d = %+v, want %v", i, got, want)
 			}
 		})

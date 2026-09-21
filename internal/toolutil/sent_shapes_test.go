@@ -458,8 +458,25 @@ func tailReaderCases() []capturedReaderCase {
 			want: readTheSentPackage,
 		},
 		{
-			name: "access request",
-			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedAccessRequest(c) },
+			// The pending request is the shape that carries nothing of the
+			// membership, so the body offers membership keys and the check is
+			// that the four UserBasic ones arrived. A shape that embedded
+			// MemberExtra again would pass the first half of this and publish
+			// ten keys GitLab never sends on these routes.
+			name: "access requester",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedAccessRequester(c) },
+			body: `{"id":1,"public_email":"pub@example.com","locked":true,` +
+				`"avatar_url":"https://example/a.png","web_url":"https://example/u",` +
+				`"access_level":30,"membership_state":"active"}`,
+			want: func(v any) bool {
+				e, _ := v.(AccessRequesterExtra)
+				return e.Locked && e.PublicEmail == "pub@example.com" &&
+					e.AvatarURL == "https://example/a.png" && e.WebURL == "https://example/u"
+			},
+		},
+		{
+			name: "approved member",
+			read: func(c *gitlabclient.ResponseCapture) (any, error) { return CapturedApprovedMember(c) },
 			body: `{"id":1,"public_email":"pub@example.com","locked":true,"avatar_url":"https://example/a.png",` +
 				`"avatar_path":"/uploads/a.png","custom_attributes":[{"key":"team","value":"core"}],` +
 				`"web_url":"https://example/u","created_by":{"id":9,"username":"owner"},` +
@@ -467,7 +484,7 @@ func tailReaderCases() []capturedReaderCase {
 				`"group_scim_identity":{"extern_uid":"scim-1","group_id":4,"active":true},` +
 				`"email":"member@example.com","override":true,` +
 				`"membership_state":"active","member_role":{"id":3,"name":"Auditor"}}`,
-			want: readTheSentAccessRequest,
+			want: readTheSentApprovedMember,
 		},
 		{
 			name: "billable member",
@@ -490,13 +507,14 @@ func tailReaderCases() []capturedReaderCase {
 	}
 }
 
-// readTheSentAccessRequest reports whether the access request reader filled
-// every key of the entity. The two halves are split so each stays inside the
-// complexity bound, and they are the entity's own split: what Member and the
-// UserBasic merged into it contribute, and what the embed does not reach.
-func readTheSentAccessRequest(v any) bool {
-	e, _ := v.(AccessRequestExtra)
-	return readTheEmbeddedMember(e.MemberExtra) && readTheAccessRequestsOwnKeys(e)
+// readTheSentApprovedMember reports whether the reader for the membership an
+// approved request became filled every key of the entity. The two halves are
+// split so each stays inside the complexity bound, and they are the entity's
+// own split: what Member and the UserBasic merged into it contribute, and what
+// the embed does not reach.
+func readTheSentApprovedMember(v any) bool {
+	e, _ := v.(ApprovedMemberExtra)
+	return readTheEmbeddedMember(e.MemberExtra) && readTheApprovedMembersOwnKeys(e)
 }
 
 // readTheEmbeddedMember reports whether the keys [MemberExtra] contributes
@@ -509,9 +527,9 @@ func readTheEmbeddedMember(e MemberExtra) bool {
 		e.Override != nil && *e.Override && e.MembershipState == "active"
 }
 
-// readTheAccessRequestsOwnKeys reports whether the six keys the shape names
+// readTheApprovedMembersOwnKeys reports whether the six keys the shape names
 // beside the embed arrived.
-func readTheAccessRequestsOwnKeys(e AccessRequestExtra) bool {
+func readTheApprovedMembersOwnKeys(e ApprovedMemberExtra) bool {
 	return e.AvatarURL == "https://example/a.png" && e.WebURL == "https://example/u" &&
 		e.CreatedBy != nil && e.CreatedBy.Username == "owner" &&
 		e.ExpiresAt == "2027-01-31" && e.Email == "member@example.com" &&
@@ -657,7 +675,7 @@ func TestCapturedTailListReaders_HoldTheCountToTheSDKs(t *testing.T) {
 			return len(x), e
 		}},
 		{"access requests", func(c *gitlabclient.ResponseCapture, n int) (int, error) {
-			x, e := CapturedAccessRequests(c, n)
+			x, e := CapturedAccessRequesters(c, n)
 			return len(x), e
 		}},
 		{"billable members", func(c *gitlabclient.ResponseCapture, n int) (int, error) {

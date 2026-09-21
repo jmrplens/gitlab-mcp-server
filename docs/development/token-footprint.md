@@ -37,7 +37,7 @@ All measurements are against the current source tree. The catalog is built in-me
 | `meta` / `minimal` (compact) | Free/CE  |            34 |               869 | `compact`                      |            207,856 |           170 |      208,026 |
 | `meta` / `full` (full)       | Free/CE  |            34 |               869 | `full`                         |            300,667 |         8,835 |      309,502 |
 | `meta` / `minimal` (full)    | Free/CE  |            34 |               869 | `full`                         |            300,667 |           170 |      300,837 |
-| `individual` / `full`        | Free/CE  |           865 |               865 | n/a                            |            539,317 |         8,835 |      548,152 |
+| `individual` / `full`        | Free/CE  |           865 |               865 | n/a                            |            538,295 |         8,835 |      547,130 |
 | `dynamic` / `full` (default) | Premium  |             2 |             1,023 | n/a                            |              1,524 |         8,835 |       10,359 |
 | `dynamic` / `minimal`        | Premium  |             2 |             1,023 | n/a                            |              1,524 |           170 |        1,694 |
 | `meta` / `full` (opaque)     | Premium  |            40 |             1,023 | `opaque`                       |            150,690 |         8,835 |      159,525 |
@@ -46,7 +46,7 @@ All measurements are against the current source tree. The catalog is built in-me
 | `meta` / `minimal` (compact) | Premium  |            40 |             1,023 | `compact`                      |            241,119 |           170 |      241,289 |
 | `meta` / `full` (full)       | Premium  |            40 |             1,023 | `full`                         |            348,961 |         8,835 |      357,796 |
 | `meta` / `minimal` (full)    | Premium  |            40 |             1,023 | `full`                         |            348,961 |           170 |      349,131 |
-| `individual` / `full`        | Premium  |         1,019 |             1,019 | n/a                            |            649,006 |         8,835 |      657,841 |
+| `individual` / `full`        | Premium  |         1,019 |             1,019 | n/a                            |            647,744 |         8,835 |      656,579 |
 | `dynamic` / `full` (default) | Ultimate |             2 |             1,089 | n/a                            |              1,524 |         8,835 |       10,359 |
 | `dynamic` / `minimal`        | Ultimate |             2 |             1,089 | n/a                            |              1,524 |           170 |        1,694 |
 | `meta` / `full` (opaque)     | Ultimate |            51 |             1,089 | `opaque`                       |            162,863 |         8,835 |      171,698 |
@@ -55,7 +55,7 @@ All measurements are against the current source tree. The catalog is built in-me
 | `meta` / `minimal` (compact) | Ultimate |            51 |             1,089 | `compact`                      |            258,467 |           170 |      258,637 |
 | `meta` / `full` (full)       | Ultimate |            51 |             1,089 | `full`                         |            371,394 |         8,835 |      380,229 |
 | `meta` / `minimal` (full)    | Ultimate |            51 |             1,089 | `full`                         |            371,394 |           170 |      371,564 |
-| `individual` / `full`        | Ultimate |         1,085 |             1,085 | n/a                            |            683,032 |         8,835 |      691,867 |
+| `individual` / `full`        | Ultimate |         1,085 |             1,085 | n/a                            |            681,312 |         8,835 |      690,147 |
 
 ## Interpretation guide
 

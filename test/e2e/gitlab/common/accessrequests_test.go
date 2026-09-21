@@ -105,7 +105,10 @@ func assertAccessRequestFlow(e *harness.Env, parties accessRequestParties, targe
 	if again.ID != parties.requesterID {
 		e.T.Errorf("the second request for %s answered user %d, want the requester %d", target, again.ID, parties.requesterID)
 	}
-	approved := harness.Do[accessrequests.Output](parties.owner, approve, withParams(requester, map[string]any{"access_level": int(gl.DeveloperPermissions)}))
+	// Approving is the one route of this family GitLab answers with a
+	// membership rather than a pending request, so it is the one read back as
+	// the member shape and the only one with a level on it.
+	approved := harness.Do[accessrequests.MemberOutput](parties.owner, approve, withParams(requester, map[string]any{"access_level": int(gl.DeveloperPermissions)}))
 	if approved.ID != parties.requesterID || approved.AccessLevel != int(gl.DeveloperPermissions) {
 		e.T.Errorf("the approval for %s answered user %d at level %d, want %d as a developer (%d)", target, approved.ID, approved.AccessLevel, parties.requesterID, gl.DeveloperPermissions)
 	}

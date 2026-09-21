@@ -863,19 +863,58 @@ func CapturedPackages(capture *gitlabclient.ResponseCapture, decoded int) ([]Pac
 	return capturedList[PackageExtra](capture, decoded, "packages")
 }
 
-// AccessRequestExtra is what lib/api/entities/access_requester.rb sends on an
-// access request that client-go's AccessRequest does not carry. The entity
-// inherits Member and merges UserBasic into it, so everything [MemberExtra]
-// reads arrives here too; these are the keys beside them. The two URLs are
-// unconditional; the address, the creator and the custom role each wait on
-// their own condition, and the expiry is sent on every member.
+// AccessRequesterExtra is what lib/api/entities/access_requester.rb sends on a
+// pending access request that client-go's AccessRequest does not carry.
+//
+// It is deliberately not [MemberExtra], and this is the whole point of the
+// shape. The entity does not inherit Member: it exposes `user` merged from
+// UserBasic and `requested_at`, and nothing else, which the live record in
+// docs/development/gitlab-api-live.json states as those two fields. A pending
+// request is not a membership, so it carries no access level, no expiry, no
+// role, no membership state and no SAML or SCIM identity, and the four keys
+// here are the UserBasic ones client-go leaves out. This shape used to embed
+// MemberExtra on the strength of a comment saying the entity inherits Member,
+// which it does not, and ten membership keys were published on a response
+// that has never carried one of them.
+//
+// The same UserBasic exposes avatar_path and custom_attributes, and neither
+// is read: both wait on a presenter option, and no access-request route
+// declares only_path or with_custom_attributes, so GitLab has never sent
+// either here.
+type AccessRequesterExtra struct {
+	Locked      bool   `json:"locked"`
+	PublicEmail string `json:"public_email"`
+	AvatarURL   string `json:"avatar_url"`
+	WebURL      string `json:"web_url"`
+}
+
+// CapturedAccessRequester reads them off the captured answer to a request that
+// returned one pending access request.
+func CapturedAccessRequester(capture *gitlabclient.ResponseCapture) (AccessRequesterExtra, error) {
+	return capturedOne[AccessRequesterExtra](capture)
+}
+
+// CapturedAccessRequesters reads the same off a list answer, one extra per
+// request in order, the count held to what the SDK decoded.
+func CapturedAccessRequesters(capture *gitlabclient.ResponseCapture, decoded int) ([]AccessRequesterExtra, error) {
+	return capturedList[AccessRequesterExtra](capture, decoded, "access requests")
+}
+
+// ApprovedMemberExtra is what lib/api/entities/member.rb sends on the member an
+// approved access request became, beyond what client-go's AccessRequest
+// carries. Approving is the one route of that family GitLab answers with
+// Member rather than AccessRequester, so it is the one that has a membership
+// to describe: everything [MemberExtra] reads arrives here, and these are the
+// keys beside them. The two URLs are unconditional; the address, the creator
+// and the custom role each wait on their own condition, and the expiry is sent
+// on every member.
 //
 // Three keys the entity can send are deliberately not read: is_using_seat,
 // avatar_path and custom_attributes wait on presenter options the caller has
 // to ask for, and no access-request route declares show_seat_info, only_path
 // or with_custom_attributes, so GitLab never sends them here. The first is
 // absent from this shape and the other two arrive through the embed unread.
-type AccessRequestExtra struct {
+type ApprovedMemberExtra struct {
 	MemberExtra
 	AvatarURL string            `json:"avatar_url"`
 	WebURL    string            `json:"web_url"`
@@ -887,16 +926,10 @@ type AccessRequestExtra struct {
 	MemberRole *MemberRoleOutput `json:"member_role"`
 }
 
-// CapturedAccessRequest reads them off the captured answer to a request that
-// returned one access request.
-func CapturedAccessRequest(capture *gitlabclient.ResponseCapture) (AccessRequestExtra, error) {
-	return capturedOne[AccessRequestExtra](capture)
-}
-
-// CapturedAccessRequests reads the same off a list answer, one extra per
-// request in order, the count held to what the SDK decoded.
-func CapturedAccessRequests(capture *gitlabclient.ResponseCapture, decoded int) ([]AccessRequestExtra, error) {
-	return capturedList[AccessRequestExtra](capture, decoded, "access requests")
+// CapturedApprovedMember reads them off the captured answer to approving one
+// access request.
+func CapturedApprovedMember(capture *gitlabclient.ResponseCapture) (ApprovedMemberExtra, error) {
+	return capturedOne[ApprovedMemberExtra](capture)
 }
 
 // BillableMemberExtra is what ee/lib/api/entities/billable_member.rb sends on a
