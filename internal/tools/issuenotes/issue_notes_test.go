@@ -343,16 +343,15 @@ func TestGetNote_Success(t *testing.T) {
 	}
 }
 
-// TestGetNote_MissingProjectID verifies GetNote when missing project ID.
+// TestGetNote_MissingProjectID verifies GetNote refuses an absent project_id
+// itself, before the request is built: the mock is ForbiddenHandler, which
+// fails the test if anything reaches GitLab, so a passing run says the handler
+// refused rather than that some 404 came back.
 func TestGetNote_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetNote(context.Background(), client, GetInput{IssueIID: 10, NoteID: 100})
-	if err == nil {
-		t.Fatal("GetNote() expected error for missing project_id, got nil")
-	}
+	assertContains(t, err, "project_id")
 }
 
 // TestUpdate_Success verifies Update when success.
@@ -382,16 +381,13 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingProjectID verifies Update when missing project ID.
+// TestUpdate_MissingProjectID verifies Update refuses an absent project_id
+// itself, before the request is built, held by ForbiddenHandler.
 func TestUpdate_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Update(context.Background(), client, UpdateInput{IssueIID: 10, NoteID: 100, Body: "test"})
-	if err == nil {
-		t.Fatal("Update() expected error for missing project_id, got nil")
-	}
+	assertContains(t, err, "project_id")
 }
 
 // TestDelete_Success verifies Delete when success.
@@ -414,16 +410,15 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingProjectID verifies Delete when missing project ID.
+// TestDelete_MissingProjectID verifies Delete refuses an absent project_id
+// itself, before the request is built, held by ForbiddenHandler. It is the one
+// of the five where reaching GitLab would not merely be wrong but
+// irreversible.
 func TestDelete_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), client, DeleteInput{IssueIID: 10, NoteID: 100})
-	if err == nil {
-		t.Fatal("Delete() expected error for missing project_id, got nil")
-	}
+	assertContains(t, err, "project_id")
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +568,79 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 	}
 	if strings.Contains(md, "**Internal note**") {
 		t.Error("should not contain Internal note")
+	}
+}
+
+// TestFormatOutputMarkdown_EachFlagAloneRendersItsOwnLine drives one note flag
+// at a time, because a struct of booleans has no fixture in which no two values
+// agree: TestFormatOutputMarkdown_Populated sets all four true and the two
+// tests beside it set System and Internal both false, so until this test
+// crossing them in toNoteMarkdown passed the whole suite while every system
+// note rendered as an internal one and every internal note as a system note.
+// Neither gate can see it — the crossing is a straight-line assignment with no
+// branch to flip.
+// Reading a public comment as internal is the half that misleads a user about
+// who can see what they wrote.
+func TestFormatOutputMarkdown_EachFlagAloneRendersItsOwnLine(t *testing.T) {
+	const (
+		systemLine     = "- **System note**"
+		internalLine   = "- **Internal note**"
+		resolvableLine = "- **Resolvable**: unresolved"
+	)
+
+	tests := []struct {
+		name string
+		out  Output
+		want string
+	}{
+		{name: "SystemOnly", out: Output{ID: 1, System: true}, want: systemLine},
+		{name: "InternalOnly", out: Output{ID: 2, Internal: true}, want: internalLine},
+		{name: "ResolvableOnly", out: Output{ID: 3, Resolvable: true}, want: resolvableLine},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := FormatOutputMarkdown(tt.out)
+			for _, line := range []string{systemLine, internalLine, resolvableLine} {
+				if got, want := strings.Contains(md, line), line == tt.want; got != want {
+					t.Errorf("contains(%q) = %v, want %v, in:\n%s", line, got, want, md)
+				}
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_FlagColumnsFollowTheirOwnField pins the same crossing
+// one column over. The table prints System and Internal as two emoji in fixed
+// positions, and the populated list test above asserts only the ID and author
+// cells, so a row whose flags had traded places read as valid Markdown and
+// nothing failed. One note per subtest with a single flag set is what separates
+// the columns.
+func TestFormatListMarkdown_FlagColumnsFollowTheirOwnField(t *testing.T) {
+	tests := []struct {
+		name string
+		note Output
+		want string
+	}{
+		{
+			name: "SystemOnly",
+			note: Output{ID: 1, Author: &toolutil.NoteUserOutput{Username: "alice"}, System: true},
+			want: "| 1 | alice |  | " + toolutil.EmojiSuccess + " | " + toolutil.EmojiCross + " |",
+		},
+		{
+			name: "InternalOnly",
+			note: Output{ID: 2, Author: &toolutil.NoteUserOutput{Username: "bob"}, Internal: true},
+			want: "| 2 | bob |  | " + toolutil.EmojiCross + " | " + toolutil.EmojiSuccess + " |",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := FormatListMarkdown(ListOutput{Notes: []Output{tt.note}})
+			if !strings.Contains(md, tt.want) {
+				t.Errorf("missing row %q in:\n%s", tt.want, md)
+			}
+		})
 	}
 }
 
@@ -855,26 +923,20 @@ func TestList_AllOptionalParams(t *testing.T) {
 // Missing project_id for Create and List
 // ---------------------------------------------------------------------------.
 
-// TestCreate_MissingProjectID verifies Create when missing project ID.
+// TestCreate_MissingProjectID verifies Create refuses an absent project_id
+// itself, before the request is built, held by ForbiddenHandler.
 func TestCreate_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{IssueIID: 10, Body: "test"})
-	if err == nil {
-		t.Fatal("Create() expected error for missing project_id, got nil")
-	}
+	assertContains(t, err, "project_id")
 }
 
-// TestList_MissingProjectID verifies List when missing project ID.
+// TestList_MissingProjectID verifies List refuses an absent project_id itself,
+// before the request is built, held by ForbiddenHandler.
 func TestList_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{IssueIID: 10})
-	if err == nil {
-		t.Fatal("List() expected error for missing project_id, got nil")
-	}
+	assertContains(t, err, "project_id")
 }
 
 // ---------------------------------------------------------------------------
