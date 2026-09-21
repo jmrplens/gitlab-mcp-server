@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,14 +14,39 @@ import (
 
 // sentSchema is the schema the sent fixtures are judged by: one field per
 // exclusion the walk makes, a connection with its plumbing, an interface with
-// two implementations, and a mutation payload.
+// two implementations, a union, a connection that pages through edges alone, a
+// payload that is not a mutation payload, and a mutation payload.
 const sentSchema = `
 scalar Time
 
 type Query {
   project(fullPath: ID!): Project
   node: Thing
+  holder: Holder
+  twin: Holder
+  defaulted: Defaulted
 }
+
+type Holder {
+  id: ID!
+  name: String!
+  shape: Shape
+  thing: Thing
+  gizmos: GizmoConnection
+  tags: [Label!]
+  pipeline: Pipeline
+  stamp: Time
+  token: String
+  rank: Int!
+}
+
+union Shape = Widget | Gadget
+
+type GizmoConnection { total: Int! edges: [GizmoEdge!] }
+type GizmoEdge { node: Gizmo! }
+type Gizmo { id: ID! label: String! weight: Int! }
+
+type Defaulted { id: ID! scaled(scale: Int! = 1): String keyed(key: String!): String }
 
 type Project {
   id: ID!
@@ -53,11 +79,13 @@ type PageInfo { hasNextPage: Boolean! endCursor: String }
 type Label { title: String! color: String! }
 
 interface Thing { id: ID! kind: String! }
-type Widget implements Thing { id: ID! kind: String! size: Int! color: String! }
+type Widget implements Thing { id: ID! kind: String! size: Int! color: String! owner: Person }
 type Gadget implements Thing { id: ID! kind: String! weight: Int! }
+type Person { name: String! email: String! }
 
-type Mutation { createNote(body: String!): NotePayload }
+type Mutation { createNote(body: String!): NotePayload touchNote(body: String!): TouchPayload }
 type NotePayload { clientMutationId: String errors: [String!]! note: Note }
+type TouchPayload { clientMutationId: String note: Note }
 type Note { id: ID! body: String! internal: Boolean }
 `
 
@@ -386,6 +414,13 @@ func TestRun_SentDimension_OneFieldReachedTwice_IsOneFindingWithItsOccurrences(t
 	if report.Summary.Findings != len(report.Sent) {
 		t.Errorf("summary counts %d finding(s) and the report holds %d", report.Summary.Findings, len(report.Sent))
 	}
+	// The two counts are what a reader compares to see how much of the report
+	// is one thing said twice, so they are asserted together and the fixture
+	// makes them differ.
+	if report.Summary.Occurrences <= report.Summary.Findings {
+		t.Errorf("summary counts %d occurrence(s) of %d finding(s), and this fixture reaches one of them twice",
+			report.Summary.Occurrences, report.Summary.Findings)
+	}
 }
 
 // twiceFixture sends two documents that both read a pipeline and both leave
@@ -581,8 +616,9 @@ func TestRun_SentDeclarations_AnswerAFindingAndAreReportedWhenTheyAnswerNothing(
 		if field.Category != categoryNotThisResponse || field.Reason != answers.Reason {
 			t.Errorf("Pipeline.startedAt category = %q, reason = %q; want the declaration's", field.Category, field.Reason)
 		}
-		if report.Summary.Undeclared != 0 {
-			t.Errorf("summary undeclared = %d, want 0", report.Summary.Undeclared)
+		if report.Summary.Undeclared != 0 || report.Summary.Findings == 0 {
+			t.Errorf("summary counts %d undeclared of %d finding(s), want none undeclared and some found",
+				report.Summary.Undeclared, report.Summary.Findings)
 		}
 	})
 
@@ -668,6 +704,14 @@ func TestNormalizeFieldName_TwoSpellingsOfOneValue_Compare(t *testing.T) {
 		{name: "snake case", left: "start_line", want: "startline"},
 		{name: "an initialism", left: "webURL", want: "weburl"},
 		{name: "digits are kept", left: "last30DayUsageCount", want: "last30dayusagecount"},
+		{name: "a separator below the digits is dropped", left: "web-url", want: "weburl"},
+		{name: "a letter above the ASCII alphabet is dropped", left: "naïve", want: "nave"},
+		// Each of the three ranges is spelled with its two ends and the two
+		// runes just outside them, because every comparison here has a
+		// boundary a name made of ordinary words never reaches: the pinned
+		// schema has no field whose name carries an A, so a rule that dropped
+		// one would compare equal to this one on every real input.
+		{name: "each range keeps its ends and drops what sits just outside", left: "@AZ[`az{/09:", want: "azaz09"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := normalizeFieldName(testCase.left); got != testCase.want {
@@ -837,6 +881,18 @@ func TestRun_SentDimension_ADocumentSentThroughAWrapper_IsFiledAgainstTheDecoder
 			t.Errorf("Pipeline.startedAt same_name_in_package = %q, want started_at", field.SameNameInPackage)
 		}
 	})
+	// The two positions are separate because a reader needs both and they are
+	// in different packages: the send is one line in a wrapper that knows
+	// nothing about pipelines, and the call that named this document is what a
+	// reader opens to act on the finding.
+	t.Run("the finding names the send and where the document was handed over", func(t *testing.T) {
+		if !strings.HasPrefix(field.Position, "wrap/wrap.go:") {
+			t.Errorf("Pipeline.startedAt position = %q, want the send in the wrapper", field.Position)
+		}
+		if !strings.HasPrefix(field.HandedOverAt, "domain/domain.go:") {
+			t.Errorf("Pipeline.startedAt handed_over_at = %q, want the call that named the document", field.HandedOverAt)
+		}
+	})
 }
 
 // wrapperFixture sends a document it receives through a parameter and decodes
@@ -996,6 +1052,675 @@ func TestUncoveredGraphQL_APackageThisWalkNeverPairs_IsNamedInTheReport(t *testi
 			t.Errorf("uncoveredGraphQL() names %+v, want only internal/tools/achievements", uncovered.Packages)
 		}
 	})
+}
+
+// holderFixture reads one object twice in one document, leaving unselected a
+// union, an interface, a connection that pages through edges alone, a list, an
+// object and a scalar, so that one finding of every class comes back. Its
+// third selection reads an object whose one field takes an argument that
+// answers itself beside one that does not.
+const holderFixture = `package sent
+
+import "fixture/gql"
+
+const getHolder = @@
+query Holding {
+  holder { id name }
+  twin { id name }
+  defaulted { id }
+}
+@@
+
+type leaves struct {
+	ID   string @@json:"id"@@
+	Name string @@json:"name"@@
+}
+
+func send(service gql.Service) {
+	var holding struct {
+		Data struct {
+			Holder    *leaves @@json:"holder"@@
+			Twin      *leaves @@json:"twin"@@
+			Defaulted *struct {
+				ID string @@json:"id"@@
+			} @@json:"defaulted"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getHolder}, &holding)
+}
+`
+
+// shapeFixture names the members of a union and of an interface in every way
+// a document can: an inline fragment, one on the position's own type, one on a
+// type the position cannot be, a named fragment spread, and a fragment with no
+// type condition at all.
+const shapeFixture = `package sent
+
+import "fixture/gql"
+
+const getShape = @@
+query Shaping {
+  holder {
+    id
+    name
+    shape { ... on Widget { size ... on Thing { kind } } }
+    thing { id kind ... on Thing { kind } ...Widgetish ... { id } }
+  }
+}
+fragment Widgetish on Widget { size }
+@@
+
+func send(service gql.Service) {
+	var shaping struct {
+		Data struct {
+			Holder *struct {
+				ID    string @@json:"id"@@
+				Name  string @@json:"name"@@
+				Shape *struct {
+					Size int    @@json:"size"@@
+					Kind string @@json:"kind"@@
+				} @@json:"shape"@@
+				Thing *struct {
+					ID   string @@json:"id"@@
+					Kind string @@json:"kind"@@
+					Size int    @@json:"size"@@
+				} @@json:"thing"@@
+			} @@json:"holder"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getShape}, &shaping)
+}
+`
+
+// TestRun_SentDimension_EveryKindOfFieldSaysWhatActingOnItWouldCost verifies
+// the class annotation over the whole schema vocabulary rather than over the
+// scalars alone, because the class is what a reader triages by and the two
+// that are easy to get wrong are the ones with no fields of their own: a union
+// carries none, so the connection test that decides a collection reads nothing
+// on it, and a connection that pages through edges alone answers nothing to
+// the first half of that test.
+func TestRun_SentDimension_EveryKindOfFieldSaysWhatActingOnItWouldCost(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": holderFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, testCase := range []struct {
+		name  string
+		field string
+		class string
+	}{
+		{name: "a union is a struct to decode", field: "shape", class: sentObject},
+		{name: "an interface is a struct to decode", field: "thing", class: sentObject},
+		{name: "a connection that pages through edges alone is a collection", field: "gizmos", class: sentCollection},
+		{name: "a plain list is a collection", field: "tags", class: sentCollection},
+		{name: "an object is a struct to decode", field: "pipeline", class: sentObject},
+		{name: "a scalar is one more field", field: "stamp", class: sentLeaf},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			field, ok := offered(report, "Holder")[testCase.field]
+			if !ok {
+				t.Fatalf("Holder.%s is not in the report: %v", testCase.field, keys(offered(report, "Holder")))
+			}
+			if field.Class != testCase.class {
+				t.Errorf("Holder.%s class = %q, want %q", testCase.field, field.Class, testCase.class)
+			}
+			if field.Sent != sentNullable {
+				t.Errorf("Holder.%s sent = %q, want %q", testCase.field, field.Sent, sentNullable)
+			}
+		})
+	}
+	t.Run("a field whose only argument answers itself is part of this response", func(t *testing.T) {
+		fields := offered(report, "Defaulted")
+		if _, ok := fields["scaled"]; !ok {
+			t.Errorf("Defaulted.scaled takes an argument with a default and is not in the report: %v", keys(fields))
+		}
+		if _, ok := fields["keyed"]; ok {
+			t.Errorf("Defaulted.keyed must be supplied a key and is reported anyway: %v", keys(fields))
+		}
+	})
+	t.Run("a finding names the operation it was reached through", func(t *testing.T) {
+		field, ok := offered(report, "Holder")["stamp"]
+		if !ok {
+			t.Fatalf("Holder.stamp is not in the report")
+		}
+		if field.Operation != "query Holding" {
+			t.Errorf("Holder.stamp operation = %q, want the name the document wrote", field.Operation)
+		}
+	})
+}
+
+// TestRun_SentSummary_CountsEachFigureInItsOwnPlace verifies the eight numbers
+// the report leads with, over the fixture whose findings span every class.
+//
+// They are asserted together and the fixture is arranged so no two of them
+// agree. Each pair is a straight line of the summary that no branch decides,
+// so a count written into the field beside it is invisible to a test that
+// checks one at a time, and invisible to one that checks a total.
+func TestRun_SentSummary_CountsEachFigureInItsOwnPlace(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": holderFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	summary := report.Summary
+	if summary.Leaf != 4 || summary.Object != 3 || summary.Collection != 2 {
+		t.Errorf("summary leaf/object/collection = %d/%d/%d, want 4/3/2", summary.Leaf, summary.Object, summary.Collection)
+	}
+	if summary.Always != 1 || summary.Nullable != 8 {
+		t.Errorf("summary always/nullable = %d/%d, want 1/8", summary.Always, summary.Nullable)
+	}
+	if summary.Findings != len(report.Sent) {
+		t.Errorf("summary counts %d finding(s) and the report holds %d", summary.Findings, len(report.Sent))
+	}
+	// The coverage block is the same shape of claim about the walk: one
+	// object is read, one is read a second time and skipped, and nothing is
+	// merely traversed, so the four figures differ.
+	coverage := report.Check.Coverage
+	if coverage.Reached != 3 || coverage.Asked != 2 || coverage.Traversed != 0 || coverage.RepeatedType != 1 {
+		t.Errorf("coverage reached/asked/traversed/repeated = %d/%d/%d/%d, want 3/2/0/1",
+			coverage.Reached, coverage.Asked, coverage.Traversed, coverage.RepeatedType)
+	}
+}
+
+// TestRun_SentDimension_AUnionOrInterfaceIsAskedAboutTheMembersTheDocumentNames
+// verifies the rule that keeps this dimension from becoming a schema dump at
+// exactly the position where it would explode.
+//
+// A union carries no fields of its own, so asking it alone would report
+// nothing and lose a whole family; asking every member would report every
+// variant on every finding. So the members are the ones the document names,
+// the position's own type is not a member of itself, and a type named deeper
+// in the selection that the position cannot be is not one either.
+func TestRun_SentDimension_AUnionOrInterfaceIsAskedAboutTheMembersTheDocumentNames(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": shapeFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, testCase := range []struct {
+		name       string
+		schemaType string
+		want       []string
+		absent     []string
+	}{
+		{
+			name:       "a union offers the member the document names and nothing of the member it does not",
+			schemaType: "Shape",
+			want:       []string{"id", "color", "owner"},
+			absent:     []string{"size", "kind", "weight"},
+		},
+		{
+			name:       "an interface offers its own fields and the implementation a spread names",
+			schemaType: "Thing",
+			want:       []string{"color", "owner"},
+			absent:     []string{"id", "kind", "size", "weight"},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fields := offered(report, testCase.schemaType)
+			for _, field := range testCase.want {
+				if _, ok := fields[field]; !ok {
+					t.Errorf("%s.%s is offered and not selected, and the report does not hold it: %v", testCase.schemaType, field, keys(fields))
+				}
+			}
+			for _, field := range testCase.absent {
+				if _, ok := fields[field]; ok {
+					t.Errorf("%s.%s is reported and should not be: %v", testCase.schemaType, field, keys(fields))
+				}
+			}
+		})
+	}
+}
+
+// positionsFixture stops the walk in each of the three ways it can be stopped
+// and selects, without decoding, an interface, a union, a list and the cursor
+// object, so that the rule deciding which of those the question could have
+// been put at is exercised on every kind of type.
+const positionsFixture = `package sent
+
+import "fixture/gql"
+
+const getPositions = @@
+query {
+  holder {
+    id
+    name
+    thing { id kind }
+    shape { ... on Widget { size } }
+    tags { title }
+    pipeline { id status }
+  }
+  twin { id name }
+  defaulted { id }
+  project(fullPath: "x") {
+    labels { hint pageInfo { hasNextPage } }
+  }
+}
+@@
+
+type raw struct{}
+
+func (r *raw) UnmarshalJSON(body []byte) error { return nil }
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Holder *struct {
+				ID       string @@json:"id"@@
+				Name     string @@json:"name"@@
+				Pipeline raw    @@json:"pipeline"@@
+			} @@json:"holder"@@
+			Twin      map[string]string @@json:"twin"@@
+			Defaulted map[string]string @@json:"defaulted"@@
+			Project   *struct {
+				Labels *struct {
+					Hint string @@json:"hint"@@
+				} @@json:"labels"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getPositions}, &resp)
+}
+`
+
+// TestRun_SentCoverage_CountsOnlyThePositionsTheQuestionCouldHaveBeenPutAt
+// verifies the three silences the coverage figure publishes and the rule that
+// decides which positions they are counted at.
+//
+// Each counter stands for a place the walk stopped without asking the schema
+// anything, and a figure that counted every stop would overstate what was
+// declined: the cursor object is not part of any response, so a selection of
+// it that nothing decodes is not a question that went unasked. An interface, a
+// union and a list all are, which is what makes the rule worth a test of its
+// own rather than a scalar-shaped assumption.
+func TestRun_SentCoverage_CountsOnlyThePositionsTheQuestionCouldHaveBeenPutAt(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": positionsFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	coverage := report.Check.Coverage
+	for _, testCase := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		// The three wanted figures differ on purpose: with the same number
+		// under each, a walk that counted one stop as another would read
+		// exactly like this one.
+		{name: "a type that unmarshals itself is trusted with its own decoding", got: coverage.SelfDecoding, want: 1},
+		{name: "an object decoded into a map has no fields to judge", got: coverage.Map, want: 2},
+		{name: "an interface, a union and a list nothing decodes are three questions unasked", got: coverage.Undecoded, want: 3},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if testCase.got != testCase.want {
+				t.Errorf("coverage %s = %d, want %d: %+v", testCase.name, testCase.got, testCase.want, coverage)
+			}
+		})
+	}
+}
+
+// askedPayloadFixture selects a payload's errors and decodes them, so the
+// payload is an object this walk reads rather than one it traverses, and the
+// fields it offers are asked about.
+const askedPayloadFixture = `package sent
+
+import "fixture/gql"
+
+const createNote = @@
+mutation { createNote(body: "x") { errors note { id body } } }
+@@
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			CreateNote struct {
+				Errors []string @@json:"errors"@@
+				Note   struct {
+					ID   string @@json:"id"@@
+					Body string @@json:"body"@@
+				} @@json:"note"@@
+			} @@json:"createNote"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: createNote}, &resp)
+}
+`
+
+// TestRun_SentDimension_TheClientMutationIdIsNeverOfferedBack verifies the one
+// exclusion that is about the protocol rather than about the response.
+//
+// Every GitLab mutation payload carries a client mutation id, which is the
+// caller's own correlation value echoed back. Offering it would put one
+// finding on every mutation this server sends, each of them advice to publish
+// a value the caller already has, which is how a backlog stops being read.
+func TestRun_SentDimension_TheClientMutationIdIsNeverOfferedBack(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": askedPayloadFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	if fields := offered(report, "NotePayload"); len(fields) != 0 {
+		t.Errorf("NotePayload offers %v, and the client mutation id is the only field left", keys(fields))
+	}
+	if _, ok := offered(report, "Note")["internal"]; !ok {
+		t.Errorf("Note.internal is not in the report, so the payload was traversed rather than read")
+	}
+}
+
+// touchPayloadFixture sends a mutation whose payload carries no errors field
+// at all, so the gate's first condition decides it rather than its second.
+const touchPayloadFixture = `package sent
+
+import "fixture/gql"
+
+const touch = @@
+mutation { touchNote(body: "x") { note { id body } } }
+@@
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			TouchNote struct {
+				Note struct {
+					ID   string @@json:"id"@@
+					Body string @@json:"body"@@
+				} @@json:"note"@@
+			} @@json:"touchNote"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: touch}, &resp)
+}
+`
+
+// TestRun_APayloadWithNoErrorsField_IsNotAMutationPayloadAndDoesNotGate
+// verifies the boundary of the one sub-class that fails a build.
+//
+// The gate is for a payload that carries GitLab's account of a refused
+// mutation and hands it to a decoder that drops it. An object with no errors
+// field carries no such account, so there is nothing to drop and nothing to
+// fail; treating the client mutation id alone as the mark would fail every
+// object GitLab happens to give one.
+func TestRun_APayloadWithNoErrorsField_IsNotAMutationPayloadAndDoesNotGate(t *testing.T) {
+	report, status, out, errOut := runSent(t, map[string]string{"sent": touchPayloadFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	if strings.Contains(errOut, "mutation payload whose errors") {
+		t.Errorf("run() gated a payload that carries no errors field:\n%s", errOut)
+	}
+	if fields := offered(report, "Note"); len(fields) == 0 {
+		t.Errorf("the note under the payload was never asked about, so the walk stopped before the gate could matter")
+	}
+}
+
+// publishedFixture publishes one value per way a struct can hold another —
+// directly, through a pointer, through a slice and through an array — and one
+// name twice under two spellings, beside a published type that is not a struct
+// at all and one that names itself.
+const publishedFixture = `package published
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { id name } }
+@@
+
+type inline struct {
+	Labels string @@json:"labels"@@
+}
+
+type nested struct {
+	Archived string @@json:"archived"@@
+}
+
+type row struct {
+	Optional string @@json:"optional"@@
+}
+
+type cell struct {
+	Pipeline string @@json:"pipeline"@@
+}
+
+type DetailOutput struct {
+	WebURL    string        @@json:"web_url"@@
+	Weburl    string        @@json:"weburl"@@
+	Direct    inline        @@json:"direct"@@
+	Nested    *nested       @@json:"nested"@@
+	Rows      []row         @@json:"rows"@@
+	Pair      [2]cell       @@json:"pair"@@
+	Tags      []string      @@json:"tags"@@
+	Recursive *DetailOutput @@json:"recursive"@@
+}
+
+type AliasOutput = string
+
+type CountItem int
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *struct {
+				ID   string @@json:"id"@@
+				Name string @@json:"name"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &resp)
+}
+`
+
+// secondFixture reads two more objects in another package, so the findings the
+// report holds span two packages and three schema types: the order the report
+// puts them in is observable, and the two counts the summary carries cannot be
+// read for one another.
+const secondFixture = `package second
+
+import "fixture/gql"
+
+const getPipeline = @@
+query { project(fullPath: "x") { pipeline { id status } labels { nodes { title } } } }
+@@
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *struct {
+				Pipeline *struct {
+					ID     string @@json:"id"@@
+					Status string @@json:"status"@@
+				} @@json:"pipeline"@@
+				Labels *struct {
+					Nodes []struct {
+						Title string @@json:"title"@@
+					} @@json:"nodes"@@
+				} @@json:"labels"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getPipeline}, &resp)
+}
+`
+
+// TestRun_SentDimension_AValuePublishedAnywhereInAnOutputTypeIsFound verifies
+// the reach of the annotation that tells a triager the value already gets out.
+//
+// The index is built from a package's output types and not from the struct the
+// document decodes into, so it has to walk whatever those types nest a value
+// in: a struct held directly, behind a pointer, in a slice or in an array are
+// four different Go types and one publishing decision. A type that names
+// itself must be walked once rather than forever, and a published name that
+// two fields spell differently must resolve to one of them rather than to
+// whichever the map iteration reached last.
+func TestRun_SentDimension_AValuePublishedAnywhereInAnOutputTypeIsFound(t *testing.T) {
+	// The declaration answers one of the three objects, so the four figures
+	// the run's own line carries are four different numbers and none of them
+	// can be printed in another's place.
+	answered := sentDeclaration{
+		Package:    "fixture/second",
+		SchemaType: "Label",
+		Field:      declaredSegment,
+		Category:   categoryNotThisResponse,
+		Reason:     "a label is named to say which one a node is, and the labels domain publishes its own",
+	}
+	report, status, out, errOut := runSent(t, map[string]string{"published": publishedFixture, "second": secondFixture}, []sentDeclaration{answered})
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	fields := offered(report, "Project")
+	for _, testCase := range []struct {
+		name        string
+		field       string
+		publishedAs string
+	}{
+		{name: "a field of the output type itself", field: "webUrl", publishedAs: "web_url"},
+		{name: "a field of a struct it holds directly", field: "labels", publishedAs: "labels"},
+		{name: "a field of a struct behind a pointer", field: "archived", publishedAs: "archived"},
+		{name: "a field of a struct in a slice", field: "optional", publishedAs: "optional"},
+		{name: "a field of a struct in an array", field: "pipeline", publishedAs: "pipeline"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			field, ok := fields[testCase.field]
+			if !ok {
+				t.Fatalf("Project.%s is not in the report: %v", testCase.field, keys(fields))
+			}
+			if field.SameNameInPackage != testCase.publishedAs {
+				t.Errorf("Project.%s same_name_in_package = %q, want %q", testCase.field, field.SameNameInPackage, testCase.publishedAs)
+			}
+		})
+	}
+	t.Run("findings are ordered by package, then object, then field", func(t *testing.T) {
+		order := func(field sentField) string {
+			return field.Package + "\x00" + field.SchemaType + "\x00" + field.Field
+		}
+		for i := 1; i < len(report.Sent); i++ {
+			previous, current := report.Sent[i-1], report.Sent[i]
+			if order(previous) >= order(current) {
+				t.Errorf("finding %d (%s.%s.%s) does not precede %d (%s.%s.%s)",
+					i-1, previous.Package, previous.SchemaType, previous.Field,
+					i, current.Package, current.SchemaType, current.Field)
+			}
+		}
+		// The two counts are asserted together, and the fixture is built so
+		// they differ: with one package per schema type each would read the
+		// other's value and nothing here would notice.
+		if report.Summary.Packages != 2 || report.Summary.SchemaTypes != 3 {
+			t.Errorf("summary counts %d package(s) and %d schema type(s), want 2 and 3",
+				report.Summary.Packages, report.Summary.SchemaTypes)
+		}
+	})
+	// The line the run prints is what a reader sees without opening the
+	// report, and its four figures are the only place they appear together;
+	// asserted as one string so none of them can be printed in another's
+	// place.
+	t.Run("the run's own line carries the four figures in their own places", func(t *testing.T) {
+		want := fmt.Sprintf("%d field(s) the schema offers that no document of their package selects, %d undeclared, across 2 package(s) and 3 schema type(s) ->",
+			report.Summary.Findings, report.Summary.Undeclared)
+		if !strings.Contains(out, want) {
+			t.Errorf("run() stdout lacks %q:\n%s", want, out)
+		}
+		if report.Summary.Undeclared >= report.Summary.Findings || report.Summary.Undeclared == 0 {
+			t.Errorf("summary counts %d undeclared of %d finding(s), and the declaration answers some but not all",
+				report.Summary.Undeclared, report.Summary.Findings)
+		}
+	})
+}
+
+// TestRun_WhenTheInventoryIsRead_NamesEveryGraphQLPackageTheWalkNeverSaw
+// verifies the other side of the seam over the request inventory.
+//
+// The run that cannot read the record says so; the run that can must publish
+// the set rather than a count, ordered by package so two reports of one tree
+// compare, and say on its second line how many operations it never asked
+// about. A reader given only the findings reads them as the whole GraphQL
+// surface, which is the thing this line exists to prevent.
+func TestRun_WhenTheInventoryIsRead_NamesEveryGraphQLPackageTheWalkNeverSaw(t *testing.T) {
+	original := readInventory
+	readInventory = func(string) (requestinventory.Inventory, error) {
+		return requestinventory.Inventory{Requests: []requestinventory.Row{
+			{Package: "internal/tools/workitems", Kind: requestinventory.KindGraphQL, Operation: "query WorkItem"},
+			{Package: "internal/tools/achievements", Kind: requestinventory.KindGraphQL, Operation: "mutation Award"},
+			{Package: "internal/tools/achievements", Kind: requestinventory.KindGraphQL, Operation: "query Achievements"},
+			{Package: "internal/tools/terraformstates", Kind: requestinventory.KindGraphQL, Operation: "query State"},
+			{Package: "internal/tools/epics", Kind: requestinventory.KindGraphQL, Operation: "query Epics"},
+			{Package: "internal/tools/achievements", Kind: requestinventory.KindREST, Method: "GET", Path: "/projects"},
+		}}, nil
+	}
+	t.Cleanup(func() { readInventory = original })
+
+	report, status, out, errOut := runSent(t, map[string]string{"sent": sentFixture}, nil)
+
+	if status != 0 {
+		t.Fatalf("run() = %d, want 0; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	uncovered := report.Check.Uncovered
+	t.Run("the set is published rather than declared unknown", func(t *testing.T) {
+		if uncovered.Unavailable != "" {
+			t.Errorf("report uncovered unavailable = %q, want it empty when the record was read", uncovered.Unavailable)
+		}
+	})
+	t.Run("every recorded GraphQL package this walk never paired is named, in order", func(t *testing.T) {
+		var named []string
+		for _, pkg := range uncovered.Packages {
+			named = append(named, pkg.Package)
+		}
+		want := []string{
+			"internal/tools/achievements",
+			"internal/tools/epics",
+			"internal/tools/terraformstates",
+			"internal/tools/workitems",
+		}
+		if len(named) != len(want) {
+			t.Fatalf("report uncovered packages = %v, want the four recorded ones", named)
+		}
+		for i, pkg := range want {
+			if named[i] != pkg {
+				t.Errorf("report uncovered package %d = %q, want %q; the list is %v", i, named[i], pkg, named)
+			}
+		}
+	})
+	t.Run("only the GraphQL rows are counted", func(t *testing.T) {
+		if uncovered.Operations != 5 {
+			t.Errorf("report uncovered operations = %d, want 5", uncovered.Operations)
+		}
+	})
+	t.Run("the run says on its own line how much it never asked about", func(t *testing.T) {
+		if want := "not asked of 5 GraphQL operation(s) in 4 package(s)"; !strings.Contains(out, want) {
+			t.Errorf("run() stdout lacks %q:\n%s", want, out)
+		}
+		if strings.Contains(out, uncoveredUnavailable) {
+			t.Errorf("run() stdout calls the set unknown although the record was read:\n%s", out)
+		}
+	})
+}
+
+// TestRepoRelative_APathOutsideInternal_IsLeftAlone verifies the half of the
+// trim that keeps the two lists from meeting by accident: an import path with
+// no internal segment has no repository-relative spelling to guess, and
+// inventing a shorter one could make it match a row it is not.
+func TestRepoRelative_APathOutsideInternal_IsLeftAlone(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "a package under internal is trimmed to what the inventory records",
+			path: "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branchrules",
+			want: "internal/tools/branchrules",
+		},
+		{name: "a package outside internal is left as it is", path: "fixture/sent", want: "fixture/sent"},
+		{name: "a third-party path is left as it is", path: "gitlab.com/gitlab-org/api/client-go/v3", want: "gitlab.com/gitlab-org/api/client-go/v3"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := repoRelative(testCase.path); got != testCase.want {
+				t.Errorf("repoRelative(%q) = %q, want %q", testCase.path, got, testCase.want)
+			}
+		})
+	}
 }
 
 // keys names the fields a report holds for one type, for a failure message.

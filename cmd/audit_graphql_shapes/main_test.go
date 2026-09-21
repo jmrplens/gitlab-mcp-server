@@ -858,3 +858,275 @@ func TestAbsolute_WhenTheWorkingDirectoryIsGone_KeepsTheDirAsWritten(t *testing.
 		t.Errorf("absolute(.) = %q, want it left as written", got)
 	}
 }
+
+// taggedFixture carries the three shapes encoding/json treats as ordinary
+// fields and a reader of Go reads as something else: an embedded struct given
+// a json name, the ",string" option on a field whose scalar is not sent as a
+// string, and a map whose key type is not basic at all.
+const taggedFixture = `package tagged
+
+import "fixture/gql"
+
+const getProject = @@
+query { project(fullPath: "x") { id name stars } }
+@@
+
+type Identity struct {
+	ID string @@json:"id"@@
+}
+
+type node struct {
+	Identity @@json:"ident"@@
+	Name     string @@json:"name"@@
+	Stars    bool   @@json:"stars,string"@@
+}
+
+func send(service gql.Service) {
+	var shaped struct {
+		Data struct {
+			Project *node @@json:"project"@@
+		} @@json:"data"@@
+	}
+	var keyed struct {
+		Data struct {
+			Project map[[2]int]string @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &shaped)
+	_, _ = service.Do(gql.GraphQLQuery{Query: getProject}, &keyed)
+}
+`
+
+// TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWouldDo
+// verifies three readings a shape check has to get right because the Go source
+// suggests the other answer.
+//
+// An embedded struct is promoted only while it is anonymous: give it a json
+// name and encoding/json fills one field under that name, so the object's own
+// id is decoded by nothing and a walk that promoted it anyway would call the
+// document covered. The ",string" option is a permission for a scalar GitLab
+// sends as a string, not a permit to put any scalar in any field, so an
+// integer decoded into a boolean is still a disagreement. And a map key is
+// judged by what it is rather than by whether it is a string once resolved: a
+// key that is not a basic type cannot be a JSON object key either.
+func TestRun_FixtureWhoseTagsChangeWhatADecoderReads_JudgesWhatEncodingJSONWouldDo(t *testing.T) {
+	status, out, errOut := runFixture(t, map[string]string{"tagged": taggedFixture}, true)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, want := range []string{
+		"    - data.project.ident: decoded from a field the document never selects, so it is always empty",
+		"    - data.project.stars: Int! is sent as a JSON integer and is decoded into bool",
+		"    - data.project: Project is an object and is decoded into map[[2]int]string, whose keys are not strings",
+		"    ~ data.project.id: selected and never decoded",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errOut, want) {
+				t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+			}
+		})
+	}
+}
+
+// tracedFixture traces a document back to a local the function declares before
+// assigning, and holds three calls the audit must not read as sends: one named
+// Do with a single argument, one named Do whose first argument is some other
+// type of its own, and a document reached through a selector on a selector.
+const tracedFixture = `package traced
+
+import "fixture/gql"
+
+const sent = @@
+query { project(fullPath: "x") { id } }
+@@
+
+const alsoSent = @@
+query { project(fullPath: "x") { name } }
+@@
+
+type inner struct {
+	Query string
+}
+
+type holder struct {
+	Inner inner
+}
+
+type token struct{}
+
+type fewArgs struct{}
+
+func (fewArgs) Do(one int) {}
+
+type otherQuery struct{}
+
+func (otherQuery) Do(first token, second int) {}
+
+type response struct {
+	Data struct {
+		Project *struct {
+			ID string @@json:"id"@@
+		} @@json:"project"@@
+	} @@json:"data"@@
+}
+
+func viaDeclaredLocal(service gql.Service) {
+	sink := map[string]string{}
+	sink["k"] = "v"
+	var query string
+	query = sent
+	var resp response
+	_, _ = service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func viaSecondName(service gql.Service) {
+	first, query := sent, alsoSent
+	_ = first
+	var resp struct {
+		Data struct {
+			Project *struct {
+				Name string @@json:"name"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: query}, &resp)
+}
+
+func viaNestedSelector(service gql.Service, h holder) {
+	var resp response
+	_, _ = service.Do(gql.GraphQLQuery{Query: h.Inner.Query}, &resp)
+}
+
+func notSends() {
+	fewArgs{}.Do(1)
+	otherQuery{}.Do(token{}, 2)
+}
+`
+
+// TestRun_FixtureWithCallsThatOnlyLookLikeSends_PairsTheOneThatIsOne verifies
+// what the pairing walk takes a send to be, and what it takes a document to
+// be, at the two places a wrong answer would be silent.
+//
+// A method named Do is not a send: the audit is looking for one that carries a
+// request and a decode target, and reading either of the other two as a send
+// would report a decoder that does not exist. A local declared before it is
+// assigned still yields the document it is given, so the declaration
+// contributing nothing must not stand in for the assignment that follows it,
+// and a local that is the second name of a multiple assignment takes the
+// second value rather than the first. And a document reached through a
+// selector on a selector is not a parameter hand-over, so it is reported as
+// built at run time rather than traced to a caller that was never asked.
+func TestRun_FixtureWithCallsThatOnlyLookLikeSends_PairsTheOneThatIsOne(t *testing.T) {
+	status, out, errOut := runFixture(t, map[string]string{"traced": tracedFixture}, true)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	for _, testCase := range []struct {
+		name string
+		want string
+	}{
+		{name: "the document a declared local is later given is the one judged", want: "    ok  fixture/traced sent (traced/traced.go:"},
+		{name: "a local that is the second name takes the second value", want: "    ok  fixture/traced alsoSent (traced/traced.go:"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if !strings.Contains(out, testCase.want) {
+				t.Errorf("run() stdout lacks %q:\n%s", testCase.want, out)
+			}
+		})
+	}
+	t.Run("a selector on a selector is reported rather than traced to a caller", func(t *testing.T) {
+		want := "the document is built at run time, from h.Inner.Query, so nothing can be judged before a request is made"
+		if !strings.Contains(errOut, want) {
+			t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+		}
+	})
+	t.Run("nothing else in the package is read as a send", func(t *testing.T) {
+		if got := strings.Count(out, "    ok  fixture/traced"); got != 2 {
+			t.Errorf("run() paired %d call(s) in the package, want the two sends:\n%s", got, out)
+		}
+	})
+}
+
+// quietProblemFixture sends one document every decoder agrees with and
+// declares a second that nothing sends, so the run has a problem and no
+// disagreement.
+const quietProblemFixture = `package quiet
+
+import "fixture/gql"
+
+const sent = @@
+query { project(fullPath: "x") { id } }
+@@
+
+const nobody = @@
+query { project(fullPath: "x") { name } }
+@@
+
+func send(service gql.Service) {
+	var resp struct {
+		Data struct {
+			Project *struct {
+				ID string @@json:"id"@@
+			} @@json:"project"@@
+		} @@json:"data"@@
+	}
+	_, _ = service.Do(gql.GraphQLQuery{Query: sent}, &resp)
+}
+`
+
+// TestRun_AProblemWithNoDisagreement_StillFails verifies the second leg of the
+// failing condition on its own. Every pairing agrees, so the disagreement
+// count is zero and decides nothing: what fails the run is the document no
+// send carries, and a run that reported it and exited 0 would leave a decoder
+// judged by nobody in a green build.
+func TestRun_AProblemWithNoDisagreement_StillFails(t *testing.T) {
+	status, out, errOut := runFixture(t, map[string]string{"quiet": quietProblemFixture}, false)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out, errOut)
+	}
+	if want := "0 disagreement(s) in 1 pairing(s), 1 unpaired or unjudged, 0 stale declaration(s)"; !strings.Contains(errOut, want) {
+		t.Errorf("run() stderr lacks %q:\n%s", want, errOut)
+	}
+}
+
+// TestRun_WhenTheReportCannotBeWritten_SaysWhyAndFails verifies that a -report
+// path the run cannot write to ends the run with the reason.
+//
+// The alternative is worse than a failure: the summary line names the file it
+// wrote, so a swallowed write error hands a reader a path to a report that is
+// not there, and the run that was asked for the sent list exits 0 having
+// produced none.
+func TestRun_WhenTheReportCannotBeWritten_SaysWhyAndFails(t *testing.T) {
+	var out, errOut bytes.Buffer
+	status := run(auditRun{
+		dir:        fixtureModule(t, map[string]string{"pinned": pinnedFixture}),
+		patterns:   []string{"./..."},
+		schemaPath: schemaFile(t, testSchema),
+		reportPath: filepath.Join(t.TempDir(), "no-such-directory", "sent.json"),
+	}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("run() = %d, want 1; stdout:\n%s\nstderr:\n%s", status, out.String(), errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "write the sent report") {
+		t.Errorf("run() stderr = %q, want it to name the write it could not do", errOut.String())
+	}
+	if strings.Contains(out.String(), "sent.json") {
+		t.Errorf("run() stdout names a report it did not write:\n%s", out.String())
+	}
+}
+
+// TestRelative_APathThatCannotBeMadeRelative_IsLeftAsItIs verifies the other
+// half of the trim. filepath.Rel refuses a relative path against an absolute
+// root, and a position that cannot be trimmed is printed as it was recorded
+// rather than dropped, since a finding without a file is unactionable.
+func TestRelative_APathThatCannotBeMadeRelative_IsLeftAsItIs(t *testing.T) {
+	position := token.Position{Filename: filepath.Join("relative", "file.go"), Line: 11}
+
+	if got := relative(position, t.TempDir()); got != position.Filename+":11" {
+		t.Errorf("relative(a relative path) = %q, want %q", got, position.Filename+":11")
+	}
+}
