@@ -73,6 +73,27 @@ func TestTemplatePath_Identifiers_CollapseToPlaceholders(t *testing.T) {
 		// inside a segment and leave the first segment holding an identifier
 		// with no collection in front of it.
 		{"an identifier that opens the path", "/api/v41", ":id"},
+		// A CI variable key is spelled exactly like a route word, so no shape
+		// rule can reach it and the parent has to decide. Without this the
+		// fixture's own vocabulary became the endpoint: six keys under
+		// /admin/ci/variables read as six routes.
+		{"an instance variable key", "/api/v4/admin/ci/variables/DB_HOST", "/admin/ci/variables/:key"},
+		{"a project variable key", "/api/v4/projects/1/variables/K", "/projects/:project_id/variables/:key"},
+		{"a group variable key", "/api/v4/groups/2/variables/MY_VAR", "/groups/:group_id/variables/:key"},
+		{"a hook url variable key", "/api/v4/hooks/3/url_variables/TOKEN", "/hooks/:hook_id/url_variables/:key"},
+		{
+			"a pipeline schedule variable key",
+			"/api/v4/projects/1/pipeline_schedules/2/variables/DEPLOY_ENV",
+			"/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/:key",
+		},
+		// The collection itself is not a member of it, so listing and creating
+		// keep their own row rather than folding onto the keyed one.
+		{"the variables collection itself", "/api/v4/projects/1/variables", "/projects/:project_id/variables"},
+		// The rule is the parent and nothing else: a word that merely contains
+		// one of the keyed names is not one, and a key-shaped segment under an
+		// ordinary parent is still left alone.
+		{"a collection whose name ends in the keyed one", "/api/v4/projects/1/ci_variables/K", "/projects/:project_id/ci_variables/K"},
+		{"a key-shaped segment under another parent", "/api/v4/templates/licenses/MIT", "/templates/licenses/MIT"},
 	}
 
 	for _, tt := range tests {
@@ -120,6 +141,15 @@ func TestTemplatePath_RawValues_ComeBackUnderTheirPlaceholder(t *testing.T) {
 			name: "a path with nothing to template",
 			path: "/api/v4/projects",
 			want: nil,
+		},
+		{
+			// The point of naming the key at all: until it had a placeholder
+			// there was nothing to count the distinct values under, so a
+			// handler with a variable key written into it produced the same
+			// row as one reading the caller's.
+			name: "a variable key comes back under :key",
+			path: "/api/v4/admin/ci/variables/DB_HOST",
+			want: map[string][]string{":key": {"DB_HOST"}},
 		},
 	}
 

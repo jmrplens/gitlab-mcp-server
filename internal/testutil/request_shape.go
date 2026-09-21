@@ -108,9 +108,6 @@ func templatePath(escaped string) (templated string, identifiers map[string][]st
 
 	segments := strings.Split(path, "/")
 	for i, segment := range segments {
-		if !isIdentifierSegment(segment) {
-			continue
-		}
 		// Reading the previous element after it may itself have been
 		// rewritten is deliberate: two identifiers in a row means the second
 		// one's collection was never spelled, and a placeholder is not a
@@ -118,6 +115,9 @@ func templatePath(escaped string) (templated string, identifiers map[string][]st
 		parent := ""
 		if i > 0 {
 			parent = segments[i-1]
+		}
+		if !isIdentifierSegment(segment) && !keyedCollection(parent) {
+			continue
 		}
 		name := placeholderFor(parent)
 		if identifiers == nil {
@@ -129,8 +129,52 @@ func templatePath(escaped string) (templated string, identifiers map[string][]st
 	return strings.Join(segments, "/"), identifiers
 }
 
+// keyedCollections are the collection segments whose member is named by a key
+// rather than by an identifier any shape rule could recognize.
+//
+// A CI variable key is `[A-Za-z0-9_]+`, which is exactly the shape of a route
+// word, so the ordinary rule leaves it in the path and the fixture's own
+// vocabulary becomes the endpoint: `/admin/ci/variables/DB_HOST`, `/GONE`,
+// `/K`, `/MY_VAR`, `/SOLO` and `/TOKEN` were six rows of the committed
+// inventory for one GitLab route. That inflates the distinct-path count with
+// whatever the tests happen to call their variables, reaches the endpoint join
+// only through its tolerance for one untemplated segment, and leaves the
+// per-placeholder value count with no placeholder to count under, which is the
+// one lead this recording has for a handler with an identifier written into
+// it.
+//
+// Widening the shape rule is what [templatePath]'s own comment refuses, and
+// rightly: a trailing segment is not an identifier because it is last, and the
+// segment after a known parent is not one either, both measured. This is
+// narrower than either. It is the parent that decides, the two parents are
+// named here rather than guessed, and the live record says the segment after
+// each of them is `:key` on all seven routes that have one and a literal on
+// none: /admin/ci/variables/:key, /groups/:id/variables/:key,
+// /projects/:id/variables/:key, the pipeline schedule variables, and
+// url_variables under the three hook scopes. So a literal after one of these
+// is a shape GitLab does not have.
+var keyedCollections = map[string]string{
+	"variables":     "key",
+	"url_variables": "key",
+}
+
+// keyedCollection reports whether a segment is one of the collections whose
+// member [keyedCollections] names.
+func keyedCollection(parent string) bool {
+	_, keyed := keyedCollections[parent]
+
+	return keyed
+}
+
 // placeholderFor names the identifier that follows one collection segment.
+//
+// A keyed collection is spelled the way GitLab spells it, `:key`, rather than
+// as the `:<singular>_id` every other collection produces: `:variable_id`
+// would promise an id, and the value there is a name.
 func placeholderFor(parent string) string {
+	if keyed, ok := keyedCollections[parent]; ok {
+		return ":" + keyed
+	}
 	name := singular(parent)
 	if name == "" {
 		return unnamedIdentifier
