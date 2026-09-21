@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -694,6 +695,14 @@ func TestValidateLLMSTxt_RejectsRelativeFileListTarget(t *testing.T) {
 // no links whether another section or the end of the file follows it, and a
 // file-list entry with an unterminated, empty, or note-less link. CRLF content
 // is accepted as-is, since check mode compares it normalized.
+//
+// The heading rule is driven from both sides of its one prefix test: an H3 and
+// a second H1 are each refused, so the rule cannot narrow to the H3 spelling
+// and keep passing. Three shapes the generator never emits are pinned too,
+// because each is a boundary the validator alone decides: a document with no
+// file-list section at all is valid rather than an unterminated section, a
+// plain http target is as absolute as an https one, and a link whose target
+// closes immediately after "](" is empty rather than unterminated.
 func TestValidateLLMSTxt_ReportsEachStructuralDefect(t *testing.T) {
 	const head = "# Title\n\n> Summary.\n\n"
 	tests := []struct {
@@ -706,6 +715,11 @@ func TestValidateLLMSTxt_ReportsEachStructuralDefect(t *testing.T) {
 		{name: "first line is an H2", content: "## Title\n", wantErr: "first line must be an H1 title"},
 		{name: "missing blockquote summary", content: "# Title\n\n## Docs\n\n- [A](https://x/a)\n", wantErr: "missing blockquote summary"},
 		{name: "H3 heading", content: head + "### Sub\n", wantErr: "line 5: llms.txt only allows H1 plus H2 file-list sections"},
+		{name: "second H1", content: head + "# Second\n\n- [A](https://x/a): note\n", wantErr: "line 5: llms.txt only allows H1 plus H2 file-list sections"},
+		{name: "no file-list section at all", content: "# Title\n\n> Summary.\n"},
+		{name: "http link target", content: head + "## A\n\n- [A](http://x/a): note\n"},
+		{name: "empty link label", content: head + "## A\n\n- [](https://x/a): note\n", wantErr: "file-list entry is missing markdown link label"},
+		{name: "link target closes immediately", content: head + "## A\n\n- [A]()\n", wantErr: "file-list entry has empty markdown link target"},
 		{name: "section without links followed by another", content: head + "## A\n\n## B\n\n- [B](https://x/b)\n", wantErr: `section "A" has no file links`},
 		{name: "trailing section without links", content: head + "## A\n", wantErr: `section "A" has no file links`},
 		{name: "unterminated link target", content: head + "## A\n\n- [A](https://x/a\n", wantErr: "line 7: file-list entry is missing markdown link target"},
@@ -1090,6 +1104,10 @@ func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
 // to the shape of a schema with no type keyword, joins a union of types, keeps a
 // bare array bare, calls an array of unions an array of values, pluralizes any
 // item type, and ignores blank or non-string entries in a type list.
+//
+// A blank type is filtered out of a type list but not out of a lone string, so
+// an item schema spelled {"type": ""} is the one input that labels nothing;
+// the array then stays bare rather than reading "array of s".
 func TestSchemaTypeLabel_InfersUntypedAndUnionShapes(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1104,6 +1122,7 @@ func TestSchemaTypeLabel_InfersUntypedAndUnionShapes(t *testing.T) {
 		{name: "array of booleans", schema: map[string]any{"type": "array", "items": map[string]any{"type": "boolean"}}, want: "array of booleans"},
 		{name: "array of numbers", schema: map[string]any{"type": "array", "items": map[string]any{"type": "number"}}, want: "array of numbers"},
 		{name: "array of a custom type", schema: map[string]any{"type": "array", "items": map[string]any{"type": "date"}}, want: "array of dates"},
+		{name: "array whose item type is blank stays bare", schema: map[string]any{"type": "array", "items": map[string]any{"type": ""}}, want: "array"},
 		{name: "blank and non-string entries are ignored", schema: map[string]any{"type": []any{"", " ", 3, "string"}}, want: "string"},
 		{name: "unrecognized type value reads as any", schema: map[string]any{"type": 42}, want: "any"},
 	}
@@ -1350,6 +1369,10 @@ func TestEnterpriseOnlyMetaTools_KeepsToolsAbsentFromBase(t *testing.T) {
 // description shown for an individual tool: the first paragraph when it fits,
 // its first sentence when the paragraph is too long, and a hard truncation
 // when even that sentence, or a paragraph with no sentence break, is too long.
+// Both limits are inclusive, and each case that sits exactly on one carries a
+// shorter first sentence than its paragraph, so the two arms disagree there:
+// with an exclusive limit the paragraph case would fall through to its own
+// first sentence and the sentence case to a truncation.
 func TestCompactToolDescription_KeepsFirstParagraphWithinLimit(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1360,6 +1383,16 @@ func TestCompactToolDescription_KeepsFirstParagraphWithinLimit(t *testing.T) {
 		{name: "long paragraph falls back to its first sentence", description: "Short lead sentence. " + strings.Repeat("x", 700), want: "Short lead sentence."},
 		{name: "long paragraph without a sentence break is truncated", description: strings.Repeat("y", 700), want: strings.Repeat("y", maxFullDescRunes) + "..."},
 		{name: "long first sentence is truncated", description: strings.Repeat("z", 650) + ". Next.", want: strings.Repeat("z", maxFullDescRunes) + "..."},
+		{
+			name:        "a paragraph exactly at the limit is kept whole",
+			description: "Lead. " + strings.Repeat("y", maxFullDescRunes-6),
+			want:        "Lead. " + strings.Repeat("y", maxFullDescRunes-6),
+		},
+		{
+			name:        "a first sentence exactly at the limit is kept",
+			description: strings.Repeat("z", maxFullDescRunes-1) + ". Next.",
+			want:        strings.Repeat("z", maxFullDescRunes-1) + ".",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1376,6 +1409,11 @@ func TestCompactToolDescription_KeepsFirstParagraphWithinLimit(t *testing.T) {
 // estimate in thousands that switches to millions once llms-full.txt's scale is
 // reached, and an honest placeholder when a size is missing rather than a
 // confident "0 KB" for a file that was simply not measured.
+//
+// Both thresholds are inclusive and each is driven at its exact value, since
+// that is the only size at which "at least" and "more than" disagree: a file of
+// exactly a megabyte reads in megabytes, and one of exactly a million tokens in
+// millions.
 func TestDescribeSize_ReportsBothScales(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -1386,7 +1424,9 @@ func TestDescribeSize_ReportsBothScales(t *testing.T) {
 		{name: "negative size", bytes: -1, want: "size unknown"},
 		{name: "kilobytes round to nearest", bytes: 18286, want: "18 KB, ~5k tokens"},
 		{name: "just under a megabyte", bytes: 884613, want: "864 KB, ~221k tokens"},
+		{name: "exactly a megabyte reads in megabytes", bytes: 1024 * 1024, want: "1.0 MB, ~262k tokens"},
 		{name: "megabytes carry one decimal", bytes: 2126670, want: "2.0 MB, ~532k tokens"},
+		{name: "exactly a million tokens reads in millions", bytes: 4_000_000, want: "3.8 MB, ~1.0M tokens"},
 		{name: "past a million tokens", bytes: 8_000_000, want: "7.6 MB, ~2.0M tokens"},
 	}
 
@@ -1486,6 +1526,7 @@ func TestFirstSentence_SkipsAbbreviations(t *testing.T) {
 		{name: "abbreviation is not a boundary", s: "See e.g. this. Then that.", want: "See e.g. this."},
 		{name: "abbreviations match by suffix, so request. reads as est.", s: "Open a request. Then wait.", want: "Open a request. Then wait."},
 		{name: "leading abbreviation is skipped", s: "vs. a. b", want: "vs. a."},
+		{name: "a boundary at the very start ends the sentence there", s: ". rest", want: "."},
 		{name: "only an abbreviation", s: "i.e. only", want: "i.e. only"},
 		{name: "no terminator", s: "No terminator", want: "No terminator"},
 		{name: "empty text", s: "", want: ""},
@@ -1510,6 +1551,7 @@ func TestFindSentenceEnd_ReturnsBoundaryIndex(t *testing.T) {
 		want int
 	}{
 		{name: "plain boundary", s: "a. b", want: 1},
+		{name: "boundary at index zero", s: ". rest", want: 0},
 		{name: "no boundary", s: "a.b", want: -1},
 		{name: "abbreviation only", s: "e.g. x", want: -1},
 		{name: "boundary after an abbreviation", s: "vs. a. b", want: 5},
@@ -1702,4 +1744,310 @@ func TestWriteLLMSMediumMetaTools_OmitsSchemas(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRunMain_ReturnsOneExitCodePerOutcome verifies the exit code this command
+// hands the process: 0 when generation succeeds, 1 when it fails with the
+// reason on stderr, 2 for a flag the command does not take, and 0 for -h, which
+// is the one parse failure that is not an error.
+//
+// The code matters more than the message here. make check-llms and the CI job
+// behind it decide by the exit status alone, so a --check that reported drift
+// and exited 0 would leave a stale llms.txt passing every gate.
+func TestRunMain_ReturnsOneExitCodePerOutcome(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		runErr   error
+		want     int
+		wantErrs []string
+	}{
+		{name: "generation succeeds", want: 0},
+		{name: "check mode passes", args: []string{"-check"}, want: 0},
+		{
+			name:     "generation fails",
+			runErr:   errors.New("llms.txt is stale"),
+			want:     1,
+			wantErrs: []string{"failed to generate llms files", "llms.txt is stale"},
+		},
+		{name: "unknown flag", args: []string{"-nope"}, want: 2, wantErrs: []string{"-nope"}},
+		{name: "help", args: []string{"-h"}, want: 0, wantErrs: []string{"-check"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var asked bool
+			runLLMS = func(_ llmsSurface, checkOnly bool) error {
+				asked = true
+				if want := slices.Contains(tt.args, "-check"); checkOnly != want {
+					t.Errorf("run() received checkOnly = %v, want %v", checkOnly, want)
+				}
+				return tt.runErr
+			}
+			t.Cleanup(func() { runLLMS = run })
+
+			var stderr strings.Builder
+			if got := runMain(tt.args, &stderr); got != tt.want {
+				t.Errorf("runMain(%q) = %d, want %d", tt.args, got, tt.want)
+			}
+			for _, want := range tt.wantErrs {
+				if !strings.Contains(stderr.String(), want) {
+					t.Errorf("runMain(%q) stderr = %q, want it to mention %q", tt.args, stderr.String(), want)
+				}
+			}
+			if wantAsked := tt.want != 2 && !slices.Contains(tt.args, "-h"); asked != wantAsked {
+				t.Errorf("runMain(%q) reached the generator = %v, want %v", tt.args, asked, wantAsked)
+			}
+		})
+	}
+}
+
+// TestMain_HandsTheExitCodeToOsExit verifies the one line main carries: it
+// exits with whatever runMain returned, rather than swallowing it.
+func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
+	runLLMS = func(llmsSurface, bool) error { return errors.New("stale") }
+	t.Cleanup(func() { runLLMS = run })
+	oldArgs := os.Args
+	os.Args = []string{toolName}
+	t.Cleanup(func() { os.Args = oldArgs })
+	var got int
+	osExit = func(code int) { got = code }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	captureStderr(t, main)
+
+	if got != 1 {
+		t.Errorf("main() exited %d, want 1", got)
+	}
+}
+
+// TestWriteLLMSTxt_RefusesContentItsOwnValidatorRejects verifies llms.txt is
+// validated before it is written, so a catalog whose text breaks the format
+// fails generation instead of publishing a file no llms.txt consumer accepts.
+//
+// A resource name carrying a newline is the shape that reaches it: the summary
+// list writes the name verbatim, so the second line lands in the document as a
+// heading of its own, in a position where llms.txt allows no heading at all.
+func TestWriteLLMSTxt_RefusesContentItsOwnValidatorRejects(t *testing.T) {
+	dir := projectRootWithVersion(t, cannedVersion)
+	catalog := cannedCatalog()
+	catalog.Resources = []*mcp.Resource{{URI: "gitlab://server/info", Name: "Server info\n# Injected"}}
+
+	err := writeLLMSTxt(cannedVersion, catalog, map[string]int{}, false)
+
+	if err == nil {
+		t.Fatal("writeLLMSTxt() error = nil, want it to refuse content its validator rejects")
+	}
+	if !strings.Contains(err.Error(), "validate llms.txt") {
+		t.Errorf("writeLLMSTxt() error = %v, want it to name the validation step", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, llmsFileName)); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("writeLLMSTxt() wrote %s although validation failed", llmsFileName)
+	}
+}
+
+// TestBuildLLMSReferenceFiles_EmptyCatalogStillCarriesEverySection pins the
+// property that makes three error branches above it unreachable: every section
+// llms-full.txt is validated for is written unconditionally, so an empty
+// catalog still produces a document its own validator accepts.
+//
+// That is why no fixture drives the failing arm of buildLLMSFullTxt's
+// validation, of buildLLMSReferenceFiles' check on it, or of run's check on
+// that: the arms are kept, and the reason they cannot fire is asserted here
+// instead. A section that started depending on catalog content would fail this
+// test rather than silently make those arms reachable.
+func TestBuildLLMSReferenceFiles_EmptyCatalogStillCarriesEverySection(t *testing.T) {
+	files, err := buildLLMSReferenceFiles(cannedVersion, llmsCatalog{})
+	if err != nil {
+		t.Fatalf("buildLLMSReferenceFiles() error: %v", err)
+	}
+	if len(files) != len(generatedFileNames)-1 {
+		t.Fatalf("buildLLMSReferenceFiles() returned %d files, want %d", len(files), len(generatedFileNames)-1)
+	}
+
+	full := files[0]
+	if full.name != llmsFullFileName {
+		t.Fatalf("first rendered file = %q, want %q", full.name, llmsFullFileName)
+	}
+	requireFragments(t, full.content, []string{
+		"## Dynamic Toolset\n", "## Meta-Tools\n", "## Individual Tools\n", "## Resources\n", "## Prompts\n",
+	})
+	if validateErr := validateLLMSFullTxt(full.content); validateErr != nil {
+		t.Errorf("validateLLMSFullTxt() error = %v, want an empty catalog to render a valid document", validateErr)
+	}
+}
+
+// TestFirstSentence_IsNeverEmptyForTextThatHasAny pins the property
+// compactToolDescription's "sentence != \"\"" guard rests on: firstSentence
+// trims its input and then returns either a prefix ending at a boundary or the
+// whole thing, so a description long enough to reach that guard can never yield
+// an empty sentence. The guard therefore decides nothing, which is why no
+// fixture drives its false arm; the shapes that look like they might are
+// listed here instead.
+func TestFirstSentence_IsNeverEmptyForTextThatHasAny(t *testing.T) {
+	long := strings.Repeat("x", maxFullDescRunes+1)
+	tests := []struct {
+		name string
+		s    string
+	}{
+		{name: "one long run of a single rune", s: long},
+		{name: "a boundary at the very start", s: ". " + long},
+		{name: "a newline at the very start survives trimming", s: "\n" + long},
+		{name: "nothing but abbreviations", s: strings.Repeat("e.g. ", maxFullDescRunes)},
+		{name: "a single period", s: "."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := firstSentence(tt.s); got == "" {
+				t.Errorf("firstSentence(%.20q...) = %q, want a non-empty sentence", tt.s, got)
+			}
+		})
+	}
+}
+
+// countingCatalog returns a catalog whose nine populations are nine different
+// numbers, so every count the summary paragraphs quote can be told from every
+// other one.
+//
+// cannedCatalog cannot do that job: four of its populations are 2 and two more
+// are 3, so three of the counters in those paragraphs could trade places with a
+// neighbor and every assertion still passed. Only the byte-for-byte comparison
+// against the committed files noticed, and that comparison is skipped on every
+// stacked layer below the one that refreshes them (issue 644), which is
+// exactly where a crossing would be introduced.
+//
+// The populations: 1 prompt, 2 base meta-tools, 3 dynamic tools, 4 individual
+// domains, 5 resources and templates together, 6 self-managed individual tools,
+// 7 GitLab.com individual tools, 8 self-managed enterprise meta-tools, and 9
+// GitLab.com Enterprise meta-tools.
+func countingCatalog() llmsCatalog {
+	tool := func(name string) *mcp.Tool {
+		return &mcp.Tool{Name: name, Description: "Tool " + name + "."}
+	}
+	individual := []*mcp.Tool{
+		tool("gitlab_alpha_one"), tool("gitlab_alpha_two"),
+		tool("gitlab_beta_one"), tool("gitlab_beta_two"),
+		tool("gitlab_gamma_one"), tool("gitlab_gamma_two"),
+		tool("gitlab_delta_one"),
+	}
+	meta := make([]*mcp.Tool, 0, 9)
+	for _, suffix := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"} {
+		meta = append(meta, tool("gitlab_meta"+suffix))
+	}
+	return llmsCatalog{
+		Individual:              individual,
+		IndividualSelfManaged:   individual[:6],
+		MetaBase:                meta[:2],
+		MetaEnterprise:          meta[:8],
+		MetaGitLabComEnterprise: meta,
+		Dynamic: []*mcp.Tool{
+			tool(mcpsurface.DynamicFindToolName),
+			tool(mcpsurface.DynamicExecuteActionToolName),
+			tool("gitlab_third_dynamic"),
+		},
+		MetaRoutes: map[string]toolutil.ActionMap{},
+		Resources: []*mcp.Resource{
+			{URI: "gitlab://one", Name: "One"},
+			{URI: "gitlab://two", Name: "Two"},
+			{URI: "gitlab://three", Name: "Three"},
+		},
+		ResourceTemplates: []*mcp.ResourceTemplate{
+			{URITemplate: "gitlab://four/{id}", Name: "Four"},
+			{URITemplate: "gitlab://five/{id}", Name: "Five"},
+		},
+		Prompts: []*mcp.Prompt{{Name: "only_prompt", Description: "The one prompt."}},
+	}
+}
+
+// TestRun_CountsEachPopulationInItsOwnPlace verifies that every count the three
+// summary paragraphs and the completion line quote is the population belonging
+// in that slot, driven from a catalog where no two populations agree.
+//
+// Each of those lines states six to nine numbers in a row, and a fixture that
+// repeats a value lets two of them change places unnoticed. The assertions are
+// whole lines rather than single numbers for the same reason: a number checked
+// on its own says nothing about the slot it landed in.
+func TestRun_CountsEachPopulationInItsOwnPlace(t *testing.T) {
+	dir := projectRootWithVersion(t, cannedVersion)
+	summary := captureStdout(t, func() {
+		if err := run(newCanned(countingCatalog()).surface, false); err != nil {
+			t.Errorf("run() error: %v", err)
+		}
+	})
+
+	const header = "> Version 9.9.9-test | up to 7 tools | 2 base meta-tools; 8 self-managed enterprise meta-tools; " +
+		"9 GitLab.com Enterprise meta-tools | 3 dynamic tools | 5 resources | 1 prompts\n"
+	t.Run("the completion line reports each population", func(t *testing.T) {
+		const want = "Generated llms.txt (7 max tools, 2 base meta, 9 GitLab.com enterprise meta, " +
+			"3 dynamic tools, 5 resources, 1 prompts)\n"
+		if !strings.Contains(summary, want) {
+			t.Errorf("run() printed:\n%s\nwant it to contain:\n%s", summary, want)
+		}
+	})
+	t.Run("llms.txt opens with the populations in order", func(t *testing.T) {
+		requireFragments(t, readGenerated(t, dir, llmsFileName), []string{
+			"It provides up to 7 individual MCP tools across 4 GitLab API domains, 2 base meta-tools, " +
+				"8 self-managed enterprise meta-tools, 9 GitLab.com Enterprise meta-tools,\n",
+			"a default 3-tool dynamic find/execute surface, 5 resources, 1 prompts, and 4 MCP capabilities",
+		})
+	})
+	t.Run("every long-form file repeats the same header", func(t *testing.T) {
+		for _, name := range []string{
+			llmsFullFileName, llmsMediumFileName, llmsFullMetaFileName,
+			llmsFullIndividualFileName, llmsFullCapabilityFileName,
+		} {
+			t.Run(name, func(t *testing.T) {
+				if got := readGenerated(t, dir, name); !strings.Contains(got, header) {
+					t.Errorf("%s is missing the header %q", name, header)
+				}
+			})
+		}
+	})
+	t.Run("the individual section names both surfaces", func(t *testing.T) {
+		requireFragments(t, readGenerated(t, dir, llmsFullIndividualFileName), []string{
+			"up to 7 individual tools are registered on GitLab.com Enterprise/Premium; " +
+				"self-managed Enterprise/Premium registers 6.\n",
+		})
+	})
+}
+
+// captureStdout returns what action wrote to the process's standard output,
+// and captureStderr the same for standard error.
+func captureStdout(t *testing.T, action func()) string {
+	t.Helper()
+	return captureWrites(t, &os.Stdout, action)
+}
+
+func captureStderr(t *testing.T, action func()) string {
+	t.Helper()
+	return captureWrites(t, &os.Stderr, action)
+}
+
+// captureWrites binds one of the process's output files to a temporary file
+// while action runs and returns what was written to it.
+//
+// A file rather than a pipe: what these commands print is a few short lines,
+// but a pipe holds a fixed amount and a reader draining afterwards would hang
+// on anything larger, which is a failure mode these tests have no reason to
+// carry. Both sides are bound at the same moment, since os.Stderr is read at
+// each write rather than captured at package initialization.
+func captureWrites(t *testing.T, stream **os.File, action func()) string {
+	t.Helper()
+	file, err := os.CreateTemp(t.TempDir(), "captured")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	original := *stream
+	*stream = file
+	action()
+	*stream = original
+	if closeErr := file.Close(); closeErr != nil {
+		t.Fatalf("Close() error = %v", closeErr)
+	}
+	data, err := os.ReadFile(file.Name())
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	return string(data)
 }

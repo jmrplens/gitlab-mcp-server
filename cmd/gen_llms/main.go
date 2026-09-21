@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,6 +32,7 @@ const (
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
 	maxFullDescRunes = 600
+	toolName         = "gen_llms"
 	llmsFileName     = "llms.txt"
 	llmsFullFileName = "llms-full.txt"
 
@@ -89,14 +91,43 @@ type llmsCatalog struct {
 	Prompts                 []*mcp.Prompt
 }
 
-func main() {
-	checkOnly := flag.Bool("check", false, "validate generated llms files without writing them")
-	flag.Parse()
+// Seams over os.Exit and run, so the exit code this command hands the process
+// is reachable from a test rather than only from a process, and so both of its
+// branches can be driven without building the real catalog or rewriting the
+// committed llms files.
+var (
+	osExit  = os.Exit
+	runLLMS = run
+)
 
-	if err := run(defaultLLMSSurface(), *checkOnly); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to generate llms files: %v\n", err)
-		os.Exit(1)
+// main regenerates the llms files, or with --check reports that they have
+// drifted.
+func main() {
+	osExit(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain parses args, the command line with the program name already removed,
+// and returns the process exit code.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code this function returns instead of an
+// os.Exit the seam above never sees; -h is the one parse failure that exits
+// clean, as ExitOnError would.
+func runMain(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	checkOnly := fs.Bool("check", false, "validate generated llms files without writing them")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
 	}
+	if err := runLLMS(defaultLLMSSurface(), *checkOnly); err != nil {
+		fmt.Fprintf(stderr, "failed to generate llms files: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 // llmsSurface names the introspection calls run makes against the MCP
@@ -427,11 +458,15 @@ func absoluteLLMSTarget(target string) string {
 }
 
 func validateLLMSTxt(content string) error {
+	// strings.Split never returns an empty slice for a non-empty separator, so
+	// lines[0] always exists and an empty document arrives here as "". And a
+	// line that starts with "# " cannot also start with "##", so the H1 prefix
+	// is the whole level check.
 	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
+	if strings.TrimSpace(lines[0]) == "" {
 		return errors.New("missing H1 title")
 	}
-	if !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[0]), "##") {
+	if !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") {
 		return fmt.Errorf("first line must be an H1 title, got %q", lines[0])
 	}
 
@@ -480,7 +515,10 @@ func (s *llmsTxtValidationState) validateLine(lineNumber int, line string) error
 }
 
 func (s *llmsTxtValidationState) validateHeading(lineNumber int, line string) error {
-	if !strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "###") {
+	// Every heading that is not an H2 is refused here, "###" among them: a line
+	// starting with "## " cannot also start with "###", so a second prefix test
+	// for the H3 case could decide nothing either way.
+	if !strings.HasPrefix(line, "## ") {
 		return fmt.Errorf("line %d: llms.txt only allows H1 plus H2 file-list sections", lineNumber)
 	}
 	if s.inFileListSection && !s.sectionHasLink {
@@ -526,8 +564,9 @@ func validateLLMSFileListItem(line string) error {
 }
 
 func validateLLMSFullTxt(content string) error {
+	// lines[0] always exists, for the reason validateLLMSTxt states.
 	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	if len(lines) == 0 || !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") {
+	if !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") {
 		return errors.New("missing H1 title")
 	}
 	for _, section := range []string{"## Dynamic Toolset", "## Meta-Tools", "## Individual Tools", "## Resources", "## Prompts"} {

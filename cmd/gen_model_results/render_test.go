@@ -152,6 +152,23 @@ func TestRenderBlock_SelectsBySurfaceAndLicence(t *testing.T) {
 	if renderBlock(metaBlock, []row{free}) != metaBlock.Empty {
 		t.Error("a dynamic row was published in the meta block")
 	}
+
+	// Both licensed tiers, and not only the one every other fixture carries: a
+	// split that read Ultimate alone would leave every Premium row in no block
+	// at all, which the orphan finding would then report as a measurement
+	// nobody publishes.
+	for _, tier := range []string{"premium", "ultimate"} {
+		t.Run(tier, func(t *testing.T) {
+			one := twoModels()[0]
+			one.Key.Tier, one.Provenance.Tier = tier, tier
+			if renderBlock(licensedBlock, []row{one}) == licensedBlock.Empty {
+				t.Errorf("a %s row was not published in the Enterprise block", tier)
+			}
+			if renderBlock(freeBlock, []row{one}) != freeBlock.Empty {
+				t.Errorf("a %s row was published in the CE block", tier)
+			}
+		})
+	}
 }
 
 // TestRenderBlock_AnOpaqueMetaRow_CarriesWhatItIsNotComparableWith is the

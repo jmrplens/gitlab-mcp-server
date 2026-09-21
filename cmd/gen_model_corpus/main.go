@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -16,11 +19,19 @@ import (
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 )
 
+// toolName is the command's own name, used as the flag set's name so a usage
+// message names the command rather than the test binary that drove it.
+const toolName = "gen_model_corpus"
+
 // defaultOutputPath is the committed ledger this command owns.
 const defaultOutputPath = "docs/development/testing/model-corpus.md"
 
 // regenerate is the sentence a stale artifact is reported with.
 const regenerate = "make gen-model-corpus"
+
+// osExit is os.Exit behind a variable, so the one line main carries is
+// reachable from a test rather than only from a process.
+var osExit = os.Exit
 
 // main renders the breadth ledger, or verifies the committed one.
 //
@@ -36,17 +47,40 @@ const regenerate = "make gen-model-corpus"
 //	go run ./cmd/gen_model_corpus/          # rewrite the ledger
 //	go run ./cmd/gen_model_corpus/ -check   # fail when it is stale
 func main() {
-	outputPath := flag.String("output", defaultOutputPath, "generated ledger path")
-	check := flag.Bool("check", false, "verify the committed ledger is current without writing")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain parses args, the command line with the program name already removed,
+// and returns the process exit code.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code this function returns instead of an
+// os.Exit the seam above never sees; -h is the one parse failure that exits
+// clean, as ExitOnError would. The two failures below both exit 1 and are
+// fixed differently, so each names its own stage: one means this is not a
+// checkout, the other that the render or the comparison refused.
+func runMain(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	outputPath := fs.String("output", defaultOutputPath, "generated ledger path")
+	check := fs.Bool("check", false, "verify the committed ledger is current without writing")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fmt.Fprintf(stderr, "find repository root: %v\n", err)
+		return 1
 	}
 	if runErr := run(root, *outputPath, *check); runErr != nil {
-		cmdutil.Fatalf("%v", runErr)
+		fmt.Fprintf(stderr, "%v\n", runErr)
+		return 1
 	}
+	return 0
 }
 
 // readCatalogFacts is the one reader of the catalog, held in a variable so a

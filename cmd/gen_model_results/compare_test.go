@@ -1,8 +1,11 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil/modelcorpus"
 )
 
 // oneRow is a row that agrees with its siblings on everything, so a test below
@@ -346,11 +349,55 @@ func TestCaseCoverage_SaysHowMuchOfTheCorpusWasAsked(t *testing.T) {
 		{name: "records none", coverage: caseCoverage{}, want: ""},
 		{name: "part of it", coverage: caseCoverage{Digest: "abc", Cases: 12, Corpus: 258}, want: "12 of 258 cases (`abc`)"},
 		{name: "all of it", coverage: caseCoverage{Digest: "abc", Cases: 258, Corpus: 258}, want: "the whole corpus (258 cases)"},
+		// A row whose corpus size is zero has not measured the whole of
+		// anything. There is deliberately no guard on Corpus for this: the
+		// `case 0` arm has already settled that Cases is not zero, so a
+		// corpus of zero is a corpus Cases cannot equal, and the equality
+		// arm alone keeps a count of cases from reading as a corpus it
+		// covered entirely when nothing recorded how large that corpus was.
+		{name: "a corpus size nothing recorded", coverage: caseCoverage{Digest: "abc", Cases: 12}, want: "12 of 0 cases (`abc`)"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			if got := testCase.coverage.String(); got != testCase.want {
 				t.Errorf("String() = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestCoverageOf_CountsTheRowsOwnCasesBesideTheCorpusItself pins the two
+// numbers the caption above is built from.
+//
+// They are both ints of one struct read off two different things, so a reader
+// that filled each from the other's source produces a caption that is still
+// well formed and says the opposite: a row measured on two cases claims a
+// corpus of two and reads as having covered all of it. Nothing downstream can
+// tell, because two rows transposed the same way still key alike and still sit
+// in one table.
+func TestCoverageOf_CountsTheRowsOwnCasesBesideTheCorpusItself(t *testing.T) {
+	corpus := len(modelcorpus.Keys())
+	if corpus < 3 {
+		t.Fatalf("the corpus holds %d case(s), too few for this test to tell the two numbers apart", corpus)
+	}
+
+	got := coverageOf(withCases(oneRow(), "MT-002", "MT-003"))
+	if got.Cases != 2 {
+		t.Errorf("the coverage counts %d case(s), want the two the row was measured on", got.Cases)
+	}
+	if got.Corpus != corpus {
+		t.Errorf("the coverage names a corpus of %d, want the %d the corpus at HEAD holds", got.Corpus, corpus)
+	}
+	if got.Digest == "" {
+		t.Error("a row measured on named cases fingerprints none of them")
+	}
+	if want := "2 of " + strconv.Itoa(corpus) + " cases (`" + got.Digest + "`)"; got.String() != want {
+		t.Errorf("the caption reads %q, want %q", got.String(), want)
+	}
+
+	// A row that recorded no cases fingerprints nothing, which is the silence
+	// the caption keeps rather than an agreement neither row made.
+	none := coverageOf(oneRow())
+	if none.Digest != "" || none.Cases != 0 || none.Corpus != corpus {
+		t.Errorf("a row recording no cases covers %+v, want no digest and no cases beside a corpus of %d", none, corpus)
 	}
 }

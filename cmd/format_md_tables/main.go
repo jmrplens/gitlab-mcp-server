@@ -37,10 +37,17 @@ type options struct {
 	pathsAreDefaults bool
 }
 
+// osExit is os.Exit behind a variable, so a test can drive main and read the
+// status it asks the process to exit with; the sibling commands keep the same
+// seam. It is worth a seam here because the status is the whole of what
+// `make audit-docs` reads from `--check`: a main that reported a stale tree
+// and exited zero would leave that gate green with nothing else to notice.
+var osExit = os.Exit
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		osExit(1)
 	}
 }
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -312,6 +314,81 @@ func TestDocument_RoundTrip_SortsRowsAndKeepsTheSchemaVersion(t *testing.T) {
 	}
 }
 
+// TestDocument_Marshal_IsTheSameBytesHoweverTheRowsArrived is the other half of
+// that sort, and the half two rows cannot ask about.
+//
+// With two rows the comparator is consulted once and can only ever answer one
+// way, so an order that merely reversed whatever it was given would pass the
+// round trip above. What the record needs is stronger: the order rows were
+// folded in is no part of the file, so two documents holding the same rows are
+// the same bytes and a diff of two records is a diff of the measurements rather
+// than of the order two runs happened to arrive in.
+func TestDocument_Marshal_IsTheSameBytesHoweverTheRowsArrived(t *testing.T) {
+	rowNamed := func(model string) row {
+		return row{Key: rowKey{Model: model, Surface: "dynamic", Mode: "default", Tier: "free", Repeat: 1}}
+	}
+	first, second, third := rowNamed("a"), rowNamed("m"), rowNamed("z")
+
+	ascending, err := document{SchemaVersion: recordSchemaVersion, Rows: []row{first, second, third}}.marshal()
+	if err != nil {
+		t.Fatalf("marshal the ascending document: %v", err)
+	}
+	descending, err := document{SchemaVersion: recordSchemaVersion, Rows: []row{third, second, first}}.marshal()
+	if err != nil {
+		t.Fatalf("marshal the descending document: %v", err)
+	}
+	if !bytes.Equal(ascending, descending) {
+		t.Errorf("the same three rows folded in two orders wrote two files:\n%s\n---\n%s", ascending, descending)
+	}
+
+	read, err := unmarshalDocument(ascending)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	models := []string{read.Rows[0].Key.Model, read.Rows[1].Key.Model, read.Rows[2].Key.Model}
+	if !slices.IsSorted(models) {
+		t.Errorf("the record holds the models in the order %v, want them sorted by key", models)
+	}
+}
+
+// TestDocument_EveryPartOfARow_SurvivesTheFileItIsWrittenTo states the property
+// that makes the two error arms around this marshaling unreachable, and that
+// nothing else in the package asserts.
+//
+// [document.marshal] and [runWrite] both branch on an error encoding/json
+// cannot produce for this type: a document is strings, ints, bools, pointers to
+// them, slices of them and maps keyed by string, with no channel, no function,
+// no cycle and no float that could be a NaN. Deleting either arm is what
+// errcheck refuses, so the arm stays and what is asserted instead is the claim
+// behind it -- that every block of a row reaches the file and comes back. A
+// field the file cannot carry fails the marshal here, and one it silently drops
+// fails the comparison; what this cannot see is two fields exchanging tags,
+// which a round trip restores as symmetrically as it wrote.
+func TestDocument_EveryPartOfARow_SurvivesTheFileItIsWrittenTo(t *testing.T) {
+	one := publishOne(t, twoCaseShard())
+	if len(one.Cases) != 2 {
+		t.Fatalf("the fixture row carries %d case(s), want the two the shard measured", len(one.Cases))
+	}
+	one.Key.TierPin, one.Key.MetaParamSchema, one.Key.SliceSize = "ultimate", "compact", 128
+	one.Provenance.TierPin, one.Provenance.MetaParamSchema, one.Provenance.SliceSize = "ultimate", "compact", 128
+	one.Counts.Shown = &shown{Min: 96, Max: 312, Overflowed: 2}
+
+	body, err := document{SchemaVersion: recordSchemaVersion, Note: recordNote, Rows: []row{one}}.marshal()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	read, err := unmarshalDocument(body)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(read.Rows) != 1 {
+		t.Fatalf("the record came back holding %d row(s), want one", len(read.Rows))
+	}
+	if !reflect.DeepEqual(read.Rows[0], one) {
+		t.Errorf("the row came back as\n got %+v\nwant %+v", read.Rows[0], one)
+	}
+}
+
 // TestUnmarshalDocument_AnotherSchemaVersion_IsRefused is the rule every record
 // in this tree is held to: a document written by another version of this
 // command may spell a field differently, and reading what we recognize would
@@ -494,6 +571,17 @@ func TestShownOf_ReadsTheSpanTheAttemptsRecorded(t *testing.T) {
 			attempts: []modelscore.Attempt{shownAttempt(0, false), shownAttempt(64, false)},
 			want:     &shown{Min: 64, Max: 64},
 			caption:  "64",
+		},
+		{
+			// Every case above meets its smallest list first, so the floor is
+			// settled by the opening value and a span that only ever rose would
+			// read the same. Here the smaller list arrives second, which is the
+			// only arrangement that asks whether the floor is a minimum or
+			// merely the first thing seen.
+			name:     "a later attempt shown fewer tools lowers the floor",
+			attempts: []modelscore.Attempt{shownAttempt(312, true), shownAttempt(96, false)},
+			want:     &shown{Min: 96, Max: 312, Overflowed: 1},
+			caption:  "96 to 312, 1 over budget",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -799,5 +887,85 @@ func TestGroupShard_ASkippedAttemptNothingClaims_IsRefusedRatherThanGuessed(t *t
 	}
 	if !strings.Contains(refusals[0].Reason, "surface") && !strings.Contains(refusals[0].Reason, "mode") {
 		t.Errorf("the refusal reads %q, want it to name the provenance it has not got", refusals[0].Reason)
+	}
+}
+
+// measuredOn is one attempt that opened a session, built for [groupShard]
+// directly rather than through a shard, because what is being asked about is
+// the placement and not the join that feeds it.
+func measuredOn(model, surface, session, mode string) modelscore.Attempt {
+	return modelscore.Attempt{
+		Run:     *fixtureRun(),
+		Session: modelrecord.Session{Label: session, Surface: surface, Mode: mode},
+		Line:    modelrecord.Attempt{Case: fixtureCase, Model: model, Surface: surface, Session: session, Repeat: 1},
+	}
+}
+
+// skippedOn is one attempt the runtime turned away: a model, a surface and
+// nothing else, because no session was ever opened.
+func skippedOn(model, surface, caseID string) modelscore.Attempt {
+	return modelscore.Attempt{
+		Run:  *fixtureRun(),
+		Line: modelrecord.Attempt{Case: caseID, Model: model, Surface: surface, Repeat: 1, EndedBy: modelrecord.EndedSkipped},
+	}
+}
+
+// TestPlaceSessionless_ASkipSeveralMeasurementsCouldBelongTo_KeepsItsOwnRow is
+// the branch the comment beside [placeSessionless] promises and no fixture
+// reached: the one where the answer is refused rather than guessed.
+//
+// A skip names its model and its surface and nothing else. Where exactly one
+// measurement of that pair is in the shard it joins it, which the test above
+// covers. Where two are (one shard measuring one model on one surface in two
+// modes) choosing either would credit a row with an attempt it never made, so
+// the skips keep a candidate of their own with no session behind it, which the
+// provenance rule then refuses by name. Both skips land on that same candidate
+// rather than on one each, and a second fold over a record that already holds
+// that key says where it already stands instead of publishing it twice.
+func TestPlaceSessionless_ASkipSeveralMeasurementsCouldBelongTo_KeepsItsOwnRow(t *testing.T) {
+	const other = "openai:other-model"
+	attempts := []modelscore.Attempt{
+		measuredOn(fixtureModel, "meta", "meta-default", "default"),
+		measuredOn(fixtureModel, "meta", "meta-read-only", "read-only"),
+		// A row of the same model on another surface, and a row of another
+		// model on this one. Neither is a home for a skip naming this model on
+		// meta, and each is passed over for its own reason.
+		measuredOn(fixtureModel, "dynamic", "dynamic-default", "default"),
+		measuredOn(other, "meta", "meta-default", "default"),
+		skippedOn(fixtureModel, "meta", "MT-017"),
+		skippedOn(fixtureModel, "meta", "MT-013"),
+	}
+
+	candidates := groupShard("modeleval-ambiguous.jsonl", attempts, map[string]string{})
+	if len(candidates) != 5 {
+		t.Fatalf("grouped into %d candidate(s), want the four measurements and one candidate for the skips", len(candidates))
+	}
+	for _, one := range candidates[:4] {
+		if len(one.attempts) != 1 {
+			t.Errorf("the measurement %s took %d attempt(s), want only its own", one.key.String(), len(one.attempts))
+		}
+	}
+
+	orphan := candidates[4]
+	if orphan.session.Label != "" {
+		t.Errorf("the skips were keyed off session %q, want a candidate with no session behind it", orphan.session.Label)
+	}
+	if len(orphan.attempts) != 2 {
+		t.Fatalf("the skips formed %d candidate(s) holding %d attempt(s), want both on one",
+			len(candidates)-4, len(orphan.attempts))
+	}
+	if orphan.claimedBy != "" {
+		t.Errorf("nothing had published this key and it reads as claimed by %q", orphan.claimedBy)
+	}
+
+	// The same shard folded against a record that already holds that key: the
+	// candidate is the same one and it now names where the row stands, which is
+	// what the duplicate-row rule refuses it by.
+	again := groupShard("modeleval-ambiguous.jsonl", attempts, map[string]string{orphan.key.String(): "an-earlier-shard.jsonl"})
+	if len(again) != 5 {
+		t.Fatalf("the second fold grouped into %d candidate(s), want the same five", len(again))
+	}
+	if again[4].claimedBy != "an-earlier-shard.jsonl" {
+		t.Errorf("the re-folded skips read as claimed by %q, want the shard that already published the key", again[4].claimedBy)
 	}
 }

@@ -7,8 +7,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -117,6 +121,80 @@ func TestGenerate_ReportsCapabilityCounts(t *testing.T) {
 				t.Fatalf("counts summary = %q, want it to mention %q", counts, want)
 			}
 		})
+	}
+}
+
+// TestGenerate_CountsSummaryMatchesTheArrays verifies the three numbers in the
+// summary are the lengths of the three arrays the manifest carries, each under
+// its own word.
+//
+// The summary is the only thing a run prints, and the three figures are
+// interchangeable integers: exchanging two of them reports a surface the file
+// does not hold, and no caller of this command reads anything else. The test
+// first establishes that the three counts really differ, since against equal
+// counts a crossing would be invisible here too.
+func TestGenerate_CountsSummaryMatchesTheArrays(t *testing.T) {
+	out, counts, err := generate([]byte(minimalManifest))
+	if err != nil {
+		t.Fatalf("generate() error: %v", err)
+	}
+	var m manifest
+	if decodeErr := json.Unmarshal(out, &m); decodeErr != nil {
+		t.Fatalf("unmarshal generated manifest: %v", decodeErr)
+	}
+
+	tools, prompts, resources := len(m.Tools), len(m.Prompts), len(m.Resources)
+	if tools == prompts || prompts == resources || tools == resources {
+		t.Fatalf("the registered surface has %d tools, %d prompts and %d resources; two counts that agree cannot witness a crossing", tools, prompts, resources)
+	}
+	want := fmt.Sprintf("%d tools, %d prompts, %d resources", tools, prompts, resources)
+	if counts != want {
+		t.Fatalf("counts summary = %q, want %q", counts, want)
+	}
+}
+
+// TestGenerate_CarriesLocalizationsAndLeavesMarkupUnescaped verifies a
+// localization block survives the rewrite and that the encoder does not escape
+// the markup characters a description may carry.
+//
+// Two properties meet here. Localizations are held as raw JSON, so this is what
+// pins that everything the decoder accepts can be written back out, which is why
+// the encode failure the generator guards against cannot happen for a manifest
+// that parsed. And HTML escaping is off, so a description carrying an angle
+// bracket or an ampersand stays readable in the committed file instead of
+// arriving at the marketplace as a run of numeric escapes.
+func TestGenerate_CarriesLocalizationsAndLeavesMarkupUnescaped(t *testing.T) {
+	in := `{
+  "identifier": "jmrplens-gitlab-mcp-server",
+  "name": "GitLab MCP Server",
+  "version": "9.9.9",
+  "localizations": [{"locale": "es-ES", "description": "Servidor MCP <GitLab> & compania"}]
+}`
+
+	out, _, err := generate([]byte(in))
+	if err != nil {
+		t.Fatalf("generate() error: %v", err)
+	}
+
+	if !strings.Contains(string(out), "<GitLab> & compania") {
+		t.Errorf("generated manifest escaped the markup characters:\n%s", out)
+	}
+	var m manifest
+	if decodeErr := json.Unmarshal(out, &m); decodeErr != nil {
+		t.Fatalf("unmarshal generated manifest: %v", decodeErr)
+	}
+	if len(m.Localizations) != 1 {
+		t.Fatalf("len(localizations) = %d, want the one it was given", len(m.Localizations))
+	}
+	var localization struct {
+		Locale      string `json:"locale"`
+		Description string `json:"description"`
+	}
+	if decodeErr := json.Unmarshal(m.Localizations[0], &localization); decodeErr != nil {
+		t.Fatalf("unmarshal the localization: %v", decodeErr)
+	}
+	if localization.Locale != "es-ES" || localization.Description == "" {
+		t.Errorf("localization = %+v, want it carried through unchanged", localization)
 	}
 }
 
@@ -253,6 +331,106 @@ func TestGenerate_RejectsUnpublishableManifest(t *testing.T) {
 	}
 }
 
+// TestManifestTools_SortedByName verifies tools come out in name order.
+//
+// The registered surface is the two dynamic tools, which arrive find-then-
+// execute and are therefore always reordered here; nothing drove the converter
+// with a list already in order, so the comparator was only ever asked a
+// question it answered yes to.
+func TestManifestTools_SortedByName(t *testing.T) {
+	got := manifestTools([]*mcp.Tool{
+		{Name: "gitlab_execute_action"},
+		{Name: "gitlab_find_action"},
+		{Name: "gitlab_discover_project"},
+	})
+
+	want := []string{"gitlab_discover_project", "gitlab_execute_action", "gitlab_find_action"}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if got[i].Name != name {
+				t.Fatalf("position %d = %q, want %q", i, got[i].Name, name)
+			}
+		})
+	}
+}
+
+// TestManifestEntries_CarryEachFieldToItsOwnKey verifies each converter copies
+// every field to the manifest key of the same meaning.
+//
+// Two of these fields are a pair no other test can tell apart: a title and a
+// description are both free text, so exchanging them changes no type, no
+// ordering and no count, and the listing would render the one-line title as the
+// blurb and the blurb as the title. Each entry is therefore built with a value
+// no sibling field shares and compared whole.
+func TestManifestEntries_CarryEachFieldToItsOwnKey(t *testing.T) {
+	t.Run("tool", func(t *testing.T) {
+		annotations := &mcp.ToolAnnotations{ReadOnlyHint: true}
+		schema := map[string]any{"type": "object"}
+		got := manifestTools([]*mcp.Tool{{
+			Name:        "tool-name",
+			Title:       "tool-title",
+			Description: "tool-description",
+			InputSchema: schema,
+			Annotations: annotations,
+		}})
+
+		want := []manifestTool{{
+			Name:        "tool-name",
+			Title:       "tool-title",
+			Description: "tool-description",
+			InputSchema: schema,
+			Annotations: annotations,
+		}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("manifestTools() = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("prompt", func(t *testing.T) {
+		arguments := []*mcp.PromptArgument{{Name: "argument-name"}}
+		got := manifestPrompts([]*mcp.Prompt{{
+			Name:        "prompt-name",
+			Title:       "prompt-title",
+			Description: "prompt-description",
+			Arguments:   arguments,
+		}})
+
+		want := []manifestPrompt{{
+			Name:        "prompt-name",
+			Title:       "prompt-title",
+			Description: "prompt-description",
+			Arguments:   arguments,
+		}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("manifestPrompts() = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("resource", func(t *testing.T) {
+		annotations := &mcp.Annotations{Priority: 0.6}
+		got := manifestResources([]*mcp.Resource{{
+			URI:         "gitlab://resource-uri",
+			Name:        "resource-name",
+			Title:       "resource-title",
+			Description: "resource-description",
+			MIMEType:    "application/resource-mime",
+			Annotations: annotations,
+		}})
+
+		want := []manifestResource{{
+			URI:         "gitlab://resource-uri",
+			Name:        "resource-name",
+			Title:       "resource-title",
+			Description: "resource-description",
+			MIMEType:    "application/resource-mime",
+			Annotations: annotations,
+		}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("manifestResources() = %+v, want %+v", got, want)
+		}
+	})
+}
+
 // TestManifestPrompts_SortedByName verifies prompts come out in name order, so
 // the file does not churn when registration order changes.
 func TestManifestPrompts_SortedByName(t *testing.T) {
@@ -304,7 +482,7 @@ func TestManifestResources_SortedByName(t *testing.T) {
 // would rewrite still fails check mode on every run.
 func TestRun_CheckModeAcceptsCommittedManifest(t *testing.T) {
 	freshness.SkipIfDeferred(t)
-	if err := run(true); err != nil {
+	if err := run(io.Discard, true); err != nil {
 		t.Fatalf("run(true) error: %v", err)
 	}
 }
@@ -327,46 +505,106 @@ func chdirFixtureProject(t *testing.T) string {
 // mode rejects a manifest whose capability arrays are stale, and a write run
 // rewrites the manifest to exactly what generate produces and then passes
 // check mode.
+//
+// The stale case also holds the command a reader is told to run. That string is
+// the only actionable half of the refusal, and it reaches the message through
+// an argument no other assertion here reads.
 func TestRun_FixtureProject_Scenarios(t *testing.T) {
 	tests := []struct {
 		name     string
 		manifest string
 		absent   bool
 		check    bool
-		wantErr  string
+		wantErr  []string
 	}{
-		{name: "missing manifest", absent: true, check: true, wantErr: "read " + manifestFileName},
-		{name: "unparsable manifest", manifest: "{", check: true, wantErr: "parse " + manifestFileName},
-		{name: "check rejects stale arrays", manifest: minimalManifest, check: true, wantErr: manifestFileName + " is stale"},
+		{name: "missing manifest", absent: true, check: true, wantErr: []string{"read " + manifestFileName}},
+		{name: "unparsable manifest", manifest: "{", check: true, wantErr: []string{"parse " + manifestFileName}},
+		{
+			name:     "check rejects stale arrays",
+			manifest: minimalManifest,
+			check:    true,
+			wantErr:  []string{manifestFileName + " is stale", regenerateHint},
+		},
 		{name: "write rewrites the manifest", manifest: minimalManifest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := chdirFixtureProject(t)
 			if !tt.absent {
-				if err := os.WriteFile(filepath.Join(root, manifestFileName), []byte(tt.manifest), 0o600); err != nil {
-					t.Fatalf("write manifest: %v", err)
-				}
+				writeManifest(t, root, tt.manifest)
 			}
 
-			err := run(tt.check)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("run(%v) error = %v, want containing %q", tt.check, err, tt.wantErr)
+			var stdout bytes.Buffer
+			err := run(&stdout, tt.check)
+			if len(tt.wantErr) > 0 {
+				assertErrorMentions(t, err, tt.wantErr)
+				if stdout.Len() != 0 {
+					t.Errorf("stdout = %q, want nothing printed for a failed run", stdout.String())
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("run(%v) error = %v", tt.check, err)
 			}
+			assertSummary(t, stdout.String(), "Generated "+manifestFileName)
 			assertManifestRewritten(t, root, tt.manifest)
 		})
 	}
 }
 
+// writeManifest lays content down as the manifest of the fixture project under
+// root.
+func writeManifest(t *testing.T, root, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, manifestFileName), []byte(content), 0o600); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+}
+
+// assertErrorMentions checks that err was returned and that it names each of
+// want, so a refusal is held to every part of it a reader acts on rather than
+// to the first phrase alone.
+func assertErrorMentions(t *testing.T, err error, want []string) {
+	t.Helper()
+	for _, phrase := range want {
+		if err == nil || !strings.Contains(err.Error(), phrase) {
+			t.Fatalf("error = %v, want containing %q", err, phrase)
+		}
+	}
+}
+
+// assertSummary checks that a run's one line of output opens with prefix and
+// closes with the capability counts in parentheses.
+//
+// The two summaries differ only in that prefix: one says the file was written,
+// the other that the committed one is already current, so a test reading only
+// the counts could not tell a write run from a check run.
+func assertSummary(t *testing.T, got, prefix string) {
+	t.Helper()
+	if !strings.HasPrefix(got, prefix) {
+		t.Errorf("summary = %q, want it to start with %q", got, prefix)
+	}
+	wantCounts := "(" + registeredCounts(t) + ")\n"
+	if !strings.HasSuffix(got, wantCounts) {
+		t.Errorf("summary = %q, want it to end with %q", got, wantCounts)
+	}
+}
+
+// registeredCounts is the counts summary generate reports for the registered
+// surface, read back through generate itself so the expectation is not a second
+// copy of the same numbers.
+func registeredCounts(t *testing.T) string {
+	t.Helper()
+	_, counts, err := generate([]byte(minimalManifest))
+	if err != nil {
+		t.Fatalf("generate() error = %v", err)
+	}
+	return counts
+}
+
 // assertManifestRewritten checks that the manifest under root is byte-equal
 // to what generate produces from the original content, and that check mode
-// then accepts it.
+// then accepts it and says so.
 func assertManifestRewritten(t *testing.T, root, original string) {
 	t.Helper()
 	want, _, genErr := generate([]byte(original))
@@ -380,9 +618,11 @@ func assertManifestRewritten(t *testing.T, root, original string) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("rewritten manifest differs from generate() output:\n%s", got)
 	}
-	if checkErr := run(true); checkErr != nil {
+	var stdout bytes.Buffer
+	if checkErr := run(&stdout, true); checkErr != nil {
 		t.Fatalf("run(true) after the rewrite error = %v, want the manifest accepted", checkErr)
 	}
+	assertSummary(t, stdout.String(), manifestFileName+" is current")
 }
 
 // TestRun_RemovedWorkingDirectory_ReturnsProjectRootError verifies run
@@ -405,8 +645,143 @@ func TestRun_RemovedWorkingDirectory_ReturnsProjectRootError(t *testing.T) {
 		t.Skip("this platform's getcwd still answers after the working directory is removed")
 	}
 
-	err := run(true)
+	err := run(io.Discard, true)
 	if err == nil || !strings.Contains(err.Error(), "get working directory") {
 		t.Fatalf("run(true) error = %v, want the working-directory error", err)
+	}
+}
+
+// TestRun_UnopenableProjectRoot_NamesTheStage verifies the arm that reports a
+// project root it could not open says which stage failed, so it is not read as
+// the manifest read below it, which is fixed by a different thing.
+//
+// The directory handed to the open is the one the project-root walk has just
+// found a go.mod in, so no fixture can make that open fail; the seam is
+// replaced for the length of this test instead, which is the only way the arm
+// is reachable at all.
+func TestRun_UnopenableProjectRoot_NamesTheStage(t *testing.T) {
+	writeManifest(t, chdirFixtureProject(t), minimalManifest)
+	original := openRoot
+	openRoot = func(string) (*os.Root, error) { return nil, errors.New("the root went away") }
+	t.Cleanup(func() { openRoot = original })
+
+	err := run(io.Discard, true)
+
+	if err == nil || !strings.Contains(err.Error(), "open project root: the root went away") {
+		t.Fatalf("run(true) error = %v, want the open stage named", err)
+	}
+}
+
+// TestRunMain_FlagParsing_ReturnsTheExitCode verifies a parse failure is an exit
+// code this function returns rather than an os.Exit inside the flag package: an
+// unknown flag is the usage exit, 2, and -h is the one parse failure that exits
+// clean, which is what the package-level ExitOnError flag set would have done
+// for both. Neither reaches the run, which the absent manifest witnesses.
+func TestRunMain_FlagParsing_ReturnsTheExitCode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want int
+		text string
+	}{
+		{name: "an unknown flag is a usage error", args: []string{"-bogus"}, want: 2, text: "flag provided but not defined: -bogus"},
+		{name: "asking for help exits clean", args: []string{"-h"}, want: 0, text: "-check"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := chdirFixtureProject(t)
+
+			var stdout, stderr bytes.Buffer
+			if code := runMain(tt.args, &stdout, &stderr); code != tt.want {
+				t.Fatalf("runMain(%v) = %d, want %d (stderr %q)", tt.args, code, tt.want, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.text) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.text)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want nothing on it past a failed parse", stdout.String())
+			}
+			if _, err := os.Stat(filepath.Join(root, manifestFileName)); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("os.Stat(manifest) = %v, want nothing written past a failed parse", err)
+			}
+		})
+	}
+}
+
+// TestRunMain_FixtureProject_ExitCodeAndStream verifies the two endings a run
+// has, and that each writes to the stream a caller reads it from: a write run
+// exits 0 with its summary on stdout, and a stale manifest exits 1 with the
+// refusal on stderr and nothing on stdout.
+func TestRunMain_FixtureProject_ExitCodeAndStream(t *testing.T) {
+	t.Run("a write run exits zero and reports on stdout", func(t *testing.T) {
+		writeManifest(t, chdirFixtureProject(t), minimalManifest)
+
+		var stdout, stderr bytes.Buffer
+		if code := runMain(nil, &stdout, &stderr); code != 0 {
+			t.Fatalf("runMain() = %d, want 0 (stderr %q)", code, stderr.String())
+		}
+		assertSummary(t, stdout.String(), "Generated "+manifestFileName)
+		if stderr.Len() != 0 {
+			t.Errorf("stderr = %q, want nothing on it for a run that worked", stderr.String())
+		}
+	})
+
+	t.Run("a stale manifest exits one and refuses on stderr", func(t *testing.T) {
+		root := chdirFixtureProject(t)
+		writeManifest(t, root, minimalManifest)
+
+		var stdout, stderr bytes.Buffer
+		if code := runMain([]string{"-check"}, &stdout, &stderr); code != 1 {
+			t.Fatalf("runMain(-check) = %d, want 1 (stderr %q)", code, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), manifestFileName+" is stale") {
+			t.Errorf("stderr = %q, want it to say the manifest is stale", stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Errorf("stdout = %q, want nothing on it for a refused run", stdout.String())
+		}
+		got, err := os.ReadFile(filepath.Join(root, manifestFileName))
+		if err != nil {
+			t.Fatalf("read manifest: %v", err)
+		}
+		if string(got) != minimalManifest {
+			t.Errorf("check mode rewrote the manifest:\n%s", got)
+		}
+	})
+}
+
+// TestMain_HandsTheExitCodeToTheSeam verifies main wires runMain's result to the
+// exit seam and reads its flags from os.Args, which is the only thing main does
+// and the one line no other test here reaches. Both endings are driven, since a
+// main that exited a constant would satisfy either one alone.
+func TestMain_HandsTheExitCodeToTheSeam(t *testing.T) {
+	tests := []struct {
+		name          string
+		writeManifest bool
+		want          int
+	}{
+		{name: "a manifest it can rewrite exits zero", writeManifest: true, want: 0},
+		{name: "no manifest at all exits one", want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := chdirFixtureProject(t)
+			if tt.writeManifest {
+				writeManifest(t, root, minimalManifest)
+			}
+			originalArgs := os.Args
+			os.Args = []string{toolName}
+			t.Cleanup(func() { os.Args = originalArgs })
+			code := -1
+			originalExit := osExit
+			osExit = func(got int) { code = got }
+			t.Cleanup(func() { osExit = originalExit })
+
+			main()
+
+			if code != tt.want {
+				t.Fatalf("main() exited %d, want %d", code, tt.want)
+			}
+		})
 	}
 }

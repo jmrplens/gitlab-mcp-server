@@ -19,8 +19,32 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 )
 
-// manifestFileName is the LobeHub manifest read by `lhm plugin publish`.
-const manifestFileName = "lhm.plugin.json"
+const (
+	// manifestFileName is the LobeHub manifest read by `lhm plugin publish`.
+	manifestFileName = "lhm.plugin.json"
+
+	// toolName names the flag set, so a usage message names this command
+	// rather than the test binary that drove it.
+	toolName = "gen_lhm_manifest"
+
+	// regenerateHint is what a stale manifest tells its reader to run. It is
+	// the only actionable half of that message, so it is named here rather
+	// than written at the call site.
+	regenerateHint = "make gen-lhm-manifest"
+)
+
+var (
+	// osExit is os.Exit behind a variable, so the one line main carries is
+	// reachable from a test rather than only from a process.
+	osExit = os.Exit
+
+	// openRoot is os.OpenRoot behind a variable. The directory it is handed
+	// is the one the project-root walk has just found a go.mod in, so the
+	// open fails only for a root that stopped being openable in between,
+	// which no test can arrange; the seam is how the arm that names that
+	// stage is reached at all.
+	openRoot = os.OpenRoot
+)
 
 // manifest mirrors the schema accepted by the LobeHub publish endpoint
 // (market.lobehub.com/s/publish-mcp/references/manifest). Every documented field
@@ -88,19 +112,40 @@ type surface struct {
 	resources []manifestResource
 }
 
+// main rewrites the manifest, or reports that the committed one has drifted.
 func main() {
-	checkOnly := flag.Bool("check", false, "verify the committed manifest matches the registered surface without writing it")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
 
-	if err := run(*checkOnly); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to generate %s: %v\n", manifestFileName, err)
-		os.Exit(1)
+// runMain parses args, the command line with the program name already removed,
+// and returns the process exit code.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code this function returns instead of an
+// os.Exit the seam above never sees; -h is the one parse failure that exits
+// clean, as ExitOnError would. The summary goes to stdout and every failure to
+// stderr, so a caller reading one is not handed the other.
+func runMain(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	checkOnly := fs.Bool("check", false, "verify the committed manifest matches the registered surface without writing it")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
 	}
+
+	if err := run(stdout, *checkOnly); err != nil {
+		fmt.Fprintf(stderr, "failed to generate %s: %v\n", manifestFileName, err)
+		return 1
+	}
+	return 0
 }
 
 // run rewrites the manifest's capability arrays from the live MCP surface, or,
 // in check mode, reports whether the committed file already matches them.
-func run(checkOnly bool) error {
+func run(stdout io.Writer, checkOnly bool) error {
 	rootDir, err := mcpsurface.ProjectRoot()
 	if err != nil {
 		return err
@@ -108,7 +153,7 @@ func run(checkOnly bool) error {
 	// The manifest is addressed relative to an os.Root rooted at the project
 	// directory, so the command can only ever read that one file; the write
 	// goes through docgen.WriteOrCheck, which contains itself the same way.
-	root, err := os.OpenRoot(rootDir)
+	root, err := openRoot(rootDir)
 	if err != nil {
 		return fmt.Errorf("open project root: %w", err)
 	}
@@ -127,14 +172,14 @@ func run(checkOnly bool) error {
 		return err
 	}
 
-	if writeErr := docgen.WriteOrCheck(filepath.Join(rootDir, manifestFileName), generated, checkOnly, "make gen-lhm-manifest"); writeErr != nil {
+	if writeErr := docgen.WriteOrCheck(filepath.Join(rootDir, manifestFileName), generated, checkOnly, regenerateHint); writeErr != nil {
 		return writeErr
 	}
 	if checkOnly {
-		fmt.Printf("%s is current (%s)\n", manifestFileName, counts)
+		fmt.Fprintf(stdout, "%s is current (%s)\n", manifestFileName, counts)
 		return nil
 	}
-	fmt.Printf("Generated %s (%s)\n", manifestFileName, counts)
+	fmt.Fprintf(stdout, "Generated %s (%s)\n", manifestFileName, counts)
 	return nil
 }
 

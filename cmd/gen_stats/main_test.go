@@ -89,8 +89,13 @@ func TestFlow_Default_Passes(t *testing.T) {
 }
 `
 
-// fakeGoMod declares two direct and two indirect dependencies across a block
-// and two single-line requires, with a comment line inside the block.
+// fakeGoMod declares three direct and four indirect dependencies across a
+// block and four single-line requires, with a comment line inside the block.
+//
+// The two totals are deliberately different. They were both two, which made
+// every assertion about them blind to the one confusion that can produce them:
+// swapping the halves of `s.DirectDeps, s.IndirectDeps = parseDeps(...)`, or
+// the two arms of classifyDep, is invisible while the answers agree.
 const fakeGoMod = `module example.com/fake
 
 go 1.27.0
@@ -98,12 +103,37 @@ go 1.27.0
 require (
 	github.com/a/b v1.0.0
 	github.com/c/d v1.0.0 // indirect
+	github.com/i/j v1.0.0 // indirect
 	// a comment inside the block
 )
 
 require github.com/e/f v1.0.0
 
+require github.com/k/l v1.0.0
+
 require github.com/g/h v1.0.0 // indirect
+
+require github.com/m/n v1.0.0 // indirect
+`
+
+// fakeGoModEdges holds the three line shapes the block scanner had never been
+// driven through: a closing parenthesis with no block open, a blank line
+// inside a block, and a block opener carrying a trailing comment, which is not
+// the exact "require (" the first case matches and reaches the single-line
+// case instead. Only github.com/a/b is a dependency.
+const fakeGoModEdges = `module example.com/edges
+
+go 1.27.0
+
+)
+
+require (
+
+	github.com/a/b v1.0.0
+)
+
+require ( // a commented opener is still an opener, never a dependency
+)
 `
 
 // TestCollectStats_NonZeroCounts verifies collectStats returns non-zero
@@ -168,8 +198,48 @@ func TestCollectStats_FakeRepository_CountsEveryField(t *testing.T) {
 		LargestTestFile:  "internal/a/a_test.go",
 		LargestTestLines: strings.Count(fakeUnitTest, "\n"),
 		Packages:         2,
-		DirectDeps:       2,
-		IndirectDeps:     2,
+		DirectDeps:       3,
+		IndirectDeps:     4,
+	}
+	if *stats != *want {
+		t.Fatalf("collectStats() =\n%+v\nwant\n%+v", *stats, *want)
+	}
+}
+
+// TestCollectStats_SeveralFilesPerKind_CountEachKindAndKeepTheLongest drives
+// the two things one file per kind cannot show.
+//
+// The longest-file records were only ever set, never defended: every fixture
+// file was the first of its kind, so "lines > s.LargestSrcLines" was true on
+// every evaluation and a later, shorter file had no chance to displace the
+// record. And with one source, one unit test and one end-to-end file, the
+// three file counters all read 1, so crossing two of the "++" lines in the
+// classifying switch produced the same three numbers. Here the counts are 2,
+// 3 and 1, and the shorter files of each kind are staged after the longest.
+func TestCollectStats_SeveralFilesPerKind_CountEachKindAndKeepTheLongest(t *testing.T) {
+	// git lists the index in sorted order, so a.go and a_test.go (the two
+	// longest) are seen before the shorter files that must not displace them.
+	root := writeFakeRepository(t, map[string]string{
+		"internal/a/a.go":              "package a\n\nfunc Long() {}\n\nfunc alsoLong() {}\n",
+		"internal/a/b.go":              "package a\n\nfunc short() {}\n",
+		"internal/a/a_test.go":         "package a\n\nimport \"testing\"\n\nfunc TestLong_Case_Works(t *testing.T) {}\n\nfunc TestLong_Other_Works(t *testing.T) {}\n",
+		"internal/a/b_test.go":         "package a\n\nimport \"testing\"\n\nfunc TestB(t *testing.T) {}\n",
+		"internal/a/c_test.go":         "package a\n\nimport \"testing\"\n\nfunc TestC(t *testing.T) {}\n",
+		"test/e2e/gitlab/flow_test.go": "//go:build e2e\n\npackage gitlab\n\nimport \"testing\"\n\nfunc TestFlow_Default_Passes(t *testing.T) {}\n",
+	})
+
+	stats, err := collectStats(root)
+	if err != nil {
+		t.Fatalf("collectStats() error = %v", err)
+	}
+	want := &repoStats{
+		SourceFiles: 2, UnitTestFiles: 3, E2ETestFiles: 1,
+		SourceLines: 8, UnitTestLines: 17, E2ETestLines: 7,
+		ExportedFuncs: 1, UnexportedFuncs: 2, TestFuncs: 4, E2ETestFuncs: 1,
+		LongestFuncName: "alsoLong", LongestTestName: "TestLong_Other_Works",
+		LargestSrcFile: "internal/a/a.go", LargestSrcLines: 5,
+		LargestTestFile: "internal/a/a_test.go", LargestTestLines: 7,
+		Packages: 2,
 	}
 	if *stats != *want {
 		t.Fatalf("collectStats() =\n%+v\nwant\n%+v", *stats, *want)
@@ -338,8 +408,8 @@ func TestRun_FakeRepository_ChecksAndWrites(t *testing.T) {
 		{label: "End-to-end tests", want: []string{"1", strconv.Itoa(e2eLines)}},
 		{label: "**Total**", want: []string{"**3**", "**" + strconv.Itoa(srcLines+unitLines+e2eLines) + "**"}},
 		{label: "Go packages", want: []string{"2"}},
-		{label: "Direct dependencies (`go.mod`)", want: []string{"2"}},
-		{label: "Indirect dependencies", want: []string{"2"}},
+		{label: "Direct dependencies (`go.mod`)", want: []string{"3"}},
+		{label: "Indirect dependencies", want: []string{"4"}},
 	}
 	for _, row := range rows {
 		t.Run(row.label, func(t *testing.T) {
@@ -501,16 +571,24 @@ func TestIsTODOComment_MarkerShapes_RequireWordBoundary(t *testing.T) {
 // TestParseDeps_GoModShapes_CountsDirectAndIndirect verifies block and
 // single-line requires are classified by the indirect marker, comment lines
 // inside the block are ignored, and a missing go.mod yields zeros.
+//
+// The edge fixture adds the three shapes the switch guards against and nothing
+// used to send it: a stray ")" must not close a block that was never opened, a
+// blank line inside a block is not a dependency, and an opener with a trailing
+// comment is caught by the "require (" guard on the single-line case rather
+// than counted as one more direct dependency.
 func TestParseDeps_GoModShapes_CountsDirectAndIndirect(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "go.mod", fakeGoMod)
+	writeFile(t, dir, "edges.mod", fakeGoModEdges)
 	tests := []struct {
 		name         string
 		path         string
 		wantDirect   int
 		wantIndirect int
 	}{
-		{name: "fixture", path: filepath.Join(dir, "go.mod"), wantDirect: 2, wantIndirect: 2},
+		{name: "fixture", path: filepath.Join(dir, "go.mod"), wantDirect: 3, wantIndirect: 4},
+		{name: "block edges", path: filepath.Join(dir, "edges.mod"), wantDirect: 1},
 		{name: "missing", path: filepath.Join(dir, "absent.mod")},
 	}
 	for _, tt := range tests {
@@ -526,6 +604,12 @@ func TestParseDeps_GoModShapes_CountsDirectAndIndirect(t *testing.T) {
 // TestRenderStats_PopulatedStats_RendersEveryTable verifies every table row
 // derives from the collected numbers: totals, ratios, averages, percentages,
 // pattern counts, project meta, and the hall-of-fame records.
+//
+// No two fields share a value, which is what makes the row-to-field mapping
+// assertable at all: a renderer that read the wrong neighbor would print the
+// same table wherever two numbers agree. Packages and E2ETestFuncs were both
+// 12, and IndirectDeps and ErrChecks both 90, so two such crossings between
+// tables rendered identically.
 func TestRenderStats_PopulatedStats_RendersEveryTable(t *testing.T) {
 	out := renderStats(&repoStats{
 		SourceFiles: 10, UnitTestFiles: 5, E2ETestFiles: 2,
@@ -534,7 +618,7 @@ func TestRenderStats_PopulatedStats_RendersEveryTable(t *testing.T) {
 		CommentLines: 250, DeferStmts: 40, ErrChecks: 90, Nolints: 3, TODOs: 1, StructTypes: 55, GitlabLines: 42,
 		LongestFuncName: "RegisterEverything", LongestTestName: "TestRegisterEverything_Works",
 		LargestSrcFile: "internal/big.go", LargestSrcLines: 1200, LargestTestFile: "internal/big_test.go", LargestTestLines: 3400,
-		Packages: 12, DirectDeps: 7, IndirectDeps: 90,
+		Packages: 13, DirectDeps: 7, IndirectDeps: 91,
 	})
 	rows := []struct {
 		label string
@@ -560,9 +644,9 @@ func TestRenderStats_PopulatedStats_RendersEveryTable(t *testing.T) {
 		{label: "`struct` types defined", want: []string{"55"}},
 		{label: "`//nolint` suppressions", want: []string{"3"}},
 		{label: "`TODO` / `FIXME` / `HACK` comments", want: []string{"1"}},
-		{label: "Go packages", want: []string{"12"}},
+		{label: "Go packages", want: []string{"13"}},
 		{label: "Direct dependencies (`go.mod`)", want: []string{"7"}},
-		{label: "Indirect dependencies", want: []string{"90"}},
+		{label: "Indirect dependencies", want: []string{"91"}},
 		{label: "Longest source file", want: []string{"`internal/big.go`. 1,200 lines"}},
 		{label: "Longest test file", want: []string{"`internal/big_test.go`. 3,400 lines"}},
 		{label: "Source code printed at 55 lines/page", want: []string{"~18 pages of A4"}},
@@ -731,6 +815,17 @@ func TestScanGoDecls_CountsDeclarationsNotText(t *testing.T) {
 			isTest:      true,
 			wantStructs: 0,
 		},
+		{
+			// The struct guard reads isTest before isE2E, so until an
+			// end-to-end file carried a type declaration the isE2E half was
+			// never the one that decided: every file reaching it was a unit
+			// test or a source file.
+			name:         "end-to-end file types are not counted either",
+			src:          "package p\n\ntype fixture struct{}\n\nfunc TestFlow(t *testing.T) {}\n",
+			isE2E:        true,
+			wantE2EFuncs: 1,
+			wantStructs:  0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -768,6 +863,11 @@ func TestScanGoDecls_CountsDeclarationsNotText(t *testing.T) {
 // cannot read surfaces as an error rather than silently contributing zero.
 // A generator that under-reports without saying so is what this whole change
 // is correcting.
+//
+// It is also what makes the third arm of the declaration switch unreachable,
+// and so the one condition gobco reports as never false: ast.Decl has exactly
+// three implementations, and go/parser emits the third, *ast.BadDecl, only
+// after recording an error, which this refusal returns before the loop runs.
 func TestScanGoDecls_UnparseableFile_Reports(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.go")

@@ -77,11 +77,17 @@ func coverageOf(one row) caseCoverage {
 // found to agree on, and "a coverage neither of them recorded" is not an
 // agreement. A row like that is one written before the cases were carried, and
 // saying so in every caption would be noise a reader has to step over.
+//
+// The whole-corpus arm deliberately tests only for equality with the corpus. A
+// guard on the corpus being counted at all used to stand beside it and could
+// never decide anything: the arm above has already established that Cases is
+// not zero, so a corpus of zero is a corpus Cases cannot equal. Both arms ask
+// about the same value, which is what makes this a switch on it.
 func (c caseCoverage) String() string {
-	switch {
-	case c.Cases == 0:
+	switch c.Cases {
+	case 0:
 		return ""
-	case c.Corpus > 0 && c.Cases == c.Corpus:
+	case c.Corpus:
 		return "the whole corpus (" + strconv.Itoa(c.Cases) + " cases)"
 	default:
 		return strconv.Itoa(c.Cases) + " of " + strconv.Itoa(c.Corpus) + " cases (`" + c.Digest + "`)"
