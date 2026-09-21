@@ -1,11 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -394,17 +396,21 @@ func writeSummary(out io.Writer, summary Summary, verbose bool) {
 }
 
 // byCount renders a breakdown, biggest first, so a report opens with where the
-// work is.
+// work is. Two kinds with the same count are ordered by name, so two runs over
+// one tree print the same line.
+//
+// The order is expressed as a comparison rather than as a "less" predicate
+// guarded by an inequality. The guarded form reads the same and carries a
+// boundary no input reaches: inside "the counts differ", > and >= cannot be
+// told apart, so mutation testing reports a survivor that no test could ever
+// kill. A comparison has no boundary to get wrong.
 func byCount(counts map[string]int) string {
 	keys := make([]string, 0, len(counts))
 	for key := range counts {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		if counts[keys[i]] != counts[keys[j]] {
-			return counts[keys[i]] > counts[keys[j]]
-		}
-		return keys[i] < keys[j]
+	slices.SortFunc(keys, func(left, right string) int {
+		return cmp.Or(cmp.Compare(counts[right], counts[left]), cmp.Compare(left, right))
 	})
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
