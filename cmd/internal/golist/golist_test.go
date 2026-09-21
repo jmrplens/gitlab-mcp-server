@@ -3,6 +3,7 @@ package golist
 import (
 	"go/build"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,6 +44,11 @@ func TestParseRows_ToolchainOutput_ReadsEveryField(t *testing.T) {
 // read as a package, which is what keeps a warning a caller merged into the
 // same stream out of the listing. Empty output is a listing of no packages,
 // not an error, and comes back non-nil so a caller can range over it.
+//
+// The padded case is what holds the TrimSpace around the split, which no
+// mutation can model and which every other case here survives: a line of
+// spaces is not the empty string the loop skips, so without the trim it
+// reaches the field count and the whole listing is refused.
 func TestParseRows_MalformedRows_AreSkippedOrRefused(t *testing.T) {
 	t.Parallel()
 
@@ -55,6 +61,7 @@ func TestParseRows_MalformedRows_AreSkippedOrRefused(t *testing.T) {
 		{name: "blank interior line is skipped", output: "d\tp\tn\n\nd2\tp2\tn2\n", wantLen: 2},
 		{name: "empty output lists no packages", output: "", wantLen: 0},
 		{name: "whitespace only lists no packages", output: "\n\n", wantLen: 0},
+		{name: "padding lines around the rows are trimmed", output: "  \nd\tp\tn\n  \n", wantLen: 1},
 		{name: "row without a tab is refused", output: "no-tabs-here\n", wantErr: true},
 		{name: "row with a single tab is refused", output: "dir\tonly-one-field\n", wantErr: true},
 		{name: "row with a fourth field is refused", output: "d\tp\tn\textra\n", wantErr: true},
@@ -100,6 +107,48 @@ func TestExecutable_PointsAtTheRunningToolchain(t *testing.T) {
 	info, err := os.Stat(got)
 	if err != nil || info.IsDir() {
 		t.Fatalf("Executable() = %q, want an existing file (stat error %v)", got, err)
+	}
+}
+
+// TestFormat_ToolchainListing_PutsEachFieldWhereParseRowsReadsIt drives the
+// real toolchain the way cmd/godoc_tool does, `go list -f Format` through
+// [Executable], and reads the row back with [ParseRows]. It is the one
+// assertion that holds the template's field order to the order the parser
+// assigns them in, and the only test here that names [Format] at all: every
+// other one hands ParseRows a literal row, so reordering Format left this
+// package's own suite green while both callers broke.
+//
+// The three values are pairwise distinct by construction (only Dir is a
+// directory holding golist.go, only ImportPath ends in this package's path,
+// only Name is the package clause), so no permutation of either side passes.
+// It also proves Executable names a binary that runs, which the stat beside
+// it cannot.
+func TestFormat_ToolchainListing_PutsEachFieldWhereParseRowsReadsIt(t *testing.T) {
+	t.Parallel()
+
+	// #nosec G204 -- Executable returns the fixed Go tool path from the active toolchain, which is the property under test.
+	output, err := exec.CommandContext(t.Context(), Executable(), "list", "-f", Format, ".").Output()
+	if err != nil {
+		t.Fatalf("go list -f %q .: %v", Format, err)
+	}
+
+	rows, err := ParseRows(output)
+	if err != nil {
+		t.Fatalf("ParseRows(%q) error = %v, want nil", output, err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("go list -f Format . returned %d rows, want this package alone", len(rows))
+	}
+
+	got := rows[0]
+	if _, statErr := os.Stat(filepath.Join(got.Dir, "golist.go")); statErr != nil {
+		t.Errorf("Dir = %q, want the directory holding golist.go (stat error %v)", got.Dir, statErr)
+	}
+	if want := "/cmd/internal/golist"; !strings.HasSuffix(got.ImportPath, want) {
+		t.Errorf("ImportPath = %q, want it to end in %q", got.ImportPath, want)
+	}
+	if got.Name != "golist" {
+		t.Errorf("Name = %q, want the package clause golist", got.Name)
 	}
 }
 
