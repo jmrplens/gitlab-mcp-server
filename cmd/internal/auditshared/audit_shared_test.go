@@ -46,6 +46,10 @@ func TestIsGenericUsage_Scenarios_ClassifiesPlaceholderText(t *testing.T) {
 // check reads the projected description of the spec's individual tool and
 // only flags a description missing the "Returns:" or "See also:" sections;
 // specs without an individual tool or without a projection are never weak.
+//
+// The padded name is the case that holds the lookup to the trimmed spelling:
+// without the trim it misses the projection and the spec reads as healthy
+// rather than as the weak description it is.
 func TestWeakIndividualDescription_Scenarios_ChecksProjectedText(t *testing.T) {
 	projected := map[string]string{
 		"gitlab_full":       "Lists things. Returns: a list. See also: gitlab_other.",
@@ -63,6 +67,7 @@ func TestWeakIndividualDescription_Scenarios_ChecksProjectedText(t *testing.T) {
 		{name: "complete description", tool: "gitlab_full", want: false},
 		{name: "missing returns", tool: "gitlab_no_returns", want: true},
 		{name: "missing see also", tool: "gitlab_no_see", want: true},
+		{name: "padded name resolves to the projection", tool: "  gitlab_no_returns  ", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -149,11 +154,18 @@ func TestNewStubGitLabClient_Default_AnswersVersionAndClosesOnCleanup(t *testing
 	}
 }
 
-// TestCachedActionSpecs_RepeatedCalls_ShareOneCollection verifies the cache
-// collects the catalog once per tier flag: repeated calls return the same
-// backing slice, the two tiers are collected independently, and the
-// enterprise collection is at least as large as the free one.
-func TestCachedActionSpecs_RepeatedCalls_ShareOneCollection(t *testing.T) {
+// TestCachedActionSpecs_RepeatedCalls_ShareOneCollectionPerFlag verifies the
+// cache collects the catalog once per enterprise flag: each flag's repeated
+// call hands back that flag's own backing slice, and the two flags are cached
+// apart rather than sharing one entry, which is what the sync.Map key is for.
+//
+// What it deliberately does not assert is that the two collections differ.
+// Every one of the 46 builders in internal/tools/action_specs.go declares the
+// flag as `_ bool`, so CollectActionSpecs returns the same catalog either way
+// and the edition tags are gated later by the tier filter. A test comparing
+// the two sizes would therefore either pin that equality as intended or fail;
+// the flag's journey past this cache cannot be observed from here at all.
+func TestCachedActionSpecs_RepeatedCalls_ShareOneCollectionPerFlag(t *testing.T) {
 	client, cleanup := NewStubGitLabClient("stub-token")
 	t.Cleanup(cleanup)
 
@@ -167,6 +179,12 @@ func TestCachedActionSpecs_RepeatedCalls_ShareOneCollection(t *testing.T) {
 	free := CachedActionSpecs(client, false)
 	if len(free) == 0 || len(free) > len(enterprise) {
 		t.Fatalf("CachedActionSpecs(free) = %d groups, enterprise = %d; want 0 < free <= enterprise", len(free), len(enterprise))
+	}
+	if &free[0] == &enterprise[0] {
+		t.Fatal("both flags returned one backing slice, want one cache entry per flag")
+	}
+	if again := CachedActionSpecs(client, false); len(again) != len(free) || &again[0] != &free[0] {
+		t.Fatal("CachedActionSpecs(free) second call did not return the cached slice")
 	}
 }
 
