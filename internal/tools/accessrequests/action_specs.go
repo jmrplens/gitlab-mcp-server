@@ -95,7 +95,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 		options.Usage = "List pending project access requests. Use before approving or denying user access requests at project scope. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"list project access requests", "project join requests", "pending project requests"}
 		options.RelatedActions = []string{actionAccessApproveProject, actionAccessDenyProject, actionProjectMemberList}
-		options.IndividualTool.Description = "List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list."
+		options.IndividualTool.Description = "List pending access requests for a project. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -112,7 +112,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 		options.Usage = "List pending group access requests. Use before approving or denying user access requests at group scope. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"list group access requests", "group join requests", "pending group requests"}
 		options.RelatedActions = []string{actionAccessApproveGroup, actionAccessDenyGroup, actionGroupMemberList}
-		options.IndividualTool.Description = "List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list."
+		options.IndividualTool.Description = "List pending access requests for a group. Returns: access requests with id, username, name, state, whether the account is locked, the address the user publishes, the requested_at timestamp, and pagination metadata. A pending request carries no access level: GitLab grants one when it is approved. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"group_id": {
 				SemanticRole:   "scope_group",
@@ -153,7 +153,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 		options.Usage = "Approve a user project access request. Use after listing pending requests and selecting the user_id to approve."
 		options.Aliases = []string{"approve project access request", "grant project access request", "accept project join request"}
 		options.RelatedActions = []string{actionAccessRequestListProject, actionAccessDenyProject, actionProjectMemberList}
-		options.IndividualTool.Description = "Approve a pending project access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list."
+		options.IndividualTool.Description = "Approve a pending project access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramUserID: {
 				SemanticRole:   paramUserID,
@@ -165,7 +165,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 		options.Usage = "Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve."
 		options.Aliases = []string{"approve group access request", "grant group access request", "accept group join request"}
 		options.RelatedActions = []string{actionAccessRequestListGroup, actionAccessDenyGroup, actionGroupMemberList}
-		options.IndividualTool.Description = "Approve a pending group access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list."
+		options.IndividualTool.Description = "Approve a pending group access request, granting the user membership. Returns: the membership it became, with id, username, name, the granted access level, the state, and the membership fields GitLab sends with it. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramUserID: {
 				SemanticRole:   paramUserID,

@@ -342,6 +342,18 @@ List all deploy keys across projects for a specific user.
 
 ## Access Requests
 
+GitLab answers these routes with two different objects, and the responses
+differ accordingly. Listing and requesting render `API::Entities::AccessRequester`,
+which carries the person and the moment they asked: `id`, `username`, `name`,
+`state`, `locked`, `public_email`, `avatar_url`, `web_url` and `requested_at`.
+Approving renders `API::Entities::Member`, the membership the request became,
+which is the only one of them with an `access_level`, an `expires_at`, a
+`membership_state` or a custom role on it.
+
+A pending request therefore has no access level at all. GitLab grants one when
+the request is approved, and until then there is nothing to report rather than
+a level of zero.
+
 ### `gitlab_access_request_list_project`
 
 List access requests for a GitLab project.
