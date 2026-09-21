@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -178,6 +181,160 @@ func TestRun_Generation_ATruncatedAnswer_DoesNotReplaceAWholePin(t *testing.T) {
 	}
 }
 
+// wholeAnswer is an introspection payload that clears the floor the truncation
+// guard applies, so a generation can be driven down the path a real pin of
+// gitlab.com takes. Every other generation test here answers with [tinySchema]
+// and therefore enters that guard, which left the branch for a whole answer
+// evaluated one way only: the refusal could have become unconditional with
+// nothing to say so. The types are trivial because the guard counts them and
+// reads nothing else.
+var wholeAnswer = func() string {
+	var payload strings.Builder
+	payload.WriteString(`{"data":{"__schema":{"queryType":{"name":"Query"},"types":[`)
+	payload.WriteString(introspectedObject("Query"))
+	for i := range graphqlintrospect.MinimumTypes {
+		payload.WriteString(",")
+		payload.WriteString(introspectedObject(fmt.Sprintf("Padding%d", i)))
+	}
+	payload.WriteString(`]}}}`)
+	return payload.String()
+}()
+
+// introspectedObject is one object type carrying one scalar field, which is the
+// smallest thing the SDL renderer emits a type block for.
+func introspectedObject(name string) string {
+	return fmt.Sprintf(`{"kind":"OBJECT","name":%q,"fields":[{"name":"ok","args":[],"type":{"kind":"SCALAR","name":"Boolean"}}]}`, name)
+}
+
+// TestRun_Generation_AWholeAnswer_WritesEveryFieldOfThePin verifies the whole
+// generation this command exists for: an answer that clears the floor is
+// converted, loaded and written without the truncation guard firing.
+//
+// It compares the record field by field rather than asserting one field of it,
+// because the values a converter assigns have no branch for a gate to flip. The
+// revision is the one that was loose: [graphqlschema.Source.String] does not
+// print it and no check consults it, so an assignment that spoiled or dropped it
+// was invisible to every test here. The bearer credential is asserted for the
+// same reason — the token reaching the instance is one field of a struct literal
+// — and both requests are counted, since the version is a second ask and a
+// credential withheld from it silently records "unknown".
+func TestRun_Generation_AWholeAnswer_WritesEveryFieldOfThePin(t *testing.T) {
+	const credential = "glpat-probe-credential"
+
+	var mu sync.Mutex
+	var authorizations []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		authorizations = append(authorizations, r.Header.Get("Authorization"))
+		mu.Unlock()
+		if strings.Contains(string(body), "metadata") {
+			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.5.1","revision":"def5678"}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(wholeAnswer))
+	}))
+	t.Cleanup(server.Close)
+	dir := filepath.Join(t.TempDir(), "pinned")
+
+	status, out, errOut := runCommand(t, genRun{
+		endpoint: server.URL, dir: dir, token: credential, client: server.Client(), now: fixedClock,
+	})
+
+	if status != 0 {
+		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
+	}
+	types, source, err := readArtifacts(dir)
+	if err != nil {
+		t.Fatalf("the artifacts it wrote do not read back: %v", err)
+	}
+	want := graphqlschema.Source{
+		Instance:       server.URL,
+		GitLabVersion:  "19.5.1",
+		GitLabRevision: "def5678",
+		RetrievedAt:    "2026-09-06",
+		Types:          types,
+	}
+	// %#v rather than %+v: Source is a Stringer and its line omits the
+	// revision, so the one field this comparison exists for would be missing
+	// from the message reporting that it differs.
+	if source != want {
+		t.Errorf("the record it wrote = %#v, want %#v", source, want)
+	}
+
+	mu.Lock()
+	asked := slices.Clone(authorizations)
+	mu.Unlock()
+	if wantAsked := []string{"Bearer " + credential, "Bearer " + credential}; !slices.Equal(asked, wantAsked) {
+		t.Errorf("the instance was asked with %q, want the credential on the introspection and the version alike", asked)
+	}
+
+	// The report's two numbers are a size and a count, in that order. They are
+	// the same Go type and nothing else prints either, so reporting one in the
+	// other's place reads as a plausible line about a different schema.
+	sdl, err := os.ReadFile(filepath.Join(dir, graphqlschema.SDLFileName))
+	if err != nil {
+		t.Fatalf("read the schema back: %v", err)
+	}
+	if wantSize := fmt.Sprintf("(%d KiB)", len(sdl)/1024); !strings.Contains(out, wantSize) {
+		t.Errorf("stdout does not report the schema's size as %s:\n%s", wantSize, out)
+	}
+	if wantCount := fmt.Sprintf("%d loaded", types); !strings.Contains(out, wantCount) {
+		t.Errorf("stdout does not report %s:\n%s", wantCount, out)
+	}
+
+	// The endpoint is not gitlab.com, so that warning is expected; a whole
+	// answer reported as narrow would mean the guard fired on it.
+	if !strings.Contains(errOut, "not "+defaultEndpoint) {
+		t.Errorf("stderr does not warn that the pin was not taken from gitlab.com:\n%s", errOut)
+	}
+	if strings.Contains(errOut, "narrower edition") {
+		t.Errorf("an answer of %d types was reported as truncated:\n%s", graphqlintrospect.MinimumTypes+1, errOut)
+	}
+}
+
+// TestRun_Generation_ATruncatedAnswer_ReplacesAPinAlreadyTruncated verifies the
+// other side of the guard its sibling above pins. Refusing is about not losing a
+// whole pin, so a directory holding a probe of a narrower instance has nothing
+// to lose and the new probe is written: the `-schema` workflow is exactly that,
+// run twice. Without this the inner condition was evaluated one way only, and a
+// refusal that had quietly become unconditional would take that workflow with
+// it.
+func TestRun_Generation_ATruncatedAnswer_ReplacesAPinAlreadyTruncated(t *testing.T) {
+	probed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(tinySchema))
+	}))
+	t.Cleanup(probed.Close)
+
+	dir := filepath.Join(t.TempDir(), "pinned")
+	earlier := withSource(func(s *graphqlschema.Source) {
+		s.Instance = "https://gitlab.gnome.org/api/graphql"
+		s.Types = graphqlintrospect.MinimumTypes - 1
+	})
+	if err := writeArtifacts(dir, minimalSDL, earlier); err != nil {
+		t.Fatalf("prepare the fixture: %v", err)
+	}
+
+	status, _, errOut := runCommand(t, genRun{
+		endpoint: probed.URL, dir: dir, client: probed.Client(), now: fixedClock,
+	})
+
+	if status != 0 {
+		t.Fatalf("exit status %d, want 0: a probe replacing a probe loses no guarantee.\n%s", status, errOut)
+	}
+	if strings.Contains(errOut, "refusing to replace") {
+		t.Errorf("stderr refuses although the pin it would replace was itself truncated:\n%s", errOut)
+	}
+	types, source, err := readArtifacts(dir)
+	if err != nil {
+		t.Fatalf("the artifacts it wrote do not read back: %v", err)
+	}
+	if source.Instance != probed.URL || source.Types != types {
+		t.Errorf("the pin was not replaced: %+v, want one naming %s and the %d types the schema beside it loads with",
+			source, probed.URL, types)
+	}
+}
+
 // TestRun_CheckMode_JudgesTheCommittedFilesWithoutNetwork verifies the CI half.
 // It must need no instance at all, because a gate that reaches gitlab.com is a
 // gate that fails when gitlab.com does.
@@ -260,6 +417,13 @@ func loadedTypes(sdl string) int {
 // self-managed instance, or one without a token, wrote a narrower or anonymous
 // pin that every gate in the repository accepted in silence, and the guarantee
 // the whole gate rests on could be swapped out by one flag.
+//
+// The two refusals that count something spell the whole sentence, numbers
+// included, rather than the phrase that names them. Each holds one figure
+// against another — the record against the floor, the record against the schema
+// beside it — and a message that reports the pair the wrong way round tells a
+// reader to fix the half that was already right. Nothing else here can see
+// that: two arguments of one Sprintf have no branch to flip.
 func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -274,7 +438,10 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		{
 			name:   "a truncated or narrower answer",
 			source: withSource(func(s *graphqlschema.Source) { s.Types = graphqlintrospect.MinimumTypes - 1 }),
-			want:   "truncated or the instance was a narrower edition",
+			want: fmt.Sprintf(
+				"the pin carries %d types and gitlab.com answers with more than %d: the introspection was truncated or the instance was a narrower edition",
+				graphqlintrospect.MinimumTypes-1, graphqlintrospect.MinimumTypes,
+			),
 		},
 		{
 			name:   "an introspection with no token",
@@ -304,7 +471,10 @@ func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {
 		{
 			name:   "a record beside a schema it did not come from",
 			source: withSource(func(s *graphqlschema.Source) { s.Types++ }),
-			want:   "were not written by one regeneration",
+			want: fmt.Sprintf(
+				"%s records %d types and %s loads with %d: the two files were not written by one regeneration",
+				graphqlschema.SourceFileName, canonicalSource.Types+1, graphqlschema.SDLFileName, canonicalSource.Types,
+			),
 		},
 	}
 	for _, testCase := range cases {
@@ -506,9 +676,12 @@ func TestMainEntry_CredentialResolution_FollowsGITLABURLNotTheFlag(t *testing.T)
 		{
 			name:     "an endpoint the token does not belong to",
 			instance: instance,
-			// No -url, so the default gitlab.com endpoint is asked while the
-			// token belongs somewhere else.
-			wantNote: "GITLAB_TOKEN belongs to https://gitlab.example.com",
+			// No -url, so the default endpoint is asked while the token belongs
+			// somewhere else. The note names both origins, which is what makes
+			// this the one place the -url default is observable at all: a
+			// generation with no flag pins whatever that default names, and
+			// `make gen-graphql-schema` passes no flag.
+			wantNote: "GITLAB_TOKEN belongs to https://gitlab.example.com and this run asks https://gitlab.com",
 		},
 		{
 			name:     "a token nothing says the instance of",
