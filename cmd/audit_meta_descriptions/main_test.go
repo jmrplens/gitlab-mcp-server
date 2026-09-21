@@ -13,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -129,6 +130,20 @@ func TestParseEnumerationLine_HouseShapes_ParsedOrSkippedWhole(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestParseEnumerationLine_NestedLeadingRemark_EndsAtItsOwnBracket verifies an
+// opening remark is closed by the bracket that opened it rather than by the
+// first ")" inside it, so the parameters behind a remark that brackets
+// something of its own are read instead of being swallowed with it.
+func TestParseEnumerationLine_NestedLeadingRemark_EndsAtItsOwnBracket(t *testing.T) {
+	_, params, ok := parseEnumerationLine("- list_all: (admin (root) only) type, status")
+	if !ok {
+		t.Fatal("parseEnumerationLine() refused a line whose only oddity is a nested opening remark")
+	}
+	if got := mentionNames(params); !slices.Equal(got, []string{"type", "status"}) {
+		t.Errorf("parameter names = %v, want [type status]", got)
 	}
 }
 
@@ -686,45 +701,121 @@ func TestAudit_SingleActionLine_ReportsASiblingsParameter(t *testing.T) {
 
 // TestAudit_SortsAcrossTools verifies the tool name orders the report before
 // the kind does, so a growing catalog cannot reshuffle an unchanged report.
+//
+// Both listing orders are driven because the comparator is only ever asked
+// about an adjacent pair: a corpus that already arrives sorted is what asks it
+// to leave two findings where they are, and the reversed one never does.
 func TestAudit_SortsAcrossTools(t *testing.T) {
-	catalog := actioncatalog.NewCatalog()
 	body := metaPreamble + "Widget actions.\n\n- list: query\n"
-	served := []*mcp.Tool{
-		{Name: "gitlab_zeta", Description: body},
-		{Name: "gitlab_alpha", Description: body},
+
+	cases := []struct {
+		name   string
+		listed []string
+	}{
+		{name: "listed_in_reverse", listed: []string{"gitlab_zeta", "gitlab_alpha"}},
+		{name: "listed_in_order", listed: []string{"gitlab_alpha", "gitlab_zeta"}},
 	}
 
-	findings, _, _ := audit(served, catalog)
-	if len(findings) != 2 || findings[0].tool != "gitlab_alpha" || findings[1].tool != "gitlab_zeta" {
-		t.Fatalf("findings = %+v, want them ordered by tool name", findings)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			served := make([]*mcp.Tool, 0, len(tc.listed))
+			for _, name := range tc.listed {
+				served = append(served, &mcp.Tool{Name: name, Description: body})
+			}
+
+			findings, _, _ := audit(served, actioncatalog.NewCatalog())
+			if len(findings) != 2 || findings[0].tool != "gitlab_alpha" || findings[1].tool != "gitlab_zeta" {
+				t.Fatalf("findings = %+v, want them ordered by tool name", findings)
+			}
+		})
 	}
 }
 
 // TestAudit_SortsByDetailWithinAKind verifies two findings of one kind on one
-// tool are ordered by what they name, which is the last tie-break and the one
-// that keeps a multi-parameter line reported in a stable order.
+// tool are ordered by what they name, which keeps a multi-parameter line
+// reported in a stable order. Both spellings of the line are driven so the
+// comparator answers about a pair that already arrives in order as well as
+// about one it has to swap.
 func TestAudit_SortsByDetailWithinAKind(t *testing.T) {
-	catalog := testCatalog(t, "gitlab_widget", "list", "search")
-	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n- list: query, filter\n"}
+	cases := []struct {
+		name string
+		line string
+	}{
+		{name: "enumerated_in_reverse", line: "- list: query, filter"},
+		{name: "enumerated_in_order", line: "- list: filter, query"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := testCatalog(t, "gitlab_widget", "list", "search")
+			tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n" + tc.line + "\n"}
+
+			findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+			if len(findings) != 2 || findings[0].detail != "filter" || findings[1].detail != "query" {
+				t.Fatalf("findings = %+v, want them ordered by the name they report", findings)
+			}
+		})
+	}
+}
+
+// TestAudit_SortsTheKindsOfOneLine_ValueBeforeParameter verifies the kind
+// tie-break in the direction the other tests never reach. One line can report a
+// rejected value and an unknown parameter at once, and they arrive in that
+// order, so the comparator is asked to leave the pair alone rather than to swap
+// it; the report keeps the value finding first either way.
+func TestAudit_SortsTheKindsOfOneLine_ValueBeforeParameter(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	action := actioncatalog.Action{
+		Name:         "list",
+		OwnerPackage: "tools",
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"scope": map[string]any{"type": "string", "enum": []any{"ALL"}}},
+		}},
+	}
+	options := actioncatalog.GroupOptions{ToolName: "gitlab_widget", OwnerPackage: "tools", SurfaceKind: actioncatalog.SurfaceKindMetaGroup}
+	if err := catalog.AddAction("gitlab_widget", action, options); err != nil {
+		t.Fatalf("AddAction() error: %v", err)
+	}
+	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n- list: scope (ALL/NONE), query\n"}
 
 	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
-	if len(findings) != 2 || findings[0].detail != "filter" || findings[1].detail != "query" {
-		t.Fatalf("findings = %+v, want them ordered by the name they report", findings)
+	if len(findings) != 2 {
+		t.Fatalf("findings = %+v, want the rejected value and the unknown parameter", findings)
+	}
+	if findings[0].kind != kindEnumValue || findings[0].detail != "scope=NONE" {
+		t.Errorf("first finding = %+v, want the value one, which sorts first", findings[0])
+	}
+	if findings[1].kind != kindParameter || findings[1].detail != "query" {
+		t.Errorf("second finding = %+v, want the parameter one", findings[1])
 	}
 }
 
 // TestAudit_SortsByLineWhenEverythingElseTies verifies two findings that agree
 // on tool, kind and detail are ordered by the line they came from: six actions
 // of one tool offering one wrong parameter tie on every other part of the key,
-// and without the line they printed in a different order from run to run.
+// and without the line they printed in a different order from run to run. Both
+// description orders are driven, so the last tie-break is asked to keep a pair
+// as well as to swap one.
 func TestAudit_SortsByLineWhenEverythingElseTies(t *testing.T) {
-	catalog := testCatalog(t, "gitlab_widget", "list", "search")
-	tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble +
-		"Widget actions.\n\n- search: query\n- list: query\n"}
+	cases := []struct {
+		name  string
+		block string
+	}{
+		{name: "described_in_reverse", block: "- search: query\n- list: query\n"},
+		{name: "described_in_order", block: "- list: query\n- search: query\n"},
+	}
 
-	findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
-	if len(findings) != 2 || findings[0].line != "- list: query" || findings[1].line != "- search: query" {
-		t.Fatalf("findings = %+v, want them ordered by the line each came from", findings)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			catalog := testCatalog(t, "gitlab_widget", "list", "search")
+			tool := &mcp.Tool{Name: "gitlab_widget", Description: metaPreamble + "Widget actions.\n\n" + tc.block}
+
+			findings, _, _ := audit([]*mcp.Tool{tool}, catalog)
+			if len(findings) != 2 || findings[0].line != "- list: query" || findings[1].line != "- search: query" {
+				t.Fatalf("findings = %+v, want them ordered by the line each came from", findings)
+			}
+		})
 	}
 }
 
@@ -774,6 +865,133 @@ func TestReport_FindingsAndExitCodes(t *testing.T) {
 			}
 			if tc.absent != "" && strings.Contains(out.String(), tc.absent) {
 				t.Errorf("stdout = %q, want it not to name %q without -uncovered", out.String(), tc.absent)
+			}
+		})
+	}
+}
+
+// TestReport_FindingRow_NamesTheToolThenTheKindThenWhatItFound verifies the
+// order of a finding row's four columns. The report is this command's whole
+// output, and a row that printed what it found where the tool belongs would
+// still carry every word an assertion about the text looks for.
+func TestReport_FindingRow_NamesTheToolThenTheKindThenWhatItFound(t *testing.T) {
+	out := captureStdout(t)
+
+	report([]finding{{tool: "gitlab_widget", kind: kindParameter, detail: "confidence", line: "- list: confidence"}}, 1, nil, false, false)
+
+	columns := strings.Fields(strings.SplitN(out.String(), "\n", 2)[0])
+	if len(columns) < 4 {
+		t.Fatalf("row = %q, want the tool, the kind, what it found and the line", out.String())
+	}
+	if columns[0] != "gitlab_widget" || columns[1] != kindParameter || columns[2] != "confidence" {
+		t.Errorf("row = %q, want the tool, then the kind, then what it found", out.String())
+	}
+	if rest := strings.Join(columns[3:], " "); rest != "- list: confidence" {
+		t.Errorf("last column = %q, want the description line the finding came from", rest)
+	}
+}
+
+// TestReport_UncoveredRow_NamesTheToolThenTheLine verifies the same for the
+// rows -uncovered prints, whose two values are a tool name and a description
+// line: both are plain text, so nothing but their order tells them apart.
+func TestReport_UncoveredRow_NamesTheToolThenTheLine(t *testing.T) {
+	out := captureStdout(t)
+
+	report(nil, 1, []skipped{{tool: "gitlab_widget", line: "- hook_edit: id*, same params as hook_add"}}, false, true)
+
+	columns := strings.Fields(strings.SplitN(out.String(), "\n", 2)[0])
+	if len(columns) < 3 {
+		t.Fatalf("row = %q, want the tool, the marker and the line", out.String())
+	}
+	if columns[0] != "gitlab_widget" || columns[1] != "uncovered" {
+		t.Errorf("row = %q, want the tool first and the marker second", out.String())
+	}
+	if rest := strings.Join(columns[2:], " "); rest != "- hook_edit: id*, same params as hook_add" {
+		t.Errorf("last column = %q, want the refused line", rest)
+	}
+}
+
+// TestFindingKinds_EachRowSaysWhichOracleRefusedIt verifies the word a finding
+// carries into the report, driven through the function that emits it. The two
+// value kinds are the pair that matters: one says the property's published enum
+// rejected the value and the other that only its description did, which is
+// where a reader has to go to check. Every other assertion here compares a kind
+// against its constant rather than against the word, so exchanging two labels
+// would change what the report claims and fail nothing.
+func TestFindingKinds_EachRowSaysWhichOracleRefusedIt(t *testing.T) {
+	allowed := newAccepted()
+	allowed.add(map[string]any{"properties": map[string]any{
+		"scope": map[string]any{"type": "string", "enum": []any{"ALL"}},
+		"level": map[string]any{"type": "integer", "description": "Access level (10=Guest, 20=Reporter)"},
+	}})
+	perAction := schemas{union: allowed, byAction: map[string]accepted{"list": allowed}}
+
+	cases := []struct {
+		name string
+		emit func() []finding
+		want string
+	}{
+		{
+			name: "a_parameter_no_route_accepts",
+			emit: func() []finding {
+				return judge("gitlab_widget", enumeration{params: []mention{{name: "confidence"}}}, allowed)
+			},
+			want: "parameter",
+		},
+		{
+			name: "a_value_the_published_enum_rejects",
+			emit: func() []finding {
+				return judge("gitlab_widget", enumeration{params: []mention{{name: "scope", values: []string{"NONE"}}}}, allowed)
+			},
+			want: "enum value",
+		},
+		{
+			name: "a_value_only_the_description_rejects",
+			emit: func() []finding {
+				return judge("gitlab_widget", enumeration{params: []mention{{name: "level", values: []string{"5"}}}}, allowed)
+			},
+			want: "doc value",
+		},
+		{
+			name: "guidance_for_a_parameter_its_action_lacks",
+			emit: func() []finding {
+				return judgeGuidance("gitlab_widget", guidance{action: "list", param: "commit_id"}, perAction)
+			},
+			want: "guidance",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			found := tc.emit()
+			if len(found) != 1 {
+				t.Fatalf("emit() = %+v, want one finding", found)
+			}
+			if found[0].kind != tc.want {
+				t.Errorf("kind = %q, want %q, which is what says why the row is there", found[0].kind, tc.want)
+			}
+		})
+	}
+}
+
+// TestMetaTools_ListsTheLicensedGroups_SoTheGateJudgesThemToo verifies the
+// listing this audit reads is the one the widest tier serves. A narrower tier
+// passes every other test here, the clean-run gate included, while quietly
+// dropping the Premium and Ultimate groups out of the comparison: their
+// descriptions would then be the only ones nothing checks at all.
+func TestMetaTools_ListsTheLicensedGroups_SoTheGateJudgesThemToo(t *testing.T) {
+	client, cleanup := mcpsurface.NewStubClient()
+	t.Cleanup(cleanup)
+
+	served := map[string]bool{}
+	for _, tool := range metaTools(client) {
+		served[tool.Name] = true
+	}
+
+	for _, licensed := range []string{"gitlab_merge_train", "gitlab_vulnerability"} {
+		t.Run(licensed, func(t *testing.T) {
+			if !served[licensed] {
+				t.Errorf("the surface this audit judges does not carry %s, so a licensed group's description goes unchecked", licensed)
 			}
 		})
 	}

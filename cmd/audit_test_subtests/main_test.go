@@ -295,6 +295,13 @@ func TestClean(t *testing.T) {
 // a break aimed at the loop blocks the rewrite, a goto or label blocks it,
 // a continue inside a nested loop is that loop's business, and a bare
 // continue is collected for conversion.
+//
+// A labeled break or continue is the case that decides the shape of the first
+// clause: it names a loop the closure would no longer be inside, so it blocks
+// the rewrite as a goto does, and reading that clause as a conjunction instead
+// would classify it as an ordinary break and rewrite the site anyway. The
+// nested break, the classic for, the type switch and the select each reach a
+// statement kind the walk treats apart from the one beside it.
 func TestBodyControlFlow_ClassifiesBranches(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -309,6 +316,12 @@ func TestBodyControlFlow_ClassifiesBranches(t *testing.T) {
 		{"break_in_switch_is_fine", "for _, x := range xs { switch x { case 0: break }; t.Error(x) }", "", 0},
 		{"goto", "for _, x := range xs { if x == 0 { goto done }; t.Error(x); done: }", "goto", 0},
 		{"closure_is_opaque", "for _, x := range xs { f := func() { for { break } }; f(); t.Error(x) }", "", 0},
+		{"labeled_break", "outer: for _, x := range xs { if x == 0 { break outer }; t.Error(x) }", "goto", 0},
+		{"labeled_continue", "outer: for _, x := range xs { if x == 0 { continue outer }; t.Error(x) }", "goto", 0},
+		{"nested_loop_break", "for _, x := range xs { for range 2 { break }; t.Error(x) }", "", 0},
+		{"nested_classic_for", "for _, x := range xs { for i := 0; i < 2; i++ { continue }; t.Error(x) }", "", 0},
+		{"continue_in_type_switch", "for _, x := range xs { switch any(x).(type) { default: continue }; t.Error(x) }", "", 1},
+		{"continue_in_select", "for _, x := range xs { select { default: continue }; t.Error(x) }", "", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			src := "package p\nimport \"testing\"\nfunc TestX(t *testing.T) { xs := []int{1, 2}; " + tc.body + " }\n"
@@ -433,6 +446,121 @@ func TestClean(t *testing.T) {
 			}
 		})
 	}
+}
+`
+
+// fixtureCorners exercises the shapes the two fixtures above leave out: a
+// declaration with no body, a Run call on something that is not a package
+// identifier, a pointer element type, a body whose three calls are the ones
+// the assertion rule has to tell apart, a map loop with no key variable, a
+// slice loop whose element variable is blank, a struct whose name field is not
+// a string, a struct where a name outranks the desc beside it, and a loop that
+// follows a synctest bubble instead of sitting inside it.
+//
+// The `loose` assignment gives more values than it has variables, which no
+// compiler accepts and go/parser does, because the sweep parses the files it
+// walks and never type-checks them: it is the only way a table literal reaches
+// the walk at a position no variable is bound to, and the walk has to leave
+// such a literal alone rather than index past the left-hand side.
+const fixtureCorners = `package fixture
+
+import (
+	"testing"
+	"testing/synctest"
+)
+
+type step struct {
+	label string
+	in    string
+}
+
+func TestBodyless(t *testing.T)
+
+func TestCorners(t *testing.T) {
+	suite.runner.Run("a Run that is not a bubble")
+
+	for _, p := range []*step{{"a", "1"}, {"b", "2"}} { // pointer element
+		t.Error(p)
+	}
+
+	loose := 1, []string{"x", "y"}
+	for _, s := range loose { // more values than variables: binds nothing
+		t.Error(s)
+	}
+
+	for _, s := range []string{"a", "b"} { // three calls, one assertion
+		holder.sink.Printf(s)
+		t.Logf("%s", s)
+		tb.Errorf("%s", s)
+	}
+
+	for range map[string]string{"a": "1", "b": "2"} { // no key variable
+		t.Error("x")
+	}
+
+	for i, _ := range []string{"a", "b"} { // blank element variable
+		t.Error(i)
+	}
+
+	for _, c := range []struct {
+		name int
+		in   string
+	}{{1, "a"}, {2, "b"}} { // name is not a string
+		t.Error(c.in)
+	}
+
+	for _, c := range []struct {
+		desc string
+		name string
+		in   string
+	}{{"d1", "n1", "a"}, {"d2", "n2", "b"}} { // name outranks desc
+		t.Error(c.in)
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, s := range []string{"a", "b"} {
+			t.Error(s)
+		}
+	})
+
+	for _, s := range []string{"c", "d"} { // after the bubble, not inside it
+		t.Error(s)
+	}
+}
+`
+
+// fixtureDeclared is a file that passes the gate and still fills both of the
+// lists a finding can be filed under, with two declared-sequential loops
+// against one synctest loop: the counts differ on purpose, because equal ones
+// cannot tell the two lists apart.
+const fixtureDeclared = `package fixture
+
+import (
+	"testing"
+	"testing/synctest"
+)
+
+func TestDeclared(t *testing.T) {
+	// sequential: the second step reads what the first wrote
+	for _, s := range []string{"a", "b"} {
+		if s == "" {
+			t.Fatal("empty")
+		}
+	}
+
+	for _, s := range []string{"c", "d"} { // sequential: likewise
+		if s == "" {
+			t.Fatal("empty")
+		}
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, s := range []string{"e", "f"} {
+			if s == "" {
+				t.Fatal("empty")
+			}
+		}
+	})
 }
 `
 
@@ -833,6 +961,10 @@ func TestBodyControlFlow_Label_BlocksTheRewrite(t *testing.T) {
 // TestPrintHuman_Findings_ListsFilesThenSummary verifies the human report
 // prints one padded row per file, sorted, with its site and fixable counts,
 // followed by the summary line.
+//
+// No two of the six summary counters share a value, because the line prints
+// them positionally: with two of them equal, the report reads the same whether
+// or not those two are the ones it names.
 func TestPrintHuman_Findings_ListsFilesThenSummary(t *testing.T) {
 	report := &Report{
 		Findings: []Finding{
@@ -840,7 +972,7 @@ func TestPrintHuman_Findings_ListsFilesThenSummary(t *testing.T) {
 			{File: "a_test.go", Line: 9, Fix: "element"},
 			{File: "a_test.go", Line: 4, Fix: "break"},
 		},
-		Summary: Summary{Sites: 3, Fixable: 1, Sequential: 2, Synctest: 1, Compliant: 4, Files: 2},
+		Summary: Summary{Sites: 3, Fixable: 1, Sequential: 5, Synctest: 6, Compliant: 4, Files: 2},
 	}
 	var out strings.Builder
 	printHuman(&out, report)
@@ -849,7 +981,7 @@ func TestPrintHuman_Findings_ListsFilesThenSummary(t *testing.T) {
 		"a_test.go" + strings.Repeat(" ", 63) + " sites=2   fixable=1",
 		"z_test.go" + strings.Repeat(" ", 63) + " sites=1   fixable=0",
 		"",
-		"summary: 3 case loop(s) assert without a subtest (1 fixable by -fix), 2 declared sequential, 1 inside synctest bubbles, 4 compliant, across 2 file(s)",
+		"summary: 3 case loop(s) assert without a subtest (1 fixable by -fix), 5 declared sequential, 6 inside synctest bubbles, 4 compliant, across 2 file(s)",
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("printHuman wrote %d lines, want %d:\n%s", len(lines), len(want), out.String())
@@ -885,6 +1017,18 @@ func TestRun_Flags_DriveExitCodesAndOutput(t *testing.T) {
 			},
 			wantCode: 1,
 			wantOut:  []string{"sites=5   fixable=3", "check: FAIL. 5 case loop(s) assert without a subtest (1 declared sequential)\n"},
+		},
+		{
+			name: "check_pass_counts_the_declared_loops_only",
+			args: func(t *testing.T) []string {
+				t.Helper()
+				return []string{"-check", filepath.Dir(writeFixture(t, fixtureDeclared))}
+			},
+			wantCode: 0,
+			wantOut: []string{
+				"summary: 0 case loop(s) assert without a subtest (0 fixable by -fix), 2 declared sequential, 1 inside synctest bubbles",
+				"check: PASS. Every case loop runs its cases under t.Run (2 declared sequential)\n",
+			},
 		},
 		{
 			name: "check_passes_on_clean_tree",
@@ -1037,5 +1181,169 @@ func TestRun_NoDirectories_ScansTheModuleDefaults(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "3 compliant, across 3 file(s)") {
 		t.Errorf("stdout = %q, want the three default trees scanned and docs/ left alone", out.String())
+	}
+}
+
+// TestScan_Corners_ClassifiesTheRemainingShapes verifies the shapes the two
+// earlier fixtures leave out. A pointer element type and a struct whose name
+// field is not a string both leave the name to be written by hand; a name
+// field outranks the desc declared before it; a map loop with no key variable
+// and a slice loop with a blank element variable are blank-var; a table
+// literal no assignment binds is not a site at all; and a loop that follows a
+// synctest bubble is a site of its own rather than part of the bubble, which
+// only a loop positioned after one can show.
+func TestScan_Corners_ClassifiesTheRemainingShapes(t *testing.T) {
+	path := writeFixture(t, fixtureCorners)
+	report, err := scan([]string{filepath.Dir(path)})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	byLine := map[int]string{}
+	for _, f := range report.Findings {
+		byLine[f.Line] = f.Fix
+	}
+	for _, tc := range []struct {
+		name string
+		line int
+		fix  string
+	}{
+		{"pointer_element", 18, fixNeedsName},
+		{"three_call_body", 27, fixElement},
+		{"map_without_a_key_variable", 33, fixBlankVar},
+		{"blank_element_variable", 37, fixBlankVar},
+		{"name_field_is_not_a_string", 41, fixNeedsName},
+		{"name_outranks_desc", 48, fixFieldPrefix + "name"},
+		{"loop_after_the_bubble", 62, fixElement},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if byLine[tc.line] != tc.fix {
+				t.Errorf("finding at line %d: Fix = %q, want %q (findings %+v)", tc.line, byLine[tc.line], tc.fix, report.Findings)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"sites", report.Summary.Sites, 7},
+		{"fixable", report.Summary.Fixable, 3},
+		{"sequential", report.Summary.Sequential, 0},
+		{"synctest", report.Summary.Synctest, 1},
+		{"compliant", report.Summary.Compliant, 0},
+		{"files", report.Summary.Files, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("summary %s = %d, want %d (findings %+v)", tc.name, tc.got, tc.want, report.Findings)
+			}
+		})
+	}
+	if len(report.Synctest) != 1 || report.Synctest[0].Line != 57 {
+		t.Errorf("synctest list = %+v, want only the loop at line 57", report.Synctest)
+	}
+}
+
+// TestScan_DeclaredAndBubbled_KeepsTheTwoListsApart verifies that a declared
+// sequential loop and a loop inside a synctest bubble are filed under the list
+// each one names, and counted under the counter of that list.
+//
+// The fixture holds two of the first and one of the second on purpose: with
+// one of each, the two lists hold the same number of the same kind of record,
+// so a run that filed every loop under the other list would report exactly
+// what a correct one does.
+func TestScan_DeclaredAndBubbled_KeepsTheTwoListsApart(t *testing.T) {
+	path := writeFixture(t, fixtureDeclared)
+	report, err := scan([]string{filepath.Dir(path)})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if len(report.Findings) != 0 {
+		t.Fatalf("findings = %+v, want none: every loop is declared or bubbled", report.Findings)
+	}
+	if len(report.Sequential) != 2 || report.Sequential[0].Line != 10 || report.Sequential[1].Line != 16 {
+		t.Errorf("sequential list = %+v, want the loops at lines 10 and 16", report.Sequential)
+	}
+	if len(report.Synctest) != 1 || report.Synctest[0].Line != 23 {
+		t.Errorf("synctest list = %+v, want only the loop at line 23", report.Synctest)
+	}
+	if report.Summary.Sequential != 2 || report.Summary.Synctest != 1 {
+		t.Errorf("summary = %+v, want 2 sequential and 1 synctest", report.Summary)
+	}
+}
+
+// TestSortFindings_UnsortedInput_OrdersByFileThenLine verifies the work list's
+// two sort keys and their order: the file decides, and the line decides only
+// between findings of one file. A run whose findings already arrive in order
+// asks the comparator nothing it can get wrong, so the input here is one no
+// walk produces.
+func TestSortFindings_UnsortedInput_OrdersByFileThenLine(t *testing.T) {
+	findings := []Finding{
+		{File: "b_test.go", Line: 2},
+		{File: "b_test.go", Line: 1},
+		{File: "a_test.go", Line: 9},
+	}
+	sortFindings(findings)
+	for i, want := range []Finding{
+		{File: "a_test.go", Line: 9},
+		{File: "b_test.go", Line: 1},
+		{File: "b_test.go", Line: 2},
+	} {
+		t.Run(fmt.Sprintf("position_%d", i), func(t *testing.T) {
+			if findings[i] != want {
+				t.Errorf("findings[%d] = %+v, want %+v (whole list %+v)", i, findings[i], want, findings)
+			}
+		})
+	}
+}
+
+// assertingBody parses stmt as the body of a case loop and returns what
+// asserts makes of it.
+func assertingBody(t *testing.T, stmt string) bool {
+	t.Helper()
+	src := "package p\nimport \"testing\"\nfunc TestX(t *testing.T) { for _, x := range []int{1, 2} { " + stmt + " } }\n"
+	file, err := parser.ParseFile(token.NewFileSet(), "x_test.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse %q: %v", stmt, err)
+	}
+	var loop *ast.RangeStmt
+	ast.Inspect(file, func(n ast.Node) bool {
+		if rs, ok := n.(*ast.RangeStmt); ok && loop == nil {
+			loop = rs
+		}
+		return loop == nil
+	})
+	return asserts(loop.Body)
+}
+
+// TestAsserts_LoopBodies_RecogniseEveryFailingCall verifies which bodies make a
+// loop a site: every method that records a failure counts, a call that hands t
+// to a helper counts because the helper may fail the test, and a t method that
+// records nothing does not. A name missing from the table would make every
+// loop that fails only through it invisible to the gate, which no other test
+// here would notice.
+func TestAsserts_LoopBodies_RecogniseEveryFailingCall(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"Error", "t.Error(x)", true},
+		{"Errorf", `t.Errorf("%v", x)`, true},
+		{"Fatal", "t.Fatal(x)", true},
+		{"Fatalf", `t.Fatalf("%v", x)`, true},
+		{"Fail", "t.Fail()", true},
+		{"FailNow", "t.FailNow()", true},
+		{"helper_handed_t", "check(t, x)", true},
+		{"tb_receiver", `tb.Errorf("%v", x)`, true},
+		{"log_records_nothing", `t.Logf("%v", x)`, false},
+		{"selector_on_a_selector", "holder.sink.Printf(x)", false},
+		{"no_call_at_all", "_ = x", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := assertingBody(t, tc.body); got != tc.want {
+				t.Errorf("asserts(%q) = %v, want %v", tc.body, got, tc.want)
+			}
+		})
 	}
 }

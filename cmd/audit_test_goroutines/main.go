@@ -213,8 +213,10 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []Finding {
 	var findings []Finding
 	seen := map[*ast.FuncLit]bool{}
 
+	// Every call site below reaches audit through a checked type assertion to
+	// *ast.FuncLit, so the literal is never nil and only the seen set decides.
 	audit := func(lit *ast.FuncLit, boundary string) {
-		if lit == nil || seen[lit] {
+		if seen[lit] {
 			return
 		}
 		seen[lit] = true
@@ -232,7 +234,11 @@ func scanFile(fset *token.FileSet, path string, file *ast.File) []Finding {
 			if boundary == "" {
 				return true
 			}
-			if argIdx < len(node.Args) {
+			// The lower bound is load-bearing: the MCP registrations take
+			// their handler as the last argument, so a call written with
+			// none at all indexes -1, which is out of range rather than
+			// out of bounds and crashes the walk on a file that parses.
+			if argIdx >= 0 && argIdx < len(node.Args) {
 				if lit, ok := node.Args[argIdx].(*ast.FuncLit); ok {
 					audit(lit, boundary)
 				}

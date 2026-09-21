@@ -1,8 +1,9 @@
 // Package main tests the gateway character auditor: the per-string scan and
 // its excerpt window, the schema walk that skips data keywords, the report
 // formatting and exit codes, the command line main assembles out of its three
-// flags, and one full scan of the served surface, which is the CI gate's own
-// assertion that nothing served offends.
+// flags, the wiring that decides which listings are scanned and under which
+// label each served string is reported, and one full scan of the served
+// surface, which is the CI gate's own assertion that nothing served offends.
 package main
 
 import (
@@ -17,9 +18,11 @@ import (
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/gatewaycompat"
 )
 
@@ -87,6 +90,28 @@ func setScanMode(t *testing.T, full bool, subs []gatewaycompat.Substitution) {
 	prevFull, prevSubs := fullStrings, appliedSubstitutions
 	fullStrings, appliedSubstitutions = full, subs
 	t.Cleanup(func() { fullStrings, appliedSubstitutions = prevFull, prevSubs })
+}
+
+// setOffendingChars pins the policy's ASCII list for one test and restores it
+// after. A wiring test needs the scan to produce rows for the strings the
+// server really serves, and those are clean by construction, so it declares an
+// ordinary letter offending instead of putting a semicolon into the catalog.
+func setOffendingChars(t *testing.T, chars ...rune) {
+	t.Helper()
+	prev := offendingChars
+	offendingChars = chars
+	t.Cleanup(func() { offendingChars = prev })
+}
+
+// formatRows renders offenders as comparable rows, so two scans can be held to
+// each other as the multisets they are.
+func formatRows(found []offender) []string {
+	rows := make([]string, len(found))
+	for i, f := range found {
+		rows[i] = f.surface + "\t" + f.where + "\t" + f.excerpt
+	}
+	slices.Sort(rows)
+	return rows
 }
 
 // TestScanText_CharacterClasses_ReportsOnlyOffenders verifies the served-text
@@ -316,8 +341,13 @@ func TestRun_ApplyWithoutUsableSubstitutions_Fails(t *testing.T) {
 
 // TestListSurface_Surfaces_ReturnTheirRegisteredTools verifies the listing
 // helper publishes each named surface over a real tools/list round-trip: the
-// dynamic pair, the meta domain tools, and nothing for a surface name the
-// server does not know.
+// dynamic pair, the meta domain tools, the individual projection, and nothing
+// for a surface name the server does not know.
+//
+// Each tiered surface is asked for an Ultimate-only name as well as a Free one,
+// which is what holds the two listings at the widest tier: a scan that listed
+// them at Free would still be a scan of a real surface, and the string a
+// gateway rejects would sit in the part of the catalog it no longer reads.
 func TestListSurface_Surfaces_ReturnTheirRegisteredTools(t *testing.T) {
 	client, cleanup := mcpsurface.NewStubClient()
 	t.Cleanup(cleanup)
@@ -329,7 +359,14 @@ func TestListSurface_Surfaces_ReturnTheirRegisteredTools(t *testing.T) {
 		wantEmpty bool
 	}{
 		{name: "dynamic_pair", surface: config.ToolSurfaceDynamic, wantTools: []string{"gitlab_find_action", "gitlab_execute_action"}},
-		{name: "meta_domains", surface: config.ToolSurfaceMeta, wantTools: []string{"gitlab_issue", "gitlab_project", "gitlab_group"}},
+		{
+			name: "meta_domains_at_the_widest_tier", surface: config.ToolSurfaceMeta,
+			wantTools: []string{"gitlab_issue", "gitlab_project", "gitlab_group", "gitlab_vulnerability"},
+		},
+		{
+			name: "individual_projection_at_the_widest_tier", surface: config.ToolSurfaceIndividual,
+			wantTools: []string{"gitlab_issue_list", "gitlab_list_vulnerabilities"},
+		},
 		{name: "unknown_surface_registers_nothing", surface: "bogus", wantEmpty: true},
 	}
 	for _, tc := range cases {
@@ -351,6 +388,174 @@ func TestListSurface_Surfaces_ReturnTheirRegisteredTools(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestScanTools_EverySurface_PairsEachLabelWithItsOwnField holds the wiring of
+// the tool scan: all three surfaces are reached, the two tiered ones are listed
+// at the widest tier, and each of a tool's four served fields is reported under
+// the label naming it.
+//
+// What it asserts is that wiring and not the scan, so both sides are built with
+// scanText and scanSchema, whose own behavior belongs to the two tests above.
+// Nothing else states it, and every crossing of it is silent: with description
+// and title exchanged, with the input and output schemas exchanged, with the
+// tier narrowed to Free, or with a surface dropped, the served surface is still
+// clean and the whole suite still passes. The policy list is pinned to a letter
+// the served text carries throughout, so that the rows a crossing would move
+// are produced at all.
+func TestScanTools_EverySurface_PairsEachLabelWithItsOwnField(t *testing.T) {
+	client, cleanup := mcpsurface.NewStubClient()
+	t.Cleanup(cleanup)
+	setScanMode(t, false, nil)
+	setOffendingChars(t, 'i')
+
+	widest := edition.TierForEnterprise(true)
+	surfaces := []struct {
+		name  string
+		tools []*mcp.Tool
+	}{
+		{config.ToolSurfaceDynamic, mcpsurface.DynamicTools(client)},
+		{config.ToolSurfaceMeta, mcpsurface.MetaTools(client, widest)},
+		{config.ToolSurfaceIndividual, mcpsurface.IndividualTools(client, widest)},
+	}
+
+	var want []offender
+	var unlisted []string
+	for _, surface := range surfaces {
+		if len(surface.tools) == 0 {
+			unlisted = append(unlisted, surface.name)
+		}
+		for _, tool := range surface.tools {
+			want = append(want, scanText(surface.name, "tool "+tool.Name+" description", tool.Description)...)
+			want = append(want, scanText(surface.name, "tool "+tool.Name+" title", tool.Title)...)
+			want = append(want, scanSchema(surface.name, "tool "+tool.Name+" input schema", tool.InputSchema)...)
+			want = append(want, scanSchema(surface.name, "tool "+tool.Name+" output schema", tool.OutputSchema)...)
+		}
+	}
+
+	if len(unlisted) != 0 {
+		t.Fatalf("the %v surface(s) listed no tools, so the comparison would hold nothing", unlisted)
+	}
+	wantRows, gotRows := formatRows(want), formatRows(scanTools(client))
+	if len(wantRows) == 0 {
+		t.Fatal("no served string carries the pinned letter, so the comparison asserts nothing")
+	}
+	if !slices.Equal(gotRows, wantRows) {
+		t.Errorf("scanTools produced %d rows, want %d, first difference at %s",
+			len(gotRows), len(wantRows), firstDifference(gotRows, wantRows))
+	}
+}
+
+// TestScanPromptsAndResources_EachListing_IsLabelledByItsOwnKind holds the
+// other half of that wiring: a prompt's description and each of its arguments,
+// then the resources and the resource templates, each reported under the label
+// naming the listing it came from.
+//
+// The two crossings it forecloses are as silent as the tool ones. Exchanging
+// the resource and template listings reports every template as a resource and
+// every resource as a template; naming the argument where the prompt belongs
+// reports an argument's prose under a prompt that does not exist. Both leave
+// the served surface clean, and dropping this half of the scan entirely leaves
+// it cleaner still.
+func TestScanPromptsAndResources_EachListing_IsLabelledByItsOwnKind(t *testing.T) {
+	client, cleanup := mcpsurface.NewStubClient()
+	t.Cleanup(cleanup)
+	setScanMode(t, false, nil)
+	setOffendingChars(t, 'i')
+
+	var want []offender
+	prompts, arguments := mcpsurface.Prompts(client), 0
+	for _, prompt := range prompts {
+		want = append(want, scanText("prompts", "prompt "+prompt.Name+" description", prompt.Description)...)
+		for _, arg := range prompt.Arguments {
+			arguments++
+			want = append(want, scanText("prompts", "prompt "+prompt.Name+" argument "+arg.Name, arg.Description)...)
+		}
+	}
+	resources, templates := mcpsurface.Resources(client)
+	for _, resource := range resources {
+		want = append(want, scanText("resources", "resource "+resource.Name+" description", resource.Description)...)
+	}
+	for _, template := range templates {
+		want = append(want, scanText("resources", "resource template "+template.Name+" description", template.Description)...)
+	}
+	if len(prompts) == 0 || arguments == 0 || len(resources) == 0 || len(templates) == 0 {
+		t.Fatalf("listings are %d prompts carrying %d arguments, %d resources and %d templates; each must be populated or a dropped loop reads as agreement",
+			len(prompts), arguments, len(resources), len(templates))
+	}
+
+	wantRows, gotRows := formatRows(want), formatRows(scanPromptsAndResources(client))
+	if len(wantRows) == 0 {
+		t.Fatal("no served string carries the pinned letter, so the comparison asserts nothing")
+	}
+	if !slices.Equal(gotRows, wantRows) {
+		t.Errorf("scanPromptsAndResources produced %d rows, want %d, first difference at %s",
+			len(gotRows), len(wantRows), firstDifference(gotRows, wantRows))
+	}
+}
+
+// TestRun_Report_CarriesARowFromEveryListing holds run's own composition. The
+// two scans above are each driven directly, so a run that stopped calling one
+// of them would still leave both of those tests green and the served surface
+// clean: an audit reporting the all-clear over half the catalog is the one
+// failure this command cannot afford. Under the pinned policy letter every
+// listing has something to report, so the report must name all five.
+func TestRun_Report_CarriesARowFromEveryListing(t *testing.T) {
+	setScanMode(t, false, nil)
+	setOffendingChars(t, 'i')
+	out, errOut := captureOutput(t)
+
+	if got := run(false, false); got != 0 {
+		t.Fatalf("run(check=false, apply=false) = %d, want 0: findings alone are not a failure", got)
+	}
+
+	// Each report row starts with its surface, left-padded into a column.
+	rows := map[string]int{}
+	for line := range strings.SplitSeq(strings.TrimSuffix(out.String(), "\n"), "\n") {
+		if surface, _, ok := strings.Cut(line, " "); ok {
+			rows[surface]++
+		}
+	}
+	var unscanned []string
+	for _, listing := range []string{
+		config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual, "prompts", "resources",
+	} {
+		if rows[listing] == 0 {
+			unscanned = append(unscanned, listing)
+		}
+	}
+	if len(unscanned) != 0 {
+		t.Errorf("the report carries no row from %v, so those listings went unscanned", unscanned)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr should stay empty, got %q", errOut.String())
+	}
+}
+
+// TestRun_WithoutApply_JudgesTheTextThisBuildShips is the gate as CI runs it,
+// with -check and without -apply. The configured substitutions are then not
+// read at all, which is the only state in which the audit vouches for the
+// catalog this build serves rather than for a rewritten one: the environment
+// here holds a substitution that would put a semicolon into every served string
+// naming GitLab, and the run must still report the all-clear and install
+// nothing.
+func TestRun_WithoutApply_JudgesTheTextThisBuildShips(t *testing.T) {
+	t.Setenv(gatewaycompat.EnvVar, "GitLab=GitLab;")
+	setScanMode(t, false, nil)
+	out, errOut := captureOutput(t)
+
+	if got := run(true, false); got != 0 {
+		t.Fatalf("run(check=true, apply=false) = %d, want 0\nstdout:\n%s\nstderr:\n%s", got, out.String(), errOut.String())
+	}
+	if want := "gateway character audit: nothing served carries an offending character\n"; out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+	if appliedSubstitutions != nil {
+		t.Errorf("appliedSubstitutions = %+v, want the environment left unread without -apply", appliedSubstitutions)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr should stay empty, got %q", errOut.String())
 	}
 }
 

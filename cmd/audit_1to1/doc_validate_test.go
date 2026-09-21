@@ -161,6 +161,49 @@ func TestRunValidateDocs_EmptyDocs_ReportedStale(t *testing.T) {
 	}
 }
 
+// TestRunValidateDocs_Citations_NameTheAreaAndTheReason verifies each stale
+// entry says which area failed and why, over a planted tree where the three
+// outcomes are three different areas: one fetchable, one cached but blank,
+// one absent.
+//
+// Both fields of an issue are strings, and until now only the reason was ever
+// read: the empty-doc case asserted "doc is empty" and the missing-doc case
+// asserted nothing but a count, so an issue naming the area in its reason and
+// the reason in its area would have satisfied every assertion here.
+func TestRunValidateDocs_Citations_NameTheAreaAndTheReason(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, filepath.Join(root, "cmd", "audit_1to1"), map[string]string{
+		"main.go": "package main // doc/api/alpha.md, doc/api/beta.md and doc/api/gamma.md",
+	})
+	cache := t.TempDir()
+	writeTree(t, cache, map[string]string{"alpha.md": "# alpha", "beta.md": "  \n"})
+	fetcher := apidocs.New(root, apidocs.Options{Offline: true, CacheDir: cache})
+
+	out, ok, err := runValidateDocs(context.Background(), root, fetcher)
+	if err != nil {
+		t.Fatalf("runValidateDocs: %v", err)
+	}
+	if ok {
+		t.Fatalf("gate passed with two citations unusable; report: %s", out)
+	}
+	var rep docValidationReport
+	if jsonErr := json.Unmarshal(out, &rep); jsonErr != nil {
+		t.Fatalf("unmarshal: %v", jsonErr)
+	}
+	if rep.Checked != 3 || rep.OK != 1 || len(rep.Stale) != 2 {
+		t.Fatalf("report = %+v, want 3 checked, 1 ok and 2 stale", rep)
+	}
+	if rep.Stale[0].Area != "beta" || rep.Stale[0].Error != "doc is empty" {
+		t.Errorf("first stale entry = %+v, want beta reported empty", rep.Stale[0])
+	}
+	if rep.Stale[1].Area != "gamma" {
+		t.Errorf("second stale entry = %+v, want gamma", rep.Stale[1])
+	}
+	if reason := rep.Stale[1].Error; !strings.Contains(reason, "not cached") {
+		t.Errorf("second stale entry's reason = %q, want the fetcher's own account of the missing doc", reason)
+	}
+}
+
 // writeTree writes each slash-separated relative path in files under dir,
 // creating parent directories. It lives outside the Test function so the
 // fixture loop is setup rather than a case table.

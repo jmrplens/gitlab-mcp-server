@@ -174,8 +174,11 @@ func parseDomainsTable(readmePath string) ([]docMappingRow, error) {
 func relativeDocPath(link string) string {
 	link = strings.TrimSpace(link)
 	link = strings.TrimSuffix(link, ".md")
+	// filepath.Base never answers the empty string: an empty path gives ".",
+	// and a path of nothing but separators gives the separator, so "." is the
+	// only spelling an empty link can arrive as.
 	base := filepath.Base(link)
-	if base == "" || base == "." {
+	if base == "." {
 		return docsToolsPrefix
 	}
 	return docsToolsPrefix + base + ".md"

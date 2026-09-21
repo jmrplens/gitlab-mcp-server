@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,48 +100,98 @@ type cmdlineFlags struct {
 // dropping them.
 const unassignedDocPath = "(unassigned)"
 
-func main() {
-	flags := parseFlags()
+// Seams over the two calls a test cannot make for itself. osExit would end the
+// test process, so runMain returns the code and main is the one line that
+// spends it. loadActionCatalog is the catalog build: it hands a stub client
+// and a fixed set of options to specs compiled into this binary, so nothing
+// this command accepts can make it fail, and the branch that reports the
+// failure would otherwise never run.
+var (
+	osExit            = os.Exit
+	loadActionCatalog = loadCatalog
+)
 
-	repoRoot, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+// main audits docs/reference/tools/*.md against the canonical action catalog
+// and writes plan/docs-tools-backlog.json, or, under -check, exits non-zero
+// when any doc has a missing, orphan, tier_mismatch or unassigned finding.
+func main() {
+	osExit(runMain(os.Args, os.Stderr))
+}
+
+// runMain parses args, the command line with the program name still at
+// args[0], resolves the repository root from the working directory, builds the
+// report and either gates on it or writes it. It returns the process exit code
+// and reports every failure on stderr, so a test can drive each exit path
+// without ending its own process: 0 when the run succeeded or the gate passed,
+// 1 for a failed stage or a gate that found something, 2 for a bad flag.
+func runMain(args []string, stderr io.Writer) int {
+	flags, flagErr := parseFlags(args, stderr)
+	if flagErr != nil {
+		// flag has already written the error and the usage to stderr by the
+		// time Parse returns; -h is the one failure that exits clean, as the
+		// package-level ExitOnError flag set would.
+		if errors.Is(flagErr, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	repoRoot, rootErr := cmdutil.RepositoryRoot(".")
+	if rootErr != nil {
+		fmt.Fprintf(stderr, "find repository root: %v\n", rootErr)
+		return 1
+	}
+
+	catalog, catalogErr := loadActionCatalog()
+	if catalogErr != nil {
+		fmt.Fprintf(stderr, "load action catalog: %v\n", catalogErr)
+		return 1
 	}
 
 	docsRoot := filepath.Join(repoRoot, flags.docsRoot)
 	readmePath := filepath.Join(repoRoot, flags.readmePath)
-
-	catalog, err := loadCatalog()
-	if err != nil {
-		cmdutil.Fatalf("load action catalog: %v", err)
-	}
-
-	rep, err := buildReport(repoRoot, docsRoot, readmePath, catalog)
-	if err != nil {
-		cmdutil.Fatalf("build doc coverage report: %v", err)
+	rep, buildErr := buildReport(repoRoot, docsRoot, readmePath, catalog)
+	if buildErr != nil {
+		fmt.Fprintf(stderr, "build doc coverage report: %v\n", buildErr)
+		return 1
 	}
 
 	if flags.checkMode {
-		if msg := rep.check(); msg != "" {
-			fmt.Fprintln(os.Stderr, msg)
-			os.Exit(1)
+		msg := rep.check()
+		if msg == "" {
+			return 0
 		}
-		return
+		fmt.Fprintln(stderr, msg)
+		return 1
 	}
 
+	if writeErr := writeBacklog(repoRoot, flags, rep); writeErr != nil {
+		fmt.Fprintf(stderr, "%v\n", writeErr)
+		return 1
+	}
+	return 0
+}
+
+// writeBacklog applies -gaps-only, renders the report as the backlog JSON and
+// writes it where -output names. Every error names the stage that failed,
+// which is the text runMain reports.
+//
+// The marshal arm cannot fail for the value in hand: a report holds only
+// integers, strings, slices and structs of those, none of which encoding/json
+// refuses. It is kept because dropping it would discard a returned error.
+func writeBacklog(repoRoot string, flags cmdlineFlags, rep report) error {
 	if flags.gapsOnly {
 		rep = rep.filterGapsOnly()
 	}
-
-	content, err := json.MarshalIndent(rep, "", "  ")
-	if err != nil {
-		cmdutil.Fatalf("marshal report: %v", err)
+	content, marshalErr := json.MarshalIndent(rep, "", "  ")
+	if marshalErr != nil {
+		return fmt.Errorf("marshal report: %w", marshalErr)
 	}
 	content = append(content, '\n')
-
 	if writeErr := docgen.WriteReport(resolveOutputPath(repoRoot, flags.outputPath), content); writeErr != nil {
-		cmdutil.Fatalf("write report: %v", writeErr)
+		return fmt.Errorf("write report: %w", writeErr)
 	}
+	return nil
 }
 
 // resolveOutputPath resolves the -output flag value. "-" (stdout) and absolute
@@ -154,17 +206,26 @@ func resolveOutputPath(repoRoot, outputPath string) string {
 	return filepath.Join(repoRoot, outputPath)
 }
 
-// parseFlags parses CLI options. -output defaults to
-// plan/docs-tools-backlog.json (under the repo root).
-func parseFlags() cmdlineFlags {
+// parseFlags parses CLI options out of args, whose first element is the
+// program name. -output defaults to plan/docs-tools-backlog.json (under the
+// repo root).
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is an exit code runMain returns instead of an os.Exit the
+// seam above never sees.
+func parseFlags(args []string, stderr io.Writer) (cmdlineFlags, error) {
 	var flags cmdlineFlags
-	flag.StringVar(&flags.outputPath, "output", defaultBacklogPath, "path to write JSON report (relative paths resolve against repo root; absolute paths used as-is; '-' for stdout)")
-	flag.BoolVar(&flags.gapsOnly, "gaps-only", false, "only include files that have at least one finding")
-	flag.BoolVar(&flags.checkMode, "check", false, "exit non-zero if any file has missing/orphan/tier_mismatch findings")
-	flag.StringVar(&flags.docsRoot, "docs-root", defaultDocsRoot, "directory of per-domain docs (relative to repo root)")
-	flag.StringVar(&flags.readmePath, "readme-path", defaultToolsReadmePath, "path to the Domains-table README (relative to repo root)")
-	flag.Parse()
-	return flags
+	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.StringVar(&flags.outputPath, "output", defaultBacklogPath, "path to write JSON report (relative paths resolve against repo root; absolute paths used as-is; '-' for stdout)")
+	fs.BoolVar(&flags.gapsOnly, "gaps-only", false, "only include files that have at least one finding")
+	fs.BoolVar(&flags.checkMode, "check", false, "exit non-zero if any file has missing/orphan/tier_mismatch findings")
+	fs.StringVar(&flags.docsRoot, "docs-root", defaultDocsRoot, "directory of per-domain docs (relative to repo root)")
+	fs.StringVar(&flags.readmePath, "readme-path", defaultToolsReadmePath, "path to the Domains-table README (relative to repo root)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return cmdlineFlags{}, err
+	}
+	return flags, nil
 }
 
 // check returns a non-empty diagnostic when the report has any

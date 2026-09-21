@@ -253,7 +253,6 @@ var acceptedMissingMethods = map[string]string{
 	"Integrations.GetGroupTelegramSettings":                      coveredRawGeneric,
 	"Integrations.GetGroupWebexTeamsSettings":                    coveredRawGeneric,
 	"Integrations.GetProjectGoogleChatSettings":                  coveredRawGeneric,
-	"Integrations.ListActiveGroupIntegrations":                   coveredRawGeneric,
 	"Integrations.SetGroupMattermostIntegration":                 coveredRawGeneric,
 	"Integrations.SetGroupMattermostSlashCommandsIntegration":    coveredRawGeneric,
 	"Integrations.SetGroupMicrosoftTeamsNotifications":           coveredRawGeneric,

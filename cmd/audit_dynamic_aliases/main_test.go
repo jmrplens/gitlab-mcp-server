@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -159,6 +160,96 @@ func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMain_ProcessStreams_ReportOnStdoutDiagnosticsOnStderr verifies that main
+// hands the process's own stdout to the report and its stderr to the
+// diagnostics rather than the other way round. The exit-code test above aims
+// both at os.DevNull, where the two are one file and a swapped pair is
+// invisible: the TSV a pipeline reads would go to stderr, the usage error to
+// stdout, and every test would stay green.
+func TestMain_ProcessStreams_ReportOnStdoutDiagnosticsOnStderr(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantCode   int
+		wantStdout string
+		wantStderr string
+	}{
+		{
+			name:       "the report and its summary go to stdout",
+			args:       []string{toolName},
+			wantCode:   0,
+			wantStdout: "dynamic alias audit passed:",
+		},
+		{
+			name:       "an unknown output value goes to stderr",
+			args:       []string{toolName, "-output", "xml"},
+			wantCode:   2,
+			wantStderr: `invalid -output "xml"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			outPath, errPath := filepath.Join(dir, "stdout"), filepath.Join(dir, "stderr")
+			outFile, err := os.Create(outPath)
+			if err != nil {
+				t.Fatalf("create %s: %v", outPath, err)
+			}
+			errFile, err := os.Create(errPath)
+			if err != nil {
+				t.Fatalf("create %s: %v", errPath, err)
+			}
+			oldArgs, oldStdout, oldStderr := os.Args, os.Stdout, os.Stderr
+			os.Args, os.Stdout, os.Stderr = tt.args, outFile, errFile
+			got := -1
+			osExit = func(code int) { got = code }
+			t.Cleanup(func() {
+				os.Args, os.Stdout, os.Stderr = oldArgs, oldStdout, oldStderr
+				osExit = os.Exit
+				outFile.Close()
+				errFile.Close()
+			})
+
+			main()
+
+			if got != tt.wantCode {
+				t.Errorf("main() handed os.Exit %d, want %d", got, tt.wantCode)
+			}
+			assertStream(t, "os.Stdout", readStream(t, outPath), tt.wantStdout)
+			assertStream(t, "os.Stderr", readStream(t, errPath), tt.wantStderr)
+		})
+	}
+}
+
+// assertStream fails when a redirected process stream did not receive what the
+// case expects: nothing at all when want is empty, text containing want
+// otherwise. Both halves matter, since a swapped pair shows up as one stream
+// carrying what the other should and is only caught by asking about both.
+func assertStream(t *testing.T, name, got, want string) {
+	t.Helper()
+	if want == "" {
+		if got != "" {
+			t.Errorf("%s received %q, want nothing", name, got)
+		}
+		return
+	}
+	if !strings.Contains(got, want) {
+		t.Errorf("%s received %q, want containing %q", name, got, want)
+	}
+}
+
+// readStream returns what main wrote to one of the redirected process streams.
+// os.File writes are unbuffered, so the file is readable without closing it
+// and the cleanup keeps ownership of both handles.
+func readStream(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(content)
 }
 
 // TestRun_CatalogConstructionFails_ReportsTheStepOnStderr verifies that a

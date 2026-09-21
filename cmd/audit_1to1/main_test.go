@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/enums"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/paths"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/apidocs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
@@ -56,27 +55,33 @@ func resetFlags(t *testing.T, args ...string) {
 // mode with nothing cached reaches the fatal path with the stale citations.
 func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 	cases := []struct {
-		name      string
-		args      func(t *testing.T) []string
+		name string
+		// args returns what main is given and the file it was told to write,
+		// so the case that claims a report can read the report back. Naming
+		// the path in the argument list alone left "writes its report"
+		// asserted by nothing but the absence of a fatal message.
+		args      func(t *testing.T) (args []string, output string)
 		wantFatal string
 	}{
 		{
 			name: "metadata_scope_writes_its_report",
-			args: func(t *testing.T) []string {
+			args: func(t *testing.T) ([]string, string) {
 				t.Helper()
-				return []string{"-scope=metadata", "-gaps-only", "-output", filepath.Join(t.TempDir(), "metadata.json")}
+				output := filepath.Join(t.TempDir(), "metadata.json")
+				return []string{"-scope=metadata", "-gaps-only", "-output", output}, output
 			},
 		},
 		{
 			name:      "invalid_scope_is_fatal",
-			args:      func(*testing.T) []string { return []string{"-scope=bogus"} },
+			args:      func(*testing.T) ([]string, string) { return []string{"-scope=bogus"}, "" },
 			wantFatal: `invalid scope "bogus"`,
 		},
 		{
 			name: "validate_docs_offline_without_a_cache_is_fatal",
-			args: func(t *testing.T) []string {
+			args: func(t *testing.T) ([]string, string) {
 				t.Helper()
-				return []string{"-validate-docs", "-offline", "-output", filepath.Join(t.TempDir(), "docs.json")}
+				output := filepath.Join(t.TempDir(), "docs.json")
+				return []string{"-validate-docs", "-offline", "-output", output}, output
 			},
 			wantFatal: "stale doc/api citations found",
 		},
@@ -84,13 +89,20 @@ func TestMain_Arguments_DispatchToTheModeAndReportFatalErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			messages := captureFatal(t)
-			resetFlags(t, tc.args(t)...)
+			args, output := tc.args(t)
+			resetFlags(t, args...)
 			main()
 			switch {
 			case tc.wantFatal == "" && len(*messages) != 0:
 				t.Errorf("main reported %v, want a clean exit", *messages)
 			case tc.wantFatal != "" && (len(*messages) != 1 || !strings.Contains((*messages)[0], tc.wantFatal)):
 				t.Errorf("main reported %v, want one fatal message containing %q", *messages, tc.wantFatal)
+			}
+			if output == "" {
+				return
+			}
+			if doc := readJSONFile(t, output); doc["schema_version"] == nil {
+				t.Errorf("report at %s carries no schema_version (keys %v)", output, keysOf(doc))
 			}
 		})
 	}
@@ -110,6 +122,98 @@ func TestRunValidateDocsMode_MissingRoot_IsFatal(t *testing.T) {
 	}
 }
 
+// TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal verifies the
+// mode's other ending: a validation that finds nothing stale writes its report
+// and returns, rather than reaching the fatal path.
+//
+// Until now only the failing ending was driven, so the branch that decides
+// between them was evaluated one way in every run and a mode that always
+// exited fatally would have passed. The tree is planted, because the
+// repository's own citations are hundreds of pages nothing local can answer
+// for; the cache is the one the fetcher reads for that root, so the mode
+// builds its own fetcher exactly as it does in production.
+func TestRunValidateDocsMode_EveryCitationCached_ExitsWithoutAFatal(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"cmd/audit_1to1/main.go":              "package main // see doc/api/alpha.md",
+		".cache/gitlab-api-docs/alpha.md":     "# alpha",
+		".cache/gitlab-api-docs/unrelated.md": "# not cited by the planted source",
+	})
+
+	original := repositoryRoot
+	t.Cleanup(func() { repositoryRoot = original })
+	repositoryRoot = func(string) (string, error) { return root, nil }
+	messages := captureFatal(t)
+
+	output := filepath.Join(t.TempDir(), "docs.json")
+	runValidateDocsMode(output, false, true, 0)
+
+	if len(*messages) != 0 {
+		t.Fatalf("runValidateDocsMode reported %v, want a clean exit", *messages)
+	}
+	doc := readJSONFile(t, output)
+	if checked, _ := doc["checked"].(float64); checked != 1 {
+		t.Errorf("report checked = %v, want the one cited area", doc["checked"])
+	}
+	if okCount, _ := doc["ok"].(float64); okCount != 1 {
+		t.Errorf("report ok = %v, want the one cited area validated", doc["ok"])
+	}
+}
+
+// TestMain_PathsScope_CarriesEachFlagToTheFieldItNames verifies the two flags
+// the paths scope reads land in their own field of [paths.Options], driven
+// through main so the flag set itself is what fills them.
+//
+// -gaps-only and -check-endpoints are both booleans and were only ever passed
+// together with the same value, so the options literal could have crossed them
+// and every assertion would have held. Each case therefore sets one and leaves
+// the other, and the shard directory beside them is a third value no other
+// field could be holding.
+func TestMain_PathsScope_CarriesEachFlagToTheFieldItNames(t *testing.T) {
+	original := pathsRun
+	t.Cleanup(func() { pathsRun = original })
+	var got paths.Options
+	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+		got = opts
+		return []byte("{}\n"), true, nil
+	}
+
+	cases := []struct {
+		name      string
+		args      []string
+		wantGaps  bool
+		wantFetch bool
+		wantDir   string
+	}{
+		{name: "endpoints_without_gaps_only", args: []string{"-check-endpoints"}, wantFetch: true},
+		{name: "gaps_only_without_endpoints", args: []string{"-gaps-only"}, wantGaps: true},
+		{name: "the_shard_directory", args: []string{"-e2e-calls", "/tmp/e2e-calls-fixture"}, wantDir: "/tmp/e2e-calls-fixture"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got = paths.Options{}
+			messages := captureFatal(t)
+			args := append([]string{"-scope=paths", "-output", filepath.Join(t.TempDir(), "paths.json")}, testCase.args...)
+			resetFlags(t, args...)
+
+			main()
+
+			if len(*messages) != 0 {
+				t.Fatalf("main reported %v, want a clean run", *messages)
+			}
+			if got.GapsOnly != testCase.wantGaps {
+				t.Errorf("GapsOnly = %v, want %v", got.GapsOnly, testCase.wantGaps)
+			}
+			if (got.Fetcher != nil) != testCase.wantFetch {
+				t.Errorf("Fetcher present = %v, want %v", got.Fetcher != nil, testCase.wantFetch)
+			}
+			if got.E2ECallsDir != testCase.wantDir {
+				t.Errorf("E2ECallsDir = %q, want %q", got.E2ECallsDir, testCase.wantDir)
+			}
+		})
+	}
+}
+
 // TestRun_AnalyzerFailures_AreNamedByStream verifies each seam-reachable
 // failure of the merged run and the single-scope run surfaces with the name
 // of the stream that failed, and that a gate reporting findings fails the run
@@ -121,6 +225,11 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 		scope   string
 		arrange func(t *testing.T)
 		wantErr string
+		// wantReport is set for the two gates, which write their report before
+		// refusing so a reader of the failure holds the same artifact a passing
+		// run would have produced. The analyzer failures above them produce no
+		// report at all, having failed before there was one to write.
+		wantReport bool
 	}{
 		{
 			name: "merged_root_missing", scope: "all",
@@ -183,7 +292,7 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 				t.Cleanup(func() { sdkRun = original })
 				sdkRun = func(string, bool) ([]byte, bool, error) { return []byte("{}\n"), false, nil }
 			},
-			wantErr: "SDK parity findings",
+			wantErr: "SDK parity findings", wantReport: true,
 		},
 		{
 			name: "paths_gate_reports_findings", scope: scopePaths,
@@ -195,15 +304,19 @@ func TestRun_AnalyzerFailures_AreNamedByStream(t *testing.T) {
 					return []byte("{}\n"), false, nil
 				}
 			},
-			wantErr: "request-path findings",
+			wantErr: "request-path findings", wantReport: true,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
-			err := runScope(tc.scope, filepath.Join(t.TempDir(), "out.json"))
+			output := filepath.Join(t.TempDir(), "out.json")
+			err := runScope(tc.scope, output)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("run(%q) error = %v, want it to contain %q", tc.scope, err, tc.wantErr)
+			}
+			if _, statErr := os.Stat(output); (statErr == nil) != tc.wantReport {
+				t.Errorf("run(%q) report at %s: %v, want written == %v", tc.scope, output, statErr, tc.wantReport)
 			}
 		})
 	}
@@ -224,9 +337,6 @@ func TestRunSingle_EnumScope_ReturnsTheGateVerdict(t *testing.T) {
 	content, clean, err := runSingle(t.Context(), "enums", options{gapsOnly: true})
 	if err != nil || clean || string(content) != "{}\n" {
 		t.Fatalf("runSingle(enums) = %q/%v/%v, want the seam's report and verdict", content, clean, err)
-	}
-	if _, isReport := any(enums.Report{}).(enums.Report); !isReport {
-		t.Fatal("enums.Report is not the type the real scope marshals")
 	}
 }
 
@@ -277,6 +387,136 @@ func TestParseScope(t *testing.T) {
 				t.Errorf("parseScope(%q) = %v, want [%s]", c.input, got, c.wantFirst)
 			}
 		})
+	}
+}
+
+// TestRunMerged_EachStream_LandsUnderItsOwnKey verifies the merged backlog
+// attributes each analyzer's figures to the summary key that names its stream,
+// driven through the seams with three reports whose numbers share no value.
+//
+// The four reports reach the merge as four byte slices of one type, and each
+// decodes into a report that ignores every key it does not name, so a crossed
+// pair produces a backlog with both streams simply absent rather than a parse
+// failure. The only assertion that ran over this path checked that the summary
+// carried each key, which it does whatever the counts are.
+func TestRunMerged_EachStream_LandsUnderItsOwnKey(t *testing.T) {
+	originalStructs, originalActions, originalEnums := structsRun, actionsRun, enumsRun
+	t.Cleanup(func() { structsRun, actionsRun, enumsRun = originalStructs, originalActions, originalEnums })
+	structsRun = func(string, bool) ([]byte, error) {
+		return []byte(`{"packages":[{"package":"alpha","missing_input_count":7,` +
+			`"missing_output_count":11,"extra_output_count":13}]}`), nil
+	}
+	actionsRun = func(string, bool) ([]byte, error) {
+		return []byte(`{"services":[{"service":"BetaService","packages":["beta"],` +
+			`"api_methods":23,"covered_methods":20,"missing_methods":["One","Two","Three"]}]}`), nil
+	}
+	enumsRun = func(string, bool) ([]byte, bool, error) {
+		return []byte(`{"packages":[{"package":"gamma","missing_values":17,"extra_values":19}]}`), true, nil
+	}
+
+	path := filepath.Join(t.TempDir(), "backlog.json")
+	if err := runScope("all", path); err != nil {
+		t.Fatalf("run(all): %v", err)
+	}
+	summary, _ := readJSONFile(t, path)["summary"].(map[string]any)
+
+	cases := []struct {
+		key  string
+		want float64
+	}{
+		{key: "struct_missing_input", want: 7},
+		{key: "struct_missing_output", want: 11},
+		{key: "struct_extra_output", want: 13},
+		{key: "action_missing_methods", want: 3},
+		{key: "enum_missing_values", want: 17},
+		{key: "enum_extra_values", want: 19},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.key, func(t *testing.T) {
+			if got, _ := summary[testCase.key].(float64); got != testCase.want {
+				t.Errorf("summary[%q] = %v, want %v", testCase.key, summary[testCase.key], testCase.want)
+			}
+		})
+	}
+}
+
+// TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags
+// verifies the fetcher the endpoint comparison is handed was configured from
+// the documentation flags, by asking it for an area nothing cached: offline, it
+// must say so rather than reach for the network.
+//
+// -refresh and -offline are two booleans of one options struct that no test
+// distinguished: every case asserted the fetcher was present and nothing about
+// what it was built to do, so a run told to stay offline could have been
+// handed one that downloads. The root is a planted directory, so the cache the
+// fetcher derives from it holds nothing whatever this machine has fetched
+// before.
+func TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags(t *testing.T) {
+	originalRoot, originalPaths := repositoryRoot, pathsRun
+	t.Cleanup(func() { repositoryRoot, pathsRun = originalRoot, originalPaths })
+	root := t.TempDir()
+	repositoryRoot = func(string) (string, error) { return root, nil }
+	var got paths.Options
+	pathsRun = func(_ context.Context, _ string, opts paths.Options) ([]byte, bool, error) {
+		got = opts
+		return []byte("{}\n"), true, nil
+	}
+
+	messages := captureFatal(t)
+	resetFlags(t, "-scope=paths", "-check-endpoints", "-offline",
+		"-output", filepath.Join(t.TempDir(), "paths.json"))
+	main()
+
+	if len(*messages) != 0 {
+		t.Fatalf("main reported %v, want a clean run", *messages)
+	}
+	if got.Fetcher == nil {
+		t.Fatal("-check-endpoints was passed no fetcher")
+	}
+	_, err := got.Fetcher.Fetch(t.Context(), "an-area-nothing-cached")
+	if err == nil || !strings.Contains(err.Error(), "not cached and offline") {
+		t.Errorf("fetching an uncached area = %v, want the offline refusal", err)
+	}
+}
+
+// TestMain_ValidateDocsOffline_ReportsTheOfflineReason verifies -offline
+// reaches the fetcher the validation mode builds: with a planted root whose one
+// citation is cached nowhere, the run fails the gate and the report says the
+// doc is not cached rather than naming a download failure.
+//
+// It is driven from main rather than from the mode, because refresh and offline
+// are crossable twice over, in the argument list main passes and in the
+// options literal the mode builds, and only a run that starts at the flag set
+// holds both. Either crossing leaves the citation reported stale all the same,
+// for a different reason and after six attempts at gitlab.com, which is what a
+// test asserting staleness alone cannot tell apart.
+func TestMain_ValidateDocsOffline_ReportsTheOfflineReason(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"cmd/audit_1to1/main.go": "package main // see doc/api/delta.md",
+	})
+	original := repositoryRoot
+	t.Cleanup(func() { repositoryRoot = original })
+	repositoryRoot = func(string) (string, error) { return root, nil }
+	messages := captureFatal(t)
+
+	output := filepath.Join(t.TempDir(), "docs.json")
+	resetFlags(t, "-validate-docs", "-offline", "-output", output)
+	main()
+
+	if len(*messages) != 1 || !strings.Contains((*messages)[0], "stale doc/api citations found") {
+		t.Fatalf("main reported %v, want the stale-citation gate", *messages)
+	}
+	stale, _ := readJSONFile(t, output)["stale"].([]any)
+	if len(stale) != 1 {
+		t.Fatalf("report stale = %v, want the one citation", stale)
+	}
+	entry, _ := stale[0].(map[string]any)
+	if area, _ := entry["area"].(string); area != "delta" {
+		t.Errorf("stale area = %v, want delta", entry["area"])
+	}
+	if reason, _ := entry["error"].(string); !strings.Contains(reason, "not cached and offline") {
+		t.Errorf("stale reason = %v, want the offline refusal", entry["error"])
 	}
 }
 

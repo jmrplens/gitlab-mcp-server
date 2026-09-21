@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -275,6 +276,12 @@ func TestRun_AgreeingButtons_ReportTheCountAndSucceed(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "cursor.com") {
 		t.Errorf("-v did not list the buttons it checked: %s", out.String())
+	}
+	// The listing is the only place a reader sees what a payload holds, so the
+	// column has to carry the decoded entry and not the encoded one it was read
+	// from, which is unreadable and is what the audit exists to look past.
+	if !strings.Contains(out.String(), dockerEntry) {
+		t.Errorf("-v listed the buttons without what they decode to: %s", out.String())
 	}
 }
 
@@ -648,5 +655,257 @@ func TestCollect_APayloadThatDecodesInNoEncoding_NamesTheFileTheLineAndTheHost(t
 				t.Errorf("collect() error = %v, want it to mention %q", err, want)
 			}
 		})
+	}
+}
+
+// writePageIn writes one file of arbitrary content below dir, creating the
+// directories above it, so a test can plant something that is not a page of
+// install buttons beside one that is.
+func writePageIn(t *testing.T, dir, rel, body string) {
+	t.Helper()
+	full := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		t.Fatalf("creating %s: %v", filepath.Dir(full), err)
+	}
+	if err := os.WriteFile(full, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing %s: %v", full, err)
+	}
+}
+
+// fileNames is the listing a reader of -v sees, reduced to the paths it names.
+func fileNames(buttons []button) []string {
+	names := make([]string, 0, len(buttons))
+	for _, b := range buttons {
+		names = append(names, b.File)
+	}
+	return names
+}
+
+// TestCollect_ARootWalkedFirstThatAlsoSortsFirst_IsLeftWhereItIs verifies the
+// listing leaves a pair alone when the walk already produced it in name order.
+//
+// [TestCollect_ButtonsAcrossRoots_AreOrderedByFileThenLine] exercises only the
+// pair the sort has to move, so a comparator that reversed every pair handed to
+// it would satisfy that test as well. README.md is scanned before docs and
+// sorts before it too, which is the pair that says the order is the files' own.
+func TestCollect_ARootWalkedFirstThatAlsoSortsFirst_IsLeftWhereItIs(t *testing.T) {
+	dir := writeButtons(t, base64Link("cursor.com", dockerEntry))
+	writePageIn(t, dir, "docs/page.md", base64Link("lmstudio.ai", dockerEntry))
+
+	buttons, err := collect(dir)
+	if err != nil {
+		t.Fatalf("collect() error = %v", err)
+	}
+	want := []string{"README.md", "docs/page.md"}
+	if got := fileNames(buttons); !slices.Equal(got, want) {
+		t.Errorf("collect() listed %v, want %v", got, want)
+	}
+}
+
+// TestCollect_APageCarryingManyButtons_IsStillListedInLineOrder verifies that
+// the order is the comparator's rather than the sort's.
+//
+// Every other ordering test here hands sort.Slice a handful of buttons, which
+// it orders by walking the slice once and comparing each element with the one
+// before it; a dozen on one page is past the size at which it stops doing that
+// and starts comparing elements with a pivot instead, so the same two buttons
+// are asked about in the other direction. The answer has to be the same either
+// way, and the -v listing a reader diffs between runs is what depends on it.
+func TestCollect_APageCarryingManyButtons_IsStillListedInLineOrder(t *testing.T) {
+	const onThePage = 12
+	links := make([]string, 0, onThePage)
+	for i := range onThePage {
+		host := "cursor.com"
+		if i%2 == 1 {
+			host = "lmstudio.ai"
+		}
+		links = append(links, base64Link(host, dockerEntry))
+	}
+	dir := writeButtonsIn(t, "docs/page.md", links...)
+	writePageIn(t, dir, ".vscode/mcp.json", `{"install":"https://cursor.com/install-mcp?name=gitlab&config=`+
+		base64.StdEncoding.EncodeToString([]byte(dockerEntry))+`"}`)
+
+	buttons, err := collect(dir)
+	if err != nil {
+		t.Fatalf("collect() error = %v", err)
+	}
+
+	got := make([]string, 0, len(buttons))
+	for _, b := range buttons {
+		got = append(got, fmt.Sprintf("%s:%d", b.File, b.Line))
+	}
+	want := []string{".vscode/mcp.json:1"}
+	for line := 3; line < 3+onThePage; line++ {
+		want = append(want, fmt.Sprintf("docs/page.md:%d", line))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("collect() listed %v, want %v", got, want)
+	}
+}
+
+// TestCollect_ADirectoryThatIsNotThisTree_IsNotWalked verifies that the two
+// shapes [sourcewalk.SkipDirBelowRoot] prunes are pruned here too.
+//
+// The parallel-agent tooling puts a complete worktree of this repository under
+// a dot-directory, so a walk that read one would audit another branch's buttons
+// as this tree's and report a disagreement nobody can fix from here.
+func TestCollect_ADirectoryThatIsNotThisTree_IsNotWalked(t *testing.T) {
+	tests := []struct {
+		name  string
+		plant func(t *testing.T, dir string)
+	}{
+		{
+			name: "a checkout below a scanned root",
+			plant: func(t *testing.T, dir string) {
+				t.Helper()
+				writePageIn(t, dir, "docs/worktree/.git", "gitdir: /elsewhere/.git/worktrees/one\n")
+				writePageIn(t, dir, "docs/worktree/page.md", base64Link("cursor.com", dockerEntryWithFlag))
+			},
+		},
+		{
+			name: "a dot-directory below a scanned root",
+			plant: func(t *testing.T, dir string) {
+				t.Helper()
+				writePageIn(t, dir, "docs/.cache/page.md", base64Link("cursor.com", dockerEntryWithFlag))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeButtonsIn(t, "docs/page.md", base64Link("cursor.com", dockerEntry))
+			tt.plant(t, dir)
+
+			buttons, err := collect(dir)
+			if err != nil {
+				t.Fatalf("collect() error = %v", err)
+			}
+			want := []string{"docs/page.md"}
+			if got := fileNames(buttons); !slices.Equal(got, want) {
+				t.Errorf("collect() listed %v, want %v: the planted tree is not this one", got, want)
+			}
+		})
+	}
+}
+
+// malformedEscapePayload is long enough for the pattern to match and carries a
+// percent sign that begins no escape, so unescaping it fails rather than
+// producing a second candidate to try.
+const malformedEscapePayload = "cfg%zzcfg%zzcfg%zzcfg%zzcfg%zzcfg%zzcfg%zzcfg%zzcfg%zz"
+
+// TestCollect_APayloadWhoseEscapesAreMalformed_IsReportedAsNotDecoding
+// verifies that a failed unescape leaves the payload alone instead of adding
+// what it returned to the candidates.
+//
+// url.QueryUnescape answers an empty string with its error, and an empty string
+// is valid base64 for nothing at all: taking it as a candidate would decode the
+// button to "", report it as a configuration that is not a client entry, and
+// send a reader looking for a retired flag in a link that is simply mangled.
+func TestCollect_APayloadWhoseEscapesAreMalformed_IsReportedAsNotDecoding(t *testing.T) {
+	dir := writeButtons(t, `<a href="https://cursor.com/install-mcp?name=gitlab&amp;config=`+
+		malformedEscapePayload+`">install</a>`)
+
+	_, err := collect(dir)
+	if err == nil {
+		t.Fatal("collect() accepted a button whose payload cannot be unescaped")
+	}
+	if !strings.Contains(err.Error(), "does not decode") {
+		t.Errorf("collect() error = %v, want the decode failure", err)
+	}
+	if strings.Contains(err.Error(), "not a client entry") {
+		t.Errorf("collect() error = %v, want the mangled URL named rather than the configuration", err)
+	}
+}
+
+// reportLine returns the part of a disagreement report introduced by label,
+// so a test can hold each argument list to the side of the report it belongs on.
+func reportLine(t *testing.T, report, label string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(report, "\n") {
+		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, label) {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, label))
+		}
+	}
+	t.Fatalf("the report has no %q line: %s", label, report)
+	return ""
+}
+
+// TestCheck_ADisagreement_NamesTheOffendingButtonAndPutsEachListOnItsOwnSide
+// verifies that the report says which button is the odd one and which argument
+// list is whose.
+//
+// [TestCheck_ButtonsThatDisagree_AreReportedWithBothArgumentLists] asks only
+// that the retired flag appear somewhere in the report, which a report that
+// named the button it agrees with, or that put the majority's arguments under
+// "this button", would also satisfy. Both halves are the whole repair: a reader
+// edits the file the first line names and makes it look like the second list.
+func TestCheck_ADisagreement_NamesTheOffendingButtonAndPutsEachListOnItsOwnSide(t *testing.T) {
+	dir := writeButtons(t, base64Link("cursor.com", dockerEntry))
+	writePageIn(t, dir, "docs/page.md", base64Link("lmstudio.ai", dockerEntryWithFlag))
+
+	buttons, err := collect(dir)
+	if err != nil {
+		t.Fatalf("collect() error = %v", err)
+	}
+	problems := check(buttons)
+	if len(problems) != 1 {
+		t.Fatalf("check() reported %d problems, want the one disagreeing button: %v", len(problems), problems)
+	}
+
+	if want := "docs/page.md:1:"; !strings.HasPrefix(problems[0], want) {
+		t.Errorf("the report opens with %q, want the offending button at %q", problems[0], want)
+	}
+	if want := "README.md:3"; !strings.Contains(problems[0], want) {
+		t.Errorf("the report does not name %q, the button the others agree with: %s", want, problems[0])
+	}
+	if got := reportLine(t, problems[0], "this button:"); !strings.Contains(got, "--http=false") {
+		t.Errorf("the offending button's arguments read %q, want the retired flag on this side", got)
+	}
+	if got := reportLine(t, problems[0], "the others:"); strings.Contains(got, "--http=false") {
+		t.Errorf("the agreed arguments read %q, want the retired flag off this side", got)
+	}
+}
+
+// TestCollect_ASubtreeTheWalkCannotList_FailsInAProcessAllowedToReadEverything
+// verifies the rule
+// [TestCollect_ADirectoryThatCannotBeListed_FailsRatherThanBeingSkipped] states
+// through a refusal no privilege lifts.
+//
+// That test closes the directory with permissions, which a process running as
+// root ignores, so it skips wherever CI and the sweep run and the branch it
+// covers is held by nothing there. A path longer than the operating system will
+// open is refused for everyone; os.Root resolves one component at a time, so
+// such a tree can be created although it cannot be walked.
+func TestCollect_ASubtreeTheWalkCannotList_FailsInAProcessAllowedToReadEverything(t *testing.T) {
+	dir := writeButtonsIn(t, "docs/page.md", base64Link("cursor.com", dockerEntry))
+
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("opening the repository root: %v", err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+
+	segment := strings.Repeat("d", 200)
+	deep := "docs"
+	for len(filepath.Join(dir, filepath.FromSlash(deep))) < 5000 {
+		deep = path.Join(deep, segment)
+	}
+	if mkdirErr := root.MkdirAll(deep, 0o750); mkdirErr != nil {
+		t.Skipf("this platform will not create a path it cannot open: %v", mkdirErr)
+	}
+	// Remove it before the temporary directory is: cleanups run in reverse and
+	// t.TempDir registered its own first, so this one goes before it.
+	t.Cleanup(func() { _ = root.RemoveAll(path.Join("docs", segment)) })
+
+	if _, readErr := os.ReadDir(filepath.Join(dir, filepath.FromSlash(deep))); readErr == nil {
+		t.Skip("this platform lists a path longer than open(2) is supposed to accept")
+	}
+
+	_, collectErr := collect(dir)
+	if collectErr == nil {
+		t.Fatal("collect() walked past a subtree it could not list")
+	}
+	if errors.Is(collectErr, fs.ErrNotExist) {
+		t.Errorf("collect() error = %v, want the failure to list rather than a not-exist", collectErr)
 	}
 }
