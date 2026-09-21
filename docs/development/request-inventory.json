@@ -3036,28 +3036,33 @@
       "package": "internal/tools/civariables",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/projects/:project_id/variables/DB_HOST",
+      "path": "/projects/:project_id/variables/:key",
       "query": [
         "filter[environment_scope]"
       ],
       "identifiers": {
-        ":project_id": 2
+        ":key": 4,
+        ":project_id": 3
       }
     },
     {
       "package": "internal/tools/civariables",
       "kind": "rest",
       "method": "GET",
-      "path": "/projects/:project_id/variables/DB_HOST",
+      "path": "/projects/:project_id/variables/:key",
+      "query": [
+        "filter[environment_scope]"
+      ],
       "identifiers": {
-        ":project_id": 2
+        ":key": 3,
+        ":project_id": 3
       }
     },
     {
       "package": "internal/tools/civariables",
       "kind": "rest",
       "method": "PUT",
-      "path": "/projects/:project_id/variables/DB_HOST",
+      "path": "/projects/:project_id/variables/:key",
       "body": [
         "description",
         "filter",
@@ -3068,80 +3073,8 @@
         "variable_type"
       ],
       "identifiers": {
-        ":project_id": 2
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/variables/DB_URL",
-      "query": [
-        "filter[environment_scope]"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/variables/DB_URL",
-      "query": [
-        "filter[environment_scope]"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/variables/DB_URL",
-      "body": [
-        "filter",
-        "value"
-      ],
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/variables/K",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/projects/:project_id/variables/K",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/variables/K",
-      "identifiers": {
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/civariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/variables/MY_VAR",
-      "identifiers": {
-        ":project_id": 1
+        ":key": 3,
+        ":project_id": 3
       }
     },
     {
@@ -8039,59 +7972,25 @@
       "package": "internal/tools/groups",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/groups/:group_id/hooks/:hook_id/url_variables/env",
+      "path": "/groups/:group_id/hooks/:hook_id/url_variables/:key",
       "identifiers": {
-        ":group_id": 1,
-        ":hook_id": 1
+        ":group_id": 2,
+        ":hook_id": 2,
+        ":key": 2
       }
     },
     {
       "package": "internal/tools/groups",
       "kind": "rest",
       "method": "PUT",
-      "path": "/groups/:group_id/hooks/:hook_id/url_variables/env",
+      "path": "/groups/:group_id/hooks/:hook_id/url_variables/:key",
       "body": [
         "value"
       ],
       "identifiers": {
-        ":group_id": 1,
-        ":hook_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groups",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/groups/:group_id/hooks/:hook_id/url_variables/env1",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":group_id": 1,
-        ":hook_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groups",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/groups/:group_id/hooks/:hook_id/url_variables/k",
-      "identifiers": {
-        ":group_id": 1,
-        ":hook_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groups",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/groups/:group_id/hooks/:hook_id/url_variables/k",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":group_id": 1,
-        ":hook_id": 1
+        ":group_id": 2,
+        ":hook_id": 2,
+        ":key": 3
       }
     },
     {
@@ -8864,19 +8763,33 @@
       "package": "internal/tools/groupvariables",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/groups/:group_id/variables/DB_HOST",
+      "path": "/groups/:group_id/variables/:key",
       "query": [
         "filter[environment_scope]"
       ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 1,
+        ":key": 3
+      }
+    },
+    {
+      "package": "internal/tools/groupvariables",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/groups/:group_id/variables/:key",
+      "query": [
+        "filter[environment_scope]"
+      ],
+      "identifiers": {
+        ":group_id": 1,
+        ":key": 2
       }
     },
     {
       "package": "internal/tools/groupvariables",
       "kind": "rest",
       "method": "PUT",
-      "path": "/groups/:group_id/variables/DB_HOST",
+      "path": "/groups/:group_id/variables/:key",
       "body": [
         "description",
         "filter",
@@ -8887,83 +8800,18 @@
         "variable_type"
       ],
       "identifiers": {
-        ":group_id": 1
+        ":group_id": 1,
+        ":key": 3
       }
     },
     {
       "package": "internal/tools/groupvariables",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/groups/:group_id/variables/K",
+      "path": "/groups/my-group/variables/:key",
       "identifiers": {
-        ":group_id": 1
+        ":key": 1
       }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/groups/:group_id/variables/K",
-      "identifiers": {
-        ":group_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/groups/:group_id/variables/K",
-      "identifiers": {
-        ":group_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/groups/:group_id/variables/MY_VAR",
-      "query": [
-        "filter[environment_scope]"
-      ],
-      "identifiers": {
-        ":group_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/groups/:group_id/variables/MY_VAR",
-      "query": [
-        "filter[environment_scope]"
-      ],
-      "identifiers": {
-        ":group_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/groups/:group_id/variables/MY_VAR",
-      "body": [
-        "description",
-        "filter",
-        "masked",
-        "protected",
-        "raw",
-        "value",
-        "variable_type"
-      ],
-      "identifiers": {
-        ":group_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/groupvariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/groups/my-group/variables/MY_VAR"
     },
     {
       "package": "internal/tools/groupwikis",
@@ -9245,8 +9093,26 @@
     {
       "package": "internal/tools/instancevariables",
       "kind": "rest",
+      "method": "DELETE",
+      "path": "/admin/ci/variables/:key",
+      "identifiers": {
+        ":key": 2
+      }
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/admin/ci/variables/:key",
+      "identifiers": {
+        ":key": 4
+      }
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
       "method": "PUT",
-      "path": "/admin/ci/variables/DB_HOST",
+      "path": "/admin/ci/variables/:key",
       "body": [
         "description",
         "masked",
@@ -9254,73 +9120,10 @@
         "raw",
         "value",
         "variable_type"
-      ]
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/admin/ci/variables/GONE"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/admin/ci/variables/K"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/admin/ci/variables/K",
-      "body": [
-        "value"
-      ]
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/admin/ci/variables/MY_VAR"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/admin/ci/variables/MY_VAR"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/admin/ci/variables/MY_VAR",
-      "body": [
-        "masked",
-        "protected",
-        "raw",
-        "value"
-      ]
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/admin/ci/variables/SOLO"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "GET",
-      "path": "/admin/ci/variables/TOKEN"
-    },
-    {
-      "package": "internal/tools/instancevariables",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/admin/ci/variables/TOKEN",
-      "body": [
-        "value"
-      ]
+      ],
+      "identifiers": {
+        ":key": 4
+      }
     },
     {
       "package": "internal/tools/integrations",
@@ -13621,31 +13424,9 @@
       "package": "internal/tools/pipelineschedules",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/DEPLOY_ENV",
+      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/:key",
       "identifiers": {
-        ":pipeline_schedule_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/pipelineschedules",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/DEPLOY_ENV",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":pipeline_schedule_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/pipelineschedules",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/K",
-      "identifiers": {
+        ":key": 3,
         ":pipeline_schedule_id": 1,
         ":project_id": 2
       }
@@ -13654,37 +13435,15 @@
       "package": "internal/tools/pipelineschedules",
       "kind": "rest",
       "method": "PUT",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/K",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":pipeline_schedule_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/pipelineschedules",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/SECRET",
+      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/:key",
       "body": [
         "value",
         "variable_type"
       ],
       "identifiers": {
+        ":key": 3,
         ":pipeline_schedule_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/pipelineschedules",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/pipeline_schedules/:pipeline_schedule_id/variables/VAR",
-      "identifiers": {
-        ":pipeline_schedule_id": 1,
-        ":project_id": 1
+        ":project_id": 2
       }
     },
     {
@@ -14546,9 +14305,10 @@
       "package": "internal/tools/projects",
       "kind": "rest",
       "method": "DELETE",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/my_var",
+      "path": "/projects/:project_id/hooks/:hook_id/url_variables/:key",
       "identifiers": {
         ":hook_id": 1,
+        ":key": 3,
         ":project_id": 1
       }
     },
@@ -14556,71 +14316,13 @@
       "package": "internal/tools/projects",
       "kind": "rest",
       "method": "PUT",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/my_var",
+      "path": "/projects/:project_id/hooks/:hook_id/url_variables/:key",
       "body": [
         "value"
       ],
       "identifiers": {
         ":hook_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/projects",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/myvar",
-      "identifiers": {
-        ":hook_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/projects",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/myvar",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":hook_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/projects",
-      "kind": "rest",
-      "method": "DELETE",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/token",
-      "identifiers": {
-        ":hook_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/projects",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/token",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":hook_id": 1,
-        ":project_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/projects",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/projects/:project_id/hooks/:hook_id/url_variables/var1",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":hook_id": 1,
+        ":key": 4,
         ":project_id": 1
       }
     },
@@ -17481,46 +17183,24 @@
     {
       "package": "internal/tools/systemhooks",
       "kind": "rest",
-      "method": "PUT",
-      "path": "/hooks/:hook_id/url_variables/TOKEN",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":hook_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/systemhooks",
-      "kind": "rest",
       "method": "DELETE",
-      "path": "/hooks/:hook_id/url_variables/env",
+      "path": "/hooks/:hook_id/url_variables/:key",
       "identifiers": {
-        ":hook_id": 1
+        ":hook_id": 1,
+        ":key": 1
       }
     },
     {
       "package": "internal/tools/systemhooks",
       "kind": "rest",
       "method": "PUT",
-      "path": "/hooks/:hook_id/url_variables/env",
+      "path": "/hooks/:hook_id/url_variables/:key",
       "body": [
         "value"
       ],
       "identifiers": {
-        ":hook_id": 1
-      }
-    },
-    {
-      "package": "internal/tools/systemhooks",
-      "kind": "rest",
-      "method": "PUT",
-      "path": "/hooks/:hook_id/url_variables/env1",
-      "body": [
-        "value"
-      ],
-      "identifiers": {
-        ":hook_id": 1
+        ":hook_id": 2,
+        ":key": 3
       }
     },
     {
