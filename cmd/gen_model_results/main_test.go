@@ -347,6 +347,29 @@ func TestRun_UsageErrors(t *testing.T) {
 		t.Errorf("-check with -refold exited %d saying %q, want a usage error", status, stderr)
 	}
 
+	// The other two writing flags, each on its own: a gate that admitted either
+	// would rewrite the very files it was asked to compare, and the comparison
+	// would then hold by construction.
+	status, _, stderr = drive(t, root, options{check: true, render: true})
+	if status != exitUsage || !strings.Contains(stderr, "writes nothing") {
+		t.Errorf("-check with -render exited %d saying %q, want a usage error", status, stderr)
+	}
+
+	status, _, stderr = drive(t, root, options{check: true, dryRun: true})
+	if status != exitUsage || !strings.Contains(stderr, "writes nothing") {
+		t.Errorf("-check with -dry-run exited %d saying %q, want a usage error", status, stderr)
+	}
+
+	// A rehearsal rehearses folding a run in, so with no run to fold it has
+	// nothing to rehearse and says which flag is missing.
+	status, _, stderr = drive(t, root, options{dryRun: true})
+	if status != exitUsage {
+		t.Errorf("-dry-run with no -shards exited %d, want a usage error", status)
+	}
+	if !strings.Contains(stderr, "-shards") {
+		t.Errorf("the message %q does not say what is missing", stderr)
+	}
+
 	status, _, stderr = drive(t, root, options{refold: true, render: true})
 	if status != exitUsage {
 		t.Errorf("-refold with no -shards exited %d, want a usage error", status)
@@ -537,6 +560,15 @@ func TestRevisionNotes_OnlySpeakAboutARevisionGitKnowsAndCannotReach(t *testing.
 		{"git cannot be run", func(string, ...string) (bool, error) { return false, errors.New("no git here") }, 0},
 		{"the revision is unknown", func(string, ...string) (bool, error) { return false, nil }, 0},
 		{"the revision is an ancestor", func(string, ...string) (bool, error) { return true, nil }, 0},
+		// git knows the revision and then cannot answer whether it is reachable.
+		// That is a question left unanswered, not an answer of no, and a note
+		// emitted here would call a row off this history on a silence.
+		{"the ancestry cannot be answered", func(_ string, args ...string) (bool, error) {
+			if args[0] == "cat-file" {
+				return true, nil
+			}
+			return false, errors.New("the object database stopped answering")
+		}, 0},
 		{"known and not an ancestor", func(_ string, args ...string) (bool, error) {
 			return args[0] == "cat-file", nil
 		}, 1},
@@ -856,6 +888,13 @@ func TestRun_AMergeIntoARowWithNoCases_IsRefused(t *testing.T) {
 	if !strings.Contains(stdout, "refused to merge into the published row") {
 		t.Errorf("the re-fold said %q, want the merge refused", stdout)
 	}
+	// Both attempt counts, each on its own side of the sentence. They are two
+	// ints of the same shape read off two rows, so a refusal that exchanged
+	// them would read as a maintainer losing one measurement and gaining two
+	// when the loss is the other way round.
+	if !strings.Contains(stdout, "replace 2 case(s) of measurement with the 1 this run carries") {
+		t.Errorf("the refusal reads %q, want it to say the standing row's 2 cases would go for this run's 1", stdout)
+	}
 
 	doc, _, err := readRecord(root)
 	if err != nil {
@@ -906,5 +945,70 @@ func TestRun_AMergeAcrossDifferentConfigurations_IsRefused(t *testing.T) {
 	}
 	if got := len(doc.Rows[0].Cases); got != 2 {
 		t.Errorf("the row holds %d cases, want both of the run it was measured from", got)
+	}
+}
+
+// TestRun_ARefoldCarryingACaseTheRowNeverHeld_AddsItAndReplacesNothing is the
+// half of the merge sentence a one-for-one re-run cannot ask about.
+//
+// Every re-fold above replaces as many cases as it keeps, so the two figures in
+// "n replaced, m kept" are the same number and could change places unnoticed.
+// Here they differ and so do the answers: the standing row was measured on one
+// case, the run being folded in measured that one again and a second the row
+// never had, so exactly one entry changes hands, nothing is kept as it stood,
+// and the row afterwards covers both.
+func TestRun_ARefoldCarryingACaseTheRowNeverHeld_AddsItAndReplacesNothing(t *testing.T) {
+	root := newRoot(t)
+	if status, _, stderr := drive(t, root, options{shards: writeShard(t, publishableShard())}); status != exitOK {
+		t.Fatalf("the first fold exited %d: %s", status, stderr)
+	}
+
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, twoCaseShard()), refold: true})
+	if status != exitOK {
+		t.Fatalf("the re-fold exited %d: %s\n%s", status, stderr, stdout)
+	}
+	if want := "1 case(s) replaced (" + fixtureCase + "), 0 kept as they stood"; !strings.Contains(stdout, want) {
+		t.Errorf("the re-fold said %q, want it to report %q", stdout, want)
+	}
+
+	doc, _, err := readRecord(root)
+	if err != nil {
+		t.Fatalf("read the record back: %v", err)
+	}
+	if len(doc.Rows) != 1 {
+		t.Fatalf("the record holds %d rows, want the one row updated in place", len(doc.Rows))
+	}
+	if got := len(doc.Rows[0].Cases); got != 2 {
+		t.Errorf("the merged row holds %d case(s), want the one it had and the one this run added", got)
+	}
+	if got := doc.Rows[0].Counts.Attempts; got != 2 {
+		t.Errorf("the merged row counts %d attempt(s), want both cases behind its figures", got)
+	}
+}
+
+// TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded is
+// the failure a rehearsal has that a real fold has not: it writes into a
+// directory it makes for itself, and where that directory cannot be made there
+// is nowhere to rehearse into.
+//
+// Reported rather than fallen back from, because the fallback would be the
+// repository: a rehearsal that quietly wrote where a real fold writes is the
+// one thing the dry run exists to make impossible.
+func TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded(t *testing.T) {
+	root := newRoot(t)
+	// dist/ is where the rehearsal goes, and here it is a file.
+	if err := os.WriteFile(filepath.Join(root, "dist"), []byte("not a directory\n"), 0o600); err != nil {
+		t.Fatalf("plant the file in the way: %v", err)
+	}
+
+	status, _, stderr := drive(t, root, options{shards: writeShard(t, publishableShard()), render: true, dryRun: true})
+	if status != exitUsage {
+		t.Fatalf("the dry run exited %d, want the unusable scratch tree reported", status)
+	}
+	if !strings.Contains(stderr, "dry-run directory") {
+		t.Errorf("the message %q does not name what could not be prepared", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
+		t.Errorf("a rehearsal that could not build its own tree wrote the committed record; stat said %v", err)
 	}
 }
