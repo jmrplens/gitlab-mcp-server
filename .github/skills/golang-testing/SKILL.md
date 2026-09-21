@@ -714,13 +714,23 @@ test:
 
     - name: Check coverage
       run: |
-        go tool cover -func=coverage.out | awk '$1 == "total:" {print $3}' | \
-        awk -F'%' '{if ($1 < 90) exit 1}'
+        COVERAGE=$(go tool cover -func=coverage.out | awk '$1 == "total:" {print $3}' | tr -d '%')
+        case "${COVERAGE}" in
+          ''|*[!0-9.]*|*.*.*) echo "no single total coverage figure: '${COVERAGE}'"; exit 1 ;;
+        esac
+        awk -v got="${COVERAGE}" -v min=90 'BEGIN {exit !(got + 0 < min + 0)}' \
+          && { echo "coverage ${COVERAGE}% is below 90%"; exit 1; }
 ```
 
-Match the `total:` row by its first field, never with `grep total`: that also
-matches every function whose name contains the word (`totalsOf`,
-`totalTokens`), which hands the comparison several lines instead of one number.
+Three things about that recipe are load-bearing. Match the `total:` row by its
+first field, never with `grep total`: that also matches every function whose
+name contains the word (`totalsOf`, `totalTokens`), which hands the comparison
+several lines instead of one number. Refuse a figure that is not exactly one
+number before comparing it: a pipeline that feeds `awk '{if ($1 < 90) exit 1}'`
+an empty stream exits 0, so a missing `total:` row would pass the gate. And
+pass the operands through `-v` rather than interpolating them into the awk
+program, where a bad value becomes a syntax error, and a syntax error under
+`if` reads as "not below the minimum".
 
 This project's `.github/workflows/ci.yml` gates total coverage at `COVERAGE_MIN: "90"`.
 
