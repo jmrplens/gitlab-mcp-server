@@ -120,6 +120,12 @@ func TestFormatGetMarkdown(t *testing.T) {
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
+// badRequestBody is the body GitLab sends with a 400, for the tests that drive
+// one. It used to be spelled `{"message":msgBadRequest}` here, which is not
+// JSON at all: a constant name was inlined into a raw string and left
+// unquoted, so the error detail these fixtures stand for never decoded.
+const badRequestBody = `{"message":"400 Bad Request"}`
+
 // ---------------------------------------------------------------------------
 // FormatListMarkdown — empty
 // ---------------------------------------------------------------------------.
@@ -177,6 +183,68 @@ func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
+// TestFormatGetMarkdown_EveryRow_CarriesItsOwnValue renders a card from a
+// template with every field GitLab can send populated, each holding a value no
+// sibling shares, and compares the whole page.
+//
+// The nickname row and the popular row are the two nothing else here renders:
+// the card writes a blank field and a false flag as nothing at all, so a
+// formatter that stopped passing either, which this one did before the shared
+// renderer was adopted, produces exactly the page the other card tests assert,
+// and no mutant or condition stands for a value simply not handed over.
+func TestFormatGetMarkdown_EveryRow_CarriesItsOwnValue(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{
+		Key:         "apache-2.0",
+		Name:        "Apache License 2.0",
+		Nickname:    "Apache 2.0",
+		Popular:     true,
+		Description: "A permissive license with a patent grant",
+		Permissions: []string{"commercial-use"},
+		Conditions:  []string{"document-changes"},
+		Limitations: []string{"no-trademark-use"},
+		Content:     "Apache License Version 2.0",
+	})
+	want := "## License: Apache License 2.0\n\n" +
+		"- **Key**: apache-2.0\n" +
+		"- **Nickname**: Apache 2.0\n" +
+		"- **Popular**: " + toolutil.EmojiSuccess + "\n" +
+		"- **Description**: A permissive license with a patent grant\n" +
+		"- **Permissions**: commercial-use\n" +
+		"- **Conditions**: document-changes\n" +
+		"- **Limitations**: no-trademark-use\n" +
+		"\n```\nApache License Version 2.0\n```\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Copy this template to your LICENSE file and customize it\n"
+	if md != want {
+		t.Errorf("full license card:\n got %q\nwant %q", md, want)
+	}
+}
+
+// TestFormatListMarkdown_PaginatedPage_CountsTheTotalAndNamesThePage verifies
+// that the pagination block the handler filled reaches the rendered page: the
+// heading counts GitLab's total rather than the rows on show, a summary line
+// says which page this is, and the footer names the page, the total and the
+// page size.
+//
+// The formatter hands the block straight to the shared renderer, so failing to
+// pass it is a one-word omission with no branch in it, and every other list
+// test drives an unpaginated fixture where a dropped block renders identically.
+// A reader deciding whether to ask for another page has only this to go on.
+func TestFormatListMarkdown_PaginatedPage_CountsTheTotalAndNamesThePage(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{
+		Licenses:   []LicenseItem{{Key: "mit", Name: "MIT", Popular: false}},
+		Pagination: toolutil.PaginationOutput{Page: 2, PerPage: 1, TotalItems: 3, TotalPages: 3, NextPage: 3, PrevPage: 1, HasMore: true},
+	})
+	want := "## License Templates (3)\n\n" +
+		"Showing 1 of 3 results (page 2 of 3)\n\n" +
+		"| Key | Name | Popular |\n| --- | --- | --- |\n" +
+		"| mit | MIT | " + toolutil.EmojiCross + " |\n" +
+		"\nPage 2 of 3 | 3 items total | 1 per page\n" +
+		"\n---\n\U0001F4A1 **Next steps:**\n- Use `gitlab_get_license_template` to view a specific template\n"
+	if md != want {
+		t.Errorf("paginated license list:\n got %q\nwant %q", md, want)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // List — API error 400
 // ---------------------------------------------------------------------------.
@@ -184,7 +252,7 @@ func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
 // TestList_APIError400 verifies List when API error 400.
 func TestList_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
+		testutil.RespondJSON(w, http.StatusBadRequest, badRequestBody)
 	}))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
@@ -199,7 +267,7 @@ func TestList_APIError400(t *testing.T) {
 // TestGet_APIError400 verifies Get when API error 400.
 func TestGet_APIError400(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
+		testutil.RespondJSON(w, http.StatusBadRequest, badRequestBody)
 	}))
 	_, err := Get(context.Background(), client, GetInput{Key: "bad"})
 	if err == nil {
@@ -390,10 +458,10 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/templates/licenses", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
+		testutil.RespondJSON(w, http.StatusBadRequest, badRequestBody)
 	})
 	handler.HandleFunc("GET /api/v4/templates/licenses/bad", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
+		testutil.RespondJSON(w, http.StatusBadRequest, badRequestBody)
 	})
 
 	client := testutil.NewTestClient(t, handler)
@@ -500,14 +568,13 @@ func TestLicenseTemplates_UnreadablePopular(t *testing.T) {
 // template, and neither the `featured` key the SDK decodes beside it nor
 // another template's answer.
 //
-// Both halves are why the handler reads the captured response at all
-// (ADR-0021). client-go's LicenseTemplate models `featured` and not `popular`,
-// so a conversion taking l.Featured compiles, publishes a plausible boolean,
-// and silently answers a different question than the field name promises. And
-// the extras come back as a list indexed in step with the decoded templates, so
-// this fixture makes the two templates disagree on both keys: a flag read off
-// the wrong template is then a wrong answer rather than the right one by luck,
-// which a single-template fixture can never tell apart.
+// Both halves are the property. client-go's LicenseTemplate carries `featured`
+// and `popular` side by side, so a conversion taking l.Featured compiles,
+// publishes a plausible boolean, and silently answers a different question
+// than the field name promises. And the conversion runs per template in a
+// loop, so this fixture makes the two templates disagree on both keys: a flag
+// read off the wrong template is then a wrong answer rather than the right one
+// by luck, which a single-template fixture can never tell apart.
 func TestList_PopularFollowsGitLabsOwnKeyPerTemplate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+
@@ -546,9 +613,9 @@ func TestList_PopularFollowsGitLabsOwnKeyPerTemplate(t *testing.T) {
 
 // TestGet_PopularFollowsGitLabsOwnKey verifies that the single-template read
 // publishes the `popular` key GitLab sent rather than the `featured` one the
-// SDK decodes. The fixture makes the two disagree, so a read that took the
-// SDK's field, or that dropped the captured extra on the floor and passed a
-// zero one, answers false where GitLab said true.
+// SDK decodes beside it. The fixture makes the two disagree, so a read that
+// took the neighboring field, or that left the flag at its zero value,
+// answers false where GitLab said true.
 func TestGet_PopularFollowsGitLabsOwnKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"mit","name":"MIT License","featured":false,"popular":true}`)
