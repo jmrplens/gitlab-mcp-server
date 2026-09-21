@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -119,6 +120,42 @@ func TestWriteOrCheck_CheckMode_AcceptsWhatWriteModeProduced(t *testing.T) {
 			t.Errorf("WriteOrCheck(check) error = %v, want CRLF treated as LF", err)
 		}
 	})
+}
+
+// TestWriteOrCheck_CheckMode_AppliesTheSameTrailingNewlineRule verifies check
+// mode supplies the final newline before comparing, exactly as write mode
+// does, so a generator that assembles its content without one is not reported
+// stale against the file its own write mode produced.
+func TestWriteOrCheck_CheckMode_AppliesTheSameTrailingNewlineRule(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "llms.txt")
+	if err := os.WriteFile(path, []byte("# fresh\n"), 0o600); err != nil {
+		t.Fatalf("write committed artifact: %v", err)
+	}
+
+	if err := WriteOrCheck(path, []byte("# fresh"), true, "make gen"); err != nil {
+		t.Errorf("WriteOrCheck(check) error = %v, want the newline supplied before the comparison", err)
+	}
+}
+
+// TestWriteOrCheck_WriteMode_UsesTheGeneratedFileAndDirectoryModes verifies the
+// artifact is created private to its owner and its parent directory usable,
+// which is the decision GeneratedFileMode and generatedDirMode record.
+//
+// Nothing else reads either constant back, so the two could be exchanged and
+// every other assertion in this file would still pass. The directory is held
+// to a range rather than to a value because the umask narrows what MkdirAll
+// asks for, and a file mode there fails the owner half of that range anyway.
+func TestWriteOrCheck_WriteMode_UsesTheGeneratedFileAndDirectoryModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows files do not carry Unix permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "made", "stats.json")
+
+	if err := WriteOrCheck(path, []byte("{}\n"), false, "make gen"); err != nil {
+		t.Fatalf("WriteOrCheck() error = %v", err)
+	}
+
+	assertGeneratedModes(t, path)
 }
 
 // TestWriteOrCheck_CheckMode_MissingAndStaleFilesDiffer verifies check mode
@@ -254,6 +291,45 @@ func TestWriteReport_StdoutIsClosed_ReturnsTheWriteError(t *testing.T) {
 
 	if WriteReport("-", []byte("{}\n")) == nil {
 		t.Error("WriteReport(-) error = nil, want the closed-file write error")
+	}
+}
+
+// TestWriteReport_NestedFile_UsesTheGeneratedFileAndDirectoryModes verifies
+// the report writer creates the same pair of modes as the artifact writer:
+// the file private to its owner, the parent directory usable. It is the same
+// unread pair, decided in a second function.
+func TestWriteReport_NestedFile_UsesTheGeneratedFileAndDirectoryModes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows files do not carry Unix permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "plan", "backlog.json")
+
+	if err := WriteReport(path, []byte("{}\n")); err != nil {
+		t.Fatalf("WriteReport() error = %v", err)
+	}
+
+	assertGeneratedModes(t, path)
+}
+
+// assertGeneratedModes holds a written file to GeneratedFileMode and its
+// parent directory to something the owner can use and no wider than
+// generatedDirMode, which is what distinguishes the two constants from each
+// other.
+func assertGeneratedModes(t *testing.T, path string) {
+	t.Helper()
+	file, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat written file: %v", err)
+	}
+	if got := file.Mode().Perm(); got != GeneratedFileMode {
+		t.Errorf("file mode = %#o, want %#o", got, GeneratedFileMode)
+	}
+	dir, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("stat created directory: %v", err)
+	}
+	if got := dir.Mode().Perm(); got&0o700 != 0o700 || got&^generatedDirMode != 0 {
+		t.Errorf("directory mode = %#o, want it owner-usable and within %#o", got, generatedDirMode)
 	}
 }
 
