@@ -21,6 +21,8 @@ type IdentifierItem struct {
 }
 
 // ScannerItem represents the scanner that detected the vulnerability.
+// ScannerID is the id the report gives the scanner ("semgrep", "zap"), which
+// is GitLab's externalId and what the list action's scanner filter takes.
 type ScannerItem struct {
 	Name      string `json:"name"`
 	Vendor    string `json:"vendor,omitempty"`
@@ -80,6 +82,7 @@ const vulnFields = `
     title
     severity
     state
+    webUrl
     description
     reportType
     detectedAt
@@ -104,6 +107,7 @@ const vulnFields = `
     scanner {
       name
       vendor
+      externalId
     }
     location {
       ... on VulnerabilityLocationSast {
@@ -177,9 +181,13 @@ type gqlIdentifier struct {
 	URL          string `json:"url"`
 }
 
+// gqlScanner reads the scanner GitLab reports the finding under. externalId is
+// selected because [ScannerItem] publishes it as scanner_id and no document
+// asked for it, so the field was declared and always empty.
 type gqlScanner struct {
-	Name   string `json:"name"`
-	Vendor string `json:"vendor"`
+	Name       string `json:"name"`
+	Vendor     string `json:"vendor"`
+	ExternalID string `json:"externalId"`
 }
 
 // gqlLocation is the location a finding reports. GitLab types startLine and
@@ -234,6 +242,7 @@ type gqlVulnerabilityNode struct {
 	State             string                   `json:"state"`
 	Description       string                   `json:"description"`
 	ReportType        string                   `json:"reportType"`
+	WebURL            string                   `json:"webUrl"`
 	DetectedAt        string                   `json:"detectedAt"`
 	DismissedAt       string                   `json:"dismissedAt"`
 	ResolvedAt        string                   `json:"resolvedAt"`
@@ -271,6 +280,7 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		State:           n.State,
 		Description:     n.Description,
 		ReportType:      n.ReportType,
+		WebURL:          n.WebURL,
 		DetectedAt:      n.DetectedAt,
 		DismissedAt:     n.DismissedAt,
 		ResolvedAt:      n.ResolvedAt,
@@ -286,7 +296,7 @@ func nodeToItem(n gqlVulnerabilityNode) Item {
 		item.Identifiers = append(item.Identifiers, *identifierToItem(&id))
 	}
 	if n.Scanner != nil {
-		item.Scanner = &ScannerItem{Name: n.Scanner.Name, Vendor: n.Scanner.Vendor}
+		item.Scanner = &ScannerItem{Name: n.Scanner.Name, Vendor: n.Scanner.Vendor, ScannerID: n.Scanner.ExternalID}
 	}
 	if n.Location != nil {
 		loc := &LocationItem{
