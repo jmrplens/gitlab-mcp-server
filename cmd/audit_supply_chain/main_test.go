@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	yaml "go.yaml.in/yaml/v3"
+
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 )
 
@@ -247,6 +249,95 @@ func TestCheckWorkflowJobs_MultipleJobs_ReportInDocumentOrder(t *testing.T) {
 	sorted := checkWorkflowJobs("wf.yml", doc, ".", nil)
 	if len(sorted) != 2 || !strings.Contains(sorted[0], "job alpha") {
 		t.Errorf("checkWorkflowJobs() with no document order = %v, want alpha first (sorted fallback)", sorted)
+	}
+}
+
+// TestCheckWorkflowJobs_JobIsNotAMapping_IsSkipped verifies that a jobs entry
+// whose value is not a mapping is passed over while its siblings are still
+// audited, so one hand-edited workflow cannot take the whole gate down.
+func TestCheckWorkflowJobs_JobIsNotAMapping_IsSkipped(t *testing.T) {
+	t.Parallel()
+
+	doc := map[string]any{"jobs": map[string]any{
+		"release": "bash scripts/release.sh",
+		"publish": map[string]any{
+			"permissions": map[string]any{"contents": "write"},
+			"steps":       []any{map[string]any{"uses": "actions/checkout@" + testSHA}},
+		},
+	}}
+	problems := checkWorkflowJobs("wf.yml", doc, ".", []string{"release", "publish"})
+	if len(problems) != 1 || !strings.Contains(problems[0], "job publish") {
+		t.Errorf("checkWorkflowJobs() = %v, want only the job that is a mapping reported", problems)
+	}
+}
+
+// TestCheckWorkflowJobs_Finding_NamesTheWorkflowAndReadsScriptsFromTheRoot
+// verifies which of the two plain strings the job rules take is which.
+//
+// The workflow's label and the repository root are both strings, so a call that
+// passed them the other way round would still produce one finding per offending
+// job: the label would read as a directory and the scripts would be looked for
+// under the workflow's own name. Only a finding asserted whole, from a root
+// that really carries the script it names, tells the two apart.
+func TestCheckWorkflowJobs_Finding_NamesTheWorkflowAndReadsScriptsFromTheRoot(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "scripts", "publish.sh"), []byte("npx --yes thing\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	doc := map[string]any{"jobs": map[string]any{
+		"release": map[string]any{
+			"permissions": map[string]any{"id-token": "write"},
+			"steps":       []any{map[string]any{"run": "bash scripts/publish.sh"}},
+		},
+	}}
+
+	problems := checkWorkflowJobs(".github/workflows/release.yml", doc, root, nil)
+	want := ".github/workflows/release.yml: job release: scripts/publish.sh matches " + `'\\bnpx\\b'` +
+		": npx resolves a dependency tree at run time (use a lockfile and npm ci, or drop the CLI)"
+	if len(problems) != 1 || problems[0] != want {
+		t.Errorf("checkWorkflowJobs() = %v, want exactly [%q]", problems, want)
+	}
+}
+
+// TestOrderedKeys_DocumentOrder_NamesEachJobOnce verifies the order the job
+// rules iterate in: the document's own order first, each key once, then
+// whatever that order does not name, sorted.
+//
+// The order is read from the parsed nodes and the jobs from a decoded map, so
+// the two can disagree. A name the order carries and the mapping does not would
+// otherwise be audited as an empty job, and a name the order carries twice
+// would be audited twice and reported twice.
+func TestOrderedKeys_DocumentOrder_NamesEachJobOnce(t *testing.T) {
+	t.Parallel()
+
+	jobs := map[string]any{"zulu": 1, "alpha": 2, "mike": 3}
+
+	cases := []struct {
+		name  string
+		order []string
+		want  []string
+	}{
+		{name: "no order at all sorts", order: nil, want: []string{"alpha", "mike", "zulu"}},
+		{name: "a full order is kept", order: []string{"zulu", "mike", "alpha"}, want: []string{"zulu", "mike", "alpha"}},
+		{name: "what the order omits follows, sorted", order: []string{"zulu"}, want: []string{"zulu", "alpha", "mike"}},
+		{name: "a name the mapping lost is dropped", order: []string{"gone", "zulu"}, want: []string{"zulu", "alpha", "mike"}},
+		{name: "a name written twice appears once", order: []string{"zulu", "zulu"}, want: []string{"zulu", "alpha", "mike"}},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := orderedKeys(jobs, testCase.order)
+			if strings.Join(got, ",") != strings.Join(testCase.want, ",") {
+				t.Errorf("orderedKeys(%v) = %v, want %v", testCase.order, got, testCase.want)
+			}
+		})
 	}
 }
 
@@ -533,6 +624,124 @@ func TestCheckCredentialedJob_MissingScript_IsSkipped(t *testing.T) {
 	}
 }
 
+// TestCheckCredentialedJob_ScriptPathIsADirectory_IsSkipped verifies that a
+// scripts/ path which resolves to something other than a regular file is passed
+// over before anything tries to read it.
+//
+// The shape is decided ahead of the read rather than left to it: a directory
+// would fail the read, but a named pipe would block on it and hang the audit
+// instead of failing it.
+func TestCheckCredentialedJob_ScriptPathIsADirectory_IsSkipped(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "scripts", "build-thing.sh"), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	job := map[string]any{
+		"permissions": map[string]any{"id-token": "write"},
+		"steps":       []any{map[string]any{"run": "bash scripts/build-thing.sh"}},
+	}
+	if problems := checkCredentialedJob("wf.yml", "release", job, root, nil); len(problems) != 0 {
+		t.Errorf("checkCredentialedJob() = %v, want no findings for a scripts/ path that is a directory", problems)
+	}
+}
+
+// TestCheckCredentialedJob_UnreadableScript_IsSkipped verifies the arm that
+// runs when the shape check passed and the read still failed.
+//
+// Permissions cannot produce that here: the gate is run by a privileged user in
+// a container, for whom a mode-0 file reads fine, so a chmod-based fixture would
+// skip exactly where the arm needs exercising. /proc/self/mem is the one path
+// that is both: the kernel reports a regular file and refuses the read. The
+// test states that precondition and declines rather than passing vacuously
+// wherever it does not hold.
+func TestCheckCredentialedJob_UnreadableScript_IsSkipped(t *testing.T) {
+	t.Parallel()
+
+	const unreadable = "/proc/self/mem"
+	info, statErr := os.Stat(unreadable)
+	if statErr != nil || !info.Mode().IsRegular() {
+		t.Skipf("%s is not a regular file here (%v), so it cannot stand in for an unreadable script", unreadable, statErr)
+	}
+	if _, readErr := os.ReadFile(unreadable); readErr == nil {
+		t.Skipf("%s reads successfully here, so it cannot stand in for an unreadable script", unreadable)
+	}
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.Symlink(unreadable, filepath.Join(root, "scripts", "build-thing.sh")); err != nil {
+		t.Skipf("this platform will not create a symlink: %v", err)
+	}
+	job := map[string]any{
+		"permissions": map[string]any{"id-token": "write"},
+		"steps":       []any{map[string]any{"run": "bash scripts/build-thing.sh"}},
+	}
+	if problems := checkCredentialedJob("wf.yml", "release", job, root, nil); len(problems) != 0 {
+		t.Errorf("checkCredentialedJob() = %v, want no findings for a script that cannot be read", problems)
+	}
+}
+
+// TestCheckCredentialedJob_EachRule_NamesItsPatternAndReason verifies that each
+// run-time-code rule reports its own pattern beside its own reason.
+//
+// A finding carries two strings taken from one row of a table of literals, and
+// the rules sit next to each other there: a pattern paired with the wrong reason
+// would still be one finding per offending block, and the maintainer reading it
+// would be told to fix something the block does not do. Only the whole message,
+// per rule, tells them apart.
+func TestCheckCredentialedJob_EachRule_NamesItsPatternAndReason(t *testing.T) {
+	t.Parallel()
+
+	const where = "wf.yml: job release: step 0: run block matches "
+
+	cases := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "npx",
+			run:  "npx --yes thing",
+			want: where + `'\\bnpx\\b'` +
+				": npx resolves a dependency tree at run time (use a lockfile and npm ci, or drop the CLI)",
+		},
+		{
+			name: "at latest",
+			run:  "go install gotest.tools/gotestsum@latest",
+			want: where + `'@latest\\b'` + ": @latest is whatever the registry serves at that moment",
+		},
+		{
+			name: "curl piped into a shell",
+			run:  "curl -fsSL https://example.test/i.sh | bash",
+			want: where + `'curl[^\\n|]*\\|\\s*(?:ba)?sh\\b'` + ": piping a download into a shell runs unreviewed code",
+		},
+		{
+			name: "unhashed pip install",
+			run:  "pip install pyyaml",
+			want: where + `'\\bpip\\s+install\\b(?![^\\n]*--require-hashes)'` +
+				": pip install without --require-hashes resolves at run time",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := map[string]any{
+				"permissions": map[string]any{"contents": "write"},
+				"steps":       []any{map[string]any{"run": testCase.run}},
+			}
+			problems := checkCredentialedJob("wf.yml", "release", job, ".", nil)
+			if len(problems) != 1 || problems[0] != testCase.want {
+				t.Errorf("checkCredentialedJob() = %v, want exactly [%q]", problems, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCheckCredentialedJob_RepeatedScript_IsReportedOnce verifies that a script
 // two steps of the same job invoke produces one finding, not two.
 //
@@ -721,6 +930,56 @@ func TestCheckDependabot_Findings_ReadLikePython(t *testing.T) {
 	}
 }
 
+// TestSemVerCooldownKeys_Ecosystem_DecidesTheRule verifies that the SemVer rule
+// belongs to the two docker ecosystems and to no other.
+//
+// Only `docker` reaches it through the audit today, because docker-compose is
+// deliberately left out of the cooldown list entirely. The rule still names
+// both, since Dependabot rejects those keys for each of them, and the day a
+// docker-compose entry states a cooldown the rule has to be right already
+// rather than be discovered wrong by a stopped update stream.
+func TestSemVerCooldownKeys_Ecosystem_DecidesTheRule(t *testing.T) {
+	t.Parallel()
+
+	rejected := map[string]any{"default-days": 7, "semver-minor-days": 7, "semver-major-days": 30}
+
+	cases := []struct {
+		cooldown  map[string]any
+		name      string
+		ecosystem string
+		want      []string
+	}{
+		{
+			name:      "docker reports its semver keys, sorted",
+			ecosystem: "docker", cooldown: rejected,
+			want: []string{"semver-major-days", "semver-minor-days"},
+		},
+		{
+			name:      "docker-compose reports them too",
+			ecosystem: "docker-compose", cooldown: rejected,
+			want: []string{"semver-major-days", "semver-minor-days"},
+		},
+		{
+			name:      "docker with only the shared key reports nothing",
+			ecosystem: "docker", cooldown: map[string]any{"default-days": 7},
+			want: nil,
+		},
+		{name: "gomod is not judged", ecosystem: "gomod", cooldown: rejected, want: nil},
+		{name: "npm is not judged", ecosystem: "npm", cooldown: rejected, want: nil},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := semVerCooldownKeys(testCase.ecosystem, testCase.cooldown)
+			if strings.Join(got, ",") != strings.Join(testCase.want, ",") {
+				t.Errorf("semVerCooldownKeys(%q) = %v, want %v", testCase.ecosystem, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCheckSecurityPolicy_SupportedTable_TracksVersion verifies that
 // SECURITY.md's supported-versions table tracks VERSION.
 //
@@ -795,6 +1054,11 @@ func TestCheckSecurityPolicy_Findings_NameTheDrift(t *testing.T) {
 // principal who can clobber release assets replaces both consistently and the
 // hash comparison passes. Every release already publishes
 // checksums.txt.sigstore.json; the installers used to ignore it.
+//
+// Each finding is asserted whole rather than counted, because the two
+// installers carry the same two messages and differ only in the name inside
+// them: a rule handed the bodies the other way round would count right and read
+// wrong, sending a maintainer to edit the script that was already correct.
 func TestCheckInstallers_Signature_MustBeVerified(t *testing.T) {
 	t.Parallel()
 
@@ -802,22 +1066,36 @@ func TestCheckInstallers_Signature_MustBeVerified(t *testing.T) {
 	with := without + "cosign verify-blob --bundle \"$tmp/checksums.txt.sigstore.json\" \"$tmp/checksums.txt\"\n"
 
 	cases := []struct {
-		name      string
-		sh        string
-		ps1       string
-		wantCount int
+		name string
+		sh   string
+		ps1  string
+		want []string
 	}{
-		{name: "neither verifies", sh: without, ps1: without, wantCount: 4},
-		{name: "only sh verifies", sh: with, ps1: without, wantCount: 2},
-		{name: "both verify", sh: with, ps1: with, wantCount: 0},
+		{
+			name: "neither verifies", sh: without, ps1: without,
+			want: []string{
+				noSignatureFinding("scripts/install.sh"), noBundleFinding("scripts/install.sh"),
+				noSignatureFinding("scripts/install.ps1"), noBundleFinding("scripts/install.ps1"),
+			},
+		},
+		{
+			name: "only sh verifies", sh: with, ps1: without,
+			want: []string{noSignatureFinding("scripts/install.ps1"), noBundleFinding("scripts/install.ps1")},
+		},
+		{
+			name: "only ps1 verifies", sh: without, ps1: with,
+			want: []string{noSignatureFinding("scripts/install.sh"), noBundleFinding("scripts/install.sh")},
+		},
+		{name: "both verify", sh: with, ps1: with, want: nil},
 	}
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := checkInstallers(testCase.sh, testCase.ps1); len(got) != testCase.wantCount {
-				t.Errorf("checkInstallers() = %v (%d findings), want %d", got, len(got), testCase.wantCount)
+			got := checkInstallers(testCase.sh, testCase.ps1)
+			if strings.Join(got, "\n") != strings.Join(testCase.want, "\n") {
+				t.Errorf("checkInstallers() = %#v, want %#v", got, testCase.want)
 			}
 		})
 	}
@@ -851,8 +1129,13 @@ func TestCheckInstallers_AlternativeTools_AreAccepted(t *testing.T) {
 }
 
 // TestLoadWorkflows_Directory_ReadsTextAndDocument verifies that the loader
-// returns each workflow's raw text and parsed document, skips non-workflow
-// files, and records the document order of the jobs mapping.
+// returns each workflow's raw text and parsed document, skips what is not a
+// workflow file, and records the document order of the jobs mapping.
+//
+// Two shapes are skipped for different reasons and both are planted here: a
+// file whose name is not a workflow's, and a directory whose name is — reusable
+// workflow fragments are sometimes kept in one, and reading it as a file would
+// fail the whole audit for a directory nobody asked it to audit.
 func TestLoadWorkflows_Directory_ReadsTextAndDocument(t *testing.T) {
 	t.Parallel()
 
@@ -860,13 +1143,16 @@ func TestLoadWorkflows_Directory_ReadsTextAndDocument(t *testing.T) {
 	writeWorkflow(t, root, "b.yml", "jobs:\n  zulu:\n    steps: []\n  alpha:\n    steps: []\n")
 	writeWorkflow(t, root, "a.yaml", "name: a\n")
 	writeWorkflow(t, root, "notes.txt", "ignored\n")
+	if err := os.MkdirAll(filepath.Join(root, ".github", "workflows", "fragments.yml"), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	workflows, err := loadWorkflows(root)
 	if err != nil {
 		t.Fatalf("loadWorkflows: %v", err)
 	}
 	if len(workflows) != 2 {
-		t.Fatalf("loadWorkflows() returned %d files, want 2 (the .txt must be skipped)", len(workflows))
+		t.Fatalf("loadWorkflows() returned %d files, want 2 (the .txt and the directory must be skipped)", len(workflows))
 	}
 	if workflows[0].path != ".github/workflows/a.yaml" || workflows[1].path != ".github/workflows/b.yml" {
 		t.Errorf("loadWorkflows() paths = %q, %q, want a.yaml then b.yml", workflows[0].path, workflows[1].path)
@@ -950,6 +1236,93 @@ func TestLoadWorkflows_MissingDirectory_IsAnError(t *testing.T) {
 	}
 }
 
+// TestLoadWorkflows_UnreadableEntry_IsAnError verifies that an entry the
+// directory lists under a workflow's name but the loader cannot read stops the
+// audit.
+//
+// os.ReadDir reports a dangling symlink as an ordinary entry, so the name rule
+// admits it and the read is what fails. Passing over it would drop a workflow
+// from the audit and still print the success line, which is the one outcome
+// this gate must never produce.
+func TestLoadWorkflows_UnreadableEntry_IsAnError(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	directory := filepath.Join(root, ".github", "workflows")
+	if err := os.MkdirAll(directory, 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "never-written.yml"), filepath.Join(directory, "dangling.yml")); err != nil {
+		t.Skipf("this platform will not create a symlink: %v", err)
+	}
+	if _, err := loadWorkflows(root); err == nil {
+		t.Error("loadWorkflows() = nil error, want a read failure for an entry that cannot be opened")
+	}
+}
+
+// TestAuditWorkflows_NonMappingWorkflow_KeepsPinningOnly verifies that the
+// audit's own loop applies the pinning rule to a workflow whose document is not
+// a mapping and stands the job rules down for it.
+//
+// The loader hands such a file over with a nil document, and reading `jobs` off
+// it would be a lookup on nothing; the uses: line inside it is still a line a
+// later edit can turn into a step, so it is still audited.
+func TestAuditWorkflows_NonMappingWorkflow_KeepsPinningOnly(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeWorkflow(t, root, "list.yml", "- uses: actions/checkout@v7\n")
+
+	problems, err := auditWorkflows(root)
+	if err != nil {
+		t.Fatalf("auditWorkflows: %v", err)
+	}
+	want := ".github/workflows/list.yml:1: uses: actions/checkout@v7 is not pinned to a 40-character commit SHA"
+	if len(problems) != 1 || problems[0] != want {
+		t.Errorf("auditWorkflows() = %v, want exactly [%q]", problems, want)
+	}
+}
+
+// TestDocumentMapping_UnusualNode_ReturnsNoMapping verifies the unwrap that
+// turns a parsed file into the mapping the jobs lookup walks.
+//
+// Every refusal here is what keeps that lookup from indexing into a node
+// carrying nothing: no node at all, a document with nothing under it, and a
+// file whose root is a scalar. A node that is already the mapping is returned
+// as it stands, since the unwrap is the only step between the two.
+func TestDocumentMapping_UnusualNode_ReturnsNoMapping(t *testing.T) {
+	t.Parallel()
+
+	scalar := &yaml.Node{Kind: yaml.ScalarNode, Value: "ci"}
+	mapping := &yaml.Node{Kind: yaml.MappingNode}
+
+	cases := []struct {
+		node *yaml.Node
+		want *yaml.Node
+		name string
+	}{
+		{name: "no node at all", node: nil, want: nil},
+		{name: "document with nothing under it", node: &yaml.Node{Kind: yaml.DocumentNode}, want: nil},
+		{
+			name: "document over a scalar",
+			node: &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{scalar}},
+			want: nil,
+		},
+		{name: "scalar with no document around it", node: scalar, want: nil},
+		{name: "mapping with no document around it", node: mapping, want: mapping},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := documentMapping(testCase.node); got != testCase.want {
+				t.Errorf("documentMapping() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestStripComments_WholeLineComment_IsDropped verifies that only whole-line
 // comments are removed, so a rationale about npx is not read as npx while an
 // inline `# comment` after real code leaves that code visible to the rules.
@@ -1019,7 +1392,9 @@ func TestSplitLines_TrailingNewline_MatchesPython(t *testing.T) {
 //
 // Three findings embed repr() output; if the rendering drifts, a report from
 // this program and a report from the one it replaced stop comparing, and the
-// port can no longer be shown to be a port.
+// port can no longer be shown to be a port. The last case is the arm no YAML
+// scalar reaches: a decoded document can also carry a sequence or a mapping,
+// and the fallback has to render one rather than drop it.
 func TestPythonRepr_Value_MatchesPython(t *testing.T) {
 	t.Parallel()
 
@@ -1042,6 +1417,7 @@ func TestPythonRepr_Value_MatchesPython(t *testing.T) {
 		{name: "string with both quotes", value: `it's "x"`, want: `'it\'s "x"'`},
 		{name: "string with a backslash", value: `a\b`, want: `'a\\b'`},
 		{name: "string with control characters", value: "a\nb\tc\rd", want: `'a\nb\tc\rd'`},
+		{name: "a kind the switch does not name", value: []any{1, "a"}, want: "[1 a]"},
 	}
 
 	for _, testCase := range cases {
@@ -1359,6 +1735,55 @@ func TestAudit_UnparseableDependabot_IsAnError(t *testing.T) {
 	}
 }
 
+// TestAudit_UnverifiedInstaller_NamesTheOneThatFailed verifies that the audit
+// hands each installer's own text to the installer rule.
+//
+// The two are read one after the other into two strings of the same type and
+// passed positionally, so a swap changes nothing about how many findings come
+// back — only which file they accuse. The fixture therefore makes them differ
+// and the assertion names the file, rather than counting.
+func TestAudit_UnverifiedInstaller_NamesTheOneThatFailed(t *testing.T) {
+	t.Parallel()
+
+	root := brokenRepository(t)
+	if err := os.WriteFile(filepath.Join(root, "scripts", "install.ps1"),
+		[]byte("dl \"$base/checksums.txt\"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	problems, err := audit(root)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	want := []string{
+		".github/workflows/ci.yml:5: uses: actions/checkout@v7 is not pinned to a 40-character commit SHA",
+		noSignatureFinding("scripts/install.ps1"),
+		noBundleFinding("scripts/install.ps1"),
+	}
+	if strings.Join(problems, "\n") != strings.Join(want, "\n") {
+		t.Errorf("audit() = %#v, want %#v", problems, want)
+	}
+}
+
+// TestRun_WorkingDirectoryOutsideTheModule_ExitsNonZero verifies that the
+// command refuses when it cannot work out which repository to audit.
+//
+// With no --root the root is the module root at or above the working
+// directory, and a working directory outside any module leaves the audit
+// nothing to read. It changes the working directory, so it does not run in
+// parallel.
+func TestRun_WorkingDirectoryOutsideTheModule_ExitsNonZero(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+	if code := run(nil, &stdout, &stderr); code != 1 {
+		t.Errorf("run() = %d, want 1 outside any module (stdout %q)", code, stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "go.mod not found") {
+		t.Errorf("run() stderr = %q, want the missing module named on stderr", stderr.String())
+	}
+}
+
 // TestResolveRoot_NoFlag_FindsTheModuleRoot verifies that the command run with
 // no --root audits the repository it lives in, which is how every make target
 // and CI step invokes it.
@@ -1421,6 +1846,19 @@ func TestAudit_Repository_IsClean(t *testing.T) {
 	if len(problems) != 0 {
 		t.Errorf("audit() found %d problems:\n%s", len(problems), strings.Join(problems, "\n"))
 	}
+}
+
+// noSignatureFinding renders the finding an installer that checks no signature
+// carries, for the installer named.
+func noSignatureFinding(installer string) string {
+	return installer + ": verifies no signature — checksums.txt comes from the same mutable release " +
+		"as the binary, so a consistent replacement of both files is accepted"
+}
+
+// noBundleFinding renders the finding an installer that never fetches the
+// Sigstore bundle carries, for the installer named.
+func noBundleFinding(installer string) string {
+	return installer + ": never fetches checksums.txt.sigstore.json, which every release publishes"
 }
 
 // repositoryRoot returns this repository's root, so the gate runs against the
