@@ -116,16 +116,55 @@ func TestActionSpecs_Classification_MatchesTheActionItRoutes(t *testing.T) {
 	}
 }
 
+// wantProjectIDGuidance is what the project_id block must say, spelled here
+// rather than called from the package under test. Each of these three is a
+// function rather than a package-level value so that no test can leave the next
+// one comparing against a mutated copy of the slice inside.
+func wantProjectIDGuidance() toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		SemanticRole:     "scope_project",
+		ValueSource:      "Project ID or full namespace path that owns the issue.",
+		ExampleBinding:   `params.project_id:"group/project"`,
+		CommonConfusions: []string{"Use the issue's parent project here, not a group path or global issue ID."},
+	}
+}
+
+// wantIssueIIDGuidance is what the issue_iid block must say.
+func wantIssueIIDGuidance() toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		SemanticRole:     "issue_iid",
+		ValueSource:      "Issue number visible in the project, from the issue URL or prior issue list output.",
+		ExampleBinding:   "params.issue_iid:42",
+		CommonConfusions: []string{"Use the project-scoped issue IID, not the global issue database ID."},
+	}
+}
+
+// wantNoteIDGuidance is what the note_id block must say.
+func wantNoteIDGuidance() toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		SemanticRole:     "note_id",
+		ValueSource:      "Numeric note ID from a prior issue.note_list or issue.note_create result.",
+		ExampleBinding:   "params.note_id:100",
+		CommonConfusions: []string{"note_id is the comment ID, not the issue_iid. Obtain it from issue.note_list."},
+	}
+}
+
 // TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy holds each
 // guidance block against the key it hangs from. TestActionSpecs_DiscoveryMetadata
 // above only asks whether a key is present, so until this test the three shared
 // blocks could trade places in a map literal and nothing failed, and crossing
 // issue_iid with note_id tells a model to put the comment ID where the issue
-// number goes, which is a 404 it has no way to read as its own mistake.
-// The two body blocks are checked
-// for the same reason one level down: create's says what to post and update's
-// says the text replaces the whole note, so a swap turns the warning against
-// appending into advice on a parameter that appends to nothing.
+// number goes, which is a 404 it has no way to read as its own mistake. The two
+// body blocks are checked for the same reason one level down: create's says
+// what to post and update's says the text replaces the whole note, so a swap
+// turns the warning against appending into advice on a parameter that appends
+// to nothing.
+//
+// The expectation for the shared blocks is written out above rather than taken
+// from the constructor that produces them, because a comparison against that
+// constructor holds the call site alone: exchange the bodies of
+// issueIIDGuidance and noteIDGuidance and both sides of it move together, so
+// the crossing this test is named for passes one level down.
 func TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy(t *testing.T) {
 	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
 
@@ -134,19 +173,19 @@ func TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy(t *testi
 		param string
 		want  toolutil.ParameterGuidance
 	}{
-		{"gitlab_issue_note_create", "project_id", projectIDGuidance()},
-		{"gitlab_issue_note_create", "issue_iid", issueIIDGuidance()},
-		{"gitlab_issue_note_list", "project_id", projectIDGuidance()},
-		{"gitlab_issue_note_list", "issue_iid", issueIIDGuidance()},
-		{"gitlab_issue_note_get", "project_id", projectIDGuidance()},
-		{"gitlab_issue_note_get", "issue_iid", issueIIDGuidance()},
-		{"gitlab_issue_note_get", "note_id", noteIDGuidance()},
-		{"gitlab_issue_note_update", "project_id", projectIDGuidance()},
-		{"gitlab_issue_note_update", "issue_iid", issueIIDGuidance()},
-		{"gitlab_issue_note_update", "note_id", noteIDGuidance()},
-		{"gitlab_issue_note_delete", "project_id", projectIDGuidance()},
-		{"gitlab_issue_note_delete", "issue_iid", issueIIDGuidance()},
-		{"gitlab_issue_note_delete", "note_id", noteIDGuidance()},
+		{"gitlab_issue_note_create", "project_id", wantProjectIDGuidance()},
+		{"gitlab_issue_note_create", "issue_iid", wantIssueIIDGuidance()},
+		{"gitlab_issue_note_list", "project_id", wantProjectIDGuidance()},
+		{"gitlab_issue_note_list", "issue_iid", wantIssueIIDGuidance()},
+		{"gitlab_issue_note_get", "project_id", wantProjectIDGuidance()},
+		{"gitlab_issue_note_get", "issue_iid", wantIssueIIDGuidance()},
+		{"gitlab_issue_note_get", "note_id", wantNoteIDGuidance()},
+		{"gitlab_issue_note_update", "project_id", wantProjectIDGuidance()},
+		{"gitlab_issue_note_update", "issue_iid", wantIssueIIDGuidance()},
+		{"gitlab_issue_note_update", "note_id", wantNoteIDGuidance()},
+		{"gitlab_issue_note_delete", "project_id", wantProjectIDGuidance()},
+		{"gitlab_issue_note_delete", "issue_iid", wantIssueIIDGuidance()},
+		{"gitlab_issue_note_delete", "note_id", wantNoteIDGuidance()},
 	}
 	for _, tt := range shared {
 		t.Run(tt.tool+"/"+tt.param, func(t *testing.T) {

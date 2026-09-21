@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -444,9 +446,15 @@ func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 // ProjectInvites — with user_id (exercises opts.UserID path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithUserID verifies the ProjectInvites_WithUserID handler.
-// The mock GitLab API at /api/v4/projects/42/invitations (POST) responds with HTTP Created.
-// It asserts the returned output matches the expected fields.
+// TestProjectInvites_WithUserID verifies that an invitation naming a user_id
+// rather than an email reaches POST /api/v4/projects/42/invitations and is
+// reported as accepted.
+//
+// It asserts the status alone and reads nothing of the request, so it cannot
+// tell a handler that forwarded user_id from one that dropped it. The
+// parameter itself is held by TestProjectInvites_CreateBodyParams and
+// TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven, which decode the
+// body the handler sent.
 func TestProjectInvites_WithUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -472,9 +480,15 @@ func TestProjectInvites_WithUserID(t *testing.T) {
 // ProjectInvites — with expires_at (exercises date parsing path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithExpiresAt verifies the ProjectInvites_WithExpiresAt handler.
-// The mock GitLab API at /api/v4/projects/42/invitations (POST) responds with HTTP Created.
-// It asserts the returned output matches the expected fields.
+// TestProjectInvites_WithExpiresAt verifies that an invitation carrying an
+// expiry date reaches POST /api/v4/projects/42/invitations and is reported as
+// accepted, which is the path that parses the date.
+//
+// It asserts the status alone and reads nothing of the request, so a date that
+// was parsed and then dropped looks the same from here. Whether expires_at
+// reaches the body, and whether an unparseable one is withheld, is held by
+// TestProjectInvites_CreateBodyParams and
+// TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven.
 func TestProjectInvites_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -501,9 +515,14 @@ func TestProjectInvites_WithExpiresAt(t *testing.T) {
 // GroupInvites — with email AND expires_at
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_WithEmailAndExpiresAt verifies the GroupInvites_WithEmailAndExpiresAt handler.
-// The mock GitLab API at /api/v4/groups/10/invitations (POST) responds with HTTP Created.
-// It asserts the returned output matches the expected fields.
+// TestGroupInvites_WithEmailAndExpiresAt verifies that a group invitation
+// carrying both an email and an expiry date reaches POST
+// /api/v4/groups/10/invitations and is reported as accepted.
+//
+// It asserts the status alone and reads nothing of the request, so neither
+// parameter is held here. Both are held by TestGroupInvites_CreateBodyParams
+// and TestInvites_OptionalParametersReachTheRequestOnlyWhenGiven, which decode
+// the body the handler sent.
 func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -709,9 +728,13 @@ func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies that the package publishes its four
-// actions, each owned by this package and each projecting an individual tool
-// under a name of its own. No request is made: the specs are metadata.
+// TestActionSpecs_Metadata verifies that the package publishes four actions,
+// each owned by this package and each projecting an individual tool under some
+// name. No request is made: the specs are metadata.
+//
+// Which name each one projects, and that the four differ, is held by
+// TestActionSpecs_EachActionNameReachesTheEndpointItNames instead: a name is
+// non-empty here whichever action it was written for.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -790,6 +813,90 @@ func invitesRouteHandler() http.Handler {
 	})
 
 	return handler
+}
+
+// recordingInvitesRouteHandler answers the four invite endpoints and writes the
+// method and path of the last request into got.
+//
+// The request is the only place a route's identity shows: all four handlers
+// answer with a body of the same shape, so a spec wired to the wrong one of
+// them returns an indistinguishable result.
+func recordingInvitesRouteHandler(got *string) http.Handler {
+	next := invitesRouteHandler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*got = r.Method + " " + r.URL.Path
+		next.ServeHTTP(w, r)
+	})
+}
+
+// TestActionSpecs_EachActionNameReachesTheEndpointItNames asserts, for each of
+// the four canonical action names, both the individual tool it projects and the
+// request its route issues to GitLab.
+//
+// The catalog joins a spec's Name to its Route by position in one literal, and
+// nothing read the two together: TestActionSpecs_CallRoutes indexes by
+// IndividualTool.Name and never looks at Name, TestActionSpecs_Metadata reads
+// neither, and make check-action-ids answers only whether an ID resolves.
+// Crossing the four names over their routes therefore left the suite green
+// while invite_list_project resolved to the group handler, which would send a
+// project id to /groups. Verified by hand, by exchanging the first arguments of
+// the four constructor calls in ActionSpecs, which the suite passed.
+func TestActionSpecs_EachActionNameReachesTheEndpointItNames(t *testing.T) {
+	cases := []struct {
+		action  string
+		tool    string
+		args    map[string]any
+		request string
+	}{
+		{
+			action:  "invite_list_project",
+			tool:    "gitlab_project_invite_list_pending",
+			args:    map[string]any{"project_id": "42"},
+			request: "GET /api/v4/projects/42/invitations",
+		},
+		{
+			action:  "invite_list_group",
+			tool:    "gitlab_group_invite_list_pending",
+			args:    map[string]any{"group_id": "10"},
+			request: "GET /api/v4/groups/10/invitations",
+		},
+		{
+			action:  "invite_project",
+			tool:    "gitlab_project_invite",
+			args:    map[string]any{"project_id": "42", "email": "test@example.com", "access_level": 30},
+			request: "POST /api/v4/projects/42/invitations",
+		},
+		{
+			action:  "invite_group",
+			tool:    "gitlab_group_invite",
+			args:    map[string]any{"group_id": "10", "email": "test@example.com", "access_level": 30},
+			request: "POST /api/v4/groups/10/invitations",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			var got string
+			client := testutil.NewTestClient(t, recordingInvitesRouteHandler(&got))
+			specByName := make(map[string]toolutil.ActionSpec)
+			for _, spec := range ActionSpecs(client) {
+				specByName[spec.Name] = spec
+			}
+			spec, ok := specByName[tc.action]
+			if !ok {
+				t.Fatalf("no ActionSpec is published under the canonical name %q", tc.action)
+			}
+			if spec.IndividualTool.Name != tc.tool {
+				t.Errorf("%s projects the individual tool %q, want %q", tc.action, spec.IndividualTool.Name, tc.tool)
+			}
+			if _, err := spec.Route.Handler(t.Context(), tc.args); err != nil {
+				t.Fatalf("%s: %v", tc.action, err)
+			}
+			if got != tc.request {
+				t.Errorf("%s asked GitLab for %q, want %q", tc.action, got, tc.request)
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,6 +1238,146 @@ func TestInviteActionSpecs_DiscoveryMetadata(t *testing.T) {
 		if len(spec.ParameterGuidance) == 0 {
 			t.Errorf("%s: missing ParameterGuidance", tool)
 		}
+	}
+}
+
+// inviteScopeExpectation is everything one invite tool's discovery metadata has
+// to say about the scope it operates on, spelled out so a value borrowed from
+// the sibling entry fails rather than satisfying a shape check.
+type inviteScopeExpectation struct {
+	tool       string
+	scopeWord  string
+	otherWord  string
+	scopeParam string
+	otherParam string
+	aliases    []string
+	related    []string
+	scope      toolutil.ParameterGuidance
+}
+
+// inviteScopeExpectations pairs each of the four entries of inviteActionMeta
+// with the project-or-group scope it belongs to.
+var inviteScopeExpectations = []inviteScopeExpectation{
+	{
+		tool:       "gitlab_project_invite",
+		scopeWord:  "project",
+		otherWord:  "group",
+		scopeParam: "project_id",
+		otherParam: "group_id",
+		aliases:    []string{"invite user to project", "add user to project by email", "send project invitation"},
+		related:    []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
+		scope: toolutil.ParameterGuidance{
+			SemanticRole:     "scope_project",
+			ValueSource:      "Project ID or full namespace path the user is being invited to.",
+			ExampleBinding:   `params.project_id:"group/project"`,
+			CommonConfusions: []string{"Use the target project here. Use group_id only with group.invite_group."},
+		},
+	},
+	{
+		tool:       "gitlab_group_invite",
+		scopeWord:  "group",
+		otherWord:  "project",
+		scopeParam: "group_id",
+		otherParam: "project_id",
+		aliases:    []string{"invite user to group", "add user to group by email", "send group invitation"},
+		related:    []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
+		scope: toolutil.ParameterGuidance{
+			SemanticRole:     "scope_group",
+			ValueSource:      "Group ID or full group path the user is being invited to.",
+			ExampleBinding:   `params.group_id:"platform/backend"`,
+			CommonConfusions: []string{"Use group_id for the group scope. Use project_id only with project.invite_project."},
+		},
+	},
+	{
+		tool:       "gitlab_project_invite_list_pending",
+		scopeWord:  "project",
+		otherWord:  "group",
+		scopeParam: "project_id",
+		otherParam: "group_id",
+		aliases:    []string{"list pending project invitations", "show outstanding project invites", "pending project invitations"},
+		related:    []string{actionInviteProject, "project.members", "access.request_list_project"},
+		scope: toolutil.ParameterGuidance{
+			SemanticRole:     "scope_project",
+			ValueSource:      "Project ID or full namespace path whose pending invitations should be listed.",
+			ExampleBinding:   `params.project_id:"group/project"`,
+			CommonConfusions: []string{"Lists pending invitations, not accepted members. Use project.members for current members."},
+		},
+	},
+	{
+		tool:       "gitlab_group_invite_list_pending",
+		scopeWord:  "group",
+		otherWord:  "project",
+		scopeParam: "group_id",
+		otherParam: "project_id",
+		aliases:    []string{"list pending group invitations", "show outstanding group invites", "pending group invitations"},
+		related:    []string{actionInviteGroup, "group.members", "access.request_list_group"},
+		scope: toolutil.ParameterGuidance{
+			SemanticRole:     "scope_group",
+			ValueSource:      "Group ID or full group path whose pending invitations should be listed.",
+			ExampleBinding:   `params.group_id:"platform/backend"`,
+			CommonConfusions: []string{"Lists pending invitations, not accepted members. Use group.members for current members."},
+		},
+	},
+}
+
+// TestInviteActionSpecs_EachToolPublishesItsOwnScope asserts, per individual
+// invite tool, the aliases, related actions, scope guidance and scope word its
+// entry of inviteActionMeta carries.
+//
+// TestInviteActionSpecs_DiscoveryMetadata above cannot state any of this: every
+// assertion there is shape-only (Usage non-generic, two or more aliases, a
+// non-empty related list, "Returns:" and "See also:" in the description,
+// non-empty guidance), and the project and group entries satisfy all five
+// alike. Verified by hand, by exchanging the two invite entries of
+// inviteActionMeta, which the suite passed while gitlab_project_invite
+// published the group's usage, the group's aliases, group.group_member_add as a
+// related action, and guidance keyed on a group_id its schema does not have.
+func TestInviteActionSpecs_EachToolPublishesItsOwnScope(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	specByTool := make(map[string]toolutil.ActionSpec)
+	for _, spec := range ActionSpecs(client) {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	for _, want := range inviteScopeExpectations {
+		t.Run(want.tool, func(t *testing.T) {
+			spec, ok := specByTool[want.tool]
+			if !ok {
+				t.Fatalf("no ActionSpec projects the individual tool %q", want.tool)
+			}
+			assertNamesOneScope(t, "Usage", spec.Usage, want)
+			assertNamesOneScope(t, "description", spec.IndividualTool.Description, want)
+			if !slices.Equal(spec.Aliases, want.aliases) {
+				t.Errorf("%s aliases = %q, want %q", want.tool, spec.Aliases, want.aliases)
+			}
+			if !slices.Equal(spec.RelatedActions, want.related) {
+				t.Errorf("%s related actions = %q, want %q", want.tool, spec.RelatedActions, want.related)
+			}
+			if _, present := spec.ParameterGuidance[want.otherParam]; present {
+				t.Errorf("%s guides %q, which is the sibling scope and not a parameter of this tool", want.tool, want.otherParam)
+			}
+			got, present := spec.ParameterGuidance[want.scopeParam]
+			if !present {
+				t.Fatalf("%s guides no %q", want.tool, want.scopeParam)
+			}
+			if !reflect.DeepEqual(got, want.scope) {
+				t.Errorf("%s guidance for %q =\n%+v\nwant:\n%+v", want.tool, want.scopeParam, got, want.scope)
+			}
+		})
+	}
+}
+
+// assertNamesOneScope reports prose that talks about the sibling scope, which
+// is what a borrowed metadata entry reads as.
+func assertNamesOneScope(t *testing.T, field, text string, want inviteScopeExpectation) {
+	t.Helper()
+	if !strings.Contains(text, want.scopeWord) {
+		t.Errorf("%s %s never says %q: %q", want.tool, field, want.scopeWord, text)
+	}
+	if strings.Contains(text, want.otherWord) {
+		t.Errorf("%s %s says %q, which belongs to the sibling tool: %q", want.tool, field, want.otherWord, text)
 	}
 }
 

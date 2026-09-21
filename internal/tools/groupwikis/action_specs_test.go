@@ -114,9 +114,12 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
-// The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestActionSpecs_CallRouteError validates that a refused DELETE reaches the
+// caller as an error through the catalog route rather than as a nil result the
+// dispatcher would publish as success. It asserts that an error comes back and
+// that no result comes back with it, and nothing about what the error says: the
+// operation label and the hint are held by
+// TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -138,32 +141,74 @@ func TestActionSpecs_CallRouteError(t *testing.T) {
 	}
 }
 
+// groupWikiDiscovery is what one group wiki tool must be discoverable by: the
+// natural-language phrases a model's own words are matched against, and the
+// actions it is pointed at next.
+type groupWikiDiscovery struct {
+	aliases []string
+	related []string
+}
+
+// groupWikiDiscoveryWant spells out that metadata per tool, as literals rather
+// than as a read of groupWikiActionMeta. The comparison used to take its
+// expectation from the very table it was judging, so two entries could trade
+// places whole and pass: gitlab_group_wiki_delete would be the tool found under
+// "create group wiki page", and a model asking to add a page would be offered
+// the one that removes it. No committed artifact carries aliases, so nothing
+// tree-wide holds them either; this table is the only place the phrases and the
+// tool that publishes them are written down together.
+var groupWikiDiscoveryWant = map[string]groupWikiDiscovery{
+	"gitlab_group_wiki_list": {
+		aliases: []string{"list group wiki pages", "show group wiki", "find group wiki pages"},
+		related: []string{"group.wiki_get", "group.wiki_create", "group.get"},
+	},
+	"gitlab_group_wiki_get": {
+		aliases: []string{"get group wiki page", "read group wiki page", "show group wiki page content"},
+		related: []string{"group.wiki_list", "group.wiki_edit", "group.wiki_delete"},
+	},
+	"gitlab_group_wiki_create": {
+		aliases: []string{"create group wiki page", "add group wiki page", "new group wiki page"},
+		related: []string{"group.wiki_list", "group.wiki_get", "group.wiki_edit"},
+	},
+	"gitlab_group_wiki_edit": {
+		aliases: []string{"edit group wiki page", "update group wiki page", "rename group wiki page"},
+		related: []string{"group.wiki_get", "group.wiki_list", "group.wiki_delete"},
+	},
+	"gitlab_group_wiki_delete": {
+		aliases: []string{"delete group wiki page", "remove group wiki page", "destroy group wiki page", "drop group wiki page"},
+		related: []string{"group.wiki_get", "group.wiki_list", "group.wiki_edit"},
+	},
+}
+
 // assertGroupWikiSpecMetadata checks one spec for the rich metadata every
 // group wiki tool must carry: a specific Usage, group-specific natural
 // language aliases, related actions, and the Returns/See also description.
 func assertGroupWikiSpecMetadata(t *testing.T, name string, spec toolutil.ActionSpec) {
 	t.Helper()
-	meta := groupWikiActionMeta[name]
+	want, ok := groupWikiDiscoveryWant[name]
+	if !ok {
+		t.Fatalf("%s: no expected discovery metadata is written for this tool", name)
+	}
 	if spec.Usage == "" || spec.Usage == genericGroupWikiUsage {
 		t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
 	}
 	if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
 		t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
 	}
-	if !slices.Equal(spec.Aliases, meta.aliases) {
-		t.Errorf("%s: Aliases = %v, want the entry's %v", name, spec.Aliases, meta.aliases)
+	if !slices.Equal(spec.Aliases, want.aliases) {
+		t.Errorf("%s: Aliases = %v, want %v", name, spec.Aliases, want.aliases)
 	}
 	for _, alias := range spec.Aliases {
 		if !containsSubstr(alias, "group") {
 			t.Errorf("%s: alias %q is not group-wiki-specific", name, alias)
 		}
 	}
-	// The entry's related actions, not merely a non-empty list: the generic
+	// This tool's own related actions, not merely a non-empty list: the generic
 	// options already carry one placeholder ("group.get"), so a length check
 	// passes just as well when the decoration never ran and the model is left
 	// with the placeholder as the only action this tool leads to.
-	if !slices.Equal(spec.RelatedActions, meta.related) {
-		t.Errorf("%s: RelatedActions = %v, want the entry's %v", name, spec.RelatedActions, meta.related)
+	if !slices.Equal(spec.RelatedActions, want.related) {
+		t.Errorf("%s: RelatedActions = %v, want %v", name, spec.RelatedActions, want.related)
 	}
 	if slices.Equal(spec.RelatedActions, genericGroupWikiRelated()) {
 		t.Errorf("%s: RelatedActions still the generic placeholder: %v", name, spec.RelatedActions)

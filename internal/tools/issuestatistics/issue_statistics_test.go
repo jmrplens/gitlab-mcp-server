@@ -596,13 +596,14 @@ func TestGetProject_APIError401(t *testing.T) {
 
 // hintedRefusal describes the refusal one route was given: the operation it
 // reports under, the status its hint is keyed on, a second status that must
-// therefore go unhinted, what the hint has to tell a model to check, and what
-// it must not, those being the other routes' subjects.
+// therefore go unhinted, the whole sentence the hint has to be, and what the
+// other routes send a model to, neither subject nor verifying action of which
+// may appear anywhere in this route's refusal.
 type hintedRefusal struct {
 	operation   string
 	hintStatus  int
 	otherStatus int
-	names       string
+	hint        string
 	notNames    []string
 	call        func(ctx context.Context, client *gitlabclient.Client) error
 }
@@ -612,12 +613,20 @@ type hintedRefusal struct {
 // The second status of each is another route's keyed status rather than an
 // arbitrary one, since crossing the two constants is exactly the mistake a
 // list of three near-identical handlers invites.
+//
+// The hint is held as the whole sentence rather than as the subject it names,
+// because the subject is not the only half of it that can cross: "verify
+// group_id with project.get" still names the group and still names no foreign
+// subject, so a subject-only assertion passed it while the capability a model
+// was sent to is the one that cannot answer for a group. Holding the sentence
+// costs a rewording being repeated here, which is the price of the two action
+// IDs being read by anything at all.
 func hintedRefusals() []hintedRefusal {
 	return []hintedRefusal{
 		{
 			operation: "gitlab_get_issue_statistics", hintStatus: http.StatusForbidden,
-			otherStatus: http.StatusNotFound, names: "read_api",
-			notNames: []string{"group_id", "project_id"},
+			otherStatus: http.StatusNotFound, hint: "verify your token has read_api scope",
+			notNames: []string{"group_id", "project_id", "group.get", "project.get"},
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
 				_, err := Get(ctx, client, GetInput{})
 				return err
@@ -625,8 +634,8 @@ func hintedRefusals() []hintedRefusal {
 		},
 		{
 			operation: "gitlab_get_group_issue_statistics", hintStatus: http.StatusNotFound,
-			otherStatus: http.StatusForbidden, names: "group_id",
-			notNames: []string{"project_id", "read_api"},
+			otherStatus: http.StatusForbidden, hint: "verify group_id with group.get",
+			notNames: []string{"project_id", "read_api", "project.get"},
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
 				_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "99"})
 				return err
@@ -634,8 +643,8 @@ func hintedRefusals() []hintedRefusal {
 		},
 		{
 			operation: "gitlab_get_project_issue_statistics", hintStatus: http.StatusNotFound,
-			otherStatus: http.StatusForbidden, names: "project_id",
-			notNames: []string{"group_id", "read_api"},
+			otherStatus: http.StatusForbidden, hint: "verify project_id with project.get",
+			notNames: []string{"group_id", "read_api", "group.get"},
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
 				_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "42"})
 				return err
@@ -669,9 +678,10 @@ func refusalFrom(t *testing.T, route hintedRefusal, code int) string {
 // it either. The hint is what a model does next, so a project route answering
 // "verify group_id" sends it to look up an object that was never the subject.
 //
-// The subject is asserted rather than the wording, so the test states that the
-// group route names the group and the project route the project, instead of
-// holding a copy of sentences a rewording would have to be repeated in.
+// The hint is compared as the whole sentence, terminator included, so that
+// every token of it is held: the subject it tells a model to check and the
+// action ID it sends the model to check it with. Either alone leaves the other
+// free to be the sibling route's.
 func TestHandlers_RefusalNamesItsOwnOperationAndSubject(t *testing.T) {
 	for _, route := range hintedRefusals() {
 		t.Run(route.operation, func(t *testing.T) {
@@ -679,11 +689,12 @@ func TestHandlers_RefusalNamesItsOwnOperationAndSubject(t *testing.T) {
 			if !strings.HasPrefix(hinted, route.operation+": ") {
 				t.Errorf("refusal = %q, want it reported under %q", hinted, route.operation)
 			}
-			if !strings.Contains(hinted, "Suggestion: ") {
-				t.Errorf("refusal to a %d = %q, and the hint keyed on that status is missing", route.hintStatus, hinted)
-			}
-			if !strings.Contains(hinted, route.names) {
-				t.Errorf("refusal = %q, and it never tells a model to check %s", hinted, route.names)
+			// The trailing colon is what ends the hint in the composed
+			// message, so including it holds the sentence to its whole text
+			// rather than to a prefix of it.
+			wantHint := "Suggestion: " + route.hint + ":"
+			if !strings.Contains(hinted, wantHint) {
+				t.Errorf("refusal to a %d = %q, want it to carry %q", route.hintStatus, hinted, wantHint)
 			}
 			for _, foreign := range route.notNames {
 				if strings.Contains(hinted, foreign) {
@@ -1221,6 +1232,47 @@ func TestActionSpecs_MetadataNamesTheScopeItsToolReads(t *testing.T) {
 			t.Run("Usage", func(t *testing.T) { assertScopeClaim(t, spec.Usage, own, foreign) })
 			t.Run("Description", func(t *testing.T) { assertScopeClaim(t, described, own, foreign) })
 			t.Run("Aliases", func(t *testing.T) { assertAliasScope(t, spec, own, foreign) })
+		})
+	}
+}
+
+// TestActionSpecs_UsageAndDescription_KeepTheirOwnShape checks that each
+// action's usage line and individual-tool description keep the form of the
+// surface that reads them, so the two cannot trade places.
+//
+// Why that matters: both strings of one action carry that action's scope
+// phrase, so the scope test above is satisfied by either string in either
+// place, and the pair is invisible to it as it is to both gates, one field's
+// text assigned to another being no branch to flip. The two are not
+// interchangeable to a reader. The usage line is what the dynamic and meta
+// surfaces show a model choosing between actions; the description is the
+// individual tool's own, and is the only one of the two that says what comes
+// back and routes to the siblings. Crossed, the individual surface lists a tool
+// whose description never names its return shape, and the finder offers a usage
+// line that ends in a list of other tools' names.
+func TestActionSpecs_UsageAndDescription_KeepTheirOwnShape(t *testing.T) {
+	// The opening of the usage line and the tail of the description: the parts
+	// each has and the other must not.
+	const (
+		usageOpening     = "Get aggregate issue counts (all, opened, closed) "
+		describedReturns = "Returns: a statistics object with nested counts (all, opened, closed). See also: "
+	)
+
+	for _, spec := range issueStatsSpecs(t) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			t.Run("Usage", func(t *testing.T) {
+				if !strings.HasPrefix(spec.Usage, usageOpening) {
+					t.Errorf("Usage = %q, want it to open with %q", spec.Usage, usageOpening)
+				}
+				if strings.Contains(spec.Usage, "Returns:") || strings.Contains(spec.Usage, "See also:") {
+					t.Errorf("Usage = %q, carrying a tail that belongs to the individual tool's description", spec.Usage)
+				}
+			})
+			t.Run("Description", func(t *testing.T) {
+				if !strings.Contains(spec.IndividualTool.Description, describedReturns) {
+					t.Errorf("Description = %q, want it to carry %q", spec.IndividualTool.Description, describedReturns)
+				}
+			})
 		})
 	}
 }

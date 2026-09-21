@@ -71,6 +71,93 @@ func hasNaturalAlias(spec toolutil.ActionSpec) bool {
 	return false
 }
 
+// mergeTrainDiscriminator is the word that tells one merge train action from
+// the other three: the last segment of its canonical action name, which is
+// project, branch, get or add. Everything before it is shared, four actions on
+// one resource differing only in what they are pointed at and what they do.
+func mergeTrainDiscriminator(action string) string {
+	if cut := strings.LastIndex(action, "_"); cut >= 0 {
+		return action[cut+1:]
+	}
+	return action
+}
+
+// TestActionSpecs_AliasesNameTheActionTheyAreRegisteredUnder checks that each
+// action's natural-language aliases name the word telling it from its three
+// siblings, and name none of the others'.
+//
+// Why that matters: [hasNaturalAlias] above asks only whether an alias beyond
+// the tool name exists, so all four alias lists could be dealt out to the wrong
+// actions and every test here would pass. Nothing tree-wide holds them either:
+// the usage line and the individual-tool description reach the golden
+// snapshots and an alias reaches no committed artifact at all, which is what
+// leaves this pair invisible to the whole-tree gates as well as to this
+// package. Aliases are what the dynamic surface's find matches a prompt
+// against, so a crossed list answers "enqueue mr on merge train" with the
+// action that only reads one.
+//
+// The word is derived from the action's own name rather than copied from the
+// table under test, which is the half that decides whether this proves
+// anything: an expectation read out of that table would be satisfied by any
+// dealing of its rows, since both sides would move together.
+func TestActionSpecs_AliasesNameTheActionTheyAreRegisteredUnder(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+
+	words := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		words = append(words, mergeTrainDiscriminator(spec.Name))
+	}
+	// The control, and the load-bearing half: a word two actions share would
+	// hold each of them to something the other carries too, and the assertions
+	// below would pass while asserting nothing.
+	distinct := make(map[string]bool, len(words))
+	for _, word := range words {
+		if distinct[word] {
+			t.Fatalf("two actions are told apart by the same word %q, so the comparisons below prove nothing: %v", word, words)
+		}
+		distinct[word] = true
+	}
+
+	for i, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			assertAliasDiscriminator(t, spec, words[i], words)
+		})
+	}
+}
+
+// assertAliasDiscriminator checks that some natural-language alias of the spec
+// names own, and that none of them names another action's word.
+//
+// The comparison is over whole words rather than substrings, because the words
+// here sit inside each other: "target" carries "get", so a branch alias
+// mentioning the target branch would read as naming the get action.
+func assertAliasDiscriminator(t *testing.T, spec toolutil.ActionSpec, own string, all []string) {
+	t.Helper()
+	named := false
+	for _, alias := range spec.Aliases {
+		// The two names a caller already has are aliases of every action and
+		// carry the word by construction, so they answer nothing.
+		if alias == spec.IndividualTool.Name || alias == spec.Name {
+			continue
+		}
+		words := strings.Fields(alias)
+		if slices.Contains(words, own) {
+			named = true
+		}
+		for _, other := range all {
+			if other != own && slices.Contains(words, other) {
+				t.Errorf("alias %q names %q, the word another merge train action is told apart by", alias, other)
+			}
+		}
+	}
+	if !named {
+		t.Errorf("Aliases = %v, and none of them names %q, the word this action is registered under", spec.Aliases, own)
+	}
+}
+
 // assertRelatedActions holds a spec's related actions to canonical IDs this
 // domain registers, and never to the action itself: a related action a model
 // cannot execute is worse than none, and one pointing back at the call it was

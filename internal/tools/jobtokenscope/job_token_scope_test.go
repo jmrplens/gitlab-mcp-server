@@ -5,7 +5,6 @@ package jobtokenscope
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
@@ -332,11 +330,16 @@ func TestListInboundAllowlist_EachProjectField_ComesFromItsOwnSourceField(t *tes
 }
 
 // TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives reads
-// the posted body back as the options client-go encodes, so the assertion
-// names the field GitLab reads. The output was already held to both of its
-// identifiers; what nothing held was the request, and a handler posting a
-// constant in place of the caller's target would grant inbound access to the
-// wrong project while answering with the entry the mock invented.
+// the posted body back as text, so the assertion names the field GitLab reads.
+// The output was already held to both of its identifiers; what nothing held
+// was the request, and a handler posting a constant in place of the caller's
+// target would grant inbound access to the wrong project while answering with
+// the entry the mock invented.
+//
+// As text rather than decoded into the option struct the handler encoded,
+// which is what this test did first: decoding names the Go field and not the
+// key on the wire, so the assertion moved with the json tag and could never
+// have told the wire key GitLab reads from any other spelling of it.
 func TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
@@ -348,12 +351,9 @@ func TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *tes
 	}
 	assertAddressed(t, got, http.MethodPost, "/api/v4/projects/42/job_token_scope/allowlist")
 
-	var sent gl.JobTokenInboundAllowOptions
-	if decodeErr := json.Unmarshal(got.Body, &sent); decodeErr != nil {
-		t.Fatalf("decode request body %q: %v", got.Body, decodeErr)
-	}
-	if sent.TargetProjectID == nil || *sent.TargetProjectID != 99 {
-		t.Errorf("target_project_id sent = %v, want 99", sent.TargetProjectID)
+	wantBody := `{"target_project_id":99}`
+	if body := strings.TrimSpace(string(got.Body)); body != wantBody {
+		t.Errorf("request body = %s, want %s", body, wantBody)
 	}
 	if out.SourceProjectID != 42 || out.TargetProjectID != 99 {
 		t.Errorf("output = {source %d, target %d}, want {source 42, target 99}", out.SourceProjectID, out.TargetProjectID)
@@ -402,9 +402,10 @@ func TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField(t *testing
 }
 
 // TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives is the
-// group half of the same demand, and holds the answered entry's own two
-// identifiers as well: the source project was unasserted, so the pair could
-// have been exchanged on the way out and only the target was ever read.
+// group half of the same demand, read back as text for the same reason, and
+// holds the answered entry's own two identifiers as well: the source project
+// was unasserted, so the pair could have been exchanged on the way out and
+// only the target was ever read.
 func TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testing.T) {
 	var got capturedRequest
 	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
@@ -416,12 +417,9 @@ func TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testi
 	}
 	assertAddressed(t, got, http.MethodPost, "/api/v4/projects/42/job_token_scope/groups_allowlist")
 
-	var sent gl.AddGroupToJobTokenAllowlistOptions
-	if decodeErr := json.Unmarshal(got.Body, &sent); decodeErr != nil {
-		t.Fatalf("decode request body %q: %v", got.Body, decodeErr)
-	}
-	if sent.TargetGroupID == nil || *sent.TargetGroupID != 5 {
-		t.Errorf("target_group_id sent = %v, want 5", sent.TargetGroupID)
+	wantBody := `{"target_group_id":5}`
+	if body := strings.TrimSpace(string(got.Body)); body != wantBody {
+		t.Errorf("request body = %s, want %s", body, wantBody)
 	}
 	if out.SourceProjectID != 42 || out.TargetGroupID != 5 {
 		t.Errorf("output = {source %d, group %d}, want {source 42, group 5}", out.SourceProjectID, out.TargetGroupID)
@@ -439,40 +437,58 @@ func TestRemoveGroupAllowlist_Success(t *testing.T) {
 	assertAddressed(t, got, http.MethodDelete, "/api/v4/projects/42/job_token_scope/groups_allowlist/5")
 }
 
-// TestAddProjectAllowlist_ZeroTargetProjectID verifies AddProjectAllowlist when zero target project ID.
+// assertRequiredInt64 holds the whole refusal a zero identifier produces to
+// the operation and the parameter it belongs to.
+//
+// Both are arguments at the guard rather than branches of it, and the four
+// guards here are the same two lines with two strings changed, so a guard
+// naming its sibling's operation and its sibling's parameter refuses exactly
+// as loudly and tells a model to correct a parameter the tool it called does
+// not have. The expected sentence is composed here rather than taken from
+// toolutil.ErrRequiredInt64, so that a value read from the guard cannot
+// satisfy the assertion by supplying its own expectation.
+func assertRequiredInt64(t *testing.T, err error, operation, field string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected a refusal for a zero %s, got nil", field)
+	}
+	want := operation + ": " + field + " is required (must be > 0). " +
+		"Ensure you use the exact parameter name '" + field + "' as documented in the tool description"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+// TestAddProjectAllowlist_ZeroTargetProjectID holds the guard's refusal to the
+// operation and parameter of the project-add half.
 func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
-	if err == nil {
-		t.Fatal("expected error for zero TargetProjectID, got nil")
-	}
+	assertRequiredInt64(t, err, "add_project_job_token_allowlist", "target_project_id")
 }
 
-// TestRemoveProjectAllowlist_ZeroTargetProjectID verifies RemoveProjectAllowlist when zero target project ID.
+// TestRemoveProjectAllowlist_ZeroTargetProjectID holds the guard's refusal to
+// the operation and parameter of the project-remove half.
 func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
-	if err == nil {
-		t.Fatal("expected error for zero TargetProjectID, got nil")
-	}
+	assertRequiredInt64(t, err, "remove_project_job_token_allowlist", "target_project_id")
 }
 
-// TestAddGroupAllowlist_ZeroTargetGroupID verifies AddGroupAllowlist when zero target group ID.
+// TestAddGroupAllowlist_ZeroTargetGroupID holds the guard's refusal to the
+// operation and parameter of the group-add half.
 func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
-	if err == nil {
-		t.Fatal("expected error for zero TargetGroupID, got nil")
-	}
+	assertRequiredInt64(t, err, "add_group_job_token_allowlist", "target_group_id")
 }
 
-// TestRemoveGroupAllowlist_ZeroTargetGroupID verifies RemoveGroupAllowlist when zero target group ID.
+// TestRemoveGroupAllowlist_ZeroTargetGroupID holds the guard's refusal to the
+// operation and parameter of the group-remove half.
 func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
-	if err == nil {
-		t.Fatal("expected error for zero TargetGroupID, got nil")
-	}
+	assertRequiredInt64(t, err, "remove_group_job_token_allowlist", "target_group_id")
 }
 
 // markdownText reads the one text block a formatter's result carries.

@@ -104,34 +104,99 @@ func TestCreatePAT_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 }
 
-// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
-// failure the captured response adds to every handler that presents a token:
-// GitLab's answer decodes for the SDK and not for the fields read beside it,
-// and the handler reports it rather than swallowing it, on a token alone and
-// on a list of them.
-func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// capturedDecodeCase is one handler driven through an answer its output type
+// cannot hold, paired with the operation label the failure it reports must
+// carry.
+//
+// The label is an argument at the wrap site rather than a branch of the
+// handler, and two of the four reach that site as [capturedOutput]'s op
+// parameter, given by the caller. So any two of the four can trade places
+// while every error test in this file still passes: those read the label on
+// the branch GitLab refuses, which is a different argument at a different
+// line. Pairing each call with its own label in one table is what makes the
+// trade fail.
+type capturedDecodeCase struct {
+	name string
+	op   string
+	call func(context.Context, *gitlabclient.Client) error
+}
+
+// capturedDecodeCases drives every handler that presents a token read from a
+// captured answer.
+func capturedDecodeCases() []capturedDecodeCase {
+	return []capturedDecodeCase{
+		{name: "list", op: "list_impersonation_tokens", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := List(ctx, c, ListInput{UserID: 42})
+			return err
+		}},
+		{name: "get", op: "get_impersonation_token", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Get(ctx, c, GetInput{UserID: 42, TokenID: 1})
+			return err
+		}},
+		{name: "create", op: "create_impersonation_token", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := Create(ctx, c, CreateInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
+			return err
+		}},
+		{name: "create personal access token", op: "create_personal_access_token", call: func(ctx context.Context, c *gitlabclient.Client) error {
+			_, err := CreatePAT(ctx, c, CreatePATInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
+			return err
+		}},
+	}
+}
+
+// unreadableCaptureClient answers every call with a token whose granular flag
+// is a string: the SDK's own decode passes over it, and the capture reading
+// the fields beside it cannot hold it.
+func unreadableCaptureClient(t *testing.T) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body := `{"id":1,"name":"test-token","granular":"not-a-bool"}`
 		if r.Method == http.MethodGet && r.URL.Path == pathListTokens {
 			body = "[" + body + "]"
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error { _, err := List(context.Background(), client, ListInput{UserID: 42}); return err }},
-		{Name: "get", Call: func() error {
-			_, err := Get(context.Background(), client, GetInput{UserID: 42, TokenID: 1})
-			return err
-		}},
-		{Name: "create", Call: func() error {
-			_, err := Create(context.Background(), client, CreateInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
-			return err
-		}},
-		{Name: "create personal access token", Call: func() error {
-			_, err := CreatePAT(context.Background(), client, CreatePATInput{UserID: 42, Name: "t", Scopes: []string{"api"}})
-			return err
-		}},
-	})
+}
+
+// TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported verifies the one
+// failure the captured response adds to every handler that presents a token:
+// GitLab's answer decodes for the SDK and not for the fields read beside it,
+// and the handler reports it rather than swallowing it, on a token alone and
+// on a list of them.
+func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
+	client := unreadableCaptureClient(t)
+	all := capturedDecodeCases()
+	cases := make([]testutil.CapturedCase, 0, len(all))
+	for _, testCase := range all {
+		cases = append(cases, testutil.CapturedCase{
+			Name: testCase.name,
+			Call: func() error { return testCase.call(t.Context(), client) },
+		})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+}
+
+// TestHandlers_ACapturedDecodeFailure_NamesTheCallThatFailed holds each of
+// those failures to the operation it belongs to.
+//
+// The assertion beside it judges only that the message carries the decoder's
+// own text, which is the same sentence for all four handlers, so a caller told
+// "create_impersonation_token" for a list that failed reads as an account of
+// something it never asked for. The label opens the wrapped message, so the
+// prefix is the whole of it and no other part of the sentence can satisfy it.
+func TestHandlers_ACapturedDecodeFailure_NamesTheCallThatFailed(t *testing.T) {
+	client := unreadableCaptureClient(t)
+	for _, testCase := range capturedDecodeCases() {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := testCase.call(t.Context(), client)
+			if err == nil {
+				t.Fatal("expected the captured response's decode failure, got nil")
+			}
+			if !strings.HasPrefix(err.Error(), testCase.op+": ") {
+				t.Errorf("error = %q, want it to open with the operation %q", err.Error(), testCase.op)
+			}
+		})
+	}
 }
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.

@@ -553,13 +553,22 @@ func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
 }
 
 // TestInstanceVariableList_CancelledContext verifies that a canceled context
-// aborts List before it builds a request, so nothing reaches GitLab.
+// aborts List before it builds a request, so nothing reaches GitLab, and that
+// the abort is reported under this handler's own operation.
+//
+// The refusal table below pins the operation only where GitLab answered, so
+// the label each handler passes on this branch was free to trade places with
+// any of the other four: every one of these tests asserted that an error came
+// back and nothing about which call it belongs to.
 func TestInstanceVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
+	}
+	if !strings.HasPrefix(err.Error(), opListInstanceVariables+": ") {
+		t.Errorf("error = %v, want it reported under %q", err, opListInstanceVariables)
 	}
 }
 
@@ -581,13 +590,17 @@ func TestInstanceVariableGet_APIError(t *testing.T) {
 }
 
 // TestInstanceVariableGet_CancelledContext verifies that a canceled context
-// aborts Get before it builds a request, so nothing reaches GitLab.
+// aborts Get before it builds a request, so nothing reaches GitLab, and that
+// the abort names this handler's own operation rather than a sibling's.
 func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{Key: "MY_VAR"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
+	}
+	if !strings.HasPrefix(err.Error(), opGetInstanceVariable+": ") {
+		t.Errorf("error = %v, want it reported under %q", err, opGetInstanceVariable)
 	}
 }
 
@@ -726,13 +739,17 @@ func TestInstanceVariableCreate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 }
 
 // TestInstanceVariableCreate_CancelledContext verifies that a canceled context
-// aborts Create before it builds a request, so nothing reaches GitLab.
+// aborts Create before it builds a request, so nothing reaches GitLab, and
+// that the abort names this handler's own operation rather than a sibling's.
 func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{Key: "K", Value: "V"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
+	}
+	if !strings.HasPrefix(err.Error(), opCreateInstanceVariable+": ") {
+		t.Errorf("error = %v, want it reported under %q", err, opCreateInstanceVariable)
 	}
 }
 
@@ -856,14 +873,84 @@ func TestInstanceVariableUpdate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 	}
 }
 
+// TestInstanceVariablesWrite_OneFlagAtATime_ReachesItsOwnRequestField verifies
+// that each of the three booleans a caller sets reaches the wire under its own
+// name, in the create body and in the update body alike.
+//
+// A boolean has two values and the block has three flags, so no single fixture
+// can tell the three assignments apart. Every test that put them on the wire
+// filled all three from one shared true and asserted true for each, which left
+// any two of them free to trade places: the request GitLab received would
+// still carry three true flags and still answer 200. One flag per request,
+// with the other two asserted absent, distinguishes all three. What a crossing
+// ships is a variable masked where the caller asked for it to be protected, or
+// a secret written unmasked into every job log.
+func TestInstanceVariablesWrite_OneFlagAtATime_ReachesItsOwnRequestField(t *testing.T) {
+	set := true
+	cases := []struct {
+		name string
+		flag string
+		call func(client *gitlabclient.Client) error
+	}{
+		{name: "create protected", flag: "protected", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{Key: "MY_VAR", Value: "v", Protected: &set})
+			return err
+		}},
+		{name: "create masked", flag: "masked", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{Key: "MY_VAR", Value: "v", Masked: &set})
+			return err
+		}},
+		{name: "create raw", flag: "raw", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{Key: "MY_VAR", Value: "v", Raw: &set})
+			return err
+		}},
+		{name: "update protected", flag: "protected", call: func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR", Protected: &set})
+			return err
+		}},
+		{name: "update masked", flag: "masked", call: func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR", Masked: &set})
+			return err
+		}},
+		{name: "update raw", flag: "raw", call: func(client *gitlabclient.Client) error {
+			_, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR", Raw: &set})
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, ok := decodeVariableRequest(t, w, r)
+				if !ok {
+					return
+				}
+				wantRequestField(t, body, tc.flag, true)
+				for _, other := range []string{"protected", "masked", "raw"} {
+					if other != tc.flag {
+						wantRequestFieldAbsent(t, body, other)
+					}
+				}
+				testutil.RespondJSON(w, http.StatusOK, varJSON)
+			}))
+			if err := tc.call(client); err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+		})
+	}
+}
+
 // TestInstanceVariableUpdate_CancelledContext verifies that a canceled context
-// aborts Update before it builds a request, so nothing reaches GitLab.
+// aborts Update before it builds a request, so nothing reaches GitLab, and
+// that the abort names this handler's own operation rather than a sibling's.
 func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{Key: "K"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
+	}
+	if !strings.HasPrefix(err.Error(), opUpdateInstanceVariable+": ") {
+		t.Errorf("error = %v, want it reported under %q", err, opUpdateInstanceVariable)
 	}
 }
 
@@ -901,13 +988,17 @@ func TestInstanceVariableDelete_NotFound(t *testing.T) {
 }
 
 // TestInstanceVariableDelete_CancelledContext verifies that a canceled context
-// aborts Delete before it builds a request, so nothing reaches GitLab.
+// aborts Delete before it builds a request, so nothing reaches GitLab, and
+// that the abort names this handler's own operation rather than a sibling's.
 func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{Key: "K"})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
+	}
+	if !strings.HasPrefix(err.Error(), opDeleteInstanceVariable+": ") {
+		t.Errorf("error = %v, want it reported under %q", err, opDeleteInstanceVariable)
 	}
 }
 
@@ -1036,10 +1127,18 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 
 // TestInstanceVariables_UnreadableCapturedHidden verifies that every instance
 // variable handler returns an error rather than a half-filled variable when
-// GitLab sends hidden as something that is not a boolean. The SDK ignores the
-// key its own InstanceVariable does not model, so the read of the captured
-// response is the only thing that can notice, and a hidden variable published
-// as visible is exactly the mistake this flag exists to prevent.
+// GitLab sends hidden as something that is not a boolean, and that each names
+// the call that could not read the answer. The SDK ignores the key its own
+// InstanceVariable does not model, so the read of the captured response is the
+// only thing that can notice, and a hidden variable published as visible is
+// exactly the mistake this flag exists to prevent.
+//
+// The shared assertion looks for the capture's own failure text and nothing
+// else, so it holds for all four handlers alike: the operation labels on this
+// branch could be dealt out to the wrong verbs and every case would still
+// pass, leaving a reader told that the create failed on a variable they asked
+// to list. Each error is therefore kept and held to its own operation after
+// the table has run.
 func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
 	// A list answers with an array and the rest with an object, so each case
 	// drives a client of its own rather than one shared handler.
@@ -1048,28 +1147,44 @@ func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, body)
 		}))
 	}
+	reported := make(map[string]error, 4)
 	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
 		{Name: "list", Call: func() error {
 			client := poisoned(`[{"key":"TOKEN","value":"x","hidden":"maybe"}]`)
 			_, err := List(context.Background(), client, ListInput{})
+			reported[opListInstanceVariables] = err
 			return err
 		}},
 		{Name: "get", Call: func() error {
 			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
 			_, err := Get(context.Background(), client, GetInput{Key: "TOKEN"})
+			reported[opGetInstanceVariable] = err
 			return err
 		}},
 		{Name: "create", Call: func() error {
 			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
 			_, err := Create(context.Background(), client, CreateInput{Key: "TOKEN", Value: "x"})
+			reported[opCreateInstanceVariable] = err
 			return err
 		}},
 		{Name: "update", Call: func() error {
 			client := poisoned(`{"key":"TOKEN","value":"x","hidden":"maybe"}`)
 			_, err := Update(context.Background(), client, UpdateInput{Key: "TOKEN", Value: "y"})
+			reported[opUpdateInstanceVariable] = err
 			return err
 		}},
 	})
+	for _, operation := range []string{
+		opListInstanceVariables, opGetInstanceVariable,
+		opCreateInstanceVariable, opUpdateInstanceVariable,
+	} {
+		t.Run(operation, func(t *testing.T) {
+			err := reported[operation]
+			if err == nil || !strings.HasPrefix(err.Error(), operation+": ") {
+				t.Errorf("captured decode failure %v is not reported under %q", err, operation)
+			}
+		})
+	}
 }
 
 // TestInstanceVariableGet_OneFlagAtATime_ReachesItsOwnOutputField verifies that

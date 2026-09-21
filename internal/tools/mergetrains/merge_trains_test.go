@@ -8,11 +8,13 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -361,8 +363,10 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 }
 
 // TestAddMergeRequestToMergeTrain validates the AddMergeRequestToMergeTrain handler.
-// Covers success, missing project_id, invalid MR ID, optional fields
-// (AutoMerge, SHA, Squash), and API errors.
+// Covers success, missing project_id, a zero and a negative merge_request_iid,
+// and a 422 from GitLab. The optional fields are asserted by
+// [TestAddMergeRequestToMergeTrain_Options], which compares the whole body
+// rather than one key, so they are deliberately not exercised here.
 func TestAddMergeRequestToMergeTrain(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -444,6 +448,247 @@ func addMergeTrainSuccessHandler(body string) func(*testing.T, http.ResponseWrit
 
 func respondMergeTrainList(w http.ResponseWriter, body string) {
 	testutil.RespondJSONWithPagination(w, http.StatusOK, body, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+}
+
+// ---------------------------------------------------------------------------
+// The refusal each route hands a model
+// ---------------------------------------------------------------------------.
+
+// mergeTrainRefusal describes the refusal one route was written to give when
+// GitLab turns the call down: the operation it reports under, the status its
+// hint is keyed on, a second status that must therefore go unhinted, and the
+// whole sentence the hint has to be.
+type mergeTrainRefusal struct {
+	operation   string
+	hintStatus  int
+	otherStatus int
+	hint        string
+	call        func(ctx context.Context, client *gitlabclient.Client) error
+}
+
+// mergeTrainRefusals pairs each route with the refusal it was written to give.
+//
+// The second status of each is another route's keyed status rather than an
+// arbitrary one, since crossing the two constants is exactly the mistake four
+// near-identical handlers invite: three of them key their hint on a 404 and the
+// fourth, the only one that writes, keys it on a 400.
+func mergeTrainRefusals() []mergeTrainRefusal {
+	return []mergeTrainRefusal{
+		{
+			operation: "gitlab_list_project_merge_trains", hintStatus: http.StatusNotFound,
+			otherStatus: http.StatusBadRequest,
+			hint:        "verify project_id with project.get. Merge trains require Premium license",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ListProjectMergeTrains(ctx, client, ListProjectInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			operation: "gitlab_list_merge_request_in_merge_train", hintStatus: http.StatusNotFound,
+			otherStatus: http.StatusBadRequest,
+			hint:        "verify project_id and target_branch. Merge trains require Premium license",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ListMergeRequestInMergeTrain(ctx, client, ListBranchInput{ProjectID: "42", TargetBranch: "main"})
+				return err
+			},
+		},
+		{
+			operation: "gitlab_get_merge_request_on_merge_train", hintStatus: http.StatusNotFound,
+			otherStatus: http.StatusBadRequest,
+			hint:        "verify project_id and merge_request_iid. The MR must be on a merge train",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GetMergeRequestOnMergeTrain(ctx, client, GetInput{ProjectID: "42", MergeRequestID: 5})
+				return err
+			},
+		},
+		{
+			operation: "gitlab_add_merge_request_to_merge_train", hintStatus: http.StatusBadRequest,
+			otherStatus: http.StatusNotFound,
+			hint:        "verify the MR is approved and pipeline passed. Merge trains require Premium license",
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := AddMergeRequestToMergeTrain(ctx, client, AddInput{ProjectID: "42", MergeRequestID: 5})
+				return err
+			},
+		},
+	}
+}
+
+// mergeTrainRefusalFrom drives one route against an instance that answers code,
+// and returns the error text the caller is handed.
+func mergeTrainRefusalFrom(t *testing.T, route mergeTrainRefusal, code int) string {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, code, `{"message":"refused"}`)
+	}))
+	err := route.call(t.Context(), client)
+	if err == nil {
+		t.Fatalf("%s: GitLab answered %d and the handler returned no error", route.operation, code)
+	}
+	return err.Error()
+}
+
+// TestHandlers_RefusalReportsItsOwnOperationAndHint checks that each route
+// reports a refusal under its own operation and, on the status its hint is
+// keyed on, carries that route's own sentence.
+//
+// Why that matters: every error case in this package stopped at "an error came
+// back", so the operation label, the status constant and the hint sentence
+// could each be crossed with another route's and nothing would fail. None of
+// the three is a branch, so neither gate can see it either. The whole sentence
+// is held rather than a token of it, because the two halves of a hint cross
+// separately: "verify project_id and target_branch" is true of the branch route
+// and of no other, while "Merge trains require Premium license" is true of
+// three, so an assertion on either alone leaves the rest of the sentence free
+// to be a sibling's. What a model does next is this text, and the add route's
+// is the sharpest: its 400 hint is what a model is told when GitLab refuses to
+// enqueue the merge request.
+func TestHandlers_RefusalReportsItsOwnOperationAndHint(t *testing.T) {
+	for _, route := range mergeTrainRefusals() {
+		t.Run(route.operation, func(t *testing.T) {
+			hinted := mergeTrainRefusalFrom(t, route, route.hintStatus)
+			if !strings.HasPrefix(hinted, route.operation+": ") {
+				t.Errorf("refusal = %q, want it reported under %q", hinted, route.operation)
+			}
+			// The trailing colon is what ends the hint in the composed
+			// message, so including it holds the sentence to its whole text
+			// rather than to a prefix of it.
+			wantHint := "Suggestion: " + route.hint + ":"
+			if !strings.Contains(hinted, wantHint) {
+				t.Errorf("refusal to a %d = %q, want it to carry %q", route.hintStatus, hinted, wantHint)
+			}
+		})
+	}
+}
+
+// TestHandlers_RefusalOnAnotherStatusCarriesNoHint checks that each route's
+// hint reaches a model only on the status it was keyed on.
+//
+// This is the other half of the pairing above, and the half that pins the
+// status constant: three of these routes advise on a 404, which says the
+// project, the branch or the merge request is not where the caller thinks, and
+// the fourth advises on a 400, which says the merge request is not ready to be
+// enqueued. Offered on the wrong status, each advises a model to re-check
+// something GitLab never objected to.
+func TestHandlers_RefusalOnAnotherStatusCarriesNoHint(t *testing.T) {
+	for _, route := range mergeTrainRefusals() {
+		t.Run(route.operation, func(t *testing.T) {
+			unhinted := mergeTrainRefusalFrom(t, route, route.otherStatus)
+			if !strings.HasPrefix(unhinted, route.operation+": ") {
+				t.Errorf("refusal = %q, want it reported under %q", unhinted, route.operation)
+			}
+			if strings.Contains(unhinted, "Suggestion: ") {
+				t.Errorf("refusal to a %d = %q, carrying a hint keyed on %d", route.otherStatus, unhinted, route.hintStatus)
+			}
+		})
+	}
+}
+
+// mergeTrainGuard describes one input this package refuses before it calls
+// GitLab: the refusal the caller must be handed, and the call that trips it.
+type mergeTrainGuard struct {
+	name string
+	want error
+	call func(ctx context.Context, client *gitlabclient.Client) error
+}
+
+// mergeTrainGuards pairs each input guard with the refusal it owes a model.
+//
+// The expectation is built by calling the same toolutil constructor the handler
+// calls, so what is held is the arguments the handler passes it and not a copy
+// of the sentence toolutil composes: the field name, and for the two int64
+// guards the operation beside it. Those are the crossable pair. A rewording
+// inside toolutil moves both sides together, which is right, because the
+// wording is that package's business and is asserted there.
+func mergeTrainGuards() []mergeTrainGuard {
+	return []mergeTrainGuard{
+		{
+			name: "list_project without a project",
+			want: toolutil.ErrFieldRequired("project_id"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ListProjectMergeTrains(ctx, client, ListProjectInput{})
+				return err
+			},
+		},
+		{
+			name: "list_branch without a project",
+			want: toolutil.ErrFieldRequired("project_id"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ListMergeRequestInMergeTrain(ctx, client, ListBranchInput{TargetBranch: "main"})
+				return err
+			},
+		},
+		{
+			name: "list_branch without a target branch",
+			want: toolutil.ErrFieldRequired("target_branch"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := ListMergeRequestInMergeTrain(ctx, client, ListBranchInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name: "get without a project",
+			want: toolutil.ErrFieldRequired("project_id"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GetMergeRequestOnMergeTrain(ctx, client, GetInput{MergeRequestID: 5})
+				return err
+			},
+		},
+		{
+			name: "get without a merge request",
+			want: toolutil.ErrRequiredInt64("gitlab_get_merge_request_on_merge_train", "merge_request_iid"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GetMergeRequestOnMergeTrain(ctx, client, GetInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name: "add without a project",
+			want: toolutil.ErrFieldRequired("project_id"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := AddMergeRequestToMergeTrain(ctx, client, AddInput{MergeRequestID: 5})
+				return err
+			},
+		},
+		{
+			name: "add without a merge request",
+			want: toolutil.ErrRequiredInt64("gitlab_add_merge_request_to_merge_train", "merge_request_iid"),
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := AddMergeRequestToMergeTrain(ctx, client, AddInput{ProjectID: "42", MergeRequestID: -1})
+				return err
+			},
+		},
+	}
+}
+
+// TestHandlers_RefusedInput_NamesTheFieldItRefusedFor checks that each guard
+// names the field the caller left out, under the operation that refused, and
+// that it refuses without asking GitLab anything.
+//
+// Why that matters: the seven guards are the same two calls repeated with a
+// different argument, and the tests that drive them assert only that an error
+// came back, so any guard could name any sibling's field and stay green. The
+// field name is the whole content of the refusal: told "target_branch is
+// required" for a missing project, a model supplies a branch it already sent
+// and is refused again. The two int64 guards carry an operation as well, which
+// is the other half of the same pair.
+//
+// The mock fails the test if it is reached, which is the claim the wantErr
+// cases could not make: against a mock that answers, "an error came back" is
+// satisfied just as well by a guard that was never there and a GitLab that
+// refused the call.
+func TestHandlers_RefusedInput_NamesTheFieldItRefusedFor(t *testing.T) {
+	for _, guard := range mergeTrainGuards() {
+		t.Run(guard.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+			err := guard.call(t.Context(), client)
+			if err == nil {
+				t.Fatal("the input reached the end of the handler unrefused")
+			}
+			if err.Error() != guard.want.Error() {
+				t.Errorf("refusal = %q, want %q", err, guard.want)
+			}
+		})
+	}
 }
 
 // TestListProjectMergeTrains_KeysetAndOrdering verifies order_by, sort, and

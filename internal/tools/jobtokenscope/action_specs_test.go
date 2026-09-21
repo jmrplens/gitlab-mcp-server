@@ -4,6 +4,7 @@ package jobtokenscope
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -241,6 +242,85 @@ func TestActionSpecs_DiscoveryMetadataPopulated(t *testing.T) {
 		if spec.IndividualTool.Description == "" {
 			t.Errorf("%s: empty individual-tool description", tool)
 		}
+	}
+}
+
+// jobTokenScopeDiscoveryExpectation is the aliases and the related actions one
+// projected tool must publish.
+type jobTokenScopeDiscoveryExpectation struct {
+	aliases []string
+	related []string
+}
+
+// TestActionSpecs_EachToolPublishesItsOwnAliasesAndRelatedActions pins the
+// discovery metadata of every projected tool to the tool it belongs to.
+//
+// The check above it is shape-only, and every entry of
+// [jobTokenScopeActionMeta] satisfies it under whichever tool name it sits, so
+// two entries can trade aliases and related actions with the suite green. No
+// committed artifact catches it either: the individual-tool descriptions are in
+// the surface snapshots and the usage lines in llms-full.txt, while aliases and
+// related actions are in neither. What a crossing costs is discovery itself,
+// since aliases are what gitlab_find_action matches a phrase against: "add
+// group to job token allowlist" would answer with the project tool, whose
+// schema has no target_group_id.
+//
+// The expectations are spelled here rather than read from the table under test,
+// which would let that table supply its own answer, and the count is held too
+// so a new tool cannot be projected without a row of its own.
+func TestActionSpecs_EachToolPublishesItsOwnAliasesAndRelatedActions(t *testing.T) {
+	want := map[string]jobTokenScopeDiscoveryExpectation{
+		"gitlab_get_job_token_access_settings": {
+			aliases: []string{"get job token access settings", "show job token scope", "is job token scope enabled"},
+			related: []string{"job.token_scope_patch", "job.token_scope_list_inbound", "job.token_scope_list_groups"},
+		},
+		"gitlab_patch_job_token_access_settings": {
+			aliases: []string{"enable job token scope", "disable job token scope", "toggle job token access settings"},
+			related: []string{"job.token_scope_get", "job.token_scope_add_project", "job.token_scope_add_group"},
+		},
+		"gitlab_list_job_token_inbound_allowlist": {
+			aliases: []string{"list job token allowlist projects", "show inbound job token allowlist", "audit job token project allowlist"},
+			related: []string{"job.token_scope_add_project", "job.token_scope_remove_project", "job.token_scope_get"},
+		},
+		"gitlab_add_project_job_token_allowlist": {
+			aliases: []string{"add project to job token allowlist", "allow project job token access", "grant inbound job token access"},
+			related: []string{"job.token_scope_list_inbound", "job.token_scope_remove_project", "job.token_scope_add_group"},
+		},
+		"gitlab_remove_project_job_token_allowlist": {
+			aliases: []string{"remove project from job token allowlist", "revoke project job token access", "delete project job token allowlist entry"},
+			related: []string{"job.token_scope_list_inbound", "job.token_scope_add_project", "job.token_scope_remove_group"},
+		},
+		"gitlab_list_job_token_group_allowlist": {
+			aliases: []string{"list job token allowlist groups", "show group job token allowlist", "audit job token group allowlist"},
+			related: []string{"job.token_scope_add_group", "job.token_scope_remove_group", "job.token_scope_get"},
+		},
+		"gitlab_add_group_job_token_allowlist": {
+			aliases: []string{"add group to job token allowlist", "allow group job token access", "grant group inbound job token access"},
+			related: []string{"job.token_scope_list_groups", "job.token_scope_remove_group", "job.token_scope_add_project"},
+		},
+		"gitlab_remove_group_job_token_allowlist": {
+			aliases: []string{"remove group from job token allowlist", "revoke group job token access", "delete group job token allowlist entry"},
+			related: []string{"job.token_scope_list_groups", "job.token_scope_add_group", "job.token_scope_remove_project"},
+		},
+	}
+
+	byTool := jobTokenScopeSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, jobTokenScopeActionHandler())))
+	if len(byTool) != len(want) {
+		t.Fatalf("projected %d tools, want %d: a new tool needs its own row here", len(byTool), len(want))
+	}
+	for tool, spec := range byTool {
+		t.Run(tool, func(t *testing.T) {
+			expected, ok := want[tool]
+			if !ok {
+				t.Fatalf("%s: no expectation; add its aliases and related actions", tool)
+			}
+			if !slices.Equal(spec.Aliases, expected.aliases) {
+				t.Errorf("Aliases = %v, want %v", spec.Aliases, expected.aliases)
+			}
+			if !slices.Equal(spec.RelatedActions, expected.related) {
+				t.Errorf("RelatedActions = %v, want %v", spec.RelatedActions, expected.related)
+			}
+		})
 	}
 }
 
