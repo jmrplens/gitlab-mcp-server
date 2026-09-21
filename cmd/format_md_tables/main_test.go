@@ -70,6 +70,19 @@ func TestRun_TableDriven(t *testing.T) {
 			wantContains: map[string]string{"custom.md": "| one |    2 |"},
 		},
 		{
+			// The combination is the one where the two flags disagree: the
+			// path is not a default and the run must not write. With every
+			// other case agreeing, the flag that reaches the writer could be
+			// the wrong one of the two and nothing here would say so.
+			name:    "check on an explicit path reports without writing",
+			args:    []string{"--check", "custom.md"},
+			files:   map[string]string{"custom.md": "| A | B |\n| --- | --- |\n| longer | x |\n"},
+			wantErr: "custom.md",
+			wantExact: map[string]string{
+				"custom.md": "| A | B |\n| --- | --- |\n| longer | x |\n",
+			},
+		},
+		{
 			name:       "check succeeds when formatted",
 			args:       []string{"--check"},
 			files:      map[string]string{"README.md": "# Title\n"},
@@ -126,6 +139,11 @@ func assertFormatterCaseResult(t *testing.T, root, stdout string, err error, tt 
 	t.Helper()
 	if tt.wantErr != "" {
 		assertRunError(t, err, tt.wantErr)
+		// The file assertions run on this path too. A case named for refusing
+		// to write proves only that a refusal happened if the early return
+		// takes the check that the file was left alone with it, which is what
+		// it used to do.
+		assertFilesEqual(t, root, tt.wantExact)
 		return
 	}
 	if err != nil {
@@ -872,6 +890,35 @@ func TestResolveInputPath_PathsLeavingTheRoot_AreRefused(t *testing.T) {
 	}
 }
 
+// TestMarkdownFilesForInput_DirectorySpelledLoosely_IsStillWalked verifies a
+// directory the caller spelled with a redundant segment is walked by the path
+// it resolves to.
+//
+// The walk is handed two strings, the resolved path and the caller's spelling,
+// and every other fixture here names a directory that is already its own
+// resolved form, so the two could be crossed at the call site with nothing to
+// notice: proved by crossing them, which leaves this suite green without this
+// case. A loose spelling is not a valid io/fs path, so a walk given it in place
+// of the resolved one fails outright.
+func TestMarkdownFilesForInput_DirectorySpelledLoosely_IsStillWalked(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "docs", "guide.md"), "# Guide\n")
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	files, err := markdownFilesForInput(rootFS, root, filepath.FromSlash("./docs/"))
+	if err != nil {
+		t.Fatalf("markdownFilesForInput() error: %v", err)
+	}
+	want := []string{filepath.Join("docs", "guide.md")}
+	if !reflect.DeepEqual(files, want) {
+		t.Errorf("markdownFilesForInput() = %v, want %v", files, want)
+	}
+}
+
 // TestMarkdownFilesForInput_MissingPath_NamesTheCallersSpelling verifies the
 // stat failure quotes the argument as it was typed rather than the path it was
 // resolved to.
@@ -888,7 +935,10 @@ func TestMarkdownFilesForInput_MissingPath_NamesTheCallersSpelling(t *testing.T)
 	}
 	defer rootFS.Close()
 
-	item := filepath.Join("docs", "..", "missing.md")
+	// Spelled out rather than joined: filepath.Join cleans, so a joined
+	// spelling would resolve to itself and the two sides of the pair would be
+	// the same string.
+	item := filepath.FromSlash("docs/../missing.md")
 	_, err = markdownFilesForInput(rootFS, root, item)
 	if err == nil {
 		t.Fatal("markdownFilesForInput() error = nil, want a stat failure")
