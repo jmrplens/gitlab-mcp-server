@@ -121,10 +121,34 @@ coeff=$(awk -v b="$base" -v f="$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>60
 echo "gremlins: $PKG tests take ${base}s, so -timeout-coefficient $coeff for a ~${budget}s budget"
 
 # GREMLINS_FLAGS is split into words on purpose and then quoted, because its
-# documented use carries a regular expression: `--exclude-files internal/` is
-# what the sweep passes, and a caller passing `.*` to the same flag would have
-# it expanded against the working directory before gremlins ever saw it.
+# documented use carries a regular expression, and a caller passing `.*` to
+# --exclude-files would otherwise have it expanded against the working
+# directory before gremlins ever saw it.
 read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
+
+# PKG names ONE package, which is what this target's usage line says and what
+# the sweep's per-package figures claim. gremlins does not read it that way: it
+# walks the directory it is given, so a package with anything under it is
+# measured together with its whole subtree. Measured on ./cmd/audit_1to1: 789
+# runnable mutants, of which 27 are the package's own and 762 belong to its
+# seven sub-packages, each of which the sweep also measures on its own. It
+# reaches fixtures too, so the planted trees under a command's testdata were
+# being mutated as though they were source.
+#
+# --exclude-files takes a regexp over the path RELATIVE TO THE TARGET, which is
+# the one fact this rests on and it was measured rather than assumed: on that
+# same package `^internal/` and `/` both leave 24, while the module-relative
+# `^cmd/audit_1to1/internal/` leaves all 789 and so matches nothing. A path
+# with a separator in it is therefore exactly a file below the package, and `/`
+# excludes all of them and nothing else. A leaf package has none, so passing it
+# there changes no figure.
+#
+# A caller who states their own --exclude-files is left alone: they are asking
+# for a different measurement, and two rules for one flag is how one of them
+# silently wins.
+if [[ " ${gremlins_flags[*]-} " != *" --exclude-files"* && " ${gremlins_flags[*]-} " != *" -E"* ]]; then
+  gremlins_flags+=(--exclude-files=/)
+fi
 
 GOFLAGS="${GOFLAGS:-} -count=1" go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
   unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" "${gremlins_flags[@]}" "$target"
