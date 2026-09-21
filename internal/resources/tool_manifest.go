@@ -380,11 +380,13 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 		snapshot.addDynamicActions(opts.Catalog)
 	case toolSurfaceMeta:
 		snapshot.addMetaActions(opts.Catalog, opts.MetaRoutes)
+		snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	default:
 		snapshot.manifest.Surface = toolSurfaceIndividual
 		for _, tool := range toolDetails {
 			snapshot.addDirectToolEntry(tool, toolManifestKindIndividualTool)
 		}
+		snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	}
 	snapshot.addUncoveredDirectTools(toolDetails)
 	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
@@ -537,6 +539,57 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
 	}
 	snapshot.addMetaEntry(entry, routes)
+}
+
+// aliasCanonicalActionIDs makes gitlab://tools/{canonical action ID} resolve
+// on a surface whose entries are keyed by something else.
+//
+// The entry keys are per surface on purpose: a listing should name the call
+// the reader can make, which is the tool on the individual surface and the
+// tool plus an action argument on meta. The canonical ID is what everything
+// AROUND the surface names, though. It is what a card hint and an error hint
+// spell, what a cross-link carries, what the documentation teaches, and what
+// gitlab_find_action publishes, so a model holding one and serving any surface
+// has to be able to look it up.
+//
+// Without this it could not, and the measurement is the argument: the meta
+// entry for project.get is keyed gitlab_project.get and the individual one
+// gitlab_project_get, so neither answers gitlab://tools/project.get. Deriving
+// the tool name from the ID is not an alternative, because the individual name
+// is declared rather than computed: 338 of 1084 actions match
+// gitlab_<domain>_<action> and the other 746 do not (access.deploy_key_add is
+// gitlab_deploy_key_add). Meta can be derived, all 1084 of them, and is
+// aliased anyway so the two surfaces answer the same question the same way.
+//
+// Only the detail lookup gains a key. The entry the alias resolves to is the
+// surface's own, so what comes back names the call this session can really
+// make, which is the translation a model asking the question needs.
+func (snapshot *toolSurfaceSnapshot) aliasCanonicalActionIDs(catalog *actioncatalog.Catalog) {
+	if catalog == nil {
+		return
+	}
+	for _, action := range catalog.Actions() {
+		id := string(action.ID)
+		if id == "" {
+			continue
+		}
+		if _, taken := snapshot.details[id]; taken {
+			continue
+		}
+		detail, served := snapshot.details[snapshot.surfaceKeyFor(action)]
+		if !served {
+			continue
+		}
+		snapshot.details[id] = detail
+	}
+}
+
+// surfaceKeyFor is the key this surface filed one action's detail under.
+func (snapshot *toolSurfaceSnapshot) surfaceKeyFor(action actioncatalog.Action) string {
+	if snapshot.manifest.Surface == toolSurfaceMeta {
+		return metaManifestID(action.ToolName, action.Name)
+	}
+	return strings.TrimSpace(action.IndividualTool.Name)
 }
 
 func (snapshot *toolSurfaceSnapshot) addMetaEntry(entry ToolSurfaceEntry, routes map[string]toolutil.ActionMap) {

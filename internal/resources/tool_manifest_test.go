@@ -1346,3 +1346,103 @@ func TestDynamicActionSchema_SharedRouteDerivesOnce(t *testing.T) {
 		t.Fatal("dynamicActionSchema(private action) shared a schema nobody registered")
 	}
 }
+
+// undreivableWidgetCatalog is a catalog whose individual tool name cannot be
+// computed from the action ID, which is the ordinary case rather than a corner
+// one: the name is declared per action, and 746 of the 1084 the catalog builds
+// do not match gitlab_<domain>_<action>.
+func underivableWidgetCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+	group.SetAction(actioncatalog.Action{
+		Name:           "delete",
+		Route:          toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_remove_widget", Title: "Remove Widget", Description: "Remove a widget."},
+	})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	return catalog
+}
+
+// TestToolManifest_CanonicalActionID_ResolvesOnEverySurface holds the one
+// thing everything around the surface depends on: a session handed a canonical
+// action ID can look it up, whichever surface it is being served.
+//
+// The ID is what a card hint and an error hint spell, what a cross-link
+// carries, what the documentation teaches and what gitlab_find_action
+// publishes. The entries themselves stay keyed per surface, because a listing
+// should name the call its reader can make, so before this the ID answered on
+// the dynamic surface alone: meta filed the same action under
+// gitlab_widget.delete and individual under its tool name.
+//
+// Deriving the tool name from the ID is not the alternative. The individual
+// name is declared, which the fixture makes concrete: widget.delete is served
+// by gitlab_remove_widget, and no rule takes one to the other.
+//
+// What comes back is the surface's own entry, so the answer is the
+// translation: the same ID yields the meta tool with an action argument on one
+// surface and the individual tool on the other.
+func TestToolManifest_CanonicalActionID_ResolvesOnEverySurface(t *testing.T) {
+	catalog := underivableWidgetCatalog(t)
+
+	t.Run("meta", func(t *testing.T) {
+		session := toolManifestSession(t, ToolSurfaceResourceOptions{
+			Surface:    toolSurfaceMeta,
+			Tools:      []*mcp.Tool{{Name: "gitlab_widget", Title: "Widget", InputSchema: map[string]any{"type": "object"}}},
+			Catalog:    catalog,
+			MetaRoutes: catalog.ActionMaps(),
+		})
+
+		detail := readToolDetail(t, session, "gitlab://tools/widget.delete")
+		if detail.Call.Tool != "gitlab_widget" || detail.Call.Action != "delete" {
+			t.Errorf("call = %+v, want the meta tool with its action argument", detail.Call)
+		}
+	})
+
+	t.Run("individual", func(t *testing.T) {
+		session := toolManifestSession(t, ToolSurfaceResourceOptions{
+			Surface: toolSurfaceIndividual,
+			Tools:   []*mcp.Tool{{Name: "gitlab_remove_widget", Title: "Remove Widget", InputSchema: map[string]any{"type": "object"}}},
+			Catalog: catalog,
+		})
+
+		detail := readToolDetail(t, session, "gitlab://tools/widget.delete")
+		if detail.Call.Tool != "gitlab_remove_widget" {
+			t.Errorf("call = %+v, want the individual tool the action is served by", detail.Call)
+		}
+	})
+
+	t.Run("dynamic", func(t *testing.T) {
+		session := toolManifestSession(t, ToolSurfaceResourceOptions{
+			Surface: toolSurfaceDynamic,
+			Tools:   []*mcp.Tool{{Name: "gitlab_execute_action", Title: "Execute"}},
+			Catalog: catalog,
+		})
+
+		detail := readToolDetail(t, session, "gitlab://tools/widget.delete")
+		if detail.Call.Tool != "gitlab_execute_action" || detail.Call.Action != "widget.delete" {
+			t.Errorf("call = %+v, want the dispatcher taking the ID", detail.Call)
+		}
+	})
+}
+
+// TestToolManifest_CanonicalActionID_DoesNotAppearTwiceInAListing holds the
+// half of the alias that is easy to lose: it is a second way to LOOK UP an
+// entry and never a second entry. A listing that carried both spellings would
+// tell a model there are two capabilities where there is one, which is the
+// thing a compact surface exists to avoid.
+func TestToolManifest_CanonicalActionID_DoesNotAppearTwiceInAListing(t *testing.T) {
+	catalog := underivableWidgetCatalog(t)
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceIndividual,
+		Tools:   []*mcp.Tool{{Name: "gitlab_remove_widget", Title: "Remove Widget", InputSchema: map[string]any{"type": "object"}}},
+		Catalog: catalog,
+	})
+
+	manifest := readToolManifest(t, session, "gitlab://tools")
+	if manifest.EntryCount != 1 || manifest.Entries[0].ID != "gitlab_remove_widget" {
+		t.Fatalf("entries = %+v, want the one entry keyed by the tool this surface registers", manifest.Entries)
+	}
+}
