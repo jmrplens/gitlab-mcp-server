@@ -207,7 +207,7 @@ func TestRead_TheRepositorysOwnInventory_IsUsable(t *testing.T) {
 // constants names, which pins the pair of spellings and says nothing about
 // which is which: exchanging the two values leaves every row matching the other
 // constant and every count above zero. What separates them is what a GraphQL
-// request looks like, so that is what is asserted — an operation, at /graphql —
+// request looks like, so that is what is asserted (an operation, at /graphql)
 // and a REST row is the one carrying no operation at all.
 func TestKinds_EachOne_ClassifiesTheRowsThatLookLikeIt(t *testing.T) {
 	inventory, err := Read(repoRoot(t))

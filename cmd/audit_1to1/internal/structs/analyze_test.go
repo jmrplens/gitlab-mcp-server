@@ -1104,7 +1104,7 @@ func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
 	// The tag is deliberately not the snake_case of the field name. A walk that
 	// stops one level too early leaves nothing tagged behind it, which sends
 	// flattenFields to its name-keyed fallback, and that fallback would reach
-	// the very same field under the name "deep" — so a fixture whose tag and
+	// the very same field under the name "deep", so a fixture whose tag and
 	// field name agree reports the field found either way.
 	deepest := makeStruct(structField{name: "Deep", jsonTag: "deep_field", goType: tString})
 	cases := []struct {

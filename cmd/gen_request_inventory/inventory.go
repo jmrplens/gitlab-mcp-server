@@ -94,7 +94,7 @@ var shardInfo = func(entry os.DirEntry) (os.FileInfo, error) { return entry.Info
 // readDirEntries lists the shard directory. It is a variable for the reason
 // shardInfo is one: the third refusal below, where the path is there, is a
 // directory, and still cannot be read, is a permission or a resource limit,
-// and a test cannot arrange either — the suite runs as root both in CI and on
+// and a test cannot arrange either: the suite runs as root both in CI and on
 // the builder, and root is exempt from the permission half. Leaving that
 // branch unreached would leave the three refusals, which are fixed by three
 // different things, told apart by nothing.

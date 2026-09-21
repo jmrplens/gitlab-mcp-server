@@ -183,7 +183,7 @@ func TestPackageName_Owner_IsSpelledTheWayARowSpellsIt(t *testing.T) {
 // whether a field is non-empty, which an action carrying its owner as its ID
 // and its ID as its owner answers just as well. That exchange would leave every
 // action classified unmapped, since no dotted ID is a directory, and the tier
-// asked for is invisible the same way — a catalog built at Free would count a
+// asked for is invisible the same way: a catalog built at Free would count a
 // narrower surface and read as complete. ReadOnly is the third: nothing reads
 // it here, and R-PAGE judges pagination on reads alone, so one stuck at false
 // empties that comparison in silence.

@@ -267,8 +267,8 @@ func TestCatalogActionsMissingIndividualProjectionPolicy_Exemptions_AreAccepted(
 		{name: "meta-only alias is exempt", group: "gitlab_server", action: actioncatalog.Action{ID: "server.health_check", Name: "health_check"}},
 		// An action added with no ID of its own is still named in the finding,
 		// by the ID the catalog derived for it when the group was added. That
-		// is also what keeps the fallback below it — the group tool name
-		// joined to the action name — unreachable: no action a catalog hands
+		// is also what keeps the fallback below it (the group tool name
+		// joined to the action name) unreachable: no action a catalog hands
 		// back carries an empty ID.
 		{
 			name:   "an action added without an ID is named by the derived one",
@@ -1312,7 +1312,7 @@ func TestRecordActionSpecGroups_Scenarios_CountSpecsUnderTheirOwner(t *testing.T
 // catalog contributes nothing.
 //
 // The two counters this and [recordActionSpecGroups] fill answer different
-// questions — what a package contributes and what the catalog serves — so this
+// questions (what a package contributes and what the catalog serves) so this
 // asserts the whole row rather than the one number it raises.
 //
 // The fallback case is also the property that makes the ownerless skip beside

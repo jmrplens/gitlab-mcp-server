@@ -379,7 +379,7 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 // prints dynamic index and alias rows for base, self-managed enterprise, and
 // GitLab.com enterprise surfaces. Every one of the eighteen fixture values is
 // distinct and the whole block is compared, so a row that named another
-// surface's figure — three arguments of one type, printed in six triples — is a
+// surface's figure (three arguments of one type, printed in six triples) is a
 // difference rather than a rearrangement nothing reads.
 func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 	base := dynamictools.RegistryMetrics{IndexTokenCount: 1, IndexPostingCount: 2, AliasCount: 3, SearchableAliasCount: 4, UnsearchableAliasCount: 5, AmbiguousAliasCount: 6}

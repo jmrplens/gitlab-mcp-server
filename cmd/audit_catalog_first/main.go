@@ -182,8 +182,8 @@ func main() {
 // runMain is the whole command: it parses args, runs both gates over the
 // repository the working directory sits in, and writes the coverage report.
 //
-// It returns the process exit code — 2 for arguments it cannot parse, 1 for a
-// gate that failed or a report it could not write, 0 when the tree passes —
+// It returns the process exit code (2 for arguments it cannot parse, 1 for a
+// gate that failed or a report it could not write, 0 when the tree passes)
 // and reports each refusal on stderr instead of exiting where it happens. That
 // is what makes this a gate a test can drive: while every branch ended in
 // cmdutil.Fatalf, the only way to observe one was to start a process, so a run
@@ -366,7 +366,7 @@ func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Cli
 // It is separate from the build half above because the catalog that half
 // assembles is the one compiled into this binary, where nothing is missing, so
 // the line that decides whether a finding is emitted at all was reachable from
-// no test — the rule could have stopped reporting and stayed green.
+// no test: the rule could have stopped reporting and stayed green.
 func projectionPolicyError(catalog *actioncatalog.Catalog) error {
 	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
 	if len(missing) > 0 {
@@ -908,8 +908,8 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 //
 // It sits beside [recordSurfaceSpecs] rather than inside the collector for the
 // same reason that one does: the groups it reads are the ones compiled into
-// this binary, every one of which names an owner, so a spec that named none —
-// and so vanished from the report without a word — was a state no test could
+// this binary, every one of which names an owner, so a spec that named none
+// (and so vanished from the report without a word) was a state no test could
 // put it in.
 func recordActionSpecGroups(coverage map[string]packageActionCoverage, groups []tools.ActionSpecGroup) {
 	for _, group := range groups {

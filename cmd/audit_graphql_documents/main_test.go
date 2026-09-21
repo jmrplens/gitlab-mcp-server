@@ -374,8 +374,8 @@ func TestRun_Verbose_ListsWhatItAccepted(t *testing.T) {
 // It is also what pins the branch beside it. `filepath.Abs` fails only when the
 // working directory cannot be resolved, and a relative `-dir` is the only shape
 // that asks it: with an absolute one it returns before it ever looks. So the
-// failure arm is unreachable from here — a run whose working directory had gone
-// could not have loaded the package this finding names — and this is the arm
+// failure arm is unreachable from here (a run whose working directory had gone
+// could not have loaded the package this finding names) and this is the arm
 // that does run.
 func TestRun_ARelativeDir_StillTrimsTheFindingsToIt(t *testing.T) {
 	root := fixtureModule(t, map[string]string{"broken": brokenFixture})

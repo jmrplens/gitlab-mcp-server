@@ -215,8 +215,8 @@ func introspectedObject(name string) string {
 // revision is the one that was loose: [graphqlschema.Source.String] does not
 // print it and no check consults it, so an assignment that spoiled or dropped it
 // was invisible to every test here. The bearer credential is asserted for the
-// same reason — the token reaching the instance is one field of a struct literal
-// — and both requests are counted, since the version is a second ask and a
+// same reason (the token reaching the instance is one field of a struct
+// literal) and both requests are counted, since the version is a second ask and a
 // credential withheld from it silently records "unknown".
 func TestRun_Generation_AWholeAnswer_WritesEveryFieldOfThePin(t *testing.T) {
 	const credential = "glpat-probe-credential"
@@ -420,8 +420,8 @@ func loadedTypes(sdl string) int {
 //
 // The two refusals that count something spell the whole sentence, numbers
 // included, rather than the phrase that names them. Each holds one figure
-// against another — the record against the floor, the record against the schema
-// beside it — and a message that reports the pair the wrong way round tells a
+// against another (the record against the floor, the record against the schema
+// beside it) and a message that reports the pair the wrong way round tells a
 // reader to fix the half that was already right. Nothing else here can see
 // that: two arguments of one Sprintf have no branch to flip.
 func TestRun_CheckMode_RefusesAPinOfSomethingElse(t *testing.T) {

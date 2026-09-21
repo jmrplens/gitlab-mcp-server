@@ -52,7 +52,7 @@ func TestClassify_NamingPatterns(t *testing.T) {
 // rename loop relies on rather than guards: classify answers every name it is
 // given with a name. collectRenames writes the suggestion straight into a
 // declaration, so an empty one would blank a function, and it carries no check
-// for that because none of classify's branches can return one — the rewrites
+// for that because none of classify's branches can return one: the rewrites
 // prepend "Test" and the rest fall back to the name itself.
 func TestClassify_EverySuggestion_IsANonEmptyName(t *testing.T) {
 	names := []string{
@@ -243,8 +243,8 @@ func TestRun_WritesCSVAndSummary(t *testing.T) {
 		t.Errorf("CSV = %q\nwant %q", got, wantRecords)
 	}
 
-	// The map is compared whole, so a bucket nothing classified into — "other"
-	// and "skip", which no classification produces — is asserted absent too.
+	// The map is compared whole, so a bucket nothing classified into ("other"
+	// and "skip", which no classification produces) is asserted absent too.
 	wantCounts := map[string]int{
 		"Total test functions": 10,
 		Pattern3Part:           1,
@@ -279,7 +279,7 @@ func summaryCounts(stderr string) map[string]int {
 // TestRunMain_Flags_SelectTheModeAndTheExitCode verifies the entry point's own
 // work: which of the three modes each flag selects, the usage line when the
 // command line names no directory, and the code each outcome exits with. main
-// is one line over this function, so nothing else can observe the dispatch —
+// is one line over this function, so nothing else can observe the dispatch,
 // and a -dry-run given on its own has to reach the rename mode, which is what
 // tells the two flags apart from a pair that must both be set.
 func TestRunMain_Flags_SelectTheModeAndTheExitCode(t *testing.T) {

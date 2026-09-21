@@ -32,8 +32,8 @@ func makeToolsPackage(t *testing.T, root, name string) {
 // Every count in the fixture is a different number, which is what makes the
 // assertions about them mean anything: five counts are printed and three of
 // them share one Fprintf, so a fixture where the rows, the distinct paths and
-// the packages all came to one — or where the silent actions, their packages
-// and the unmapped actions did — reads identically whichever of them each hole
+// the packages all came to one (or where the silent actions, their packages
+// and the unmapped actions did) reads identically whichever of them each hole
 // is filled from.
 func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 	root := t.TempDir()

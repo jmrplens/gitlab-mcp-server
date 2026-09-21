@@ -1456,8 +1456,8 @@ func TestRun_APayloadWithNoErrorsField_IsNotAMutationPayloadAndDoesNotGate(t *te
 	}
 }
 
-// publishedFixture publishes one value per way a struct can hold another —
-// directly, through a pointer, through a slice and through an array — and one
+// publishedFixture publishes one value per way a struct can hold another
+// (directly, through a pointer, through a slice and through an array) and one
 // name twice under two spellings, beside a published type that is not a struct
 // at all and one that names itself.
 const publishedFixture = `package published

@@ -48,8 +48,8 @@ func TestLoadProgram_TreeThatCannotBeWalked_IsRefused(t *testing.T) {
 // in both directions.
 //
 // The order matters because a pairing is collected in whatever order the walk
-// reaches it — a document handed over through a wrapper is completed after
-// every direct send, so the slice arrives unsorted — and two runs over one
+// reaches it (a document handed over through a wrapper is completed after
+// every direct send, so the slice arrives unsorted) and two runs over one
 // tree have to print the same list. Each level is checked both ways round,
 // since a comparator that answers one direction correctly and the other by
 // accident sorts correctly only on input that was already sorted.

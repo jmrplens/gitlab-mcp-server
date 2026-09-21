@@ -180,7 +180,7 @@ schema {
 // tags binding these structs to GraphQL's own __schema spelling, and the kind
 // constants the renderer switches on. Both are data rather than branches, so a
 // tag that drifts to snake case, a pair of tags that trade places, or a kind
-// spelled wrong drops a whole dimension of the pin without failing anything —
+// spelled wrong drops a whole dimension of the pin without failing anything:
 // defaults, type wrappers, implemented interfaces and union members all arrive
 // empty, and every gate reading that pin keeps passing on a schema that
 // promises less than GitLab serves.
@@ -211,8 +211,8 @@ func TestIntrospect_AGitLabShapedAnswer_RendersTheWholeSchema(t *testing.T) {
 // the bound is generous enough for an instance that takes minutes to produce
 // tens of megabytes of JSON, and still short enough to end a fetch nobody is
 // going to answer. Nothing inside this package reads the constant, so a value
-// that collapsed towards zero — canceling every introspection before it began
-// — would otherwise fail no test here and only surface as an empty pin.
+// that collapsed towards zero, canceling every introspection before it began,
+// would otherwise fail no test here and only surface as an empty pin.
 func TestFetchTimeout_BoundsAWholeFetchWithRoomToSpare(t *testing.T) {
 	if FetchTimeout < time.Minute {
 		t.Errorf("FetchTimeout = %v, too short for an instance that answers in minutes", FetchTimeout)

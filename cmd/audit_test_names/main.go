@@ -391,8 +391,8 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 		if pattern == Pattern3Part || pattern == Pattern2Part {
 			continue
 		}
-		// classify answers every name with a name — each of its branches
-		// returns either the name itself or a non-empty rewrite of it — so
+		// classify answers every name with a name: each of its branches
+		// returns either the name itself or a non-empty rewrite of it, so
 		// there is no blank suggestion to guard against, only one that asks
 		// for no change.
 		if suggested == name {
