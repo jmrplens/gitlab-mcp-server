@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,6 +141,99 @@ func TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes(t *te
 	}
 }
 
+// answeringInstanceRecordingAuthorization is an instance that answers
+// introspection, keeps whatever credential it was offered, and names its
+// version only to a caller that offered one, which is what GitLab does.
+func answeringInstanceRecordingAuthorization(t *testing.T) (endpoint string, authorization func() string) {
+	t.Helper()
+	var mutex sync.Mutex
+	var seen string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		offered := r.Header.Get("Authorization")
+		if offered != "" {
+			mutex.Lock()
+			seen = offered
+			mutex.Unlock()
+		}
+		payload := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(payload)
+		switch {
+		case !strings.Contains(string(payload), "metadata"):
+			_, _ = w.Write([]byte(introspectionAnswer(queryOnly)))
+		case offered == "":
+			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0-ee","revision":"abc1234"}}}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL, func() string {
+		mutex.Lock()
+		defer mutex.Unlock()
+		return seen
+	}
+}
+
+// TestRun_ACredentialThisRunHolds_ReachesTheInstanceOrIsExplained verifies the
+// two strings a live run carries about its credential. They look alike in the
+// configuration and mean opposite things: one is sent to the instance, the
+// other is the reason nothing was. A run that confused them would offer the
+// explanation as a bearer token and print the token as an explanation, and a
+// report that only ever says "GitLab unknown" cannot tell the two apart.
+func TestRun_ACredentialThisRunHolds_ReachesTheInstanceOrIsExplained(t *testing.T) {
+	const withheld = "GITLAB_TOKEN belongs to https://gitlab.com and this run asks elsewhere"
+
+	t.Run("a token this run may send", func(t *testing.T) {
+		endpoint, authorization := answeringInstanceRecordingAuthorization(t)
+
+		var out, errOut bytes.Buffer
+		status := run(auditRun{
+			dir:      fixtureModule(t, map[string]string{"ok": okFixture}),
+			patterns: []string{"./..."},
+			live:     endpoint,
+			token:    "secret",
+			now:      afterThePin,
+		}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut.String())
+		}
+		if authorization() != "Bearer secret" {
+			t.Errorf("the instance was offered %q, want the credential this run was given", authorization())
+		}
+		if !strings.Contains(out.String(), "GitLab 19.4.0-ee") {
+			t.Errorf("the report does not name the version that credential bought:\n%s", out.String())
+		}
+	})
+
+	t.Run("a token this run withholds", func(t *testing.T) {
+		endpoint, authorization := answeringInstanceRecordingAuthorization(t)
+
+		var out, errOut bytes.Buffer
+		status := run(auditRun{
+			dir:           fixtureModule(t, map[string]string{"ok": okFixture}),
+			patterns:      []string{"./..."},
+			live:          endpoint,
+			tokenWithheld: withheld,
+			now:           afterThePin,
+		}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut.String())
+		}
+		if authorization() != "" {
+			t.Errorf("the instance was offered %q by a run that withheld its token", authorization())
+		}
+		for _, want := range []string{"GitLab unknown", withheld} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("the report does not contain %q:\n%s", want, out.String())
+				}
+			})
+		}
+	})
+}
+
 // TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin
 // verifies that a re-probe whose instance never answered stops rather than
 // judging by the pin, which would report a pass for a question nobody asked.
@@ -249,17 +343,55 @@ func TestRun_DocumentsThePinnedSchemaAccepts_Succeeds(t *testing.T) {
 // care about is reviewable rather than a count, and that the listing names only
 // what passed: a document printed as accepted and refused in the same run would
 // be worse than either line alone.
+// The accepted line is compared whole, because its two halves are both names of
+// the same document and a listing that printed them the other way round would
+// still contain each of them.
 func TestRun_Verbose_ListsWhatItAccepted(t *testing.T) {
-	status, out, _ := runFixture(t, map[string]string{"sound": soundFixture, "broken": brokenFixture}, true)
+	status, out, errOut := runFixture(t, map[string]string{"sound": soundFixture, "broken": brokenFixture}, true)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1: the broken fixture is refused", status)
 	}
-	if !strings.Contains(out, "ok  ") || !strings.Contains(out, "getVulnerability") {
-		t.Errorf("the verbose run does not name the document it checked:\n%s", out)
+	if !strings.Contains(out, "    ok  fixture/sound getVulnerability\n") {
+		t.Errorf("the verbose run does not name the package and the document it checked:\n%s", out)
 	}
 	if strings.Contains(out, "listVulnerabilities") {
 		t.Errorf("the verbose run listed a refused document as accepted:\n%s", out)
+	}
+	// The two counts are the refused documents and every document, in that
+	// order. A fixture with one of each cannot tell them apart, so the summary
+	// is asserted here, where the run carries two documents and one refusal.
+	if !strings.Contains(errOut, "refuses 1 of 2 document(s)") {
+		t.Errorf("the summary does not count the refusals against every document checked:\n%s", errOut)
+	}
+}
+
+// TestRun_ARelativeDir_StillTrimsTheFindingsToIt verifies the one thing the
+// audit does with `-dir` besides handing it to the loader: findings come out of
+// the loader positioned absolutely, so the root they are trimmed against is
+// made absolute first, whatever the flag was written as.
+//
+// It is also what pins the branch beside it. `filepath.Abs` fails only when the
+// working directory cannot be resolved, and a relative `-dir` is the only shape
+// that asks it: with an absolute one it returns before it ever looks. So the
+// failure arm is unreachable from here — a run whose working directory had gone
+// could not have loaded the package this finding names — and this is the arm
+// that does run.
+func TestRun_ARelativeDir_StillTrimsTheFindingsToIt(t *testing.T) {
+	root := fixtureModule(t, map[string]string{"broken": brokenFixture})
+	t.Chdir(filepath.Dir(root))
+
+	var out, errOut bytes.Buffer
+	status := run(auditRun{dir: filepath.Base(root), patterns: []string{"./..."}}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1", status)
+	}
+	if !strings.Contains(errOut.String(), "(broken/broken.go:") {
+		t.Errorf("the finding is not trimmed to the relative root:\n%s", errOut.String())
+	}
+	if strings.Contains(errOut.String(), root) {
+		t.Errorf("the finding still carries the absolute path %q:\n%s", root, errOut.String())
 	}
 }
 
