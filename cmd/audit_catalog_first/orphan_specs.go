@@ -153,8 +153,10 @@ func declaredActionSpecs(loaded []*packages.Package) map[string]bool {
 		if pkg.Types == nil || !strings.HasPrefix(pkg.Types.Path(), toolsPathPrefix) {
 			continue
 		}
-		object := pkg.Types.Scope().Lookup(actionSpecsFuncName)
-		if function, ok := object.(*types.Func); ok && function.Exported() {
+		// No exportedness check: the lookup key is the exported spelling, so
+		// an object it returns is exported by construction and a second test
+		// for it could never be observed either way.
+		if _, ok := pkg.Types.Scope().Lookup(actionSpecsFuncName).(*types.Func); ok {
 			declared[pkg.Types.Path()] = false
 		}
 	}

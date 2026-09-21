@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -138,6 +139,111 @@ func TestOrphanActionSpecGaps_ReportsBothDirections(t *testing.T) {
 func TestOrphanActionSpecGaps_CleanTree_ReportsNothing(t *testing.T) {
 	if gaps := orphanActionSpecGaps(nil); len(gaps) != 0 {
 		t.Errorf("orphanActionSpecGaps(nil) = %v, want no findings", gaps)
+	}
+}
+
+// orphanFixtureModule is a module the aggregation rule can be run over end to
+// end: one package whose specs a production file calls, one whose specs only a
+// test file names, and one outside internal/tools whose specs are called from
+// production.
+//
+// The module path has to be this repository's own, because that prefix is how
+// the rule decides which packages it is judging at all; the fixture is loaded
+// from its own directory, so the two never meet.
+func orphanFixtureModule() map[string]string {
+	module := strings.TrimSuffix(toolsPathPrefix, "/internal/tools/")
+	return map[string]string{
+		"go.mod":                       "module " + module + "\n\ngo 1.27\n",
+		"internal/tools/alpha/spec.go": "package alpha\n\nfunc ActionSpecs() {}\n",
+		"internal/tools/beta/spec.go":  "package beta\n\nfunc ActionSpecs() {}\n",
+		"internal/helper/spec.go":      "package helper\n\nfunc ActionSpecs() {}\n",
+		"internal/tools/aggregate.go": fmt.Sprintf(
+			"package tools\n\nimport (\n\t%q\n\t%q\n)\n\nfunc aggregate() {\n\tbeta.ActionSpecs()\n\thelper.ActionSpecs()\n}\n",
+			module+"/internal/tools/beta", module+"/internal/helper",
+		),
+		"internal/tools/aggregate_test.go": fmt.Sprintf(
+			"package tools\n\nimport %q\n\nvar _ = alpha.ActionSpecs\n", module+"/internal/tools/alpha",
+		),
+	}
+}
+
+// TestActionSpecsAggregation_FixtureModule_SeparatesTheThreeStates verifies
+// the three answers the rule can give about a package, over a module planted
+// for the purpose: called from production, named only from a test, and not a
+// package this rule judges at all.
+//
+// The middle one is the state the rule exists to catch and the one this tree
+// has never been in, so nothing had ever seen the reading that produces it;
+// the last matters because the recorded uses include every ActionSpecs in the
+// loaded program, and counting one declared outside internal/tools would make
+// a genuine orphan read as aggregated.
+func TestActionSpecsAggregation_FixtureModule_SeparatesTheThreeStates(t *testing.T) {
+	root := writeCatalogFirstFixture(t, orphanFixtureModule())
+
+	aggregated, err := actionSpecsAggregation(root)
+	if err != nil {
+		t.Fatalf("actionSpecsAggregation() error = %v", err)
+	}
+
+	called, declared := aggregated["beta"]
+	if !declared || !called {
+		t.Errorf("beta declared = %t, called = %t; want a package a production file calls", declared, called)
+	}
+	called, declared = aggregated["alpha"]
+	if !declared || called {
+		t.Errorf("alpha declared = %t, called = %t; want an orphan a test file names", declared, called)
+	}
+	if _, judged := aggregated["helper"]; judged {
+		t.Errorf("aggregation judges %v; internal/helper is outside internal/tools", aggregated)
+	}
+}
+
+// TestAssertActionSpecsAreAggregated_FixtureModule_ReportsBothDirections
+// verifies the gate over a planted module reports the orphan it finds and the
+// declaration that matches nothing, in one refusal.
+//
+// Over this repository the rule has nothing to say, which is the healthy state
+// and also the reason the branch that reports anything at all was reachable
+// from no test: a rule that stopped finding orphans would have looked exactly
+// like the tree being clean.
+func TestAssertActionSpecsAreAggregated_FixtureModule_ReportsBothDirections(t *testing.T) {
+	declaredOrphanActionSpecs["gamma"] = orphanActionSpecsDeclaration{
+		Category: "test-fixture",
+		Reason:   "declared by this test only, and matching nothing in the fixture.",
+	}
+	t.Cleanup(func() { delete(declaredOrphanActionSpecs, "gamma") })
+
+	root := writeCatalogFirstFixture(t, orphanFixtureModule())
+
+	err := assertActionSpecsAreAggregated(root)
+	if err == nil {
+		t.Fatal("assertActionSpecsAreAggregated() = nil, want the orphan and the stale declaration reported")
+	}
+	findings := []struct {
+		name string
+		want string
+	}{
+		{name: "the orphan", want: "alpha declares an exported ActionSpecs"},
+		{name: "the stale declaration", want: "declaration for gamma"},
+	}
+	for _, finding := range findings {
+		t.Run(finding.name, func(t *testing.T) {
+			if !strings.Contains(err.Error(), finding.want) {
+				t.Errorf("assertActionSpecsAreAggregated() = %v, want it to contain %q", err, finding.want)
+			}
+		})
+	}
+}
+
+// TestAssertActionSpecsAreAggregated_UnloadableTree_IsRefused verifies a tree
+// the loader cannot read is a refusal rather than an empty answer.
+//
+// It is the one failure the rule can have that says nothing about the source:
+// a load that resolved no package would otherwise report no orphans and pass,
+// which is the silence a gate must never produce.
+func TestAssertActionSpecsAreAggregated_UnloadableTree_IsRefused(t *testing.T) {
+	if err := assertActionSpecsAreAggregated(t.TempDir()); err == nil {
+		t.Fatal("assertActionSpecsAreAggregated() = nil over a directory that is not a module, want a refusal")
 	}
 }
 
