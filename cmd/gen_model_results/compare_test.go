@@ -350,9 +350,11 @@ func TestCaseCoverage_SaysHowMuchOfTheCorpusWasAsked(t *testing.T) {
 		{name: "part of it", coverage: caseCoverage{Digest: "abc", Cases: 12, Corpus: 258}, want: "12 of 258 cases (`abc`)"},
 		{name: "all of it", coverage: caseCoverage{Digest: "abc", Cases: 258, Corpus: 258}, want: "the whole corpus (258 cases)"},
 		// A row whose corpus size is zero has not measured the whole of
-		// anything: the guard on Corpus is what keeps a count of cases from
-		// reading as a corpus it covered entirely when nothing recorded how
-		// large that corpus was.
+		// anything. There is deliberately no guard on Corpus for this: the
+		// `case 0` arm has already settled that Cases is not zero, so a
+		// corpus of zero is a corpus Cases cannot equal, and the equality
+		// arm alone keeps a count of cases from reading as a corpus it
+		// covered entirely when nothing recorded how large that corpus was.
 		{name: "a corpus size nothing recorded", coverage: caseCoverage{Digest: "abc", Cases: 12}, want: "12 of 0 cases (`abc`)"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

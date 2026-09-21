@@ -916,8 +916,8 @@ func skippedOn(model, surface, caseID string) modelscore.Attempt {
 //
 // A skip names its model and its surface and nothing else. Where exactly one
 // measurement of that pair is in the shard it joins it, which the test above
-// covers. Where two are — one shard measuring one model on one surface in two
-// modes — choosing either would credit a row with an attempt it never made, so
+// covers. Where two are (one shard measuring one model on one surface in two
+// modes) choosing either would credit a row with an attempt it never made, so
 // the skips keep a candidate of their own with no session behind it, which the
 // provenance rule then refuses by name. Both skips land on that same candidate
 // rather than on one each, and a second fold over a record that already holds
