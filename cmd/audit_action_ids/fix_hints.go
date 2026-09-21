@@ -32,6 +32,16 @@ import (
 // is part of a hint the walk actually folded: a Description is not, and cannot
 // be reached by this pass however often it spells the same tool.
 
+// writeSource is how a rewritten file reaches the disk, swapped in tests.
+//
+// The seam exists for one branch that real input cannot reach: the file was
+// listed, read and parsed a moment earlier, so the write fails only for
+// something outside this run's control. It is the one failure this pass must
+// not absorb, because a rewrite that carried on past it would report a clean
+// run over a tree it had half finished, and the next thing a reader does is
+// trust that report instead of the diff.
+var writeSource = os.WriteFile
+
 // hintFix is one rewritten token, reported so a reviewer reads what moved
 // rather than only how much.
 type hintFix struct {
@@ -84,7 +94,7 @@ func fixHints(dir string, sites []site, ids *actionids.IDs, includeTests bool) (
 // nothing to match. They have to be one pass over one set of values.
 func fixHintsInPackage(dir, pkg string, values []string, ids *actionids.IDs, includeTests bool, report *hintFixReport) error {
 	admit := hintProse(values)
-	production, err := productionFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
+	production, tests, err := goFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
 	if err != nil {
 		return err
 	}
@@ -98,10 +108,6 @@ func fixHintsInPackage(dir, pkg string, values []string, ids *actionids.IDs, inc
 	}
 	if !includeTests || rewritten == 0 {
 		return nil
-	}
-	tests, err := testFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
-	if err != nil {
-		return err
 	}
 	for _, file := range tests {
 		if _, fixErr := fixOneFile(dir, file, admit, ids, report); fixErr != nil {
@@ -183,36 +189,33 @@ func hintValues(sites []site, pkg string) []string {
 	return values
 }
 
-// testFilesOf is the test source of one directory, sorted.
-func testFilesOf(dir string) ([]string, error) {
-	return goFiles(dir, func(name string) bool { return strings.HasSuffix(name, "_test.go") })
-}
-
-// productionFilesOf is the non-test Go source of one directory, sorted.
-func productionFilesOf(dir string) ([]string, error) {
-	return goFiles(dir, func(name string) bool { return !strings.HasSuffix(name, "_test.go") })
-}
-
-// goFiles is every .go file of one directory the predicate admits, sorted, so
-// a run rewrites the same files in the same order twice.
-func goFiles(dir string, admit func(name string) bool) ([]string, error) {
+// goFilesOf splits one directory's Go source into the production files and
+// the test files, each sorted, so a run rewrites the same files in the same
+// order twice.
+//
+// One read rather than one per half. The two halves are answered from the same
+// listing, so they cannot disagree about what is in the directory, and there is
+// one place a directory that cannot be read is reported rather than two, the
+// second of which could only fire if the directory vanished between them.
+func goFilesOf(dir string) (production, tests []string, err error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", dir, err)
+		return nil, nil, fmt.Errorf("read %s: %w", dir, err)
 	}
-	var files []string
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") {
 			continue
 		}
-		if !admit(name) {
+		if strings.HasSuffix(name, "_test.go") {
+			tests = append(tests, filepath.Join(dir, name))
 			continue
 		}
-		files = append(files, filepath.Join(dir, name))
+		production = append(production, filepath.Join(dir, name))
 	}
-	sort.Strings(files)
-	return files, nil
+	sort.Strings(production)
+	sort.Strings(tests)
+	return production, tests, nil
 }
 
 // replacement is one token rewritten inside one literal, kept as byte offsets
@@ -276,8 +279,7 @@ func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (cha
 		written = edit.end
 	}
 	rewritten = append(rewritten, source[written:]...)
-	//#nosec G703 -- the path is a Go file this run read out of a package it audits
-	if writeErr := os.WriteFile(file, rewritten, 0o600); writeErr != nil {
+	if writeErr := writeSource(file, rewritten, 0o600); writeErr != nil {
 		return false, nil, nil, fmt.Errorf("write %s: %w", file, writeErr)
 	}
 	return true, fixes, unresolved, nil

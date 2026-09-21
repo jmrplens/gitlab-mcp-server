@@ -241,3 +241,73 @@ func TestPatternsOrDefault_NoArguments_AuditTheWholeTree(t *testing.T) {
 		t.Errorf("defaultPatterns = %v, want the tree that publishes action IDs", defaultPatterns)
 	}
 }
+
+// TestRun_FixHints_ReportsWhatMovedAndJudgesNothing holds the shape of the
+// fixing mode: it rewrites and reports, and it does not also answer the
+// question -check answers.
+//
+// The two are deliberately not one flag. The gate says whether the tree is
+// clean and this changes the tree, so a flag that could do either is one
+// somebody eventually runs in CI.
+func TestRun_FixHints_ReportsWhatMovedAndJudgesNothing(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+// Usage names an action and nothing hands a model a hint.
+const Usage = "Read one with issue.get."
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, fixHints: true}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run with -fix-hints = %d, want 0; stderr %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "rewrote 0 tool name(s) in 0 file(s)") {
+		t.Errorf("stdout = %q, want the report of a run with nothing to move", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "published ID(s) to fix") {
+		t.Errorf("stdout = %q, want the fixing run to report rather than judge", stdout.String())
+	}
+}
+
+// TestRun_FixHints_ASourceItCannotRewrite_FailsTheRun holds the failure this
+// mode must not absorb. A rewrite that could not open what it was asked to
+// rewrite has not done the job, and a run reporting success there would leave
+// a tree half moved with a clean line above it.
+//
+// The arrangement is the fixture tree itself, which lives in an overlay and
+// not on disk: the walk folds its hints and the rewrite then has no directory
+// to open.
+func TestRun_FixHints_ASourceItCannotRewrite_FailsTheRun(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+// Get hands a model a tool name the dynamic surface does not register.
+func Get() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "verify project_id with gitlab_project_get")
+}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, fixHints: true}, &stdout, &stderr)
+
+	if code == 0 {
+		t.Fatalf("run with -fix-hints = 0 over source it cannot open, want a refusal; stdout %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), fixtureDir) {
+		t.Errorf("stderr = %q, want it to name what could not be read", stderr.String())
+	}
+}

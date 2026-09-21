@@ -463,3 +463,80 @@ func TestEditDistance_KnownDistances_AreLevenshtein(t *testing.T) {
 		})
 	}
 }
+
+// TestNewWithTools_ToolID_AnswersOnlyForANameThatProjectsAnID holds what the
+// tool map is for and the one invariant that makes it worth having.
+//
+// A rule that refuses a gitlab_* name in served prose has to be able to say
+// what should have been written there, and the individual surface is one tool
+// per action, so the catalog can. What comes out is always a canonical ID: a
+// tool naming something this set does not hold is dropped rather than
+// recorded, because a caller that had to re-check the answer would be keeping
+// the invariant itself.
+func TestNewWithTools_ToolID_AnswersOnlyForANameThatProjectsAnID(t *testing.T) {
+	ids := NewWithTools(
+		[]string{"demo.get", "demo.list"},
+		map[string]string{"demo.fetch": "demo.get"},
+		map[string]string{
+			"gitlab_fetch_demo": "demo.get",
+			"gitlab_demo_list":  "demo.list",
+			"gitlab_gone":       "demo.vanished",
+			"  ":                "demo.get",
+			"gitlab_no_id":      "",
+		},
+	)
+
+	cases := []struct {
+		name  string
+		tool  string
+		id    string
+		known bool
+	}{
+		{name: "a declared name that is not derivable", tool: "gitlab_fetch_demo", id: "demo.get", known: true},
+		{name: "a name that reads like its ID", tool: "gitlab_demo_list", id: "demo.list", known: true},
+		{name: "surrounding space is not part of a name", tool: "  gitlab_fetch_demo  ", id: "demo.get", known: true},
+		{name: "a tool whose ID the catalog does not hold", tool: "gitlab_gone"},
+		{name: "a tool with no ID at all", tool: "gitlab_no_id"},
+		{name: "a name nothing registers", tool: "gitlab_unheard_of"},
+		{name: "the empty name", tool: ""},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			id, known := ids.ToolID(testCase.tool)
+			if known != testCase.known || id != testCase.id {
+				t.Errorf("ToolID(%q) = %q, %v; want %q, %v", testCase.tool, id, known, testCase.id, testCase.known)
+			}
+		})
+	}
+	if ids.ToolCount() != 2 {
+		t.Errorf("ToolCount() = %d, want the two names that project an ID this set holds", ids.ToolCount())
+	}
+}
+
+// TestNewWithTools_OneNameRecordedTwice_KeepsTheFirst holds the rule an alias
+// is held to as well, and for the same reason: the catalog is built twice,
+// self-managed and GitLab.com, and the two overlap almost entirely, so a
+// second pass would otherwise rewrite every entry with the same value.
+func TestNewWithTools_OneNameRecordedTwice_KeepsTheFirst(t *testing.T) {
+	ids := NewWithTools([]string{"demo.get", "demo.list"}, nil, nil)
+	ids.addTool("gitlab_demo", "demo.get")
+	ids.addTool("gitlab_demo", "demo.list")
+
+	if id, _ := ids.ToolID("gitlab_demo"); id != "demo.get" {
+		t.Errorf("ToolID() = %q, want the first recording kept", id)
+	}
+}
+
+// TestNew_WithoutTools_AnswersNothingAboutThem holds that the plain
+// constructor is the same set without the map, so a caller that never asked
+// about tool names gets a clean "no" rather than a nil map dereference.
+func TestNew_WithoutTools_AnswersNothingAboutThem(t *testing.T) {
+	ids := New([]string{"demo.get"}, nil)
+
+	if id, known := ids.ToolID("gitlab_demo_get"); known || id != "" {
+		t.Errorf("ToolID() = %q, %v; want nothing known", id, known)
+	}
+	if ids.ToolCount() != 0 {
+		t.Errorf("ToolCount() = %d, want none", ids.ToolCount())
+	}
+}

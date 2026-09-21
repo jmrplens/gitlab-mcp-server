@@ -380,14 +380,18 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 		snapshot.addDynamicActions(opts.Catalog)
 	case toolSurfaceMeta:
 		snapshot.addMetaActions(opts.Catalog, opts.MetaRoutes)
-		snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	default:
 		snapshot.manifest.Surface = toolSurfaceIndividual
 		for _, tool := range toolDetails {
 			snapshot.addDirectToolEntry(tool, toolManifestKindIndividualTool)
 		}
-		snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	}
+	// Asked of every surface rather than of the two that need it. The dynamic
+	// surface files its details under the canonical ID already, so this finds
+	// each one taken and does nothing, and that is worth a pass over the
+	// catalog: the alternative is a rule about which surfaces alias, written
+	// here, that a reader of aliasCanonicalActionIDs cannot see.
+	snapshot.aliasCanonicalActionIDs(opts.Catalog)
 	snapshot.addUncoveredDirectTools(toolDetails)
 	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
 		return snapshot.manifest.Entries[i].ID < snapshot.manifest.Entries[j].ID
@@ -564,15 +568,18 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 // Only the detail lookup gains a key. The entry the alias resolves to is the
 // surface's own, so what comes back names the call this session can really
 // make, which is the translation a model asking the question needs.
+//
+// An ID already filed is left as it is, which is what the dynamic surface
+// meets on every run: its details are keyed by the canonical ID to begin with,
+// so this walks its catalog and changes nothing. That is why the caller asks
+// on every surface rather than on the two that need it, and why this guard is
+// load-bearing rather than defensive.
 func (snapshot *toolSurfaceSnapshot) aliasCanonicalActionIDs(catalog *actioncatalog.Catalog) {
 	if catalog == nil {
 		return
 	}
 	for _, action := range catalog.Actions() {
 		id := string(action.ID)
-		if id == "" {
-			continue
-		}
 		if _, taken := snapshot.details[id]; taken {
 			continue
 		}
