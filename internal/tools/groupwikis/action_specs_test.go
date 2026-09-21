@@ -28,9 +28,10 @@ const registerWikiJSON = `{
 	"encoding": "UTF-8"
 }`
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata validates the classification the catalog publishes
+// for each group wiki action: the owner package, an individual tool name on
+// every one, the two reads marked read-only, and the delete marked destructive
+// and idempotent. It makes no GitLab call; the mock is there to build a client.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -137,12 +138,6 @@ func TestActionSpecs_CallRouteError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_RichMetadata verifies that every group wiki action carries
-// non-generic discovery metadata (Usage, Aliases, RelatedActions) and a
-// "Returns: … See also: …" individual-tool description (1:1 audit R-META), that
-// the natural-language aliases are group-wiki-specific (distinct from the
-// project wikis package), and that decorateGroupWikiMeta is a no-op for an
-// unknown tool.
 // assertGroupWikiSpecMetadata checks one spec for the rich metadata every
 // group wiki tool must carry: a specific Usage, group-specific natural
 // language aliases, related actions, and the Returns/See also description.
@@ -179,6 +174,13 @@ func assertGroupWikiSpecMetadata(t *testing.T, name string, spec toolutil.Action
 	}
 }
 
+// TestActionSpecs_RichMetadata verifies that every group wiki action carries
+// non-generic discovery metadata (Usage, Aliases, RelatedActions) and a
+// "Returns: … See also: …" individual-tool description (1:1 audit R-META), that
+// the natural-language aliases are group-wiki-specific (distinct from the
+// project wikis package), and that decorateGroupWikiMeta is a no-op for an
+// unknown tool. The doc comment sat above assertGroupWikiSpecMetadata, which
+// left this test undocumented and that helper described as something else.
 func TestActionSpecs_RichMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := groupWikiSpecsByTool(t, ActionSpecs(client))
