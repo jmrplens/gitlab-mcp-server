@@ -633,6 +633,14 @@ coverage-conditions:
 	cd $(PKG) && go run github.com/rillig/gobco@v1.3.4
 
 ## coverage-mutants: mutation-test PKG with gremlins, INVERT_LOGICAL on so `&&`/`||` independence is checked. The gate on a changed package is Lived 0 and Not covered 0.
+# The recipe itself is scripts/coverage-mutants.sh. It moved out of this file
+# when it gained the staging step that makes a `package main` measurable at all
+# (issue 872): that needs a copy of the package inside the module, a run against
+# the copy and a removal that happens whatever the outcome, and a cleanup
+# guaranteed by a trap is not something a one-line make recipe can express. The
+# reasons below still describe what it does, and the reason for the staging is
+# written beside it.
+#
 # The per-mutant timeout is derived from PKG's own baseline, because gremlins
 # computes it as that baseline times a coefficient and applies no floor. On a
 # fast package that product is smaller than the fixed cost of starting `go
@@ -683,20 +691,7 @@ MUTANT_BUDGET ?= 30
 MUTANT_BUDGET_FLOOR ?= 10
 coverage-mutants:
 	@test -n "$(PKG)" || { echo "usage: make coverage-mutants PKG=./cmd/gen_stats"; exit 2; }
-	@budget=$$(awk -v want="$(MUTANT_BUDGET)" -v floor="$(MUTANT_BUDGET_FLOOR)" \
-		'BEGIN{print (want+0 < floor+0) ? floor : want}'); \
-	[ "$$budget" = "$(MUTANT_BUDGET)" ] || \
-		echo "gremlins: MUTANT_BUDGET=$(MUTANT_BUDGET)s is under the $(MUTANT_BUDGET_FLOOR)s floor and would report untested mutants as timeouts; using $${budget}s"; \
-	baseline=$$(go test -count=1 $(PKG) 2>&1) || { \
-		printf '%s\n' "$$baseline" >&2; \
-		echo "gremlins: $(PKG) does not pass its own tests, so every mutant would read as killed; refusing to measure" >&2; \
-		exit 1; \
-	}; \
-	base=$$(printf '%s\n' "$$baseline" | tail -1 | grep -oE '[0-9]+\.[0-9]+s$$' | tr -d 's'); \
-	[ -n "$$base" ] || base=0.010; \
-	coeff=$$(awk -v b="$$base" -v f="$$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}'); \
-	echo "gremlins: $(PKG) tests take $${base}s, so -timeout-coefficient $$coeff for a ~$${budget}s budget"; \
-	GOFLAGS="$${GOFLAGS} -count=1" go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash --invert-logical --workers 4 --timeout-coefficient $$coeff $(GREMLINS_FLAGS) $(PKG)
+	@scripts/coverage-mutants.sh $(PKG) $(MUTANT_BUDGET) $(MUTANT_BUDGET_FLOOR)
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test
