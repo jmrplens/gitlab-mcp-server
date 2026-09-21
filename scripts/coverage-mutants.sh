@@ -97,7 +97,19 @@ baseline=$(go test -count=1 "$target" 2>&1) || {
   exit 1
 }
 
-base=$(printf '%s\n' "$baseline" | tail -1 | grep -oE '[0-9]+\.[0-9]+s$' | tr -d 's')
+# The whole duration, minutes included. `go test` prints a summary over a
+# minute as 1m2.345s, and a pattern that reads the seconds off the end takes
+# that for 2.345: the coefficient is then derived from a package twenty-six
+# times faster than the one being measured, and every mutant gets a timeout
+# that much larger than intended. A line with no duration on it, which is what
+# a cached result prints, leaves base empty and falls back below.
+base=$(printf '%s\n' "$baseline" | tail -1 | awk '{ d = $NF }
+  END {
+    if (d !~ /^([0-9]+m)?[0-9]+(\.[0-9]+)?s$/) exit 0
+    sub(/s$/, "", d); minutes = 0
+    if (match(d, /^[0-9]+m/)) { minutes = substr(d, 1, RLENGTH - 1) + 0; d = substr(d, RLENGTH + 1) }
+    printf "%.3f", minutes * 60 + d + 0
+  }')
 [ -n "$base" ] || base=0.010
 
 # The coefficient is applied to gremlins' OWN coverage run rather than to the
@@ -108,5 +120,11 @@ base=$(printf '%s\n' "$baseline" | tail -1 | grep -oE '[0-9]+\.[0-9]+s$' | tr -d
 coeff=$(awk -v b="$base" -v f="$budget" 'BEGIN{c=int(f/b)+1; if(c<8)c=8; if(c>6000)c=6000; print c}')
 echo "gremlins: $PKG tests take ${base}s, so -timeout-coefficient $coeff for a ~${budget}s budget"
 
+# GREMLINS_FLAGS is split into words on purpose and then quoted, because its
+# documented use carries a regular expression: `--exclude-files internal/` is
+# what the sweep passes, and a caller passing `.*` to the same flag would have
+# it expanded against the working directory before gremlins ever saw it.
+read -r -a gremlins_flags <<<"${GREMLINS_FLAGS:-}"
+
 GOFLAGS="${GOFLAGS:-} -count=1" go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 \
-  unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" ${GREMLINS_FLAGS:-} "$target"
+  unleash --invert-logical --workers 4 --timeout-coefficient "$coeff" "${gremlins_flags[@]}" "$target"
