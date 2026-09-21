@@ -510,9 +510,11 @@ func TestWriteIDFindings_AliasAndDeadID_CarryTheFixEachNeeds(t *testing.T) {
 		"project.fetch is a registered alias of project.get, not an action ID a listing publishes\n",
 		"      docs/a.md\n      docs/b.md\n",
 	} {
-		if !strings.Contains(report, want) {
-			t.Errorf("report = %q, want it to contain %q", report, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(report, want) {
+				t.Errorf("report = %q, want it to contain %q", report, want)
+			}
+		})
 	}
 	if got := strings.Count(report, "; closest: "); got != 1 {
 		t.Errorf("report names a nearest ID %d times, want it only where the ID resolves nowhere:\n%s", got, report)
@@ -531,7 +533,7 @@ func TestWriteIDFindings_AliasAndDeadID_CarryTheFixEachNeeds(t *testing.T) {
 // It is asserted over repeated renders because that is the only way to observe
 // it: Go randomizes map iteration, so each pass enters the two comparators
 // from a different arrangement, and one pass proves nothing about the next.
-// The findings are shaped so both comparisons are reached — two spreads that
+// The findings are shaped so both comparisons are reached: two spreads that
 // differ and two that tie, the tie resolved by name.
 func TestReportOrder_MapIteration_DoesNotMoveTheReport(t *testing.T) {
 	tools := map[string][]string{

@@ -629,7 +629,7 @@ func checkInstallers(installSh, installPS1 string) []string {
 		})
 		if !verifies {
 			problems = append(problems, installer.name+
-				": verifies no signature — checksums.txt comes from the same mutable release "+
+				": verifies no signature; checksums.txt comes from the same mutable release "+
 				"as the binary, so a consistent replacement of both files is accepted")
 		}
 		if !strings.Contains(installer.body, "checksums.txt.sigstore.json") {

@@ -115,8 +115,8 @@ func TestAdvisory(t *testing.T) {
 `
 
 // mixedTree plants four files whose tallies differ from one another, and whose
-// five summary counters — 5 abort sites, 3 tail-position, 2 truncating, 1
-// advisory, across 4 files — are five different numbers. That is what the
+// five summary counters (5 abort sites, 3 tail-position, 2 truncating, 1
+// advisory, across 4 files) are five different numbers. That is what the
 // report's own arithmetic cannot supply: every earlier fixture makes several
 // of those counts equal, so a permutation of the format arguments or of the
 // per-file columns reads exactly the same as the correct report.

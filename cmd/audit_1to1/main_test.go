@@ -485,8 +485,8 @@ func TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags(t *te
 // doc is not cached rather than naming a download failure.
 //
 // It is driven from main rather than from the mode, because refresh and offline
-// are crossable twice over — in the argument list main passes and in the
-// options literal the mode builds — and only a run that starts at the flag set
+// are crossable twice over, in the argument list main passes and in the
+// options literal the mode builds, and only a run that starts at the flag set
 // holds both. Either crossing leaves the citation reported stale all the same,
 // for a different reason and after six attempts at gitlab.com, which is what a
 // test asserting staleness alone cannot tell apart.

@@ -1133,7 +1133,7 @@ func TestCheckInstallers_AlternativeTools_AreAccepted(t *testing.T) {
 // workflow file, and records the document order of the jobs mapping.
 //
 // Two shapes are skipped for different reasons and both are planted here: a
-// file whose name is not a workflow's, and a directory whose name is — reusable
+// file whose name is not a workflow's, and a directory whose name is. Reusable
 // workflow fragments are sometimes kept in one, and reading it as a file would
 // fail the whole audit for a directory nobody asked it to audit.
 func TestLoadWorkflows_Directory_ReadsTextAndDocument(t *testing.T) {
@@ -1740,7 +1740,7 @@ func TestAudit_UnparseableDependabot_IsAnError(t *testing.T) {
 //
 // The two are read one after the other into two strings of the same type and
 // passed positionally, so a swap changes nothing about how many findings come
-// back — only which file they accuse. The fixture therefore makes them differ
+// back, only which file they accuse. The fixture therefore makes them differ
 // and the assertion names the file, rather than counting.
 func TestAudit_UnverifiedInstaller_NamesTheOneThatFailed(t *testing.T) {
 	t.Parallel()
@@ -1851,7 +1851,7 @@ func TestAudit_Repository_IsClean(t *testing.T) {
 // noSignatureFinding renders the finding an installer that checks no signature
 // carries, for the installer named.
 func noSignatureFinding(installer string) string {
-	return installer + ": verifies no signature — checksums.txt comes from the same mutable release " +
+	return installer + ": verifies no signature; checksums.txt comes from the same mutable release " +
 		"as the binary, so a consistent replacement of both files is accepted"
 }
 
