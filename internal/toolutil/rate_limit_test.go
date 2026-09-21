@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -812,6 +813,17 @@ func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
 // silent limiter with a flood, which is the failure mode the specification
 // names when it says to rate limit log messages. One line per window carries
 // the count of what it stands for, so nothing is lost.
+//
+// Every case runs inside a testing/synctest bubble, the way the watcher tests
+// in internal/subscriptions do, because what a case here asserts is which side
+// of a window boundary a refusal fell on. Under the real clock that answer is
+// the scheduler's: the case that crossed a boundary had to shrink the window to
+// a millisecond and then sleep, which is smaller than a scheduling quantum on a
+// loaded host, so the case could cross its own boundary before the code under
+// test did and fail for the timing rather than the behavior (issue 822). A
+// fake clock moves only when this test sleeps, so the boundary is exact, the
+// window keeps its production value in the assertion, and the whole test costs
+// no real time.
 func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 	tests := []struct {
 		name string
@@ -845,25 +857,30 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			name:  "a flood inside the window is counted, not logged",
 			build: func() *RateLimiter { return NewRateLimiter(10, 40) },
 			refuse: func(r *RateLimiter) {
+				// Spread across most of the window rather than fired at one
+				// instant: the clock here only moves when this loop sleeps, so
+				// a flood with no sleeps in it would say nothing about a window
+				// and everything about a single moment. 102 refusals a
+				// two-hundredth of a window apart span just over half of one.
 				for range 102 {
 					r.reportRefusal(context.Background(), "gitlab_execute_action")
+					time.Sleep(defaultThrottleWindow / 200)
 				}
 			},
 			wantLines: 1,
 		},
 		{
-			name: "the next window reports what the last one absorbed",
-			build: func() *RateLimiter {
-				r := NewRateLimiter(10, 40)
-				r.throttleWindow = time.Millisecond
-				return r
-			},
+			name:  "the next window reports what the last one absorbed",
+			build: func() *RateLimiter { return NewRateLimiter(10, 40) },
 			refuse: func(r *RateLimiter) {
+				// The window is the shipped one, not a shortened stand-in: the
+				// fake clock jumps the whole ten seconds the moment this
+				// goroutine sleeps, so there is nothing to buy by shrinking it.
 				r.reportRefusal(context.Background(), "gitlab_execute_action")
 				for range 41 {
 					r.reportRefusal(context.Background(), "gitlab_execute_action")
 				}
-				time.Sleep(5 * time.Millisecond)
+				time.Sleep(defaultThrottleWindow + time.Millisecond)
 				r.reportRefusal(context.Background(), "gitlab_execute_action")
 			},
 			wantLines: 2,
@@ -892,28 +909,51 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			// divide by an unset window. The derived buckets carry their
 			// parent's, so this is now reachable only by hand, which is
 			// exactly how a future derivation that forgot to would arrive.
-			name:  "a zero window falls back to the default",
+			//
+			// This case and the one under it pin the fallback from opposite
+			// sides, because either alone leaves it free. A silence just short
+			// of the default says the fallback is at least that long and says
+			// nothing about how much longer, so a fallback of an hour would
+			// pass it too.
+			name:  "a zero window absorbs a refusal just short of the default",
 			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
 			refuse: func(r *RateLimiter) {
 				r.reportRefusal(context.Background(), "gitlab_execute_action")
+				time.Sleep(defaultThrottleWindow - time.Millisecond)
 				r.reportRefusal(context.Background(), "gitlab_execute_action")
 			},
 			wantLines: 1,
+		},
+		{
+			// The other side: a second line just past the default says the
+			// fallback is no longer than it. With the case above, the two
+			// bracket it to the millisecond, which is what "falls back to the
+			// default" means.
+			name:  "a zero window reports again just past the default",
+			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
+			refuse: func(r *RateLimiter) {
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
+				time.Sleep(defaultThrottleWindow + time.Millisecond)
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
+			},
+			wantLines: 2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			buf := captureSlog(t)
-			tt.refuse(tt.build())
+			synctest.Test(t, func(t *testing.T) {
+				buf := captureSlog(t)
+				tt.refuse(tt.build())
 
-			out := buf.String()
-			if got := strings.Count(out, "rate limit exceeded"); got != tt.wantLines {
-				t.Fatalf("%d refusal lines, want %d:\n%s", got, tt.wantLines, out)
-			}
-			for _, want := range tt.wantContains {
-				assertContains(t, out, want)
-			}
+				out := buf.String()
+				if got := strings.Count(out, "rate limit exceeded"); got != tt.wantLines {
+					t.Fatalf("%d refusal lines, want %d:\n%s", got, tt.wantLines, out)
+				}
+				for _, want := range tt.wantContains {
+					assertContains(t, out, want)
+				}
+			})
 		})
 	}
 }
