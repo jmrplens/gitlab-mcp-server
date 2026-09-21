@@ -6,7 +6,51 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+// TestCatalogFrom_DeclaredIndividualNames_ResolvedByRegistration verifies how
+// an action's declared individual tool name is read: through the identifier
+// registration uses, never off the declaration. Two actions of one group
+// declaring one name have it bound to the first, and the second is unservable
+// with its owner named. An action of a group the individual surface does not
+// project declares a name that registers nothing, and has no individual tool
+// and no owner either: no sibling took the name, so a report that named one
+// would be inventing the shadow.
+func TestCatalogFrom_DeclaredIndividualNames_ResolvedByRegistration(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	issues := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_issue", SurfaceKind: actioncatalog.SurfaceKindMetaGroup})
+	issues.SetAction(actioncatalog.Action{Name: "list", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list"}})
+	issues.SetAction(actioncatalog.Action{Name: "search", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_issue_list"}})
+	controller := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_dynamic", SurfaceKind: actioncatalog.SurfaceKindDynamicController})
+	controller.SetAction(actioncatalog.Action{Name: "find", IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_find_action"}})
+	if err := catalog.AddGroup(issues); err != nil {
+		t.Fatalf("add the issue group: %v", err)
+	}
+	if err := catalog.AddGroup(controller); err != nil {
+		t.Fatalf("add the controller group: %v", err)
+	}
+	served := catalogFrom(catalog, edition.Free)
+
+	cases := []struct {
+		id    string
+		tool  string
+		owner string
+	}{
+		{id: "issue.list", tool: "gitlab_issue_list"},
+		{id: "issue.search", owner: "issue.list"},
+		{id: "dynamic.find"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			action, known := served.actions[tc.id]
+			if !known || action.individualTool != tc.tool || action.individualOwner != tc.owner {
+				t.Errorf("%s = known %t, individual %q, owner %q; want known, %q, %q", tc.id, known, action.individualTool, action.individualOwner, tc.tool, tc.owner)
+			}
+		})
+	}
+}
 
 // TestBuildServedCatalog_RealCatalog_KnownFacts verifies the served catalog
 // against facts the projection rests on and that the real catalog is known
@@ -91,6 +135,14 @@ func TestCatalogAction_ToolOn_Surfaces(t *testing.T) {
 		{name: "meta is the group", action: action, surface: config.ToolSurfaceMeta, wantTool: "gitlab_issue", reachable: true},
 		{name: "individual is the declared name", action: action, surface: config.ToolSurfaceIndividual, wantTool: "gitlab_issue_list", reachable: true},
 		{name: "no individual tool", action: bare, surface: config.ToolSurfaceIndividual, reachable: false},
+		{
+			// A standalone utility whose individual name registration bound
+			// to another action carries neither name, so neither surface but
+			// dynamic reaches it.
+			name:    "no meta tool",
+			action:  catalogAction{id: "repository.file_history"},
+			surface: config.ToolSurfaceMeta, reachable: false,
+		},
 		{name: "unknown surface", action: action, surface: "other", reachable: false},
 	}
 	for _, tc := range cases {

@@ -40,6 +40,171 @@ func options() toolutil.ActionSpecOptions {
 	}
 }
 
+// TestFoldCall_TheDeepestChainTheBoundAllows_IsFolded holds the bound from
+// below: three helpers handing the value on is what maxFoldDepth admits, and
+// the tree's own shapes sit inside it. Nothing else here folds deeper than
+// two, so a bound one step tighter would have gone unnoticed.
+func TestFoldCall_TheDeepestChainTheBoundAllows_IsFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func third(name string) string  { return domain + "." + name }
+func second(name string) string { return third(name) }
+func first(name string) string  { return second(name) }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{first("get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.get"}) {
+		t.Errorf("related values = %v, want demo.get folded three helpers deep", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none inside the bound", got)
+	}
+}
+
+// TestFoldCall_PastTheBound_IsReportedRatherThanFolded holds the bound from
+// above, in both directions a fold descends: a chain of helpers each handing
+// the value to the next, and a call whose own argument is a nest of calls.
+// The bound is what stops a pair of helpers that call each other running
+// forever, and a fold that stopped counting would fold both of these instead
+// of naming what it could not read.
+func TestFoldCall_PastTheBound_IsReportedRatherThanFolded(t *testing.T) {
+	t.Run("a chain of helpers handing the value on", func(t *testing.T) {
+		sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func fourth(name string) string { return domain + "." + name }
+func third(name string) string  { return fourth(name) }
+func second(name string) string { return third(name) }
+func first(name string) string  { return second(name) }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{first("get")}}
+}
+`)
+
+		if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+			t.Errorf("related values = %v, want nothing folded past the bound", got)
+		}
+		if got := unresolvedExprs(sites); !slices.Equal(got, []string{`first("get")`}) {
+			t.Errorf("unresolved = %v, want the outermost call named", got)
+		}
+	})
+
+	t.Run("a nest of calls in the argument", func(t *testing.T) {
+		sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func canonicalID(name string) string { return domain + "." + name }
+func inner(name string) string       { return name }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{canonicalID(inner(inner(inner("get"))))}}
+}
+`)
+
+		if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+			t.Errorf("related values = %v, want nothing folded past the bound", got)
+		}
+		if got := unresolvedExprs(sites); len(got) != 1 {
+			t.Errorf("unresolved = %v, want the outermost call named once", got)
+		}
+	})
+}
+
+// TestFoldCall_ASignatureTheArgumentsDoNotFill_IsNotFolded holds the pairing
+// a fold rests on: a parameter is bound to the argument written at its own
+// index, so a call that passes a different number of arguments than the
+// helper declares cannot be folded by binding what happens to line up. A
+// variadic helper is the shape that reaches it, since its declared parameters
+// and its arguments differ by construction.
+func TestFoldCall_ASignatureTheArgumentsDoNotFill_IsNotFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func variadic(name string, rest ...string) string { return domain + "." + name }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{variadic("get", "one", "two")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing folded from a signature the call does not fill", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 1 {
+		t.Errorf("unresolved = %v, want the call named once", got)
+	}
+}
+
+// TestFoldCall_ABodyThatIsNoReturn_IsNotFolded holds the other half of "one
+// return of one expression": a body of one statement that is not a return at
+// all. The branching helper above is refused for having two statements and so
+// never reaches this rule, which used to be held by nothing.
+func TestFoldCall_ABodyThatIsNoReturn_IsNotFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func panicking(name string) string { panic(name) }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{panicking("demo.get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing folded from a body that returns nothing", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 1 {
+		t.Errorf("unresolved = %v, want the call named once", got)
+	}
+}
+
+// TestFoldCall_AReturnWithStatementsAfterIt_IsNotFolded holds the count in
+// "one return of one expression". A body whose first statement is a foldable
+// return and whose second is anything at all is refused, because a helper
+// this rule cannot read whole is one whose value it is guessing at.
+func TestFoldCall_AReturnWithStatementsAfterIt_IsNotFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func trailing(name string) string {
+	return domain + "." + name
+	panic(name)
+}
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{trailing("get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing folded from a body of two statements", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 1 {
+		t.Errorf("unresolved = %v, want the call named once", got)
+	}
+}
+
 // TestFoldCall_BranchingHelper_IsNotFolded holds the one limit on folding. A
 // helper that returns different strings on different paths has no single
 // value, and picking one of them would be a guess reported as a fact.
@@ -66,6 +231,34 @@ func options() toolutil.ActionSpecOptions {
 	got := unresolvedExprs(sites)
 	if len(got) != 1 || !strings.Contains(got[0], "branching") {
 		t.Errorf("unresolved = %v, want the branching call named", got)
+	}
+}
+
+// TestFoldCall_OneHalfOfTheConcatenationUnknown_IsNotFolded holds that a
+// concatenation is folded only when both halves are, since half an ID is a
+// phantom: reporting "demo.get" from a helper whose prefix came from the
+// environment would name an action nobody published.
+func TestFoldCall_OneHalfOfTheConcatenationUnknown_IsNotFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+func joined(prefix, name string) string { return prefix + name }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{joined(os.Getenv("PREFIX"), "demo.get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); len(got) != 0 {
+		t.Errorf("related values = %v, want nothing folded from half a concatenation", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 1 {
+		t.Errorf("unresolved = %v, want the call named once", got)
 	}
 }
 
@@ -124,6 +317,32 @@ func options() toolutil.ActionSpecOptions {
 	}
 	if got := unresolvedExprs(sites); len(got) != 1 {
 		t.Errorf("unresolved = %v, want the call named once", got)
+	}
+}
+
+// TestFoldCall_ArgumentsThatBindNothing_AreSkipped holds that an argument
+// which is no string constant binds its parameter to nothing and stops
+// neither the fold nor the arguments beside it: a function handed to a helper
+// and an arithmetic expression are both values a binding has no spelling for,
+// and the name beside them is still read.
+func TestFoldCall_ArgumentsThatBindNothing_AreSkipped(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+const domain = "demo"
+
+func build() string { return "unused" }
+
+func withOptions(read func() string, count int, name string) string { return domain + "." + name }
+
+func options() toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{RelatedActions: []string{withOptions(build, 4-2, "get")}}
+}
+`)
+
+	if got := valuesOfKind(sites, kindRelated); !slices.Equal(got, []string{"demo.get"}) {
+		t.Errorf("related values = %v, want demo.get folded from the one argument that binds", got)
 	}
 }
 

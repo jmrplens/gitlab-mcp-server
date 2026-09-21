@@ -8,6 +8,59 @@ import (
 	"testing"
 )
 
+// fullRecord is a document exercising every field of every type the record
+// carries, each with a value no sibling shares.
+//
+// Distinct values are the point rather than realism: a round trip compares the
+// whole document, and two fields holding one value are two fields a swapped
+// assignment would trade without anything noticing.
+func fullRecord() Document {
+	return Document{
+		SchemaVersion: SchemaVersion,
+		Note:          "taken from a booted instance, not from its source",
+		Source: Source{
+			Image:       "gitlab/gitlab-ee:19.3.1-ee.0",
+			Digest:      "sha256:deadbeef",
+			Version:     "19.3.1-ee",
+			Revision:    "abc1234",
+			RetrievedAt: "2026-09-09",
+			SHA256:      "0f1e2d3c",
+			Entities:    11,
+			Fields:      22,
+			Routes:      33,
+			Features:    44,
+		},
+		Entities: map[string]Entity{
+			"API::Entities::Project": {Fields: []Field{
+				{Name: "id"},
+				{Name: "owner", Attribute: "creator", Using: "API::Entities::UserBasic", Merge: true},
+				{Name: "approvals_before_merge", Conditions: []Condition{{
+					Kind:    "BlockCondition",
+					Inverse: true,
+					File:    "ee/lib/ee/api/entities/project.rb",
+					Line:    19,
+					// Spelled as a lambda rather than with the stabby arrow so the
+					// bytes compared below do not depend on whether the encoder
+					// escapes an angle bracket.
+					Text: "unless: lambda { |project, _| project.feature_available?(:merge_request_approvers) }",
+					Hash: "{scope: :all}",
+				}}},
+			}},
+			"API::Entities::Broken": {Error: "NoMethodError"},
+		},
+		Routes: []Route{{
+			Method:  "GET",
+			Path:    "/api/:version/projects",
+			Entity:  "API::Entities::Project",
+			Summary: "List projects",
+			Params: map[string]Param{
+				"page": {Required: true, Type: "Integer", Default: "1", Desc: "the page wanted"},
+			},
+		}},
+		Features: map[string]string{"merge_request_approvers": TierPremium},
+	}
+}
+
 // TestOpenAPIName_ARubyName_BecomesTheOpenAPISpelling verifies the one
 // translation that lets a reader holding an entity name from this record look
 // it up in the OpenAPI one, and the other way round.
@@ -66,6 +119,17 @@ func TestTier_SeveralFeatures_ResolveToTheDearestPlan(t *testing.T) {
 		{name: "ultimate outranks premium", features: []string{"epics", "security_reports"}, want: TierUltimate},
 		{name: "premium outranks global", features: []string{"audit_events", "epics"}, want: TierPremium},
 		{
+			// The same pair the other way round: a cheaper plan seen second must
+			// not displace the dearer one already held, or the tier a field
+			// reports would depend on the order its conditions were written in.
+			name:     "a global feature after a premium one leaves it standing",
+			features: []string{"epics", "audit_events"}, want: TierPremium,
+		},
+		{
+			name:     "a global feature after an ultimate one leaves it standing",
+			features: []string{"security_reports", "audit_events"}, want: TierUltimate,
+		},
+		{
 			// A project setting such as :issues is not a license, so a
 			// condition naming one resolves to no tier rather than to free,
 			// which would read as a checked answer.
@@ -78,6 +142,34 @@ func TestTier_SeveralFeatures_ResolveToTheDearestPlan(t *testing.T) {
 			t.Parallel()
 			if got := doc.Tier(testCase.features...); got != testCase.want {
 				t.Errorf("Tier(%v) = %q, want %q", testCase.features, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestTierConstants_SpellWhatTheRecordCarries verifies the three words this
+// package resolves a tier to, against the words the introspection script writes
+// into the record it reads.
+//
+// Nothing else can: every test above names the tiers through these constants,
+// so two of them trading values is self-consistent here and inverts every tier
+// a gated field reports once a real record's feature table is read through
+// them.
+func TestTierConstants_SpellWhatTheRecordCarries(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name     string
+		constant string
+		want     string
+	}{
+		{name: "premium", constant: TierPremium, want: "premium"},
+		{name: "ultimate", constant: TierUltimate, want: "ultimate"},
+		{name: "global", constant: TierGlobal, want: "global"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if testCase.constant != testCase.want {
+				t.Errorf("tier constant = %q, want %q, which is what the record spells it", testCase.constant, testCase.want)
 			}
 		})
 	}
@@ -153,23 +245,7 @@ func TestFieldCount_SpansEveryEntity(t *testing.T) {
 // running them at once would have each reading another's file.
 func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 	dir := t.TempDir()
-	want := Document{
-		SchemaVersion: SchemaVersion,
-		Source:        Source{Image: "gitlab/gitlab-ee:latest", Version: "19.3.1-ee", RetrievedAt: "2026-09-09"},
-		Entities: map[string]Entity{
-			"API::Entities::Project": {Fields: []Field{
-				{Name: "id"},
-				{Name: "owner", Using: "API::Entities::UserBasic"},
-				{Name: "approvals_before_merge", Conditions: []Condition{{
-					Kind: "BlockCondition",
-					File: "ee/lib/ee/api/entities/project.rb", Line: 19,
-					Text: "expose :approvals_before_merge, if: ->(project, _) { project.feature_available?(:merge_request_approvers) }",
-				}}},
-			}},
-		},
-		Routes:   []Route{{Method: "GET", Path: "/api/:version/projects", Entity: "API::Entities::Project", Params: map[string]Param{"page": {Type: "Integer", Default: "1"}}}},
-		Features: map[string]string{"merge_request_approvers": TierPremium},
-	}
+	want := fullRecord()
 
 	if err := Write(dir, want); err != nil {
 		t.Fatalf("Write: %v", err)
@@ -198,8 +274,15 @@ func TestReadWrite_ARoundTrip_KeepsWhatTheAuditReads(t *testing.T) {
 	})
 
 	t.Run("a missing record says so rather than reading as empty", func(t *testing.T) {
-		if _, readErr := Read(filepath.Join(dir, "nowhere")); readErr == nil {
+		_, readErr := Read(filepath.Join(dir, "nowhere"))
+		if readErr == nil {
 			t.Fatal("a missing record read as an empty one")
+		}
+		// Naming the step is what separates this from a record that is on disk
+		// and unreadable: one is a run that never generated the record and the
+		// other a record to regenerate, and only the wording tells them apart.
+		if !strings.Contains(readErr.Error(), "reading") {
+			t.Errorf("error = %q, want it to name the reading step", readErr)
 		}
 	})
 }
@@ -231,4 +314,97 @@ func TestWrite_TheRecordIsDiffable(t *testing.T) {
 			t.Error("the record does not end with a newline")
 		}
 	})
+}
+
+// TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect verifies the names
+// the record carries on disk, which a round trip cannot see: this package both
+// writes and reads it, so two json tags traded between fields of one type round
+// trip perfectly while every value in the committed record moves one place.
+//
+// The counters are the case that made this worth writing: `entities`, `fields`,
+// `routes` and `features` are four integers in one object, and the floors a
+// gate refuses a shrunken record by are read from them by name.
+func TestWrite_TheRecordSpellsEveryFieldTheWayItsReadersExpect(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := Write(dir, fullRecord()); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	raw, err := os.ReadFile(Path(dir))
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+
+	want := `{
+ "schema_version": 2,
+ "note": "taken from a booted instance, not from its source",
+ "source": {
+  "image": "gitlab/gitlab-ee:19.3.1-ee.0",
+  "digest": "sha256:deadbeef",
+  "version": "19.3.1-ee",
+  "revision": "abc1234",
+  "retrieved_at": "2026-09-09",
+  "sha256": "0f1e2d3c",
+  "entities": 11,
+  "fields": 22,
+  "routes": 33,
+  "features": 44
+ },
+ "entities": {
+  "API::Entities::Broken": {
+   "error": "NoMethodError"
+  },
+  "API::Entities::Project": {
+   "fields": [
+    {
+     "name": "id"
+    },
+    {
+     "name": "owner",
+     "attribute": "creator",
+     "using": "API::Entities::UserBasic",
+     "merge": true
+    },
+    {
+     "name": "approvals_before_merge",
+     "conditions": [
+      {
+       "kind": "BlockCondition",
+       "inverse": true,
+       "file": "ee/lib/ee/api/entities/project.rb",
+       "line": 19,
+       "text": "unless: lambda { |project, _| project.feature_available?(:merge_request_approvers) }",
+       "hash": "{scope: :all}"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/api/:version/projects",
+   "entity": "API::Entities::Project",
+   "summary": "List projects",
+   "params": {
+    "page": {
+     "required": true,
+     "type": "Integer",
+     "default": "1",
+     "desc": "the page wanted"
+    }
+   }
+  }
+ ],
+ "features": {
+  "merge_request_approvers": "premium"
+ }
+}
+`
+
+	if string(raw) != want {
+		t.Errorf("the record on disk is not spelled as its readers expect:\n got %s\nwant %s", raw, want)
+	}
 }

@@ -243,14 +243,18 @@ func markUses(pkg *packages.Package, harnessPath string, owners map[*types.Var]s
 // symbolKey spells an object the way [exportedSymbols] does: a method as
 // Type.Method, a field as Type.Field, anything else by its name. A field of
 // a type the owner map does not hold has no key at all, since its bare name
-// is not the field's and would be credited to whatever else carries it.
+// is not the field's and would be credited to whatever else carries it; a
+// method of an interface literal has none on the same terms, since its
+// receiver names no type and its bare name is a package-level function's.
 func symbolKey(obj types.Object, owners map[*types.Var]string) (string, bool) {
 	switch o := obj.(type) {
 	case *types.Func:
 		if recv := o.Signature().Recv(); recv != nil {
-			if named := receiverNamed(recv.Type()); named != nil {
-				return named.Obj().Name() + "." + o.Name(), true
+			named := receiverNamed(recv.Type())
+			if named == nil {
+				return "", false
 			}
+			return named.Obj().Name() + "." + o.Name(), true
 		}
 	case *types.Var:
 		if o.IsField() {

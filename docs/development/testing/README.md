@@ -96,6 +96,22 @@ limitation is the tool's rather than the package's, which is why
 `make check-spec-conditions` reports such a package as not measured instead
 of failing on it.
 
+**A gremlins run over a `package main` directory reports every mutant killed
+and has tested none of them.** It names the package to run the tests in by
+walking the mutated file's directory upward until a component ends with the
+package clause's name, and falls back to the module path when none does. For
+`package main` in `cmd/audit_action_ids` nothing ends with "main", so it runs
+`go test github.com/jmrplens/gitlab-mcp-server/v3` in its copy of the tree;
+the module root holds no Go files, that fails at setup with exit 1, and exit 1
+is what gremlins reads as KILLED. Measured on `cmd/audit_action_ids`: 134
+killed, 0 lived, 3.5 seconds, against a suite that takes 9; the same tree
+measured through a copy of the package in a directory whose name ends in
+"main" reports 101 killed, 33 lived and 2 not covered in 10m49s. Every one of
+the 40 `cmd/*` commands is `package main`, `cmd/server` included, so a clean
+figure from one of them says nothing until it has been re-measured that way.
+The coverage half of such a run is still valid: NOT COVERED comes from
+`go test -cover` over the real package, which gremlins runs correctly.
+
 **A gremlins run reporting TIMED OUT on a fast package has measured nothing.**
 It derives each mutant's timeout from the package's own baseline times a
 coefficient and applies no floor, so where the tests are quick that product

@@ -37,6 +37,69 @@ func TestComputeReplacedSection_MissingMarkersFailFast(t *testing.T) {
 	}
 }
 
+// TestComputeReplacedSection_Output_KeepsTheOrderOfTheFile verifies the exact
+// text the splice produces: what preceded the start marker stays in front of
+// the new content, and what follows the end marker stays behind it.
+//
+// The assertion is the whole string because a Contains check passes whichever
+// way round the two halves are joined, which is how a file's order came to be
+// unasserted while every piece of it was.
+func TestComputeReplacedSection_Output_KeepsTheOrderOfTheFile(t *testing.T) {
+	got, err := ComputeReplacedSection("intro\n<!-- START -->\nold\n<!-- END -->\ntail\n", "<!-- START -->", "<!-- END -->", "NEW")
+	if err != nil {
+		t.Fatalf("ComputeReplacedSection() error = %v", err)
+	}
+	if want := "intro\n<!-- START -->\n\nNEW\n<!-- END -->\ntail\n"; got != want {
+		t.Errorf("ComputeReplacedSection() = %q, want %q", got, want)
+	}
+}
+
+// TestComputeReplacedSection_EmptySection_IsFilledRatherThanRefused verifies a
+// managed region whose end marker sits immediately after its start marker is
+// filled, since that is the shape a document carries before its section has
+// ever been generated.
+func TestComputeReplacedSection_EmptySection_IsFilledRatherThanRefused(t *testing.T) {
+	got, err := ComputeReplacedSection("<!-- START --><!-- END -->\n", "<!-- START -->", "<!-- END -->", "NEW")
+	if err != nil {
+		t.Fatalf("ComputeReplacedSection() error = %v", err)
+	}
+	if want := "<!-- START -->\n\nNEW\n<!-- END -->\n"; got != want {
+		t.Errorf("ComputeReplacedSection() = %q, want %q", got, want)
+	}
+}
+
+// TestComputeReplacedSection_Refusals_NameTheMarkerThatIsMissing verifies each
+// refusal quotes the marker it looked for and not the other one, so a
+// generator pointed at the wrong document says which end of the region it
+// could not find rather than naming whichever marker came to hand.
+func TestComputeReplacedSection_Refusals_NameTheMarkerThatIsMissing(t *testing.T) {
+	const start, end = "<!-- START -->", "<!-- END -->"
+
+	tests := []struct {
+		name      string
+		text      string
+		wantName  string
+		otherName string
+	}{
+		{name: "start marker absent", text: "nothing managed here\n", wantName: start, otherName: end},
+		{name: "end marker absent", text: start + "\nbody\n", wantName: end, otherName: start},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ComputeReplacedSection(tt.text, start, end, "NEW")
+			if err == nil {
+				t.Fatal("ComputeReplacedSection() error = nil, want a refusal")
+			}
+			if !strings.Contains(err.Error(), tt.wantName) {
+				t.Errorf("error = %q, want it to name %q", err, tt.wantName)
+			}
+			if strings.Contains(err.Error(), tt.otherName) {
+				t.Errorf("error = %q, want it not to name %q", err, tt.otherName)
+			}
+		})
+	}
+}
+
 // TestReplaceSection_RewritesFile verifies the file round-trip: read, splice, write.
 func TestReplaceSection_RewritesFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "doc.md")

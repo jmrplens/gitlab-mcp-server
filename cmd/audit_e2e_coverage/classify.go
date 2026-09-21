@@ -789,8 +789,11 @@ func sampleURI(template string) string {
 // later says of the action (skipped, unasserted) the flow says too.
 func (c *classification) fillElicitationCells() {
 	for key, found := range c.cells {
-		action, known := c.catalog.actions[key.action]
-		if !known || action.domain != interactiveDomain {
+		// Every cell names a catalog action: fillActionCells makes one per
+		// catalog id and foldToolCall refuses a target the catalog lacks, so
+		// there is no unknown here to test for, and one would carry the
+		// empty domain and fall out of this comparison anyway.
+		if c.catalog.actions[key.action].domain != interactiveDomain {
 			continue
 		}
 		flow := c.capabilityCellFor(capabilityElicitation, key)

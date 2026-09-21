@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -16,6 +17,14 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/testsource"
 )
+
+// toolName is the command's own name, used as the flag set's name so a usage
+// message names the command rather than the test binary that drove it.
+const toolName = "audit_test_names"
+
+// osExit is os.Exit behind a variable, so the one line main carries is
+// reachable from a test rather than only from a process.
+var osExit = os.Exit
 
 // Pattern classifications for test function names. The four buckets a name is
 // classified into are cmd/internal/testsource's, shared with the generators
@@ -64,34 +73,56 @@ type testEntry struct {
 
 // main audits test function naming convention compliance across the project.
 func main() {
-	apply := flag.Bool("apply", false, "rename test functions in place to match the suggested names")
-	dryRun := flag.Bool("dry-run", false, "print what would be renamed without writing files (use with -apply)")
-	checkFiles := flag.Bool("check-files", false, "audit test FILE names against the module-naming convention and exit non-zero on violations")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
 
-	args := flag.Args()
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/audit_test_names/ [flags] <dir>...")
-		os.Exit(1)
+// runMain parses args, the command line with the program name already removed,
+// selects one of the three modes and returns the process exit code: 0 when the
+// mode it ran reported a clean tree, 1 when that mode found a violation or
+// failed, and 2 when the flags themselves did not parse.
+//
+// The flag set is ContinueOnError rather than the package-level ExitOnError
+// one, so a bad flag is a code this function returns instead of an os.Exit the
+// seam above never sees. flag has already printed the error and the usage by
+// the time Parse returns; -h is the one failure that exits clean, as
+// ExitOnError would.
+func runMain(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	apply := fs.Bool("apply", false, "rename test functions in place to match the suggested names")
+	dryRun := fs.Bool("dry-run", false, "print what would be renamed without writing files (use with -apply)")
+	checkFiles := fs.Bool("check-files", false, "audit test FILE names against the module-naming convention and exit non-zero on violations")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	dirs := fs.Args()
+	if len(dirs) == 0 {
+		fmt.Fprintln(stderr, "usage: go run ./cmd/audit_test_names/ [flags] <dir>...")
+		return 1
 	}
 
 	if *checkFiles {
-		if !runFileCheck(args, os.Stdout) {
-			os.Exit(1)
+		if !runFileCheck(dirs, stdout) {
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *apply || *dryRun {
-		if !runApply(args, os.Stdout, os.Stderr, *dryRun) {
-			os.Exit(1)
+		if !runApply(dirs, stdout, stderr, *dryRun) {
+			return 1
 		}
-		return
+		return 0
 	}
-	if err := run(args, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if err := run(dirs, stdout, stderr); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
+	return 0
 }
 
 // run executes the audit workflow against the supplied directories. It writes
@@ -235,16 +266,17 @@ func splitCamelCase(name string) string {
 			// (handles acronyms like "HTTPHandler" → "HTTP", "Handler").
 			prevLower := unicode.IsLower(runes[i-1])
 			nextLower := i+1 < len(runes) && unicode.IsLower(runes[i+1])
-			if prevLower || (nextLower && !prevLower && current.Len() > 0) {
+			if prevLower || nextLower {
 				parts = append(parts, current.String())
 				current.Reset()
 			}
 		}
 		current.WriteRune(r)
 	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
+	// The builder always holds at least the rune the last iteration wrote,
+	// because rest is non-empty by the check above and every iteration ends in
+	// a WriteRune, so there is no empty tail to guard against.
+	parts = append(parts, current.String())
 
 	if len(parts) <= 1 {
 		return name
@@ -353,13 +385,21 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 			continue
 		}
 		pattern, suggested := classify(name)
-		if pattern == Pattern3Part || pattern == PatternSkip || pattern == Pattern2Part {
+		// PatternSkip is deliberately absent from this list: no classification
+		// produces it, as the constants above record, so comparing against it
+		// could only ever be false.
+		if pattern == Pattern3Part || pattern == Pattern2Part {
 			continue
 		}
-		if suggested == "" || suggested == name || existing[suggested] {
-			if suggested != "" && suggested != name && existing[suggested] {
-				fmt.Fprintf(stderr, "  skip %s -> %s in %s: target name already exists\n", name, suggested, cleanPath)
-			}
+		// classify answers every name with a name: each of its branches
+		// returns either the name itself or a non-empty rewrite of it, so
+		// there is no blank suggestion to guard against, only one that asks
+		// for no change.
+		if suggested == name {
+			continue
+		}
+		if existing[suggested] {
+			fmt.Fprintf(stderr, "  skip %s -> %s in %s: target name already exists\n", name, suggested, cleanPath)
 			continue
 		}
 		renames[name] = suggested

@@ -330,7 +330,7 @@ func unattributedFindings(prog *program, root string) []finding {
 // indexLiteral indexes a handler written as a function literal and returns the
 // functions its body names, which stand in for it as call-graph roots.
 func (p *program) indexLiteral(pkg *packages.Package, lit *ast.FuncLit) []*types.Func {
-	fn := p.indexBody(pkg, nil, &ast.FuncDecl{Body: lit.Body})
+	fn := p.indexBody(pkg, &ast.FuncDecl{Body: lit.Body})
 	roots := make([]*types.Func, 0, len(fn.calls))
 	for callee := range fn.calls {
 		roots = append(roots, callee)

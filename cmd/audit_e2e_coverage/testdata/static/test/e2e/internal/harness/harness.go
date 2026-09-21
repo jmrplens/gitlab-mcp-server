@@ -112,8 +112,46 @@ func Eventually[O any](s *Session, id ActionID, params map[string]any, until fun
 // rule reports.
 func Unused() {}
 
+// Timeout is an exported variable nothing reads. The rule is about exported
+// symbols and not about functions, so a variable is reported like any other.
+var Timeout = 0
+
+// reset is unexported, so the dead-export rule never looks at it however
+// little the fixture uses it: an unexported symbol nothing reads is what
+// staticcheck's own unused check is for.
+func reset() {}
+
+// close is an unexported method on an exported type, passed over for the
+// same reason as [reset] while the exported Close beside it is reported.
+func (s *Session) close() { reset() }
+
 // ModelOnly is exported and called only from test/e2e/modeleval, which is the
 // shape the gate has to accept: the model evaluation package is loaded as a
 // consumer of the harness and never scanned for placement, so a symbol it is
 // the first and only user of is live.
 func ModelOnly() {}
+
+// Version is read only by the command under test/e2e/internal/e2ectl, a main
+// package that is not the test main go test generates: the scan keeps it as a
+// consumer, so this constant is live.
+const Version = "fixture"
+
+// Anon is a variable of an anonymous struct type. Its field has no owner the
+// dead-export scan can key it under, so a scenario reading Anon.Field is a use
+// of Anon and of nothing else; [Field] beside it shares the name and stays
+// unused.
+var Anon struct{ Field int }
+
+// Field is a package-level function sharing its name with Anon's field, and is
+// referenced by nothing.
+func Field() {}
+
+// Stopper is a variable of an interface literal. Its method has no receiver
+// type to be keyed under, so a scenario calling Stopper.Stop is a use of
+// Stopper and of nothing else; [Stop] beside it shares the name and stays
+// unused.
+var Stopper interface{ Stop() }
+
+// Stop is a package-level function sharing its name with Stopper's method, and
+// is referenced by nothing.
+func Stop() {}

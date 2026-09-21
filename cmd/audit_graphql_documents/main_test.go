@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"go/token"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,6 +142,108 @@ func TestRun_AgainstAnInstanceItIntrospects_JudgesByWhatThatInstanceServes(t *te
 	}
 }
 
+// answeringInstanceRecordingAuthorization is an instance that answers
+// introspection, keeps whatever credential it was offered, and names its
+// version only to a caller that offered one, which is what GitLab does.
+func answeringInstanceRecordingAuthorization(t *testing.T) (endpoint string, authorization func() string) {
+	t.Helper()
+	var mutex sync.Mutex
+	var seen string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		offered := r.Header.Get("Authorization")
+		if offered != "" {
+			mutex.Lock()
+			seen = offered
+			mutex.Unlock()
+		}
+		// Read to the end rather than once into a ContentLength-sized
+		// buffer: a single Read may return fewer bytes than it was given,
+		// and a short one that stopped before "metadata" would route the
+		// version query to the introspection answer.
+		payload, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("reading the request body: %v", readErr)
+			http.Error(w, "unreadable body", http.StatusInternalServerError)
+
+			return
+		}
+		switch {
+		case !strings.Contains(string(payload), "metadata"):
+			_, _ = w.Write([]byte(introspectionAnswer(queryOnly)))
+		case offered == "":
+			_, _ = w.Write([]byte(`{"data":{"metadata":null}}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":{"metadata":{"version":"19.4.0-ee","revision":"abc1234"}}}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL, func() string {
+		mutex.Lock()
+		defer mutex.Unlock()
+		return seen
+	}
+}
+
+// TestRun_ACredentialThisRunHolds_ReachesTheInstanceOrIsExplained verifies the
+// two strings a live run carries about its credential. They look alike in the
+// configuration and mean opposite things: one is sent to the instance, the
+// other is the reason nothing was. A run that confused them would offer the
+// explanation as a bearer token and print the token as an explanation, and a
+// report that only ever says "GitLab unknown" cannot tell the two apart.
+func TestRun_ACredentialThisRunHolds_ReachesTheInstanceOrIsExplained(t *testing.T) {
+	const withheld = "GITLAB_TOKEN belongs to https://gitlab.com and this run asks elsewhere"
+
+	t.Run("a token this run may send", func(t *testing.T) {
+		endpoint, authorization := answeringInstanceRecordingAuthorization(t)
+
+		var out, errOut bytes.Buffer
+		status := run(auditRun{
+			dir:      fixtureModule(t, map[string]string{"ok": okFixture}),
+			patterns: []string{"./..."},
+			live:     endpoint,
+			token:    "secret",
+			now:      afterThePin,
+		}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut.String())
+		}
+		if authorization() != "Bearer secret" {
+			t.Errorf("the instance was offered %q, want the credential this run was given", authorization())
+		}
+		if !strings.Contains(out.String(), "GitLab 19.4.0-ee") {
+			t.Errorf("the report does not name the version that credential bought:\n%s", out.String())
+		}
+	})
+
+	t.Run("a token this run withholds", func(t *testing.T) {
+		endpoint, authorization := answeringInstanceRecordingAuthorization(t)
+
+		var out, errOut bytes.Buffer
+		status := run(auditRun{
+			dir:           fixtureModule(t, map[string]string{"ok": okFixture}),
+			patterns:      []string{"./..."},
+			live:          endpoint,
+			tokenWithheld: withheld,
+			now:           afterThePin,
+		}, &out, &errOut)
+
+		if status != 0 {
+			t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut.String())
+		}
+		if authorization() != "" {
+			t.Errorf("the instance was offered %q by a run that withheld its token", authorization())
+		}
+		for _, want := range []string{"GitLab unknown", withheld} {
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("the report does not contain %q:\n%s", want, out.String())
+				}
+			})
+		}
+	})
+}
+
 // TestRun_AnInstanceThatCannotBeReached_FailsWithoutFallingBackToThePin
 // verifies that a re-probe whose instance never answered stops rather than
 // judging by the pin, which would report a pass for a question nobody asked.
@@ -249,18 +353,80 @@ func TestRun_DocumentsThePinnedSchemaAccepts_Succeeds(t *testing.T) {
 // care about is reviewable rather than a count, and that the listing names only
 // what passed: a document printed as accepted and refused in the same run would
 // be worse than either line alone.
+// The accepted line is compared whole, because its two halves are both names of
+// the same document and a listing that printed them the other way round would
+// still contain each of them.
 func TestRun_Verbose_ListsWhatItAccepted(t *testing.T) {
-	status, out, _ := runFixture(t, map[string]string{"sound": soundFixture, "broken": brokenFixture}, true)
+	status, out, errOut := runFixture(t, map[string]string{"sound": soundFixture, "broken": brokenFixture}, true)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1: the broken fixture is refused", status)
 	}
-	if !strings.Contains(out, "ok  ") || !strings.Contains(out, "getVulnerability") {
-		t.Errorf("the verbose run does not name the document it checked:\n%s", out)
+	if !strings.Contains(out, "    ok  fixture/sound getVulnerability\n") {
+		t.Errorf("the verbose run does not name the package and the document it checked:\n%s", out)
 	}
 	if strings.Contains(out, "listVulnerabilities") {
 		t.Errorf("the verbose run listed a refused document as accepted:\n%s", out)
 	}
+	// The two counts are the refused documents and every document, in that
+	// order. A fixture with one of each cannot tell them apart, so the summary
+	// is asserted here, where the run carries two documents and one refusal.
+	if !strings.Contains(errOut, "refuses 1 of 2 document(s)") {
+		t.Errorf("the summary does not count the refusals against every document checked:\n%s", errOut)
+	}
+}
+
+// TestRun_ARelativeDir_StillTrimsTheFindingsToIt verifies the one thing the
+// audit does with `-dir` besides handing it to the loader: findings come out of
+// the loader positioned absolutely and with every symlink resolved, so the root
+// they are trimmed against is made both first, whatever the flag was written
+// as.
+//
+// Both halves of that are asserted because absolute alone passes here on Linux
+// and fails on macOS, where a temp directory is reached through /var and read
+// back through /private/var. The absence check names both spellings for the
+// same reason: against the unresolved one alone it would pass on macOS while
+// the finding still carried the resolved one.
+//
+// It is also what pins the branch beside it. `filepath.Abs` fails only when the
+// working directory cannot be resolved, and a relative `-dir` is the only shape
+// that asks it: with an absolute one it returns before it ever looks. So the
+// failure arm is unreachable from here (a run whose working directory had gone
+// could not have loaded the package this finding names) and this is the arm
+// that does run.
+func TestRun_ARelativeDir_StillTrimsTheFindingsToIt(t *testing.T) {
+	root := fixtureModule(t, map[string]string{"broken": brokenFixture})
+	t.Chdir(filepath.Dir(root))
+
+	var out, errOut bytes.Buffer
+	status := run(auditRun{dir: filepath.Base(root), patterns: []string{"./..."}}, &out, &errOut)
+
+	if status != 1 {
+		t.Fatalf("exit status %d, want 1", status)
+	}
+	if !strings.Contains(errOut.String(), "(broken/broken.go:") {
+		t.Errorf("the finding is not trimmed to the relative root:\n%s", errOut.String())
+	}
+	for _, absolute := range rootSpellings(t, root) {
+		if strings.Contains(errOut.String(), absolute) {
+			t.Errorf("the finding still carries the absolute path %q:\n%s", absolute, errOut.String())
+		}
+	}
+}
+
+// rootSpellings returns every absolute path the fixture root can be named by:
+// the one [testing.T.TempDir] handed out and, where they differ, the one every
+// symlink resolves to. macOS is where they differ, /var being a link to
+// /private/var, and asserting against one spelling there says nothing about
+// the other.
+func rootSpellings(t *testing.T, root string) []string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil || resolved == root {
+		return []string{root}
+	}
+
+	return []string{root, resolved}
 }
 
 // TestRun_ADocumentGitLabWouldRefuse_Fails verifies the finding: a non-zero
@@ -333,7 +499,7 @@ func TestFinding_EveryReason_IsListedUnderTheDocument(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			report := finding("", graphqldocs.Refusal{
+			report := finding(nil, graphqldocs.Refusal{
 				Document: graphqldocs.Document{Package: "x/y", Name: "queryThing"},
 				Reasons:  testCase.reasons,
 			})
@@ -355,39 +521,90 @@ func TestRelative_PositionsUnderTheRoot_AreTrimmed(t *testing.T) {
 	cases := []struct {
 		name     string
 		position token.Position
-		root     string
+		roots    []string
 		want     string
 	}{
 		{
 			name:     "under the root",
 			position: token.Position{Filename: filepath.Join("/repo", "internal", "tools", "x.go"), Line: 12},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     "internal/tools/x.go:12",
 		},
 		{
 			name:     "outside the root",
 			position: token.Position{Filename: filepath.Join("/elsewhere", "x.go"), Line: 3},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     filepath.Join("/elsewhere", "x.go") + ":3",
 		},
 		{
 			name:     "no root to trim against",
 			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 1},
-			root:     "",
+			roots:    nil,
 			want:     filepath.Join("/repo", "x.go") + ":1",
 		},
 		{
 			name:     "a filename that is not a path under the root",
 			position: token.Position{Filename: "relative.go", Line: 7},
-			root:     "/repo",
+			roots:    []string{"/repo"},
 			want:     "relative.go:7",
+		},
+		{
+			// The two spellings of one directory, which is what macOS and
+			// Windows each produce in the opposite order. Trimming against
+			// the first alone would leave the finding absolute.
+			name:     "under the second spelling of the root",
+			position: token.Position{Filename: filepath.Join("/private", "repo", "x.go"), Line: 4},
+			roots:    []string{"/repo", filepath.Join("/private", "repo")},
+			want:     "x.go:4",
+		},
+		{
+			name:     "an empty spelling among the roots is skipped",
+			position: token.Position{Filename: filepath.Join("/repo", "x.go"), Line: 5},
+			roots:    []string{"", "/repo"},
+			want:     "x.go:5",
 		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := relative(testCase.position, testCase.root); got != testCase.want {
+			if got := relative(testCase.position, testCase.roots); got != testCase.want {
 				t.Errorf("relative() = %q, want %q", got, testCase.want)
 			}
 		})
 	}
+}
+
+// TestTrimRoots_ARelativeDir_OffersEverySpellingOfIt verifies the list a
+// finding is trimmed against: absolute always, and the resolved form beside it
+// only where the two differ.
+//
+// The second is not decoration. The loader positions a finding with symlinks
+// resolved, and the two platforms that expose it disagree about which spelling
+// wins, so offering one and guessing which leaves the finding absolute on the
+// other. A duplicate is left out rather than offered twice, since a second
+// identical root can only ever repeat the first one's answer.
+func TestTrimRoots_ARelativeDir_OffersEverySpellingOfIt(t *testing.T) {
+	t.Run("a directory that is not a link offers one spelling", func(t *testing.T) {
+		dir := t.TempDir()
+		resolved, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			t.Fatalf("EvalSymlinks(%q) error = %v", dir, err)
+		}
+
+		got := trimRoots(resolved)
+
+		if len(got) != 1 || got[0] != resolved {
+			t.Errorf("trimRoots(%q) = %v, want just the one absolute spelling", resolved, got)
+		}
+	})
+
+	t.Run("a relative dir is made absolute", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		got := trimRoots(".")
+
+		if len(got) == 0 || !filepath.IsAbs(got[0]) {
+			t.Errorf("trimRoots(\".\") = %v, want an absolute root first", got)
+		}
+	})
 }

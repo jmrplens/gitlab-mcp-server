@@ -114,8 +114,11 @@ func isDelegatedRegisterMetaDefinition(definition registerMetaDefinition) bool {
 // findRegisterMetaDefinitions walks toolsDir looking for top-level
 // RegisterMeta functions and extracts the individual tool names they declare.
 //
-// Duplicate builder names across files produce an error so the migration can
-// surface accidental re-introductions.
+// A package that defines one in two files is recorded twice rather than
+// refused: each definition is a separate finding, and the sort below orders
+// them by package and then by file so a report names both. The comment here
+// used to promise an error instead, which nothing in this function has ever
+// returned.
 func findRegisterMetaDefinitions(root, toolsDir string) ([]registerMetaDefinition, error) {
 	var definitions []registerMetaDefinition
 	fileSet := token.NewFileSet()

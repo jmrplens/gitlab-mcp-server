@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -60,6 +62,92 @@ func TestClassify_FourOutcomes_AreKeptApart(t *testing.T) {
 	}
 	if report.Summary.ByKind[kindHint] != 1 || report.Summary.ByKind[kindRelated] != 1 {
 		t.Errorf("findings by kind = %v, want the hint and the related entry counted", report.Summary.ByKind)
+	}
+}
+
+// TestClassify_EveryRecord_CarriesItsWholePosition holds a finding, an alias
+// finding and an unresolved site as whole records rather than by the one
+// field each earlier test reads. The package, file, line and kind are four
+// assignments of the same shape written side by side, and a swap between two
+// of them is invisible to a test that asserts only the ID or the expression.
+func TestClassify_EveryRecord_CarriesItsWholePosition(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "q/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
+		{Package: "p", File: "q/a.go", Line: 2, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
+		{Package: "p", File: "q/a.go", Line: 5, Kind: kindRelated, Expr: "helper(x)"},
+	}, stubCatalog(), true)
+
+	wantFindings := []Finding{
+		{Package: "p", File: "q/a.go", Line: 2, Kind: kindRelated, ID: "demo.fetch", Canonical: "demo.get"},
+		{Package: "p", File: "q/a.go", Line: 3, Kind: kindHint, ID: "demo.gone", Closest: "demo.get"},
+	}
+	if !slices.Equal(report.Findings, wantFindings) {
+		t.Errorf("findings = %+v, want %+v", report.Findings, wantFindings)
+	}
+	wantUnresolved := []Unresolved{{Package: "p", File: "q/a.go", Line: 5, Kind: kindRelated, Expression: "helper(x)"}}
+	if !slices.Equal(report.Unresolved, wantUnresolved) {
+		t.Errorf("unresolved = %+v, want %+v", report.Unresolved, wantUnresolved)
+	}
+}
+
+// TestClassify_Summary_EveryCounterIsItsOwn drives a run in which no two
+// counts of the summary agree, and holds the whole summary and both printed
+// summary lines against it. The counts are filled from lengths written side
+// by side at the end of one run and printed in one line each, so a report that
+// swapped two of them would read as correct to every test that checks one
+// count at a time, or that checks it on a run where the two happen to agree.
+func TestClassify_Summary_EveryCounterIsItsOwn(t *testing.T) {
+	sites := []site{
+		{Package: "p1", File: "p1/a.go", Line: 1, Kind: kindRelated, Value: "demo.gone", Resolved: true},
+		{Package: "p1", File: "p1/a.go", Line: 2, Kind: kindHint, Value: "demo.gone2", Resolved: true},
+		{Package: "p2", File: "p2/b.go", Line: 3, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
+		{Package: "p2", File: "p2/b.go", Line: 4, Kind: kindHint, Value: "nope.nothing", Resolved: true},
+		{Package: "p3", File: "p3/c.go", Line: 5, Kind: kindRelated, Value: "demo.missing", Resolved: true},
+		{Package: "p3", File: "p3/c.go", Line: 6, Kind: kindHint, Value: "demo.absent", Resolved: true},
+		{Package: "p1", File: "p1/a.go", Line: 7, Kind: kindUsage, Value: "Execute also accepts demo.fetch.", Resolved: true},
+		{Package: "p1", File: "p1/a.go", Line: 8, Kind: kindDescription, Value: "See demo.fetch.", Resolved: true},
+		{Package: "p2", File: "p2/b.go", Line: 9, Kind: kindUsage, Value: "Or demo.fetch.", Resolved: true},
+		{Package: "p3", File: "p3/c.go", Line: 10, Kind: kindDescription, Value: "And demo.fetch.", Resolved: true},
+		{Package: "p1", File: "p1/a.go", Line: 16, Kind: kindUsage, Value: "The remote ends in project.git; execute accepts issue.close.", Resolved: true},
+	}
+	for line := 11; line <= 15; line++ {
+		sites = append(sites, site{Package: "p1", File: "p1/a.go", Line: line, Kind: kindRelated, Expr: fmt.Sprintf("h%d(x)", line)})
+	}
+	report := classify(sites, stubCatalog("project.get", "issue.update", "extra.one", "extra.two"), true)
+
+	want := Summary{
+		DeclarationsJudged: true,
+		CatalogIDs:         8,
+		Aliases:            2,
+		Judged:             11,
+		Findings:           6,
+		Packages:           3,
+		AliasHits:          4,
+		Unresolved:         5,
+		Stale:              1,
+		ByKind:             map[string]int{kindRelated: 3, kindHint: 3},
+		JudgedByKind:       map[string]int{kindRelated: 3, kindHint: 3, kindUsage: 3, kindDescription: 2},
+	}
+	if !reflect.DeepEqual(report.Summary, want) {
+		t.Errorf("summary = %+v\nwant      %+v", report.Summary, want)
+	}
+	if report.Clean() {
+		t.Error("a run with findings in every bucket reported itself clean")
+	}
+
+	var out bytes.Buffer
+	writeReport(&out, report, true)
+	for _, line := range []string{
+		"audit_action_ids: 6 published ID(s) to fix in 3 package(s); 4 alias(es) named in prose; 5 site(s) not folded; 1 stale declaration(s)\n",
+		"  judged 11 published ID(s) against 8 catalog ID(s) and 2 alias(es)\n",
+		"  findings by kind: hint 3, related 3\n",
+		"  judged by kind: hint 3, related 3, usage 3, description 2\n",
+	} {
+		t.Run(strings.TrimSpace(line), func(t *testing.T) {
+			if !strings.Contains(out.String(), line) {
+				t.Errorf("report = %q, want the line %q", out.String(), line)
+			}
+		})
 	}
 }
 
@@ -207,6 +295,116 @@ func TestClassify_NarrowedRun_LeavesTheDeclarationsUnjudged(t *testing.T) {
 	}
 }
 
+// TestClean_OneBucketAtATime_FailsTheRun holds the gate's four terms one at a
+// time. Clean is four equalities joined by three ands, and a report with two
+// buckets filled answers the same under an and as under an or, so the tests
+// that assert !Clean over a realistic run could not tell the four apart: what
+// separates them is a report in which exactly one is non-zero.
+func TestClean_OneBucketAtATime_FailsTheRun(t *testing.T) {
+	if clean := (&Report{}).Clean(); !clean {
+		t.Error("a report with nothing in any bucket reported itself unclean")
+	}
+	for name, summary := range map[string]Summary{
+		"a published ID that resolves to nothing": {Findings: 1},
+		"an alias named in prose":                 {AliasHits: 1},
+		"a site that could not be folded":         {Unresolved: 1},
+		"a declaration that excuses nothing":      {Stale: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if (&Report{Summary: summary}).Clean() {
+				t.Errorf("a run holding %s reported itself clean", name)
+			}
+		})
+	}
+}
+
+// TestSortFindings_OneFieldAtATime_DecidesTheOrder holds each of the three
+// position fields deciding the order on its own, with the ID order pointing
+// the other way so a comparator that fell through to the ID is visible. The
+// existing order test varies the package and the file together, where a
+// comparator reading either one alone sorts the same list identically.
+//
+// Each case is sorted twice, the second time from the order the first
+// produced, because a comparator is asked both which of two rows comes first
+// and whether a row already in place belongs after the one before it, and a
+// list that is already in order is the only input that asks the second.
+func TestSortFindings_OneFieldAtATime_DecidesTheOrder(t *testing.T) {
+	for name, findings := range map[string][]Finding{
+		"the package decides": {
+			{Package: "z", File: "a.go", Line: 1, ID: "demo.aaa"},
+			{Package: "a", File: "a.go", Line: 1, ID: "demo.zzz"},
+		},
+		"the file decides": {
+			{Package: "p", File: "z.go", Line: 1, ID: "demo.aaa"},
+			{Package: "p", File: "a.go", Line: 1, ID: "demo.zzz"},
+		},
+		"the line decides": {
+			{Package: "p", File: "a.go", Line: 9, ID: "demo.aaa"},
+			{Package: "p", File: "a.go", Line: 1, ID: "demo.zzz"},
+		},
+		"one position, the ID decides": {
+			{Package: "p", File: "a.go", Line: 1, ID: "demo.zzz"},
+			{Package: "p", File: "a.go", Line: 1, ID: "demo.aaa"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sortFindings(findings)
+			first := findings[0]
+			sortFindings(findings)
+			if findings[0] != first {
+				t.Errorf("order = %+v, want a sorted list left in its order", findings)
+			}
+			if name == "one position, the ID decides" {
+				if findings[0].ID != "demo.aaa" {
+					t.Errorf("order = %+v, want the IDs in order where the position is one", findings)
+				}
+				return
+			}
+			if findings[0].ID != "demo.zzz" {
+				t.Errorf("order = %+v, want the earlier position first although its ID sorts last", findings)
+			}
+		})
+	}
+}
+
+// TestClassify_UnresolvedSitesOnOneLine_KeepTheOrderTheyWereWrittenIn holds
+// the last comparison of lessPosition, which orders two rows that agree on
+// everything above the line. Findings never reach it, since they are compared
+// only once their positions differ; the unresolved list does, and a comparator
+// that called two equal lines "less" would let the sort swap them, so the work
+// list would differ between runs over one tree.
+func TestClassify_UnresolvedSitesOnOneLine_KeepTheOrderTheyWereWrittenIn(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "p/a.go", Line: 7, Kind: kindRelated, Expr: "first(x)"},
+		{Package: "p", File: "p/a.go", Line: 7, Kind: kindRelated, Expr: "second(x)"},
+	}, stubCatalog(), true)
+
+	want := []Unresolved{
+		{Package: "p", File: "p/a.go", Line: 7, Kind: kindRelated, Expression: "first(x)"},
+		{Package: "p", File: "p/a.go", Line: 7, Kind: kindRelated, Expression: "second(x)"},
+	}
+	if !slices.Equal(report.Unresolved, want) {
+		t.Errorf("unresolved = %+v, want %+v", report.Unresolved, want)
+	}
+}
+
+// TestWriteSummary_EmptyBreakdown_PrintsNoLine holds the two breakdown lines
+// against the run they are for. A clean run has no findings by kind, and a
+// judged-nothing run has no judged-by-kind, so a guard that admitted an empty
+// map would print "findings by kind: " with nothing after it.
+func TestWriteSummary_EmptyBreakdown_PrintsNoLine(t *testing.T) {
+	var out bytes.Buffer
+	writeSummary(&out, Summary{DeclarationsJudged: true, ByKind: map[string]int{}, JudgedByKind: map[string]int{}}, true)
+
+	for _, unwanted := range []string{"findings by kind", "judged by kind"} {
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(out.String(), unwanted) {
+				t.Errorf("summary = %q, want no %q line over an empty breakdown", out.String(), unwanted)
+			}
+		})
+	}
+}
+
 // TestClassify_Findings_AreOrderedByPosition holds that two runs over one tree
 // produce the same work list, which is what lets a later layer diff it.
 func TestClassify_Findings_AreOrderedByPosition(t *testing.T) {
@@ -276,6 +474,44 @@ func TestWriteReport_EverythingTheGateRefuses_IsPrintedWithoutVerbose(t *testing
 	}
 }
 
+// TestWriteReport_Rows_ReadFileLineKindAndIDInThatOrder holds the whole quiet
+// report of one small run, row for row. Each row is one Fprintf over four
+// fields of the same record plus a verb and a trailer, and every earlier test
+// looks for an ID somewhere in the text, which a row that printed the kind
+// where the file belongs would still satisfy.
+func TestWriteReport_Rows_ReadFileLineKindAndIDInThatOrder(t *testing.T) {
+	report := classify([]site{
+		{Package: "p", File: "q/a.go", Line: 3, Kind: kindHint, Value: "demo.gone", Resolved: true},
+		{Package: "p", File: "q/a.go", Line: 2, Kind: kindRelated, Value: "demo.fetch", Resolved: true},
+		{Package: "p", File: "q/a.go", Line: 5, Kind: kindUsage, Value: "Execute also accepts demo.fetch.", Resolved: true},
+		{Package: "p", File: "q/a.go", Line: 4, Kind: kindRelated, Expr: "helper(x)"},
+	}, stubCatalog(), true)
+
+	var out bytes.Buffer
+	writeReport(&out, report, false)
+	want := strings.Join([]string{
+		"=== p ===",
+		`  q/a.go:2 related "demo.fetch" is an alias, not the catalog ID demo.get`,
+		`  q/a.go:3 hint "demo.gone" resolves to no action; closest: demo.get`,
+		"=== registered aliases, not catalog IDs ===",
+		"=== p ===",
+		`  q/a.go:5 usage "demo.fetch" alias of demo.get`,
+		"=== not folded ===",
+		"  q/a.go:4 related helper(x)",
+		"=== declarations that excuse nothing ===",
+		"  issue.close is no longer a registered alias named in prose (declaredAliasMentions). Remove the entry.",
+		"  issue.reopen is no longer a registered alias named in prose (declaredAliasMentions). Remove the entry.",
+		"  project.git is no longer spelled in any Usage line or description (proseExemptions). Remove the entry.",
+		"audit_action_ids: 2 published ID(s) to fix in 1 package(s); 1 alias(es) named in prose; 1 site(s) not folded; 3 stale declaration(s)",
+		"  judged 3 published ID(s) against 4 catalog ID(s) and 2 alias(es)",
+		"  findings by kind: hint 1, related 1",
+		"",
+	}, "\n")
+	if out.String() != want {
+		t.Errorf("report:\n%s\nwant:\n%s", out.String(), want)
+	}
+}
+
 // TestWriteReport_CleanRunVerbose_NamesTheAliasHeadingAnyway holds the one
 // thing -v still decides: on a clean run it prints the alias heading, so a
 // reader can see the bucket was looked at and was empty.
@@ -340,6 +576,22 @@ func TestWriteJSON_Roundtrip_CarriesTheWholeReport(t *testing.T) {
 	}
 }
 
+// TestWriteJSON_BareFileName_WritesInTheWorkingDirectory holds the one path
+// shape that names no directory to create. `-json action-ids.json` is a
+// spelling a caller may reasonably use, and a run that tried to create the
+// directory "." before writing would fail on a read-only checkout for no
+// reason.
+func TestWriteJSON_BareFileName_WritesInTheWorkingDirectory(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	if err := writeJSON("action-ids.json", Report{SchemaVersion: schemaVersion}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := os.Stat("action-ids.json"); err != nil {
+		t.Errorf("work list: %v", err)
+	}
+}
+
 // TestWriteJSON_UnwritablePath_IsAnError holds that a work list that could not
 // be written is reported rather than swallowed.
 func TestWriteJSON_UnwritablePath_IsAnError(t *testing.T) {
@@ -352,6 +604,12 @@ func TestWriteJSON_UnwritablePath_IsAnError(t *testing.T) {
 	}
 	if err := writeJSON(filepath.Join(t.TempDir(), "action-ids.json"), func() {}); err == nil {
 		t.Fatal("writeJSON of an unencodable report returned no error")
+	}
+	// A directory already sitting where the work list goes: its own parent
+	// exists, so the failure is the write rather than the directory, which is
+	// the other half of what this function can be refused by.
+	if err := writeJSON(t.TempDir(), Report{}); err == nil {
+		t.Fatal("writeJSON onto a directory returned no error")
 	}
 }
 

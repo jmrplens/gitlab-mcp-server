@@ -247,6 +247,7 @@ func TestCompareBaseline_WeakerCredits_MetByStrongerOnes(t *testing.T) {
 		{name: "asserted not met by a refusal", spec: callSpec{test: "TestOld", action: "issue.delete", dispatched: "issue.delete", shape: dynamicDefault}, lost: true},
 		{name: "refusal not met by asserted", spec: callSpec{test: "TestOld", expectation: "needs_confirmation", action: "issue.list", dispatched: "issue.list", outcome: e2ecalls.RefusedOutcome("needs_confirmation"), shape: dynamicDefault}, lost: true},
 		{name: "error path not met by a preview", spec: callSpec{test: "TestOld", expectation: "tool_error", action: "issue.create", dispatched: "issue.create", outcome: e2ecalls.OutcomeToolError, shape: individualSafe}, lost: true},
+		{name: "cleanup met by neither sweep nor asserted", spec: callSpec{test: "TestOld", purpose: e2ecalls.PurposeCleanup, expectation: e2ecalls.ExpectationAny, action: "issue.delete", dispatched: "issue.delete", shape: dynamicDefault}, lost: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -260,6 +261,36 @@ func TestCompareBaseline_WeakerCredits_MetByStrongerOnes(t *testing.T) {
 				t.Errorf("lost = %q, want lost=%t", result.Lost, tc.lost)
 			}
 		})
+	}
+}
+
+// TestBaselineUnjudgedCalls_SameTestTwice_NamedOnce verifies the list the
+// stream-mismatch refusal is built from: one entry per test however many of
+// its calls carry no verdict, and "none" where there is nothing to name.
+//
+// The refusal reads "<n> calls, first <name>", so a test that made forty
+// unjudged calls must not fill the count forty times over, and a count with
+// no name beside it must still read as a sentence.
+func TestBaselineUnjudgedCalls_SameTestTwice_NamedOnce(t *testing.T) {
+	unjudged := func(test, action string) *e2ecalls.Call {
+		call := fixtureCall(callSpec{test: test, action: action, dispatched: action, shape: dynamicDefault})
+		call.TestStatus = ""
+		return call
+	}
+	judged := fixtureCall(callSpec{test: "TestJudged", action: "issue.list", dispatched: "issue.list", shape: dynamicDefault})
+	anonymous := unjudged("", "issue.list")
+	rt := &runtimeRecords{calls: []*e2ecalls.Call{
+		unjudged("TestTwice", "issue.list"), unjudged("TestTwice", "issue.create"), judged, anonymous,
+	}}
+
+	if got, want := baselineUnjudgedCalls(rt), []string{"TestTwice"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("baselineUnjudgedCalls() = %q, want %q", got, want)
+	}
+	if got := firstOrNone(baselineUnjudgedCalls(rt)); got != "TestTwice" {
+		t.Errorf("firstOrNone() = %q, want TestTwice", got)
+	}
+	if got := firstOrNone(nil); got != "none" {
+		t.Errorf("firstOrNone(nil) = %q, want none", got)
 	}
 }
 

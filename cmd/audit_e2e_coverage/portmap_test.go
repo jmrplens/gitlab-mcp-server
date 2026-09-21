@@ -61,6 +61,13 @@ func TestIsTestFunc_Names_GoTestRule(t *testing.T) {
 // resolving to its parent, the drops applied, and every way the map can be
 // wrong reported. Both trees hold a Testhelper: the old one must not be on
 // the map, and the new one's Replaces line must retire nothing.
+//
+// Five more shapes in the new tree claim TestMeta_Unresolved as theirs and
+// none of them may have it: a Testhelper, a method, a function in a file that
+// is not a _test.go, one under a dot-directory, and the helper function. That
+// test staying unresolved is what says every one of those was passed over,
+// and the dot-directory is the one that matters most, since the parallel-agent
+// tooling puts a whole worktree of this repository under one.
 func TestBuildPortMap_Fixtures_ResolvedAndUnresolved(t *testing.T) {
 	oldDir, newDir := portMapFixtures()
 	oldTests, err := testFunctions(oldDir)
@@ -112,15 +119,30 @@ func TestBuildPortMap_Fixtures_ResolvedAndUnresolved(t *testing.T) {
 
 // TestResolvePortMap_EveryTestResolved_Complete verifies the map that passes: every old test
 // replaced or dropped, and nothing wrong with the map.
+//
+// The second half is the other claim a declaration table makes. Resolving
+// every old test is not enough: a drop naming a test the old suite does not
+// have is a claim nothing answers any more, and a map carrying one is not
+// complete however few tests are left unresolved.
 func TestResolvePortMap_EveryTestResolved_Complete(t *testing.T) {
-	m := resolvePortMap(
-		[]string{"TestA", "TestB"},
-		nil,
-		map[string][]string{"TestNewA": {"TestA"}},
+	old := []string{"TestA", "TestB"}
+	replaces := map[string][]string{"TestNewA": {"TestA"}}
+	m := resolvePortMap(old, nil, replaces,
 		map[string]dropDeclaration{"TestB": {Category: dropCoveredElsewhere, Reason: "test/e2e/http"}},
 	)
 	if !m.complete() {
 		t.Errorf("complete() = false: unresolved %q, findings %q", m.Unresolved, m.Findings)
+	}
+
+	stale := resolvePortMap(old, nil, replaces, map[string]dropDeclaration{
+		"TestB":    {Category: dropCoveredElsewhere, Reason: "test/e2e/http"},
+		"TestGone": {Category: dropSuperseded, Reason: "the old suite has no such test"},
+	})
+	if len(stale.Unresolved) != 0 {
+		t.Errorf("Unresolved = %q, want none: the stale drop is the only thing wrong", stale.Unresolved)
+	}
+	if stale.complete() {
+		t.Error("complete() = true with a drop declared for a test the old suite does not have")
 	}
 }
 

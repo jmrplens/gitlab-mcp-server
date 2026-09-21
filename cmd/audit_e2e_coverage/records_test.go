@@ -28,6 +28,11 @@ func writeFile(t *testing.T, path, content string) {
 // TestReadRuntimes_OneDirectory_OneRuntime verifies the plain layout: a
 // directory holding shards is one runtime, named by its run line, with every
 // line type folded and the late dispatch joined onto its call.
+//
+// The fixture directory holds a file that is not a shard, sorted ahead of the
+// one that is, because a real shard directory holds whatever else the run
+// left there and a scan that stopped at the first file it did not recognize
+// would read the directory as holding none.
 func TestReadRuntimes_OneDirectory_OneRuntime(t *testing.T) {
 	runtimes, err := readRuntimes(callsFixture("ce"))
 	if err != nil {
@@ -55,7 +60,8 @@ func TestReadRuntimes_OneDirectory_OneRuntime(t *testing.T) {
 }
 
 // TestReadRuntimes_ParentDirectory_OneRuntimePerChild verifies the layout
-// dist/e2e-calls produces: a parent holding no shard, one child per target.
+// dist/e2e-calls produces: a parent holding no shard, one child per target,
+// and a plain file beside those children passed over rather than read as one.
 func TestReadRuntimes_ParentDirectory_OneRuntimePerChild(t *testing.T) {
 	runtimes, err := readRuntimes(callsFixture("two-runtimes"))
 	if err != nil {
@@ -165,6 +171,13 @@ func TestFoldRecords_RunLines_Ruled(t *testing.T) {
 		{name: "refused before probing", records: []e2ecalls.Record{run("", "", e2ecalls.RunRefused)}, wantMsg: "refused before probing"},
 		{name: "unknown tier", records: []e2ecalls.Record{run("community", "platinum", e2ecalls.RunStarted)}, wantMsg: "platinum"},
 		{
+			// Half a runtime is no runtime: an edition with no tier beside it
+			// cannot say which catalog the calls were served from.
+			name:    "an edition with no tier names no runtime",
+			records: []e2ecalls.Record{run("community", "", e2ecalls.RunStarted)},
+			wantMsg: "no run line names an edition and a tier",
+		},
+		{
 			name: "a refused run beside a started one takes the started one's runtime",
 			records: []e2ecalls.Record{
 				run("", "", e2ecalls.RunRefused), run("enterprise", "premium", e2ecalls.RunStarted),
@@ -212,6 +225,33 @@ func TestFoldRecords_RunLines_Ruled(t *testing.T) {
 	}
 }
 
+// TestFoldRecords_LinesTheReaderCannotPlace verifies the two shapes a shard
+// can hold that name nothing: a run line with no package, whose calls are
+// then placed in none, and a line type this reader has no case for, which is
+// passed over rather than refused.
+//
+// The second is what lets the harness start writing a new kind of line
+// without the audit refusing every shard until it is taught to read it.
+func TestFoldRecords_LinesTheReaderCannotPlace(t *testing.T) {
+	call := &e2ecalls.Call{Test: "T", Action: "a.b", TraceID: "t"}
+	rt, err := foldRecords([]e2ecalls.Record{
+		{Schema: 1, Type: e2ecalls.TypeRun, Run: &e2ecalls.Run{Edition: "community", Tier: "free", Status: e2ecalls.RunStarted}},
+		{Schema: 1, Type: e2ecalls.TypeCall, Call: call},
+		{Schema: 1, Type: "annotation"},
+	})
+	if err != nil {
+		t.Fatalf("foldRecords() error = %v", err)
+	}
+
+	if len(rt.packages) != 0 {
+		t.Errorf("packages = %v, want none: the run line names no package to place the call in", rt.packages)
+	}
+	if len(rt.calls) != 1 || len(rt.sessions) != 0 || len(rt.skips) != 0 || rt.dispatches != 0 {
+		t.Errorf("folded %d calls, %d sessions, %d skips and %d dispatches; want only the call",
+			len(rt.calls), len(rt.sessions), len(rt.skips), rt.dispatches)
+	}
+}
+
 // TestMatchesRuntime_Selectors_Matched verifies the two shorthands and the literal
 // key: ce is any community runtime, ee is a licensed enterprise one, an
 // unlicensed enterprise image is neither, and a key matches itself.
@@ -231,6 +271,7 @@ func TestMatchesRuntime_Selectors_Matched(t *testing.T) {
 		{name: "a key matches itself", key: "enterprise/free", selector: "enterprise/free", want: true},
 		{name: "selectors are trimmed and case-insensitive", key: "community/free", selector: " CE ", want: true},
 		{name: "a key without a slash matches nothing", key: "community", selector: "ce", want: false},
+		{name: "ee does not match a tier the server cannot parse", key: "enterprise/platinum", selector: "ee", want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

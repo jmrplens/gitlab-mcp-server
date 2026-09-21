@@ -1,6 +1,8 @@
 package main
 
 import (
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,11 @@ import (
 // pinnedFixture is the schema standing in for the pin in these tests. It is
 // written the way GitLab's own is: an enum, an input object that refers to
 // itself, an interface with an implementation, and a field taking arguments.
+//
+// `after` is here for one comparison and is passed by no document: it is the
+// argument the pin has and the later release does not, which is the direction
+// of the presence report that a schema agreeing on every argument cannot
+// exercise.
 const pinnedFixture = `
 scalar Time
 
@@ -41,7 +48,7 @@ type Finding implements Node {
 }
 
 type Query {
-  findings(filter: Filter, first: Int): [Finding!]
+  findings(filter: Filter, first: Int, after: String): [Finding!]
   node(id: ID!): Node
 }
 
@@ -51,8 +58,14 @@ schema {
 `
 
 // probedFixture is the same schema as a later release might serve it: an enum
-// value withdrawn and another added, an argument narrowed, a field gone, and a
-// type that changed kind.
+// value withdrawn and another added, an argument narrowed, a field gone, a type
+// that changed kind, an input object that grew a field, and a type that did not
+// exist before.
+//
+// The last two are the ways a later release adds rather than removes. `cursor`
+// is what a document handing `Filter` a value silently starts being able to
+// send, so it is the coordinate that says whether the walk followed the schema
+// this run judged by; `Introduced` is a type the pin has never heard of.
 const probedFixture = `
 enum Time {
   NOW
@@ -68,6 +81,7 @@ input Filter {
   severity: [String!]
   since: Time
   also: Filter
+  cursor: String
 }
 
 interface Node {
@@ -78,6 +92,10 @@ type Finding implements Node {
   id: ID!
   severity: Severity
   found: Time
+}
+
+type Introduced {
+  id: ID!
 }
 
 type Query {
@@ -336,6 +354,30 @@ func TestDifference_AnArgumentOrFieldOnlyOneSideHas_NamesWhichSide(t *testing.T)
 			want: "",
 		},
 		{
+			name: "a type only the live schema has",
+			left: pinned, right: probed,
+			at:   coordinate{typeName: "Introduced"},
+			want: "the live schema has it, the pin does not",
+		},
+		{
+			name: "a field only the live schema has",
+			left: pinned, right: probed,
+			at:   coordinate{typeName: "Filter", fieldName: "cursor"},
+			want: "the live schema has it, the pin does not",
+		},
+		{
+			name: "an argument only the pin has",
+			left: pinned, right: probed,
+			at:   coordinate{typeName: "Query", fieldName: "findings", argName: "after"},
+			want: "the pin has it, the live schema does not",
+		},
+		{
+			name: "that same argument read the other way round",
+			left: probed, right: pinned,
+			at:   coordinate{typeName: "Query", fieldName: "findings", argName: "after"},
+			want: "the live schema has it, the pin does not",
+		},
+		{
 			name: "an argument the live schema does not have",
 			left: pinned, right: probed,
 			at:   coordinate{typeName: "Query", fieldName: "findings", argName: "notAnArgument"},
@@ -416,11 +458,16 @@ func TestEnumDifference_ValuesAddedAndWithdrawn_AreBothReported(t *testing.T) {
 // The pin's age is in both, because the number is the point. A pin is a
 // photograph of gitlab.com on one day, and without saying how old it is the
 // report invites the reader to assume it is current.
+// The document supplies `first` so that both fixtures accept it, which is what
+// makes the walk's choice of schema observable: a document only the pin accepts
+// is walked under the pin whichever schema is preferred, and the Filter.cursor
+// line below would then be missing for a reason that says nothing about the
+// preference.
 func TestDriftReport_TwoSchemasAndTheDocumentsBetweenThem_ReportsBothOutcomes(t *testing.T) {
 	pinned, probed := loadSchemaFixture(t, pinnedFixture), loadSchemaFixture(t, probedFixture)
 	documents := documentsOf(`
 query($filter: Filter) {
-  findings(filter: $filter) {
+  findings(filter: $filter, first: 1) {
     id
     severity
   }
@@ -431,8 +478,12 @@ query($filter: Filter) {
 		report := driftReport(pinned, probed, documents, fixturePin, fixtureNow())
 
 		for _, want := range []string{
-			"disagree on 3 of 12 coordinate(s)",
+			"disagree on 5 of 14 coordinate(s)",
 			"    Filter.severity: the pin says [Severity!], the live schema says [String!]\n",
+			// Only reachable when the walk followed the schema this run judged
+			// by: the pin's Filter has no cursor to reach it through.
+			"    Filter.cursor: the live schema has it, the pin does not\n",
+			"    Query.findings(first): the pin says Int, the live schema says Int!\n",
 			"    Severity: the live schema drops CRITICAL and adds UNKNOWN\n",
 			"    Time: the pin says SCALAR, the live schema says ENUM\n",
 			"    the pin: 4331 types from https://gitlab.com/api/graphql (GitLab 19.4.0), retrieved 2026-03-01, 10 day(s) ago\n",
@@ -448,7 +499,7 @@ query($filter: Filter) {
 	t.Run("one schema compared with itself", func(t *testing.T) {
 		report := driftReport(pinned, pinned, documents, fixturePin, fixtureNow())
 
-		if !strings.Contains(report, "agree on all 12 coordinate(s)") {
+		if !strings.Contains(report, "agree on all 13 coordinate(s)") {
 			t.Errorf("the report does not say the two agree:\n%s", report)
 		}
 	})
@@ -495,5 +546,41 @@ func TestCoordinateWalker_ANodeNothingResolved_IsSkipped(t *testing.T) {
 
 	if len(walker.found) != 0 {
 		t.Errorf("the walk recorded %v from nodes nothing resolved", walker.found)
+	}
+}
+
+// TestCoordinateWalker_ANameTheSchemaDoesNotHold_RecordsOnlyWhatItResolved
+// verifies the two places the walk consults a schema that may not answer, both
+// of which a validated document can never reach and a half-written one can: a
+// field whose return type names something the schema does not define, and an
+// argument the field it is passed to does not declare. Neither may be recorded
+// as a coordinate, because a coordinate the pin cannot resolve either would be
+// reported as drift that no GitLab release produced.
+func TestCoordinateWalker_ANameTheSchemaDoesNotHold_RecordsOnlyWhatItResolved(t *testing.T) {
+	walker := &coordinateWalker{
+		schema:  loadSchemaFixture(t, pinnedFixture),
+		found:   map[coordinate]bool{},
+		visited: map[string]bool{},
+	}
+
+	walker.selections(ast.SelectionSet{&ast.Field{
+		Name:             "findings",
+		ObjectDefinition: &ast.Definition{Kind: ast.Object, Name: "Query"},
+		Definition: &ast.FieldDefinition{
+			Name:      "findings",
+			Type:      ast.NamedType("NoSuchType", nil),
+			Arguments: ast.ArgumentDefinitionList{{Name: "filter", Type: ast.NamedType("Filter", nil)}},
+		},
+		Arguments: ast.ArgumentList{{Name: "notDeclaredHere"}},
+	}})
+
+	recorded := make([]string, 0, len(walker.found))
+	for at := range walker.found {
+		recorded = append(recorded, at.String())
+	}
+	sort.Strings(recorded)
+	want := []string{"Query", "Query.findings", "Query.findings(notDeclaredHere)"}
+	if !slices.Equal(recorded, want) {
+		t.Errorf("the walk recorded %v, want exactly %v", recorded, want)
 	}
 }

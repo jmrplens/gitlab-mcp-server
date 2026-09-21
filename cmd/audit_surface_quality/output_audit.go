@@ -16,6 +16,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
+// buildActionCatalog is the catalog construction hook, replaceable in tests.
+//
+// It cannot be made to fail from anything this command accepts: [
+// auditRouteOutputSchema] passes one fixed set of options, and the action
+// specs it reads are compiled in and validated by their own tests. The branch
+// that reports the failure exists for the day one of those facts changes, and
+// would otherwise never run.
+var buildActionCatalog = tools.BuildActionCatalog
+
 // finding describes one output-format audit finding for a registered MCP tool.
 //
 // tool is the MCP tool name that triggered the finding. category is the
@@ -83,12 +92,17 @@ func auditOutputSchema(tls []*mcp.Tool, kind string) []finding {
 }
 
 // auditDescriptionReturns checks whether a tool description contains a Returns section.
+//
+// The word alone is the test. A second disjunct for "returns:" used to sit
+// beside it and could never decide anything: it is read only where the word
+// is absent, and a description without "returns" has no "returns:" in it
+// either.
 func auditDescriptionReturns(tls []*mcp.Tool, kind string) []finding {
 	var fs []finding
 	lower := strings.ToLower
 	for _, t := range tls {
 		desc := lower(t.Description)
-		hasReturns := strings.Contains(desc, "returns") || strings.Contains(desc, "returns:")
+		hasReturns := strings.Contains(desc, "returns")
 		if !hasReturns {
 			fs = append(fs, finding{
 				t.Name, "description-returns",
@@ -128,7 +142,7 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 // Routes without OutputSchema are reported (these are typically void actions
 // or plain Route() calls that lack typed output).
 func auditRouteOutputSchema(client *gitlabclient.Client) []finding {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
+	catalog, err := buildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
 	if err != nil {
 		return []finding{{"gitlab_meta", "route-output-schema", fmt.Sprintf("failed to build action catalog: %v", err)}}
 	}

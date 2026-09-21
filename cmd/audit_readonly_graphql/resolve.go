@@ -332,10 +332,12 @@ func (r *resolver) resolveString(expr ast.Expr, at frame, depth int) string {
 		return ""
 	}
 	unwrapped := ast.Unparen(expr)
-	if tv, ok := at.pkg.TypesInfo.Types[unwrapped]; ok && tv.Value != nil {
-		if value, isString := constantString(tv.Value); isString {
-			return value
-		}
+	// What the type checker knows is read straight into constantString, which
+	// answers both of the questions a guard in front of it could ask: an
+	// expression with no entry yields the zero types.TypeAndValue, and a value
+	// that is nil, or that is not a string, is not a constant name.
+	if value, isString := constantString(at.pkg.TypesInfo.Types[unwrapped].Value); isString {
+		return value
 	}
 	switch typed := unwrapped.(type) {
 	case *ast.Ident:

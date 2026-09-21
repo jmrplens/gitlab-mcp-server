@@ -4,12 +4,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // metadataJSON is the report printed by the metadata view with -json.
@@ -179,12 +182,11 @@ func TestReportGate_Violations_ArePrintedAndCounted(t *testing.T) {
 	if got != 1 {
 		t.Errorf("reportGate() = %d, want 1", got)
 	}
-	for _, want := range []string{"metadata: 1 violation(s)", "gitlab_project_get", "edition-tier", "the description states Ultimate"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(out, want) {
-				t.Errorf("reportGate() printed %q, want it to carry %q", out, want)
-			}
-		})
+	// The line is pinned whole: the subject first, the category bracketed and
+	// the detail after the colon, so a reader can grep the list by tool.
+	const want = "metadata: 1 violation(s)\n  gitlab_project_get [edition-tier]: the description states Ultimate\n"
+	if out != want {
+		t.Errorf("reportGate() printed %q, want %q", out, want)
 	}
 }
 
@@ -239,4 +241,161 @@ func TestAuditViews_UnknownView_ReadsNothing(t *testing.T) {
 	if got := auditViews("neither"); got != 0 {
 		t.Errorf("auditViews(neither) = %d, want 0", got)
 	}
+}
+
+// gatingRow is the list row a formatter registered below renders for every
+// element, which gives the metadata view one violation of its own.
+type gatingRow struct{ Name string }
+
+// gatingList is the output type that formatter renders: one field, a list of
+// rows, which is the shape the constant-index rule reads.
+type gatingList struct{ Rows []gatingRow }
+
+// registerGatingViolation registers a formatter that prints its first row in
+// every row's place, so the metadata view gates on something this test owns
+// rather than on whatever the tree happens to carry.
+//
+// The registry is global and has nothing to unregister with, so this outlives
+// the test; the rule's own test skips every violation whose type is declared
+// in package main for that reason. Registering twice would be refused and
+// recorded as a registration problem, hence the [sync.Once].
+func registerGatingViolation() {
+	gatingViolationOnce.Do(func() {
+		toolutil.RegisterMarkdown(func(v gatingList) string {
+			var b strings.Builder
+			b.WriteString("| Name |\n| --- |\n")
+			for range v.Rows {
+				b.WriteString("| " + v.Rows[0].Name + " |\n")
+			}
+			return b.String()
+		})
+	})
+}
+
+// gatingViolationOnce keeps the gating formatter to one registration.
+var gatingViolationOnce sync.Once
+
+// TestRunMain_CommandLine_DecidesTheExitCodeAndWhatIsRefused drives the
+// command's own entry point over every command line it accepts and every one
+// it refuses.
+//
+// The exit code is the whole contract of a gate: 2 says the command line was
+// wrong and nothing was audited, 1 says -check found something, and 0 says it
+// did not. Until this ran, the four refusals and the gating comparison were
+// reachable only from a process, so a command line that silently audited
+// everything, or a -check that exited 0 on a violation, would have failed
+// nothing.
+func TestRunMain_CommandLine_DecidesTheExitCodeAndWhatIsRefused(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout and runMain writes the
+	// two package-level flag values.
+	registerGatingViolation()
+	t.Cleanup(func() { outputJSON, checkMode = false, false })
+
+	cases := []struct {
+		name   string
+		args   []string
+		want   int
+		stderr string
+		stdout string
+	}{
+		{
+			name: "a view the command does not have is refused",
+			args: []string{"-view=neither"}, want: 2,
+			stderr: `invalid -view "neither"`,
+		},
+		{
+			name: "a flag the command does not have is refused",
+			args: []string{"-nosuchflag"}, want: 2,
+			stderr: "flag provided but not defined",
+		},
+		{
+			name: "help is the one parse failure that exits clean",
+			args: []string{"-h"}, want: 0,
+			stderr: "which audit view to run",
+		},
+		{
+			name: "json without a view would emit two documents",
+			args: []string{"-json"}, want: 2,
+			stderr: "-json requires -view=metadata or -view=output",
+		},
+		{
+			name: "json and check contradict each other on what stdout carries",
+			args: []string{"-json", "-check", "-view=metadata"}, want: 2,
+			stderr: "-check and -json are alternatives",
+		},
+		{
+			name: "check over a view that gates on nothing exits 0",
+			args: []string{"-check", "-view=output"}, want: 0,
+			stdout: "output: no violations",
+		},
+		{
+			name: "check over a view that gates on something exits 1",
+			args: []string{"-check", "-view=metadata"}, want: 1,
+			stdout: "main.gatingList",
+		},
+		{
+			name: "the same violation without check reports and exits 0",
+			args: []string{"-view=metadata"}, want: 0,
+			stdout: "# MCP Tool Metadata Audit Report",
+		},
+		{
+			name: "json over one view writes that view's report",
+			args: []string{"-json", "-view=output"}, want: 0,
+			stdout: `"view":"output"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			var got int
+			out := captureStdout(t, func() { got = runMain(tc.args, &stderr) })
+
+			if got != tc.want {
+				t.Errorf("runMain(%v) = %d, want %d (stderr: %s)", tc.args, got, tc.want, stderr.String())
+			}
+			if tc.stderr != "" && !strings.Contains(stderr.String(), tc.stderr) {
+				t.Errorf("runMain(%v) wrote %q to stderr, want it to carry %q", tc.args, stderr.String(), tc.stderr)
+			}
+			if tc.stderr == "" && stderr.Len() != 0 {
+				t.Errorf("runMain(%v) wrote %q to stderr, want nothing", tc.args, stderr.String())
+			}
+			if tc.stdout != "" && !strings.Contains(out, tc.stdout) {
+				t.Errorf("runMain(%v) wrote %q to stdout, want it to carry %q", tc.args, truncate(out), tc.stdout)
+			}
+		})
+	}
+}
+
+// TestRunMain_CheckMetadata_GatesOnTheViolationItPrints holds the count the
+// gate exits on to the list it printed, so a -check run cannot exit 1 while
+// naming nothing or print a list while exiting 0.
+func TestRunMain_CheckMetadata_GatesOnTheViolationItPrints(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout and runMain writes the
+	// two package-level flag values.
+	registerGatingViolation()
+	t.Cleanup(func() { outputJSON, checkMode = false, false })
+
+	var stderr bytes.Buffer
+	var got int
+	out := captureStdout(t, func() { got = runMain([]string{"-check", "-view=metadata"}, &stderr) })
+
+	if got != 1 {
+		t.Fatalf("runMain(-check -view=metadata) = %d, want 1", got)
+	}
+	if !strings.Contains(out, "main.gatingList") || !strings.Contains(out, constantIndexCategory) {
+		t.Errorf("the gate printed %q, want the constant-index violation it exited on", truncate(out))
+	}
+	if strings.Contains(out, "# MCP Tool Metadata Audit Report") {
+		t.Errorf("the gate printed the full report as well as the violation list:\n%s", truncate(out))
+	}
+}
+
+// truncate shortens a captured report so a failure message names the head of
+// it rather than eleven hundred tools.
+func truncate(out string) string {
+	const limit = 2000
+	if len(out) <= limit {
+		return out
+	}
+	return out[:limit] + "…"
 }

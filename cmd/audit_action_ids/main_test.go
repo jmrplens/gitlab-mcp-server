@@ -118,6 +118,56 @@ var Spec = toolutil.ActionSpecOptions{RelatedActions: []string{"project.no_such_
 	}
 }
 
+// TestRun_Check_FailureLine_CountsEachRefusalUnderItsOwnName drives the gate
+// over a fixture that trips three of its four refusals by different amounts,
+// and holds the one stderr line a CI log is read by. The line is one Fprintf
+// over four counters, and a fixture with one dead ID and nothing else, which
+// is what the gate was first watched fail on, cannot tell "2 resolve to no
+// action, 1 names an alias, 3 not folded" from the same numbers in another
+// order. A prose alias is what fills the second slot, since a Usage line may
+// spell one and only the two declared spellings are excused.
+func TestRun_Check_FailureLine_CountsEachRefusalUnderItsOwnName(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import (
+	"os"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+// Spec publishes two dead cross-links and a Usage line naming a registered
+// alias, deploy_key.create, which resolves to access.deploy_key_add.
+var Spec = toolutil.ActionSpecOptions{
+	RelatedActions: []string{"project.no_such_action", "issue.no_such_action"},
+	Usage:          "Chain deploy_key.create after this.",
+}
+
+// Unfolded publishes three lists nothing can fold.
+var Unfolded = toolutil.ActionSpecOptions{
+	RelatedActions: []string{os.Getenv("A"), os.Getenv("B"), os.Getenv("C")},
+}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	// The fixture package alone, since the counts are the whole assertion and
+	// toolutil publishes sites of its own that would move them.
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, check: true}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("run with -check = %d, want 1; stdout %q", code, stdout.String())
+	}
+	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing\n"
+	if stderr.String() != want {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+	if !strings.Contains(stdout.String(), `usage "deploy_key.create" alias of access.deploy_key_add`) {
+		t.Errorf("stdout = %q, want the prose alias named with what it resolves to", stdout.String())
+	}
+}
+
 // TestRun_Check_CleanPackage_Passes holds the other side of the switch: with
 // nothing to refuse, -check is silent and exits 0, so the flag cannot be one
 // that fails on everything.

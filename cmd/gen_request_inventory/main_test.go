@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -170,6 +171,201 @@ func TestRun_AbsoluteShardDirectory_IsReadWhereItWasNamed(t *testing.T) {
 	}
 	if !strings.Contains(string(written), "/projects/:id/issues") {
 		t.Errorf("the inventory does not hold the recorded endpoint:\n%s", written)
+	}
+}
+
+// prepareCheckout lays out a repository root the command can be run from: a
+// go.mod for the root lookup to find, a shard directory holding one recording,
+// and a docs directory for the artifact. It chdirs into the root and returns
+// the flags naming those two paths.
+//
+// The command resolves its own root from the working directory, so a test that
+// drives it must give it one that is not this repository: an artifact written
+// here would be the committed one.
+func prepareCheckout(t *testing.T) (artifact string, args []string) {
+	t.Helper()
+	root, shardDir, outputPath := prepareRoot(t)
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(go.mod) error = %v", err)
+	}
+	t.Chdir(root)
+	return filepath.Join(root, outputPath), []string{"-shards", shardDir, "-out", outputPath}
+}
+
+// TestRunMain_FlagParsing_ReturnsTheExitCode verifies that a parse failure is
+// an exit code this function returns rather than an os.Exit inside the flag
+// package: an unknown flag is the usage exit, 2, and -h is the one parse
+// failure that exits clean, which is what ExitOnError would have done for both.
+// Neither reaches the merge, which the absent artifact witnesses.
+func TestRunMain_FlagParsing_ReturnsTheExitCode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want int
+		text string
+	}{
+		{name: "an unknown flag is a usage error", args: []string{"-bogus"}, want: 2, text: "flag provided but not defined: -bogus"},
+		{name: "asking for help exits clean", args: []string{"-h"}, want: 0, text: "-check"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubCatalog(t)
+			artifact, args := prepareCheckout(t)
+
+			var stderr bytes.Buffer
+			if code := runMain(append(tt.args, args...), &stderr); code != tt.want {
+				t.Fatalf("runMain(%v) = %d, want %d (stderr %q)", tt.args, code, tt.want, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.text) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.text)
+			}
+			if _, err := os.Stat(artifact); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("os.Stat(artifact) = %v, want nothing written past a failed parse", err)
+			}
+		})
+	}
+}
+
+// TestRunMain_WriteRunFromACheckout_WritesTheArtifactAndExitsZero verifies the
+// ordinary invocation end to end: the root is found from the working
+// directory, the shards are merged, the artifact lands where -out named it, and
+// the exit code is 0. The progress the run prints goes to the stderr it was
+// handed, so a caller redirecting stdout still gets pure output.
+func TestRunMain_WriteRunFromACheckout_WritesTheArtifactAndExitsZero(t *testing.T) {
+	stubCatalog(t)
+	artifact, args := prepareCheckout(t)
+
+	var stderr bytes.Buffer
+	if code := runMain(args, &stderr); code != 0 {
+		t.Fatalf("runMain() = %d, want 0 (stderr %q)", code, stderr.String())
+	}
+
+	written, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+	if !strings.Contains(string(written), "/projects/:id/issues") {
+		t.Errorf("the artifact does not hold the recorded endpoint:\n%s", written)
+	}
+	if !strings.Contains(stderr.String(), "1 rows") {
+		t.Errorf("stderr = %q, want the progress summary on it", stderr.String())
+	}
+}
+
+// TestRunMain_AFailingStage_ExitsOneAndNamesIt verifies the two failures that
+// share the exit code 1 still say which they are, since they are fixed by
+// different things: one means this is not a checkout, the other that the merge
+// or the comparison refused.
+func TestRunMain_AFailingStage_ExitsOneAndNamesIt(t *testing.T) {
+	tests := []struct {
+		name string
+		args func(t *testing.T, args []string) []string
+		want string
+	}{
+		{
+			name: "no repository above the working directory",
+			args: func(t *testing.T, args []string) []string {
+				t.Helper()
+				t.Chdir(t.TempDir())
+				return args
+			},
+			want: "find repository root: go.mod not found",
+		},
+		{
+			name: "nothing has recorded a run",
+			args: func(t *testing.T, _ []string) []string {
+				t.Helper()
+				return []string{"-shards", filepath.Join("dist", "absent")}
+			},
+			want: "make record-request-inventory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubCatalog(t)
+			_, args := prepareCheckout(t)
+
+			var stderr bytes.Buffer
+			if code := runMain(tt.args(t, args), &stderr); code != 1 {
+				t.Fatalf("runMain() = %d, want 1 (stderr %q)", code, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.want)
+			}
+		})
+	}
+}
+
+// TestRunMain_CheckAndVerbose_EachReachTheOptionTheyName verifies the two
+// boolean flags are not exchanged on their way into the options.
+//
+// They are the one pair here no other test can tell apart: every run above
+// leaves both false, and a block of flags has no fixture where no two values
+// agree, so each is driven on its own against the effect only it has. -check
+// refuses to write the artifact, which the run without it always writes, and -v
+// names the owners behind the coverage count, which the run without it only
+// scores.
+func TestRunMain_CheckAndVerbose_EachReachTheOptionTheyName(t *testing.T) {
+	t.Run("-check writes nothing and reports the artifact it could not read", func(t *testing.T) {
+		stubCatalog(t)
+		artifact, args := prepareCheckout(t)
+
+		var stderr bytes.Buffer
+		if code := runMain(append([]string{"-check"}, args...), &stderr); code != 1 {
+			t.Fatalf("runMain(-check) = %d, want 1 (stderr %q)", code, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "read ") {
+			t.Errorf("stderr = %q, want it to name the artifact it could not read", stderr.String())
+		}
+		if _, err := os.Stat(artifact); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("os.Stat(artifact) = %v, want -check to have written nothing", err)
+		}
+	})
+
+	t.Run("-v names the owner behind the coverage count", func(t *testing.T) {
+		original := catalogActions
+		catalogActions = func() ([]requestinventory.Action, error) {
+			return []requestinventory.Action{{ID: "ghost.list", Owner: "nowhere"}}, nil
+		}
+		t.Cleanup(func() { catalogActions = original })
+		_, args := prepareCheckout(t)
+
+		var quiet, verbose bytes.Buffer
+		if code := runMain(args, &quiet); code != 0 {
+			t.Fatalf("runMain() = %d, want 0 (stderr %q)", code, quiet.String())
+		}
+		if code := runMain(append([]string{"-v"}, args...), &verbose); code != 0 {
+			t.Fatalf("runMain(-v) = %d, want 0 (stderr %q)", code, verbose.String())
+		}
+
+		if strings.Contains(quiet.String(), "nowhere") {
+			t.Errorf("stderr = %q, want no owner named without -v", quiet.String())
+		}
+		if !strings.Contains(verbose.String(), "no package of that name: nowhere") {
+			t.Errorf("stderr = %q, want -v to name the owner", verbose.String())
+		}
+	})
+}
+
+// TestMain_HandsTheExitCodeToTheSeam verifies main wires runMain's result to
+// the exit seam and reads its flags from os.Args, which is the only thing main
+// does and the one line no other test here reaches.
+func TestMain_HandsTheExitCodeToTheSeam(t *testing.T) {
+	stubCatalog(t)
+	_, args := prepareCheckout(t)
+	oldArgs := os.Args
+	os.Args = append([]string{"gen_request_inventory"}, args...)
+	t.Cleanup(func() { os.Args = oldArgs })
+	code := -1
+	osExit = func(got int) { code = got }
+	t.Cleanup(func() { osExit = os.Exit })
+
+	main()
+
+	if code != 0 {
+		t.Errorf("main() exited %d, want 0", code)
 	}
 }
 

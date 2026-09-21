@@ -20,10 +20,14 @@ import (
 const toolutilPath = goprogram.ToolutilPath
 
 // program is the loaded, indexed source the audit reasons over.
+//
+// It carries what a reader of it consults and nothing else. Two fields used to
+// sit beside these and be read by nothing: a map of the loaded packages by
+// import path, filled at load, and on each [function] the object it was
+// declared as, which funcs is already keyed by. A field no reader consults is
+// one no test can hold, so both are gone.
 type program struct {
 	fset *token.FileSet
-	// pkgs is every loaded package keyed by import path.
-	pkgs map[string]*packages.Package
 	// funcs maps a declared function to its indexed body.
 	funcs map[*types.Func]*function
 	// documents maps the constant or variable a GraphQL document is declared
@@ -40,6 +44,13 @@ type program struct {
 }
 
 // docRef is one GraphQL document named inside a function body.
+//
+// It used to carry the position the document was declared at as well, which
+// nothing ever read: a finding points at the line that names the document,
+// since that is the line inside the handler a reader has to change, and the
+// declaration is one hop away through the name printed beside it. A field no
+// reader consults is one a swap with its neighbor cannot be observed through,
+// so it is gone rather than kept as a second position to keep straight.
 type docRef struct {
 	kind documentKind
 	// name is the constant this document was declared as, or "" when the
@@ -47,13 +58,10 @@ type docRef struct {
 	name string
 	// pos is where the body names it, which is the line a finding points at.
 	pos token.Pos
-	// declared is where the document itself is written.
-	declared token.Pos
 }
 
 // function is one declared function with everything the audit reads from it.
 type function struct {
-	obj  *types.Func
 	pkg  *packages.Package
 	decl *ast.FuncDecl
 	// calls is every function this body names. A reference counts as a call:
@@ -103,13 +111,9 @@ func loadProgram(dir string, patterns []string, overlay map[string][]byte) (*pro
 	}
 	prog := &program{
 		fset:      loaded[0].Fset,
-		pkgs:      make(map[string]*packages.Package, len(loaded)),
 		funcs:     make(map[*types.Func]*function),
 		documents: make(map[types.Object]documentKind),
 		order:     loaded,
-	}
-	for _, pkg := range prog.order {
-		prog.pkgs[pkg.PkgPath] = pkg
 	}
 	inventory := append(graphqldocs.FromPackages(loaded), standalone...)
 	prog.indexDocuments(inventory)
@@ -204,7 +208,7 @@ func (p *program) indexFunctions(pkg *packages.Package) {
 			if !ok {
 				continue
 			}
-			p.funcs[obj] = p.indexBody(pkg, obj, funcDecl)
+			p.funcs[obj] = p.indexBody(pkg, funcDecl)
 		}
 	}
 }
@@ -213,16 +217,15 @@ func (p *program) indexFunctions(pkg *packages.Package) {
 // part of it: a closure a handler defines runs when that handler runs, so
 // folding it into the enclosing function keeps the reachable set honest
 // without a separate node per literal.
-func (p *program) indexBody(pkg *packages.Package, obj *types.Func, decl *ast.FuncDecl) *function {
-	fn := &function{obj: obj, pkg: pkg, decl: decl, calls: make(map[*types.Func]bool)}
-	seen := make(map[token.Pos]bool)
+func (p *program) indexBody(pkg *packages.Package, decl *ast.FuncDecl) *function {
+	fn := &function{pkg: pkg, decl: decl, calls: make(map[*types.Func]bool)}
 	ast.Inspect(decl.Body, func(node ast.Node) bool {
 		switch typed := node.(type) {
 		case *ast.Ident:
-			p.recordUse(fn, pkg, typed, seen)
+			p.recordUse(fn, pkg, typed)
 		case *ast.BasicLit:
 			if typed.Kind == token.STRING {
-				p.recordLiteral(fn, pkg, typed, seen)
+				p.recordLiteral(fn, pkg, typed)
 			}
 		}
 		return true
@@ -231,7 +234,12 @@ func (p *program) indexBody(pkg *packages.Package, obj *types.Func, decl *ast.Fu
 }
 
 // recordUse records what one identifier in a body names.
-func (p *program) recordUse(fn *function, pkg *packages.Package, ident *ast.Ident, seen map[token.Pos]bool) {
+//
+// Both recorders used to share a set of the positions they had already
+// recorded, which nothing could ever observe: [ast.Inspect] visits each node of
+// a body once, and two nodes of these two kinds cannot share a position, so the
+// set was written 102 times in the suite and read back false every one of them.
+func (p *program) recordUse(fn *function, pkg *packages.Package, ident *ast.Ident) {
 	obj := pkg.TypesInfo.Uses[ident]
 	if obj == nil {
 		return
@@ -244,21 +252,23 @@ func (p *program) recordUse(fn *function, pkg *packages.Package, ident *ast.Iden
 		return
 	}
 	kind, ok := p.documents[obj]
-	if !ok || seen[ident.Pos()] {
+	if !ok {
 		return
 	}
-	seen[ident.Pos()] = true
-	fn.docs = append(fn.docs, docRef{kind: kind, name: obj.Name(), pos: ident.Pos(), declared: obj.Pos()})
+	fn.docs = append(fn.docs, docRef{kind: kind, name: obj.Name(), pos: ident.Pos()})
 }
 
 // recordLiteral records a GraphQL document written inline rather than as a
 // named constant.
-func (p *program) recordLiteral(fn *function, pkg *packages.Package, lit *ast.BasicLit, seen map[token.Pos]bool) {
-	tv, ok := pkg.TypesInfo.Types[lit]
-	if !ok || tv.Value == nil || seen[lit.Pos()] {
-		return
-	}
-	value, ok := constantString(tv.Value)
+//
+// What the type checker knows about the literal is read straight into
+// [constantString], because the two guards that used to stand in front of it
+// answered nothing it does not: a literal the type information has no entry for
+// yields the zero [types.TypeAndValue], whose value is nil, and a nil value is
+// not a string constant. Either of them could be inverted with the suite still
+// green, which is what a guard whose answer a later one repeats looks like.
+func (p *program) recordLiteral(fn *function, pkg *packages.Package, lit *ast.BasicLit) {
+	value, ok := constantString(pkg.TypesInfo.Types[lit].Value)
 	if !ok {
 		return
 	}
@@ -266,8 +276,7 @@ func (p *program) recordLiteral(fn *function, pkg *packages.Package, lit *ast.Ba
 	if kind == notADocument {
 		return
 	}
-	seen[lit.Pos()] = true
-	fn.docs = append(fn.docs, docRef{kind: kind, pos: lit.Pos(), declared: lit.Pos()})
+	fn.docs = append(fn.docs, docRef{kind: kind, pos: lit.Pos()})
 }
 
 // isGraphQLSender reports whether a method named Do (or one of the shared

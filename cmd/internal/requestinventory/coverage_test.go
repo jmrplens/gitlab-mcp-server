@@ -4,12 +4,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 // makeToolsPackage creates internal/tools/<name> under root, which is how the
@@ -170,6 +173,72 @@ func TestPackageName_Owner_IsSpelledTheWayARowSpellsIt(t *testing.T) {
 				t.Errorf("PackageName(%q) = %q, want %q", testCase.owner, got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestActions_EveryField_ComesFromTheCatalogFieldItNames verifies the
+// projection against a catalog built here, where no two values agree.
+//
+// Nothing else holds it: the two tests above read the real catalog and ask only
+// whether a field is non-empty, which an action carrying its owner as its ID
+// and its ID as its owner answers just as well. That exchange would leave every
+// action classified unmapped, since no dotted ID is a directory, and the tier
+// asked for is invisible the same way: a catalog built at Free would count a
+// narrower surface and read as complete. ReadOnly is the third: nothing reads
+// it here, and R-PAGE judges pagination on reads alone, so one stuck at false
+// empties that comparison in silence.
+func TestActions_EveryField_ComesFromTheCatalogFieldItNames(t *testing.T) {
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
+		ToolName:   "gitlab_fixture",
+		BaseDomain: "fixture",
+	})
+	group.SetAction(actioncatalog.Action{
+		Name:         "read",
+		ReadOnly:     true,
+		OwnerPackage: "readerpkg",
+		Route:        toolutil.ActionRoute{OutputType: reflect.TypeFor[Coverage]()},
+	})
+	group.SetAction(actioncatalog.Action{
+		Name:         "write",
+		ReadOnly:     false,
+		OwnerPackage: "writerpkg",
+		Route:        toolutil.ActionRoute{OutputType: reflect.TypeFor[Owner]()},
+	})
+	catalog := actioncatalog.NewCatalog()
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup error = %v", err)
+	}
+
+	var asked tools.ActionCatalogOptions
+	original := buildCatalog
+	buildCatalog = func(_ *gitlabclient.Client, opts tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		asked = opts
+		return catalog, nil
+	}
+	t.Cleanup(func() { buildCatalog = original })
+
+	actions, err := Actions()
+	if err != nil {
+		t.Fatalf("Actions() error = %v", err)
+	}
+
+	want := []Action{
+		{ID: "fixture.read", Owner: "readerpkg", ReadOnly: true, Route: toolutil.ActionRoute{OutputType: reflect.TypeFor[Coverage]()}},
+		{ID: "fixture.write", Owner: "writerpkg", ReadOnly: false, Route: toolutil.ActionRoute{OutputType: reflect.TypeFor[Owner]()}},
+	}
+	if len(actions) != len(want) {
+		t.Fatalf("Actions() returned %d action(s), want %d", len(actions), len(want))
+	}
+	for i, got := range actions {
+		if got.ID != want[i].ID || got.Owner != want[i].Owner ||
+			got.ReadOnly != want[i].ReadOnly || got.Route.OutputType != want[i].Route.OutputType {
+			t.Errorf("action %d = {ID:%q Owner:%q ReadOnly:%t OutputType:%v}, want {ID:%q Owner:%q ReadOnly:%t OutputType:%v}",
+				i, got.ID, got.Owner, got.ReadOnly, got.Route.OutputType,
+				want[i].ID, want[i].Owner, want[i].ReadOnly, want[i].Route.OutputType)
+		}
+	}
+	if asked.Tier != edition.Ultimate {
+		t.Errorf("the catalog was asked for at tier %q, want %q so the counts are of the whole surface", asked.Tier, edition.Ultimate)
 	}
 }
 

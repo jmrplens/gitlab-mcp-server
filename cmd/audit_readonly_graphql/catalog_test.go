@@ -62,6 +62,49 @@ func TestCatalogActions_ReturnsTheWholeSurface(t *testing.T) {
 	}
 }
 
+// TestCatalogActions_CarriesEachIdentityFieldFromItsOwnSource verifies the
+// three names an action arrives with are the three the catalog holds, each
+// from its own field: the ID is what a finding is filed under, the name is
+// what the construction sites are matched on and the owner is which package's
+// site wins. All three are non-empty strings, so a name read into the owner's
+// place and the owner into the name's would pass every check that asks only
+// whether they are set, and would resolve every action against the wrong
+// package with the fallback quietly taking every site of that name.
+//
+// The maintenance group is checked beside a domain action because it is only
+// in the catalog when the builder is asked for it, and an audit that left it
+// out would answer for one action fewer without saying so.
+func TestCatalogActions_CarriesEachIdentityFieldFromItsOwnSource(t *testing.T) {
+	actions, err := catalogActions()
+	if err != nil {
+		t.Fatalf("catalogActions: %v", err)
+	}
+	byID := make(map[string]action, len(actions))
+	for _, item := range actions {
+		byID[item.ID] = item
+	}
+
+	cases := []struct {
+		id    string
+		want  action
+		group string
+	}{
+		{id: "issue.list", want: action{ID: "issue.list", Name: "list", Owner: "issues", ReadOnly: true}, group: "a domain group"},
+		{id: "server.status", want: action{ID: "server.status", Name: "status", Owner: "health", ReadOnly: true}, group: "the maintenance group"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.group, func(t *testing.T) {
+			item, ok := byID[testCase.id]
+			if !ok {
+				t.Fatalf("action %q is not in the catalog", testCase.id)
+			}
+			if item != testCase.want {
+				t.Errorf("action %q = %+v, want %+v", testCase.id, item, testCase.want)
+			}
+		})
+	}
+}
+
 // TestCatalogActions_IncludesKnownReadAndWriteActions verifies the two
 // classifications land on actions whose nature is not in doubt, so a catalog
 // change that inverted the flag would not pass this file.

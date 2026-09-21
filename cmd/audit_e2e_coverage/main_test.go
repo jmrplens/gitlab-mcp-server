@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -326,6 +327,17 @@ func TestRun_Report_WritesTheWorkList(t *testing.T) {
 	if !strings.Contains(stdout, "written to "+opts.output) {
 		t.Errorf("the JSON path was not announced:\n%s", stdout)
 	}
+	// Without -o the work list is the whole of stdout: a JSON document
+	// printed after it would be a document nothing parses.
+	bare := fixtureOptions(t)
+	bare.report = true
+	bareCode, bareStdout, _ := runFixture(t, bare)
+	if bareCode != exitOK {
+		t.Errorf("run() without -o = %d, want 0", bareCode)
+	}
+	if strings.Contains(bareStdout, `"runtime"`) {
+		t.Errorf("the JSON report was printed after the work list:\n%s", bareStdout)
+	}
 	if _, err := os.Stat(opts.output); err != nil {
 		t.Errorf("the JSON report was not written: %v", err)
 	}
@@ -441,10 +453,11 @@ func TestRun_Static_OverTheFixtureModule(t *testing.T) {
 	for _, want := range []string{
 		"static: note: harness export Unused is used by nothing yet",
 		"non-constant id tc.id",
-		// Four packages: the three runtime packages and the model evaluation
-		// package, which is loaded as a consumer of the harness and scanned
-		// for no id sites of its own.
-		"static: 22 id sites in 4 packages, 2 non-constant sites, 4 unused harness exports, 11 findings",
+		// Seven packages: the four under test/e2e/gitlab, the harness, the
+		// model evaluation package and the command beside the harness, the
+		// last two loaded as consumers and scanned for no id sites of their
+		// own.
+		"static: 34 id sites in 7 packages, 4 non-constant sites, 7 unused harness exports, 15 findings",
 	} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(stdout, want) {
@@ -653,6 +666,59 @@ func TestRun_Baseline_Unreadable_IsAUsageError(t *testing.T) {
 	}
 }
 
+// TestRun_Baseline_Unjudged_IsAUsageError verifies, through run(), that a
+// baseline whose calls carry no verdict and which has no results stream
+// beside it stops the run before any comparison: compared as it is, every
+// baseline call would classify as failed and the superset check would pass
+// against nothing. The committed baseline fixture carries verdicts, so a
+// shard without one is written here, in the shape the old suite's recorder
+// wrote.
+func TestRun_Baseline_Unjudged_IsAUsageError(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "baseline-ce")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	writeFile(t, filepath.Join(dir, "calls-old.jsonl"), strings.Join([]string{
+		`{"schema":1,"type":"run","run":{"package":"suite","requirement":"any","edition":"community","tier":"free","run_id":"20260901t100000z-old","status":"started"}}`,
+		`{"schema":1,"type":"session","session":{"label":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","transport":"in-memory","tools":["gitlab_execute_action","gitlab_find_action"],"dispatch_observed":true}}`,
+		`{"schema":1,"type":"call","call":{"test":"TestOld_Issues","purpose":"test","expectation":"ok","session":"dynamic","surface":"dynamic","mode":"default","capabilities":"full","requirement":"any","method":"tools/call","tool":"gitlab_execute_action","action":"issue.list","dispatched":"issue.list","outcome":"ok"}}`,
+		"",
+	}, "\n"))
+	opts := fixtureOptions(t)
+	opts.baseline = dir
+	code, _, stderr := runFixture(t, opts)
+	if code != exitUsage || !strings.Contains(stderr, "audit_e2e_coverage: baseline: "+dir+": "+errBaselineUnjudged.Error()) {
+		t.Errorf("run() = %d, %q; want exit %d naming the unjudged baseline", code, stderr, exitUsage)
+	}
+}
+
+// TestRun_Baseline_CatalogUnbuildable_IsAUsageError verifies that the
+// baseline's catalog is built by the same builder as the run's and that its
+// refusal is reported: the two share a tier, so only a builder that fails on
+// its second call reaches the branch, which is what this one does.
+func TestRun_Baseline_CatalogUnbuildable_IsAUsageError(t *testing.T) {
+	opts := fixtureOptions(t)
+	opts.baseline = callsFixture("ce")
+	builds := 0
+	opts.catalogs = func(edition.Tier) (*servedCatalog, error) {
+		builds++
+		if builds > 1 {
+			return nil, errSecondBuild
+		}
+		return fixtureCatalog(), nil
+	}
+	code, _, stderr := runFixture(t, opts)
+	if code != exitUsage || !strings.Contains(stderr, errSecondBuild.Error()) {
+		t.Errorf("run() = %d, %q; want exit %d carrying the builder's refusal", code, stderr, exitUsage)
+	}
+	if builds != 2 {
+		t.Errorf("the catalog was built %d times, want once for the run and once for the baseline", builds)
+	}
+}
+
+// errSecondBuild is what the failing builder answers.
+var errSecondBuild = errors.New("the second build is refused")
+
 // TestRun_PortMap_Complete verifies the passing exit when every old test is
 // replaced.
 func TestRun_PortMap_Complete(t *testing.T) {
@@ -673,5 +739,70 @@ func TestRun_PortMap_Complete(t *testing.T) {
 	opts.newSuite = "new"
 	if code, stdout, _ := runFixture(t, opts); code != exitOK || !strings.Contains(stdout, "1 old tests (0 retired), 1 replaced, 0 dropped, 0 unresolved, 0 findings") {
 		t.Errorf("run() = %d, %q; want 0 and a complete map", code, stdout)
+	}
+}
+
+// TestRun_Static_UnloadableHarness_IsAUsageError verifies that a scan which
+// cannot run is a refusal through run() and never a clean pass: the harness
+// path names no package, so there is no ActionID type to read, and what a CI
+// step sees is exit 2 with the reason rather than a gate that found nothing.
+func TestRun_Static_UnloadableHarness_IsAUsageError(t *testing.T) {
+	opts := fixtureOptions(t)
+	opts.calls = ""
+	opts.static = true
+	opts.dir = fakeModuleDir(t)
+	opts.staticCatalog = fakeCatalog
+	opts.harnessPath = "example.com/e2efake/test/e2e/internal/absent"
+	code, stdout, stderr := runFixture(t, opts)
+	if code != exitUsage || !strings.Contains(stderr, "audit_e2e_coverage: static: the harness package") {
+		t.Errorf("run() = %d, %q; want exit %d naming the missing harness", code, stderr, exitUsage)
+	}
+	if strings.Contains(stdout, "id sites in") {
+		t.Errorf("stdout = %q, want no summary line from a scan that did not run", stdout)
+	}
+}
+
+// TestRun_NoRepositoryRoot_IsAUsageError verifies the answer when -dir is
+// not given and the working directory sits under no module: the root cannot
+// be found, and the run refuses rather than reading whatever tree it is in.
+func TestRun_NoRepositoryRoot_IsAUsageError(t *testing.T) {
+	t.Chdir(t.TempDir())
+	code, _, stderr := runFixture(t, options{static: true})
+	if code != exitUsage || !strings.Contains(stderr, "could not find project root") {
+		t.Errorf("run() = %d, %q; want exit %d saying the root was not found", code, stderr, exitUsage)
+	}
+}
+
+// TestRun_Output_UnwritablePath_IsAUsageError verifies that a -o path that
+// cannot be created is reported with its reason and exit 2, rather than the
+// report going nowhere behind an exit 0. The path sits under a regular file,
+// which no filesystem lets a file be created beneath.
+func TestRun_Output_UnwritablePath_IsAUsageError(t *testing.T) {
+	opts := fixtureOptions(t)
+	blocker := filepath.Join(opts.dir, "blocker")
+	writeFile(t, blocker, "not a directory\n")
+	opts.output = filepath.Join(blocker, "report.json")
+	code, _, stderr := runFixture(t, opts)
+	if code != exitUsage || !strings.Contains(stderr, "write report:") {
+		t.Errorf("run() = %d, %q; want exit %d naming the report write", code, stderr, exitUsage)
+	}
+}
+
+// TestWriteReportJSON_File_SaysWhatWasWrittenWhere verifies the line a run
+// prints when the JSON goes to a file: the runtime, the three levels over the
+// catalog and the path, on a report whose three levels all differ so that no
+// figure can stand in for another.
+func TestWriteReportJSON_File_SaysWhatWasWrittenWhere(t *testing.T) {
+	opts := options{output: filepath.Join(t.TempDir(), "report.json")}
+	rep := &report{Runtime: "community/free", Summary: summary{CatalogActions: 12, L1: 3, L2: 2, L3: 1}}
+	var out bytes.Buffer
+	if err := writeReportJSON(opts, []*report{rep}, &out); err != nil {
+		t.Fatalf("writeReportJSON() error = %v", err)
+	}
+	if want := "community/free: L1 3/12, L2 2, L3 1, written to " + opts.output + "\n"; out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+	if _, err := os.Stat(opts.output); err != nil {
+		t.Errorf("the report was not written: %v", err)
 	}
 }

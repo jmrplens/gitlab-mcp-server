@@ -1477,7 +1477,10 @@ func collectConverter(pkg *packages.Package, fn *ast.FuncDecl, out map[[2]string
 	// real exported Output/DetailOutput), not serialized MCP output structs. Their
 	// fields carry no json tags, so pairing them against the SDK result would flag
 	// every SDK field as missing. Real MCP output structs are always exported.
-	if mcpName == "" || !ast.IsExported(mcpName) {
+	//
+	// An empty name needs no check of its own: ast.IsExported("") is false, so
+	// the name a resolver could not read is skipped by this same line.
+	if !ast.IsExported(mcpName) {
 		return
 	}
 	key := [2]string{mcpName, sdkNamed.Obj().Name()}
@@ -1580,12 +1583,16 @@ func diffPair(pkg, kind string, pair structPair) gap {
 // struct's json tags and the SDK Options' tags (url-first, normalized to the
 // snake_case form the MCP side uses). Used by disjointPhantomInput to measure
 // field overlap.
+//
+// Neither set filters the unnamed and the excluded tag, because flattenFields
+// keys nothing under either: it drops both before recording a field, and its
+// untagged fallback keys by a Go field name, which can be neither. A second
+// copy of that rule here would be a filter nothing can observe, so what holds
+// the property is a test of the producer rather than a check of the consumer.
 func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
 	mcp = map[string]struct{}{}
 	for tag := range flattenFields(pair.mcpType, []string{tagKeyJSON}) {
-		if tag != "" && tag != "-" {
-			mcp[tag] = struct{}{}
-		}
+		mcp[tag] = struct{}{}
 	}
 	sdk = map[string]struct{}{}
 	sdkKeys := []string{tagKeyJSON}
@@ -1593,9 +1600,7 @@ func inputPairTags(pair structPair) (mcp, sdk map[string]struct{}) {
 		sdkKeys = []string{"url", tagKeyJSON}
 	}
 	for tag := range flattenFields(pair.sdkType, sdkKeys) {
-		if tag != "" && tag != "-" {
-			sdk[shared.NormalizeSDKTag(tag)] = struct{}{}
-		}
+		sdk[shared.NormalizeSDKTag(tag)] = struct{}{}
 	}
 	return mcp, sdk
 }

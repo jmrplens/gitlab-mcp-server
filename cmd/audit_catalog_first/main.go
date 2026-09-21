@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -169,33 +171,63 @@ type packageActionCoverage struct {
 	MetaGroups                map[string]struct{}
 }
 
+// exitProcess is [os.Exit] behind a seam, so the code [runMain] decided is a
+// value a test can read rather than the end of the test binary.
+var exitProcess = os.Exit
+
 func main() {
-	outputPath := flag.String("output", defaultOutputPath, "path to write action spec coverage JSON, or '-' for stdout")
-	flag.Parse()
+	exitProcess(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain is the whole command: it parses args, runs both gates over the
+// repository the working directory sits in, and writes the coverage report.
+//
+// It returns the process exit code (2 for arguments it cannot parse, 1 for a
+// gate that failed or a report it could not write, 0 when the tree passes)
+// and reports each refusal on stderr instead of exiting where it happens. That
+// is what makes this a gate a test can drive: while every branch ended in
+// cmdutil.Fatalf, the only way to observe one was to start a process, so a run
+// that wrote the report to the wrong path, or that exited 0 with the
+// aggregation rule failing, would have failed no test in this package.
+func runMain(args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("audit_catalog_first", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	outputPath := flags.String("output", defaultOutputPath, "path to write action spec coverage JSON, or '-' for stdout")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		cmdutil.Fatalf("find repository root: %v", err)
+		fmt.Fprintf(stderr, "find repository root: %v\n", err)
+		return 1
 	}
 	cmdutil.Progressf("audit_catalog_first: scanning internal/tools source for ActionSpec catalog coverage...")
 	// Type-checked separately from the report, and only over the real
 	// repository: the rule loads ./internal/... with go/packages, which the
 	// planted fixture trees buildCoverageReport is also driven over are not.
 	if aggregationErr := assertActionSpecsAreAggregated(root); aggregationErr != nil {
-		cmdutil.Fatalf("%v", aggregationErr)
+		fmt.Fprintf(stderr, "%v\n", aggregationErr)
+		return 1
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
-		cmdutil.Fatalf("build coverage report: %v", err)
+		fmt.Fprintf(stderr, "build coverage report: %v\n", err)
+		return 1
 	}
 	content, err := marshalReport(report)
 	if err != nil {
-		cmdutil.Fatalf("marshal coverage report: %v", err)
+		fmt.Fprintf(stderr, "marshal coverage report: %v\n", err)
+		return 1
 	}
-	writeErr := docgen.WriteReport(*outputPath, content)
-	if writeErr != nil {
-		cmdutil.Fatalf("write coverage report: %v", writeErr)
+	if writeErr := docgen.WriteReport(*outputPath, content); writeErr != nil {
+		fmt.Fprintf(stderr, "write coverage report: %v\n", writeErr)
+		return 1
 	}
+	return 0
 }
 
 func buildCoverageReport(root string) (coverageReport, error) {
@@ -221,36 +253,7 @@ func buildCoverageReport(root string) (coverageReport, error) {
 
 	domains := make([]domainCoverage, 0, len(sources))
 	for _, source := range sources {
-		coverage := domainCoverage{
-			Package:                 source.Package,
-			HasRegisterTools:        source.HasRegisterTools,
-			HasRegisterMeta:         source.HasRegisterMeta,
-			HasMarkdown:             source.HasMarkdown,
-			HasTests:                source.HasTests,
-			ClientType:              source.ClientType,
-			RegisteredInRegisterAll: registeredPackages[source.Package],
-			DelegatedMeta:           delegatedMetaPackages[source.Package],
-			HasMetaSpecs:            source.HasActionSpecsFunction,
-		}
-		if packageCoverage, ok := actionCoverage[source.Package]; ok {
-			coverage.ActionSpecCount = packageCoverage.ActionSpecCount
-			coverage.OrdinaryGitLabActionCount = packageCoverage.OrdinaryGitLabActionCount
-			coverage.UtilitySurfaceActionCount = packageCoverage.UtilitySurfaceActionCount
-			coverage.DynamicCatalogActionCount = packageCoverage.DynamicCatalogActionCount
-			coverage.SurfaceSpecCount = packageCoverage.SurfaceSpecCount
-			coverage.HasSurfaceSpecs = packageCoverage.SurfaceSpecCount > 0
-			coverage.HasMetaSpecs = coverage.HasMetaSpecs || packageCoverage.ActionSpecCount > 0
-			coverage.HasDynamicCatalogEntries = packageCoverage.DynamicCatalogActionCount > 0
-			coverage.MetaGroup = joinSortedSet(packageCoverage.MetaGroups)
-			coverage.SurfaceKinds = surfaceKinds(packageCoverage.SurfaceKindCounts)
-			coverage.SurfaceKindCounts = cloneStringIntMap(packageCoverage.SurfaceKindCounts)
-		}
-		legacyGitLabClientTools := source.HasRegisterTools && isGitLabClientType(source.ClientType)
-		coverage.HasIndividualTools = legacyGitLabClientTools || coverage.OrdinaryGitLabActionCount > 0 || source.HasActionSpecsFunction
-		coverage.HasStandaloneOnlyTools = (source.HasRegisterTools && !legacyGitLabClientTools) || (coverage.UtilitySurfaceActionCount > 0 && coverage.OrdinaryGitLabActionCount == 0 && !source.HasDynamicCatalogRegistration)
-		coverage.SurfaceClassification = classifySurface(source, coverage)
-		coverage.Notes = coverageNotes(source, coverage)
-		domains = append(domains, coverage)
+		domains = append(domains, domainCoverageFor(source, actionCoverage, registeredPackages, delegatedMetaPackages))
 	}
 
 	sort.Slice(domains, func(first, second int) bool {
@@ -276,6 +279,49 @@ func buildCoverageReport(root string) (coverageReport, error) {
 		Summary:       summary,
 		Domains:       domains,
 	}, nil
+}
+
+// domainCoverageFor assembles one package's row from what the source walk saw
+// in its directory, what the catalog contributes under its name, and whether
+// the two legacy registration files name it.
+//
+// It is a function rather than a block inside the report loop because every
+// field of the row is decided here and none of them can be varied from
+// outside: the catalog half is the one compiled into this binary whatever tree
+// is being audited, so a row reading its count off the wrong field, or two
+// flags that traded places, could be stated in no test while this lived in the
+// loop.
+func domainCoverageFor(source domainSource, actionCoverage map[string]packageActionCoverage, registeredPackages, delegatedMetaPackages map[string]bool) domainCoverage {
+	coverage := domainCoverage{
+		Package:                 source.Package,
+		HasRegisterTools:        source.HasRegisterTools,
+		HasRegisterMeta:         source.HasRegisterMeta,
+		HasMarkdown:             source.HasMarkdown,
+		HasTests:                source.HasTests,
+		ClientType:              source.ClientType,
+		RegisteredInRegisterAll: registeredPackages[source.Package],
+		DelegatedMeta:           delegatedMetaPackages[source.Package],
+		HasMetaSpecs:            source.HasActionSpecsFunction,
+	}
+	if packageCoverage, ok := actionCoverage[source.Package]; ok {
+		coverage.ActionSpecCount = packageCoverage.ActionSpecCount
+		coverage.OrdinaryGitLabActionCount = packageCoverage.OrdinaryGitLabActionCount
+		coverage.UtilitySurfaceActionCount = packageCoverage.UtilitySurfaceActionCount
+		coverage.DynamicCatalogActionCount = packageCoverage.DynamicCatalogActionCount
+		coverage.SurfaceSpecCount = packageCoverage.SurfaceSpecCount
+		coverage.HasSurfaceSpecs = packageCoverage.SurfaceSpecCount > 0
+		coverage.HasMetaSpecs = coverage.HasMetaSpecs || packageCoverage.ActionSpecCount > 0
+		coverage.HasDynamicCatalogEntries = packageCoverage.DynamicCatalogActionCount > 0
+		coverage.MetaGroup = joinSortedSet(packageCoverage.MetaGroups)
+		coverage.SurfaceKinds = surfaceKinds(packageCoverage.SurfaceKindCounts)
+		coverage.SurfaceKindCounts = cloneStringIntMap(packageCoverage.SurfaceKindCounts)
+	}
+	legacyGitLabClientTools := source.HasRegisterTools && isGitLabClientType(source.ClientType)
+	coverage.HasIndividualTools = legacyGitLabClientTools || coverage.OrdinaryGitLabActionCount > 0 || source.HasActionSpecsFunction
+	coverage.HasStandaloneOnlyTools = (source.HasRegisterTools && !legacyGitLabClientTools) || (coverage.UtilitySurfaceActionCount > 0 && coverage.OrdinaryGitLabActionCount == 0 && !source.HasDynamicCatalogRegistration)
+	coverage.SurfaceClassification = classifySurface(source, coverage)
+	coverage.Notes = coverageNotes(source, coverage)
+	return coverage
 }
 
 func assertCoverageInvariants(domains []domainCoverage) error {
@@ -310,6 +356,18 @@ func assertCatalogActionsHaveIndividualProjectionPolicy(client *gitlabclient.Cli
 	if err != nil {
 		return fmt.Errorf("add standalone dynamic catalog actions: %w", err)
 	}
+	return projectionPolicyError(catalog)
+}
+
+// projectionPolicyError is the verdict half of the projection rule: the
+// finding it emits when a catalog carries an action no individual tool name
+// projects, and nil when none does.
+//
+// It is separate from the build half above because the catalog that half
+// assembles is the one compiled into this binary, where nothing is missing, so
+// the line that decides whether a finding is emitted at all was reachable from
+// no test: the rule could have stopped reporting and stayed green.
+func projectionPolicyError(catalog *actioncatalog.Catalog) error {
 	missing := catalogActionsMissingIndividualProjectionPolicy(catalog)
 	if len(missing) > 0 {
 		return fmt.Errorf("catalog actions missing individual projection policy: %s", strings.Join(missing, ", "))
@@ -829,7 +887,32 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	client := clientForAudit()
 
 	coverage := make(map[string]packageActionCoverage)
-	for _, group := range auditshared.CachedActionSpecs(client, true) {
+	recordActionSpecGroups(coverage, auditshared.CachedActionSpecs(client, true))
+	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
+
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("build action catalog: %w", err)
+	}
+	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("add standalone dynamic catalog actions: %w", err)
+	}
+	recordCatalogActions(coverage, catalog)
+
+	return coverage, nil
+}
+
+// recordActionSpecGroups counts each group's actions under the package that
+// owns them, with the group's surface kind and its tool name.
+//
+// It sits beside [recordSurfaceSpecs] rather than inside the collector for the
+// same reason that one does: the groups it reads are the ones compiled into
+// this binary, every one of which names an owner, so a spec that named none
+// (and so vanished from the report without a word) was a state no test could
+// put it in.
+func recordActionSpecGroups(coverage map[string]packageActionCoverage, groups []tools.ActionSpecGroup) {
+	for _, group := range groups {
 		kind := normalizedSurfaceKind(group.SurfaceKind)
 		for _, spec := range group.Actions {
 			owner := strings.TrimSpace(spec.OwnerPackage)
@@ -843,15 +926,19 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 			coverage[owner] = packageCoverage
 		}
 	}
-	recordSurfaceSpecs(coverage, collectSurfaceSpecs(client))
+}
 
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		return nil, fmt.Errorf("build action catalog: %w", err)
-	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("add standalone dynamic catalog actions: %w", err)
+// recordCatalogActions counts each catalog action under the package that owns
+// it, with the tool name the action itself carries.
+//
+// Separate from [recordActionSpecGroups] for the same reason, and because the
+// two count into different fields of the same row: the specs answer what a
+// package contributes to the catalog and this answers what the assembled
+// catalog serves, so a line counting into the other's field would read as a
+// package with twice the surface it has.
+func recordCatalogActions(coverage map[string]packageActionCoverage, catalog *actioncatalog.Catalog) {
+	if catalog == nil {
+		return
 	}
 	for _, group := range catalog.Groups() {
 		for _, action := range group.ActionsInOrder() {
@@ -865,8 +952,6 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 			coverage[owner] = packageCoverage
 		}
 	}
-
-	return coverage, nil
 }
 
 // clientForAudit builds the offline client the catalog is registered against.

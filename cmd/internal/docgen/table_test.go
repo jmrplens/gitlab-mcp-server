@@ -115,6 +115,32 @@ func TestRenderMarkdownTable_WideContent_ExpandsColumns(t *testing.T) {
 	}
 }
 
+// TestRenderMarkdownTable_CenteredColumn_WidensToFiveAndSplitsOddPadding
+// verifies a centered column is never rendered narrower than the five
+// characters its ":---:" separator needs, and that an odd number of padding
+// spaces puts the smaller half on the left.
+//
+// Both are invisible in a table whose centered cells are already wide or
+// evenly padded, which every other centered fixture here is: the header is two
+// characters in a column of five so the padding is three, and the row cell is
+// one so the column would collapse to the three-character default.
+func TestRenderMarkdownTable_CenteredColumn_WidensToFiveAndSplitsOddPadding(t *testing.T) {
+	got := RenderMarkdownTable(
+		[]string{"AB", "B"},
+		[]Alignment{AlignCenter, AlignLeft},
+		[][]string{{"x", "y"}},
+	)
+	want := strings.Join([]string{
+		"|  AB   | B   |",
+		"| :---: | --- |",
+		"|   x   | y   |",
+		"",
+	}, "\n")
+	if got != want {
+		t.Fatalf("RenderMarkdownTable() =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // TestRenderMarkdownTable_SingleColumn_RendersTable verifies one-column input
 // still produces a valid Markdown table.
 //

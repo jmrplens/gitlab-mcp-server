@@ -107,8 +107,14 @@ func closureBody(ctx context.Context) error {
 	return nil
 }
 
-// closureAudit is the second function the literal route names, so the roots a
-// literal stands in for are more than one and their order has to be settled.
+// closureCleanup and closureAudit are the other functions the literal route
+// names, so the roots a literal stands in for are three, declared in an order
+// the literal calls them in no part of, and their order has to be settled.
+func closureCleanup(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 func closureAudit(ctx context.Context) error {
 	_ = ctx
 	return nil
@@ -176,7 +182,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			if err := closureAudit(ctx); err != nil {
 				return nil, err
 			}
-			return nil, closureBody(ctx)
+			if err := closureBody(ctx); err != nil {
+				return nil, err
+			}
+			return nil, closureCleanup(ctx)
 		}), toolutil.ActionSpecOptions{}),
 		toolutil.NewReadActionSpec("quiet", toolutil.RouteAction(client, Quiet), toolutil.ActionSpecOptions{}),
 		toolutil.NewReadActionSpec("generic", toolutil.RouteAction[Input, Output](client, Direct), toolutil.ActionSpecOptions{}),
@@ -217,14 +226,29 @@ func routeFor(client *gitlabclient.Client) toolutil.ActionRoute {
 // otherFixture holds the pieces a spec can reach across a package boundary: a
 // handler named through a selector, and a route held in a package-level
 // variable, which the resolver deliberately does not follow.
+//
+// It also declares an action called "quiet", which is the name the shapes
+// fixture gives its REST-only action, routed here to a handler that sends a
+// mutation. Two packages declaring one action name is what makes the owning
+// package's part in resolution observable: the catalog says which of them
+// declares the action it is asking about, and taking the other one would report
+// a mutation against an action whose handler touches no GraphQL at all.
 const otherFixture = `package other
 
 import (
 	"context"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
+
+const quietMutation = @@
+mutation($id: ID!) {
+	otherQuietUpdate(input: {id: $id}) { errors }
+}
+@@
 
 // Input is the fixture handler input.
 type Input struct {
@@ -250,6 +274,26 @@ func Handle(ctx context.Context, client *gitlabclient.Client, input Input) (Outp
 	_ = ctx
 	_ = client
 	return Output{OK: input.ID != ""}, nil
+}
+
+// Quiet shares its action name with the REST-only action of the shapes
+// fixture, and writes.
+func Quiet(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	var response struct {
+		Data map[string]any ` + "`json:\"data\"`" + `
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     quietMutation,
+		Variables: map[string]any{"id": input.ID},
+	}, &response, gl.WithContext(ctx))
+	return Output{OK: err == nil}, err
+}
+
+// ActionSpecs declares this package's own "quiet".
+func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
+	return []toolutil.ActionSpec{
+		toolutil.NewReadActionSpec("quiet", toolutil.RouteAction(client, Quiet), toolutil.ActionSpecOptions{}),
+	}
 }
 `
 
@@ -441,7 +485,382 @@ func synthInfo() *types.Info {
 
 // synthFrame is a frame over one hand-built package.
 func synthFrame(info *types.Info, decl *ast.FuncDecl) frame {
-	return frame{pkg: &packages.Package{Name: "synth", TypesInfo: info}, decl: decl}
+	return frame{pkg: synthPkg(info), decl: decl}
+}
+
+// synthPkg is the hand-built package the frames above stand in.
+func synthPkg(info *types.Info) *packages.Package {
+	return &packages.Package{Name: "synth", TypesInfo: info}
+}
+
+// synthToolutilTypes builds the two toolutil types the resolver follows, in a
+// package carrying toolutil's own import path, which is how it recognizes them.
+func synthToolutilTypes() (pkg *types.Package, spec, route types.Type) {
+	pkg = types.NewPackage(toolutilPath, "toolutil")
+	spec = types.NewNamed(types.NewTypeName(token.NoPos, pkg, specTypeName, nil), types.NewStruct(nil, nil), nil)
+	route = types.NewNamed(types.NewTypeName(token.NoPos, pkg, routeTypeName, nil), types.NewStruct(nil, nil), nil)
+
+	return pkg, spec, route
+}
+
+// synthFunc builds a function object with the given parameter and result
+// types, which is all the resolver reads of a callee it has not indexed.
+func synthFunc(pkg *types.Package, name string, params, results []types.Type) *types.Func {
+	tuple := func(list []types.Type) *types.Tuple {
+		vars := make([]*types.Var, 0, len(list))
+		for _, typ := range list {
+			vars = append(vars, types.NewVar(token.NoPos, pkg, "", typ))
+		}
+
+		return types.NewTuple(vars...)
+	}
+
+	return types.NewFunc(token.NoPos, pkg, name, types.NewSignatureType(nil, nil, nil, tuple(params), tuple(results), false))
+}
+
+// synthCall builds a call to a function named by an identifier.
+func synthCall(info *types.Info, callee *types.Func, args ...ast.Expr) *ast.CallExpr {
+	fun := ast.NewIdent(callee.Name())
+	info.Uses[fun] = callee
+
+	return &ast.CallExpr{Fun: fun, Args: args}
+}
+
+// synthMethodCall builds a call to a method on the given receiver expression,
+// which is the shape a decorating method such as WithTags is written in.
+func synthMethodCall(info *types.Info, callee *types.Func, receiver ast.Expr) *ast.CallExpr {
+	sel := ast.NewIdent(callee.Name())
+	info.Uses[sel] = callee
+
+	return &ast.CallExpr{Fun: &ast.SelectorExpr{X: receiver, Sel: sel}, Args: nil}
+}
+
+// synthBound builds an identifier bound to one expression the way a parameter
+// is bound to the argument a caller passed, and the frame that binding lives
+// in.
+func synthBound(info *types.Info, name string, typ types.Type, held ast.Expr) (*ast.Ident, frame) {
+	variable := types.NewVar(token.NoPos, nil, name, typ)
+	ident := ast.NewIdent(name)
+	info.Uses[ident] = variable
+	at := synthFrame(info, nil)
+	at.env = map[*types.Var]binding{variable: {expr: held, frame: synthFrame(info, nil)}}
+
+	return ident, at
+}
+
+// synthIndexed builds a resolver whose program holds one indexed function, so
+// the resolvers that enter a callee's body have one to enter.
+func synthIndexed(info *types.Info, callee *types.Func, body *ast.BlockStmt) *resolver {
+	return &resolver{prog: &program{funcs: map[*types.Func]*function{
+		callee: {pkg: synthPkg(info), decl: &ast.FuncDecl{Body: body}},
+	}}}
+}
+
+// resolution is what one resolver call came back with, reduced to the two
+// things every one of them can be asked: the action name, and how many
+// handlers. The empty resolution is what the depth bound produces, and what
+// the caller reports rather than trusts.
+type resolution struct {
+	name     string
+	handlers int
+}
+
+func (r resolution) empty() bool {
+	return r.name == "" && r.handlers == 0
+}
+
+// depthProbe is one recursive step of the resolver: a call that takes exactly
+// one step past the expression it is given, so resolving it at a depth is the
+// same as asking whether that step was counted.
+type depthProbe struct {
+	name    string
+	resolve func(depth int) resolution
+}
+
+// recursiveSteps builds one probe per place a resolver calls another with a
+// deeper depth. Each is built once and resolved twice, since what discriminates
+// is the pair: an expression that resolves to nothing at every depth would
+// satisfy the bound assertion whether the step counted or not.
+func recursiveSteps() []depthProbe {
+	toolutilPkg, specType, routeType := synthToolutilTypes()
+	str := types.Typ[types.String]
+	handlerType := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+
+	return []depthProbe{
+		specIdentProbe(specType),
+		specLiteralProbe(),
+		specConstructorProbe(toolutilPkg, specType, routeType, str),
+		specReturnProbe(specType),
+		specReceiverProbe(toolutilPkg, specType),
+		routeIdentProbe(routeType),
+		routeLiteralProbe(),
+		routeConstructorProbe(toolutilPkg, routeType, handlerType),
+		routeReturnProbe(routeType),
+		routeReceiverProbe(routeType),
+		handlerIndexProbe(),
+		handlerIndexListProbe(),
+		handlerIdentProbe(handlerType),
+		stringIdentProbe(str),
+		stringPassThroughProbe(str),
+		stringReturnProbe(str),
+	}
+}
+
+// specIdentProbe resolves a spec held in a bound identifier.
+func specIdentProbe(specType types.Type) depthProbe {
+	info := synthInfo()
+	ident, at := synthBound(info, "spec", specType, synthSpec(info, "deep.action"))
+
+	return depthProbe{name: "a spec held in an identifier", resolve: func(depth int) resolution {
+		name, handlers := synthResolver().resolveSpec(ident, at, depth)
+
+		return resolution{name: name, handlers: len(handlers)}
+	}}
+}
+
+// specLiteralProbe resolves the Name and Route fields of a spec literal, which
+// are two steps taken from one expression.
+func specLiteralProbe() depthProbe {
+	info := synthInfo()
+	lit := synthSpec(info, "deep.action")
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the fields of a spec literal", resolve: func(depth int) resolution {
+		name, handlers := synthResolver().resolveSpec(lit, at, depth)
+
+		return resolution{name: name, handlers: len(handlers)}
+	}}
+}
+
+// specConstructorProbe resolves the two arguments a toolutil constructor is
+// given.
+func specConstructorProbe(toolutilPkg *types.Package, specType, routeType, str types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(toolutilPkg, "NewActionSpec", []types.Type{str, routeType}, []types.Type{specType})
+	call := synthCall(info, callee, synthString(info, "deep.action"), synthRoute())
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the arguments of a toolutil constructor", resolve: func(depth int) resolution {
+		name, handlers := synthResolver().resolveSpecCall(call, at, depth)
+
+		return resolution{name: name, handlers: len(handlers)}
+	}}
+}
+
+// specReturnProbe resolves the spec a helper returns.
+func specReturnProbe(specType types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "buildSpec", nil, []types.Type{specType})
+	body := &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{synthSpec(info, "deep.action")}}}}
+	res := synthIndexed(info, callee, body)
+	call := synthCall(info, callee)
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the spec a helper returns", resolve: func(depth int) resolution {
+		name, handlers := res.resolveSpecCall(call, at, depth)
+
+		return resolution{name: name, handlers: len(handlers)}
+	}}
+}
+
+// specReceiverProbe resolves the spec a decorating method was called on.
+func specReceiverProbe(toolutilPkg *types.Package, specType types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(toolutilPkg, "WithTags", nil, []types.Type{specType})
+	call := synthMethodCall(info, callee, synthSpec(info, "deep.action"))
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the receiver of a decorating method", resolve: func(depth int) resolution {
+		name, handlers := synthResolver().resolveSpecCall(call, at, depth)
+
+		return resolution{name: name, handlers: len(handlers)}
+	}}
+}
+
+// routeIdentProbe resolves a route held in a bound identifier.
+func routeIdentProbe(routeType types.Type) depthProbe {
+	info := synthInfo()
+	ident, at := synthBound(info, "route", routeType, synthRoute())
+
+	return depthProbe{name: "a route held in an identifier", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveRoute(ident, at, depth))}
+	}}
+}
+
+// routeLiteralProbe resolves the Handler field of a route literal.
+func routeLiteralProbe() depthProbe {
+	info := synthInfo()
+	lit := synthRoute()
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the handler of a route literal", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveRoute(lit, at, depth))}
+	}}
+}
+
+// routeConstructorProbe resolves the handler a toolutil route constructor is
+// given.
+func routeConstructorProbe(toolutilPkg *types.Package, routeType, handlerType types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(toolutilPkg, "Route", []types.Type{handlerType}, []types.Type{routeType})
+	call := synthCall(info, callee, &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}})
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the handler a toolutil route constructor takes", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveRouteCall(call, at, depth))}
+	}}
+}
+
+// routeReturnProbe resolves the route a helper returns.
+func routeReturnProbe(routeType types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "routeFor", nil, []types.Type{routeType})
+	body := &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{synthRoute()}}}}
+	res := synthIndexed(info, callee, body)
+	call := synthCall(info, callee)
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the route a helper returns", resolve: func(depth int) resolution {
+		return resolution{handlers: len(res.resolveRouteCall(call, at, depth))}
+	}}
+}
+
+// routeReceiverProbe resolves the route a decorating method was called on.
+func routeReceiverProbe(routeType types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "WithTags", nil, []types.Type{routeType})
+	call := synthMethodCall(info, callee, synthRoute())
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the receiver of a decorated route", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveRouteCall(call, at, depth))}
+	}}
+}
+
+// handlerIndexProbe resolves the function an instantiation instantiates.
+func handlerIndexProbe() depthProbe {
+	info := synthInfo()
+	expr := &ast.IndexExpr{X: &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}}
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the function an instantiation names", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveHandler(expr, at, depth))}
+	}}
+}
+
+// handlerIndexListProbe is the same for an instantiation with several type
+// arguments.
+func handlerIndexListProbe() depthProbe {
+	info := synthInfo()
+	expr := &ast.IndexListExpr{X: &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}}
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the function a multi-argument instantiation names", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveHandler(expr, at, depth))}
+	}}
+}
+
+// handlerIdentProbe resolves a handler held in a bound identifier.
+func handlerIdentProbe(handlerType types.Type) depthProbe {
+	info := synthInfo()
+	ident, at := synthBound(info, "handler", handlerType, &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}})
+
+	return depthProbe{name: "a handler held in an identifier", resolve: func(depth int) resolution {
+		return resolution{handlers: len(synthResolver().resolveHandler(ident, at, depth))}
+	}}
+}
+
+// stringIdentProbe resolves a name held in a bound identifier.
+func stringIdentProbe(str types.Type) depthProbe {
+	info := synthInfo()
+	ident, at := synthBound(info, "name", str, synthString(info, "deep.action"))
+
+	return depthProbe{name: "a name held in an identifier", resolve: func(depth int) resolution {
+		return resolution{name: synthResolver().resolveString(ident, at, depth)}
+	}}
+}
+
+// stringPassThroughProbe resolves the argument of the one call that returns its
+// own string argument.
+func stringPassThroughProbe(str types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("strings", "strings"), "TrimSpace", []types.Type{str}, []types.Type{str})
+	call := synthCall(info, callee, synthString(info, "  deep.action  "))
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the argument of the string pass-through", resolve: func(depth int) resolution {
+		return resolution{name: synthResolver().resolveString(call, at, depth)}
+	}}
+}
+
+// stringReturnProbe resolves the name a helper returns.
+func stringReturnProbe(str types.Type) depthProbe {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "nameFor", nil, []types.Type{str})
+	body := &ast.BlockStmt{List: []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{synthString(info, "deep.action")}}}}
+	res := synthIndexed(info, callee, body)
+	call := synthCall(info, callee)
+	at := synthFrame(info, nil)
+
+	return depthProbe{name: "the name a helper returns", resolve: func(depth int) resolution {
+		return resolution{name: res.resolveString(call, at, depth)}
+	}}
+}
+
+// TestResolver_EveryRecursiveStep_CountsAgainstTheBound verifies the bound is
+// enforced at every place one resolver calls another, not only at the entry
+// points.
+//
+// The bound exists so a helper that forwards to itself cannot hang the audit,
+// and it only does that if each step is taken one deeper than the last: a step
+// that passed its own depth along, or counted down, would let a cycle run
+// forever while every test that resolves an ordinary three-deep chain stayed
+// green. Each probe is one such step, resolved at depth zero, where it has to
+// produce something, and at the bound, where the step it takes is past the
+// bound and has to produce nothing.
+func TestResolver_EveryRecursiveStep_CountsAgainstTheBound(t *testing.T) {
+	for _, probe := range recursiveSteps() {
+		t.Run(probe.name, func(t *testing.T) {
+			if got := probe.resolve(0); got.empty() {
+				t.Fatalf("resolving at depth 0 produced nothing, so the bound assertion below would prove nothing")
+			}
+			if got := probe.resolve(maxResolveDepth); !got.empty() {
+				t.Errorf("resolving at the bound produced %+v, want nothing: the step it takes is past the bound", got)
+			}
+		})
+	}
+}
+
+// TestResolver_TheBound_IsTheLastDepthThatResolves verifies the guard is
+// written as "past the bound" rather than "at it". The two resolvers that can
+// answer without taking another step are the only ones that can tell the
+// difference, and the difference is one whole level of nesting: a bound that
+// fired one step early would drop the deepest handler of every chain that
+// reached it, and drop it silently, since an action that resolves to nothing is
+// reported as unresolvable rather than as truncated.
+func TestResolver_TheBound_IsTheLastDepthThatResolves(t *testing.T) {
+	info := synthInfo()
+	at := synthFrame(info, nil)
+	res := synthResolver()
+	literal := &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}
+	name := synthString(info, "deep.action")
+
+	t.Run("handler", func(t *testing.T) {
+		if handlers := res.resolveHandler(literal, at, maxResolveDepth); len(handlers) != 1 {
+			t.Errorf("resolveHandler() at the bound = %d handler(s), want the function literal", len(handlers))
+		}
+		if handlers := res.resolveHandler(literal, at, maxResolveDepth+1); handlers != nil {
+			t.Errorf("resolveHandler() past the bound = %v, want the empty resolution", handlers)
+		}
+	})
+	t.Run("string", func(t *testing.T) {
+		if got := res.resolveString(name, at, maxResolveDepth); got != "deep.action" {
+			t.Errorf("resolveString() at the bound = %q, want the fixture name", got)
+		}
+		if got := res.resolveString(name, at, maxResolveDepth+1); got != "" {
+			t.Errorf("resolveString() past the bound = %q, want the empty resolution", got)
+		}
+	})
 }
 
 // synthString is a string literal carrying its constant value, the way the
@@ -857,10 +1276,494 @@ func TestSpecConstructorArgs_SignaturesThatAreNotTheConstructorShape_AreRefused(
 	}
 }
 
-// TestIsToolutilType_TypeThatIsNotNamed_IsNotOne verifies the type check
-// starts by asking for a named type: a builtin has no package to compare.
-func TestIsToolutilType_TypeThatIsNotNamed_IsNotOne(t *testing.T) {
-	if isToolutilType(types.Typ[types.String], routeTypeName) {
-		t.Errorf("isToolutilType(string, %q) = true, want false", routeTypeName)
+// TestIsToolutilType_TypesFromSomewhereElse_AreNotOne verifies all three
+// answers the type check gives before it compares a name: a builtin is not a
+// named type at all, a named type may belong to no package, and a named type of
+// the right name may belong to another one. The last is what the path is for:
+// every domain package here is free to declare its own ActionSpec, and reading
+// one as toolutil's would take a handler from whatever it happens to hold.
+func TestIsToolutilType_TypesFromSomewhereElse_AreNotOne(t *testing.T) {
+	elsewhere := types.NewPackage("example.com/domain", "domain")
+	cases := []struct {
+		name string
+		typ  types.Type
+	}{
+		{name: "a builtin", typ: types.Typ[types.String]},
+		{
+			name: "a named type belonging to no package",
+			typ:  types.NewNamed(types.NewTypeName(token.NoPos, nil, routeTypeName, nil), types.NewStruct(nil, nil), nil),
+		},
+		{
+			name: "a named type of another package",
+			typ:  types.NewNamed(types.NewTypeName(token.NoPos, elsewhere, routeTypeName, nil), types.NewStruct(nil, nil), nil),
+		},
 	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if isToolutilType(testCase.typ, routeTypeName) {
+				t.Errorf("isToolutilType(%s, %q) = true, want false", testCase.typ, routeTypeName)
+			}
+		})
+	}
+}
+
+// TestIsSpecType_ValuesThatAreNoSpec_AreRefused verifies the two answers the
+// element loop depends on: an expression the type checker typed as something
+// else is not a spec, and neither is one it could not type at all. The loop
+// runs over the arguments of every append in the tree, so admitting either
+// would resolve expressions that declare no action and file them under
+// whatever name they happened to yield.
+func TestIsSpecType_ValuesThatAreNoSpec_AreRefused(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  types.Type
+	}{
+		{name: "a type that is not a spec", typ: types.Typ[types.String]},
+		{name: "no type at all", typ: nil},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if isSpecType(testCase.typ) {
+				t.Error("isSpecType() = true, want false")
+			}
+		})
+	}
+}
+
+// TestIsSpecSliceType_SlicesOfSomethingElse_AreRefused verifies the slice check
+// asks what the slice holds. Every file here has string slices and option
+// slices in it, and reading one as a slice of specs would walk its elements
+// looking for action names.
+func TestIsSpecSliceType_SlicesOfSomethingElse_AreRefused(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  types.Type
+	}{
+		{name: "a slice of something else", typ: types.NewSlice(types.Typ[types.String])},
+		{name: "not a slice", typ: types.Typ[types.String]},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if isSpecSliceType(testCase.typ) {
+				t.Error("isSpecSliceType() = true, want false")
+			}
+		})
+	}
+}
+
+// TestMerge_ASecondResolution_KeepsTheFirstNameAndEveryHandler verifies what
+// merging two partial resolutions of one spec means: the first name wins, and
+// no handler is dropped. A variable assigned in two branches routes to both,
+// and keeping only one of them would leave a mutation unclassified; taking the
+// second name would attribute the spec to whichever branch was resolved last.
+func TestMerge_ASecondResolution_KeepsTheFirstNameAndEveryHandler(t *testing.T) {
+	first := []handlerRef{{}}
+	second := []handlerRef{{}, {}}
+
+	name, handlers := merge("first", first, "second", second)
+
+	if name != "first" {
+		t.Errorf("merge() name = %q, want the first resolution's", name)
+	}
+	if len(handlers) != 3 {
+		t.Errorf("merge() kept %d handler(s), want all three", len(handlers))
+	}
+}
+
+// TestResolveSpecLiteral_FieldThatIsNeitherNameNorRoute_IsIgnored verifies a
+// spec literal is read field by field. An ActionSpec carries usage text, tags
+// and options beside the two fields this audit reads, and taking a value from
+// one of those would answer with something that is not an action name.
+func TestResolveSpecLiteral_FieldThatIsNeitherNameNorRoute_IsIgnored(t *testing.T) {
+	info := synthInfo()
+	lit := &ast.CompositeLit{Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent("Usage"), Value: synthString(info, "not an action name")},
+		&ast.KeyValueExpr{Key: ast.NewIdent("Name"), Value: synthString(info, "the.action")},
+		&ast.KeyValueExpr{Key: ast.NewIdent("Route"), Value: synthRoute()},
+	}}
+
+	name, handlers := synthResolver().resolveSpecLiteral(lit, synthFrame(info, nil), 0)
+
+	if name != "the.action" {
+		t.Errorf("resolveSpecLiteral() name = %q, want the Name field", name)
+	}
+	if len(handlers) != 1 {
+		t.Errorf("resolveSpecLiteral() resolved %d handler(s), want the one the Route field names", len(handlers))
+	}
+}
+
+// TestResolveRouteLiteral_KeysThatAreNotTheHandlerField_AreSteppedOver
+// verifies the route literal is read the same way, and that the key is asked
+// what it is before it is asked what it says. A composite literal may carry a
+// key that is not an identifier at all, and reading a name off one would end
+// the run on a panic rather than on a finding.
+func TestResolveRouteLiteral_KeysThatAreNotTheHandlerField_AreSteppedOver(t *testing.T) {
+	info := synthInfo()
+	lit := &ast.CompositeLit{Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: &ast.BasicLit{Kind: token.INT, Value: "0"}, Value: &ast.FuncLit{Type: &ast.FuncType{}, Body: &ast.BlockStmt{}}},
+		&ast.KeyValueExpr{Key: ast.NewIdent("Tags"), Value: synthString(info, "fixture")},
+	}}
+
+	if handlers := synthResolver().resolveRouteLiteral(lit, synthFrame(info, nil), 0); handlers != nil {
+		t.Errorf("resolveRouteLiteral() = %v, want nothing: neither element names the Handler field", handlers)
+	}
+}
+
+// TestResolveHandler_SelectorThatNamesNoFunction_ResolvesToNothing verifies a
+// handler reached through a selector is only taken when the selector names a
+// declared function. A package-level variable of function type is written the
+// same way and holds whatever was assigned to it, which this resolver does not
+// follow across a package boundary.
+func TestResolveHandler_SelectorThatNamesNoFunction_ResolvesToNothing(t *testing.T) {
+	info := synthInfo()
+	signature := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+	sel := ast.NewIdent("SharedRoute")
+	info.Uses[sel] = types.NewVar(token.NoPos, nil, "SharedRoute", signature)
+	selector := &ast.SelectorExpr{X: ast.NewIdent("other"), Sel: sel}
+	info.Types[selector] = types.TypeAndValue{Type: signature}
+
+	if handlers := synthResolver().resolveHandler(selector, synthFrame(info, nil), 0); handlers != nil {
+		t.Errorf("resolveHandler() = %v, want nothing from a selector that names a variable", handlers)
+	}
+}
+
+// TestResolveString_ValuesThatAreNoName_ResolveToEmpty verifies the two ways an
+// expression says nothing about an action name: it carries a constant that is
+// not a string, or it is a kind of node this resolver does not follow. Both
+// have to come back empty, because a site whose name cannot be read is reported
+// as unresolvable, and a name read off something else would be filed under an
+// action nobody declared.
+func TestResolveString_ValuesThatAreNoName_ResolveToEmpty(t *testing.T) {
+	info := synthInfo()
+	number := &ast.BasicLit{Kind: token.INT, Value: "42"}
+	info.Types[number] = types.TypeAndValue{Value: constant.MakeInt64(42)}
+	joined := &ast.BinaryExpr{X: ast.NewIdent("prefix"), Op: token.ADD, Y: ast.NewIdent("suffix")}
+
+	cases := []struct {
+		name string
+		expr ast.Expr
+	}{
+		{name: "a constant that is not a string", expr: number},
+		{name: "a node kind the resolver does not follow", expr: joined},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := synthResolver().resolveString(testCase.expr, synthFrame(info, nil), 0); got != "" {
+				t.Errorf("resolveString() = %q, want the empty resolution", got)
+			}
+		})
+	}
+}
+
+// TestResolveString_TheFirstExpressionThatNamesNothing_IsPassedOver verifies a
+// name is looked for in every expression a variable can hold and in every
+// expression a helper can return, rather than in the first one alone. A
+// variable declared empty and assigned later, and a helper that returns early,
+// both put an expression that names nothing in front of the one that does.
+func TestResolveString_TheFirstExpressionThatNamesNothing_IsPassedOver(t *testing.T) {
+	t.Run("a variable assigned twice", func(t *testing.T) {
+		info := synthInfo()
+		variable := types.NewVar(token.NoPos, nil, "name", types.Typ[types.String])
+		declared, assigned, used := ast.NewIdent("name"), ast.NewIdent("name"), ast.NewIdent("name")
+		info.Defs[declared] = variable
+		info.Uses[assigned] = variable
+		info.Uses[used] = variable
+		decl := &ast.FuncDecl{Body: &ast.BlockStmt{List: []ast.Stmt{
+			&ast.AssignStmt{Lhs: []ast.Expr{declared}, Rhs: []ast.Expr{ast.NewIdent("unresolvable")}},
+			&ast.AssignStmt{Lhs: []ast.Expr{assigned}, Rhs: []ast.Expr{synthString(info, "the.action")}},
+		}}}
+
+		if got := synthResolver().resolveString(used, synthFrame(info, decl), 0); got != "the.action" {
+			t.Errorf("resolveString() = %q, want the name the second assignment gives it", got)
+		}
+	})
+	t.Run("a helper that returns twice", func(t *testing.T) {
+		info := synthInfo()
+		callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "nameFor", nil, []types.Type{types.Typ[types.String]})
+		res := synthIndexed(info, callee, &ast.BlockStmt{List: []ast.Stmt{
+			&ast.ReturnStmt{Results: []ast.Expr{ast.NewIdent("unresolvable")}},
+			&ast.ReturnStmt{Results: []ast.Expr{synthString(info, "the.action")}},
+		}})
+
+		if got := res.resolveString(synthCall(info, callee), synthFrame(info, nil), 0); got != "the.action" {
+			t.Errorf("resolveString() = %q, want the name the second return gives it", got)
+		}
+	})
+}
+
+// TestResolveString_CallThatIsNotThePassThrough_IsEnteredRatherThanUnwrapped
+// verifies the pass-through is recognized by which function it is and by how
+// many arguments it was given, both. A call of one argument that is not
+// strings.TrimSpace declares its name in what it returns, and reading the
+// argument instead would name the action after whatever that helper was handed;
+// a call of two arguments is not the one-argument function this unwraps
+// whatever it is named, and there would be no saying which argument to read.
+func TestResolveString_CallThatIsNotThePassThrough_IsEnteredRatherThanUnwrapped(t *testing.T) {
+	info := synthInfo()
+	str := types.Typ[types.String]
+	domain := types.NewPackage("example.com/domain", "domain")
+	callee := synthFunc(domain, "nameFor", []types.Type{str}, []types.Type{str})
+	res := synthIndexed(info, callee, &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{synthString(info, "the.action")}},
+	}})
+
+	t.Run("a helper of one argument", func(t *testing.T) {
+		call := synthCall(info, callee, synthString(info, "an argument"))
+
+		if got := res.resolveString(call, synthFrame(info, nil), 0); got != "the.action" {
+			t.Errorf("resolveString() = %q, want what the helper returns rather than what it was passed", got)
+		}
+	})
+	t.Run("the pass-through given more than one argument", func(t *testing.T) {
+		trim := synthFunc(types.NewPackage("strings", "strings"), "TrimSpace", []types.Type{str, str}, []types.Type{str})
+		call := synthCall(info, trim, synthString(info, "first"), synthString(info, "second"))
+
+		if got := res.resolveString(call, synthFrame(info, nil), 0); got != "" {
+			t.Errorf("resolveString() = %q, want the empty resolution: this is not the call being unwrapped", got)
+		}
+	})
+}
+
+// TestAssignmentsTo_AssignmentsToAnotherVariable_AreNotCollected verifies the
+// walk asks which variable each assignment binds. A function body assigns to
+// several variables, and collecting another one's right-hand side would resolve
+// a spec to whatever sat beside it.
+func TestAssignmentsTo_AssignmentsToAnotherVariable_AreNotCollected(t *testing.T) {
+	info := synthInfo()
+	wanted := types.NewVar(token.NoPos, nil, "spec", types.Typ[types.String])
+	other := types.NewVar(token.NoPos, nil, "options", types.Typ[types.String])
+	ours, theirs := ast.NewIdent("spec"), ast.NewIdent("options")
+	info.Defs[ours] = wanted
+	info.Defs[theirs] = other
+	ourValue, theirValue := ast.NewIdent("ourValue"), ast.NewIdent("theirValue")
+	decl := &ast.FuncDecl{Body: &ast.BlockStmt{List: []ast.Stmt{
+		&ast.AssignStmt{Lhs: []ast.Expr{theirs}, Rhs: []ast.Expr{theirValue}},
+		&ast.AssignStmt{Lhs: []ast.Expr{ours}, Rhs: []ast.Expr{ourValue}},
+	}}}
+
+	found := assignmentsTo(synthPkg(info), decl, wanted)
+
+	if len(found) != 1 || found[0] != ourValue {
+		t.Errorf("assignmentsTo() collected %d expression(s), want only the one assigned to the variable asked about", len(found))
+	}
+}
+
+// TestIsStringPassThrough_CallsThatReturnSomethingOfTheirOwn_AreRefused
+// verifies all three parts of the one pass-through this resolver applies. A
+// function belonging to no package has no path to compare, a function of
+// another package named TrimSpace is not the one the constructors apply, and
+// neither is another function of the strings package.
+func TestIsStringPassThrough_CallsThatReturnSomethingOfTheirOwn_AreRefused(t *testing.T) {
+	strings := types.NewPackage("strings", "strings")
+	elsewhere := types.NewPackage("example.com/text", "text")
+	cases := []struct {
+		name   string
+		callee *types.Func
+	}{
+		{name: "a function belonging to no package", callee: types.NewFunc(token.NoPos, nil, "TrimSpace", nil)},
+		{name: "another package's TrimSpace", callee: types.NewFunc(token.NoPos, elsewhere, "TrimSpace", nil)},
+		{name: "another function of the strings package", callee: types.NewFunc(token.NoPos, strings, "ToUpper", nil)},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if isStringPassThrough(testCase.callee) {
+				t.Error("isStringPassThrough() = true, want false")
+			}
+		})
+	}
+	if !isStringPassThrough(types.NewFunc(token.NoPos, strings, "TrimSpace", nil)) {
+		t.Error("isStringPassThrough(strings.TrimSpace) = false, so the refusals above prove nothing")
+	}
+}
+
+// TestReturnsOf_ReturnsThatCarryNoExpression_AreSkipped verifies the body walk
+// reads the result it is after only where the return statement has one. A
+// helper that returns early writes a bare return, and a guard against that
+// which stopped one short of the results would read past the end of the
+// statement rather than step over it.
+func TestReturnsOf_ReturnsThatCarryNoExpression_AreSkipped(t *testing.T) {
+	info := synthInfo()
+	str := types.Typ[types.String]
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "nameFor", nil, []types.Type{str})
+	own := synthString(info, "the.action")
+	res := synthIndexed(info, callee, &ast.BlockStmt{List: []ast.Stmt{
+		&ast.ReturnStmt{},
+		&ast.ReturnStmt{Results: []ast.Expr{own}},
+	}})
+
+	found := res.returnsOf(callee, synthCall(info, callee), synthFrame(info, nil), "")
+
+	if len(found) != 1 || found[0].expr != own {
+		t.Errorf("returnsOf() yielded %d expression(s), want only the return that carries one", len(found))
+	}
+}
+
+// TestReturnsOf_CalleeWithNoBody_YieldsNothing verifies a callee the audit
+// indexed without a body is stepped over rather than walked. A declaration
+// whose body is elsewhere has no return statement to read, and walking a nil
+// body would end the run on a panic.
+func TestReturnsOf_CalleeWithNoBody_YieldsNothing(t *testing.T) {
+	info := synthInfo()
+	callee := synthFunc(types.NewPackage("example.com/domain", "domain"), "nameFor", nil, []types.Type{types.Typ[types.String]})
+	res := &resolver{prog: &program{funcs: map[*types.Func]*function{callee: {decl: &ast.FuncDecl{}}}}}
+
+	if found := res.returnsOf(callee, synthCall(info, callee), synthFrame(info, nil), ""); found != nil {
+		t.Errorf("returnsOf() = %v, want nothing from a callee with no body", found)
+	}
+}
+
+// TestBindParams_ArgumentsAndParametersOfDifferentLengths_StopAtTheShorter
+// verifies the binding walks both lists at once. A call may carry fewer
+// arguments than the signature declares, or more, and reading past the end of
+// either would end the run on a panic instead of on a finding.
+func TestBindParams_ArgumentsAndParametersOfDifferentLengths_StopAtTheShorter(t *testing.T) {
+	str := types.Typ[types.String]
+	pkg := types.NewPackage("example.com/domain", "domain")
+	first, second := ast.NewIdent("first"), ast.NewIdent("second")
+
+	t.Run("more arguments than parameters", func(t *testing.T) {
+		callee := synthFunc(pkg, "one", []types.Type{str}, nil)
+
+		env := bindParams(callee, &ast.CallExpr{Args: []ast.Expr{first, second}}, frame{})
+
+		if len(env) != 1 {
+			t.Errorf("bindParams() bound %d parameter(s), want the one the signature declares", len(env))
+		}
+	})
+	t.Run("fewer arguments than parameters", func(t *testing.T) {
+		callee := synthFunc(pkg, "two", []types.Type{str, str}, nil)
+
+		env := bindParams(callee, &ast.CallExpr{Args: []ast.Expr{first}}, frame{})
+
+		if len(env) != 1 {
+			t.Errorf("bindParams() bound %d parameter(s), want the one the call supplies", len(env))
+		}
+	})
+}
+
+// TestSpecConstructorArgs_TheConstructorShape_IsTheBaseCase verifies the shape
+// match accepts the smallest constructor it is written for: two parameters,
+// two arguments, a string first and a route second, returning a spec. The
+// refusals beside it are what keep a toolutil function that merely resembles
+// one from being read as the base case, and without a case that is accepted
+// they would be satisfied by a match that accepts nothing at all.
+func TestSpecConstructorArgs_TheConstructorShape_IsTheBaseCase(t *testing.T) {
+	toolutilPkg, specType, routeType := synthToolutilTypes()
+	str := types.Typ[types.String]
+	name, route := ast.NewIdent("name"), ast.NewIdent("route")
+	call := &ast.CallExpr{Args: []ast.Expr{name, route}}
+
+	t.Run("the shape is accepted", func(t *testing.T) {
+		callee := synthFunc(toolutilPkg, "NewActionSpec", []types.Type{str, routeType}, []types.Type{specType})
+
+		nameArg, routeArg, ok := specConstructorArgs(callee, call)
+
+		if !ok {
+			t.Fatal("specConstructorArgs() refused the constructor shape")
+		}
+		if nameArg != name || routeArg != route {
+			t.Errorf("specConstructorArgs() = %v, %v, want the call's own two arguments", nameArg, routeArg)
+		}
+	})
+	t.Run("a callee with no signature to read", func(t *testing.T) {
+		if _, _, ok := specConstructorArgs(types.NewFunc(token.NoPos, toolutilPkg, "New", nil), call); ok {
+			t.Error("specConstructorArgs() matched a callee with no signature")
+		}
+	})
+	t.Run("fewer parameters than the shape", func(t *testing.T) {
+		callee := synthFunc(toolutilPkg, "New", []types.Type{str}, []types.Type{specType})
+
+		if _, _, ok := specConstructorArgs(callee, call); ok {
+			t.Error("specConstructorArgs() matched a callee of one parameter")
+		}
+	})
+	t.Run("fewer arguments than the shape", func(t *testing.T) {
+		callee := synthFunc(toolutilPkg, "NewActionSpec", []types.Type{str, routeType}, []types.Type{specType})
+
+		if _, _, ok := specConstructorArgs(callee, &ast.CallExpr{Args: []ast.Expr{name}}); ok {
+			t.Error("specConstructorArgs() matched a call of one argument")
+		}
+	})
+}
+
+// TestIsAppendCall_CallsThatAppendNothingResolvable_AreRefused verifies what
+// the element loop is entered for. The loop reads every argument after the
+// first as a spec, so a call that is not the builtin, one whose elements are
+// spread from a slice, and one with no element at all each have to be refused:
+// the first would resolve someone else's arguments, and the others have no
+// element the loop could read.
+func TestIsAppendCall_CallsThatAppendNothingResolvable_AreRefused(t *testing.T) {
+	appendBuiltin, _ := types.Universe.Lookup("append").(*types.Builtin)
+	copyBuiltin, _ := types.Universe.Lookup("copy").(*types.Builtin)
+	if appendBuiltin == nil || copyBuiltin == nil {
+		t.Fatal("the universe scope no longer declares append and copy as builtins")
+	}
+	slice, element := ast.NewIdent("specs"), ast.NewIdent("spec")
+
+	cases := []struct {
+		name string
+		call func(info *types.Info) *ast.CallExpr
+		want bool
+	}{
+		{
+			name: "the builtin with an element",
+			want: true,
+			call: func(info *types.Info) *ast.CallExpr {
+				return appendCall(info, appendBuiltin, token.NoPos, slice, element)
+			},
+		},
+		{
+			name: "a function of another name",
+			call: func(info *types.Info) *ast.CallExpr {
+				fun := ast.NewIdent("extend")
+				info.Uses[fun] = appendBuiltin
+
+				return &ast.CallExpr{Fun: fun, Args: []ast.Expr{slice, element}}
+			},
+		},
+		{
+			name: "an append that spreads a slice",
+			call: func(info *types.Info) *ast.CallExpr {
+				return appendCall(info, appendBuiltin, token.Pos(1), slice, element)
+			},
+		},
+		{
+			name: "an append with no element",
+			call: func(info *types.Info) *ast.CallExpr {
+				return appendCall(info, appendBuiltin, token.NoPos, slice)
+			},
+		},
+		{
+			name: "a name shadowing the builtin",
+			call: func(info *types.Info) *ast.CallExpr {
+				fun := ast.NewIdent("append")
+				info.Uses[fun] = types.NewFunc(token.NoPos, types.NewPackage("example.com/domain", "domain"), "append", nil)
+
+				return &ast.CallExpr{Fun: fun, Args: []ast.Expr{slice, element}}
+			},
+		},
+		{
+			name: "another builtin under that name",
+			call: func(info *types.Info) *ast.CallExpr {
+				return appendCall(info, copyBuiltin, token.NoPos, slice, element)
+			},
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			info := synthInfo()
+
+			if got := isAppendCall(synthPkg(info), testCase.call(info)); got != testCase.want {
+				t.Errorf("isAppendCall() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// appendCall builds a call written as append, bound to the given object.
+func appendCall(info *types.Info, obj types.Object, ellipsis token.Pos, args ...ast.Expr) *ast.CallExpr {
+	fun := ast.NewIdent("append")
+	info.Uses[fun] = obj
+
+	return &ast.CallExpr{Fun: fun, Args: args, Ellipsis: ellipsis}
 }

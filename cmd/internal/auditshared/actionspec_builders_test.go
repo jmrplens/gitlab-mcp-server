@@ -5,6 +5,7 @@ package auditshared
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -53,32 +54,59 @@ func writeBuilderFixture(t *testing.T, files map[string]string) string {
 	return dir
 }
 
+// assertDiscoveryError checks the error a refused scan returned: the substring
+// the case names, and, where the case pins a pair of files, the message naming
+// them in that order under dir.
+func assertDiscoveryError(t *testing.T, dir string, err error, wantErr string, wantErrFiles []string) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("DiscoverActionSpecGroupBuilders() error = %v, want containing %q", err, wantErr)
+	}
+	if len(wantErrFiles) != 2 {
+		return
+	}
+	first := filepath.Join(dir, filepath.FromSlash(wantErrFiles[0]))
+	second := filepath.Join(dir, filepath.FromSlash(wantErrFiles[1]))
+	if want := fmt.Sprintf("in %s and %s", first, second); !strings.Contains(err.Error(), want) {
+		t.Errorf("DiscoverActionSpecGroupBuilders() error = %v, want it to name %q", err, want)
+	}
+}
+
 // TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources verifies
 // the scan reads only the top-level non-test, non-generated Go files of the
-// directory, returns builder names sorted, and fails on a duplicate builder,
-// on a directory without builders, on a file that does not parse, and on a
-// directory that does not exist.
+// directory, counts function declarations alone, returns builder names sorted,
+// and fails on a duplicate builder, on a directory without builders, on a file
+// that does not parse, and on a directory that does not exist.
+//
+// The happy case plants three builders rather than two so that dropping the
+// sort cannot pass on a coin toss, and a package-level var named like a
+// builder so the declaration-kind test is exercised in both directions.
+// wantErrFiles pins the pair of paths the duplicate message names, in the
+// order it must name them: the file that already held the builder, then the
+// one that redeclared it. Crossing those two reads as the same message.
 func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testing.T) {
 	tests := []struct {
-		name    string
-		files   map[string]string
-		missing bool
-		want    []string
-		wantErr string
-		wantIs  error
+		name         string
+		files        map[string]string
+		missing      bool
+		want         []string
+		wantErr      string
+		wantErrFiles []string
+		wantIs       error
 	}{
 		{
 			name: "sorted names from top-level sources only",
 			files: map[string]string{
 				"zeta.go":             "package tools\n\nfunc buildZetaActionSpecs() {}\nfunc (x T) buildMethodActionSpecs() {}\n",
-				"alpha.go":            "package tools\n\nfunc buildAlphaActionSpecs() {}\nfunc helper() {}\n",
+				"middle.go":           "package tools\n\nfunc buildMiddleActionSpecs() {}\n",
+				"alpha.go":            "package tools\n\nvar buildVarActionSpecs = \"a var is not a builder\"\n\nfunc buildAlphaActionSpecs() {}\nfunc helper() {}\n",
 				"alpha_test.go":       "package tools\n\nfunc buildTestActionSpecs() {}\n",
 				"manifest_gen.go":     "package tools\n\nfunc buildGenActionSpecs() {}\n",
 				"notes.txt":           "func buildTextActionSpecs() {}\n",
 				"nested/nested.go":    "package nested\n\nfunc buildNestedActionSpecs() {}\n",
 				"nested/deep/deep.go": "package deep\n\nfunc buildDeepActionSpecs() {}\n",
 			},
-			want: []string{"buildAlphaActionSpecs", "buildZetaActionSpecs"},
+			want: []string{"buildAlphaActionSpecs", "buildMiddleActionSpecs", "buildZetaActionSpecs"},
 		},
 		{
 			name: "duplicate builder across files",
@@ -86,7 +114,8 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 				"a.go": "package tools\n\nfunc buildSameActionSpecs() {}\n",
 				"b.go": "package tools\n\nfunc buildSameActionSpecs() {}\n",
 			},
-			wantErr: "duplicate action spec group builder buildSameActionSpecs",
+			wantErr:      "duplicate action spec group builder buildSameActionSpecs",
+			wantErrFiles: []string{"a.go", "b.go"},
 		},
 		{
 			name:    "no builders",
@@ -122,9 +151,7 @@ func TestDiscoverActionSpecGroupBuilders_Scenarios_ScansTopLevelSources(t *testi
 				return
 			}
 			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("DiscoverActionSpecGroupBuilders() error = %v, want containing %q", err, tt.wantErr)
-				}
+				assertDiscoveryError(t, dir, err, tt.wantErr, tt.wantErrFiles)
 				return
 			}
 			if err != nil {

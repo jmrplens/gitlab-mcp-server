@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -12,6 +14,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 )
+
+// toolName is the command's own name, used as the flag set's name so a usage
+// message names the command rather than the test binary that drove it.
+const toolName = "audit_surface_quality"
+
+// osExit is os.Exit behind a variable, so the one line main carries is
+// reachable from a test rather than only from a process.
+var osExit = os.Exit
 
 // outputJSON switches stdout output from human-readable markdown to structured
 // JSON. Set by the -json flag.
@@ -30,35 +40,58 @@ var outputJSON bool
 var checkMode bool
 
 func main() {
-	view := flag.String("view", "all", "which audit view to run: metadata, output, or all")
-	flag.BoolVar(&outputJSON, "json", false, "emit JSON instead of markdown")
-	flag.BoolVar(&checkMode, "check", false, "print only the violations that gate and exit 1 when there are any")
-	flag.Parse()
+	osExit(runMain(os.Args[1:], os.Stderr))
+}
+
+// runMain parses args, the command line with the program name already
+// removed, runs the views it asked for and returns the process exit code: 0
+// when nothing gates, 1 when -check found something, and 2 for a command line
+// this command refuses.
+//
+// The flag set is one of its own rather than the package-level [flag]
+// CommandLine, so a bad flag is an exit code this function returns instead of
+// an os.Exit the seam above never sees, and so a second call in one process
+// does not redeclare a flag. flag has already printed the error and the usage
+// by the time Parse returns; -h is the one failure that exits clean, as
+// ExitOnError would.
+func runMain(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet(toolName, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	view := fs.String("view", "all", "which audit view to run: metadata, output, or all")
+	fs.BoolVar(&outputJSON, "json", false, "emit JSON instead of markdown")
+	fs.BoolVar(&checkMode, "check", false, "print only the violations that gate and exit 1 when there are any")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
 
 	switch *view {
 	case "metadata", "output", "all":
 	default:
-		fmt.Fprintf(os.Stderr, "invalid -view %q (valid: metadata, output, all)\n", *view)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "invalid -view %q (valid: metadata, output, all)\n", *view)
+		return 2
 	}
 
 	// -json runs a single audit view: -view=all would emit two top-level JSON
 	// documents back-to-back (unparseable), so require an explicit view.
 	if outputJSON && *view == "all" {
-		fmt.Fprintln(os.Stderr, "-json requires -view=metadata or -view=output")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "-json requires -view=metadata or -view=output")
+		return 2
 	}
 
 	// -check reports one compact list per view, so the two spellings would
 	// contradict each other on what stdout carries.
 	if outputJSON && checkMode {
-		fmt.Fprintln(os.Stderr, "-check and -json are alternatives: -check prints the violations that gate")
-		os.Exit(2)
+		fmt.Fprintln(stderr, "-check and -json are alternatives: -check prints the violations that gate")
+		return 2
 	}
 
 	if auditViews(*view) > 0 && checkMode {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // auditViews runs the views the flag asked for and returns how many

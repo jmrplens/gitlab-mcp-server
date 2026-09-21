@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
@@ -91,6 +93,13 @@ func TestCountResources_IncludesToolManifest(t *testing.T) {
 	}
 	if templates == 0 {
 		t.Fatal("countResources() templates = 0, want registered templates")
+	}
+	// Two counts of the same type returned in one statement: which is which is
+	// decided here against the listing itself, or the report can label the
+	// templates as concrete resources and read as sound.
+	listed, listedTemplates := mcpsurface.Resources(newAuditMetricsClient(t))
+	if static != len(listed) || templates != len(listedTemplates) {
+		t.Fatalf("countResources() = (%d, %d), want the listing's (%d, %d)", static, templates, len(listed), len(listedTemplates))
 	}
 }
 
@@ -164,9 +173,34 @@ func TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo(t *testing.T) 
 	}
 }
 
+// TestCountToolPackageDirsAt_NestedCheckout_CountsOnlyOurOwnPackages verifies
+// the walk prunes a dot-directory and a directory carrying a .git entry, and
+// that it applies that rule to what it descends into rather than to the root it
+// was pointed at. Both halves are load-bearing: the parallel-agent tooling puts
+// a whole worktree of this repository under the tree, so counting one publishes
+// another branch's packages as ours, while a root judged by the same rule is
+// the repository's own checkout and would be pruned to nothing.
+func TestCountToolPackageDirsAt_NestedCheckout_CountsOnlyOurOwnPackages(t *testing.T) {
+	toolsDir := t.TempDir()
+	markNestedCheckout(t, toolsDir)
+	writeTestFile(t, toolsDir, "root.go")
+	writeTestFile(t, filepath.Join(toolsDir, "alpha"), "alpha.go")
+	writeTestFile(t, filepath.Join(toolsDir, ".hidden"), "hidden.go")
+	worktree := filepath.Join(toolsDir, "worktree")
+	writeTestFile(t, worktree, "other.go")
+	writeTestFile(t, filepath.Join(worktree, "inner"), "inner.go")
+	markNestedCheckout(t, worktree)
+
+	if got := countToolPackageDirsAt(toolsDir); got != 2 {
+		t.Fatalf("countToolPackageDirsAt() = %d, want 2 (the root and alpha)", got)
+	}
+}
+
 // TestCountToolPackageDirsAt_MissingRoot_ReportsAndCountsZero verifies a root
 // that cannot be walked is reported on stderr and counted as no packages
-// rather than aborting the audit.
+// rather than aborting the audit. The failure is named once, by the walk
+// function, which is what leaves the walk itself nothing to report: it swallows
+// every error it is handed, so the error it returns is always nil.
 func TestCountToolPackageDirsAt_MissingRoot_ReportsAndCountsZero(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
 
@@ -180,6 +214,18 @@ func TestCountToolPackageDirsAt_MissingRoot_ReportsAndCountsZero(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "WalkDir "+missing) {
 		t.Fatalf("stderr = %q, want the walk failure naming %s", stderr, missing)
+	}
+	if reports := strings.Count(stderr, "WalkDir "); reports != 1 {
+		t.Fatalf("stderr = %q, want exactly one walk failure, got %d", stderr, reports)
+	}
+}
+
+// markNestedCheckout plants the .git entry that makes dir read as a checkout of
+// its own, which is what a linked worktree and a clone both carry.
+func markNestedCheckout(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: elsewhere\n"), 0o600); err != nil {
+		t.Fatalf("plant .git in %s: %v", dir, err)
 	}
 }
 
@@ -225,6 +271,28 @@ func TestCountSourceFilesAt_MixedTree_PartitionsByTestSuffix(t *testing.T) {
 	}
 }
 
+// TestCountSourceFilesAt_NestedCheckout_CountsOnlyOurOwnFiles verifies the
+// codebase walk prunes a dot-directory and a nested checkout while still
+// counting the root it was pointed at, which carries a .git entry of its own in
+// every real run. A rule applied to the root as well would count nothing at all.
+func TestCountSourceFilesAt_NestedCheckout_CountsOnlyOurOwnFiles(t *testing.T) {
+	dir := t.TempDir()
+	markNestedCheckout(t, dir)
+	writeTestFile(t, dir, "a.go")
+	writeTestFile(t, filepath.Join(dir, "pkg"), "b.go")
+	writeTestFile(t, filepath.Join(dir, "pkg"), "b_test.go")
+	writeTestFile(t, filepath.Join(dir, ".hidden"), "hidden.go")
+	worktree := filepath.Join(dir, "worktree")
+	writeTestFile(t, worktree, "other.go")
+	writeTestFile(t, worktree, "other_test.go")
+	markNestedCheckout(t, worktree)
+
+	src, test := countSourceFilesAt(dir)
+	if src != 2 || test != 1 {
+		t.Fatalf("countSourceFilesAt() = (%d, %d), want (2, 1)", src, test)
+	}
+}
+
 // TestCountCatalogDomains_UsesCanonicalActionDomains verifies domain metrics are
 // based on Action.Domain rather than individual tool name segments.
 func TestCountCatalogDomains_UsesCanonicalActionDomains(t *testing.T) {
@@ -253,14 +321,34 @@ func TestCountCatalogDomains_NilCatalog_ReturnsEmpty(t *testing.T) {
 }
 
 // TestCountCatalogDomains_ToolWithoutDomain_CountsAsUnknown verifies an action
-// whose tool name carries no domain segment (so neither its Domain nor its ID
-// prefix names one) is counted under "unknown" instead of an empty key.
+// whose tool name carries no domain segment is counted under "unknown" instead
+// of an empty key, and pins the invariant that lets the count read Domain and
+// nothing else: a catalog normalizes every action it holds into
+// Domain + "." + Name, so an action with no domain carries an ID that begins
+// with the dot and the half before it is empty too. A fallback that cut the ID
+// could hand the "unknown" guard only the same empty string.
 func TestCountCatalogDomains_ToolWithoutDomain_CountsAsUnknown(t *testing.T) {
-	catalog := catalogWithActions(t, catalogActionFixture{toolName: "gitlab_", actionName: "list", specBacked: true})
+	catalog := catalogWithActions(
+		t,
+		catalogActionFixture{toolName: "gitlab_", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_project", actionName: "get", specBacked: true},
+	)
 
-	domains := countCatalogDomains(catalog)
-	if domains["unknown"] != 1 || len(domains) != 1 {
-		t.Fatalf("countCatalogDomains() = %v, want map[unknown:1]", domains)
+	for _, action := range catalog.Actions() {
+		t.Run(string(action.ID), func(t *testing.T) {
+			if want := actioncatalog.ActionID(action.Domain + "." + action.Name); action.ID != want {
+				t.Fatalf("action id = %q, want %q", action.ID, want)
+			}
+			prefix, _, _ := strings.Cut(string(action.ID), ".")
+			if prefix != action.Domain {
+				t.Fatalf("id prefix = %q, want the domain %q", prefix, action.Domain)
+			}
+		})
+	}
+
+	want := map[string]int{"unknown": 1, "project": 1}
+	if domains := countCatalogDomains(catalog); !maps.Equal(domains, want) {
+		t.Fatalf("countCatalogDomains() = %v, want %v", domains, want)
 	}
 }
 
@@ -289,7 +377,10 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 
 // TestPrintDynamicSearchMetrics_IncludesAllSurfaces verifies the audit report
 // prints dynamic index and alias rows for base, self-managed enterprise, and
-// GitLab.com enterprise surfaces.
+// GitLab.com enterprise surfaces. Every one of the eighteen fixture values is
+// distinct and the whole block is compared, so a row that named another
+// surface's figure (three arguments of one type, printed in six triples) is a
+// difference rather than a rearrangement nothing reads.
 func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 	base := dynamictools.RegistryMetrics{IndexTokenCount: 1, IndexPostingCount: 2, AliasCount: 3, SearchableAliasCount: 4, UnsearchableAliasCount: 5, AmbiguousAliasCount: 6}
 	enterprise := dynamictools.RegistryMetrics{IndexTokenCount: 7, IndexPostingCount: 8, AliasCount: 9, SearchableAliasCount: 10, UnsearchableAliasCount: 11, AmbiguousAliasCount: 12}
@@ -298,22 +389,29 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 	output := captureStdout(t, func() {
 		printDynamicSearchMetrics(base, enterprise, gitLabCom)
 	})
-	for _, want := range []string{
-		"Dynamic search index tokens (base)",
-		"Dynamic search index tokens (self-managed enterprise)",
-		"Dynamic search index tokens (GitLab.com enterprise)",
-		"Dynamic search index postings (GitLab.com enterprise)",
-		"Dynamic aliases (GitLab.com enterprise)",
-		"Dynamic aliases searchable (GitLab.com enterprise)",
-		"Dynamic aliases unsearchable (GitLab.com enterprise)",
-		"Dynamic aliases ambiguous (GitLab.com enterprise)",
-		"18",
-	} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(output, want) {
-				t.Fatalf("printDynamicSearchMetrics() output missing %q:\n%s", want, output)
-			}
-		})
+
+	want := strings.Join([]string{
+		metricRow("Dynamic search index tokens (base)", 1),
+		metricRow("Dynamic search index tokens (self-managed enterprise)", 7),
+		metricRow("Dynamic search index tokens (GitLab.com enterprise)", 13),
+		metricRow("Dynamic search index postings (base)", 2),
+		metricRow("Dynamic search index postings (self-managed enterprise)", 8),
+		metricRow("Dynamic search index postings (GitLab.com enterprise)", 14),
+		metricRow("Dynamic aliases (base)", 3),
+		metricRow("Dynamic aliases (self-managed enterprise)", 9),
+		metricRow("Dynamic aliases (GitLab.com enterprise)", 15),
+		metricRow("Dynamic aliases searchable (base)", 4),
+		metricRow("Dynamic aliases searchable (self-managed enterprise)", 10),
+		metricRow("Dynamic aliases searchable (GitLab.com enterprise)", 16),
+		metricRow("Dynamic aliases unsearchable (base)", 5),
+		metricRow("Dynamic aliases unsearchable (self-managed enterprise)", 11),
+		metricRow("Dynamic aliases unsearchable (GitLab.com enterprise)", 17),
+		metricRow("Dynamic aliases ambiguous (base)", 6),
+		metricRow("Dynamic aliases ambiguous (self-managed enterprise)", 12),
+		metricRow("Dynamic aliases ambiguous (GitLab.com enterprise)", 18),
+	}, "")
+	if output != want {
+		t.Fatalf("printDynamicSearchMetrics() output =\n%s\nwant\n%s", output, want)
 	}
 }
 
@@ -814,8 +912,18 @@ func TestCollectMetrics_RealSurfaces_AgreesWithSiteStats(t *testing.T) {
 	if metrics.gitLabComEnterpriseDomains["orbit"] == 0 {
 		t.Fatalf("GitLab.com domain breakdown %v lacks the orbit domain", metrics.gitLabComEnterpriseDomains)
 	}
-	if metrics.srcFiles == 0 || metrics.testFiles == 0 {
-		t.Fatalf("codebase counts = (%d, %d), want both positive", metrics.srcFiles, metrics.testFiles)
+	// Each of these two pairs is assigned from one call in one statement, so a
+	// crossing is a legal assignment that every row below reads back through
+	// the same field it was written to. The report would print the test files
+	// as sources and the templates as concrete resources, and only a
+	// comparison with the measurement's own source says which is which.
+	wantSrc, wantTest := countSourceFilesAt(filepath.Join(repositoryRoot(), "internal"))
+	if metrics.srcFiles != wantSrc || metrics.testFiles != wantTest {
+		t.Fatalf("codebase counts = (%d, %d), want (%d, %d)", metrics.srcFiles, metrics.testFiles, wantSrc, wantTest)
+	}
+	wantStatic, wantTemplates := countResources(newAuditMetricsClient(t))
+	if metrics.staticResources != wantStatic || metrics.templateResources != wantTemplates {
+		t.Fatalf("resource counts = (%d, %d), want (%d, %d)", metrics.staticResources, metrics.templateResources, wantStatic, wantTemplates)
 	}
 }
 
@@ -860,6 +968,61 @@ func TestWriteJSONSummary_RealMetrics_EmitsDocumentedShape(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWriteJSONSummary_FixtureMetrics_PairsEveryKeyWithItsOwnCount verifies the
+// summary's ten keys against a payload where no two counts agree, and against
+// the whole document rather than a lookup per key. The struct it encodes is
+// filled positionally, so two counts trading places is a legal literal that
+// only a fixture telling them apart can catch: on the real surface
+// dynamic_base and dynamic_enterprise are both 2, which is exactly the pair a
+// real-metrics assertion cannot see.
+func TestWriteJSONSummary_FixtureMetrics_PairsEveryKeyWithItsOwnCount(t *testing.T) {
+	metrics := auditMetrics{
+		individualTools:   countedTools("individual", 1),
+		metaBase:          countedTools("meta_base", 2),
+		metaEnterprise:    countedTools("meta_enterprise", 3),
+		dynamicBase:       countedTools("dynamic_base", 4),
+		dynamicEnterprise: countedTools("dynamic_enterprise", 5),
+		staticResources:   6,
+		templateResources: 7,
+		promptCount:       8,
+		toolPackages:      9,
+		srcFiles:          10,
+		testFiles:         11,
+	}
+
+	var out bytes.Buffer
+	if err := writeJSONSummary(&out, metrics); err != nil {
+		t.Fatalf("writeJSONSummary() error: %v", err)
+	}
+
+	want := `{
+  "individual_tools": 1,
+  "meta_base": 2,
+  "meta_enterprise": 3,
+  "dynamic_base": 4,
+  "dynamic_enterprise": 5,
+  "resources": 13,
+  "prompts": 8,
+  "tool_packages": 9,
+  "source_files": 10,
+  "test_files": 11
+}
+`
+	if out.String() != want {
+		t.Fatalf("writeJSONSummary() =\n%s\nwant\n%s", out.String(), want)
+	}
+}
+
+// countedTools builds n tool definitions with distinct names, for a fixture
+// whose only interesting property is how many tools a surface carries.
+func countedTools(surface string, n int) []*mcp.Tool {
+	names := make([]string, 0, n)
+	for i := range n {
+		names = append(names, fmt.Sprintf("gitlab_%s_%d", surface, i))
+	}
+	return namedTools(names...)
 }
 
 // failingWriter fails every write so an encoder error can be observed.
@@ -1007,12 +1170,24 @@ func TestPrintReport_FixtureMetrics_ListsSurfaceDeltas(t *testing.T) {
 	}{
 		{"Dynamic tools (base)", 2},
 		{"Dynamic tools (self-managed enterprise)", 0},
+		{"Dynamic catalog actions (base)", 10},
+		{"Dynamic catalog actions (self-managed enterprise)", 12},
+		{"Dynamic catalog actions (GitLab.com enterprise)", 13},
 		{"Enterprise-only meta-tools", 1},
 		{"GitLab.com-only meta-tools", 1},
 		{"GitLab.com-only individual tools", 1},
 		{"MCP Resources (total)", 10},
+		{"  Static resources", 4},
+		{"  Resource templates", 6},
+		{"  Workspace roots", 1},
+		{"MCP Prompts", 7},
 		{"Enterprise catalog actions missing ActionSpec", 1},
+		{"Spec-backed enterprise catalog actions", 1},
+		{"Elicitation tools", 1},
 		{"Standard tools", 1},
+		{"internal/tools Go packages", 8},
+		{"Source files (.go)", 9},
+		{"Test files (_test.go)", 10},
 	}
 	for _, row := range rows {
 		t.Run(row.label, func(t *testing.T) {
@@ -1103,6 +1278,35 @@ func TestRun_RejectsNegativeTopDomains(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want nothing written before the guard fires", stdout.String())
+	}
+}
+
+// TestRun_ZeroTopDomains_PrintsTheReportWithoutADomainRow verifies zero is a
+// count the guard admits rather than refuses: its own message says ">= 0", and
+// the breakdown then names how many domains it left out instead of listing any.
+// A guard that refused zero as well failed nothing before this, because every
+// other case passes a positive count.
+func TestRun_ZeroTopDomains_PrintsTheReportWithoutADomainRow(t *testing.T) {
+	var stderr bytes.Buffer
+
+	var code int
+	out := captureStdout(t, func() {
+		code = run(auditOptions{topDomains: 0}, os.Stdout, &stderr)
+	})
+
+	if code != 0 {
+		t.Fatalf("run() = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(out, "top 0)\n") {
+		t.Errorf("report does not carry the zero run was given:\n%s", out)
+	}
+	header := "  Domain                    Tools\n  ------------------------- -----\n"
+	_, table, found := strings.Cut(out, header)
+	if !found {
+		t.Fatalf("report lacks the domain table header:\n%s", out)
+	}
+	if !strings.HasPrefix(table, "  ... and ") {
+		t.Errorf("domain table lists rows for -top-domains=0:\n%s", table)
 	}
 }
 

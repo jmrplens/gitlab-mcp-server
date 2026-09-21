@@ -4,8 +4,13 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -15,7 +20,8 @@ import (
 )
 
 // TestAuditNaming_FlagsMismatchedToolNames verifies auditNaming reports a
-// violation per tool name that does not match the supplied pattern.
+// violation per tool name that does not match the supplied pattern, naming
+// the tool as its subject and the pattern in its detail.
 func TestAuditNaming_FlagsMismatchedToolNames(t *testing.T) {
 	tools := []*mcp.Tool{
 		{Name: "gitlab_project_get"},
@@ -24,13 +30,12 @@ func TestAuditNaming_FlagsMismatchedToolNames(t *testing.T) {
 	}
 
 	got := auditNaming(tools, toolNameRe, "individual")
-	if len(got) != 2 {
-		t.Fatalf("auditNaming() returned %d violations, want 2", len(got))
+	want := []violation{
+		{"InvalidName", "naming", "individual tool name does not match " + toolNameRe.String()},
+		{"gitlabProjectGet", "naming", "individual tool name does not match " + toolNameRe.String()},
 	}
-	for _, v := range got {
-		if v.category != "naming" {
-			t.Errorf("category = %q, want naming", v.category)
-		}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditNaming() = %+v, want %+v", got, want)
 	}
 }
 
@@ -47,7 +52,8 @@ func TestAuditNaming_AllValidReturnsNoViolations(t *testing.T) {
 }
 
 // TestAuditDescriptions_FlagsShortDescription verifies the description audit
-// reports tools whose description is shorter than minDescLen.
+// reports tools whose description is shorter than minDescLen, with the
+// length and the text in the detail.
 func TestAuditDescriptions_FlagsShortDescription(t *testing.T) {
 	short := strings.Repeat("a", minDescLen-1)
 	tools := []*mcp.Tool{
@@ -56,45 +62,61 @@ func TestAuditDescriptions_FlagsShortDescription(t *testing.T) {
 	}
 
 	got := auditDescriptions(tools, "individual")
-	if len(got) != 1 {
-		t.Fatalf("auditDescriptions() = %d violations, want 1", len(got))
+	want := []violation{
+		{"short", "description", fmt.Sprintf("individual description too short (%d chars): %q", minDescLen-1, short)},
 	}
-	if got[0].tool != "short" {
-		t.Fatalf("tool = %q, want short", got[0].tool)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditDescriptions() = %+v, want %+v", got, want)
 	}
 }
 
 // TestAuditAnnotations_DetectsNilAndConflictingHints verifies the annotation
-// audit flags nil annotations and conflicting ReadOnly/Destructive hints.
+// audit flags nil annotations and conflicting ReadOnly/Destructive hints, and
+// leaves a read-only tool that states no destructive hint alone: nil is the
+// hint's absence, not a conflict.
 func TestAuditAnnotations_DetectsNilAndConflictingHints(t *testing.T) {
 	destr := true
 	tools := []*mcp.Tool{
 		{Name: "nil_ann"},
 		{Name: "conflict", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: &destr}},
 		{Name: "ok", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &destr}},
+		{Name: "read_only_unstated", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}},
 	}
 
 	got := auditAnnotations(tools, "individual")
-	if len(got) != 2 {
-		t.Fatalf("auditAnnotations() = %d violations, want 2: %+v", len(got), got)
+	want := []violation{
+		{"nil_ann", "annotations", "individual tool has nil Annotations"},
+		{"conflict", "annotations", "ReadOnlyHint=true conflicts with DestructiveHint=true"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditAnnotations() = %+v, want %+v", got, want)
 	}
 }
 
 // TestAuditAnnotationTypes_ValidatesReadAndDeleteNames verifies the audit
-// reports tools whose name suffix should match their annotation hint.
+// reports exactly the tools whose name suffix contradicts their annotation
+// hint: a read name without ReadOnlyHint, a delete name whose DestructiveHint
+// is absent or false. A read name that is read-only and a name that suggests
+// neither raise nothing, whatever their hints say, which is what tells the
+// rule from one that fires on every tool that is not read-only.
 func TestAuditAnnotationTypes_ValidatesReadAndDeleteNames(t *testing.T) {
-	// Read name without ReadOnlyHint.
+	notDestructive := false
 	tools := []*mcp.Tool{
 		{Name: "gitlab_project_list", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false}},
-		// Delete name without DestructiveHint=true.
 		{Name: "gitlab_project_delete", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: nil}},
-		// Compliant read tool.
+		{Name: "gitlab_branch_delete", Annotations: &mcp.ToolAnnotations{DestructiveHint: &notDestructive}},
 		{Name: "gitlab_project_get", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}},
+		{Name: "gitlab_project_create", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false}},
 	}
 
 	got := auditAnnotationTypes(tools)
-	if len(got) < 2 {
-		t.Fatalf("auditAnnotationTypes() = %d violations, want >= 2: %+v", len(got), got)
+	want := []violation{
+		{"gitlab_project_list", "annotation-type", "name suggests read-only but ReadOnlyHint is false"},
+		{"gitlab_project_delete", "annotation-type", "name suggests delete but DestructiveHint is not true"},
+		{"gitlab_branch_delete", "annotation-type", "name suggests delete but DestructiveHint is not true"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditAnnotationTypes() = %+v, want %+v", got, want)
 	}
 }
 
@@ -108,7 +130,8 @@ func TestAuditAnnotationTypes_NilAnnotationsAreSkipped(t *testing.T) {
 }
 
 // TestAuditInputSchema_RequiresObjectType verifies the input schema audit
-// reports tools whose schema is missing or not typed as object.
+// reports the tools whose schema is not a map or not typed as object, and
+// which of the two each one is, and passes the one typed as object.
 func TestAuditInputSchema_RequiresObjectType(t *testing.T) {
 	tools := []*mcp.Tool{
 		{Name: "wrong_type", InputSchema: map[string]any{"type": "string"}},
@@ -117,23 +140,35 @@ func TestAuditInputSchema_RequiresObjectType(t *testing.T) {
 	}
 
 	got := auditInputSchema(tools)
-	if len(got) != 2 {
-		t.Fatalf("auditInputSchema() = %d, want 2: %+v", len(got), got)
+	want := []violation{
+		{"wrong_type", "input-schema", `InputSchema type="string", expected "object"`},
+		{"no_map", "input-schema", "InputSchema is not a map"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditInputSchema() = %+v, want %+v", got, want)
 	}
 }
 
 // TestAuditAdditionalProperties_RequiresFalseConstraint verifies the audit
-// reports schemas without additionalProperties=false.
+// reports a schema that leaves additionalProperties out, sets it true, or
+// sets it to something that is not a boolean at all, each with the value it
+// found, and passes one that sets it false.
 func TestAuditAdditionalProperties_RequiresFalseConstraint(t *testing.T) {
 	tools := []*mcp.Tool{
 		{Name: "missing", InputSchema: map[string]any{"type": "object"}},
 		{Name: "true_value", InputSchema: map[string]any{"type": "object", "additionalProperties": true}},
+		{Name: "not_a_bool", InputSchema: map[string]any{"type": "object", "additionalProperties": "no"}},
 		{Name: "ok", InputSchema: map[string]any{"type": "object", "additionalProperties": false}},
 	}
 
 	got := auditAdditionalProperties(tools, "individual")
-	if len(got) != 2 {
-		t.Fatalf("auditAdditionalProperties() = %d, want 2: %+v", len(got), got)
+	want := []violation{
+		{"missing", "additional-properties", "individual tool inputSchema missing additionalProperties:false"},
+		{"true_value", "additional-properties", "individual tool inputSchema additionalProperties=true, want false"},
+		{"not_a_bool", "additional-properties", "individual tool inputSchema additionalProperties=no, want false"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditAdditionalProperties() = %+v, want %+v", got, want)
 	}
 }
 
@@ -181,11 +216,9 @@ func TestAuditDuplicates_ReportsDuplicatesByName(t *testing.T) {
 		{Name: "gitlab_x"},
 	}
 	got := auditDuplicates(tools, "individual")
-	if len(got) != 1 {
-		t.Fatalf("auditDuplicates() = %d, want 1", len(got))
-	}
-	if got[0].tool != "gitlab_x" {
-		t.Fatalf("duplicate tool = %q, want gitlab_x", got[0].tool)
+	want := []violation{{"gitlab_x", "duplicate", "duplicate individual tool name"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditDuplicates() = %+v, want %+v", got, want)
 	}
 }
 
@@ -307,6 +340,115 @@ func hasEntryContaining(entries []string, text string) bool {
 	return false
 }
 
+// TestAuditResultEnvelopes_Counts_AreTheRegistryRenderedPlainly holds every
+// count and list of the envelope audit to the registry rendered without the
+// audit's own sorting: each registered type filled and rendered in both
+// states, a nil render counted under the state that produced it, a panic
+// under its message, a bare block under its position. The three conditions
+// that sort a render share one switch, and a test asserting that a count is
+// not zero cannot tell a counter that counts the wrong state, or counts
+// downwards, from one that counts the right renders.
+func TestAuditResultEnvelopes_Counts_AreTheRegistryRenderedPlainly(t *testing.T) {
+	registerBareBlock()
+	audit, _ := auditResultEnvelopes()
+
+	want := envelopeAudit{RegistrationProblems: toolutil.MarkdownRegistrationProblems()}
+	for _, typ := range toolutil.RegisteredMarkdownTypes() {
+		want.Formatters++
+		name := typ.String() + " (" + toolutil.RegisteredMarkdownFormatterName(typ) + ")"
+		for _, state := range []testutil.FixtureState{testutil.FixtureZero, testutil.FixtureMultiPage} {
+			result, panicked := renderEnvelope(testutil.FillFixture(typ, testutil.FixtureOptions{State: state, Text: fixtureText}))
+			switch {
+			case panicked != "":
+				want.Panicked = append(want.Panicked, fmt.Sprintf("%s [%s]: %s", name, state, panicked))
+			case result == nil && state == testutil.FixtureZero:
+				want.NilOnZero++
+			case result == nil:
+				want.NilOnPopulated = append(want.NilOnPopulated, name)
+			default:
+				for i, block := range result.Content {
+					if !blockAnnotated(block) {
+						want.Unannotated = append(want.Unannotated, fmt.Sprintf("%s [%s] block %d (%T)", name, state, i, block))
+					}
+				}
+			}
+		}
+	}
+
+	if audit.Formatters != want.Formatters || audit.NilOnZero != want.NilOnZero {
+		t.Errorf("formatters = %d, nil on zero = %d; want %d and %d", audit.Formatters, audit.NilOnZero, want.Formatters, want.NilOnZero)
+	}
+	if !reflect.DeepEqual(audit.NilOnPopulated, want.NilOnPopulated) {
+		t.Errorf("nil on populated = %v, want %v", audit.NilOnPopulated, want.NilOnPopulated)
+	}
+	if !reflect.DeepEqual(audit.Panicked, want.Panicked) {
+		t.Errorf("panicked = %v, want %v", audit.Panicked, want.Panicked)
+	}
+	if !reflect.DeepEqual(audit.Unannotated, want.Unannotated) {
+		t.Errorf("unannotated = %v, want %v", audit.Unannotated, want.Unannotated)
+	}
+	if !reflect.DeepEqual(audit.RegistrationProblems, want.RegistrationProblems) {
+		t.Errorf("registration problems = %v, want %v", audit.RegistrationProblems, want.RegistrationProblems)
+	}
+}
+
+// bareBlock is the output type of a result formatter that builds its own
+// envelope and leaves the annotations off, which a string formatter cannot
+// do: the registry annotates every string it wraps.
+type bareBlock struct{ Name string }
+
+// registerBareBlock registers that formatter once for the process.
+func registerBareBlock() {
+	bareBlockOnce.Do(func() {
+		toolutil.RegisterMarkdownResult(func(bareBlock) *mcp.CallToolResult {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "bare"}}}
+		})
+	})
+}
+
+// bareBlockOnce keeps the bare-block formatter to one registration.
+var bareBlockOnce sync.Once
+
+// TestAuditResultEnvelopes_BareBlock_IsListedWithItsPosition checks the one
+// entry the walk writes for a block that reaches the client with no
+// audience: the formatter's name, the state that rendered it, the block's
+// index and its kind, in both states, since a result formatter is served
+// as it is and the dispatcher annotates nothing it built itself.
+func TestAuditResultEnvelopes_BareBlock_IsListedWithItsPosition(t *testing.T) {
+	registerBareBlock()
+	audit, _ := auditResultEnvelopes()
+
+	typ := reflect.TypeFor[bareBlock]()
+	name := typ.String() + " (" + toolutil.RegisteredMarkdownFormatterName(typ) + ")"
+	for _, want := range []string{
+		name + " [zero] block 0 (*mcp.TextContent)",
+		name + " [multi-page] block 0 (*mcp.TextContent)",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(audit.Unannotated, want) {
+				t.Errorf("unannotated = %v, want it to carry %q", audit.Unannotated, want)
+			}
+		})
+	}
+}
+
+// TestRegisteredMarkdownTypes_EveryFormatterIsNamed pins the property the
+// envelope walk's name guard rests on: the registry records a function name
+// for every type at registration, so the guard against an empty one is never
+// taken and the report never prints a bare type. A formatter that lost its
+// name would be one a finding could not point a reader at.
+func TestRegisteredMarkdownTypes_EveryFormatterIsNamed(t *testing.T) {
+	types := toolutil.RegisteredMarkdownTypes()
+	if len(types) == 0 {
+		t.Fatal("the registry holds no formatter, so nothing was checked")
+	}
+	for _, typ := range types {
+		if toolutil.RegisteredMarkdownFormatterName(typ) == "" {
+			t.Errorf("%s is registered under no function name", typ)
+		}
+	}
+}
+
 // TestRenderEnvelope_Panic_IsReportedRatherThanRaised checks the recovery
 // the audit relies on to finish a run whose one formatter panics.
 func TestRenderEnvelope_Panic_IsReportedRatherThanRaised(t *testing.T) {
@@ -347,12 +489,13 @@ func TestBlockAnnotated_Blocks_ReadsTheAnnotationOfEachKind(t *testing.T) {
 }
 
 // TestPrintReport_EmptyViolationsWritesNoViolationsMessage verifies the report
-// writes the no-violations message when there are no findings.
+// writes the no-violations message when there are no findings, over two
+// surfaces of different sizes so the two counts cannot trade places.
 func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 	// Not parallel: captureStdout rebinds os.Stdout.
 	output := captureStdout(t, func() {
 		printMetadataReport(
-			[]*mcp.Tool{{Name: "gitlab_x"}},
+			[]*mcp.Tool{{Name: "gitlab_x"}, {Name: "gitlab_z"}},
 			[]*mcp.Tool{{Name: "gitlab_y"}},
 			nil,
 			nil,
@@ -362,7 +505,7 @@ func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 
 	for _, want := range []string{
 		"# MCP Tool Metadata Audit Report",
-		"| Individual tools | 1 |",
+		"| Individual tools | 2 |",
 		"| Meta-tools | 1 |",
 		"| Total violations | 0 |",
 		"**No violations found.**",
@@ -447,4 +590,233 @@ func TestPrintReport_ListsAllMetaToolsAndTruncatesDescription(t *testing.T) {
 	if !strings.Contains(output, "...") {
 		t.Fatalf("printReport() output missing truncated description marker:\n%s", output)
 	}
+}
+
+// TestPrintReport_AllTools_NumbersRowsAndTruncatesPastSixtyCharacters pins
+// the two tables of the "All Tools" section: rows are numbered from one, a
+// description of exactly sixty characters is printed whole, one character
+// more is cut to sixty and marked, and the annotation column spells each
+// hint. Both tables are checked, since each has a loop of its own.
+func TestPrintReport_AllTools_NumbersRowsAndTruncatesPastSixtyCharacters(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout.
+	sixty := strings.Repeat("a", 60)
+	individual := []*mcp.Tool{
+		{Name: "ind_whole", Description: sixty},
+		{Name: "ind_cut", Description: strings.Repeat("b", 61), Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}},
+	}
+	meta := []*mcp.Tool{
+		{Name: "meta_short", Description: "short"},
+		{Name: "meta_whole", Description: strings.Repeat("d", 60)},
+		{Name: "meta_cut", Description: strings.Repeat("c", 61)},
+	}
+	vs := []violation{{tool: "ind_whole", category: "naming", detail: "bad"}}
+
+	output := captureStdout(t, func() {
+		printMetadataReport(individual, meta, vs, nil, envelopeAudit{})
+	})
+
+	for _, want := range []string{
+		"### Individual Tools (2)",
+		"| 1 | `ind_whole` | " + sixty + " | nil |",
+		"| 2 | `ind_cut` | " + strings.Repeat("b", 60) + "... | RO=true D=nil I=false OW=nil |",
+		"### Meta-Tools (3)",
+		"| 1 | `meta_short` | short | nil |",
+		"| 2 | `meta_whole` | " + strings.Repeat("d", 60) + " | nil |",
+		"| 3 | `meta_cut` | " + strings.Repeat("c", 60) + "... | nil |",
+	} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Errorf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
+	}
+}
+
+// metadataJSONReport is the metadata view's JSON document with the envelope
+// section, which [metadataJSON] leaves out.
+type metadataJSONReport struct {
+	metadataJSON
+	Envelopes envelopeAudit `json:"envelopes"`
+}
+
+// TestPrintMetadataReport_JSON_CarriesEachFieldUnderItsKey decodes the JSON
+// view of a report with one violation and a populated envelope audit, and
+// holds every key to the value it was given. The document is built from a
+// positional literal, so two counts, or a violation's tool and category,
+// could trade keys and still encode.
+func TestPrintMetadataReport_JSON_CarriesEachFieldUnderItsKey(t *testing.T) {
+	// Not parallel: captureStdout rebinds os.Stdout and outputJSON is global.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+	envelopes := envelopeAudit{
+		Formatters:           5,
+		NilOnZero:            2,
+		NilOnPopulated:       []string{"x.Output (x.FormatMarkdown)"},
+		Unannotated:          []string{"y.Output [zero] block 0 (*mcp.TextContent)"},
+		Panicked:             []string{"z.Output [multi-page]: nil map"},
+		RegistrationProblems: []string{"duplicate Markdown formatter for w.Output: the first registration is kept"},
+	}
+
+	out := captureStdout(t, func() {
+		printMetadataReport(
+			[]*mcp.Tool{{Name: "gitlab_a"}, {Name: "gitlab_b"}},
+			[]*mcp.Tool{{Name: "gitlab_c"}},
+			[]violation{{"gitlab_a", "naming", "does not match"}},
+			nil,
+			envelopes,
+		)
+	})
+
+	var got metadataJSONReport
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode metadata report: %v\n%s", err, out)
+	}
+	want := metadataJSONReport{
+		View:            "metadata",
+		IndividualTools: 2,
+		MetaTools:       1,
+		Violations:      1,
+		Entries:         []jsonEntry{{Tool: "gitlab_a", Category: "naming", Detail: "does not match"}},
+		Envelopes:       envelopes,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("metadata JSON = %+v, want %+v", got, want)
+	}
+}
+
+// TestPrintMetadataReport_JSON_UnwritableStdout_IsSaidOnStderr checks the
+// one failure the JSON view can have, a stdout that cannot be written, and
+// that it is said on stderr rather than swallowed; and that a stdout that can
+// be written says nothing there, so a run that succeeded is not read as one
+// that failed.
+func TestPrintMetadataReport_JSON_UnwritableStdout_IsSaidOnStderr(t *testing.T) {
+	// Not parallel: os.Stdout, os.Stderr and outputJSON are process-wide.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+	report := func() { printMetadataReport(nil, nil, nil, nil, envelopeAudit{}) }
+
+	t.Run("a closed stdout", func(t *testing.T) {
+		stderr := withClosedStdout(t, func() string { return captureStderr(t, report) })
+		if !strings.Contains(stderr, "encode json: ") {
+			t.Errorf("stderr = %q, want the encoding failure reported", stderr)
+		}
+	})
+	t.Run("a writable stdout", func(t *testing.T) {
+		var stderr string
+		captureStdout(t, func() { stderr = captureStderr(t, report) })
+		if stderr != "" {
+			t.Errorf("stderr = %q, want nothing when the report was written", stderr)
+		}
+	})
+}
+
+// withClosedStdout runs fn with os.Stdout bound to a pipe whose both ends
+// are closed, so every write to it fails, and returns what fn returned.
+func withClosedStdout(t *testing.T, fn func() string) string {
+	t.Helper()
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe() error = %v", err)
+	}
+	if closeErr := reader.Close(); closeErr != nil {
+		t.Fatalf("Close() reader error = %v", closeErr)
+	}
+	if closeErr := writer.Close(); closeErr != nil {
+		t.Fatalf("Close() writer error = %v", closeErr)
+	}
+	os.Stdout = writer
+	defer func() { os.Stdout = original }()
+	return fn()
+}
+
+// TestRunMetadataAudit_RegisterMetaAudit_ReadsTheTreeUnderTheWorkingDirectory
+// drives the metadata view from three working directories and checks what the
+// register-meta half does with each: no module root above it is a skip said
+// on stderr, a tree it cannot parse is a skip said on stderr, and a tree
+// carrying a package-level RegisterMeta is a violation in the report. The
+// first two used to be reachable only from a process, so a skip that said
+// nothing would have failed no test.
+func TestRunMetadataAudit_RegisterMetaAudit_ReadsTheTreeUnderTheWorkingDirectory(t *testing.T) {
+	// Not parallel: t.Chdir, captureStdout, captureStderr and outputJSON are
+	// process-wide.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+
+	const hub = "package tools\n"
+	cases := []struct {
+		name       string
+		files      map[string]string
+		wantStderr string
+		wantEntry  *jsonEntry
+	}{
+		{
+			name:       "no module root above the working directory",
+			wantStderr: "register meta audit skipped: go.mod not found",
+		},
+		{
+			name: "a tree the audit cannot parse",
+			files: map[string]string{
+				"go.mod":                          "module example.com/fixture\n",
+				"internal/tools/register_meta.go": hub,
+				"internal/tools/broken/broken.go": "package broken\n\nfunc (\n",
+			},
+			wantStderr: "register meta audit skipped: parse ",
+		},
+		{
+			name: "a package-level RegisterMeta under the root",
+			files: map[string]string{
+				"go.mod":                            "module example.com/fixture\n",
+				"internal/tools/register_meta.go":   hub,
+				"internal/tools/legacy/register.go": "package legacy\n\nfunc RegisterMeta() {}\n",
+			},
+			wantEntry: &jsonEntry{
+				Tool:     "legacy",
+				Category: "register-meta",
+				Detail:   "package-level RegisterMeta is not an approved catalog-first runtime pattern (internal/tools/legacy/register.go)",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			for name, content := range tc.files {
+				writeTestFile(t, root, name, content)
+			}
+			t.Chdir(root)
+			client := stubClient(t)
+
+			var stderr string
+			out := captureStdout(t, func() { stderr = captureStderr(t, func() { runMetadataAudit(client) }) })
+
+			var got metadataJSON
+			if err := json.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatalf("decode metadata report: %v\n%s", err, truncate(out))
+			}
+			if tc.wantStderr != "" && !strings.Contains(stderr, tc.wantStderr) {
+				t.Errorf("stderr = %q, want it to carry %q", stderr, tc.wantStderr)
+			}
+			if tc.wantStderr == "" && stderr != "" {
+				t.Errorf("stderr = %q, want nothing", stderr)
+			}
+			var wantEntries []jsonEntry
+			if tc.wantEntry != nil {
+				wantEntries = []jsonEntry{*tc.wantEntry}
+			}
+			if got := entriesOfCategory(got.Entries, "register-meta"); !reflect.DeepEqual(got, wantEntries) {
+				t.Errorf("register-meta entries = %+v, want %+v", got, wantEntries)
+			}
+		})
+	}
+}
+
+// entriesOfCategory returns the entries of one category, in report order.
+func entriesOfCategory(entries []jsonEntry, category string) []jsonEntry {
+	var matched []jsonEntry
+	for _, entry := range entries {
+		if entry.Category == category {
+			matched = append(matched, entry)
+		}
+	}
+	return matched
 }

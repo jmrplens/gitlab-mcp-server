@@ -155,13 +155,21 @@ func TestNestedNames_TheEdgeAGeneratedDocumentFlattens(t *testing.T) {
 			{Name: "body"},
 			{Name: "author", Using: "API::Entities::UserBasic"},
 			{Name: "resolver", Using: "API::Entities::Unloaded"},
+			{Name: "project", Using: "API::Entities::ProjectIdentity"},
 		}},
-		"API::Entities::UserBasic": {Fields: []Field{{Name: "id"}, {Name: "username"}}},
+		"API::Entities::UserBasic":       {Fields: []Field{{Name: "id"}, {Name: "username"}}},
+		"API::Entities::ProjectIdentity": {Fields: []Field{{Name: "path_with_namespace"}}},
 	}}
 
-	t.Run("a field rendering an entity names that entity's keys", func(t *testing.T) {
+	t.Run("every field rendering an entity names that entity's keys", func(t *testing.T) {
 		t.Parallel()
-		want := map[string][]string{"author": {"id", "username"}}
+		// Two edges rather than one, because an entity carrying several is the
+		// ordinary case and a map built for the first would answer the second
+		// with nothing.
+		want := map[string][]string{
+			"author":  {"id", "username"},
+			"project": {"path_with_namespace"},
+		}
 		if got := doc.NestedNames("API::Entities::Note"); !reflect.DeepEqual(got, want) {
 			t.Errorf("NestedNames = %v, want %v", got, want)
 		}
@@ -382,6 +390,27 @@ func TestGateOf_WhatAConditionAmountsTo(t *testing.T) {
 			want: Gate{If: "->(p, _) { p.public? }"},
 		},
 		{
+			// The unless side of every rule below, which is not the same code
+			// path reaching the same place: the license, the edition and the
+			// dropping of a condition with no text are each read once for both
+			// halves, and moving any of them under the if would go unnoticed
+			// without a case that is gated the other way.
+			name: "an inverse condition carries its license, its edition and no empty text",
+			conditions: []Condition{
+				{Kind: "HashCondition", Inverse: true},
+				{
+					Kind: "BlockCondition", Inverse: true,
+					File: "ee/lib/ee/api/entities/project.rb", Line: 9,
+					Text: "->(p, _) { p.licensed_feature_available?(:repository_mirrors) }",
+				},
+			},
+			want: Gate{
+				Unless:  "->(p, _) { p.licensed_feature_available?(:repository_mirrors) }",
+				Tier:    TierPremium,
+				Edition: "ee",
+			},
+		},
+		{
 			name: "a licensed feature resolves to the plan that unlocks it",
 			conditions: []Condition{{
 				Kind: "BlockCondition",
@@ -482,11 +511,22 @@ func TestNames_ListsTheEntitiesInAStableOrder(t *testing.T) {
 // GitLab it holds, which GitLab, and when it was taken.
 func TestSourceString_TheProvenanceLineAGateReports(t *testing.T) {
 	t.Parallel()
+	// The image deliberately does not carry the version: the released tag does,
+	// and with it the two read the same whichever hole each lands in, so the
+	// whole-line comparison below could not see them traded.
 	line := Source{
-		Image: "gitlab/gitlab-ee:19.3.1-ee.0", Version: "19.3.1-ee", RetrievedAt: "2026-09-09",
+		Image: "gitlab/gitlab-ee:sha-9f2c1ab", Version: "19.3.1-ee", RetrievedAt: "2026-09-09",
 		Entities: 582, Fields: 7317, Routes: 2110, Features: 264,
 	}.String()
 
+	t.Run("every value is in its own place", func(t *testing.T) {
+		t.Parallel()
+		want := "582 entities (7317 fields), 2110 routes and 264 licensed features " +
+			"from GitLab 19.3.1-ee (gitlab/gitlab-ee:sha-9f2c1ab), retrieved 2026-09-09"
+		if line != want {
+			t.Errorf("provenance line = %q, want %q", line, want)
+		}
+	})
 	for _, want := range []string{"582 entities", "7317 fields", "2110 routes", "264 licensed features", "19.3.1-ee", "2026-09-09"} {
 		t.Run(want, func(t *testing.T) {
 			t.Parallel()
