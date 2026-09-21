@@ -714,9 +714,13 @@ test:
 
     - name: Check coverage
       run: |
-        go tool cover -func=coverage.out | grep total | awk '{print $3}' | \
+        go tool cover -func=coverage.out | awk '$1 == "total:" {print $3}' | \
         awk -F'%' '{if ($1 < 90) exit 1}'
 ```
+
+Match the `total:` row by its first field, never with `grep total`: that also
+matches every function whose name contains the word (`totalsOf`,
+`totalTokens`), which hands the comparison several lines instead of one number.
 
 This project's `.github/workflows/ci.yml` gates total coverage at `COVERAGE_MIN: "90"`.
 
