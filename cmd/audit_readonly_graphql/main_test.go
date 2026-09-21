@@ -22,20 +22,25 @@ func runFixture(t *testing.T, sources map[string]string, actions []action, verbo
 }
 
 // TestRun_CleanCatalog_Succeeds verifies the passing path: read-only actions
-// that reach no mutation exit zero and say what was checked.
+// that reach no mutation exit zero and say what was checked, with the two
+// counts in the sentence each from its own tally. The catalog is chosen so the
+// tallies differ: two read-only actions are classified and one of them sends
+// GraphQL, so a sentence that reported the GraphQL senders as the checked
+// count, or the other way round, does not read the same.
 func TestRun_CleanCatalog_Succeeds(t *testing.T) {
 	actions := []action{
 		{ID: "vuln.list", Name: "list", Owner: "vuln", ReadOnly: true},
+		{ID: "shapes.quiet", Name: "quiet", Owner: "shapes", ReadOnly: true},
 		{ID: "vuln.dismiss", Name: "dismiss", Owner: "vuln", ReadOnly: false},
 	}
 
-	status, out, errOut := runFixture(t, vulnSources(), actions, false)
+	status, out, errOut := runFixture(t, mainSources(), actions, false)
 
 	if status != 0 {
 		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
 	}
-	if !strings.Contains(out, "reach no GraphQL mutation") {
-		t.Errorf("stdout does not report the clean result:\n%s", out)
+	if want := "audit_readonly_graphql: 2 read-only actions reach no GraphQL mutation (1 of them send GraphQL)\n"; out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
 	}
 	if errOut != "" {
 		t.Errorf("a clean run wrote to stderr:\n%s", errOut)
@@ -44,40 +49,58 @@ func TestRun_CleanCatalog_Succeeds(t *testing.T) {
 
 // TestRun_VerboseCleanCatalog_ListsTheGraphQLActions verifies the verbose
 // report names the read-only actions that touch GraphQL, so the set a reviewer
-// has to care about is visible rather than a count.
+// has to care about is visible rather than a count, and that its two counts
+// are each the tally they claim to be. The excused fixture is loaded beside the
+// vuln one so that one exception is in use while two actions send GraphQL: a
+// report that printed the one figure under the other's label would otherwise
+// read the same as a correct one.
 func TestRun_VerboseCleanCatalog_ListsTheGraphQLActions(t *testing.T) {
-	actions := []action{{ID: "vuln.list", Name: "list", Owner: "vuln", ReadOnly: true}}
+	sources := map[string]string{"vuln": vulnFixture, "excused": excusedFixture}
+	actions := []action{
+		{ID: "vuln.list", Name: "list", Owner: "vuln", ReadOnly: true},
+		{ID: "excused.risky_read", Name: "risky_read", Owner: "excused", ReadOnly: true},
+	}
 
-	status, out, _ := runFixture(t, vulnSources(), actions, true)
+	status, out, errOut := runFixture(t, sources, actions, true)
 
 	if status != 0 {
-		t.Fatalf("exit status %d, want 0", status)
+		t.Fatalf("exit status %d, want 0. stderr:\n%s", status, errOut)
 	}
-	for _, want := range []string{"declared exception(s) in use", "read-only action(s) send GraphQL", "vuln.list"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(out, want) {
-				t.Errorf("verbose output does not contain %q:\n%s", want, out)
-			}
-		})
+	want := "audit_readonly_graphql: 1 declared exception(s) in use\n" +
+		"audit_readonly_graphql: 2 read-only action(s) send GraphQL:\n" +
+		"    vuln.list\n" +
+		"    excused.risky_read\n" +
+		"audit_readonly_graphql: 2 read-only actions reach no GraphQL mutation (2 of them send GraphQL)\n"
+	if out != want {
+		t.Errorf("stdout = %q\nwant %q", out, want)
 	}
 }
 
 // TestRun_ReadOnlyActionReachingMutation_Fails verifies the failing path: a
-// non-zero exit, the finding on stderr, and a count.
+// non-zero exit, the finding on stderr, and a count of problems beside a count
+// of actions checked. A clean action is audited beside the violation so the two
+// counts differ, since a summary that reported the problems as the actions
+// checked would otherwise read the same.
 func TestRun_ReadOnlyActionReachingMutation_Fails(t *testing.T) {
-	actions := []action{{ID: "vuln.read_dismiss", Name: "read_dismiss", Owner: "vuln", ReadOnly: true}}
+	actions := []action{
+		{ID: "vuln.read_dismiss", Name: "read_dismiss", Owner: "vuln", ReadOnly: true},
+		{ID: "vuln.list", Name: "list", Owner: "vuln", ReadOnly: true},
+	}
 
-	status, _, errOut := runFixture(t, vulnSources(), actions, false)
+	status, out, errOut := runFixture(t, vulnSources(), actions, false)
 
 	if status != 1 {
 		t.Fatalf("exit status %d, want 1", status)
 	}
-	for _, want := range []string{"vuln.read_dismiss", "GraphQL mutation", "1 problem(s)"} {
-		t.Run(want, func(t *testing.T) {
+	for _, want := range []string{"vuln.read_dismiss is classified ReadOnly but its handler sends a GraphQL mutation.", "\naudit_readonly_graphql: 1 problem(s) across 2 read-only action(s)\n"} {
+		t.Run(strings.TrimSpace(want), func(t *testing.T) {
 			if !strings.Contains(errOut, want) {
 				t.Errorf("stderr does not contain %q:\n%s", want, errOut)
 			}
 		})
+	}
+	if out != "" {
+		t.Errorf("a failing run wrote the clean sentence to stdout:\n%s", out)
 	}
 }
 

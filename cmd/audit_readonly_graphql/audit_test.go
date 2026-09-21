@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"go/token"
+	"go/types"
 	"sort"
 	"strings"
 	"testing"
@@ -28,8 +30,9 @@ mutation($id: ID!) {
 }
 @@
 
-// undoMutation is the second mutation this handler can send, so the sites a
-// finding would list are more than one and their order has to be settled.
+// undoMutation is the second mutation this handler can reach, through a callee
+// rather than in its own body, so the sites a finding would list come from two
+// functions of the reachable set and their order has to be settled.
 const undoMutation = @@
 mutation($id: ID!) {
   thingUntouch(input: {id: $id}) { errors }
@@ -58,7 +61,15 @@ func Risky(ctx context.Context, client *gitlabclient.Client, input Input) (Outpu
 	if err == nil {
 		return Output{OK: true}, nil
 	}
-	_, err = client.GL().GraphQL.Do(gl.GraphQLQuery{
+	return undo(ctx, client, input)
+}
+
+// undo sends the second mutation, from a body of its own.
+func undo(ctx context.Context, client *gitlabclient.Client, input Input) (Output, error) {
+	var response struct {
+		Data map[string]any ` + "`json:\"data\"`" + `
+	}
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
 		Query:     undoMutation,
 		Variables: map[string]any{"id": input.ID},
 	}, &response, gl.WithContext(ctx))
@@ -225,8 +236,30 @@ func TestAudit_ActionSendingNoGraphQL_IsNotAFinding(t *testing.T) {
 	}
 }
 
+// lineOf returns the 1-based line of the first line of a fixture source that
+// contains needle, which is how a test states the line a finding has to point
+// at without writing a number that moves whenever the fixture is edited.
+func lineOf(t *testing.T, source, needle string) int {
+	t.Helper()
+	for i, line := range strings.Split(source, "\n") {
+		if strings.Contains(line, needle) {
+			return i + 1
+		}
+	}
+	t.Fatalf("no line of the fixture contains %q", needle)
+	return 0
+}
+
 // TestAudit_FindingNamesTheActionAndTheFile verifies a failure says which
-// action and which file, which is what the issue asks a failure to name.
+// action, which handler, which document and which line, which is what the
+// issue asks a failure to name.
+//
+// The two location lines are held to the exact text rather than to their
+// parts. The site line has to point at the spec element, the send line at the
+// statement inside the handler that names the document, and the handler's
+// name has to come before the document's: a finding that pointed at the
+// constant's declaration, or read "dismissMutation sends Dismiss", still
+// contains every word a looser assertion would look for.
 func TestAudit_FindingNamesTheActionAndTheFile(t *testing.T) {
 	prog := loadFixture(t, mainSources())
 	result := audit(prog, vulnActions(), repoRoot(t))
@@ -235,10 +268,16 @@ func TestAudit_FindingNamesTheActionAndTheFile(t *testing.T) {
 	if message == "" {
 		t.Fatal("the constructed violation produced no finding")
 	}
-	for _, want := range []string{"vuln.read_dismiss", "dismissMutation", fixtureDir + "/vuln/vuln.go:"} {
-		t.Run(want, func(t *testing.T) {
-			if !strings.Contains(message, want) {
-				t.Errorf("finding does not mention %q:\n%s", want, message)
+	file := fixtureDir + "/vuln/vuln.go:"
+	want := []string{
+		"vuln.read_dismiss is classified ReadOnly but its handler sends a GraphQL mutation.",
+		fmt.Sprintf("    action declared at %s%d\n", file, lineOf(t, vulnFixture, `readSpec("read_dismiss",`)),
+		fmt.Sprintf("    Dismiss sends dismissMutation at %s%d\n", file, lineOf(t, vulnFixture, "return send(ctx, client, dismissMutation, input)")),
+	}
+	for _, line := range want {
+		t.Run(strings.TrimSpace(line), func(t *testing.T) {
+			if !strings.Contains(message, line) {
+				t.Errorf("finding does not carry the line %q:\n%s", line, message)
 			}
 		})
 	}
@@ -269,8 +308,14 @@ func TestAudit_UnresolvedAction_IsReported(t *testing.T) {
 	if len(result.findings) != 1 {
 		t.Fatalf("an unresolvable action produced %d findings, want 1", len(result.findings))
 	}
-	if !strings.Contains(result.findings[0].message, "no ActionSpec construction resolves") {
-		t.Errorf("finding does not say the action could not be resolved:\n%s", result.findings[0].message)
+	// The whole text, because the ID and the owner are both quoted and both
+	// are names: a finding that opened with the package and told the reader to
+	// declare the action in a package called "vuln.never_declared" would still
+	// contain each of them somewhere.
+	want := "vuln.never_declared: no ActionSpec construction resolves to this action, so its handler cannot be classified.\n" +
+		"    Declare the action through a toolutil action-spec constructor in package \"vuln\", or the gate cannot vouch for it."
+	if result.findings[0].message != want {
+		t.Errorf("finding = %q\nwant %q", result.findings[0].message, want)
 	}
 	if result.checked != 0 {
 		t.Errorf("checked %d actions, want 0: an unresolved action was not classified", result.checked)
@@ -435,6 +480,203 @@ func TestAudit_DocumentsNothingCanBeHeldTo_AreReported(t *testing.T) {
 	}
 }
 
+// TestAudit_OwnerPackageDecidesAmongSameNamedSites verifies that when two
+// packages declare an action of the same name, the one the catalog names as the
+// owner is the one answered for.
+//
+// Both fixtures declare "quiet": the shapes one touches no GraphQL, the other
+// one sends a mutation. An owner filter that selected the wrong site, or that
+// selected both, would report a mutation against an action whose handler makes
+// no request at all, and the fallback for an owner no site matches would hide
+// that behind the same answer.
+func TestAudit_OwnerPackageDecidesAmongSameNamedSites(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+
+	cases := []struct {
+		name         string
+		act          action
+		wantFindings int
+	}{
+		{
+			name: "the owner whose handler is quiet",
+			act:  action{ID: "shapes.quiet", Name: "quiet", Owner: "shapes", ReadOnly: true},
+		},
+		{
+			name:         "the owner whose handler writes",
+			act:          action{ID: "other.quiet", Name: "quiet", Owner: "other", ReadOnly: true},
+			wantFindings: 1,
+		},
+		{
+			name:         "an owner neither of them is",
+			act:          action{ID: "elsewhere.quiet", Name: "quiet", Owner: "elsewhere", ReadOnly: true},
+			wantFindings: 1,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := audit(prog, []action{testCase.act}, repoRoot(t))
+
+			if len(result.findings) != testCase.wantFindings {
+				t.Fatalf("audit() reported %d finding(s), want %d: %v", len(result.findings), testCase.wantFindings, findingActions(result))
+			}
+			if testCase.wantFindings == 0 {
+				return
+			}
+			if !strings.Contains(result.findings[0].message, "quietMutation") {
+				t.Errorf("the finding does not name the mutation the other package sends:\n%s", result.findings[0].message)
+			}
+		})
+	}
+}
+
+// TestClassifyReached_MutationSites_AreOrderedBySourcePosition verifies the
+// sites a reachable set names come back ordered by where the source names
+// them, whatever order they were collected in, and that only the documents
+// carrying a mutation are among them.
+//
+// The reachable set is a map, so a run over a real program hands the sort its
+// input in an order no test can choose; a hand-built function whose documents
+// are listed back to front is what puts the comparator to both answers on
+// every run rather than on the runs the map happens to favor.
+func TestClassifyReached_MutationSites_AreOrderedBySourcePosition(t *testing.T) {
+	handler := types.NewFunc(token.NoPos, types.NewPackage("example.com/domain", "domain"), "Handle", nil)
+	prog := &program{funcs: map[*types.Func]*function{handler: {
+		sendsGraphQL: true,
+		docs: []docRef{
+			{kind: writeDocument, name: "lastMutation", pos: 300},
+			{kind: readDocument, name: "middleQuery", pos: 200},
+			{kind: writeDocument, name: "firstMutation", pos: 100},
+		},
+	}}}
+
+	sends, mutations := classifyReached(prog, map[*types.Func]bool{handler: true})
+
+	if !sends {
+		t.Error("classifyReached() did not report the transport the function reaches")
+	}
+	var names []string
+	for _, site := range mutations {
+		names = append(names, site.doc.name)
+	}
+	if !equalOrdered(names, []string{"firstMutation", "lastMutation"}) {
+		t.Errorf("classifyReached() listed %v, want the two mutations in position order and no query", names)
+	}
+}
+
+// equalOrdered compares two string slices element by element, in order.
+func equalOrdered(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestAudit_MutationSites_AreListedInSourceOrder verifies a finding lists the
+// documents a handler reaches in the order the source writes them.
+//
+// The excused fixture's handler names one mutation in its own body and reaches
+// the second through a callee declared below it, so the two sites come out of
+// the reachable set's map in whichever order that run's iteration gives; without
+// the ordering the two lines would swap between runs and a CI log diff would
+// show a reshuffled finding rather than a changed one. The action is attributed
+// to a package that declared no exception, so the finding is made rather than
+// excused.
+func TestAudit_MutationSites_AreListedInSourceOrder(t *testing.T) {
+	prog := loadFixture(t, exceptionSources())
+	actions := []action{{ID: "stale.risky_read", Name: "risky_read", Owner: "stale", ReadOnly: true}}
+
+	message := messageFor(audit(prog, actions, repoRoot(t)), "stale.risky_read")
+
+	first, second := strings.Index(message, "writeMutation"), strings.Index(message, "undoMutation")
+	if first < 0 || second < 0 {
+		t.Fatalf("the finding does not name both documents:\n%s", message)
+	}
+	if first > second {
+		t.Errorf("the finding lists undoMutation before writeMutation, which the source writes second:\n%s", message)
+	}
+}
+
+// TestAudit_Findings_AreOrderedByActionThenMessage verifies the whole report is
+// ordered: by the action a finding is about, and by the message within one
+// action. The order has to hold whatever order the findings were made in, which
+// is why the same documents are put to it twice, reversed the second time: the
+// set they come from is a map for the mutation findings and the inventory's own
+// order for these, and a report that only happens to come out sorted would pass
+// one of the two.
+func TestAudit_Findings_AreOrderedByActionThenMessage(t *testing.T) {
+	sorted := []graphqldocs.Document{
+		{Package: "internal/tools/alpha", Name: "a.graphql", Position: token.Position{Filename: "/repo/a.graphql", Line: 1}},
+		{Package: "internal/tools/alpha", Name: "z.graphql", Position: token.Position{Filename: "/repo/z.graphql", Line: 2}},
+		{Package: "internal/tools/beta", Name: "b.graphql", Position: token.Position{Filename: "/repo/b.graphql", Line: 3}},
+	}
+	reversed := []graphqldocs.Document{sorted[2], sorted[1], sorted[0]}
+	want := []string{"a.graphql", "z.graphql", "b.graphql"}
+
+	cases := []struct {
+		name      string
+		inventory []graphqldocs.Document
+	}{
+		{name: "made in order", inventory: sorted},
+		{name: "made in reverse", inventory: reversed},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := audit(&program{unattributed: testCase.inventory}, nil, "/repo")
+
+			if len(result.findings) != len(want) {
+				t.Fatalf("audit() reported %d finding(s), want %d", len(result.findings), len(want))
+			}
+			for i, document := range want {
+				if !strings.Contains(result.findings[i].message, document) {
+					t.Errorf("finding %d is not the one about %s:\n%s", i, document, result.findings[i].message)
+				}
+			}
+		})
+	}
+}
+
+// TestIndexLiteral_Roots_AreOrderedBySourcePosition verifies the functions a
+// function-literal route stands in for come back in the order the source
+// declares them, on every call. They are collected from a map, so leaving them
+// in its order would make the roots of one handler differ between runs, and
+// the reachable set is where every classification below starts.
+//
+// The literal is indexed a dozen times because the map's order is the one
+// input the test cannot choose: three roots have six orders, only one of
+// which is already the declared one, and asking repeatedly is what puts the
+// sort in front of the orders that need work rather than the one that does
+// not.
+func TestIndexLiteral_Roots_AreOrderedBySourcePosition(t *testing.T) {
+	prog := loadFixture(t, mainSources())
+	var literal handlerRef
+	for _, resolved := range (&resolver{prog: prog}).collectSites()["closure"] {
+		for _, handler := range resolved.handlers {
+			if handler.lit != nil {
+				literal = handler
+			}
+		}
+	}
+	if literal.lit == nil {
+		t.Fatal("the shapes fixture no longer routes an action through a function literal")
+	}
+	want := []string{"closureBody", "closureCleanup", "closureAudit"}
+
+	for attempt := range 12 {
+		var names []string
+		for _, root := range prog.indexLiteral(literal.pkg, literal.lit) {
+			names = append(names, root.Name())
+		}
+		if !equalOrdered(names, want) {
+			t.Fatalf("attempt %d: indexLiteral() = %v, want %v, the order the fixture declares them", attempt, names, want)
+		}
+	}
+}
+
 // TestParseException_DirectiveForms verifies what counts as a declared
 // exception: the directive, an action name, and a reason. A directive without
 // a reason is not an exception, because an exception with no stated reason is
@@ -493,6 +735,11 @@ func TestParseException_DirectiveForms(t *testing.T) {
 // TestRelative_PathsOutsideTheRoot_StayAbsolute verifies a position the
 // repository root does not contain is printed as it is, rather than as a
 // nonsense path full of parent directories.
+//
+// The last case is the one the others cannot reach: a path that is not rooted
+// where the root is cannot be expressed relative to it at all, so the answer
+// comes back as an error rather than as a path full of "..", and a finding
+// still has to name a file.
 func TestRelative_PathsOutsideTheRoot_StayAbsolute(t *testing.T) {
 	cases := []struct {
 		name string
@@ -503,6 +750,7 @@ func TestRelative_PathsOutsideTheRoot_StayAbsolute(t *testing.T) {
 		{name: "inside the root", root: "/repo", file: "/repo/internal/tools/x.go", want: "internal/tools/x.go:7"},
 		{name: "outside the root", root: "/repo", file: "/elsewhere/x.go", want: "/elsewhere/x.go:7"},
 		{name: "no root given", root: "", file: "/repo/internal/x.go", want: "/repo/internal/x.go:7"},
+		{name: "not relatable to the root", root: "/repo", file: "internal/x.go", want: "internal/x.go:7"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

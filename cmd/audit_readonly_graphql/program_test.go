@@ -376,6 +376,66 @@ func TestIsGraphQLSender_Classification(t *testing.T) {
 	}
 }
 
+// nonTransportDo is a method named Do on a type that has nothing to do with
+// GraphQL, which is what the name half of the transport check cannot tell apart
+// on its own: client-go's GraphQL service is reached as Do, and so is every
+// http.Client in the module.
+func nonTransportDo() *types.Func {
+	pkg := types.NewPackage("example.com/transport", "transport")
+	client := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Client", nil), types.NewStruct(nil, nil), nil)
+	recv := types.NewVar(token.NoPos, pkg, "c", client)
+	return types.NewFunc(token.NoPos, pkg, "Do", types.NewSignatureType(recv, nil, nil, nil, nil, false))
+}
+
+// TestIsGraphQLSender_CalleesThatPutNoDocumentOnTheWire_AreRefused verifies the
+// three ways the transport check answers no. A function with no package cannot
+// be one of toolutil's executors, a function the type checker gave no signature
+// has no receiver to read, and a method named Do on an ordinary type is the
+// case the name alone cannot decide: every http.Client in the module is reached
+// through one.
+func TestIsGraphQLSender_CalleesThatPutNoDocumentOnTheWire_AreRefused(t *testing.T) {
+	cases := []struct {
+		name   string
+		callee *types.Func
+	}{
+		{name: "a function belonging to no package", callee: types.NewFunc(token.NoPos, nil, "Do", nil)},
+		{
+			name:   "a function with no signature to read",
+			callee: types.NewFunc(token.NoPos, types.NewPackage("example.com/other", "other"), "Do", nil),
+		},
+		{name: "a method named Do on an ordinary type", callee: nonTransportDo()},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if isGraphQLSender(testCase.callee) {
+				t.Error("isGraphQLSender() = true, want false")
+			}
+		})
+	}
+}
+
+// TestRecordUse_CallToAMethodNamedDoOnSomethingElse_IsNoTransport verifies the
+// body walk asks both halves of the transport question. The name is checked
+// first because it is cheap, but a body that calls some other Do has not sent a
+// GraphQL document, and marking it as sending would put every document it names
+// on the list of requests this gate answers for.
+func TestRecordUse_CallToAMethodNamedDoOnSomethingElse_IsNoTransport(t *testing.T) {
+	info := synthInfo()
+	ident := ast.NewIdent("Do")
+	callee := nonTransportDo()
+	info.Uses[ident] = callee
+	decl := &ast.FuncDecl{Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: ident}}}}
+
+	fn := (&program{}).indexBody(&packages.Package{TypesInfo: info}, decl)
+
+	if fn.sendsGraphQL {
+		t.Error("indexBody() marked a body calling an unrelated Do as sending GraphQL")
+	}
+	if !fn.calls[callee] {
+		t.Error("indexBody() did not record the call at all, so the assertion above proves nothing")
+	}
+}
+
 // TestLoadProgram_PackageLevelVariables_IndexesOnlyConstantDocuments verifies
 // the two shapes a document can be written in as a variable: one initialized
 // from a constant string, which is indexed, and one initialized from a call,
@@ -749,20 +809,103 @@ func TestIndexFunctions_DeclarationBoundToNoFunction_IsSkipped(t *testing.T) {
 	}
 }
 
-// TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument verifies the literal
-// recorder judges the constant it was handed rather than the kind of node it
-// arrived in. Only a document can be a document, and a value that is not a
-// string cannot be one.
-func TestRecordLiteral_ConstantThatIsNotAString_IsNoDocument(t *testing.T) {
-	lit := &ast.BasicLit{Kind: token.INT, Value: "42"}
+// TestRecordLiteral_ConstantsThatCarryNoDocument_AreNotRecorded verifies the
+// literal recorder judges the constant it was handed rather than the kind of
+// node it arrived in. Only a document can be a document: a value that is not a
+// string cannot be one, and neither can a literal the type checker recorded
+// nothing for, which is the case the two guards in front of [constantString]
+// used to answer a second time.
+func TestRecordLiteral_ConstantsThatCarryNoDocument_AreNotRecorded(t *testing.T) {
+	number := &ast.BasicLit{Kind: token.INT, Value: "42"}
+	untyped := &ast.BasicLit{Kind: token.STRING, Value: `"mutation { thing { errors } }"`}
 	info := synthInfo()
-	info.Types[lit] = types.TypeAndValue{Value: constant.MakeInt64(42)}
-	fn := &function{}
+	info.Types[number] = types.TypeAndValue{Value: constant.MakeInt64(42)}
 
-	(&program{}).recordLiteral(fn, &packages.Package{TypesInfo: info}, lit, map[token.Pos]bool{})
+	cases := []struct {
+		name string
+		lit  *ast.BasicLit
+	}{
+		{name: "a constant that is not a string", lit: number},
+		{name: "a literal the type checker has no value for", lit: untyped},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fn := &function{}
+
+			(&program{}).recordLiteral(fn, &packages.Package{TypesInfo: info}, testCase.lit)
+
+			if len(fn.docs) != 0 {
+				t.Errorf("recordLiteral() recorded %d document(s): %+v", len(fn.docs), fn.docs)
+			}
+		})
+	}
+}
+
+// TestRecordUse_IdentifiersThatNameNoDocument_AreNotRecorded verifies the body
+// walk records a document for the identifiers that name one and for nothing
+// else. A body names its parameters, its locals and its types too, and
+// recording those as documents would fill every function's list with entries
+// [classifyReached] then has to judge, which is how a guard whose condition is
+// never observed goes unnoticed: the entries carry the zero kind, so no finding
+// changes and only the list itself says anything is wrong.
+func TestRecordUse_IdentifiersThatNameNoDocument_AreNotRecorded(t *testing.T) {
+	prog := loadFixture(t, vulnSources())
+
+	cases := []struct {
+		fn    string
+		named []string
+	}{
+		{fn: "List", named: []string{"listQuery"}},
+		{fn: "Dismiss", named: []string{"dismissMutation"}},
+		{fn: "send", named: nil},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.fn, func(t *testing.T) {
+			var named []string
+			for _, doc := range prog.funcs[lookupFunc(t, prog, "vuln", testCase.fn)].docs {
+				named = append(named, doc.name)
+			}
+			if !equalStrings(named, testCase.named) {
+				t.Errorf("%s() names documents %v, want %v", testCase.fn, named, testCase.named)
+			}
+		})
+	}
+}
+
+// TestIndexFunctions_DeclarationWithNoBody_IsSkipped verifies a function
+// declared without a body is not indexed. Go allows one for a function
+// implemented elsewhere, and walking a nil body would end the run on a panic
+// rather than on a finding.
+func TestIndexFunctions_DeclarationWithNoBody_IsSkipped(t *testing.T) {
+	prog := &program{funcs: map[*types.Func]*function{}}
+	pkg := &packages.Package{
+		Name:      "synth",
+		Syntax:    []*ast.File{{Decls: []ast.Decl{&ast.FuncDecl{Name: ast.NewIdent("Assembly")}}}},
+		TypesInfo: synthInfo(),
+	}
+
+	prog.indexFunctions(pkg)
+
+	if len(prog.funcs) != 0 {
+		t.Errorf("indexFunctions() recorded %d function(s) for a declaration with no body", len(prog.funcs))
+	}
+}
+
+// TestIndexBody_LiteralThatIsNotAString_IsNotOfferedAsADocument verifies the
+// body walk decides on the literal's kind before it reads a value. A numeric
+// literal carries a constant value like a string one does, so handing it to the
+// recorder would put the question to [classifyDocument] instead of to the
+// node's own kind.
+func TestIndexBody_LiteralThatIsNotAString_IsNotOfferedAsADocument(t *testing.T) {
+	number := &ast.BasicLit{Kind: token.INT, Value: "42"}
+	info := synthInfo()
+	info.Types[number] = types.TypeAndValue{Value: constant.MakeString("mutation { thing { errors } }")}
+	decl := &ast.FuncDecl{Body: &ast.BlockStmt{List: []ast.Stmt{&ast.ExprStmt{X: number}}}}
+
+	fn := (&program{}).indexBody(&packages.Package{TypesInfo: info}, decl)
 
 	if len(fn.docs) != 0 {
-		t.Errorf("recordLiteral() recorded %d document(s) for a constant that is not a string", len(fn.docs))
+		t.Errorf("indexBody() recorded %d document(s) from a literal that is not a string", len(fn.docs))
 	}
 }
 
