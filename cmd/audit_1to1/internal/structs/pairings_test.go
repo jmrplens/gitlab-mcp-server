@@ -4,6 +4,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -56,6 +57,16 @@ func TestCollectOutputPairings_Repository_NamesTheSDKStructBehindEachOutput(t *t
 			found = true
 			if pairing.SDKType != "MergeRequestApprovals" {
 				t.Errorf("ConfigOutput pairs with %q, want MergeRequestApprovals", pairing.SDKType)
+			}
+			// The field list is the second half of the pairing and the only
+			// input to the question of whether a field GitLab sends is absent
+			// from client-go too. An empty or unsorted one would answer that
+			// question wrongly without failing anything else here.
+			if !slices.IsSorted(pairing.SDKFields) {
+				t.Errorf("ConfigOutput's SDK fields are unsorted: %v", pairing.SDKFields)
+			}
+			if !slices.Contains(pairing.SDKFields, "approvals_required") {
+				t.Errorf("ConfigOutput's SDK fields = %v, want the approvals_required key gl.MergeRequestApprovals carries", pairing.SDKFields)
 			}
 		}
 	}
@@ -126,6 +137,17 @@ func TestClientGoDir_AnImportGraph_IsResolvedToTheModuleRoot(t *testing.T) {
 		{
 			name:    "the root with no files on disk",
 			imports: map[string]*packages.Package{rootPath: clientGoPackage(t, rootPath, nil)},
+		},
+		{
+			// The declaration is half the rule and the path is the other
+			// half. This repository's own gitlab package declares a Client
+			// struct too, and every tool package imports it, so a rule that
+			// asked only for the declaration would resolve the SDK directory
+			// to internal/gitlab and read no service method from it.
+			name: "a Client struct outside the SDK module",
+			imports: map[string]*packages.Package{
+				"example.com/x/internal/gitlab": clientGoPackage(t, "example.com/x/internal/gitlab", []string{filepath.FromSlash("/repo/internal/gitlab/client.go")}),
+			},
 		},
 	}
 	for _, testCase := range cases {

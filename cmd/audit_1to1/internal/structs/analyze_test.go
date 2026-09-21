@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -151,6 +152,13 @@ func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
 		{"string_to_isotime_pointer", "string", "*v2.ISOTime"},
 		{"string_to_time", "string", "time.Time"},
 		{"bool_to_pointer", "bool", "*bool"},
+		// The three projections each accept a second MCP type beside the one
+		// above, and the label collections are two SDK spellings of one thing.
+		{"int64_to_access_level", "int64", "v2.AccessLevelValue"},
+		{"int64_to_isotime", "int64", "v2.ISOTime"},
+		{"string_to_bare_time", "string", "time"},
+		{"string_slice_to_label_options", "[]string", "v2.LabelOptions"},
+		{"string_slice_to_labels", "[]string", "v2.Labels"},
 	}
 	for _, tc := range compatible {
 		t.Run(tc.name, func(t *testing.T) {
@@ -165,6 +173,14 @@ func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
 		{"string_vs_struct_pointer", "string", "*v2.Commit"},
 		{"int_vs_string_slice", "int", "[]string"},
 		{"distinct_structs", "v2.Foo", "v2.Bar"},
+		// Each projection accepts a named set of MCP types and no other: a
+		// value enum, a time and a label collection are each rendered as the
+		// scalars listed above, so a bool or a lone string against them is a
+		// divergence the report must keep.
+		{"bool_vs_access_level", "bool", "v2.AccessLevelValue"},
+		{"bool_vs_isotime", "bool", "v2.ISOTime"},
+		{"string_vs_labels", "string", "v2.Labels"},
+		{"string_slice_vs_struct", "[]string", "v2.Commit"},
 	}
 	for _, tc := range incompatible {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,6 +198,12 @@ func TestPathHelpers(t *testing.T) {
 	}
 	if got := lastPathSegment("flat"); got != "flat" {
 		t.Errorf("lastPathSegment(flat) = %q, want flat", got)
+	}
+	// A separator at the very front is still a separator: the segment after it
+	// is the name, and keeping the slash would qualify every type reported
+	// from such a path with a leading one.
+	if got := lastPathSegment("/leading"); got != "leading" {
+		t.Errorf("lastPathSegment(/leading) = %q, want leading", got)
 	}
 	full := "github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/branches"
 	if got := shortPackage(full); got != "branches" {
@@ -250,8 +272,14 @@ func TestBuildReport_DetectsKnownBranchGaps(t *testing.T) {
 	}
 }
 
-// TestBuildReport_Deterministic verifies two runs produce identical output, a
-// prerequisite for using the report as a committed backlog.
+// TestBuildReport_Deterministic verifies two runs produce identical output and
+// that the packages come back in name order, both prerequisites for using the
+// report as a committed backlog.
+//
+// Repeating a run catches an order that varies and not one that is stable and
+// reversed: map iteration is where the first would come from, and the sort
+// below it is what makes both runs agree, so the two runs agree just as well
+// on an order nobody can diff against the previous commit.
 func TestBuildReport_Deterministic(t *testing.T) {
 	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
@@ -264,6 +292,9 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	}
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("buildReport is not deterministic across runs")
+	}
+	if !slices.IsSortedFunc(first.Packages, func(a, b packageReport) int { return strings.Compare(a.Package, b.Package) }) {
+		t.Error("the report's packages are not in name order, so a diff against the previous commit reads as churn")
 	}
 }
 
@@ -335,6 +366,13 @@ func countPairKinds(t *testing.T, pkgName string, pairs []Pair) (inputs, outputs
 		}
 		if pair.MCPType == nil || pair.SDKType == nil || pair.MCPName == "" || pair.SDKName == "" {
 			t.Errorf("%s: pair %d is incomplete: %+v", pkgName, i, pair)
+		}
+		// The SDK name is qualified by its module segment and the MCP name is
+		// this package's bare type name, which is what tells the two sides of
+		// a pair apart once they are both strings: a crossed pair is complete,
+		// deterministic and about two types that were never paired.
+		if !strings.Contains(pair.SDKName, ".") || strings.Contains(pair.MCPName, ".") {
+			t.Errorf("%s: pair %d names %q on the MCP side and %q on the SDK side, want the qualified name on the SDK side", pkgName, i, pair.MCPName, pair.SDKName)
 		}
 	}
 	return inputs, outputs
@@ -997,6 +1035,9 @@ func TestNonResultSDKStruct_Types_ExcludeWrappersAndTimeValues(t *testing.T) {
 		{name: "pagination_wrapper", typ: namedStruct(sdk, "Response", makeStruct()), want: true},
 		{name: "options_struct", typ: namedStruct(sdk, "ListBranchesOptions", makeStruct()), want: true},
 		{name: "time_package_struct", typ: namedStruct(timePkg, "Duration", makeStruct()), want: true},
+		// A named type belonging to no package is judged by its name alone:
+		// the package rule has nothing to read and must not be asked.
+		{name: "struct_with_no_package", typ: namedStruct(nil, "Branch", makeStruct()), want: false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1007,9 +1048,23 @@ func TestNonResultSDKStruct_Types_ExcludeWrappersAndTimeValues(t *testing.T) {
 	}
 }
 
+// embedChain wraps st in levels untagged embedded structs, so the caller can
+// put the flattener's recursion limit exactly where it wants it.
+func embedChain(st *types.Struct, levels int) *types.Struct {
+	for range levels {
+		embedded := types.NewField(token.NoPos, nil, "Embedded", st, true)
+		st = types.NewStruct([]*types.Var{embedded}, []string{""})
+	}
+	return st
+}
+
 // TestFlattenInto_Nesting_StopsAtNilAndDepth verifies the field flattener's
 // two guards: a nil struct contributes nothing, and embedding deeper than the
 // recursion limit stops rather than descending forever.
+//
+// The limit is asserted on both sides of where it falls, because a limit only
+// tested well past it is satisfied by any smaller one: six levels of embedding
+// is the deepest a field is still read from, and seven is the first it is not.
 func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
 	out := map[string]string{}
 	flattenInto(nil, []string{tagKeyJSON}, out, 0)
@@ -1017,23 +1072,165 @@ func TestFlattenInto_Nesting_StopsAtNilAndDepth(t *testing.T) {
 		t.Errorf("flattenInto(nil) wrote %v, want nothing", out)
 	}
 
-	// Eight nested embedded structs: the innermost tag sits below the depth
-	// limit of 6 and must not appear.
-	deepest := makeStruct(structField{name: "Deep", jsonTag: "deep", goType: tString})
-	nested := deepest
-	for range 8 {
-		embedded := types.NewField(token.NoPos, nil, "Embedded", nested, true)
-		nested = types.NewStruct([]*types.Var{embedded}, []string{""})
+	// The tag is deliberately not the snake_case of the field name. A walk that
+	// stops one level too early leaves nothing tagged behind it, which sends
+	// flattenFields to its name-keyed fallback, and that fallback would reach
+	// the very same field under the name "deep" — so a fixture whose tag and
+	// field name agree reports the field found either way.
+	deepest := makeStruct(structField{name: "Deep", jsonTag: "deep_field", goType: tString})
+	cases := []struct {
+		name    string
+		levels  int
+		reached bool
+	}{
+		{name: "no_embedding", levels: 0, reached: true},
+		{name: "one_level", levels: 1, reached: true},
+		{name: "the_deepest_level_read", levels: 6, reached: true},
+		{name: "one_level_past_the_limit", levels: 7, reached: false},
+		{name: "far_past_the_limit", levels: 8, reached: false},
 	}
-	if got := flattenFields(nested, []string{tagKeyJSON}); len(got) != 0 {
-		t.Errorf("flattenFields descended past the depth limit: %v", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := flattenFields(embedChain(deepest, tc.levels), []string{tagKeyJSON})
+			want := map[string]string{"deep_field": typNameString}
+			if !tc.reached {
+				want = map[string]string{}
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("flattenFields at %d level(s) = %v, want %v", tc.levels, got, want)
+			}
+		})
+	}
+}
+
+// TestFlattenInto_EmbeddedFields_AreDescendedIntoOnlyWhenTheyCarryNoTag
+// verifies which field the flattener steps through and which it records.
+//
+// Both halves have been wrong in a way no whole-tree run would show. An
+// embedded field that carries a tag is a key of its own in the document
+// encoding/json writes, so descending into it would publish its members under
+// the parent and lose the key; and a named field carrying no tag is not
+// serialized at all, so descending into that one would invent members the SDK
+// never sends under names nothing reads.
+func TestFlattenInto_EmbeddedFields_AreDescendedIntoOnlyWhenTheyCarryNoTag(t *testing.T) {
+	inner := makeStruct(structField{name: "Inner", jsonTag: "inner", goType: tString})
+
+	t.Run("an embedded field with a tag is a key, not a path", func(t *testing.T) {
+		st := types.NewStruct(
+			[]*types.Var{types.NewField(token.NoPos, nil, "Embedded", inner, true)},
+			[]string{`json:"embedded"`},
+		)
+
+		got := flattenFields(st, []string{tagKeyJSON})
+
+		if _, descended := got["inner"]; descended || len(got) != 1 || got["embedded"] == "" {
+			t.Errorf("flattenFields = %v, want the embedded tag alone", got)
+		}
+	})
+
+	t.Run("a named field with no tag is neither a key nor a path", func(t *testing.T) {
+		st := types.NewStruct([]*types.Var{
+			types.NewField(token.NoPos, nil, "Named", inner, false),
+			types.NewField(token.NoPos, nil, "Kept", tString, false),
+		}, []string{"", `json:"kept"`})
+
+		got := flattenFields(st, []string{tagKeyJSON})
+
+		if _, descended := got["inner"]; descended || len(got) != 1 || got["kept"] != typNameString {
+			t.Errorf("flattenFields = %v, want the tagged field alone", got)
+		}
+	})
+
+	t.Run("an embedded non-struct with no tag contributes nothing", func(t *testing.T) {
+		st := types.NewStruct([]*types.Var{
+			types.NewField(token.NoPos, nil, "Duration", tInt, true),
+			types.NewField(token.NoPos, nil, "Kept", tString, false),
+		}, []string{"", `json:"kept"`})
+
+		got := flattenFields(st, []string{tagKeyJSON})
+
+		if len(got) != 1 || got["kept"] != typNameString {
+			t.Errorf("flattenFields = %v, want the tagged field alone", got)
+		}
+	})
+}
+
+// TestFlattenFields_NeitherKeying_EmitsTheSentinelOrTheUnnamedTag is what
+// holds the property the tag-set builder relies on instead of re-checking it.
+// A field tagged "-" is serialized under no name and an empty tag names
+// nothing, so neither may become a key: a consumer comparing two of these maps
+// would otherwise count the sentinel as a field both sides share.
+func TestFlattenFields_NeitherKeying_EmitsTheSentinelOrTheUnnamedTag(t *testing.T) {
+	tagged := types.NewStruct([]*types.Var{
+		types.NewField(token.NoPos, nil, "Hidden", tString, false),
+		types.NewField(token.NoPos, nil, "Unnamed", tString, false),
+		types.NewField(token.NoPos, nil, "Kept", tString, false),
+	}, []string{`json:"-"`, `json:""`, `json:"kept"`})
+
+	got := flattenFields(tagged, []string{tagKeyJSON})
+
+	if len(got) != 1 || got["kept"] != typNameString {
+		t.Errorf("flattenFields = %v, want the named field alone", got)
+	}
+}
+
+// TestFlattenNamesInto_UntaggedStructs_AreWalkedUnderTheSameRules verifies the
+// name-keyed fallback answers a nil struct, the recursion limit and a repeated
+// name the way the tag-keyed walk answers them. It is a second implementation
+// of one walk, so each guard it carries is one that can drift away from the
+// walk beside it rather than one inherited from it.
+func TestFlattenNamesInto_UntaggedStructs_AreWalkedUnderTheSameRules(t *testing.T) {
+	t.Run("a nil struct contributes nothing", func(t *testing.T) {
+		out := map[string]string{}
+		flattenNamesInto(nil, out, 0)
+		if len(out) != 0 {
+			t.Errorf("flattenNamesInto(nil) wrote %v, want nothing", out)
+		}
+	})
+
+	untagged := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "WebURL", tString, false)}, []string{""})
+	depths := []struct {
+		name    string
+		levels  int
+		reached bool
+	}{
+		{name: "the_deepest_level_read", levels: 6, reached: true},
+		{name: "one_level_past_the_limit", levels: 7, reached: false},
+	}
+	for _, tc := range depths {
+		t.Run(tc.name, func(t *testing.T) {
+			got := flattenFields(embedChain(untagged, tc.levels), []string{tagKeyJSON})
+			if tc.reached != (got["web_url"] == typNameString) {
+				t.Errorf("flattenFields at %d level(s) = %v, reached = %v", tc.levels, got, tc.reached)
+			}
+		})
 	}
 
-	// The same field one level in is reached.
-	shallow := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "Embedded", deepest, true)}, []string{""})
-	if got := flattenFields(shallow, []string{tagKeyJSON}); got["deep"] != "string" {
-		t.Errorf("flattenFields of a one-level embed = %v, want the deep field", got)
-	}
+	t.Run("an embedded non-struct is keyed by its own name", func(t *testing.T) {
+		st := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "NamespaceID", tInt, true)}, []string{""})
+
+		got := flattenFields(st, []string{tagKeyJSON})
+
+		if len(got) != 1 || got["namespace_id"] != "int" {
+			t.Errorf("flattenFields = %v, want the embedded scalar under its own name", got)
+		}
+	})
+
+	t.Run("the shallower field wins a repeated name", func(t *testing.T) {
+		// encoding/json promotes the outer field over the embedded one of the
+		// same name, so the type recorded must be the outer field's.
+		promoted := types.NewStruct([]*types.Var{types.NewField(token.NoPos, nil, "ID", tString, false)}, []string{""})
+		st := types.NewStruct([]*types.Var{
+			types.NewField(token.NoPos, nil, "ID", tInt, false),
+			types.NewField(token.NoPos, nil, "Embedded", promoted, true),
+		}, []string{"", ""})
+
+		got := flattenFields(st, []string{tagKeyJSON})
+
+		if len(got) != 1 || got["id"] != "int" {
+			t.Errorf("flattenFields = %v, want the outer int field to keep the id key", got)
+		}
+	})
 }
 
 // TestFlattenFields_AStructThatTagsNothing_IsKeyedByFieldName verifies the
@@ -1102,9 +1299,15 @@ func TestDiffPair_URLTagNotation_MatchesTheSnakeCaseMCPName(t *testing.T) {
 // TestSummarize_Reports_CountPackagesWithGaps verifies the report summary
 // counts a package as gapped when any of the three gap classes is non-zero,
 // sums the per-class totals, and tallies the advisory type mismatches.
+// Two clean packages sit in the fixture rather than one, because with a single
+// clean package the gapped count and the count a negated class test produces
+// coincide: three of four packages carry a gap, and inverting any one class
+// swaps exactly which three, leaving the total at three. A second clean package
+// is what makes the mutant's total four and the assertion able to see it.
 func TestSummarize_Reports_CountPackagesWithGaps(t *testing.T) {
 	s := summarize([]packageReport{
 		{Package: "clean", InputPairs: 4, OutputPairs: 2},
+		{Package: "also_clean", InputPairs: 6, OutputPairs: 3},
 		{Package: "missing_input", InputPairs: 1, MissingInputCount: 3},
 		{Package: "missing_output", OutputPairs: 1, MissingOutputCount: 2},
 		{Package: "extra_output", OutputPairs: 1, ExtraOutputCount: 1, Gaps: []gap{
@@ -1112,7 +1315,7 @@ func TestSummarize_Reports_CountPackagesWithGaps(t *testing.T) {
 		}},
 	})
 	want := reportSummary{
-		Packages: 4, PackagesWithGaps: 3, InputPairs: 5, OutputPairs: 4,
+		Packages: 5, PackagesWithGaps: 3, InputPairs: 11, OutputPairs: 7,
 		MissingInputFields: 3, MissingOutputFields: 2, ExtraOutputFields: 1, TypeMismatches: 2,
 	}
 	if s != want {
@@ -1151,5 +1354,484 @@ func TestRun_Roots_EmitsJSONOrLoadError(t *testing.T) {
 		if pr.MissingInputCount == 0 && pr.MissingOutputCount == 0 && pr.ExtraOutputCount == 0 {
 			t.Errorf("gaps-only report kept %s, which has no gap", pr.Package)
 		}
+	}
+}
+
+// sdkNamedStruct and mcpNamedStruct give the two sides of a pairing type names
+// that print under different qualifiers, so a value that ends up on the wrong
+// side of a record is visible rather than a string equal to the one it
+// replaced.
+func sdkNamedStruct(t *testing.T, name string) *types.Named {
+	t.Helper()
+	return namedStruct(types.NewPackage("example.com/api/client-go/v2", "sdk"), name, makeStruct())
+}
+
+func mcpNamedStruct(t *testing.T, name string) *types.Named {
+	t.Helper()
+	return namedStruct(types.NewPackage("example.com/x/internal/tools/environments", "environments"), name, makeStruct())
+}
+
+// TestAppendGapIfAny_OnlyAPairCarryingAFinding_IsRecorded verifies the one
+// filter between a diffed pair and the report: a pair whose three finding
+// lists are all empty is 1:1 and is left out, and a pair carrying any one of
+// them is kept whole.
+//
+// The fixture holds two clean pairs rather than one, because with a single
+// clean pair a rule that dropped a gapped pair and kept the clean one produces
+// the same count, which is how the report-wide guards stayed green over it.
+func TestAppendGapIfAny_OnlyAPairCarryingAFinding_IsRecorded(t *testing.T) {
+	clean := gap{Kind: "output", MCPType: "CleanOutput", SDKType: "v2.Clean"}
+	alsoClean := gap{Kind: "input", MCPType: "CleanInput", SDKType: "v2.CleanOptions"}
+	missing := gap{Kind: "output", MCPType: "MissingOutput", SDKType: "v2.Missing", MissingFields: []missingField{{Tag: "author", SDKType: "*v2.User"}}}
+	mismatched := gap{Kind: "output", MCPType: "MismatchOutput", SDKType: "v2.Mismatch", TypeMismatches: []typeMismatch{{Tag: "weight", MCPType: typNameString, SDKType: "int"}}}
+	extra := gap{Kind: "output", MCPType: "ExtraOutput", SDKType: "v2.Extra", ExtraFields: []extraField{{Tag: "invented", MCPType: "bool"}}}
+
+	var pr packageReport
+	for _, g := range []gap{clean, missing, alsoClean, mismatched, extra} {
+		appendGapIfAny(&pr, g)
+	}
+
+	if !reflect.DeepEqual(pr.Gaps, []gap{missing, mismatched, extra}) {
+		t.Errorf("recorded gaps = %+v, want the three carrying a finding, in order", pr.Gaps)
+	}
+}
+
+// TestSortedPairs_Ordering_IsByMCPNameThenSDKName verifies the order the
+// report's pairs and its output groups are both built from, which is what the
+// committed backlog's determinism rests on. It is stated as the whole expected
+// sequence rather than as a first and a last element, since a reversed
+// comparison and a correct one agree on those wherever the set is symmetric.
+func TestSortedPairs_Ordering_IsByMCPNameThenSDKName(t *testing.T) {
+	st := makeStruct(structField{"ID", "id", tInt})
+	pair := func(mcp, sdk string) structPair {
+		return structPair{mcpName: mcp, mcpType: st, sdkName: sdk, sdkType: st}
+	}
+	pairs := map[[2]string]structPair{
+		{"Output", "Zebra"}:    pair("Output", "v2.Zebra"),
+		{"Output", "Alpha"}:    pair("Output", "v2.Alpha"),
+		{"Detail", "Middle"}:   pair("Detail", "v2.Middle"),
+		{"Listed", "Anything"}: pair("Listed", "v2.Anything"),
+	}
+
+	var got []string
+	for _, p := range sortedPairs(pairs) {
+		got = append(got, p.mcpName+"/"+p.sdkName)
+	}
+
+	want := []string{"Detail/v2.Middle", "Listed/v2.Anything", "Output/v2.Alpha", "Output/v2.Zebra"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sortedPairs = %v, want %v", got, want)
+	}
+}
+
+// TestStructPairExported_EachSide_KeepsItsOwnFields verifies the exported form
+// of a pair hands every value to the side it came from. Nothing downstream can
+// tell a crossed pair from a correct one: both halves are a name and a struct,
+// so a swap reads as a real pairing of two types that were never paired, and
+// the enum rule keyed on the exported form would look up the wrong type.
+func TestStructPairExported_EachSide_KeepsItsOwnFields(t *testing.T) {
+	mcpNamed := mcpNamedStruct(t, "Output")
+	mcpStruct := makeStruct(structField{"ID", "id", tInt})
+	sdkStruct := makeStruct(structField{"Name", "name", tString})
+
+	got := structPair{
+		mcpName: "Output", mcpType: mcpStruct, mcpNamed: mcpNamed,
+		sdkName: "v2.Environment", sdkType: sdkStruct, sdkURLTags: true,
+	}.exported("input")
+
+	want := Pair{
+		Kind: "input", MCPName: "Output", MCPType: mcpStruct, MCPNamed: mcpNamed,
+		SDKName: "v2.Environment", SDKType: sdkStruct, SDKURLTags: true,
+	}
+	if got != want {
+		t.Errorf("exported = %+v, want %+v", got, want)
+	}
+}
+
+// TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope verifies
+// the two suppressions the output diff applies together, and the whole record
+// each finding carries.
+//
+// They are two rules and not one: a curated reference subset silences every
+// missing field of a nested type the endpoint documents as an identity subset,
+// while a doc-omitted field silences exactly one field of a primary type. Read
+// as alternatives rather than as conditions that must both hold, either one
+// would report the other's suppressed fields, and the predicates' own tests
+// cannot see it because they never run the diff.
+func TestDiffOutputGroup_DocGroundedCarveOuts_SuppressOnlyTheirOwnScope(t *testing.T) {
+	t.Run("a doc-omitted field is silenced and its siblings are not", func(t *testing.T) {
+		mcp := makeStruct(
+			structField{"ID", "id", tInt},
+			structField{"Weight", "weight", mcpNamedStruct(t, "Weight")},
+			structField{"Invented", "invented_scalar", mcpNamedStruct(t, "Invented")},
+		)
+		sdk := makeStruct(
+			structField{"ID", "id", tInt},
+			structField{"Project", "project", sdkNamedStruct(t, "Project")},
+			structField{"Name", "name", tString},
+			structField{"Weight", "weight", sdkNamedStruct(t, "Weight")},
+		)
+
+		g := diffOutputGroup("environments", outputGroup{
+			mcpName: "Output", mcpType: mcp,
+			pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.Environment", sdkType: sdk}},
+		})
+
+		want := gap{
+			Kind: "output", MCPType: "Output", SDKType: "v2.Environment",
+			MissingFields:  []missingField{{Tag: "name", SDKType: typNameString}},
+			TypeMismatches: []typeMismatch{{Tag: "weight", MCPType: "environments.Weight", SDKType: "v2.Weight"}},
+			ExtraFields:    []extraField{{Tag: "invented_scalar", MCPType: "environments.Invented"}},
+		}
+		if !reflect.DeepEqual(g, want) {
+			t.Errorf("diffOutputGroup = %+v, want %+v", g, want)
+		}
+	})
+
+	t.Run("a curated reference subset silences the whole type", func(t *testing.T) {
+		mcp := makeStruct(structField{"ID", "id", tInt})
+		sdk := makeStruct(
+			structField{"ID", "id", tInt},
+			structField{"Ref", "ref", tString},
+			structField{"Project", "project", sdkNamedStruct(t, "Project")},
+		)
+
+		g := diffOutputGroup("environments", outputGroup{
+			mcpName: "DeployableOutput", mcpType: mcp,
+			pairs: []structPair{{mcpName: "DeployableOutput", mcpType: mcp, sdkName: "v2.Deployable", sdkType: sdk}},
+		})
+
+		want := gap{Kind: "output", MCPType: "DeployableOutput", SDKType: "v2.Deployable"}
+		if !reflect.DeepEqual(g, want) {
+			t.Errorf("diffOutputGroup = %+v, want no finding on a curated subset", g)
+		}
+	})
+
+	t.Run("neither carve-out reaches another package", func(t *testing.T) {
+		mcp := makeStruct(structField{"ID", "id", tInt})
+		sdk := makeStruct(
+			structField{"ID", "id", tInt},
+			structField{"Project", "project", sdkNamedStruct(t, "Project")},
+		)
+
+		g := diffOutputGroup("deployments", outputGroup{
+			mcpName: "Output", mcpType: mcp,
+			pairs: []structPair{{mcpName: "Output", mcpType: mcp, sdkName: "v2.Deployment", sdkType: sdk}},
+		})
+
+		want := []missingField{{Tag: "project", SDKType: "v2.Project"}}
+		if !reflect.DeepEqual(g.MissingFields, want) {
+			t.Errorf("missing fields = %+v, want the project field reported outside environments", g.MissingFields)
+		}
+	})
+}
+
+// TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies verifies the two
+// arguments of the input diff that the production callers never vary, and the
+// whole record the diff returns.
+//
+// The adjudicated-omission allowlist is input-scoped: an entry says an SDK
+// request field is exposed under another key, which is a claim about a request
+// and says nothing about a response. And the tag preference decides which side
+// of client-go's dual tagging is read, so a result-struct pairing compared by
+// url tags would match none and report every field of it missing.
+func TestDiffPair_Kind_DecidesWhetherTheInputAllowlistApplies(t *testing.T) {
+	// branches.CreateInput.branch is an adjudicated omission: the SDK's
+	// `branch` param is exposed as `branch_name`.
+	mcp := makeStruct(structField{"BranchName", "branch_name", tString})
+	sdk := makeStructWithTags(
+		taggedField{name: "Branch", tag: `url:"branch" json:"branch"`, goType: tString},
+		taggedField{name: "Ref", tag: `url:"ref" json:"ref"`, goType: tString},
+	)
+
+	t.Run("an input pair honors the allowlist", func(t *testing.T) {
+		g := diffPair("branches", "input", structPair{
+			mcpName: "CreateInput", mcpType: mcp,
+			sdkName: "v2.CreateBranchOptions", sdkType: sdk, sdkURLTags: true,
+		})
+
+		want := gap{
+			Kind: "input", MCPType: "CreateInput", SDKType: "v2.CreateBranchOptions",
+			MissingFields: []missingField{{Tag: "ref", SDKType: typNameString}},
+		}
+		if !reflect.DeepEqual(g, want) {
+			t.Errorf("diffPair = %+v, want %+v", g, want)
+		}
+	})
+
+	t.Run("any other kind reports the same field", func(t *testing.T) {
+		g := diffPair("branches", "output", structPair{
+			mcpName: "CreateInput", mcpType: mcp,
+			sdkName: "v2.CreateBranchOptions", sdkType: sdk, sdkURLTags: true,
+		})
+
+		want := []missingField{{Tag: "branch", SDKType: typNameString}, {Tag: "ref", SDKType: typNameString}}
+		if !reflect.DeepEqual(g.MissingFields, want) {
+			t.Errorf("missing fields = %+v, want the allowlist not applied outside an input pair", g.MissingFields)
+		}
+	})
+
+	t.Run("a pairing that prefers json tags reads the json side", func(t *testing.T) {
+		jsonOnly := makeStructWithTags(
+			taggedField{name: "Ref", tag: `json:"ref"`, goType: tString},
+			taggedField{name: "Branch", tag: `url:"branch"`, goType: tString},
+		)
+
+		g := diffPair("branches", "input", structPair{
+			mcpName: "CreateInput", mcpType: mcp,
+			sdkName: "v2.Branch", sdkType: jsonOnly, sdkURLTags: false,
+		})
+
+		want := []missingField{{Tag: "ref", SDKType: typNameString}}
+		if !reflect.DeepEqual(g.MissingFields, want) {
+			t.Errorf("missing fields = %+v, want the json-tagged field alone", g.MissingFields)
+		}
+	})
+}
+
+// TestDisjointPhantomInput_TheOverlapEvidence_ComesFromTheSameInputStruct
+// verifies what the phantom rule accepts as evidence. A disjoint pairing is
+// dropped only because the SAME MCP input struct has another pairing that does
+// overlap; an overlap belonging to a different input struct is another
+// struct's business, and reading it as evidence would silence every genuine
+// single-pairing gap in any package that also holds one healthy pair.
+func TestDisjointPhantomInput_TheOverlapEvidence_ComesFromTheSameInputStruct(t *testing.T) {
+	getInput := makeStruct(structField{"GroupID", "group_id", tString})
+	getGroupOpts := makeStruct(structField{"WithProjects", "with_projects", tString})
+	solePair := structPair{mcpName: "GetInput", mcpType: getInput, sdkName: "v2.GetGroupOptions", sdkType: getGroupOpts, sdkURLTags: true}
+
+	// A different input struct, paired against options it fully overlaps.
+	listInput := makeStruct(structField{"Search", "search", tString})
+	listOpts := makeStruct(structField{"Search", "search", tString})
+	neighbor := structPair{mcpName: "ListInput", mcpType: listInput, sdkName: "v2.ListGroupsOptions", sdkType: listOpts, sdkURLTags: true}
+
+	all := map[[2]string]structPair{
+		{"GetInput", "GetGroupOptions"}:    solePair,
+		{"ListInput", "ListGroupsOptions"}: neighbor,
+	}
+	if disjointPhantomInput(solePair, all) {
+		t.Error("a sole disjoint pairing was dropped on another input struct's overlap; a genuine candidate gap is lost")
+	}
+
+	// Two disjoint pairings of one input struct are still both genuine: the
+	// rule needs an overlapping sibling, not merely a second pairing.
+	otherOpts := makeStruct(structField{"Sort", "sort", tString})
+	secondDisjoint := structPair{mcpName: "GetInput", mcpType: getInput, sdkName: "v2.ListGroupsOptions", sdkType: otherOpts, sdkURLTags: true}
+	bothDisjoint := map[[2]string]structPair{
+		{"GetInput", "GetGroupOptions"}:   solePair,
+		{"GetInput", "ListGroupsOptions"}: secondDisjoint,
+	}
+	if disjointPhantomInput(solePair, bothDisjoint) {
+		t.Error("a disjoint pairing was dropped on a sibling that does not overlap either")
+	}
+}
+
+// TestLocalNamedStruct_OnlyTheHandlersOwnPackage_IsTheMCPSide verifies the
+// rule that decides which parameter of a handler is its typed MCP input. The
+// package is half of it and is easy to lose: without it every client-go struct
+// a handler takes would read as the input struct, and the diff would then
+// compare the SDK against itself and report a perfect 1:1 on a handler nothing
+// checked.
+func TestLocalNamedStruct_OnlyTheHandlersOwnPackage_IsTheMCPSide(t *testing.T) {
+	const local = "example.com/x/internal/tools/environments"
+	pkg := &packages.Package{PkgPath: local}
+	st := makeStruct(structField{"ID", "id", tInt})
+
+	cases := []struct {
+		name string
+		typ  types.Type
+		want bool
+	}{
+		{name: "declared_here", typ: namedStruct(types.NewPackage(local, "environments"), "Input", st), want: true},
+		{name: "declared_elsewhere", typ: namedStruct(types.NewPackage("example.com/api/client-go/v2", "sdk"), "Input", st), want: false},
+		{name: "declared_in_no_package", typ: namedStruct(nil, "Input", st), want: false},
+		{name: "not_a_struct", typ: tString, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			named, got, ok := localNamedStruct(pkg, tc.typ)
+			if ok != tc.want {
+				t.Fatalf("localNamedStruct = %v, want %v", ok, tc.want)
+			}
+			if ok && (named == nil || got != st) {
+				t.Errorf("localNamedStruct returned %v/%v, want the declared struct", named, got)
+			}
+		})
+	}
+}
+
+// TestClientGoNamedStruct_OnlyTheSDKModule_IsTheSDKSide is the mirror of the
+// rule above, on the side that decides what a converter is filling from. A
+// struct from anywhere else read as an SDK result would pair an output type
+// against one of this repository's own shapes, which mirrors itself and
+// reports nothing.
+func TestClientGoNamedStruct_OnlyTheSDKModule_IsTheSDKSide(t *testing.T) {
+	st := makeStruct(structField{"Name", "name", tString})
+
+	cases := []struct {
+		name string
+		typ  types.Type
+		want bool
+	}{
+		{name: "sdk_module", typ: namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab"), "Branch", st), want: true},
+		{name: "sdk_subpackage", typ: namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2/testing", "testing"), "Branch", st), want: true},
+		{name: "our_own_package", typ: namedStruct(types.NewPackage("example.com/x/internal/tools/branches", "branches"), "Branch", st), want: false},
+		{name: "no_package", typ: namedStruct(nil, "Branch", st), want: false},
+		{name: "not_a_struct", typ: tString, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			named, got, ok := clientGoNamedStruct(tc.typ)
+			if ok != tc.want {
+				t.Fatalf("clientGoNamedStruct = %v, want %v", ok, tc.want)
+			}
+			if ok && (named == nil || got != st) {
+				t.Errorf("clientGoNamedStruct returned %v/%v, want the declared struct", named, got)
+			}
+		})
+	}
+}
+
+// TestLocalOrAliasNamedStruct_TheAlias_IsFollowedOnlyWhenItIsOneOfOurs
+// verifies the checks the alias path makes before following a result type. An
+// identifier naming a value rather than a type, and an alias declared in
+// another package, are both shapes the resolver must decline: following the
+// second would attribute a shared toolutil shape to whichever domain happened
+// to name it, and the per-package accept-list keys are what that would move.
+func TestLocalOrAliasNamedStruct_TheAlias_IsFollowedOnlyWhenItIsOneOfOurs(t *testing.T) {
+	const pkgPath = "example.com/x/internal/tools/p"
+	target := namedStruct(types.NewPackage("example.com/x/internal/toolutil", "toolutil"), "SharedOutput", makeStruct(structField{"ID", "id", tInt}))
+
+	t.Run("an identifier that names no type", func(t *testing.T) {
+		ident := ast.NewIdent("output")
+		variable := types.NewVar(token.NoPos, types.NewPackage(pkgPath, "p"), "output", target)
+		pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{Uses: map[*ast.Ident]types.Object{ident: variable}}}
+
+		if _, _, name, ok := localOrAliasNamedStruct(pkg, ident, target); ok || name != "" {
+			t.Errorf("localOrAliasNamedStruct = %q/%v, want no pair for a value identifier", name, ok)
+		}
+	})
+
+	t.Run("an alias declared in another package", func(t *testing.T) {
+		ident := ast.NewIdent("Output")
+		foreign := types.NewTypeName(token.NoPos, types.NewPackage("example.com/x/internal/tools/other", "other"), "Output", nil)
+		alias := types.NewAlias(foreign, target)
+		pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{Uses: map[*ast.Ident]types.Object{ident: foreign}}}
+
+		if _, _, name, ok := localOrAliasNamedStruct(pkg, ident, alias); ok || name != "" {
+			t.Errorf("localOrAliasNamedStruct = %q/%v, want no pair for another package's alias", name, ok)
+		}
+	})
+
+	t.Run("a local alias of a shared shape", func(t *testing.T) {
+		ident := ast.NewIdent("Output")
+		localObj := types.NewTypeName(token.NoPos, types.NewPackage(pkgPath, "p"), "Output", nil)
+		alias := types.NewAlias(localObj, target)
+		pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{Uses: map[*ast.Ident]types.Object{ident: localObj}}}
+
+		named, st, name, ok := localOrAliasNamedStruct(pkg, ident, types.NewPointer(alias))
+		if !ok || name != "Output" || named != target || st == nil {
+			t.Errorf("localOrAliasNamedStruct = %v/%q/%v, want the shared target under the local name", named, name, ok)
+		}
+	})
+}
+
+// TestCollectConverter_DeclarationsWithNothingToPair_RecordNoPair verifies the
+// shapes the converter scan steps over before it can read a result type: a
+// declaration returning nothing, one declaring an empty result list, and one
+// whose result this package does not declare. Each records no pair, which is
+// the only way a function that is not a converter stays out of the audit.
+func TestCollectConverter_DeclarationsWithNothingToPair_RecordNoPair(t *testing.T) {
+	pkg := &packages.Package{PkgPath: "example.com/x/internal/tools/p", TypesInfo: &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+		Uses:  map[*ast.Ident]types.Object{},
+	}}
+
+	cases := []struct {
+		name string
+		fn   *ast.FuncDecl
+	}{
+		{name: "no result list at all", fn: &ast.FuncDecl{Name: ast.NewIdent("Do"), Type: &ast.FuncType{}}},
+		{
+			name: "an empty result list",
+			fn:   &ast.FuncDecl{Name: ast.NewIdent("Do"), Type: &ast.FuncType{Results: &ast.FieldList{}}},
+		},
+		{
+			name: "a result this package does not declare",
+			fn: &ast.FuncDecl{Name: ast.NewIdent("Do"), Type: &ast.FuncType{
+				Results: &ast.FieldList{List: []*ast.Field{{Type: ast.NewIdent("Output")}}},
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pairs := map[[2]string]structPair{}
+			collectConverter(pkg, tc.fn, pairs)
+			if len(pairs) != 0 {
+				t.Errorf("collectConverter recorded %d pair(s), want none", len(pairs))
+			}
+		})
+	}
+}
+
+// TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded verifies
+// which converter results become audited pairs, and that a recorded pair keeps
+// each name on its own side.
+//
+// An unexported result is a mapping intermediate whose fields carry no json
+// tag, so pairing it would report every field of the SDK struct as missing on
+// a type no client ever sees. A converter taking no parameter has no SDK side
+// to pair against at all.
+func TestCollectConverter_TheResultName_DecidesWhetherThePairIsRecorded(t *testing.T) {
+	const pkgPath = "example.com/x/internal/tools/p"
+	local := types.NewPackage(pkgPath, "p")
+	sdkNamed := namedStruct(types.NewPackage(shared.ClientGoPkgPath+"/v2", "gitlab"), "Branch", makeStruct(structField{"Name", "name", tString}))
+
+	converter := func(resultName string, withParam bool) (*packages.Package, *ast.FuncDecl) {
+		resultIdent := ast.NewIdent(resultName)
+		paramIdent := ast.NewIdent("src")
+		result := namedStruct(local, resultName, makeStruct(structField{"Name", "name", tString}))
+		pkg := &packages.Package{PkgPath: pkgPath, TypesInfo: &types.Info{
+			Types: map[ast.Expr]types.TypeAndValue{
+				resultIdent: {Type: result},
+				paramIdent:  {Type: types.NewPointer(sdkNamed)},
+			},
+			Uses: map[*ast.Ident]types.Object{resultIdent: result.Obj()},
+		}}
+		fnType := &ast.FuncType{Results: &ast.FieldList{List: []*ast.Field{{Type: resultIdent}}}}
+		if withParam {
+			fnType.Params = &ast.FieldList{List: []*ast.Field{{Type: paramIdent}}}
+		}
+		return pkg, &ast.FuncDecl{Name: ast.NewIdent("newOutput"), Type: fnType}
+	}
+
+	cases := []struct {
+		name       string
+		resultName string
+		withParam  bool
+		wantPairs  int
+	}{
+		{name: "an exported result with an SDK argument is paired", resultName: "Output", withParam: true, wantPairs: 1},
+		{name: "an unexported result is not", resultName: "commitFields", withParam: true, wantPairs: 0},
+		{name: "a declaration with no parameter list is not", resultName: "Output", wantPairs: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pkg, fn := converter(tc.resultName, tc.withParam)
+			pairs := map[[2]string]structPair{}
+
+			collectConverter(pkg, fn, pairs)
+
+			if len(pairs) != tc.wantPairs {
+				t.Fatalf("collectConverter recorded %d pair(s), want %d", len(pairs), tc.wantPairs)
+			}
+			if tc.wantPairs == 0 {
+				return
+			}
+			got := pairs[[2]string{tc.resultName, "Branch"}]
+			if got.mcpName != tc.resultName || got.sdkName != "v2.Branch" || got.sdkURLTags {
+				t.Errorf("pair = %+v, want the local name on the MCP side and the qualified SDK name on the other", got)
+			}
+		})
 	}
 }
