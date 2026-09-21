@@ -19,7 +19,9 @@ package freshness
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -199,10 +201,116 @@ func TestDeferredValue_IsTheValueCIComputes(t *testing.T) {
 	}
 }
 
+// TestDoc_NamesEveryPackageThatDefers verifies the package comment's account of
+// who defers is the tree's, in both directions. That list is the only statement
+// anywhere of what deferring reaches, so a reader sizes the blast radius by it,
+// and it is prose about other packages: no compiler, no gate and neither
+// coverage tool can be wrong about it, which is how it came to name four while
+// six called.
+func TestDoc_NamesEveryPackageThatDefers(t *testing.T) {
+	callers := packagesCallingFreshness(t)
+	named := packagesNamedInDoc(t)
+
+	for caller := range callers {
+		t.Run("calls/"+caller, func(t *testing.T) {
+			if !named[caller] {
+				t.Errorf("%s defers through this package and doc.go does not name it", caller)
+			}
+		})
+	}
+	for pkg := range named {
+		t.Run("named/"+pkg, func(t *testing.T) {
+			if !callers[pkg] {
+				t.Errorf("doc.go names %s as a package that defers, and it imports nothing from here", pkg)
+			}
+		})
+	}
+}
+
+// packagesCallingFreshness asks the toolchain which packages of this module
+// import this one, from a test file or otherwise. It is asked rather than
+// scanned because a scan of the tree would read the hundred-odd worktrees the
+// parallel-agent tooling keeps under .claude and fold another branch's callers
+// into the answer. Paths are returned the way this repository writes them,
+// with the module prefix off.
+func packagesCallingFreshness(t *testing.T) map[string]bool {
+	t.Helper()
+	const format = `{{.ImportPath}}{{range .Imports}} {{.}}{{end}}{{range .TestImports}} {{.}}{{end}}{{range .XTestImports}} {{.}}{{end}}`
+	list := exec.CommandContext(t.Context(), "go", "list", "-f", format, "./cmd/...", "./internal/...")
+	// From the module root, because a test runs in its own package directory
+	// and the patterns are relative.
+	list.Dir = moduleRoot(t)
+	var stderr strings.Builder
+	list.Stderr = &stderr
+	listed, err := list.Output()
+	if err != nil {
+		t.Fatalf("go list in %s: %v: %s", list.Dir, err, stderr.String())
+	}
+
+	const self = "internal/freshness"
+	var prefix string
+	rows := strings.Split(string(listed), "\n")
+	for _, row := range rows {
+		if pkg, _, _ := strings.Cut(strings.TrimSpace(row), " "); strings.HasSuffix(pkg, "/"+self) {
+			prefix = strings.TrimSuffix(pkg, self)
+			break
+		}
+	}
+	if prefix == "" {
+		t.Fatalf("go list named %d row(s) and not %s, so it is not listing this module", len(rows), self)
+	}
+
+	callers := map[string]bool{}
+	for _, row := range rows {
+		fields := strings.Fields(row)
+		if len(fields) == 0 || fields[0] == prefix+self {
+			continue
+		}
+		if slices.Contains(fields[1:], prefix+self) {
+			callers[strings.TrimPrefix(fields[0], prefix)] = true
+		}
+	}
+	return callers
+}
+
+// packagesNamedInDoc reads the package comment's list back. The list is a
+// godoc bullet list rather than a sentence so that what it claims can be read
+// without parsing prose, and a comment naming a package anywhere else, such as
+// the cmd/server test named below it, is not mistaken for a member.
+func packagesNamedInDoc(t *testing.T) map[string]bool {
+	t.Helper()
+	source, err := os.ReadFile("doc.go")
+	if err != nil {
+		t.Fatalf("read doc.go: %v", err)
+	}
+	named := map[string]bool{}
+	for line := range strings.SplitSeq(string(source), "\n") {
+		if pkg, ok := strings.CutPrefix(line, "//   - "); ok {
+			named[strings.TrimSpace(pkg)] = true
+		}
+	}
+	if len(named) == 0 {
+		t.Fatalf("doc.go lists no package that defers, so its account of what deferring reaches is gone")
+	}
+	return named
+}
+
 // readCIWorkflow returns the workflow that computes FRESHNESS and hands it to
-// the unit suite. The module root is walked to rather than reached by a fixed
-// relative path, so the test says what it could not find when it fails.
+// the unit suite.
 func readCIWorkflow(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(moduleRoot(t), ".github", "workflows", "ci.yml")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(content)
+}
+
+// moduleRoot walks up from the package directory to the go.mod above it,
+// rather than counting the ".." a fixed relative path would need, so a test
+// that cannot find what it judges says so instead of reading nothing.
+func moduleRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
 	if err != nil {
@@ -210,20 +318,15 @@ func readCIWorkflow(t *testing.T) string {
 	}
 	for {
 		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
-			break
+			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatalf("no go.mod above the package directory, so the repository root could not be found")
+			t.Fatalf("no go.mod above %s, so the module root could not be found", dir)
+			return ""
 		}
 		dir = parent
 	}
-	path := filepath.Join(dir, ".github", "workflows", "ci.yml")
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	return string(content)
 }
 
 // TestSkipReason_NamesTheSettingAndTheValue verifies the message a skipped run

@@ -15,10 +15,22 @@
 //
 // # What reads it
 //
-// Test files only. [SkipIfDeferred] is called by the tests of internal/tools,
-// cmd/audit_metrics, cmd/audit_tokens and cmd/gen_llms, each of which reads a
-// committed artifact and compares it. Nothing in the server reads any of this,
-// which is why TestDependencies_TestSupport_NeverReachesTheServerBinary in
+// Test files only. [SkipIfDeferred] is called by the tests of these packages,
+// each of which reads a committed artifact and compares it:
+//
+//   - internal/tools
+//   - cmd/audit_metrics
+//   - cmd/audit_tokens
+//   - cmd/gen_lhm_manifest
+//   - cmd/gen_llms
+//   - cmd/gen_model_corpus
+//
+// The list is a claim about the tree rather than a note, so
+// TestDoc_NamesEveryPackageThatDefers holds it both ways: it named four while
+// six called, cmd/gen_lhm_manifest and cmd/gen_model_corpus having arrived
+// after it was written, and a reader sizing what deferring reaches by it was
+// reading a third of it short. Nothing in the server reads any of this, which
+// is why TestDependencies_TestSupport_NeverReachesTheServerBinary in
 // cmd/server names this package alongside internal/testutil.
 //
 // # What deferring does not mean
