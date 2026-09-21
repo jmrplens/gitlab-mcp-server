@@ -11,12 +11,15 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -45,6 +48,27 @@ func TestClassify_NamingPatterns(t *testing.T) {
 	}
 }
 
+// TestClassify_EverySuggestion_IsANonEmptyName verifies the property the
+// rename loop relies on rather than guards: classify answers every name it is
+// given with a name. collectRenames writes the suggestion straight into a
+// declaration, so an empty one would blank a function, and it carries no check
+// for that because none of classify's branches can return one — the rewrites
+// prepend "Test" and the rest fall back to the name itself.
+func TestClassify_EverySuggestion_IsANonEmptyName(t *testing.T) {
+	names := []string{
+		"Test", "TestCov", "TestCatalog", "TestFooBar", "TestFoo_Bar",
+		"TestFoo_Bar_Baz", "TestCovAlphaBeta", "TestCovX", "TestHTTPHandlerReturnsError",
+	}
+
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			if _, suggested := classify(name); suggested == "" {
+				t.Errorf("classify(%q) suggested an empty name", name)
+			}
+		})
+	}
+}
+
 // TestSplitCamelCase_HandlesAcronymsAndShortNames verifies CamelCase splitting preserves meaningful segments.
 func TestSplitCamelCase_HandlesAcronymsAndShortNames(t *testing.T) {
 	testCases := []struct {
@@ -57,6 +81,9 @@ func TestSplitCamelCase_HandlesAcronymsAndShortNames(t *testing.T) {
 		{name: "acronym boundary", input: "TestHTTPHandlerReturnsError", want: "TestHTTP_HandlerReturns_Error"},
 		{name: "no result suffix", input: "TestBuildCatalogFromSpecs", want: "TestBuild_CatalogFromSpecs"},
 		{name: "two words unchanged", input: "TestCatalog", want: "TestCatalog"},
+		// The last rune being the uppercase one is the case where the word
+		// boundary has to be decided with no following rune to look at.
+		{name: "trailing uppercase", input: "TestFooB", want: "TestFoo_B"},
 	}
 
 	for _, testCase := range testCases {
@@ -129,25 +156,19 @@ func BenchmarkCreateIssue(b *testing.B) {}
 		t.Fatalf("WriteFile(non-test) error = %v", err)
 	}
 
-	entries := scanDir(root)
-	if len(entries) != 4 {
-		t.Fatalf("scanDir() len = %d, want 4 entries: %+v", len(entries), entries)
+	// The whole entry is compared rather than its pattern alone: the file and
+	// the suggested name are assignments with no branch of their own, so a
+	// converter that read either from the wrong neighbor would be reported by
+	// neither gate and by no assertion that looks at one field.
+	file := filepath.ToSlash(filepath.Join(nested, "sample_test.go"))
+	want := []testEntry{
+		{File: file, CurrentName: "TestCreateIssueReturnsIssue", Pattern: PatternNoUnderscore, SuggestedName: "TestCreate_IssueReturnsIssue"},
+		{File: file, CurrentName: "TestCreateIssue_ReturnsIssue", Pattern: Pattern2Part, SuggestedName: "TestCreateIssue_ReturnsIssue"},
+		{File: file, CurrentName: "TestCovBuildCatalogError", Pattern: PatternTestCov, SuggestedName: "TestBuild_Catalog_Error"},
+		{File: file, CurrentName: "TestMain_Flags_Parse", Pattern: Pattern3Part, SuggestedName: "TestMain_Flags_Parse"},
 	}
-	patterns := map[string]string{}
-	for _, entry := range entries {
-		patterns[entry.CurrentName] = entry.Pattern
-	}
-	if patterns["TestCreateIssueReturnsIssue"] != PatternNoUnderscore {
-		t.Fatalf("patterns = %+v, want TestCreateIssueReturnsIssue as no-underscore", patterns)
-	}
-	if patterns["TestCreateIssue_ReturnsIssue"] != Pattern2Part {
-		t.Fatalf("patterns = %+v, want TestCreateIssue_ReturnsIssue as 2-part", patterns)
-	}
-	if patterns["TestCovBuildCatalogError"] != PatternTestCov {
-		t.Fatalf("patterns = %+v, want TestCovBuildCatalogError as TestCov", patterns)
-	}
-	if patterns["TestMain_Flags_Parse"] != Pattern3Part {
-		t.Fatalf("patterns = %+v, want TestMain_Flags_Parse as 3-part", patterns)
+	if got := scanDir(root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("scanDir() = %+v\nwant %+v", got, want)
 	}
 }
 
@@ -162,25 +183,37 @@ func TestScanDir_InvalidPathsReturnNoEntries(t *testing.T) {
 	}
 }
 
-// TestRun_WritesCSVAndSummary verifies the run entry point walks the supplied
-// directories, emits the expected CSV header/rows to stdout, and prints a
-// classification summary to stderr.
-//
-// The test stages a directory tree containing a mix of compliant and
-// non-compliant test names plus a non-test file, then asserts that the CSV
-// output contains the expected rows and the stderr summary references the
-// audited counts.
-func TestRun_WritesCSVAndSummary(t *testing.T) {
-	root := t.TempDir()
-	fixture := `package sample
+// summaryFixture holds one to four test functions of each bucket, so that no
+// two counts in the stderr summary agree and a count printed under the wrong
+// label cannot pass for the right one.
+const summaryFixture = `package sample
 
 import "testing"
 
+func TestAlpha_Beta_Gamma(t *testing.T) {}
 func TestCreateIssue_ReturnsIssue(t *testing.T) {}
+func TestDelta_Epsilon(t *testing.T) {}
 func TestCovBuildCatalogError(t *testing.T) {}
+func TestCovMuNu(t *testing.T) {}
+func TestCovXiOmicron(t *testing.T) {}
 func TestCreateIssueReturnsIssue(t *testing.T) {}
+func TestZetaEta(t *testing.T) {}
+func TestThetaIota(t *testing.T) {}
+func TestKappaLambda(t *testing.T) {}
 `
-	if err := os.WriteFile(filepath.Join(root, "sample_test.go"), []byte(fixture), 0o600); err != nil {
+
+// TestRun_WritesCSVAndSummary verifies the run entry point walks the supplied
+// directories, emits the whole CSV report to stdout, and prints a
+// classification summary to stderr.
+//
+// Every column of every row is compared, and the summary is read back as
+// counts: the file and the suggested name are written by plain assignments and
+// each count by one Fprintf, so a column filled from the wrong field and a
+// count printed under the wrong label are defects no mutation and no condition
+// can report, and were invisible here until this compared the whole report.
+func TestRun_WritesCSVAndSummary(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "sample_test.go"), []byte(summaryFixture), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("package sample\n"), 0o600); err != nil {
@@ -192,45 +225,213 @@ func TestCreateIssueReturnsIssue(t *testing.T) {}
 		t.Fatalf("run() error = %v", err)
 	}
 
-	records := readCSVRecords(t, stdout.Bytes())
-	if len(records) == 0 {
-		t.Fatalf("run() emitted no CSV records; stderr:\n%s", stderr.String())
+	file := filepath.ToSlash(filepath.Join(root, "sample_test.go"))
+	wantRecords := [][]string{
+		{"file", "current_name", "pattern", "suggested_name"},
+		{file, "TestAlpha_Beta_Gamma", Pattern3Part, "TestAlpha_Beta_Gamma"},
+		{file, "TestCreateIssue_ReturnsIssue", Pattern2Part, "TestCreateIssue_ReturnsIssue"},
+		{file, "TestDelta_Epsilon", Pattern2Part, "TestDelta_Epsilon"},
+		{file, "TestCovBuildCatalogError", PatternTestCov, "TestBuild_Catalog_Error"},
+		{file, "TestCovMuNu", PatternTestCov, "TestMu_Nu"},
+		{file, "TestCovXiOmicron", PatternTestCov, "TestXi_Omicron"},
+		{file, "TestCreateIssueReturnsIssue", PatternNoUnderscore, "TestCreate_IssueReturnsIssue"},
+		{file, "TestZetaEta", PatternNoUnderscore, "TestZeta_Eta"},
+		{file, "TestThetaIota", PatternNoUnderscore, "TestTheta_Iota"},
+		{file, "TestKappaLambda", PatternNoUnderscore, "TestKappa_Lambda"},
 	}
-	wantHeader := []string{"file", "current_name", "pattern", "suggested_name"}
-	if len(records[0]) != len(wantHeader) {
-		t.Fatalf("CSV header = %v, want %v", records[0], wantHeader)
+	if got := readCSVRecords(t, stdout.Bytes()); !reflect.DeepEqual(got, wantRecords) {
+		t.Errorf("CSV = %q\nwant %q", got, wantRecords)
 	}
-	for i, col := range wantHeader {
-		t.Run(col, func(t *testing.T) {
-			if records[0][i] != col {
-				t.Errorf("CSV header[%d] = %q, want %q", i, records[0][i], col)
+
+	// The map is compared whole, so a bucket nothing classified into — "other"
+	// and "skip", which no classification produces — is asserted absent too.
+	wantCounts := map[string]int{
+		"Total test functions": 10,
+		Pattern3Part:           1,
+		Pattern2Part:           2,
+		PatternTestCov:         3,
+		PatternNoUnderscore:    4,
+	}
+	if got := summaryCounts(stderr.String()); !reflect.DeepEqual(got, wantCounts) {
+		t.Errorf("summary counts = %v, want %v\nstderr:\n%s", got, wantCounts, stderr.String())
+	}
+}
+
+// summaryCounts reads the numbers back out of the audit's stderr summary, so
+// the counts can be asserted without pinning the column padding they are
+// printed with.
+func summaryCounts(stderr string) map[string]int {
+	counts := map[string]int{}
+	for line := range strings.SplitSeq(stderr, "\n") {
+		label, value, found := strings.Cut(strings.TrimSpace(line), ":")
+		if !found {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			continue
+		}
+		counts[label] = n
+	}
+	return counts
+}
+
+// TestRunMain_Flags_SelectTheModeAndTheExitCode verifies the entry point's own
+// work: which of the three modes each flag selects, the usage line when the
+// command line names no directory, and the code each outcome exits with. main
+// is one line over this function, so nothing else can observe the dispatch —
+// and a -dry-run given on its own has to reach the rename mode, which is what
+// tells the two flags apart from a pair that must both be set.
+func TestRunMain_Flags_SelectTheModeAndTheExitCode(t *testing.T) {
+	const cleanTest = "package sample\n\nimport \"testing\"\n\nfunc TestOne_Two(t *testing.T) {}\n"
+	testCases := []struct {
+		name       string
+		files      []fileSpec
+		args       func(root string) []string
+		failStdout bool
+		wantCode   int
+		wantStdout []string
+		notStdout  []string
+		wantStderr []string
+		wantFile   string
+	}{
+		{
+			name:       "no directory named",
+			args:       func(string) []string { return nil },
+			wantCode:   1,
+			wantStderr: []string{"usage: go run ./cmd/audit_test_names/ [flags] <dir>..."},
+		},
+		{
+			name:       "a flag the command does not define",
+			args:       func(root string) []string { return []string{"-nope", root} },
+			wantCode:   2,
+			wantStderr: []string{"flag provided but not defined", "-check-files"},
+		},
+		{
+			name:       "help is not a failure",
+			args:       func(string) []string { return []string{"-h"} },
+			wantCode:   0,
+			wantStderr: []string{"-apply", "-dry-run", "-check-files"},
+		},
+		{
+			name:       "no mode flag reports",
+			files:      []fileSpec{{"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{root} },
+			wantCode:   0,
+			wantStdout: []string{"current_name", "TestCovBuildCatalogError"},
+			wantFile:   legacyNamesFixture,
+		},
+		{
+			name:       "a report that cannot be written",
+			files:      []fileSpec{{"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{root} },
+			failStdout: true,
+			wantCode:   1,
+			wantStderr: []string{"flush csv: boom"},
+		},
+		{
+			name:       "check-files on a clean tree",
+			files:      []fileSpec{{"kind.go", "package kind\n"}, {"kind_test.go", cleanTest}},
+			args:       func(root string) []string { return []string{"-check-files", root} },
+			wantCode:   0,
+			wantStdout: []string{"every test file is named after a module it tests"},
+		},
+		{
+			name:       "check-files on a violating tree",
+			files:      []fileSpec{{"kind.go", "package kind\n"}, {"theme_test.go", cleanTest}},
+			args:       func(root string) []string { return []string{"-check-files", root} },
+			wantCode:   1,
+			wantStdout: []string{"theme_test.go", "1 file(s) violate the convention"},
+		},
+		{
+			name:       "dry-run on its own selects the rename mode",
+			files:      []fileSpec{{"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{"-dry-run", root} },
+			wantCode:   0,
+			wantStdout: []string{"TestCovBuildCatalogError -> TestBuild_Catalog_Error"},
+			notStdout:  []string{"current_name"},
+			wantStderr: []string{"Rename Summary (dry-run)"},
+			wantFile:   legacyNamesFixture,
+		},
+		{
+			name:       "apply rewrites the file",
+			files:      []fileSpec{{"sample_test.go", legacyNamesFixture}},
+			args:       func(root string) []string { return []string{"-apply", root} },
+			wantCode:   0,
+			wantStdout: []string{"TestCovBuildCatalogError -> TestBuild_Catalog_Error"},
+			wantStderr: []string{"Rename Summary (applied)"},
+			wantFile:   legacyNamesRewritten,
+		},
+		{
+			name:       "apply on a directory that is not there",
+			args:       func(root string) []string { return []string{"-apply", filepath.Join(root, "absent")} },
+			wantCode:   1,
+			wantStderr: []string{"walk "},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixtureDir(t, root, nil, tc.files)
+
+			var buffered, stderr bytes.Buffer
+			var stdout io.Writer = &buffered
+			if tc.failStdout {
+				stdout = failingWriter{}
+			}
+
+			if got := runMain(tc.args(root), stdout, &stderr); got != tc.wantCode {
+				t.Errorf("runMain() = %d, want %d\nstdout:\n%s\nstderr:\n%s", got, tc.wantCode, buffered.String(), stderr.String())
+			}
+			assertMentions(t, buffered.String(), tc.wantStdout, tc.notStdout)
+			assertMentions(t, stderr.String(), tc.wantStderr, nil)
+			if tc.wantFile != "" {
+				if got := readFile(t, filepath.Join(root, "sample_test.go")); got != tc.wantFile {
+					t.Errorf("file = \n%s\nwant\n%s", got, tc.wantFile)
+				}
 			}
 		})
 	}
-	patterns := map[string]string{}
-	for _, rec := range records[1:] {
-		if len(rec) >= 3 {
-			patterns[rec[1]] = rec[2]
-		}
-	}
-	if patterns["TestCreateIssue_ReturnsIssue"] != Pattern2Part {
-		t.Fatalf("patterns = %+v, want TestCreateIssue_ReturnsIssue as 2-part", patterns)
-	}
-	if patterns["TestCovBuildCatalogError"] != PatternTestCov {
-		t.Fatalf("patterns = %+v, want TestCovBuildCatalogError as TestCov", patterns)
-	}
-	if patterns["TestCreateIssueReturnsIssue"] != PatternNoUnderscore {
-		t.Fatalf("patterns = %+v, want TestCreateIssueReturnsIssue as no-underscore", patterns)
+}
+
+// TestMain_HandsTheExitCodeToOsExit verifies main forwards whatever code
+// runMain returned rather than a constant: a command line naming a clean tree
+// exits 0 and one naming no directory at all exits 1, through the same one
+// line.
+func TestMain_HandsTheExitCodeToOsExit(t *testing.T) {
+	root := t.TempDir()
+	testCases := []struct {
+		name     string
+		args     []string
+		wantCode int
+	}{
+		{name: "a named directory audits clean", args: []string{toolName, root}, wantCode: 0},
+		{name: "no directory is a usage failure", args: []string{toolName}, wantCode: 1},
 	}
 
-	if !strings.Contains(stderr.String(), "Total test functions: 3") {
-		t.Fatalf("stderr = %q, want total count line", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), Pattern2Part+":") {
-		t.Fatalf("stderr = %q, want %s summary", stderr.String(), Pattern2Part)
-	}
-	if !strings.Contains(stderr.String(), PatternTestCov+":") {
-		t.Fatalf("stderr = %q, want %s summary", stderr.String(), PatternTestCov)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatalf("OpenFile(%s) error = %v", os.DevNull, err)
+			}
+			oldArgs, oldStdout, oldStderr := os.Args, os.Stdout, os.Stderr
+			os.Args, os.Stdout, os.Stderr = tc.args, devNull, devNull
+			got := -1
+			osExit = func(code int) { got = code }
+			t.Cleanup(func() {
+				os.Args, os.Stdout, os.Stderr = oldArgs, oldStdout, oldStderr
+				osExit = os.Exit
+				devNull.Close()
+			})
+
+			main()
+
+			if got != tc.wantCode {
+				t.Errorf("main() handed os.Exit %d, want %d", got, tc.wantCode)
+			}
+		})
 	}
 }
 
@@ -412,6 +613,28 @@ func TestRunApply_Failures_ReturnFalse(t *testing.T) {
 			wantStderrPre: func(string) string { return "" },
 			wantSummary:   "\n=== Rename Summary (applied) ===\nFiles scanned: 1\nRenames: 0\n",
 		},
+		{
+			// A directory that failed must not end the run: the verdict is
+			// already false and every later root still has to be judged, which
+			// the file it scanned is what shows.
+			name:          "a later directory is still walked",
+			files:         []fileSpec{{"clean_test.go", "package sample\n\nimport \"testing\"\n\nfunc TestOne_Two(t *testing.T) {}\n"}},
+			dirs:          func(root string) []string { return []string{filepath.Join(root, "absent"), root} },
+			wantStderrPre: func(root string) string { return "walk " + filepath.Join(root, "absent") + ": " },
+			wantSummary:   "\n=== Rename Summary (applied) ===\nFiles scanned: 1\nRenames: 0\n",
+		},
+		{
+			// The same within one directory: the file that would not parse is
+			// reported and the walk carries on to the next, which the count of
+			// two scanned files is what shows.
+			name: "a later file is still judged",
+			files: []fileSpec{
+				{"a_broken_test.go", "package sample\n\nfunc (\n"},
+				{"b_clean_test.go", "package sample\n\nimport \"testing\"\n\nfunc TestOne_Two(t *testing.T) {}\n"},
+			},
+			wantStderrPre: func(root string) string { return "parse " + filepath.Join(root, "a_broken_test.go") + ": " },
+			wantSummary:   "\n=== Rename Summary (applied) ===\nFiles scanned: 2\nRenames: 0\n",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -564,33 +787,69 @@ func TestBuild_Catalog_Error(t *testing.T) {}
 			originalRead := readSource
 			readSource = func(string) ([]byte, error) { return []byte(tc.reread), nil }
 			t.Cleanup(func() { readSource = originalRead })
-
-			var written string
-			writes := 0
-			originalWrite := writeSource
-			writeSource = func(_ string, data []byte, _ os.FileMode) error {
-				writes++
-				written = string(data)
-				return nil
-			}
-			t.Cleanup(func() { writeSource = originalWrite })
+			wrote := recordWrites(t)
 
 			var stdout, stderr bytes.Buffer
 			applied, ok := applyFile(path, &stdout, &stderr, false)
 			if applied != tc.want || !ok {
 				t.Errorf("applyFile() = (%d, %t), want (%d, true)", applied, ok, tc.want)
 			}
-			if tc.want == 0 && writes != 0 {
-				t.Errorf("writeSource called %d times, want the file left alone", writes)
-			}
-			if tc.want > 0 && written != tc.wantWrite {
-				t.Errorf("written = %q, want %q", written, tc.wantWrite)
+			if tc.want == 0 {
+				if wrote.calls != 0 {
+					t.Errorf("writeSource called %d times, want the file left alone", wrote.calls)
+				}
+			} else {
+				wrote.assert(t, path, tc.wantWrite)
 			}
 			assertMentions(t, stdout.String(), tc.wantOut, tc.notOut)
 			if stderr.String() != "" {
 				t.Errorf("stderr = %q, want empty", stderr.String())
 			}
 		})
+	}
+}
+
+// writeRecord is what applyFile handed writeSource, kept so the content, the
+// path and the mode can be asserted after the call.
+type writeRecord struct {
+	calls int
+	path  string
+	data  string
+	mode  os.FileMode
+}
+
+// recordWrites replaces writeSource with one that records its arguments and
+// succeeds, restoring the original when the test ends.
+func recordWrites(t *testing.T) *writeRecord {
+	t.Helper()
+	rec := &writeRecord{}
+	original := writeSource
+	writeSource = func(path string, data []byte, mode os.FileMode) error {
+		rec.calls++
+		rec.path, rec.data, rec.mode = path, string(data), mode
+		return nil
+	}
+	t.Cleanup(func() { writeSource = original })
+	return rec
+}
+
+// assert verifies the one write went to path with the content and the mode the
+// command promises. The path and the mode reach the write as plain arguments,
+// so a rewrite sent to the wrong file or left world-readable is something only
+// an assertion here can report.
+func (r *writeRecord) assert(t *testing.T, path, want string) {
+	t.Helper()
+	if r.calls != 1 {
+		t.Errorf("writeSource called %d times, want once", r.calls)
+	}
+	if r.data != want {
+		t.Errorf("written = %q, want %q", r.data, want)
+	}
+	if r.path != path {
+		t.Errorf("wrote to %q, want %q", r.path, path)
+	}
+	if r.mode != 0o600 {
+		t.Errorf("wrote with mode %#o, want %#o", r.mode, 0o600)
 	}
 }
 
@@ -626,8 +885,8 @@ func TestParseGoSourceText_Sources_ReportWhatTheParserSays(t *testing.T) {
 // TestCollectRenames_SkipsCollisionsAndReservesTargets verifies a legacy
 // name whose suggestion already exists is skipped with a message, a target
 // claimed by an earlier rename is not claimed twice, and names that are
-// compliant, self-suggesting, TestMain, lowercase helpers or not functions
-// are left alone.
+// compliant in either the two-part or the three-part form, self-suggesting,
+// TestMain, lowercase helpers or not functions are left alone.
 func TestCollectRenames_SkipsCollisionsAndReservesTargets(t *testing.T) {
 	source := `package sample
 
@@ -640,6 +899,7 @@ func TestFoo_Bar(t *testing.T) {}
 func TestCovAlphaBeta(t *testing.T) {}
 func TestAlphaBeta(t *testing.T) {}
 func TestCatalog(t *testing.T) {}
+func TestGamma_Delta_Epsilon(t *testing.T) {}
 func TestMain(m *testing.M) {}
 func Testhelper(t *testing.T) {}
 `
@@ -659,6 +919,31 @@ func Testhelper(t *testing.T) {}
 		"  skip TestAlphaBeta -> TestAlpha_Beta in sample_test.go: target name already exists\n"
 	if stderr.String() != wantStderr {
 		t.Errorf("stderr = %q, want %q", stderr.String(), wantStderr)
+	}
+}
+
+// TestCollectRenames_ADeclarationWithNoName_IsPassedOver verifies the guard
+// both of collectRenames' loops carry. Go's parser gives every function
+// declaration a name, so only a caller handing in an assembled tree can
+// produce one without: the guard is what keeps that from dereferencing nil,
+// and it is asserted here because a tree can never reach it.
+func TestCollectRenames_ADeclarationWithNoName_IsPassedOver(t *testing.T) {
+	const source = "package sample\n\nimport \"testing\"\n\nfunc TestCovAlphaBeta(t *testing.T) {}\n"
+	node, err := parser.ParseFile(token.NewFileSet(), "sample_test.go", source, 0)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+	node.Decls = append([]ast.Decl{&ast.FuncDecl{}}, node.Decls...)
+
+	var stderr bytes.Buffer
+	got := collectRenames(node, "sample_test.go", &stderr)
+
+	want := map[string]string{"TestCovAlphaBeta": "TestAlpha_Beta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("collectRenames() = %v, want %v", got, want)
+	}
+	if stderr.String() != "" {
+		t.Errorf("stderr = %q, want empty", stderr.String())
 	}
 }
 

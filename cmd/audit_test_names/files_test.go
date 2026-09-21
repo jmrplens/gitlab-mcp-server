@@ -119,6 +119,15 @@ func TestClassifyTestFileName_ConventionAndExemptions(t *testing.T) {
 			wantReason: qualifiedReason("kind_extra"),
 		},
 		{
+			// The longest prefix has no module file, so the search has to keep
+			// cutting: with only kind.go present the file claims kind, not
+			// kind_extra, and the reason names the module it really claims.
+			name:       "a shorter prefix is reached when the longest has no module",
+			files:      []fileSpec{{"kind.go", internalPkg}, {"kind_extra_unix_test.go", internalPkg}},
+			file:       "kind_extra_unix_test.go",
+			wantReason: qualifiedReason("kind"),
+		},
+		{
 			name:       "a base ending in _test is never a module",
 			files:      []fileSpec{{"foo.go", "package foo\n"}, {"foo_test_test.go", "package foo\n"}},
 			file:       "foo_test_test.go",
