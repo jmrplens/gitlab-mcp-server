@@ -340,13 +340,24 @@ func TestScan_HarnessLibrary_AuditsItsNonTestFiles(t *testing.T) {
 	}
 }
 
+// unclean spells a path with a "." element between its second and third
+// segments. filepath.Join would fold that away, so the pieces are joined by
+// hand: the predicate is handed whatever spelling its caller holds, and the
+// tree it names is what it answers about.
+func unclean(elements ...string) string {
+	separator := string(filepath.Separator)
+	return filepath.Join(elements[:2]...) + separator + "." + separator + filepath.Join(elements[2:]...)
+}
+
 // TestUnderHarnessTree_PathShapes_DecidesByTheTree verifies the predicate that
-// selects the library corpus, on the path spellings a walk produces.
+// selects the library corpus, on the path spellings a walk produces and on one
+// it does not: an unclean path names the same tree and is answered the same.
 func TestUnderHarnessTree_PathShapes_DecidesByTheTree(t *testing.T) {
 	cases := map[string]bool{
 		filepath.Join("test", "e2e", "internal", "harness", "server.go"):           true,
 		filepath.Join("test", "e2e", "internal", "fixture", "project.go"):          true,
 		filepath.Join("/tmp", "x", "test", "e2e", "internal", "harness", "env.go"): true,
+		unclean("test", "e2e", "internal", "harness", "detour.go"):                 true,
 		filepath.Join("test", "e2e", "suite", "setup_test.go"):                     false,
 		filepath.Join("internal", "tools", "issues", "issues.go"):                  false,
 		filepath.Join("test", "e2e", "internal"):                                   false,
@@ -1046,16 +1057,26 @@ func TestScanFile_LiteralReachedTwice_IsAuditedOnce(t *testing.T) {
 }
 
 // TestRun_DefaultDirectories_ScansModuleTrees verifies that with no
-// directories the command scans cmd, internal and test relative to the
-// working directory, reporting paths relative to it.
+// directories the command scans cmd, internal and test relative to the working
+// directory, reporting paths relative to it.
+//
+// Each of the three holds a finding of its own, so dropping one from the
+// default list is a missing row rather than a tree that happened to be empty,
+// and a fourth directory outside the list holds one too: what makes the list a
+// list is that it is not the whole working directory.
 func TestRun_DefaultDirectories_ScansModuleTrees(t *testing.T) {
 	root := t.TempDir()
-	mkdirTree(t, root, []string{"cmd", "internal", "test"}, "", "")
-	if err := os.WriteFile(filepath.Join(root, "cmd", "a_test.go"), []byte(dirtyFixture), 0o600); err != nil {
-		t.Fatalf("write cmd fixture: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "test", "b_test.go"), []byte(cleanFixture), 0o600); err != nil {
-		t.Fatalf("write test fixture: %v", err)
+	mkdirTree(t, root, []string{"cmd", "internal", "test", "docs"}, "", "")
+	// sequential: four trees planted for one run, not four cases
+	for path, source := range map[string]string{
+		filepath.Join("cmd", "a_test.go"):      dirtyFixture,
+		filepath.Join("internal", "b_test.go"): advisoryFixture,
+		filepath.Join("test", "c_test.go"):     mixedTree["charlie_test.go"],
+		filepath.Join("docs", "d_test.go"):     dirtyFixture,
+	} {
+		if err := os.WriteFile(filepath.Join(root, path), []byte(source), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
 	}
 	t.Chdir(root)
 
@@ -1063,10 +1084,20 @@ func TestRun_DefaultDirectories_ScansModuleTrees(t *testing.T) {
 	if exit := run(nil, "", false, &stdout, &stderr); exit != 0 {
 		t.Fatalf("exit = %d, want 0; stderr:\n%s", exit, stderr.String())
 	}
-	want := fmt.Sprintf("%-72s fatal=%-3d errorf_no_return=%d\n", filepath.Join("cmd", "a_test.go"), 1, 1) +
-		"\nsummary: 1 fatal sites (A=1 tail-position, B=0 truncating) + 1 advisory errorf-without-return across 1 files\n"
-	if got := stdout.String(); got != want {
-		t.Fatalf("stdout = %q\nwant %q", got, want)
+	var want strings.Builder
+	for _, row := range []struct {
+		path          string
+		fatal, errorf int
+	}{
+		{filepath.Join("cmd", "a_test.go"), 1, 1},
+		{filepath.Join("internal", "b_test.go"), 0, 1},
+		{filepath.Join("test", "c_test.go"), 1, 0},
+	} {
+		fmt.Fprintf(&want, "%-72s fatal=%-3d errorf_no_return=%d\n", row.path, row.fatal, row.errorf)
+	}
+	want.WriteString("\nsummary: 2 fatal sites (A=1 tail-position, B=1 truncating) + 2 advisory errorf-without-return across 3 files\n")
+	if got := stdout.String(); got != want.String() {
+		t.Fatalf("stdout = %q\nwant %q", got, want.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
