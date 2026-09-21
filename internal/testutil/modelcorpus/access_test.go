@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -587,6 +588,128 @@ func digestOf(one Case) string {
 	sum := sha256.New()
 	writeCaseDigest(sum, one)
 	return hex.EncodeToString(sum.Sum(nil))[:digestLength]
+}
+
+// TestDigest_MovesForEveryFieldACaseDeclares holds the fold to covering the
+// whole case rather than the parts somebody remembered.
+//
+// The test above asks two questions of it, a step added and an argument's truth
+// changed, and a field dropped from the fold answers both of them correctly
+// while covering nothing: Needs.Admin and Step.Optional can both be taken out
+// of the format string and the whole suite stays green. What that costs is the
+// one thing the digest is for. The publisher refuses a record whose digest no
+// longer matches the corpus at HEAD, so a field outside the fold is a field a
+// case can be edited in after a run and have the run published against it.
+//
+// Nothing here is a mutant a gate could report: dropping a printf argument
+// flips no operator and removes no branch.
+//
+// Two of the rows are shapes no real case may have — a step carrying both an
+// action and a standalone tool, an argument carrying two truths — because the
+// question is which fields the fold reads, and holding each row to one field's
+// difference is what makes the answer per field rather than per shape.
+func TestDigest_MovesForEveryFieldACaseDeclares(t *testing.T) {
+	declared := func() Case {
+		return Case{
+			ID:     "MT-000",
+			Prompt: "Do the thing.",
+			Recipe: RecipeWorld,
+			key:    Key{Steps: []Step{{Action: "issue.list", Args: []Arg{{Name: "project_id"}}}}},
+		}
+	}
+	tests := []struct {
+		field string
+		move  func(*Case)
+	}{
+		{field: "ID", move: func(c *Case) { c.ID = "MT-001" }},
+		{field: "Prompt", move: func(c *Case) { c.Prompt = "Do the other thing." }},
+		{field: "Recipe", move: func(c *Case) { c.Recipe = RecipeProject }},
+		{field: "Needs.Tier", move: func(c *Case) { c.Needs.Tier = TierPremium }},
+		{field: "Needs.Runner", move: func(c *Case) { c.Needs.Runner = true }},
+		{field: "Needs.Admin", move: func(c *Case) { c.Needs.Admin = true }},
+		{field: "Needs.FixtureService", move: func(c *Case) { c.Needs.FixtureService = true }},
+		{field: "Surfaces.Only", move: func(c *Case) { c.Surfaces.Only = []Surface{SurfaceDynamic} }},
+		{field: "Surfaces.Reason", move: func(c *Case) { c.Surfaces.Reason = "the seed exists once" }},
+		{field: "key.Steps", move: func(c *Case) { c.key.Steps = append(c.key.Steps, step("issue.get")) }},
+		{field: "key.Steps.Action", move: func(c *Case) { c.key.Steps[0].Action = "issue.get" }},
+		{
+			field: "key.Steps.Standalone",
+			move:  func(c *Case) { c.key.Steps[0].Standalone = "gitlab_discover_project" },
+		},
+		{field: "key.Steps.Optional", move: func(c *Case) { c.key.Steps[0].Optional = true }},
+		{field: "key.Steps.Produces", move: func(c *Case) { c.key.Steps[0].Produces = []string{"id"} }},
+		{
+			field: "key.Steps.Args",
+			move:  func(c *Case) { c.key.Steps[0].Args = append(c.key.Steps[0].Args, Arg{Name: "state"}) },
+		},
+		{field: "key.Steps.Args.Name", move: func(c *Case) { c.key.Steps[0].Args[0].Name = "issue_iid" }},
+		{field: "key.Steps.Args.Required", move: func(c *Case) { c.key.Steps[0].Args[0].Required = true }},
+		{
+			field: "key.Steps.Args.Truth.Fact",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Fact = FactProjectPath },
+		},
+		{
+			field: "key.Steps.Args.Truth.Literal",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Literal = "opened" },
+		},
+		{
+			field: "key.Steps.Args.Truth.Produced.Step",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Produced.Step = 1 },
+		},
+		{
+			field: "key.Steps.Args.Truth.Produced.Field",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Produced.Field = "id" },
+		},
+		{
+			field: "key.Steps.Args.Truth.Authored",
+			move:  func(c *Case) { c.key.Steps[0].Args[0].Truth.Authored = true },
+		},
+	}
+
+	unmoved := digestOf(declared())
+	seen := map[string]string{unmoved: "the case as declared"}
+	for _, tc := range tests {
+		t.Run(tc.field, func(t *testing.T) {
+			moved := declared()
+			tc.move(&moved)
+			got := digestOf(moved)
+			if got == unmoved {
+				t.Fatalf("a case differing only in %s digests the same as one that does not: "+
+					"the fold does not read that field, and a run could be published against "+
+					"a corpus that moved under it", tc.field)
+			}
+			if first, collides := seen[got]; collides {
+				t.Errorf("a case moved in %s digests the same as one moved in %s", tc.field, first)
+			}
+			seen[got] = tc.field
+		})
+	}
+
+	// The table is written by hand, so a field added to any of these types
+	// would leave it describing a case that no longer exists. Asking the
+	// types themselves is what keeps the list from going quietly short.
+	for _, folded := range []reflect.Type{
+		reflect.TypeFor[Case](), reflect.TypeFor[Needs](), reflect.TypeFor[Restrict](),
+		reflect.TypeFor[Key](), reflect.TypeFor[Step](), reflect.TypeFor[Arg](),
+		reflect.TypeFor[Truth](), reflect.TypeFor[Ref](),
+	} {
+		t.Run(folded.Name(), func(t *testing.T) {
+			for field := range folded.Fields() {
+				name := field.Name
+				if slices.ContainsFunc(tests, func(tc struct {
+					field string
+					move  func(*Case)
+				},
+				) bool {
+					return slices.Contains(strings.Split(tc.field, "."), name)
+				}) {
+					continue
+				}
+				t.Errorf("%s.%s is part of a case and no row here moves it, so nothing says "+
+					"whether the digest covers it", folded.Name(), name)
+			}
+		})
+	}
 }
 
 // TestStepCount_AnswersFromTheKeyAndRefusesAnUnknownCase checks the one number

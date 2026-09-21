@@ -457,6 +457,109 @@ func TestContract_EachSurfaceIsIntroducedOnce(t *testing.T) {
 	}
 }
 
+// TestContract_IntroducesTheSurfaceItIsFiledUnder holds each text to the key it
+// sits under, which distinctness alone cannot see: the meta and individual
+// entries can be exchanged and every other test in this file still passes,
+// because all three are present, all three differ and none names the
+// confirmation. A model on the individual surface would then be told that its
+// tools are dispatchers taking {action, params}, which is exactly the defect
+// the file's own comment says the individual contract was written to end.
+//
+// The sentence is built from the [Surface] value rather than written out, so a
+// fourth surface is held to the same rule without anybody remembering to add it
+// here.
+func TestContract_IntroducesTheSurfaceItIsFiledUnder(t *testing.T) {
+	for _, surface := range Surfaces() {
+		t.Run(string(surface), func(t *testing.T) {
+			contract, known := Contract(surface)
+			if !known {
+				t.Fatalf("surface %q has no contract", surface)
+			}
+			if !strings.Contains(contract, surfaceSentence(surface)) {
+				t.Errorf("the contract filed under %q never says it is the %s surface: %q",
+					surface, surface, sentenceAround(contract, 0))
+			}
+			for _, other := range Surfaces() {
+				if other == surface {
+					continue
+				}
+				if strings.Contains(contract, surfaceSentence(other)) {
+					t.Errorf("the contract filed under %q introduces itself as the %s surface",
+						surface, other)
+				}
+			}
+		})
+	}
+}
+
+// surfaceSentence is how a contract names the surface it introduces.
+func surfaceSentence(surface Surface) string {
+	return string(surface) + " tool surface"
+}
+
+// TestContract_TellsEachSurfaceItsOwnMechanism is the other half of the
+// binding: an opening line can stay put while the paragraphs under it are
+// exchanged, and what a model does with a surface comes from those.
+//
+// Each marker is the thing that decides which surface the text is about — the
+// two tools that are the only way into the catalog on the dynamic surface, the
+// dispatcher envelope that is the meta surface, and the sentence denying both
+// that is the individual one — so a rewording that keeps the meaning keeps the
+// marker, and one that moves the meaning to another surface fails here.
+func TestContract_TellsEachSurfaceItsOwnMechanism(t *testing.T) {
+	const (
+		findTool     = "gitlab_find_action"
+		executeTool  = "gitlab_execute_action"
+		dispatcher   = `{"action":"...","params":{...}}`
+		noDispatcher = "no dispatcher"
+	)
+	tests := []struct {
+		surface Surface
+		present []string
+		absent  []string
+	}{
+		{
+			surface: SurfaceDynamic,
+			present: []string{findTool, executeTool},
+			absent:  []string{noDispatcher},
+		},
+		{
+			surface: SurfaceMeta,
+			present: []string{dispatcher},
+			absent:  []string{findTool, executeTool, noDispatcher},
+		},
+		{
+			surface: SurfaceIndividual,
+			present: []string{noDispatcher},
+			absent:  []string{findTool, executeTool, dispatcher},
+		},
+	}
+	if len(tests) != len(contracts) {
+		t.Fatalf("%d surfaces are held to a mechanism and the contract table holds %d",
+			len(tests), len(contracts))
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.surface), func(t *testing.T) {
+			contract, known := Contract(tc.surface)
+			if !known {
+				t.Fatalf("surface %q has no contract", tc.surface)
+			}
+			for _, marker := range tc.present {
+				if !strings.Contains(contract, marker) {
+					t.Errorf("the %s contract never says %q, which is what makes it that surface",
+						tc.surface, marker)
+				}
+			}
+			for _, marker := range tc.absent {
+				if strings.Contains(contract, marker) {
+					t.Errorf("the %s contract says %q, which belongs to another surface",
+						tc.surface, marker)
+				}
+			}
+		})
+	}
+}
+
 // namedInFindings reports whether any finding names value.
 func namedInFindings(findings []auditFinding, value string) bool {
 	for _, finding := range findings {
