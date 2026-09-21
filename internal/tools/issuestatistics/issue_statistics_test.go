@@ -4,12 +4,15 @@
 package issuestatistics
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -27,10 +30,34 @@ func newStats(all, opened, closed int64) StatisticsOutput {
 	}
 }
 
+// statsRequest returns a handler that checks the request reached path carrying
+// exactly want as its query, then answers with body.
+//
+// Equality over the whole query, rather than one lookup per parameter, is what
+// tells two filters apart. The assertions this replaced asked only whether a
+// parameter was non-empty, so an option builder that read created_before into
+// created_after, or milestone into search, produced a query every one of them
+// accepted; neither gate can see such a crossing, because a straight-line
+// assignment carries no branch to flip. It also fails on a filter sent that
+// the caller never set, which a per-parameter lookup never looks for.
+//
+// It runs on the httptest server's own goroutine, so it reports with t.Errorf
+// and answers regardless, leaving the calling test's assertions to report too.
+func statsRequest(t *testing.T, path string, want url.Values, body string) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, path)
+		if got := r.URL.Query(); !reflect.DeepEqual(got, want) {
+			t.Errorf("query = %v, want %v", got, want)
+		}
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}
+}
+
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/issues_statistics")
+		testutil.AssertRequestPath(t, r, pathGlobalStats)
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":10,"closed":3,"opened":7}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -135,16 +162,14 @@ const fmtUnexpErr = "unexpected error: %v"
 const commonStatsJSON = `{"statistics":{"counts":{"all":5,"closed":2,"opened":3}}}`
 
 const (
-	// errExpLabelsParam identifies the err exp labels param constant used by this package.
-	errExpLabelsParam = "expected labels query param"
-	// errExpMilestoneParam identifies the err exp milestone param constant used by this package.
-	errExpMilestoneParam = "expected milestone query param"
-	// errExpScopeParam identifies the err exp scope param constant used by this package.
-	errExpScopeParam = "expected scope query param"
-	// errExpSearchParam identifies the err exp search param constant used by this package.
-	errExpSearchParam = "expected search query param"
 	// errExpAPIErrResponse identifies the err exp API err response constant used by this package.
 	errExpAPIErrResponse = "expected error for API error response"
+	// pathGlobalStats is the instance-wide issue statistics endpoint.
+	pathGlobalStats = "/api/v4/issues_statistics"
+	// pathGroupStats is the issue statistics endpoint of the group these tests filter against.
+	pathGroupStats = "/api/v4/groups/99/issues_statistics"
+	// pathProjectStats is the issue statistics endpoint of the project these tests filter against.
+	pathProjectStats = "/api/v4/projects/42/issues_statistics"
 )
 
 // ---------------------------------------------------------------------------
@@ -245,27 +270,16 @@ func TestFromGL_ZeroCounts(t *testing.T) {
 // Get (global) -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGet_WithAllFilters verifies Get when with all filters.
+// TestGet_WithAllFilters checks that the four core filters reach GitLab as the
+// caller spelled them, and as the only query the request carries.
 func TestGet_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":10,"closed":3,"opened":7}}}`
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/issues_statistics")
-		q := r.URL.Query()
-		if q.Get("labels") == "" {
-			t.Error(errExpLabelsParam)
-		}
-		if q.Get("milestone") == "" {
-			t.Error(errExpMilestoneParam)
-		}
-		if q.Get("scope") == "" {
-			t.Error(errExpScopeParam)
-		}
-		if q.Get("search") == "" {
-			t.Error(errExpSearchParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, resp)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, url.Values{
+		"labels":    {"bug,critical"},
+		"milestone": {"v1.0"},
+		"scope":     {"all"},
+		"search":    {"memory leak"},
+	}, resp))
 
 	out, err := Get(t.Context(), client, GetInput{
 		Labels:    []string{"bug", "critical"},
@@ -281,60 +295,41 @@ func TestGet_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGet_WithLabelsOnly verifies Get when with labels only.
+// TestGet_WithLabelsOnly checks that a labels-only call sends the labels
+// filter and nothing beside it, so a builder reading another field into
+// Labels leaves the query empty rather than merely differently populated.
 func TestGet_WithLabelsOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("labels") == "" {
-			t.Error(errExpLabelsParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, url.Values{"labels": {"bug"}}, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGet_WithMilestoneOnly verifies Get when with milestone only.
+// TestGet_WithMilestoneOnly checks that a milestone-only call sends the
+// milestone filter and nothing beside it.
 func TestGet_WithMilestoneOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("milestone") == "" {
-			t.Error(errExpMilestoneParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, url.Values{"milestone": {"v2.0"}}, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{Milestone: "v2.0"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGet_WithScopeOnly verifies Get when with scope only.
+// TestGet_WithScopeOnly checks that a scope-only call sends the scope filter
+// and nothing beside it.
 func TestGet_WithScopeOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("scope") == "" {
-			t.Error(errExpScopeParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, url.Values{"scope": {"created_by_me"}}, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{Scope: "created_by_me"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGet_WithSearchOnly verifies Get when with search only.
+// TestGet_WithSearchOnly checks that a search-only call sends the search
+// filter and nothing beside it.
 func TestGet_WithSearchOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("search") == "" {
-			t.Error(errExpSearchParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, url.Values{"search": {"timeout"}}, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{Search: "timeout"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -356,7 +351,7 @@ func TestGet_ContextCancelled(t *testing.T) {
 // TestGet_APIError500 verifies Get when API error 500.
 func TestGet_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"boom"}`)
 	}))
 	_, err := Get(t.Context(), client, GetInput{})
 	if err == nil {
@@ -379,27 +374,16 @@ func TestGet_APIError403(t *testing.T) {
 // GetGroup -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGetGroup_WithAllFilters verifies GetGroup when with all filters.
+// TestGetGroup_WithAllFilters checks that the four core filters reach GitLab
+// as the caller spelled them, and as the only query the request carries.
 func TestGetGroup_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":30,"closed":10,"opened":20}}}`
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/groups/99/issues_statistics")
-		q := r.URL.Query()
-		if q.Get("labels") == "" {
-			t.Error(errExpLabelsParam)
-		}
-		if q.Get("milestone") == "" {
-			t.Error(errExpMilestoneParam)
-		}
-		if q.Get("scope") == "" {
-			t.Error(errExpScopeParam)
-		}
-		if q.Get("search") == "" {
-			t.Error(errExpSearchParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, resp)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, url.Values{
+		"labels":    {"feature,enhancement"},
+		"milestone": {"sprint-3"},
+		"scope":     {"assigned_to_me"},
+		"search":    {"refactor"},
+	}, resp))
 
 	out, err := GetGroup(t.Context(), client, GetGroupInput{
 		GroupID:   "99",
@@ -419,44 +403,43 @@ func TestGetGroup_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGetGroup_WithLabelsOnly verifies GetGroup when with labels only.
+// TestGetGroup_WithLabelsOnly checks that a labels-only call sends the labels
+// filter and nothing beside it. This and its three siblings below looked at no
+// request at all until this sweep: each named a filter and then asserted only
+// that GitLab had not refused, so dropping the filter from the option builder
+// failed none of them.
 func TestGetGroup_WithLabelsOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, url.Values{"labels": {"bug"}}, commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetGroup_WithMilestoneOnly verifies GetGroup when with milestone only.
+// TestGetGroup_WithMilestoneOnly checks that a milestone-only call sends the
+// milestone filter and nothing beside it.
 func TestGetGroup_WithMilestoneOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, url.Values{"milestone": {"v1.0"}}, commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Milestone: "v1.0"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetGroup_WithScopeOnly verifies GetGroup when with scope only.
+// TestGetGroup_WithScopeOnly checks that a scope-only call sends the scope
+// filter and nothing beside it.
 func TestGetGroup_WithScopeOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, url.Values{"scope": {"all"}}, commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Scope: "all"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetGroup_WithSearchOnly verifies GetGroup when with search only.
+// TestGetGroup_WithSearchOnly checks that a search-only call sends the search
+// filter and nothing beside it.
 func TestGetGroup_WithSearchOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, url.Values{"search": {"deploy"}}, commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99", Search: "deploy"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -478,7 +461,7 @@ func TestGetGroup_ContextCancelled(t *testing.T) {
 // TestGetGroup_APIError500 verifies GetGroup when API error 500.
 func TestGetGroup_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"boom"}`)
 	}))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "99"})
 	if err == nil {
@@ -501,27 +484,16 @@ func TestGetGroup_APIError404(t *testing.T) {
 // GetProject -- filter branches
 // ---------------------------------------------------------------------------.
 
-// TestGetProject_WithAllFilters verifies GetProject when with all filters.
+// TestGetProject_WithAllFilters checks that the four core filters reach GitLab
+// as the caller spelled them, and as the only query the request carries.
 func TestGetProject_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":50,"closed":20,"opened":30}}}`
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/issues_statistics")
-		q := r.URL.Query()
-		if q.Get("labels") == "" {
-			t.Error(errExpLabelsParam)
-		}
-		if q.Get("milestone") == "" {
-			t.Error(errExpMilestoneParam)
-		}
-		if q.Get("scope") == "" {
-			t.Error(errExpScopeParam)
-		}
-		if q.Get("search") == "" {
-			t.Error(errExpSearchParam)
-		}
-		testutil.RespondJSON(w, http.StatusOK, resp)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, url.Values{
+		"labels":    {"bug,security"},
+		"milestone": {"release-1"},
+		"scope":     {"created_by_me"},
+		"search":    {"crash"},
+	}, resp))
 
 	out, err := GetProject(t.Context(), client, GetProjectInput{
 		ProjectID: "42",
@@ -544,44 +516,40 @@ func TestGetProject_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestGetProject_WithLabelsOnly verifies GetProject when with labels only.
+// TestGetProject_WithLabelsOnly checks that a labels-only call sends the
+// labels filter and nothing beside it.
 func TestGetProject_WithLabelsOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, url.Values{"labels": {"bug"}}, commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Labels: []string{"bug"}})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetProject_WithMilestoneOnly verifies GetProject when with milestone only.
+// TestGetProject_WithMilestoneOnly checks that a milestone-only call sends the
+// milestone filter and nothing beside it.
 func TestGetProject_WithMilestoneOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, url.Values{"milestone": {"v3.0"}}, commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Milestone: "v3.0"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetProject_WithScopeOnly verifies GetProject when with scope only.
+// TestGetProject_WithScopeOnly checks that a scope-only call sends the scope
+// filter and nothing beside it.
 func TestGetProject_WithScopeOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, url.Values{"scope": {"all"}}, commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Scope: "all"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
-// TestGetProject_WithSearchOnly verifies GetProject when with search only.
+// TestGetProject_WithSearchOnly checks that a search-only call sends the
+// search filter and nothing beside it.
 func TestGetProject_WithSearchOnly(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	}))
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, url.Values{"search": {"nil pointer"}}, commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42", Search: "nil pointer"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -603,7 +571,7 @@ func TestGetProject_ContextCancelled(t *testing.T) {
 // TestGetProject_APIError500 verifies GetProject when API error 500.
 func TestGetProject_APIError500(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"boom"}`)
 	}))
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "42"})
 	if err == nil {
@@ -623,6 +591,131 @@ func TestGetProject_APIError401(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// The refusal each route hands a model
+// ---------------------------------------------------------------------------.
+
+// hintedRefusal describes the refusal one route was given: the operation it
+// reports under, the status its hint is keyed on, a second status that must
+// therefore go unhinted, what the hint has to tell a model to check, and what
+// it must not, those being the other routes' subjects.
+type hintedRefusal struct {
+	operation   string
+	hintStatus  int
+	otherStatus int
+	names       string
+	notNames    []string
+	call        func(ctx context.Context, client *gitlabclient.Client) error
+}
+
+// hintedRefusals pairs each route with the refusal it was written to give.
+//
+// The second status of each is another route's keyed status rather than an
+// arbitrary one, since crossing the two constants is exactly the mistake a
+// list of three near-identical handlers invites.
+func hintedRefusals() []hintedRefusal {
+	return []hintedRefusal{
+		{
+			operation: "gitlab_get_issue_statistics", hintStatus: http.StatusForbidden,
+			otherStatus: http.StatusNotFound, names: "read_api",
+			notNames: []string{"group_id", "project_id"},
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := Get(ctx, client, GetInput{})
+				return err
+			},
+		},
+		{
+			operation: "gitlab_get_group_issue_statistics", hintStatus: http.StatusNotFound,
+			otherStatus: http.StatusForbidden, names: "group_id",
+			notNames: []string{"project_id", "read_api"},
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "99"})
+				return err
+			},
+		},
+		{
+			operation: "gitlab_get_project_issue_statistics", hintStatus: http.StatusNotFound,
+			otherStatus: http.StatusForbidden, names: "project_id",
+			notNames: []string{"group_id", "read_api"},
+			call: func(ctx context.Context, client *gitlabclient.Client) error {
+				_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "42"})
+				return err
+			},
+		},
+	}
+}
+
+// refusalFrom drives one route against an instance that answers code, and
+// returns the error text the caller is handed.
+func refusalFrom(t *testing.T, route hintedRefusal, code int) string {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, code, `{"message":"refused"}`)
+	}))
+	err := route.call(t.Context(), client)
+	if err == nil {
+		t.Fatalf("%s: GitLab answered %d and the handler returned no error", route.operation, code)
+	}
+	return err.Error()
+}
+
+// TestHandlers_RefusalNamesItsOwnOperationAndSubject checks that each route
+// reports a refusal under its own operation and, on the status its hint is
+// keyed on, tells a model to check that route's own subject and no other's.
+//
+// Why that matters: every error assertion this package had stopped at "an
+// error came back", so the operation label, the status the hint is keyed on
+// and the sentence itself could each be crossed with another route's and
+// nothing would fail. None of the three is a branch, so neither gate can see
+// it either. The hint is what a model does next, so a project route answering
+// "verify group_id" sends it to look up an object that was never the subject.
+//
+// The subject is asserted rather than the wording, so the test states that the
+// group route names the group and the project route the project, instead of
+// holding a copy of sentences a rewording would have to be repeated in.
+func TestHandlers_RefusalNamesItsOwnOperationAndSubject(t *testing.T) {
+	for _, route := range hintedRefusals() {
+		t.Run(route.operation, func(t *testing.T) {
+			hinted := refusalFrom(t, route, route.hintStatus)
+			if !strings.HasPrefix(hinted, route.operation+": ") {
+				t.Errorf("refusal = %q, want it reported under %q", hinted, route.operation)
+			}
+			if !strings.Contains(hinted, "Suggestion: ") {
+				t.Errorf("refusal to a %d = %q, and the hint keyed on that status is missing", route.hintStatus, hinted)
+			}
+			if !strings.Contains(hinted, route.names) {
+				t.Errorf("refusal = %q, and it never tells a model to check %s", hinted, route.names)
+			}
+			for _, foreign := range route.notNames {
+				if strings.Contains(hinted, foreign) {
+					t.Errorf("refusal = %q, which sends a model to %s, another route's subject", hinted, foreign)
+				}
+			}
+		})
+	}
+}
+
+// TestHandlers_RefusalOnAnotherStatusCarriesNoHint checks that each route's
+// hint reaches a model only on the status it was keyed on.
+//
+// This is the other half of the pairing above, and the half that pins the
+// status constant: a hint written for a 403 says something true only of a 403,
+// and a handler that offered it on every refusal would be advising a token
+// scope to a model that was told the group does not exist.
+func TestHandlers_RefusalOnAnotherStatusCarriesNoHint(t *testing.T) {
+	for _, route := range hintedRefusals() {
+		t.Run(route.operation, func(t *testing.T) {
+			unhinted := refusalFrom(t, route, route.otherStatus)
+			if !strings.HasPrefix(unhinted, route.operation+": ") {
+				t.Errorf("refusal = %q, want it reported under %q", unhinted, route.operation)
+			}
+			if strings.Contains(unhinted, "Suggestion: ") {
+				t.Errorf("refusal to a %d = %q, carrying a hint keyed on %d", route.otherStatus, unhinted, route.hintStatus)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
@@ -635,11 +728,11 @@ func newIssueStatsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
-		case r.Method == http.MethodGet && path == "/api/v4/issues_statistics":
+		case r.Method == http.MethodGet && path == pathGlobalStats:
 			testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
-		case r.Method == http.MethodGet && path == "/api/v4/groups/99/issues_statistics":
+		case r.Method == http.MethodGet && path == pathGroupStats:
 			testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
-		case r.Method == http.MethodGet && path == "/api/v4/projects/42/issues_statistics":
+		case r.Method == http.MethodGet && path == pathProjectStats:
 			testutil.RespondJSON(w, http.StatusOK, covStatsJSON)
 		default:
 			http.NotFound(w, r)
@@ -701,10 +794,12 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 }
 
 // TestActionSpecs_Metadata verifies issue statistics action spec metadata.
+//
+// The client answers with [testutil.ForbiddenHandler], which fails the test if
+// any request arrives: this reads metadata and calls no route, so a request
+// would mean the assertions below had reached GitLab to make them.
 func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	specs := ActionSpecs(client)
 	if len(specs) != 3 {
 		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
@@ -717,7 +812,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// panics due to nil FormatResultFunc in production code -- tracked separately)
+// ActionSpec route error paths
 // ---------------------------------------------------------------------------.
 
 // TestActionSpecs_CallRouteErrors validates issue statistics route error paths.
@@ -765,64 +860,63 @@ func TestMarkdownInit(t *testing.T) {
 // Extended 1:1 filter coverage (assignee, author, confidential, dates, IIDs)
 // ---------------------------------------------------------------------------.
 
-// assertExtendedStatsParams verifies that the extended issue-statistics filter
-// fields are serialized into the outgoing query string.
-func assertExtendedStatsParams(t *testing.T, q map[string][]string, getParam func(string) string) {
-	t.Helper()
-	checks := map[string]string{
-		"assignee_id":       "7",
-		"author_id":         "9",
-		"author_username":   "octocat",
-		"confidential":      "true",
-		"my_reaction_emoji": "thumbsup",
-	}
-	for key, want := range checks {
-		if got := getParam(key); got != want {
-			t.Errorf("%s = %q, want %q", key, got, want)
-		}
-	}
-	if got := q["assignee_username"]; len(got) == 0 {
-		t.Error("expected assignee_username query param")
-	}
-	if got := q["iids[]"]; len(got) == 0 {
-		t.Error("expected iids[] query param")
-	}
-	if getParam("created_after") == "" {
-		t.Error("expected created_after query param")
-	}
-	if getParam("created_before") == "" {
-		t.Error("expected created_before query param")
-	}
-	if getParam("updated_after") == "" {
-		t.Error("expected updated_after query param")
-	}
-	if getParam("updated_before") == "" {
-		t.Error("expected updated_before query param")
+// The four timestamps the extended-filter calls send. They differ in the month
+// as well as in the day and the time of day, because two fields carrying one
+// value are indistinguishable however the comparison is written: an option
+// builder that read CreatedBefore into CreatedAfter would produce the same
+// query as a faithful one if any pair agreed.
+const (
+	createdAfterFilter  = "2025-01-01T00:00:00Z"
+	createdBeforeFilter = "2025-12-31T23:59:59Z"
+	updatedAfterFilter  = "2025-02-01T00:00:00Z"
+	updatedBeforeFilter = "2025-11-30T23:59:59Z"
+)
+
+// extendedStatsQuery returns the query the extended-filter calls below must
+// produce, which the global route extends by the "in" parameter only it
+// offers. Every value is distinct from every other for the reason the
+// timestamps above are.
+//
+// It is built fresh per call because [url.Values] is a map and a shared one
+// would carry one test's addition into the next.
+func extendedStatsQuery() url.Values {
+	return url.Values{
+		"assignee_id":       {"7"},
+		"assignee_username": {"alice"},
+		"author_id":         {"9"},
+		"author_username":   {"octocat"},
+		"confidential":      {"true"},
+		"created_after":     {createdAfterFilter},
+		"created_before":    {createdBeforeFilter},
+		"updated_after":     {updatedAfterFilter},
+		"updated_before":    {updatedBeforeFilter},
+		"iids[]":            {"1", "2"},
+		"my_reaction_emoji": {"thumbsup"},
 	}
 }
 
-// TestGet_ExtendedFilters verifies that global statistics serializes every
-// extended filter field, covering optStrings and optIIDs non-empty branches.
+// TestGet_ExtendedFilters checks that every extended filter the global route
+// offers reaches GitLab under its own name and with the caller's own value.
+//
+// The whole query is compared rather than each parameter looked up, because
+// what the assertion this replaced could not see is a crossing: it asked only
+// whether created_after, created_before, updated_after and updated_before were
+// non-empty, so the four could be permuted freely and every one of them still
+// passed while the caller's date window silently became another window.
 func TestGet_ExtendedFilters(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		assertExtendedStatsParams(t, q, q.Get)
-		if q.Get("in") != "title" {
-			t.Errorf("in = %q, want title", q.Get("in"))
-		}
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	})
-	client := testutil.NewTestClient(t, handler)
+	want := extendedStatsQuery()
+	want.Set("in", "title")
+	client := testutil.NewTestClient(t, statsRequest(t, pathGlobalStats, want, commonStatsJSON))
 	_, err := Get(t.Context(), client, GetInput{
 		AssigneeID:       new(int64(7)),
 		AssigneeUsername: []string{"alice"},
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",
 		Confidential:     new(true),
-		CreatedAfter:     "2025-01-01T00:00:00Z",
-		CreatedBefore:    "2025-12-31T23:59:59Z",
-		UpdatedAfter:     "2025-02-01T00:00:00Z",
-		UpdatedBefore:    "2025-11-30T23:59:59Z",
+		CreatedAfter:     createdAfterFilter,
+		CreatedBefore:    createdBeforeFilter,
+		UpdatedAfter:     updatedAfterFilter,
+		UpdatedBefore:    updatedBeforeFilter,
 		IIDs:             []int64{1, 2},
 		In:               "title",
 		MyReactionEmoji:  "thumbsup",
@@ -832,15 +926,12 @@ func TestGet_ExtendedFilters(t *testing.T) {
 	}
 }
 
-// TestGetGroup_ExtendedFilters verifies group statistics serializes every
-// extended filter field.
+// TestGetGroup_ExtendedFilters checks that every extended filter the group
+// route offers reaches GitLab under its own name and with the caller's own
+// value, and that the group route sends no "in" parameter, which GitLab does
+// not offer there.
 func TestGetGroup_ExtendedFilters(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		assertExtendedStatsParams(t, q, q.Get)
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, statsRequest(t, pathGroupStats, extendedStatsQuery(), commonStatsJSON))
 	_, err := GetGroup(t.Context(), client, GetGroupInput{
 		GroupID:          "99",
 		AssigneeID:       new(int64(7)),
@@ -848,10 +939,10 @@ func TestGetGroup_ExtendedFilters(t *testing.T) {
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",
 		Confidential:     new(true),
-		CreatedAfter:     "2025-01-01T00:00:00Z",
-		CreatedBefore:    "2025-12-31T23:59:59Z",
-		UpdatedAfter:     "2025-02-01T00:00:00Z",
-		UpdatedBefore:    "2025-11-30T23:59:59Z",
+		CreatedAfter:     createdAfterFilter,
+		CreatedBefore:    createdBeforeFilter,
+		UpdatedAfter:     updatedAfterFilter,
+		UpdatedBefore:    updatedBeforeFilter,
 		IIDs:             []int64{1, 2},
 		MyReactionEmoji:  "thumbsup",
 	})
@@ -860,15 +951,11 @@ func TestGetGroup_ExtendedFilters(t *testing.T) {
 	}
 }
 
-// TestGetProject_ExtendedFilters verifies project statistics serializes every
-// extended filter field.
+// TestGetProject_ExtendedFilters checks that every extended filter the project
+// route offers reaches GitLab under its own name and with the caller's own
+// value, and that the project route sends no "in" parameter either.
 func TestGetProject_ExtendedFilters(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		assertExtendedStatsParams(t, q, q.Get)
-		testutil.RespondJSON(w, http.StatusOK, commonStatsJSON)
-	})
-	client := testutil.NewTestClient(t, handler)
+	client := testutil.NewTestClient(t, statsRequest(t, pathProjectStats, extendedStatsQuery(), commonStatsJSON))
 	_, err := GetProject(t.Context(), client, GetProjectInput{
 		ProjectID:        "42",
 		AssigneeID:       new(int64(7)),
@@ -876,10 +963,10 @@ func TestGetProject_ExtendedFilters(t *testing.T) {
 		AuthorID:         new(int64(9)),
 		AuthorUsername:   "octocat",
 		Confidential:     new(true),
-		CreatedAfter:     "2025-01-01T00:00:00Z",
-		CreatedBefore:    "2025-12-31T23:59:59Z",
-		UpdatedAfter:     "2025-02-01T00:00:00Z",
-		UpdatedBefore:    "2025-11-30T23:59:59Z",
+		CreatedAfter:     createdAfterFilter,
+		CreatedBefore:    createdBeforeFilter,
+		UpdatedAfter:     updatedAfterFilter,
+		UpdatedBefore:    updatedBeforeFilter,
 		IIDs:             []int64{1, 2},
 		MyReactionEmoji:  "thumbsup",
 	})
@@ -892,15 +979,13 @@ func TestGetProject_ExtendedFilters(t *testing.T) {
 // Discovery metadata (R-META)
 // ---------------------------------------------------------------------------.
 
-// issueStatsSpecs builds the package's action specs against a client that
-// answers nothing: every assertion below reads metadata rather than calling a
-// route.
+// issueStatsSpecs builds the package's action specs against a client that must
+// not be asked anything: every assertion below reads metadata rather than
+// calling a route, so [testutil.ForbiddenHandler] fails the test on any
+// request instead of quietly answering one.
 func issueStatsSpecs(t *testing.T) []toolutil.ActionSpec {
 	t.Helper()
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
-	return ActionSpecs(client)
+	return ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
 }
 
 // publishedJSONFields returns the json names a tool input struct publishes,
@@ -1081,6 +1166,96 @@ func assertOverridesNamePublishedFields(t *testing.T, overrides []toolutil.Input
 	for _, override := range overrides {
 		if !published[override.PropertyPath] {
 			t.Errorf("override constrains %q, which this action's input does not publish, so it patches nothing", override.PropertyPath)
+		}
+	}
+}
+
+// statsScope is a scope one of these actions reads, in the two spellings its
+// metadata uses: the bare word an alias is built from, and the phrase the
+// prose claims it with.
+type statsScope struct {
+	word  string
+	claim string
+}
+
+// statsScopes returns the scope the named tool reads and the scopes it must
+// not claim, derived from the tool's own name.
+//
+// Deriving it from the name is what keeps the assertions below from being a
+// copy of whatever the source says today: what is held is that a tool whose
+// name says group describes a group. The global route reads no single scope,
+// so its own is empty and it is held only to claiming neither of the others.
+func statsScopes(tool string) (own statsScope, foreign []statsScope) {
+	group := statsScope{word: "group", claim: "for a group"}
+	project := statsScope{word: "project", claim: "for a single project"}
+	switch {
+	case strings.Contains(tool, "_group_"):
+		return group, []statsScope{project}
+	case strings.Contains(tool, "_project_"):
+		return project, []statsScope{group}
+	default:
+		return statsScope{}, []statsScope{group, project}
+	}
+}
+
+// TestActionSpecs_MetadataNamesTheScopeItsToolReads checks that the usage
+// line, the individual-tool description and the natural-language aliases each
+// action carries describe the scope that action actually reads.
+//
+// Why that matters: the three cases of decorateIssueStatisticsMeta are
+// near-identical blocks of hand-written prose, and a copy-paste that leaves
+// one action carrying another's sentences is invisible to both gates, text
+// assigned to a field being no branch to flip. The tests around it asked only
+// whether those fields were non-empty, so all three could have been permuted
+// and stayed green. What a model reads to choose between three tools that
+// differ in nothing but scope is exactly this text: a project tool promising
+// counts "for a group and its descendant projects" is chosen for the wrong
+// question, and the wrong counts come back with no sign that they are wrong.
+func TestActionSpecs_MetadataNamesTheScopeItsToolReads(t *testing.T) {
+	for _, spec := range issueStatsSpecs(t) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			own, foreign := statsScopes(spec.IndividualTool.Name)
+			// The See-also tail names the sibling scopes on purpose, so the
+			// claim is read from what precedes it.
+			described, _, _ := strings.Cut(spec.IndividualTool.Description, "See also:")
+			t.Run("Usage", func(t *testing.T) { assertScopeClaim(t, spec.Usage, own, foreign) })
+			t.Run("Description", func(t *testing.T) { assertScopeClaim(t, described, own, foreign) })
+			t.Run("Aliases", func(t *testing.T) { assertAliasScope(t, spec, own, foreign) })
+		})
+	}
+}
+
+// assertScopeClaim checks that prose claims the action's own scope and none of
+// the others'.
+func assertScopeClaim(t *testing.T, prose string, own statsScope, foreign []statsScope) {
+	t.Helper()
+	if own.claim != "" && !strings.Contains(prose, own.claim) {
+		t.Errorf("%q never says it reads %q", prose, own.claim)
+	}
+	for _, other := range foreign {
+		if strings.Contains(prose, other.claim) {
+			t.Errorf("%q claims to read %q, which is another action's scope", prose, other.claim)
+		}
+	}
+}
+
+// assertAliasScope checks that every natural-language alias names the scope
+// its own tool reads, so a model searching for one scope is not handed
+// another. The tool name itself is skipped: it is an alias of every action and
+// carries the scope by construction.
+func assertAliasScope(t *testing.T, spec toolutil.ActionSpec, own statsScope, foreign []statsScope) {
+	t.Helper()
+	for _, alias := range spec.Aliases {
+		if alias == spec.IndividualTool.Name {
+			continue
+		}
+		if own.word != "" && !strings.Contains(alias, own.word) {
+			t.Errorf("alias %q does not name the %s scope it is registered under", alias, own.word)
+		}
+		for _, other := range foreign {
+			if strings.Contains(alias, other.word) {
+				t.Errorf("alias %q names the %s scope, which another action reads", alias, other.word)
+			}
 		}
 	}
 }

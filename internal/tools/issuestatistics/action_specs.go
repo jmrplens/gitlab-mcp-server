@@ -17,8 +17,10 @@ const (
 	actionStatisticsGet        = catalogDomain + ".statistics_get"
 	actionStatisticsGetGroup   = catalogDomain + ".statistics_get_group"
 	actionStatisticsGetProject = catalogDomain + ".statistics_get_project"
-	// actionIssueList is owned by the issues package rather than this one, and
-	// is declared here so every ID this package publishes has one home.
+	// actionIssueList is owned by the issues package rather than this one. It
+	// is a constant because two readers share it, markdown.go's result hint
+	// and the project action's related list; the two other cross-domain IDs
+	// the decorator below names are spelled inline, each having one reader.
 	actionIssueList = catalogDomain + ".list"
 )
 
