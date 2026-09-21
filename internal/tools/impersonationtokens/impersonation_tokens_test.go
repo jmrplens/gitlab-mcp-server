@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -157,9 +158,10 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_InvalidUserID verifies the List_InvalidUserID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestList_InvalidUserID asserts that List refuses a user_id of zero with an
+// error. It reaches no GitLab path, the guard running before the request; that
+// no request is made is asserted by
+// TestHandlers_AnIdentifierOfZero_IsRefusedBeforeAnyRequest.
 func TestList_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -170,9 +172,9 @@ func TestList_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestList_WithStateFilter verifies the List_WithStateFilter handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestList_WithStateFilter asserts that a state the caller gave reaches the
+// listing request's query, and that the single token GitLab answers with comes
+// back.
 func TestList_WithStateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListTokens {
@@ -221,9 +223,8 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidUserID verifies the Get_InvalidUserID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestGet_InvalidUserID asserts that Get refuses a user_id of zero with an
+// error, before any request.
 func TestGet_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -234,9 +235,8 @@ func TestGet_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidTokenID verifies the Get_InvalidTokenID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestGet_InvalidTokenID asserts that Get refuses a token_id of zero with an
+// error, before any request.
 func TestGet_InvalidTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -273,9 +273,8 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_EmptyName verifies the Create_EmptyName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreate_EmptyName asserts that Create refuses a token with no name with
+// an error, before any request.
 func TestCreate_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -286,9 +285,8 @@ func TestCreate_EmptyName(t *testing.T) {
 	}
 }
 
-// TestCreate_EmptyScopes verifies the Create_EmptyScopes handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreate_EmptyScopes asserts that Create refuses a token with no scopes
+// with an error, before any request.
 func TestCreate_EmptyScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -299,9 +297,8 @@ func TestCreate_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidExpiresAt verifies the Create_InvalidExpiresAt handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreate_InvalidExpiresAt asserts that Create refuses an expiry it cannot
+// parse as YYYY-MM-DD with an error, before any request.
 func TestCreate_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -335,9 +332,8 @@ func TestRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestRevoke_InvalidUserID verifies the Revoke_InvalidUserID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestRevoke_InvalidUserID asserts that Revoke refuses a user_id of zero with
+// an error, before any request.
 func TestRevoke_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -374,9 +370,8 @@ func TestCreatePAT_Success(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_EmptyName verifies the CreatePAT_EmptyName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreatePAT_EmptyName asserts that CreatePAT refuses a token with no name
+// with an error, before any request.
 func TestCreatePAT_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -445,9 +440,14 @@ func TestFormatPATMarkdownString(t *testing.T) {
 	}
 }
 
-// TestList_PaginationParams verifies that ListParams forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestList_PaginationParams asserts that the page and per_page a caller gave
+// reach the listing request's query.
+//
+// It stops there because there is nothing further to assert: ListOutput carries
+// no [toolutil.PaginationOutput], so the page, total and next-page headers
+// GitLab answers a paged listing with are read by nothing. That is the R-PAGE
+// finding this action is the worked example of, and closing it moves the
+// published surface rather than the tests.
 func TestList_PaginationParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -500,9 +500,11 @@ func TestList_KeysetAndSortParams(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab
+// API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that the wrapped error names the operation; the hint it carries is
+// asserted by TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -517,9 +519,11 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab
+// API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// It asserts that the wrapped error names the operation; the hint it carries is
+// asserted by TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -534,9 +538,8 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidUserID verifies the Create_InvalidUserID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreate_InvalidUserID asserts that Create refuses a user_id of zero with
+// an error naming the field, before any request.
 func TestCreate_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -552,9 +555,11 @@ func TestCreate_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreate_APIError verifies that Create returns a wrapped error when the
+// GitLab API responds with an error status.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts that the wrapped error names the operation; the hint it carries is
+// asserted by TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -571,9 +576,8 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestRevoke_InvalidTokenID verifies the Revoke_InvalidTokenID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestRevoke_InvalidTokenID asserts that Revoke refuses a token_id of zero
+// with an error naming the field, before any request.
 func TestRevoke_InvalidTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -587,9 +591,11 @@ func TestRevoke_InvalidTokenID(t *testing.T) {
 	}
 }
 
-// TestRevoke_APIError verifies that Revoke returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestRevoke_APIError verifies that Revoke returns a wrapped error when the
+// GitLab API responds with an error status.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the wrapped error names the operation; the hint it carries is
+// asserted by TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith.
 func TestRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -604,9 +610,8 @@ func TestRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_InvalidUserID verifies the CreatePAT_InvalidUserID handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreatePAT_InvalidUserID asserts that CreatePAT refuses a negative
+// user_id with an error naming the field, before any request.
 func TestCreatePAT_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -622,9 +627,8 @@ func TestCreatePAT_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_EmptyScopes verifies the CreatePAT_EmptyScopes handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreatePAT_EmptyScopes asserts that CreatePAT refuses a token with no
+// scopes with an error naming the field, before any request.
 func TestCreatePAT_EmptyScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -640,9 +644,9 @@ func TestCreatePAT_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_InvalidExpiresAt verifies the CreatePAT_InvalidExpiresAt handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreatePAT_InvalidExpiresAt asserts that CreatePAT refuses an expiry it
+// cannot parse as YYYY-MM-DD with an error naming the field, before any
+// request.
 func TestCreatePAT_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -658,9 +662,11 @@ func TestCreatePAT_InvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_APIError verifies that CreatePAT returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreatePAT_APIError verifies that CreatePAT returns a wrapped error when
+// the GitLab API responds with an error status.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts that the wrapped error names the operation; the hint it carries is
+// asserted by TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith.
 func TestCreatePAT_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -677,9 +683,10 @@ func TestCreatePAT_APIError(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_MinimalInput verifies the CreatePAT_MinimalInput handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCreatePAT_MinimalInput asserts what a personal access token created with
+// neither description nor expiry carries back: the id and the secret GitLab
+// answered with, and both optional fields empty.
+// The test exercises the POST path of the underlying GitLab API call.
 func TestCreatePAT_MinimalInput(t *testing.T) {
 	const minimalPATJSON = `{
 		"id":20,"name":"bare-pat","active":true,"token":"glpat-min123",
@@ -712,9 +719,10 @@ func TestCreatePAT_MinimalInput(t *testing.T) {
 	}
 }
 
-// TestToPATOutput_WithLastUsedAt verifies the ToPATOutput_WithLastUsedAt handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToPATOutput_WithLastUsedAt asserts that a last_used_at GitLab sent on a
+// personal access token reaches the output rather than being dropped with the
+// pointer it arrived behind.
+// The test exercises the POST path of the underlying GitLab API call.
 func TestToPATOutput_WithLastUsedAt(t *testing.T) {
 	const patWithLastUsed = `{
 		"id":30,"name":"used-pat","active":true,"token":"glpat-used",
@@ -965,6 +973,294 @@ func TestCreatePAT_Description_ReachesTheBodyOnlyWhenGiven(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Errorf("description = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGet_TheTokenIsAssembledFieldByField pins the whole token one Get
+// produces from a body in which no two values agree.
+//
+// The converter is straight-line assignment, which neither gate can reach: no
+// operator to flip and no condition to evaluate both ways. Two crossings it
+// leaves invisible are already in reach here, because scopes and last_used_ips
+// are both lists of strings and created_at and last_used_at are both RFC3339
+// instants, so a fixture giving either pair one value apiece publishes GitLab's
+// answer under the wrong name and every field-at-a-time assertion still passes.
+// The body also names a user the request did not, so publishing the request's
+// user_id in place of the response's is visible too.
+func TestGet_TheTokenIsAssembledFieldByField(t *testing.T) {
+	const body = `{
+		"id":77,"name":"nightly-audit","active":true,"token":"glpat-7QcRz",
+		"scopes":["read_api","read_user"],"revoked":false,
+		"created_at":"2026-01-15T10:00:00Z","expires_at":"2026-09-30",
+		"last_used_at":"2026-06-01T08:00:00Z",
+		"impersonation":true,"description":"raised for the quarterly audit","user_id":91,
+		"granular":true,"last_used_ips":["192.0.2.10","198.51.100.7"],
+		"granular_scopes":[{"access":"personal_projects","permissions":["read_job"],"project_id":3}]
+	}`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, pathGetToken)
+		testutil.RespondJSON(w, http.StatusOK, body)
+	}))
+
+	got, err := Get(t.Context(), client, GetInput{UserID: 42, TokenID: 1})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+
+	want := Output{
+		ID: 77, Name: "nightly-audit", Active: true, Token: "glpat-7QcRz",
+		Scopes:   []string{"read_api", "read_user"},
+		Granular: true,
+		GranularScopes: []toolutil.TokenGranularScopeOutput{
+			{Access: "personal_projects", Permissions: []string{"read_job"}, ProjectID: 3},
+		},
+		Description:   "raised for the quarterly audit",
+		UserID:        91,
+		Impersonation: true,
+		CreatedAt:     "2026-01-15T10:00:00Z",
+		ExpiresAt:     "2026-09-30",
+		LastUsedAt:    "2026-06-01T08:00:00Z",
+		LastUsedIPs:   []string{"192.0.2.10", "198.51.100.7"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Get() = %+v,\nwant %+v", got, want)
+	}
+}
+
+// TestGet_EachFlagIsReadOntoItsOwnField drives one boolean at a time, which is
+// the only fixture that tells four flags apart: a body setting several of them
+// true is one where a crossed assignment publishes exactly the same token. Each
+// case compares the whole token, so a flag that landed on a neighbour's field
+// fails on both fields at once.
+func TestGet_EachFlagIsReadOntoItsOwnField(t *testing.T) {
+	cases := []struct {
+		name string // the one flag the body sets, and the subtest's name
+		want Output
+	}{
+		{name: "active", want: Output{ID: 1, Name: "flagged", Active: true}},
+		{name: "revoked", want: Output{ID: 1, Name: "flagged", Revoked: true}},
+		{name: "granular", want: Output{ID: 1, Name: "flagged", Granular: true}},
+		{name: "impersonation", want: Output{ID: 1, Name: "flagged", Impersonation: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"flagged","`+tc.name+`":true}`)
+			}))
+
+			got, err := Get(t.Context(), client, GetInput{UserID: 42, TokenID: 1})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("with %s alone set, Get() = %+v,\nwant %+v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestList_EachTokenKeepsTheCapturedFieldsOfItsOwnRow pins the join between
+// what the SDK decoded and what the capture read beside it. They arrive as two
+// slices paired by index, so handing every token the first row's extra is a
+// straight-line change no gate can see, and a fixture whose rows carry the same
+// captured values cannot see it either.
+func TestList_EachTokenKeepsTheCapturedFieldsOfItsOwnRow(t *testing.T) {
+	const rows = `[
+		{"id":1,"name":"first","active":true,"scopes":["api"],"revoked":false,
+		 "impersonation":true,"description":"the first","user_id":42,"granular":true,
+		 "last_used_ips":["192.0.2.10"]},
+		{"id":2,"name":"second","active":false,"scopes":["read_user"],"revoked":true,
+		 "impersonation":false,"description":"the second","user_id":43,"granular":false}
+	]`
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, pathListTokens)
+		testutil.RespondJSON(w, http.StatusOK, rows)
+	}))
+
+	out, err := List(t.Context(), client, ListInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+
+	want := []Output{
+		{
+			ID: 1, Name: "first", Active: true, Scopes: []string{"api"},
+			Granular: true, Description: "the first", UserID: 42,
+			Impersonation: true, LastUsedIPs: []string{"192.0.2.10"},
+		},
+		{
+			ID: 2, Name: "second", Revoked: true, Scopes: []string{"read_user"},
+			Description: "the second", UserID: 43,
+		},
+	}
+	if !reflect.DeepEqual(out.Tokens, want) {
+		t.Errorf("List() tokens = %+v,\nwant %+v", out.Tokens, want)
+	}
+}
+
+// TestRevoke_TheConfirmationNamesTheUserAndTheTokenApart pins both identifiers
+// of the confirmation a revocation answers with. Both are int64 copied straight
+// off the input, so crossing them is invisible to both gates, and the success
+// test beside this one reads only the revoked flag: a model told token 42 of
+// user 7 is gone would go looking for the wrong token next.
+func TestRevoke_TheConfirmationNamesTheUserAndTheTokenApart(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
+		testutil.AssertRequestPath(t, r, "/api/v4/users/42/impersonation_tokens/7")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	got, err := Revoke(t.Context(), client, RevokeInput{UserID: 42, TokenID: 7})
+	if err != nil {
+		t.Fatalf("Revoke() unexpected error: %v", err)
+	}
+	want := RevokeOutput{UserID: 42, TokenID: 7, Revoked: true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Revoke() = %+v, want %+v", got, want)
+	}
+}
+
+// TestCreateHandlers_TheBodyGitLabReceives_CarriesWhatTheCallerGave pins the
+// two request bodies this package builds. Nothing else reads them: the mock
+// answers with its fixture whatever it was sent, so an option left unset, or
+// filled from the wrong input field, reaches GitLab unnoticed by every
+// assertion the package makes about the response. The two expiry encodings
+// differ on purpose and are the SDK option types' own: an impersonation token's
+// expires_at is a timestamp and a personal access token's is a date.
+func TestCreateHandlers_TheBodyGitLabReceives_CarriesWhatTheCallerGave(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		call func(context.Context, *gitlabclient.Client) error
+		want map[string]any
+	}{
+		{
+			name: "create_impersonation_token",
+			path: pathCreateToken,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{
+					UserID: 42, Name: "nightly-audit",
+					Scopes: []string{"read_api", "read_user"}, ExpiresAt: "2026-09-30",
+				})
+				return err
+			},
+			want: map[string]any{
+				"name":       "nightly-audit",
+				"scopes":     []any{"read_api", "read_user"},
+				"expires_at": "2026-09-30T00:00:00Z",
+			},
+		},
+		{
+			name: "create_personal_access_token",
+			path: pathCreatePAT,
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := CreatePAT(ctx, c, CreatePATInput{
+					UserID: 42, Name: "release-bot", Scopes: []string{"api"},
+					Description: "for the release job", ExpiresAt: "2026-09-30",
+				})
+				return err
+			},
+			want: map[string]any{
+				"name":        "release-bot",
+				"scopes":      []any{"api"},
+				"description": "for the release job",
+				"expires_at":  "2026-09-30",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body map[string]any
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPost)
+				testutil.AssertRequestPath(t, r, tc.path)
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decoding the request body: %v", err)
+					testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"unreadable request body"}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusCreated, tokenJSON)
+			}))
+
+			if err := tc.call(t.Context(), client); err != nil {
+				t.Fatalf("%s unexpected error: %v", tc.name, err)
+			}
+			if !reflect.DeepEqual(body, tc.want) {
+				t.Errorf("body = %v, want %v", body, tc.want)
+			}
+		})
+	}
+}
+
+// TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith holds each
+// handler's corrective hint to the status GitLab really answers with. The
+// status is an argument rather than a branch of this package, so a handler
+// hinting on 404 where its endpoint refuses with 403 keeps returning an error
+// and the error tests beside this one, which read only the operation name, keep
+// passing — while the model loses the one sentence saying what to do next.
+func TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		hint   string
+		call   func(context.Context, *gitlabclient.Client) error
+	}{
+		{
+			name: "list", status: http.StatusForbidden,
+			hint: "impersonation tokens require admin token",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := List(ctx, c, ListInput{UserID: 42})
+				return err
+			},
+		},
+		{
+			name: "get", status: http.StatusNotFound,
+			hint: "the token may have been revoked",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Get(ctx, c, GetInput{UserID: 42, TokenID: 1})
+				return err
+			},
+		},
+		{
+			name: "create", status: http.StatusForbidden,
+			hint: "creating impersonation tokens requires admin token",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Create(ctx, c, CreateInput{UserID: 42, Name: "tok", Scopes: []string{"api"}})
+				return err
+			},
+		},
+		{
+			name: "revoke", status: http.StatusNotFound,
+			hint: "the token may already be revoked",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := Revoke(ctx, c, RevokeInput{UserID: 42, TokenID: 1})
+				return err
+			},
+		},
+		{
+			name: "create_personal_access_token", status: http.StatusForbidden,
+			hint: "creating PAT for another user requires admin token",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := CreatePAT(ctx, c, CreatePATInput{UserID: 42, Name: "tok", Scopes: []string{"api"}})
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tc.status, `{"message":"refused"}`)
+			}))
+
+			err := tc.call(t.Context(), client)
+			if err == nil {
+				t.Fatalf("expected an error for status %d, got nil", tc.status)
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("error = %q, want it to carry the hint %q", err.Error(), tc.hint)
 			}
 		})
 	}
