@@ -97,9 +97,10 @@ limitation is the tool's rather than the package's, which is why
 of failing on it.
 
 **A gremlins run over a `package main` directory reports every mutant killed
-and has tested none of them.** It names the package to run the tests in by
-walking the mutated file's directory upward until a component ends with the
-package clause's name, and falls back to the module path when none does. For
+and has tested none of them, so the recipe stages such a package before
+measuring it.** gremlins names the package to run the tests in by walking the
+mutated file's directory upward until a component ends with the package
+clause's name, and falls back to the module path when none does. For
 `package main` in `cmd/audit_action_ids` nothing ends with "main", so it runs
 `go test github.com/jmrplens/gitlab-mcp-server/v3` in its copy of the tree;
 the module root holds no Go files, that fails at setup with exit 1, and exit 1
@@ -107,10 +108,32 @@ is what gremlins reads as KILLED. Measured on `cmd/audit_action_ids`: 134
 killed, 0 lived, 3.5 seconds, against a suite that takes 9; the same tree
 measured through a copy of the package in a directory whose name ends in
 "main" reports 101 killed, 33 lived and 2 not covered in 10m49s. Every one of
-the 40 `cmd/*` commands is `package main`, `cmd/server` included, so a clean
-figure from one of them says nothing until it has been re-measured that way.
-The coverage half of such a run is still valid: NOT COVERED comes from
-`go test -cover` over the real package, which gremlins runs correctly.
+the 40 `cmd/*` commands is `package main`, `cmd/server` included, so thirty
+odd real survivors per command were being reported as kills. The giveaway is
+on the face of such a run: a mutation pass finishing faster than one run of
+the tests it claims to have run 134 times.
+
+`scripts/coverage-mutants.sh`, which `make coverage-mutants` calls, therefore
+copies a package whose directory does not end with its package name into a
+sibling directory that does, runs gremlins against the copy, and removes it
+through a trap. Measured on `cmd/audit_test_names`: 88 killed, 0 lived and
+100% efficacy before, 83 killed, 16 lived and 3 not covered after. The copy
+is a sibling rather than something tidier under `dist/` because Go's internal
+rule is about the path, and a copy of a `cmd/` command staged elsewhere cannot
+import `cmd/internal/...`. A staged copy that does not pass its own tests
+where it was staged stops the run rather than falling back to the run that
+lies, and a staged path that already exists is refused rather than removed.
+A package whose directory already ends with its package name, which is all of
+`internal/`, is measured where it is.
+
+**A figure recorded for a `cmd/` command before this was fixed is not a
+measurement.** The mutation numbers in the sweep that closed those packages
+(PRs [#871](https://github.com/jmrplens/gitlab-mcp-server/pull/871) and
+earlier) were produced by the unstaged run, so `Lived 0` from one of them says
+nothing and the packages are owed a re-measurement. The coverage half was
+valid throughout: NOT COVERED comes from `go test -cover` over the real
+package, which gremlins runs correctly, so a package taken to `Not covered 0`
+has been measured for reachability whatever the kill column said.
 
 **A gremlins run reporting TIMED OUT on a fast package has measured nothing.**
 It derives each mutant's timeout from the package's own baseline times a
