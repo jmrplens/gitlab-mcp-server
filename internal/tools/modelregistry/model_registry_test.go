@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -17,8 +18,16 @@ import (
 
 // TestDownload validates the Download handler for the ML model registry.
 // Covers successful download with output verification, all four required-field
-// validations, multiple API error status codes (401, 403, 404, 500), and
-// context cancellation.
+// validations, multiple API error status codes (401, 403, 404, 500), context
+// cancellation, and a nested path with a percent-encoded project.
+//
+// Every case that asserts a refusal names the layer that refused. The four
+// required-field cases and the cancelled one run against
+// [testutil.ForbiddenHandler], so they fail if any request is issued at all,
+// and each pins the exact error the guard returns: with the mock answering 404
+// instead, all four passed on a word the 404 hint happens to carry
+// ("verify project_id, model_version_id, path, and filename"), so every one of
+// them stayed green with its guard deleted from the handler.
 func TestDownload(t *testing.T) {
 	tests := []downloadCase{
 		{
@@ -82,56 +91,48 @@ func TestDownload(t *testing.T) {
 			},
 		},
 		{
-			name: "returns error when project_id is empty",
+			name: "empty project_id is refused before any request",
 			input: DownloadInput{
 				ModelVersionID: toolutil.StringOrInt("7"),
 				Path:           "models",
 				Filename:       "model.bin",
 			},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				http.NotFound(w, nil)
-			},
-			wantErr:    true,
-			errContain: "project_id",
+			forbidRequest: true,
+			wantErr:       true,
+			errContain:    "project_id is required",
 		},
 		{
-			name: "returns error when model_version_id is empty",
+			name: "empty model_version_id is refused before any request",
 			input: DownloadInput{
 				ProjectID: toolutil.StringOrInt("42"),
 				Path:      "models",
 				Filename:  "model.bin",
 			},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				http.NotFound(w, nil)
-			},
-			wantErr:    true,
-			errContain: "model_version_id",
+			forbidRequest: true,
+			wantErr:       true,
+			errContain:    "model_version_id is required",
 		},
 		{
-			name: "returns error when path is empty",
+			name: "empty path is refused before any request",
 			input: DownloadInput{
 				ProjectID:      toolutil.StringOrInt("42"),
 				ModelVersionID: toolutil.StringOrInt("7"),
 				Filename:       "model.bin",
 			},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				http.NotFound(w, nil)
-			},
-			wantErr:    true,
-			errContain: "path",
+			forbidRequest: true,
+			wantErr:       true,
+			errContain:    "path is required",
 		},
 		{
-			name: "returns error when filename is empty",
+			name: "empty filename is refused before any request",
 			input: DownloadInput{
 				ProjectID:      toolutil.StringOrInt("42"),
 				ModelVersionID: toolutil.StringOrInt("7"),
 				Path:           "models",
 			},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				http.NotFound(w, nil)
-			},
-			wantErr:    true,
-			errContain: "filename",
+			forbidRequest: true,
+			wantErr:       true,
+			errContain:    "filename is required",
 		},
 		{
 			name: "returns error on 401 unauthorized",
@@ -158,6 +159,10 @@ func TestDownload(t *testing.T) {
 				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
 			},
 			wantErr: true,
+			// The identifier hint belongs to 404 alone: a forbidden read is not
+			// a mistyped path, and telling a caller to check their arguments
+			// sends them to correct something that is already right.
+			errOmit: wantIdentifierHint,
 		},
 		{
 			name: "returns error on 404 not found",
@@ -170,7 +175,8 @@ func TestDownload(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
 			},
-			wantErr: true,
+			wantErr:    true,
+			errContain: wantIdentifierHint,
 		},
 		{
 			name: "returns error on 500 server error",
@@ -181,26 +187,30 @@ func TestDownload(t *testing.T) {
 				Filename:       "model.bin",
 			},
 			handler: func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"internal server error"}`)
+				testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"internal server error"}`)
 			},
 			wantErr: true,
+			errOmit: wantIdentifierHint,
 		},
 		{
-			name: "returns error when context is cancelled",
+			name: "cancelled context is refused before any request",
 			input: DownloadInput{
 				ProjectID:      toolutil.StringOrInt("42"),
 				ModelVersionID: toolutil.StringOrInt("7"),
 				Path:           "models",
 				Filename:       "model.bin",
 			},
-			handler: func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			},
-			cancelCtx: true,
-			wantErr:   true,
+			cancelCtx:     true,
+			forbidRequest: true,
+			wantErr:       true,
+			// The context error itself, unwrapped: the SDK would also refuse a
+			// cancelled context, but it would arrive wrapped in this action's
+			// operation label, so identity is what separates the early return
+			// from a request that was built and then abandoned.
+			errExactly: context.Canceled,
 		},
 		{
-			name: "handles URL-encoded project path",
+			name: "a nested path stays one route segment",
 			input: DownloadInput{
 				ProjectID:      toolutil.StringOrInt("group%2Fproject"),
 				ModelVersionID: toolutil.StringOrInt("candidate:5"),
@@ -209,17 +219,29 @@ func TestDownload(t *testing.T) {
 			},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				// The escaped path, not r.URL.Path: the server decodes %2F back
+				// into a slash, so the decoded form cannot tell a nested path
+				// from two extra route segments, which is the whole question
+				// here.
+				if got := r.URL.EscapedPath(); got != wantNestedEscapedPath {
+					t.Errorf("escaped URL path = %q, want %q", got, wantNestedEscapedPath)
+				}
 				w.Header().Set("Content-Type", "application/octet-stream")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("weight-data"))
 			},
 			validate: func(t *testing.T, out DownloadOutput) {
 				t.Helper()
-				if out.ProjectID != "group%2Fproject" {
-					t.Errorf("ProjectID = %q, want %q", out.ProjectID, "group%2Fproject")
+				want := DownloadOutput{
+					ProjectID:      "group%2Fproject",
+					ModelVersionID: "candidate:5",
+					Path:           "deep/nested",
+					Filename:       "weights.h5",
+					ContentBase64:  base64.StdEncoding.EncodeToString([]byte("weight-data")),
+					SizeBytes:      len("weight-data"),
 				}
-				if out.ModelVersionID != "candidate:5" {
-					t.Errorf("ModelVersionID = %q, want %q", out.ModelVersionID, "candidate:5")
+				if !reflect.DeepEqual(out, want) {
+					t.Errorf("Download() = %+v, want %+v", out, want)
 				}
 			},
 		},
@@ -232,21 +254,49 @@ func TestDownload(t *testing.T) {
 	}
 }
 
+// wantIdentifierHint is the hint this action attaches to a 404 and to no other
+// status, so a case can assert both that it is there and that it is not.
+const wantIdentifierHint = "verify project_id, model_version_id, path, and filename"
+
+// wantNestedEscapedPath is the request line a nested path and a
+// percent-encoded project produce: the slash inside path is escaped so the
+// package path stays one route segment, the percent of an already-encoded
+// project id is escaped again, and the colon of a candidate version and the dot
+// of a file name are left alone.
+const wantNestedEscapedPath = "/api/v4/projects/group%252Fproject/packages/ml_models/candidate:5/files/deep%2Fnested/weights.h5"
+
 type downloadCase struct {
-	name       string
-	input      DownloadInput
-	handler    http.HandlerFunc
-	cancelCtx  bool
-	wantErr    bool
-	errContain string
-	validate   func(t *testing.T, out DownloadOutput)
+	name  string
+	input DownloadInput
+	// handler answers the mock GitLab; forbidRequest replaces it with one that
+	// fails the test on any request, for a case asserting that the handler
+	// refuses before it reaches GitLab.
+	handler       http.HandlerFunc
+	forbidRequest bool
+	cancelCtx     bool
+	wantErr       bool
+	errContain    string
+	errOmit       string
+	errExactly    error
+	validate      func(t *testing.T, out DownloadOutput)
 }
 
 func runDownloadCase(t *testing.T, tt downloadCase) {
 	t.Helper()
-	client := testutil.NewTestClient(t, tt.handler)
+	client := testutil.NewTestClient(t, downloadCaseHandler(t, tt))
 	got, err := Download(downloadCaseContext(tt), client, tt.input)
 	assertDownloadCaseResult(t, got, err, tt)
+}
+
+// downloadCaseHandler gives the case its own mock, or one that fails the test
+// on any request at all when the case asserts a refusal that must never reach
+// GitLab.
+func downloadCaseHandler(t *testing.T, tt downloadCase) http.Handler {
+	t.Helper()
+	if tt.forbidRequest {
+		return testutil.ForbiddenHandler(t)
+	}
+	return tt.handler
 }
 
 func downloadCaseContext(tt downloadCase) context.Context {
@@ -267,6 +317,14 @@ func assertDownloadCaseResult(t *testing.T, got DownloadOutput, err error, tt do
 	if tt.errContain != "" && err != nil && !strings.Contains(err.Error(), tt.errContain) {
 		t.Errorf("error = %q, want it to contain %q", err.Error(), tt.errContain)
 	}
+	if tt.errOmit != "" && err != nil && strings.Contains(err.Error(), tt.errOmit) {
+		t.Errorf("error = %q, want it not to carry %q", err.Error(), tt.errOmit)
+	}
+	// Identity rather than errors.Is: a wrapped context error would satisfy
+	// errors.Is and would mean the request was built before it was abandoned.
+	if tt.errExactly != nil && err != tt.errExactly { //nolint:errorlint // identity is the assertion
+		t.Errorf("error = %v, want exactly %v", err, tt.errExactly)
+	}
 	if tt.validate != nil {
 		tt.validate(t, got)
 	}
@@ -275,24 +333,41 @@ func assertDownloadCaseResult(t *testing.T, got DownloadOutput, err error, tt do
 // TestDownloadOutput_ReadError verifies downloadOutput returns reader failures
 // instead of producing partial base64 content.
 //
-// The test injects a reader that always fails and expects a non-nil error,
-// protecting ML model downloads from silently accepting corrupted file streams.
+// The reader yields a prefix and only then fails, which is the shape a
+// truncated network read takes and the only shape that can tell the claim
+// apart: io.ReadAll returns the bytes it did read alongside the error, so a
+// reader that yields nothing leaves nothing to drop and the test would pass
+// however the failure were handled. The error names the read rather than the
+// download, because those are two different ceilings a caller reacts to
+// differently.
 func TestDownloadOutput_ReadError(t *testing.T) {
-	_, err := downloadOutput(DownloadInput{
+	out, err := downloadOutput(DownloadInput{
 		ProjectID:      toolutil.StringOrInt("42"),
 		ModelVersionID: toolutil.StringOrInt("7"),
 		Path:           "models",
 		Filename:       "model.bin",
-	}, failingReader{})
+	}, &partialThenFailingReader{})
 	if err == nil {
 		t.Fatal("downloadOutput() error = nil, want read error")
 	}
+	if !strings.Contains(err.Error(), "read ml model package content") {
+		t.Errorf("error = %v, want it to name the read operation", err)
+	}
+	if out.ContentBase64 != "" || out.SizeBytes != 0 {
+		t.Errorf("output = %+v, want no content alongside the read failure", out)
+	}
 }
 
-type failingReader struct{}
+// partialThenFailingReader yields one short chunk and then fails on every
+// later read.
+type partialThenFailingReader struct{ yielded bool }
 
-func (failingReader) Read([]byte) (int, error) {
-	return 0, errors.New("read failed")
+func (r *partialThenFailingReader) Read(p []byte) (int, error) {
+	if r.yielded {
+		return 0, errors.New("read failed")
+	}
+	r.yielded = true
+	return copy(p, "partial-model-bytes"), nil
 }
 
 // TestDownloadOutput_FileOverTheCeiling_IsRefusedNotTruncated verifies that the
