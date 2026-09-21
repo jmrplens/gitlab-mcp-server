@@ -479,16 +479,18 @@ func TestMain_EndpointComparison_BuildsTheFetcherFromTheDocumentationFlags(t *te
 	}
 }
 
-// TestRunValidateDocsMode_OfflineWithNothingCached_ReportsTheOfflineReason
-// verifies the mode's own fetcher is built offline from its parameter: with a
-// planted root whose one citation is cached nowhere, the run fails the gate and
-// the report says the doc is not cached rather than naming a download failure.
+// TestMain_ValidateDocsOffline_ReportsTheOfflineReason verifies -offline
+// reaches the fetcher the validation mode builds: with a planted root whose one
+// citation is cached nowhere, the run fails the gate and the report says the
+// doc is not cached rather than naming a download failure.
 //
-// It is the other half of the ending this mode was given: a mode that passed
-// refresh where offline belongs would leave that cache miss to the network, and
-// the citation would still be reported stale, for a different reason and after
-// six attempts at gitlab.com.
-func TestRunValidateDocsMode_OfflineWithNothingCached_ReportsTheOfflineReason(t *testing.T) {
+// It is driven from main rather than from the mode, because refresh and offline
+// are crossable twice over — in the argument list main passes and in the
+// options literal the mode builds — and only a run that starts at the flag set
+// holds both. Either crossing leaves the citation reported stale all the same,
+// for a different reason and after six attempts at gitlab.com, which is what a
+// test asserting staleness alone cannot tell apart.
+func TestMain_ValidateDocsOffline_ReportsTheOfflineReason(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
 		"cmd/audit_1to1/main.go": "package main // see doc/api/delta.md",
@@ -499,10 +501,11 @@ func TestRunValidateDocsMode_OfflineWithNothingCached_ReportsTheOfflineReason(t 
 	messages := captureFatal(t)
 
 	output := filepath.Join(t.TempDir(), "docs.json")
-	runValidateDocsMode(output, false, true, 0)
+	resetFlags(t, "-validate-docs", "-offline", "-output", output)
+	main()
 
 	if len(*messages) != 1 || !strings.Contains((*messages)[0], "stale doc/api citations found") {
-		t.Fatalf("runValidateDocsMode reported %v, want the stale-citation gate", *messages)
+		t.Fatalf("main reported %v, want the stale-citation gate", *messages)
 	}
 	stale, _ := readJSONFile(t, output)["stale"].([]any)
 	if len(stale) != 1 {
