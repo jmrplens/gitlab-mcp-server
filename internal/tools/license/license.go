@@ -122,7 +122,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 	}
 	if lic == nil {
 		return GetOutput{}, toolutil.WrapErrWithHint("license_get", errNoLicense,
-			"add one with the license_add action, or read the tier from the metadata_get action")
+			"add one with the admin.license_add action, or read the tier from the admin.metadata_get action")
 	}
 	return GetOutput{License: toItem(lic)}, nil
 }
@@ -140,7 +140,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	}
 	if lic == nil {
 		return AddOutput{}, toolutil.WrapErrWithHint("license_add", errNoLicense,
-			"read the installed license back with the license_get action")
+			"read the installed license back with the admin.license_get action")
 	}
 	return AddOutput{License: toItem(lic)}, nil
 }
