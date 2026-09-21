@@ -20,8 +20,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 17,765 |
-| Unit test functions                                   | 16,567 |
+| Total test functions                                  | 17,793 |
+| Unit test functions                                   | 16,595 |
 | E2E test functions                                    |  1,198 |
 | cmd test functions                                    |  2,917 |
 | Test files (internal/)                                |    649 |
@@ -37,9 +37,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 12,340 | 69.5% |
+| `TestFunc_Scenario` (2-part)           | 12,342 | 69.4% |
 | `TestFunc` (no underscore)             |    905 |  5.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |  4,520 | 25.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |  4,546 | 25.5% |
 
 ## Test Distribution
 
@@ -49,10 +49,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          3,189 |        185 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            367 |         16 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (179) |         10,094 |        448 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (179) |         10,122 |        448 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |          1,198 |        384 | build-tagged; only test/e2e/gitlab and test/e2e/orbit need a real instance                      |
 | cmd packages            |          2,917 |        216 | server entry point and developer command utilities                                              |
-| **Total**               |     **17,765** |  **1,249** |                                                                                                 |
+| **Total**               |     **17,793** |  **1,249** |                                                                                                 |
 
 ### Core Packages
 
@@ -166,7 +166,7 @@
 | deployments             |         84 |          4 |    99.1% |         6 |
 | deploytokens            |         71 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |         25 |          3 |   100.0% |         2 |
-| dorametrics             |         11 |          2 |   100.0% |         2 |
+| dorametrics             |         14 |          2 |   100.0% |         2 |
 | dynamic                 |        283 |          8 |    99.8% |         2 |
 | dynamiccatalog          |          9 |          1 |   100.0% |         0 |
 | elicitationtools        |         71 |          2 |   100.0% |         4 |
@@ -209,31 +209,31 @@
 | groupsshcerts           |         28 |          5 |   100.0% |         3 |
 | groupstoragemoves       |         38 |          2 |   100.0% |         6 |
 | groupvariables          |         60 |          4 |   100.0% |         5 |
-| groupwikis              |         37 |          3 |   100.0% |         5 |
-| health                  |         24 |          1 |   100.0% |         2 |
-| impersonationtokens     |         52 |          3 |   100.0% |         5 |
+| groupwikis              |         42 |          3 |   100.0% |         5 |
+| health                  |         25 |          1 |   100.0% |         2 |
+| impersonationtokens     |         58 |          3 |   100.0% |         5 |
 | importservice           |         33 |          1 |   100.0% |         5 |
-| instancevariables       |         49 |          3 |   100.0% |         5 |
+| instancevariables       |         53 |          3 |   100.0% |         5 |
 | integrations            |         88 |          5 |    99.5% |        12 |
-| invites                 |         50 |          1 |   100.0% |         4 |
-| issuediscussions        |         45 |          2 |   100.0% |         6 |
+| invites                 |         53 |          1 |   100.0% |         4 |
+| issuediscussions        |         34 |          2 |   100.0% |         6 |
 | issuelinks              |         79 |          4 |    99.4% |         4 |
-| issuenotes              |         51 |          2 |   100.0% |         5 |
+| issuenotes              |         55 |          2 |   100.0% |         5 |
 | issues                  |        264 |          4 |    99.9% |        21 |
-| issuestatistics         |         47 |          2 |   100.0% |         3 |
+| issuestatistics         |         50 |          2 |   100.0% |         3 |
 | iterationdata           |         11 |          1 |   100.0% |         0 |
 | jobs                    |        146 |          6 |    99.9% |        17 |
-| jobtokenscope           |         51 |          2 |   100.0% |         8 |
-| keys                    |         27 |          2 |   100.0% |         2 |
+| jobtokenscope           |         44 |          2 |   100.0% |         8 |
+| keys                    |         30 |          2 |   100.0% |         2 |
 | labeldata               |         11 |          1 |   100.0% |         0 |
 | labels                  |         70 |          3 |   100.0% |         8 |
-| license                 |         16 |          1 |   100.0% |         3 |
-| licensetemplates        |         28 |          2 |   100.0% |         2 |
+| license                 |         23 |          1 |   100.0% |         3 |
+| licensetemplates        |         31 |          2 |   100.0% |         2 |
 | markdown                |         10 |          1 |   100.0% |         1 |
 | memberroles             |         55 |          4 |   100.0% |         6 |
-| members                 |         71 |          3 |   100.0% |         6 |
+| members                 |         73 |          3 |   100.0% |         6 |
 | mergerequests           |        289 |          5 |   100.0% |        30 |
-| mergetrains             |         18 |          2 |   100.0% |         4 |
+| mergetrains             |         20 |          2 |   100.0% |         4 |
 | metadata                |          9 |          1 |   100.0% |         1 |
 | milestones              |         78 |          2 |   100.0% |         7 |
 | modelregistry           |          7 |          3 |   100.0% |         1 |
@@ -305,7 +305,7 @@
 | wikis                   |         71 |          2 |    99.5% |         6 |
 | workitems               |        128 |          5 |    99.5% |         6 |
 | workitemsavedviews      |         58 |          4 |   100.0% |         7 |
-| **Total**               | **10,094** |    **448** |          | **1,187** |
+| **Total**               | **10,122** |    **448** |          | **1,187** |
 
 </details>
 
