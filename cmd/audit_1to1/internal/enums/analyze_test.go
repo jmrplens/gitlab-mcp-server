@@ -19,6 +19,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/shared"
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/audit_1to1/internal/structs"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
@@ -28,11 +29,18 @@ import (
 // carries the client-go path as an infix, which is what the resolver matches
 // on, so the analyzer treats it exactly as it treats the real SDK. It declares
 // one string enum with an aliased value, one integer enum, a float named type
-// (not an enum kind), and a named string with no constants (not an enum).
+// (not an enum kind), a named string with no constants (not an enum), and a
+// constant of a type another package owns (not this SDK's value set).
 const fixtureSDK = `package gitlab
+
+import "time"
 
 // RequestOptionFunc is the variadic tail that marks a REST endpoint.
 type RequestOptionFunc func()
+
+// Tick is declared here and typed by another package. Its underlying kind is
+// an integer, so only the owning-package test keeps it out of the value sets.
+const Tick = time.Nanosecond
 
 // ColorValue is a string enum; Azure repeats Blue's value.
 type ColorValue string
@@ -59,9 +67,13 @@ const Heavy WeightValue = 2.5
 // PlainID is a named string with no constants, so it is not an enum.
 type PlainID string
 
+// ListWidgetsOptions is sent as a query string, so the url tag is the name
+// GitLab receives and the one the rule must read. Sizes spells its two tags
+// differently on purpose: with the json tag preferred it would meet no MCP
+// counterpart and fall out of the rule unreported.
 type ListWidgetsOptions struct {
 	Color  *ColorValue ` + "`url:\"color,omitempty\" json:\"color,omitempty\"`" + `
-	Sizes  []SizeValue ` + "`url:\"sizes[],omitempty\" json:\"sizes,omitempty\"`" + `
+	Sizes  []SizeValue ` + "`url:\"sizes[],omitempty\" json:\"size_list,omitempty\"`" + `
 	Shade  ColorValue  ` + "`url:\"shade,omitempty\" json:\"shade,omitempty\"`" + `
 	ID     PlainID     ` + "`url:\"id,omitempty\" json:\"id,omitempty\"`" + `
 	Weight WeightValue ` + "`url:\"weight,omitempty\" json:\"weight,omitempty\"`" + `
@@ -211,7 +223,12 @@ func findingsByField(rep Report) map[string]Finding {
 // TestCollectSDKEnums_Fixture_KeepsStringAndIntegerTypesWithConstants
 // verifies the SDK half of the rule: a string or integer named type with
 // constants is an enum, two constants with one value are one value, and a
-// float kind or a constant-less named string is left out.
+// float kind, a constant-less named string or a constant of a type another
+// package owns is left out.
+//
+// The last is the one no fixture reached. client-go declares constants typed
+// by the standard library, and reading one would publish a value set under
+// that package's type name, held against fields this SDK never has.
 func TestCollectSDKEnums_Fixture_KeepsStringAndIntegerTypesWithConstants(t *testing.T) {
 	_, clientGo := loadFixture(t, fixtureModule(t, nil))
 	got := collectSDKEnums(clientGo)
@@ -367,6 +384,29 @@ func TestBuildReport_Fixture_HoldsEachFieldToTheSDKValues(t *testing.T) {
 		}
 	})
 
+	t.Run("an_offer_that_only_adds_a_value_is_a_gap_of_its_own", func(t *testing.T) {
+		// Every gap so far carried a missing value beside its extra one, so
+		// the extra half of both the finding test and the gate decided
+		// nothing: a rule reading only the missing values would have called
+		// this report clean and dropped the finding.
+		adding := fixtureOffered(map[string]property{
+			"color": {Enum: []string{"blue", "red", "green"}},
+			"sizes": {Enum: []string{"1", "3"}},
+		}, nil)
+		extraOnly := buildReport(pkgs, collectSDKEnums(clientGo), adding, nil, true)
+
+		if extraOnly.Summary.MissingValues != 0 || extraOnly.Summary.ExtraValues != 1 {
+			t.Fatalf("summary = %+v, want no missing value and one extra", extraOnly.Summary)
+		}
+		if extraOnly.Summary.Clean() {
+			t.Error("a report whose only finding is an offered value the SDK does not declare reported a clean gate")
+		}
+		color := findingsByField(extraOnly)["input color"]
+		if !reflect.DeepEqual(color.Extra, []string{"green"}) || color.Missing != nil {
+			t.Errorf("color finding = %+v, want green extra and nothing missing", color)
+		}
+	})
+
 	t.Run("gaps_only_drops_a_clean_package", func(t *testing.T) {
 		clean := fixtureOffered(map[string]property{"color": {Enum: []string{"blue", "red"}}, "sizes": {Enum: []string{"1", "3"}}}, nil)
 		gaps := buildReport(pkgs, collectSDKEnums(clientGo), clean, nil, true)
@@ -374,6 +414,99 @@ func TestBuildReport_Fixture_HoldsEachFieldToTheSDKValues(t *testing.T) {
 			t.Errorf("gaps-only report of a clean package = %+v, want no packages and a clean gate", gaps)
 		}
 	})
+}
+
+// TestBuildReport_Fixture_EveryCounterCarriesItsOwnNumber holds the summary
+// to one arrangement in which no two counters read the same, so a report that
+// tallied a field under its neighbor is a failure rather than a coincidence.
+//
+// Every other case here leaves five of the eight at 1, and the two that are
+// distinct are the two nothing would confuse. Under that arrangement the
+// counter for the output fields that surface no value set could be filled
+// from the fields that surface one and still read right, which is what let
+// the condition deciding it survive every mutation run.
+func TestBuildReport_Fixture_EveryCounterCarriesItsOwnNumber(t *testing.T) {
+	pkgs, clientGo := loadFixture(t, fixtureModule(t, nil))
+	offered := fixtureOffered(
+		map[string]property{
+			// Neither SDK value offered, four the SDK never declared.
+			"color": {Enum: []string{"x1", "x2", "x3", "x4"}},
+			// Neither SDK value offered, two the SDK never declared.
+			"sizes": {Enum: []string{"y1", "y2"}},
+		},
+		map[string]property{
+			// Prose naming one of the two values: a gap, and surfaced.
+			"color": {Description: "One shade only, blue."},
+			// Prose naming both: no gap, and surfaced.
+			"size": {Description: "Either 1 or 3."},
+		},
+	)
+	// Seven keys that excuse nothing, each stale for a different reason: a
+	// package, a type and a tag the fixture does not have, a non-enum field,
+	// a field-level key on a field with no gap, and two value-level keys
+	// naming values neither side carries.
+	exemptions := map[string]string{
+		"gadgets.ListInput.color":     "no such package",
+		"widgets.Missing.color":       "no such type",
+		"widgets.ListInput.gone":      "no such tag",
+		"widgets.ListInput.name":      "not a field of an enum type",
+		"widgets.Output.size":         "the field has no gap to excuse",
+		"widgets.ListInput.sizes=9":   "a value neither side declares",
+		"widgets.Output.color=indigo": "a value neither side declares",
+	}
+	rep := buildReport(pkgs, collectSDKEnums(clientGo), offered, exemptions, false)
+
+	want := Summary{
+		Packages: 1, SDKEnums: 2, Fields: 4, FieldsWithGaps: 3,
+		UnsurfacedOutputFields: 0, MissingValues: 5, ExtraValues: 6, StaleExemptions: 7,
+	}
+	if rep.Summary != want {
+		t.Errorf("summary = %+v, want %+v", rep.Summary, want)
+	}
+	if len(rep.StaleExemptions) != len(exemptions) {
+		t.Errorf("stale = %v, want all %d keys", rep.StaleExemptions, len(exemptions))
+	}
+}
+
+// TestBuildReport_TwoPackages_AreNamedAndOrderedByTheirShortName verifies the
+// two claims the package list makes: an entry is named by the short package
+// its fields belong to, not by the import path they were found under, and the
+// list is sorted by that name.
+//
+// Every other case here builds a report of one package, where reading the
+// wrong name and reversing the order are both invisible. The list is what a
+// reader scans, so both are load-bearing.
+func TestBuildReport_TwoPackages_AreNamedAndOrderedByTheirShortName(t *testing.T) {
+	root := fixtureModule(t, map[string]string{
+		"internal/tools/alpha/alpha.go": `package alpha
+
+import gl "example.com/fixture/gitlab.com/gitlab-org/api/client-go/v3"
+
+type Output struct {
+	Color string ` + "`json:\"color\"`" + `
+}
+
+// toOutput pairs Output with the SDK result.
+func toOutput(w *gl.Widget) Output {
+	return Output{Color: string(w.Color)}
+}
+`,
+	})
+	pkgs, clientGo := loadFixture(t, root)
+	onlyRed := map[string]property{"color": {Enum: []string{"red"}}}
+	offered := offeredIndex{
+		fixtureModulePath + "/internal/tools/alpha.Output": {{Action: "alpha.list", Kind: kindOutput, Properties: onlyRed}},
+		fixtureOutputKey: {{Action: fixtureAction, Kind: kindOutput, Properties: onlyRed}},
+	}
+	rep := buildReport(pkgs, collectSDKEnums(clientGo), offered, nil, true)
+
+	var names []string
+	for _, pkg := range rep.Packages {
+		names = append(names, pkg.Package)
+	}
+	if !reflect.DeepEqual(names, []string{"alpha", "widgets"}) {
+		t.Errorf("package names = %v, want [alpha widgets], sorted and short", names)
+	}
 }
 
 // TestBuildReport_Fixture_InputWithNoValueSetIsMissingEverything verifies
@@ -663,6 +796,51 @@ func TestCollectTaggedFields_Structs_FlattenEmbedsAndStopAtTheDepthLimit(t *test
 		t.Errorf("tagsOf = %v, want {leaf}", got)
 	}
 
+	// An embed that names itself with a tag is a field rather than a
+	// flattening, which is what encoding/json does with it. Every embed the
+	// tree carries is untagged, so the tag half of that condition decided
+	// nothing until this case.
+	tagged := types.NewStruct(
+		[]*types.Var{types.NewField(0, nil, "Leaf", types.NewPointer(leafNamed), true)},
+		[]string{`json:"leaf_object"`},
+	)
+	if got := tagsOf(tagged, []string{tagJSON}); !reflect.DeepEqual(got, map[string]struct{}{"leaf_object": {}}) {
+		t.Errorf("tagsOf a tagged embed = %v, want {leaf_object} rather than its promoted fields", got)
+	}
+
+	// The limit reached by the recursion itself, rather than by starting below
+	// it: six embeds deep is the last level read, seven is the first dropped.
+	// Starting at the bound alone says nothing about the step that walks to
+	// it, so a walk that counted downwards would never have stopped.
+	chain := func(levels int) *types.Struct {
+		nested := types.Type(types.NewPointer(leafNamed))
+		var st *types.Struct
+		for range levels {
+			st = types.NewStruct([]*types.Var{types.NewField(0, nil, "Leaf", nested, true)}, []string{""})
+			nested = types.NewNamed(types.NewTypeName(0, nil, "Level", nil), st, nil)
+		}
+		return st
+	}
+	if atLimit := taggedFields(chain(maxEmbedDepth), []string{tagJSON}); len(atLimit) != 1 || atLimit[0].tag != "leaf" {
+		t.Errorf("taggedFields at the depth limit = %+v, want the leaf field", atLimit)
+	}
+	if pastLimit := taggedFields(chain(maxEmbedDepth+1), []string{tagJSON}); len(pastLimit) != 0 {
+		t.Errorf("taggedFields past the depth limit = %+v, want nothing", pastLimit)
+	}
+
+	// An untagged embed of a named string has no fields to flatten, so the
+	// walk must fall through to the tag test instead of recursing. Every
+	// embed in the tree is a struct, so that fall-through decided nothing.
+	bareVar2, bareTag2 := field("Leaf", `json:"leaf"`)
+	notAStruct := types.NewNamed(types.NewTypeName(0, nil, "Tick", nil), types.Typ[types.String], nil)
+	bareEmbed := types.NewStruct(
+		[]*types.Var{types.NewField(0, nil, "Tick", notAStruct, true), bareVar2},
+		[]string{"", bareTag2},
+	)
+	if bare := taggedFields(bareEmbed, []string{tagJSON}); len(bare) != 1 || bare[0].tag != "leaf" {
+		t.Errorf("taggedFields with a non-struct embed = %+v, want the leaf field alone", bare)
+	}
+
 	// A struct nested in itself through embedding cannot be built with
 	// go/types, so the limit is exercised by starting below it.
 	var out []taggedField
@@ -701,6 +879,10 @@ func TestHelpers_Small_BehaveAsDocumented(t *testing.T) {
 			{name: "by_action", a: Finding{Action: "a.x"}, b: Finding{Action: "b.x"}, want: true},
 			{name: "by_kind", a: Finding{Action: "a", Kind: kindInput}, b: Finding{Action: "a", Kind: kindOutput}, want: true},
 			{name: "by_field", a: Finding{Action: "a", Kind: kindInput, Field: "z"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: false},
+			// Equality is what separates a strict order from one sort.Slice
+			// may not be given, and the field is the only key a tie reaches:
+			// the two above it are each guarded by a difference.
+			{name: "equal_in_every_key", a: Finding{Action: "a", Kind: kindInput, Field: "y"}, b: Finding{Action: "a", Kind: kindInput, Field: "y"}, want: false},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -752,6 +934,75 @@ func TestHelpers_Small_BehaveAsDocumented(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestMCPIdentity_APair_IsKeyedByTheTypeReflectReports verifies the identity
+// the catalog's offer is looked up by: an alias resolves to its target's
+// package and name, and a pair with no named type at all is the local
+// package's own.
+//
+// Keying an aliased output by the alias name would meet no offer, and the
+// field would fall out of the rule without a finding, which is the silence
+// this identity exists to prevent.
+func TestMCPIdentity_APair_IsKeyedByTheTypeReflectReports(t *testing.T) {
+	local := &packages.Package{PkgPath: "example.com/internal/tools/widgets"}
+	toolutilPkg := types.NewPackage("example.com/internal/toolutil", "toolutil")
+	alias := types.NewNamed(types.NewTypeName(0, toolutilPkg, "MergeRequestOutput", nil), types.NewStruct(nil, nil), nil)
+	orphan := types.NewNamed(types.NewTypeName(0, nil, "Orphan", nil), types.NewStruct(nil, nil), nil)
+
+	cases := []struct {
+		name     string
+		pair     structs.Pair
+		wantPath string
+		wantType string
+	}{
+		{
+			name: "an_alias_resolves_to_its_target", pair: structs.Pair{MCPName: "Output", MCPNamed: alias},
+			wantPath: "example.com/internal/toolutil", wantType: "MergeRequestOutput",
+		},
+		{
+			name: "no_named_type", pair: structs.Pair{MCPName: "Output"},
+			wantPath: local.PkgPath, wantType: "Output",
+		},
+		{
+			name: "a_named_type_belonging_to_no_package", pair: structs.Pair{MCPName: "Output", MCPNamed: orphan},
+			wantPath: local.PkgPath, wantType: "Output",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			path, mcpType := mcpIdentity(local, testCase.pair)
+			if path != testCase.wantPath || mcpType != testCase.wantType {
+				t.Errorf("mcpIdentity = %q/%q, want %q/%q", path, mcpType, testCase.wantPath, testCase.wantType)
+			}
+		})
+	}
+}
+
+// TestIsTokenBoundary_Runes_KeepEveryWordCharacterAndBreakOnTheRest verifies
+// the rule that cuts a property description into the tokens a value can be
+// read out of: both ends of each range it keeps, and the character one past
+// each of them.
+//
+// The upper ends were reached by nothing. A description carrying a brace or a
+// bracket is what tells a range from a "greater than the start" test, and
+// every fixture so far separated its values with spaces and commas, which are
+// below every range.
+func TestIsTokenBoundary_Runes_KeepEveryWordCharacterAndBreakOnTheRest(t *testing.T) {
+	for _, r := range "_09azAZ" {
+		t.Run(string(r), func(t *testing.T) {
+			if isTokenBoundary(r) {
+				t.Errorf("isTokenBoundary(%q) = true, want it kept inside a token", r)
+			}
+		})
+	}
+	for _, r := range "/:@[`{" {
+		t.Run(string(r), func(t *testing.T) {
+			if !isTokenBoundary(r) {
+				t.Errorf("isTokenBoundary(%q) = false, want it to end a token", r)
+			}
+		})
+	}
 }
 
 // TestAnalyze_Roots_LoadTheTreeOrFail verifies the entry points against a
