@@ -1,7 +1,10 @@
 package mergetrains
 
 import (
+	"maps"
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,22 +20,6 @@ const (
 	// action before its own metadata replaces it.
 	genericMergeTrainUsage = "Use to execute mergetrains domain action."
 )
-
-// TestActionSpecs_Metadata verifies merge train action spec metadata.
-func TestActionSpecs_Metadata(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	specs := ActionSpecs(client)
-	if len(specs) != 4 {
-		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.OwnerPackage != "mergetrains" || spec.IndividualTool.Name == "" {
-			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
-		}
-	}
-}
 
 // TestActionSpecs_DiscoveryMetadata_ReplacesTheGenericOptions verifies every
 // merge train action reaches the catalog carrying its own discovery metadata
@@ -133,43 +120,59 @@ func TestDecorateMergeTrainMeta_EmptyEntry_LeavesEveryOptionAlone(t *testing.T) 
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies all 4 merge train routes execute successfully.
+// TestActionSpecs_CallRoutes verifies each merge train tool reaches the GitLab
+// endpoint its own action names, and not merely that some route answered.
+//
+// The pairing of a tool name with a route is a function value beside a string,
+// and nothing about it is a branch either gate can flip: giving
+// gitlab_get_merge_request_on_merge_train the add route leaves a read tool
+// POSTing a merge request onto the train, and the version of this test that
+// asked only for a non-nil result and no error stayed green while it did. The
+// mock answers by the shape of the path it is given, so a crossed route gets a
+// well-formed response and is caught by the recorded method and path rather
+// than by a decoding accident.
 func TestActionSpecs_CallRoutes(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		switch {
-		case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/merge_requests/"):
-			testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
-		case r.Method == http.MethodGet && strings.Contains(path, "/merge_trains/"):
-			testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/merge_trains"):
-			testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
-		case r.Method == http.MethodPost && strings.Contains(path, "/merge_trains/merge_requests/"):
-			testutil.RespondJSON(w, http.StatusCreated, registerTrainsJSON)
-		default:
-			http.NotFound(w, r)
-		}
-	})
-	client := testutil.NewTestClient(t, mux)
-	specs := ActionSpecs(client)
-	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
-	for _, spec := range specs {
-		specByTool[spec.IndividualTool.Name] = spec
-	}
-
 	tools := []struct {
-		name string
-		args map[string]any
+		name       string
+		args       map[string]any
+		wantMethod string
+		wantPath   string
 	}{
-		{"gitlab_list_project_merge_trains", map[string]any{"project_id": "42"}},
-		{"gitlab_list_merge_request_in_merge_train", map[string]any{"project_id": "42", "target_branch": "main"}},
-		{"gitlab_get_merge_request_on_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
-		{"gitlab_add_merge_request_to_merge_train", map[string]any{"project_id": "42", "merge_request_iid": float64(10)}},
+		{
+			"gitlab_list_project_merge_trains",
+			map[string]any{"project_id": "42"},
+			http.MethodGet, "/api/v4/projects/42/merge_trains",
+		},
+		{
+			"gitlab_list_merge_request_in_merge_train",
+			map[string]any{"project_id": "42", "target_branch": "main"},
+			http.MethodGet, "/api/v4/projects/42/merge_trains/main",
+		},
+		{
+			"gitlab_get_merge_request_on_merge_train",
+			map[string]any{"project_id": "42", "merge_request_iid": float64(10)},
+			http.MethodGet, "/api/v4/projects/42/merge_trains/merge_requests/10",
+		},
+		{
+			"gitlab_add_merge_request_to_merge_train",
+			map[string]any{"project_id": "42", "merge_request_iid": float64(10)},
+			http.MethodPost, "/api/v4/projects/42/merge_trains/merge_requests/10",
+		},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {
-			spec, ok := specByTool[tt.name]
+			var gotMethod, gotPath string
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotMethod, gotPath = r.Method, r.URL.Path
+				// Only the single-merge-request read answers with one object;
+				// every other merge train route answers with a list.
+				if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/merge_trains/merge_requests/") {
+					testutil.RespondJSON(w, http.StatusOK, registerTrainJSON)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, registerTrainsJSON)
+			}))
+			spec, ok := specsByTool(ActionSpecs(client))[tt.name]
 			if !ok {
 				t.Fatalf("missing ActionSpec for %s", tt.name)
 			}
@@ -180,6 +183,169 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 			if result == nil {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.name)
 			}
+			if gotMethod != tt.wantMethod || gotPath != tt.wantPath {
+				t.Errorf("%s reached %s %s, want %s %s", tt.name, gotMethod, gotPath, tt.wantMethod, tt.wantPath)
+			}
 		})
+	}
+}
+
+// specsByTool indexes specs by the name their individual tool is registered
+// under.
+func specsByTool(specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	return byTool
+}
+
+// mergeTrainSurfaceFacts is what the catalog reads off one spec to decide where
+// the action is served and whether a session may run it.
+type mergeTrainSurfaceFacts struct {
+	action     string
+	readOnly   bool
+	idempotent bool
+}
+
+// TestActionSpecs_SurfaceMetadata pins the facts the catalog reads off each
+// spec that no other test in this package reads back: the canonical action each
+// tool name belongs to, whether the action mutates, and the tier, tags, owner
+// and open-world hint the whole domain is registered under.
+//
+// None of it is a branch, so neither gate can be wrong about any of it, and
+// each is one word away from a surface defect that compiles: building the add
+// action with [mergeTrainReadSpec] serves a tool that enqueues a merge request
+// to a --read-only deployment and to a read_api token, and an empty Edition
+// serves this Premium domain to a Free instance.
+func TestActionSpecs_SurfaceMetadata(t *testing.T) {
+	want := map[string]mergeTrainSurfaceFacts{
+		"gitlab_list_project_merge_trains":         {action: "list_project", readOnly: true, idempotent: true},
+		"gitlab_list_merge_request_in_merge_train": {action: "list_branch", readOnly: true, idempotent: true},
+		"gitlab_get_merge_request_on_merge_train":  {action: "get", readOnly: true, idempotent: true},
+		"gitlab_add_merge_request_to_merge_train":  {action: "add", readOnly: false, idempotent: false},
+	}
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	gotTools := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		gotTools = append(gotTools, spec.IndividualTool.Name)
+	}
+	slices.Sort(gotTools)
+	if wantTools := slices.Sorted(maps.Keys(want)); !slices.Equal(gotTools, wantTools) {
+		t.Fatalf("individual tools = %v, want %v", gotTools, wantTools)
+	}
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			assertSurfaceFacts(t, spec, want[spec.IndividualTool.Name])
+		})
+	}
+}
+
+// assertSurfaceFacts holds one spec to the action it belongs to, its mutation
+// classification and the domain-wide registration metadata.
+func assertSurfaceFacts(t *testing.T, spec toolutil.ActionSpec, facts mergeTrainSurfaceFacts) {
+	t.Helper()
+	if spec.Name != facts.action {
+		t.Errorf("Name = %q, want %q", spec.Name, facts.action)
+	}
+	if spec.ReadOnly != facts.readOnly {
+		t.Errorf("ReadOnly = %v, want %v", spec.ReadOnly, facts.readOnly)
+	}
+	if spec.Idempotent != facts.idempotent {
+		t.Errorf("Idempotent = %v, want %v", spec.Idempotent, facts.idempotent)
+	}
+	if spec.Destructive {
+		t.Error("Destructive = true; no merge train action deletes anything")
+	}
+	if spec.Edition != "premium" {
+		t.Errorf("Edition = %q, want %q: merge trains are a Premium feature", spec.Edition, "premium")
+	}
+	if spec.OwnerPackage != "mergetrains" {
+		t.Errorf("OwnerPackage = %q, want %q", spec.OwnerPackage, "mergetrains")
+	}
+	if !spec.OpenWorld {
+		t.Error("OpenWorld = false; every merge train action reaches GitLab")
+	}
+	if wantTags := []string{"merge_request", "merge_train"}; !slices.Equal(spec.Tags, wantTags) {
+		t.Errorf("Tags = %v, want %v", spec.Tags, wantTags)
+	}
+}
+
+// TestActionSpecs_ScopeEnum verifies the scope parameter is published as a
+// closed vocabulary on the two actions that accept one, and that the other two
+// publish no input-schema override at all.
+//
+// The enum is the only thing telling a model that scope takes "active" or
+// "complete" rather than free text, it is applied by a switch over tool names
+// that no mutation reaches, and it is attached to the wrong action as easily as
+// to the right one.
+func TestActionSpecs_ScopeEnum(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	wantScoped := map[string]bool{
+		"gitlab_list_project_merge_trains":         true,
+		"gitlab_list_merge_request_in_merge_train": true,
+	}
+	for _, spec := range ActionSpecs(client) {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			if !wantScoped[spec.IndividualTool.Name] {
+				if len(spec.InputSchemaOverrides) != 0 {
+					t.Errorf("InputSchemaOverrides = %v, want none for an action with no scope parameter", spec.InputSchemaOverrides)
+				}
+				return
+			}
+			want := []toolutil.InputSchemaOverride{
+				toolutil.SchemaPropertyOverride("scope", map[string]any{"enum": []any{"active", "complete"}}),
+			}
+			if !reflect.DeepEqual(spec.InputSchemaOverrides, want) {
+				t.Errorf("InputSchemaOverrides = %+v, want %+v", spec.InputSchemaOverrides, want)
+			}
+		})
+	}
+}
+
+// TestActionIDConstants_AreTheIDsTheSpecsRegister holds both blocks of
+// canonical action IDs this package keeps — the one markdown.go builds its
+// hints from and the one action_specs.go names related actions with — to the
+// IDs [ActionSpecs] really registers, and to each other.
+//
+// A dotted ID is a string literal, so no mutation of a branch and no condition
+// counter can be wrong about one, and a hint naming an action no surface
+// resolves answers a model "unknown action" the moment it follows the advice.
+// Two blocks are only safe while they agree, and elsewhere in this tree they
+// have drifted.
+func TestActionIDConstants_AreTheIDsTheSpecsRegister(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	registered := make(map[string]bool)
+	for _, spec := range ActionSpecs(client) {
+		registered["merge_train."+spec.Name] = true
+	}
+	pairs := []struct {
+		hintID string
+		specID string
+	}{
+		{actionListProject, actionMergeTrainListProject},
+		{actionListBranch, actionMergeTrainListBranch},
+		{actionGet, actionMergeTrainGet},
+		{actionAdd, actionMergeTrainAdd},
+	}
+	for _, pair := range pairs {
+		t.Run(pair.hintID, func(t *testing.T) {
+			if pair.hintID != pair.specID {
+				t.Errorf("markdown.go names %q where action_specs.go names %q", pair.hintID, pair.specID)
+			}
+			if !registered[pair.hintID] {
+				t.Errorf("%q names no action ActionSpecs registers", pair.hintID)
+			}
+		})
+	}
+	if len(pairs) != len(registered) {
+		t.Errorf("%d ID constant(s) for %d registered action(s); every action needs one", len(pairs), len(registered))
 	}
 }
