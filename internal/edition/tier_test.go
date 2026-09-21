@@ -35,15 +35,20 @@ func TestParseTier(t *testing.T) {
 }
 
 // TestTierFromPlan verifies the GitLab license plan to tier mapping, including
-// legacy plan names (starter/bronze/silver → Premium, gold → Ultimate).
+// legacy plan names (starter/bronze/silver → Premium, gold → Ultimate). The two
+// padded rows pin the trimming the switch applies: every other case here spells
+// the plan exactly, so dropping strings.TrimSpace changed nothing any of them
+// could see, while ParseTier and TierFromEdition each already had a padded case.
 func TestTierFromPlan(t *testing.T) {
 	tests := []struct {
 		plan string
 		want Tier
 	}{
 		{plan: "premium", want: Premium},
+		{plan: "  premium ", want: Premium},
 		{plan: "ultimate", want: Ultimate},
 		{plan: "Ultimate", want: Ultimate},
+		{plan: " GOLD ", want: Ultimate},
 		{plan: "starter", want: Premium},
 		{plan: "bronze", want: Premium},
 		{plan: "silver", want: Premium},
@@ -132,6 +137,53 @@ func TestTierForEnterprise_LegacyBoolean_MapsToUltimateAndFree(t *testing.T) {
 			}
 			if back := got.IsEnterprise(); back != tc.enterprise {
 				t.Errorf("TierForEnterprise(%v).IsEnterprise() = %v, want %v", tc.enterprise, back, tc.enterprise)
+			}
+		})
+	}
+}
+
+// TestTier_ZeroValue_IsFree pins what the package comment and [Tier] both
+// claim: an unset tier is Free, the conservative fallback. Every action with an
+// empty Edition annotation and every deployment whose tier nobody resolved
+// arrives here as that zero value, and no other case in this file names a Tier
+// that was never assigned, so a constant block that stopped starting at iota
+// would move the whole gating floor in silence.
+func TestTier_ZeroValue_IsFree(t *testing.T) {
+	var zero Tier
+	if zero != Free {
+		t.Errorf("zero value of Tier = %d, want Free (%d)", int(zero), int(Free))
+	}
+	if zero.IsEnterprise() {
+		t.Error("the zero value must grant no Enterprise action")
+	}
+}
+
+// TestLicensePlanNames_AreNotConfigurationOrEditionValues holds the three string
+// vocabularies apart. TierFromPlan reads what the License API answers, so it
+// knows the legacy paid plans; ParseTier reads GITLAB_MCP_TIER and
+// TierFromEdition reads an ActionSpec annotation, and neither has ever accepted
+// a plan name. Both halves are asserted because folding the three switches into
+// one would map every legacy name everywhere, and only "starter" objected.
+func TestLicensePlanNames_AreNotConfigurationOrEditionValues(t *testing.T) {
+	tests := []struct {
+		plan string
+		want Tier
+	}{
+		{plan: "starter", want: Premium},
+		{plan: "bronze", want: Premium},
+		{plan: "silver", want: Premium},
+		{plan: "gold", want: Ultimate},
+	}
+	for _, tc := range tests {
+		t.Run(tc.plan, func(t *testing.T) {
+			if got := TierFromPlan(tc.plan); got != tc.want {
+				t.Errorf("TierFromPlan(%q) = %v, want %v", tc.plan, got, tc.want)
+			}
+			if got, ok := ParseTier(tc.plan); ok || got != Free {
+				t.Errorf("ParseTier(%q) = (%v, %v), want (free, false)", tc.plan, got, ok)
+			}
+			if got := TierFromEdition(tc.plan); got != Free {
+				t.Errorf("TierFromEdition(%q) = %v, want free", tc.plan, got)
 			}
 		})
 	}
