@@ -4,6 +4,7 @@ package issuediscussions
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,9 +14,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallAllRoutes drives every issue discussion action through
+// the route the catalog publishes, with the arguments that action's schema
+// takes, and asserts each one reaches its handler and answers a result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
 
@@ -65,8 +66,8 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 }
 
 // TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the route answers with the deletion confirmation naming what was removed.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
 
@@ -85,9 +86,10 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalogSurface_DeleteConfirmDeclined drives the destructive note delete
+// over a real MCP session whose client declines the elicited confirmation.
+// It asserts the call is answered rather than failing the transport, and the
+// mock is a [testutil.ForbiddenHandler], so nothing reached GitLab.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(client))
@@ -135,6 +137,14 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // generic placeholder), natural-language aliases, canonical RelatedActions,
 // parameter guidance, and an IndividualTool.Description with "Returns:" and
 // "See also:" sections.
+//
+// Two of the assertions are about which action the metadata belongs to rather
+// than about its shape, because all of it is written in one switch over the
+// individual tool name and a case body moved to the wrong label is a straight
+// assignment no gate can see. The aliases must name the tool they decorate,
+// which a crossed case body does not, and an action must not link to itself,
+// which a crossed RelatedActions list does: every list here names siblings
+// only, so a self-reference is exactly the fingerprint of a swap.
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
 
@@ -149,27 +159,98 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 
 	for _, tool := range tools {
 		t.Run(tool, func(t *testing.T) {
-			spec := byTool[tool]
-			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute issuediscussions domain action.") {
-				t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+			assertActionText(t, byTool[tool], tool)
+			assertRelatedActions(t, byTool[tool], tool)
+		})
+	}
+}
+
+// assertActionText holds the prose an action publishes: usage written for this
+// action rather than the package placeholder, aliases that include the tool
+// they decorate, parameter guidance, and a description with both sections a
+// model reads.
+func assertActionText(t *testing.T, spec toolutil.ActionSpec, tool string) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute issuediscussions domain action.") {
+		t.Errorf("%s: Usage must be action-specific, got %q", tool, spec.Usage)
+	}
+	if len(spec.Aliases) < 2 {
+		t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+	}
+	if !slices.Contains(spec.Aliases, tool) {
+		t.Errorf("%s: aliases %v decorate another action", tool, spec.Aliases)
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Errorf("%s: expected ParameterGuidance, got none", tool)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+	}
+}
+
+// assertRelatedActions holds every cross-link an action publishes to a
+// canonical issue.* id that is not its own.
+func assertRelatedActions(t *testing.T, spec toolutil.ActionSpec, tool string) {
+	t.Helper()
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: expected RelatedActions, got none", tool)
+	}
+	self := canonicalID(spec.Name)
+	for _, ra := range spec.RelatedActions {
+		if !strings.HasPrefix(ra, "issue.") {
+			t.Errorf("%s: RelatedAction %q is not a canonical issue.* id", tool, ra)
+		}
+		if ra == self {
+			t.Errorf("%s: RelatedActions link to the action itself (%q)", tool, self)
+		}
+	}
+}
+
+// canonicalID is the catalog id of an issue discussion action. These specs are
+// merged into the gitlab_issue group, so the id is the spec name under the
+// issue domain.
+func canonicalID(specName string) string { return "issue." + specName }
+
+// TestActionSpecs_Annotations_MatchWhatEachActionDoes holds the three
+// behavioral hints a client reads before deciding whether it may call an
+// action without asking, and whether it may repeat one whose answer it never
+// saw: read-only, idempotent, destructive.
+//
+// They come from which constructor each spec is built with, and the four
+// constructors differ only in the flags they set, so building an action with
+// the wrong one is invisible to every gate here: no branch changes, the route
+// still runs, and the suite still passes. What changes is that a delete stops
+// announcing itself as destructive, or a create starts inviting a retry that
+// posts a second note.
+func TestActionSpecs_Annotations_MatchWhatEachActionDoes(t *testing.T) {
+	byTool := issueDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueDiscussionsActionHandler())))
+
+	tests := []struct {
+		tool        string
+		readOnly    bool
+		idempotent  bool
+		destructive bool
+	}{
+		{"gitlab_list_issue_discussions", true, true, false},
+		{"gitlab_get_issue_discussion", true, true, false},
+		{"gitlab_create_issue_discussion", false, false, false},
+		{"gitlab_add_issue_discussion_note", false, false, false},
+		{"gitlab_update_issue_discussion_note", false, true, false},
+		{"gitlab_delete_issue_discussion_note", false, true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.ReadOnly != tt.readOnly {
+				t.Errorf("%s: ReadOnly = %t, want %t", tt.tool, spec.ReadOnly, tt.readOnly)
 			}
-			if len(spec.Aliases) < 2 {
-				t.Errorf("%s: expected natural-language aliases, got %v", tool, spec.Aliases)
+			if spec.Idempotent != tt.idempotent {
+				t.Errorf("%s: Idempotent = %t, want %t", tt.tool, spec.Idempotent, tt.idempotent)
 			}
-			if len(spec.RelatedActions) == 0 {
-				t.Errorf("%s: expected RelatedActions, got none", tool)
-			}
-			for _, ra := range spec.RelatedActions {
-				if !strings.HasPrefix(ra, "issue.") {
-					t.Errorf("%s: RelatedAction %q is not a canonical issue.* id", tool, ra)
-				}
-			}
-			if len(spec.ParameterGuidance) == 0 {
-				t.Errorf("%s: expected ParameterGuidance, got none", tool)
-			}
-			desc := spec.IndividualTool.Description
-			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-				t.Errorf("%s: IndividualTool.Description must contain Returns:/See also:, got %q", tool, desc)
+			if spec.Destructive != tt.destructive {
+				t.Errorf("%s: Destructive = %t, want %t", tt.tool, spec.Destructive, tt.destructive)
 			}
 		})
 	}

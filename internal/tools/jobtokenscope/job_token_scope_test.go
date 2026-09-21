@@ -5,177 +5,438 @@ package jobtokenscope
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v3"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 )
 
-// TestGetAccessSettings_Success verifies GetAccessSettings when success.
+// Every writing handler here builds a body GitLab reads and nothing answered
+// back: a PATCH carrying one flag, and two POSTs each carrying one identifier.
+// A mock that only answers cannot tell the flag the caller chose from its
+// opposite, nor the target the caller named from a constant, so the mock keeps
+// what it was sent and each writing handler is held to it.
+
+// capturedRequest is what the mock was sent: how the handler addressed the
+// request and what it carried.
+type capturedRequest struct {
+	Method string
+	Path   string
+	Body   []byte
+}
+
+// captureRequest answers with response, or with status alone when response is
+// empty, and keeps the request it was sent so a test can assert what GitLab
+// received rather than what the handler returned.
+func captureRequest(t *testing.T, status int, response string, into *capturedRequest) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
+		}
+		*into = capturedRequest{Method: r.Method, Path: r.URL.Path, Body: body}
+		if response == "" {
+			w.WriteHeader(status)
+			return
+		}
+		testutil.RespondJSON(w, status, response)
+	})
+}
+
+// assertAddressed fails when the captured request did not reach the endpoint
+// the action is named for, so a body assertion can never pass on a request
+// that went somewhere else.
+func assertAddressed(t *testing.T, got capturedRequest, method, path string) {
+	t.Helper()
+	if got.Method != method {
+		t.Errorf("method = %q, want %q", got.Method, method)
+	}
+	if got.Path != path {
+		t.Errorf("path = %q, want %q", got.Path, path)
+	}
+}
+
+// TestGetAccessSettings_Success reads the settings both ways. The whole answer
+// of this action is one boolean, and a fixture that only ever says true cannot
+// tell a handler reading GitLab's flag from one returning a constant, which
+// would report every project as restricted, including the ones open to any job
+// token.
 func TestGetAccessSettings_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/42/job_token_scope" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		testutil.RespondJSON(w, http.StatusOK, `{"inbound_enabled": true}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	out, err := GetAccessSettings(t.Context(), client, GetAccessSettingsInput{ProjectID: "42"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "restricted to the allowlist", body: `{"inbound_enabled": true}`, want: true},
+		{name: "open to any project", body: `{"inbound_enabled": false}`, want: false},
 	}
-	if !out.InboundEnabled {
-		t.Error("expected inbound_enabled=true")
-	}
-}
-
-// TestGetAccessSettings_Error verifies GetAccessSettings when error.
-func TestGetAccessSettings_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, `{"message":"error"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	_, err := GetAccessSettings(t.Context(), client, GetAccessSettingsInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, tc.body, &got))
+			out, err := GetAccessSettings(t.Context(), client, GetAccessSettingsInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope")
+			if out.InboundEnabled != tc.want {
+				t.Errorf("InboundEnabled = %t, want %t", out.InboundEnabled, tc.want)
+			}
+		})
 	}
 }
 
-// TestPatchAccessSettings_Success verifies PatchAccessSettings when success.
-func TestPatchAccessSettings_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPatch {
-			t.Errorf("expected PATCH, got %s", r.Method)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	client := testutil.NewTestClient(t, handler)
-	out, err := PatchAccessSettings(t.Context(), client, PatchAccessSettingsInput{ProjectID: "42", Enabled: true})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// gitLabRefusal is the message GitLab's own body carries in the error tests,
+// distinct from anything this package writes so an assertion can tell the two
+// apart.
+const gitLabRefusal = "job token scope is not available here"
+
+// detailFor is the parenthesised detail a wrapped error carries for a refusal
+// at status. Everything but a 404 reaches the wrapper as GitLab's own parsed
+// body; a 404 reaches it as client-go's shared ErrNotFound, whose message is
+// the status text.
+func detailFor(status int) string {
+	if status == http.StatusNotFound {
+		return "Not Found"
 	}
-	if out.Status != "updated" {
-		t.Errorf("expected status 'updated', got %q", out.Status)
+	return "{message: " + gitLabRefusal + "}"
+}
+
+// refusingHandler answers every request with status and GitLab's own error
+// body.
+func refusingHandler(status int) http.Handler {
+	body := fmt.Sprintf(`{"message":%q}`, gitLabRefusal)
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, status, body)
+	})
+}
+
+// TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor drives every
+// handler at the status its hint names and at one other, and replaces eight
+// tests that asserted an error had come back and nothing else.
+//
+// Three properties were unheld, and each is a straight-line literal no gate
+// reads. The status: every hint here is attached by WrapErrWithStatusHint for
+// one code, and two handlers could have exchanged 403 for 404 with no test
+// noticing. The hint text itself, which is what a model is told to do next.
+// And the operation label the wrapped error opens with, which is what names
+// the failing action in a log. Six of the replaced tests also sent
+// `{"message":msgServerError}`, which is not JSON, so GitLab's message was
+// never parsed and no assertion about it could have held.
+//
+// The hint leg asserts the composed `(<detail>). Suggestion: <hint>` rather
+// than the hint alone: the parenthesised group is emitted only when a detail
+// was extracted, so one substring holds both halves. The other leg asserts no
+// suggestion at all, which is what pins the code.
+//
+// What that detail is depends on the status, and the reason is upstream:
+// client-go's CheckResponse answers every 404 with one shared ErrNotFound
+// sentinel before it reads the body, so GitLab's own message survives on the
+// 403 and 400 legs and is replaced by "Not Found" on the 404 ones. Spelling it
+// out here rather than asserting around it keeps the test honest about what a
+// caller really sees when a project id is wrong.
+func TestHandlers_EachHint_IsCarriedOnlyByTheStatusItIsWrittenFor(t *testing.T) {
+	const otherStatus = http.StatusBadRequest
+
+	cases := []struct {
+		name      string
+		operation string
+		status    int
+		hint      string
+		call      func(context.Context, *gitlabclient.Client) error
+	}{
+		{
+			name:      "get_access_settings",
+			operation: "get_job_token_access_settings",
+			status:    http.StatusNotFound,
+			hint:      "verify project_id with gitlab_project_get; CI/CD job token settings are at project level",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := GetAccessSettings(ctx, c, GetAccessSettingsInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name:      "patch_access_settings",
+			operation: "patch_job_token_access_settings",
+			status:    http.StatusForbidden,
+			hint:      "updating job token access settings requires Maintainer role; verify project_id",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := PatchAccessSettings(ctx, c, PatchAccessSettingsInput{ProjectID: "42", Enabled: true})
+				return err
+			},
+		},
+		{
+			name:      "list_inbound_allowlist",
+			operation: "list_job_token_inbound_allowlist",
+			status:    http.StatusNotFound,
+			hint:      "verify project_id; allowlist may be empty if inbound scope is disabled",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListInboundAllowlist(ctx, c, ListInboundAllowlistInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name:      "add_project_allowlist",
+			operation: "add_project_job_token_allowlist",
+			status:    http.StatusForbidden,
+			hint:      "adding to inbound allowlist requires Maintainer role on source project; verify target_project_id exists and is accessible",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := AddProjectAllowlist(ctx, c, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+				return err
+			},
+		},
+		{
+			name:      "remove_project_allowlist",
+			operation: "remove_project_job_token_allowlist",
+			status:    http.StatusNotFound,
+			hint:      "verify target_project_id is on the allowlist with gitlab_list_job_token_inbound_allowlist; requires Maintainer role",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				return RemoveProjectAllowlist(ctx, c, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
+			},
+		},
+		{
+			name:      "list_group_allowlist",
+			operation: "list_job_token_group_allowlist",
+			status:    http.StatusNotFound,
+			hint:      "verify project_id; group allowlist requires GitLab 17.0+",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := ListGroupAllowlist(ctx, c, ListGroupAllowlistInput{ProjectID: "42"})
+				return err
+			},
+		},
+		{
+			name:      "add_group_allowlist",
+			operation: "add_group_job_token_allowlist",
+			status:    http.StatusForbidden,
+			hint:      "adding to group allowlist requires Maintainer role on project; verify target_group_id exists; requires GitLab 17.0+",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				_, err := AddGroupAllowlist(ctx, c, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+				return err
+			},
+		},
+		{
+			name:      "remove_group_allowlist",
+			operation: "remove_group_job_token_allowlist",
+			status:    http.StatusNotFound,
+			hint:      "verify target_group_id is on the allowlist with gitlab_list_job_token_group_allowlist; requires Maintainer role",
+			call: func(ctx context.Context, c *gitlabclient.Client) error {
+				return RemoveGroupAllowlist(ctx, c, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hinted := tc.call(t.Context(), testutil.NewTestClient(t, refusingHandler(tc.status)))
+			if hinted == nil {
+				t.Fatalf("expected an error from a %d answer", tc.status)
+			}
+			wantHinted := "(" + detailFor(tc.status) + "). Suggestion: " + tc.hint
+			if !strings.Contains(hinted.Error(), wantHinted) {
+				t.Errorf("error at %d = %q,\nwant it to carry %q", tc.status, hinted, wantHinted)
+			}
+			if !strings.HasPrefix(hinted.Error(), tc.operation+": ") {
+				t.Errorf("error at %d = %q, want it to open with the operation %q", tc.status, hinted, tc.operation)
+			}
+
+			plain := tc.call(t.Context(), testutil.NewTestClient(t, refusingHandler(otherStatus)))
+			if plain == nil {
+				t.Fatalf("expected an error from a %d answer", otherStatus)
+			}
+			if !strings.Contains(plain.Error(), "("+detailFor(otherStatus)+")") {
+				t.Errorf("error at %d = %q, want GitLab's own message in it", otherStatus, plain)
+			}
+			if strings.Contains(plain.Error(), "Suggestion: ") {
+				t.Errorf("error at %d = %q, want no suggestion: this hint is written for %d alone", otherStatus, plain, tc.status)
+			}
+		})
 	}
 }
 
-// TestListInboundAllowlist_Success verifies ListInboundAllowlist when success.
-func TestListInboundAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id": 10, "name": "project-a", "path_with_namespace": "group/project-a", "web_url": "https://gitlab.example.com/group/project-a"}
-		]`)
-	})
-	client := testutil.NewTestClient(t, handler)
+// TestPatchAccessSettings_TheFlagTheCallerChose_IsWhatGitLabReceives drives
+// the handler both ways and reads the body back. This is the one action here
+// whose whole effect is a single boolean, and nothing observed it: the mock
+// answered 204 whatever arrived, so a handler sending the opposite of what the
+// caller asked would have turned the inbound restriction on for someone
+// turning it off, and every assertion would still have passed. The body is
+// compared as text rather than decoded, because a decoded false cannot be told
+// from a field that was never sent.
+func TestPatchAccessSettings_TheFlagTheCallerChose_IsWhatGitLabReceives(t *testing.T) {
+	cases := []struct {
+		name     string
+		enabled  bool
+		wantBody string
+	}{
+		{name: "enabling the inbound restriction", enabled: true, wantBody: `{"enabled":true}`},
+		{name: "disabling the inbound restriction", enabled: false, wantBody: `{"enabled":false}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got capturedRequest
+			client := testutil.NewTestClient(t, captureRequest(t, http.StatusNoContent, "", &got))
+
+			out, err := PatchAccessSettings(t.Context(), client, PatchAccessSettingsInput{ProjectID: "42", Enabled: tc.enabled})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			assertAddressed(t, got, http.MethodPatch, "/api/v4/projects/42/job_token_scope")
+			if body := strings.TrimSpace(string(got.Body)); body != tc.wantBody {
+				t.Errorf("request body = %s, want %s", body, tc.wantBody)
+			}
+			if out.Status != "updated" {
+				t.Errorf("Status = %q, want %q", out.Status, "updated")
+			}
+		})
+	}
+}
+
+// TestListInboundAllowlist_EachProjectField_ComesFromItsOwnSourceField holds
+// the whole row rather than its id and name, because the two string fields
+// left unasserted could trade places without a test noticing: a path and a web
+// URL are both strings, and the card built from the row prints the path in a
+// column of its own. Every value in the fixture is distinct, so no assignment
+// is indistinguishable from its neighbor.
+func TestListInboundAllowlist_EachProjectField_ComesFromItsOwnSourceField(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, `[
+		{"id": 10, "name": "project-a", "path_with_namespace": "group/project-a", "web_url": "https://gitlab.example.com/group/project-a"},
+		{"id": 11, "name": "project-b", "path_with_namespace": "other/project-b", "web_url": "https://gitlab.example.com/other/project-b"}
+	]`, &got))
+
 	out, err := ListInboundAllowlist(t.Context(), client, ListInboundAllowlistInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Projects) != 1 {
-		t.Fatalf("expected 1 project, got %d", len(out.Projects))
+	assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope/allowlist")
+
+	want := []AllowlistProjectItem{
+		{ID: 10, Name: "project-a", PathWithNamespace: "group/project-a", WebURL: "https://gitlab.example.com/group/project-a"},
+		{ID: 11, Name: "project-b", PathWithNamespace: "other/project-b", WebURL: "https://gitlab.example.com/other/project-b"},
 	}
-	if out.Projects[0].ID != 10 {
-		t.Errorf("expected ID 10, got %d", out.Projects[0].ID)
-	}
-	if out.Projects[0].Name != "project-a" {
-		t.Errorf("expected name 'project-a', got %q", out.Projects[0].Name)
+	if !slices.Equal(out.Projects, want) {
+		t.Errorf("Projects =\n %+v\nwant\n %+v", out.Projects, want)
 	}
 }
 
-// TestAddProjectAllowlist_Success verifies AddProjectAllowlist when success.
-func TestAddProjectAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"source_project_id": 42, "target_project_id": 99}`)
-	})
-	client := testutil.NewTestClient(t, handler)
+// TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives reads
+// the posted body back as the options client-go encodes, so the assertion
+// names the field GitLab reads. The output was already held to both of its
+// identifiers; what nothing held was the request, and a handler posting a
+// constant in place of the caller's target would grant inbound access to the
+// wrong project while answering with the entry the mock invented.
+func TestAddProjectAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
+		`{"source_project_id": 42, "target_project_id": 99}`, &got))
+
 	out, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.SourceProjectID != 42 {
-		t.Errorf("expected source 42, got %d", out.SourceProjectID)
+	assertAddressed(t, got, http.MethodPost, "/api/v4/projects/42/job_token_scope/allowlist")
+
+	var sent gl.JobTokenInboundAllowOptions
+	if decodeErr := json.Unmarshal(got.Body, &sent); decodeErr != nil {
+		t.Fatalf("decode request body %q: %v", got.Body, decodeErr)
 	}
-	if out.TargetProjectID != 99 {
-		t.Errorf("expected target 99, got %d", out.TargetProjectID)
+	if sent.TargetProjectID == nil || *sent.TargetProjectID != 99 {
+		t.Errorf("target_project_id sent = %v, want 99", sent.TargetProjectID)
+	}
+	if out.SourceProjectID != 42 || out.TargetProjectID != 99 {
+		t.Errorf("output = {source %d, target %d}, want {source 42, target 99}", out.SourceProjectID, out.TargetProjectID)
 	}
 }
 
-// TestRemoveProjectAllowlist_Success verifies RemoveProjectAllowlist when success.
+// TestRemoveProjectAllowlist_Success checks that the delete reaches the entry
+// the caller named. The two identifiers this action carries are both in the
+// path and nowhere else, so the path is the only place a test can see which
+// project was removed from whose allowlist.
 func TestRemoveProjectAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	client := testutil.NewTestClient(t, handler)
-	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
-	if err != nil {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusNoContent, "", &got))
+	if err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	assertAddressed(t, got, http.MethodDelete, "/api/v4/projects/42/job_token_scope/allowlist/99")
 }
 
-// TestRemoveProjectAllowlist_Error verifies RemoveProjectAllowlist when error.
-func TestRemoveProjectAllowlist_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, `{"message":"error"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
+// TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField holds the
+// whole row for the reason its project sibling does, and for one more: a
+// top-level group's name and full path are the same string, so the fixture
+// this replaced gave two of the three assignments the same value and could not
+// have told them apart even had it asserted them. The groups here are nested,
+// so name, path and URL all differ.
+func TestListGroupAllowlist_EachGroupField_ComesFromItsOwnSourceField(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusOK, `[
+		{"id": 5, "name": "my-group", "full_path": "parent/my-group", "web_url": "https://gitlab.example.com/groups/parent/my-group"},
+		{"id": 6, "name": "other-group", "full_path": "parent/other-group", "web_url": "https://gitlab.example.com/groups/parent/other-group"}
+	]`, &got))
 
-// TestListGroupAllowlist_Success verifies ListGroupAllowlist when success.
-func TestListGroupAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id": 5, "name": "my-group", "full_path": "my-group", "web_url": "https://gitlab.example.com/groups/my-group"}
-		]`)
-	})
-	client := testutil.NewTestClient(t, handler)
 	out, err := ListGroupAllowlist(t.Context(), client, ListGroupAllowlistInput{ProjectID: "42"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if len(out.Groups) != 1 {
-		t.Fatalf("expected 1 group, got %d", len(out.Groups))
+	assertAddressed(t, got, http.MethodGet, "/api/v4/projects/42/job_token_scope/groups_allowlist")
+
+	want := []AllowlistGroupItem{
+		{ID: 5, Name: "my-group", FullPath: "parent/my-group", WebURL: "https://gitlab.example.com/groups/parent/my-group"},
+		{ID: 6, Name: "other-group", FullPath: "parent/other-group", WebURL: "https://gitlab.example.com/groups/parent/other-group"},
 	}
-	if out.Groups[0].ID != 5 {
-		t.Errorf("expected ID 5, got %d", out.Groups[0].ID)
+	if !slices.Equal(out.Groups, want) {
+		t.Errorf("Groups =\n %+v\nwant\n %+v", out.Groups, want)
 	}
 }
 
-// TestAddGroupAllowlist_Success verifies AddGroupAllowlist when success.
-func TestAddGroupAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"source_project_id": 42, "target_group_id": 5}`)
-	})
-	client := testutil.NewTestClient(t, handler)
+// TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives is the
+// group half of the same demand, and holds the answered entry's own two
+// identifiers as well: the source project was unasserted, so the pair could
+// have been exchanged on the way out and only the target was ever read.
+func TestAddGroupAllowlist_TheTargetTheCallerNamed_IsWhatGitLabReceives(t *testing.T) {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusCreated,
+		`{"source_project_id": 42, "target_group_id": 5}`, &got))
+
 	out, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.TargetGroupID != 5 {
-		t.Errorf("expected target_group_id 5, got %d", out.TargetGroupID)
+	assertAddressed(t, got, http.MethodPost, "/api/v4/projects/42/job_token_scope/groups_allowlist")
+
+	var sent gl.AddGroupToJobTokenAllowlistOptions
+	if decodeErr := json.Unmarshal(got.Body, &sent); decodeErr != nil {
+		t.Fatalf("decode request body %q: %v", got.Body, decodeErr)
+	}
+	if sent.TargetGroupID == nil || *sent.TargetGroupID != 5 {
+		t.Errorf("target_group_id sent = %v, want 5", sent.TargetGroupID)
+	}
+	if out.SourceProjectID != 42 || out.TargetGroupID != 5 {
+		t.Errorf("output = {source %d, group %d}, want {source 42, group 5}", out.SourceProjectID, out.TargetGroupID)
 	}
 }
 
-// TestRemoveGroupAllowlist_Success verifies RemoveGroupAllowlist when success.
+// TestRemoveGroupAllowlist_Success is the group half of the same demand: the
+// project and the group it revokes access for are both segments of the path.
 func TestRemoveGroupAllowlist_Success(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	client := testutil.NewTestClient(t, handler)
-	err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
-	if err != nil {
+	var got capturedRequest
+	client := testutil.NewTestClient(t, captureRequest(t, http.StatusNoContent, "", &got))
+	if err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	assertAddressed(t, got, http.MethodDelete, "/api/v4/projects/42/job_token_scope/groups_allowlist/5")
 }
 
 // TestAddProjectAllowlist_ZeroTargetProjectID verifies AddProjectAllowlist when zero target project ID.
@@ -269,9 +530,6 @@ const errExpNonNilResult = "expected non-nil result"
 // errExpCancelledCtx identifies the err exp cancelled ctx constant used by this package.
 const errExpCancelledCtx = "expected error for canceled context"
 
-// errExpectedAPI identifies the err expected API constant used by this package.
-const errExpectedAPI = "expected API error, got nil"
-
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -290,19 +548,8 @@ func TestGetAccessSettings_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PatchAccessSettings — API error, canceled context
+// PatchAccessSettings: canceled context
 // ---------------------------------------------------------------------------.
-
-// TestPatchAccessSettings_APIError verifies PatchAccessSettings when API error.
-func TestPatchAccessSettings_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := PatchAccessSettings(context.Background(), client, PatchAccessSettingsInput{ProjectID: "42", Enabled: true})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestPatchAccessSettings_CancelledContext verifies PatchAccessSettings when cancelled context.
 func TestPatchAccessSettings_CancelledContext(t *testing.T) {
@@ -315,19 +562,8 @@ func TestPatchAccessSettings_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListInboundAllowlist — API error, canceled context, pagination
+// ListInboundAllowlist: canceled context, pagination
 // ---------------------------------------------------------------------------.
-
-// TestListInboundAllowlist_APIError verifies ListInboundAllowlist when API error.
-func TestListInboundAllowlist_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestListInboundAllowlist_CancelledContext verifies ListInboundAllowlist when cancelled context.
 func TestListInboundAllowlist_CancelledContext(t *testing.T) {
@@ -396,7 +632,11 @@ func TestListInboundAllowlist_KeysetOrdering(t *testing.T) {
 	}
 }
 
-// TestListInboundAllowlist_Empty verifies ListInboundAllowlist when empty.
+// TestListInboundAllowlist_Empty checks that an allowlist with nothing on it
+// is published as an empty array rather than as null. A length of zero cannot
+// tell those apart, and the difference reaches the caller: a model reading
+// "projects": null has to decide whether the field failed or the list is
+// empty, while [] says only the second.
 func TestListInboundAllowlist_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -405,25 +645,17 @@ func TestListInboundAllowlist_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	if out.Projects == nil {
+		t.Error("Projects is nil, want an empty slice so the field publishes [] rather than null")
+	}
 	if len(out.Projects) != 0 {
 		t.Errorf("expected 0 projects, got %d", len(out.Projects))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AddProjectAllowlist — API error, canceled context
+// AddProjectAllowlist: canceled context
 // ---------------------------------------------------------------------------.
-
-// TestAddProjectAllowlist_APIError verifies AddProjectAllowlist when API error.
-func TestAddProjectAllowlist_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := AddProjectAllowlist(context.Background(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 99})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestAddProjectAllowlist_CancelledContext verifies AddProjectAllowlist when cancelled context.
 func TestAddProjectAllowlist_CancelledContext(t *testing.T) {
@@ -450,19 +682,8 @@ func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListGroupAllowlist — API error, canceled context, pagination, empty
+// ListGroupAllowlist: canceled context, pagination, empty
 // ---------------------------------------------------------------------------.
-
-// TestListGroupAllowlist_APIError verifies ListGroupAllowlist when API error.
-func TestListGroupAllowlist_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{ProjectID: "42"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestListGroupAllowlist_CancelledContext verifies ListGroupAllowlist when cancelled context.
 func TestListGroupAllowlist_CancelledContext(t *testing.T) {
@@ -531,7 +752,8 @@ func TestListGroupAllowlist_KeysetOrdering(t *testing.T) {
 	}
 }
 
-// TestListGroupAllowlist_Empty verifies ListGroupAllowlist when empty.
+// TestListGroupAllowlist_Empty holds the group allowlist to the same published
+// shape its project sibling is held to: an empty array, never null.
 func TestListGroupAllowlist_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -540,25 +762,17 @@ func TestListGroupAllowlist_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	if out.Groups == nil {
+		t.Error("Groups is nil, want an empty slice so the field publishes [] rather than null")
+	}
 	if len(out.Groups) != 0 {
 		t.Errorf("expected 0 groups, got %d", len(out.Groups))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AddGroupAllowlist — API error, canceled context
+// AddGroupAllowlist: canceled context
 // ---------------------------------------------------------------------------.
-
-// TestAddGroupAllowlist_APIError verifies AddGroupAllowlist when API error.
-func TestAddGroupAllowlist_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	_, err := AddGroupAllowlist(context.Background(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestAddGroupAllowlist_CancelledContext verifies AddGroupAllowlist when cancelled context.
 func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
@@ -571,19 +785,8 @@ func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RemoveGroupAllowlist — API error, canceled context
+// RemoveGroupAllowlist: canceled context
 // ---------------------------------------------------------------------------.
-
-// TestRemoveGroupAllowlist_APIError verifies RemoveGroupAllowlist when API error.
-func TestRemoveGroupAllowlist_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
-	}))
-	err := RemoveGroupAllowlist(context.Background(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 5})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
 
 // TestRemoveGroupAllowlist_CancelledContext verifies RemoveGroupAllowlist when cancelled context.
 func TestRemoveGroupAllowlist_CancelledContext(t *testing.T) {

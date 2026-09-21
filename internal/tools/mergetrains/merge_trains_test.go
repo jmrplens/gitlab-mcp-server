@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 )
 
 // TestListProjectMergeTrains validates the ListProjectMergeTrains handler.
-// Covers success with all fields, empty project_id validation, scope/sort query
-// params, API errors, and empty results.
+// Covers a populated car asserted field for field, empty project_id validation,
+// scope/sort query params, a refusal from GitLab, and empty results.
 func TestListProjectMergeTrains(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -34,9 +35,8 @@ func TestListProjectMergeTrains(t *testing.T) {
 				t.Helper()
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
 				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains")
-				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
-					{"id":1,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"merged","web_url":"https://gitlab.example.com/-/merge_requests/5","created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z"},"user":{"id":1,"username":"admin"},"pipeline":{"id":200},"target_branch":"main","status":"merged","duration":120,"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z","merged_at":"2026-01-17T10:00:00Z"}
-				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
+				testutil.RespondJSONWithPagination(w, http.StatusOK, "["+populatedTrainJSON+"]",
+					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 			},
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
@@ -69,7 +69,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 			},
 		},
 		{
-			name:  "returns error on API 500",
+			name:  "returns error on API 403",
 			input: ListProjectInput{ProjectID: "42"},
 			handler: func(_ *testing.T, w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -113,23 +113,77 @@ func TestListProjectMergeTrains(t *testing.T) {
 	}
 }
 
+// populatedTrainJSON is one merge train car as GitLab sends it, with every
+// value distinct from every other: the two identifiers of the car differ from
+// the three of its merge request, its status differs from the merge request's
+// state, and all five timestamps name a different day.
+//
+// The distinctness is the point. The fixture it replaced gave the car and its
+// user the id 1 and gave the car's status and the merge request's state both
+// "merged", so a converter reading either from its neighbor produced exactly
+// the same output, a defect no mutation of a branch and no condition counter
+// can see, because a straight-line assignment has neither.
+const populatedTrainJSON = `{"id":1,` +
+	`"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug",` +
+	`"description":"Corrects the off-by-one","state":"opened",` +
+	`"web_url":"https://gitlab.example.com/-/merge_requests/5",` +
+	`"created_at":"2026-01-11T10:00:00Z","updated_at":"2026-01-12T10:00:00Z"},` +
+	`"user":{"id":7,"username":"admin"},"pipeline":{"id":200},` +
+	`"target_branch":"main","status":"merged","duration":120,` +
+	`"created_at":"2026-01-15T10:00:00Z","updated_at":"2026-01-16T10:00:00Z",` +
+	`"merged_at":"2026-01-17T10:00:00Z"}`
+
+// wantPopulatedMergeTrain is the whole [Output] populatedTrainJSON converts to.
+func wantPopulatedMergeTrain() Output {
+	return Output{
+		ID: 1,
+		MergeRequest: MergeRequestOutput{
+			ID:          100,
+			IID:         5,
+			ProjectID:   42,
+			Title:       "Fix bug",
+			Description: "Corrects the off-by-one",
+			State:       "opened",
+			CreatedAt:   "2026-01-11T10:00:00Z",
+			UpdatedAt:   "2026-01-12T10:00:00Z",
+			WebURL:      "https://gitlab.example.com/-/merge_requests/5",
+		},
+		User:         &toolutil.BasicUserOutput{ID: 7, Username: "admin"},
+		Pipeline:     &toolutil.PipelineOutput{ID: 200},
+		TargetBranch: "main",
+		Status:       "merged",
+		Duration:     120,
+		CreatedAt:    "2026-01-15T10:00:00Z",
+		UpdatedAt:    "2026-01-16T10:00:00Z",
+		MergedAt:     "2026-01-17T10:00:00Z",
+	}
+}
+
+// assertPopulatedMergeTrain holds the converted car against the whole expected
+// object rather than spot-checking a few of its fields, so a field read from
+// the wrong source changes the comparison instead of passing through it. The
+// spot-checking form this replaced never read the merge request's id, project
+// id, title, description or state at all, and asked of the five timestamps only
+// that they were not empty.
 func assertPopulatedMergeTrain(t *testing.T, tr Output) {
 	t.Helper()
-	if tr.ID != 1 || tr.TargetBranch != "main" || tr.Status != "merged" || tr.Duration != 120 {
-		t.Fatalf("train = %+v, want populated merged train", tr)
+	want := wantPopulatedMergeTrain()
+	if reflect.DeepEqual(tr, want) {
+		return
 	}
-	if tr.User == nil || tr.User.Username != "admin" || tr.User.ID != 1 {
-		t.Fatalf("user = %+v, want populated BasicUser admin", tr.User)
+	// Reported as JSON rather than with %+v, which prints the user and the
+	// pipeline as addresses and so says nothing about the fields that differ.
+	t.Fatalf("train =\n%s\nwant\n%s", mustJSON(t, tr), mustJSON(t, want))
+}
+
+// mustJSON renders a value for a failure message, or fails the test.
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", v, err)
 	}
-	if tr.Pipeline == nil || tr.Pipeline.ID != 200 {
-		t.Fatalf("pipeline = %+v, want populated pipeline id 200", tr.Pipeline)
-	}
-	if tr.MergeRequest.IID != 5 || tr.MergeRequest.WebURL != "https://gitlab.example.com/-/merge_requests/5" {
-		t.Fatalf("merge request = %+v, want IID 5 and web URL", tr.MergeRequest)
-	}
-	if tr.MergeRequest.CreatedAt == "" || tr.MergeRequest.UpdatedAt == "" || tr.CreatedAt == "" || tr.UpdatedAt == "" || tr.MergedAt == "" {
-		t.Fatalf("timestamps missing in train = %+v", tr)
-	}
+	return string(encoded)
 }
 
 // TestListMergeRequestInMergeTrain validates the ListMergeRequestInMergeTrain handler.
@@ -334,19 +388,6 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 			},
 		},
 		{
-			name:  "sends optional fields in request body",
-			input: AddInput{ProjectID: "42", MergeRequestID: 5, AutoMerge: true, SHA: "abc123", Squash: true},
-			handler: addMergeTrainOptionalFieldsHandler(`[
-					{"id":3,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"opened"},"target_branch":"main","status":"idle","duration":0}
-				]`),
-			validate: func(t *testing.T, out ListOutput) {
-				t.Helper()
-				if len(out.Trains) != 1 {
-					t.Fatalf("got %d trains, want 1", len(out.Trains))
-				}
-			},
-		},
-		{
 			name:    "returns error when project_id is empty",
 			input:   AddInput{MergeRequestID: 5},
 			wantErr: true,
@@ -401,49 +442,22 @@ func addMergeTrainSuccessHandler(body string) func(*testing.T, http.ResponseWrit
 	}
 }
 
-func addMergeTrainOptionalFieldsHandler(body string) func(*testing.T, http.ResponseWriter, *http.Request) {
-	return func(t *testing.T, w http.ResponseWriter, r *http.Request) {
-		t.Helper()
-		testutil.AssertRequestMethod(t, r, http.MethodPost)
-		assertAddMergeTrainBody(t, r)
-		respondMergeTrainList(w, body)
-	}
-}
-
-func assertAddMergeTrainBody(t *testing.T, r *http.Request) {
-	t.Helper()
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		t.Fatalf("failed to read body: %v", err)
-	}
-	var opts map[string]any
-	if unmarshalErr := json.Unmarshal(body, &opts); unmarshalErr != nil {
-		t.Fatalf("failed to parse body: %v", unmarshalErr)
-	}
-	if opts["auto_merge"] != true {
-		t.Errorf("auto_merge = %v, want true", opts["auto_merge"])
-	}
-	if opts["sha"] != "abc123" {
-		t.Errorf("sha = %v, want %q", opts["sha"], "abc123")
-	}
-	if opts["squash"] != true {
-		t.Errorf("squash = %v, want true", opts["squash"])
-	}
-}
-
 func respondMergeTrainList(w http.ResponseWriter, body string) {
 	testutil.RespondJSONWithPagination(w, http.StatusOK, body, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 }
 
 // TestListProjectMergeTrains_KeysetAndOrdering verifies order_by, sort, and
 // keyset pagination (pagination/page_token) are forwarded as query parameters.
+//
+// Each parameter is asserted on its own line rather than in a loop: the
+// assertions run inside the mock's handler, on the server's goroutine, where a
+// subtest cannot be opened.
 func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for k, v := range map[string]string{"order_by": "id", "sort": "desc", "pagination": "keyset", "page_token": "tok"} {
-			t.Run(k, func(t *testing.T) {
-				testutil.AssertQueryParam(t, r, k, v)
-			})
-		}
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "sort", "desc")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
@@ -459,14 +473,13 @@ func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
 }
 
 // TestListMergeRequestInMergeTrain_KeysetAndOrdering verifies order_by and
-// keyset pagination forwarding for the per-branch list handler.
+// keyset pagination forwarding for the per-branch list handler, asserted one
+// parameter per line for the reason its project-wide sibling states.
 func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for k, v := range map[string]string{"order_by": "id", "pagination": "keyset", "page_token": "tok"} {
-			t.Run(k, func(t *testing.T) {
-				testutil.AssertQueryParam(t, r, k, v)
-			})
-		}
+		testutil.AssertQueryParam(t, r, "order_by", "id")
+		testutil.AssertQueryParam(t, r, "pagination", "keyset")
+		testutil.AssertQueryParam(t, r, "page_token", "tok")
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
@@ -481,37 +494,105 @@ func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 	}
 }
 
-// TestAddMergeRequestToMergeTrain_WhenPipelineSucceeds verifies the deprecated
-// when_pipeline_succeeds option is forwarded in the request body.
-func TestAddMergeRequestToMergeTrain_WhenPipelineSucceeds(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("read body: %v", err)
-			http.Error(w, "read body", http.StatusInternalServerError)
-			return
-		}
-		var opts map[string]any
-		if jErr := json.Unmarshal(body, &opts); jErr != nil {
-			t.Errorf("parse body: %v", jErr)
-			http.Error(w, "parse body", http.StatusInternalServerError)
-			return
-		}
-		if opts["when_pipeline_succeeds"] != true {
-			t.Errorf("when_pipeline_succeeds = %v, want true", opts["when_pipeline_succeeds"])
-		}
-		respondMergeTrainList(w, registerTrainsJSON)
-	}))
-	_, err := AddMergeRequestToMergeTrain(context.Background(), client, AddInput{
-		ProjectID: "42", MergeRequestID: 5, WhenPipelineSucceeds: true,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestAddMergeRequestToMergeTrain_Options drives each optional field of the add
+// request on its own and compares the whole body GitLab receives, which is the
+// only shape that tells the four options apart.
+//
+// Setting them together and checking each key is present cannot: every one is a
+// pointer written under a guard of its own, so two guards filling each other's
+// field send exactly the same body when both flags are true. The empty case is
+// the other half of the claim: client-go omits every option nobody set, so no
+// value is sent that the caller never asked to send.
+func TestAddMergeRequestToMergeTrain_Options(t *testing.T) {
+	tests := []struct {
+		name  string
+		input AddInput
+		want  map[string]any
+	}{
+		{
+			name:  "no option sends an empty body",
+			input: AddInput{ProjectID: "42", MergeRequestID: 5},
+			want:  map[string]any{},
+		},
+		{
+			name:  "auto_merge alone",
+			input: AddInput{ProjectID: "42", MergeRequestID: 5, AutoMerge: true},
+			want:  map[string]any{"auto_merge": true},
+		},
+		{
+			name:  "squash alone",
+			input: AddInput{ProjectID: "42", MergeRequestID: 5, Squash: true},
+			want:  map[string]any{"squash": true},
+		},
+		{
+			name:  "sha alone",
+			input: AddInput{ProjectID: "42", MergeRequestID: 5, SHA: "abc123"},
+			want:  map[string]any{"sha": "abc123"},
+		},
+		{
+			// Deprecated in 17.11 and mirrored for 1:1 SDK fidelity: it is sent
+			// under its own name and never folded into auto_merge, which is what
+			// keeps the two distinguishable to a GitLab that still reads both.
+			name:  "when_pipeline_succeeds alone",
+			input: AddInput{ProjectID: "42", MergeRequestID: 5, WhenPipelineSucceeds: true},
+			want:  map[string]any{"when_pipeline_succeeds": true},
+		},
+		{
+			name: "every option together",
+			input: AddInput{
+				ProjectID: "42", MergeRequestID: 5,
+				AutoMerge: true, SHA: "abc123", Squash: true, WhenPipelineSucceeds: true,
+			},
+			want: map[string]any{
+				"auto_merge": true, "sha": "abc123", "squash": true, "when_pipeline_succeeds": true,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotBody []byte
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read body: %v", err)
+					http.Error(w, "read body", http.StatusInternalServerError)
+					return
+				}
+				gotBody = body
+				respondMergeTrainList(w, registerTrainsJSON)
+			}))
+			if _, err := AddMergeRequestToMergeTrain(context.Background(), client, tt.input); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			assertJSONBody(t, gotBody, tt.want)
+		})
 	}
 }
 
-// TestToOutput_FullPipeline verifies the pipeline sub-object is mirrored in full,
-// including the nested detailed_status and its illustration image.
+// assertJSONBody compares a recorded request body with the whole object it is
+// expected to be, so a key sent that no case asked for fails as loudly as a
+// missing one.
+func assertJSONBody(t *testing.T, body []byte, want map[string]any) {
+	t.Helper()
+	got := map[string]any{}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatalf("parse body %q: %v", body, err)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("request body = %v, want %v (raw: %s)", got, want, body)
+	}
+}
+
+// TestToOutput_FullPipeline verifies a populated pipeline reaches the output as
+// a nested object rather than as an id: its scalars, its user, its five
+// timestamps, and the detailed status with its illustration image.
+//
+// It samples those fields rather than asserting the whole pipeline, because the
+// conversion is [toolutil.NewPipelineOutput]'s and is held field by field
+// there; what this test is about is that [toOutput] reaches for it at all. The
+// comment used to say "mirrored in full", which the body never checked.
 func TestToOutput_FullPipeline(t *testing.T) {
 	created := mustParseTime(t, "2026-01-15T10:00:00Z")
 	mt := &gl.MergeTrain{
@@ -542,7 +623,8 @@ func TestToOutput_FullPipeline(t *testing.T) {
 	assertFullPipeline(t, out.Pipeline)
 }
 
-// assertFullPipeline verifies every mirrored field of a populated pipeline.
+// assertFullPipeline verifies the sampled fields of a populated pipeline: six
+// scalars, the user, the five timestamps and the detailed status.
 func assertFullPipeline(t *testing.T, p *toolutil.PipelineOutput) {
 	t.Helper()
 	switch {

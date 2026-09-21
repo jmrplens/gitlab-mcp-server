@@ -5,6 +5,7 @@ package health
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
@@ -30,6 +33,13 @@ const (
 	fmtStatusWant = "Status = %q, want %q"
 	// testGitLabVersion identifies the test GitLab version constant used by this package.
 	testGitLabVersion = "17.5.0"
+
+	// errPrefixConnectivity and errPrefixIdentity are the test's own copies of
+	// the two prefixes Check writes, kept here so a rewrite of the handler
+	// cannot move both sides of a comparison at once. They are the only part of
+	// the output that says which of the two calls failed.
+	errPrefixConnectivity = "connectivity check failed: "
+	errPrefixIdentity     = "authenticated but user retrieval failed: "
 )
 
 // TestCheck_Healthy verifies the Check_Healthy handler.
@@ -118,6 +128,42 @@ func TestCheck_SlowVersionCall_ReportsHowLongThatCallTook(t *testing.T) {
 	}
 }
 
+// TestCheck_SlowIdentityCall_IsNotCountedInTheResponseTime asserts that the
+// reported time covers the version round trip alone, which is where the
+// measurement stops.
+//
+// Its sibling above holds only a floor, and a figure that timed the whole
+// check would satisfy that just as well, so the clock could be stopped after
+// the identity lookup instead and nothing would fail. Which call it measures
+// decides what the number means: an instance answering at once while the
+// identity lookup crawls is reachable, and a figure folding both in reports it
+// as a slow instance. The ceiling is half the delay so the bound is about
+// which call was timed rather than about how fast this machine is.
+func TestCheck_SlowIdentityCall_IsNotCountedInTheResponseTime(t *testing.T) {
+	const identityDelay = 200 * time.Millisecond
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathVersion {
+			testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc123"}`)
+			return
+		}
+		time.Sleep(identityDelay)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"username":"u","state":"active"}`)
+	}))
+
+	out, err := Check(context.Background(), client, Input{})
+	if err != nil {
+		t.Fatalf(fmtStatusCheckErr, err)
+	}
+	if out.Status != "healthy" {
+		t.Errorf(fmtStatusWant, out.Status, "healthy")
+	}
+	ceiling := (identityDelay / 2).Milliseconds()
+	if out.ResponseTimeMS >= ceiling {
+		t.Errorf("ResponseTimeMS = %d, want under %d: the identity call took %s and is not part of this figure", out.ResponseTimeMS, ceiling, identityDelay)
+	}
+}
+
 // TestSetServerInfo_PopulatesCheckOutput verifies that calling SetServerInfo
 // causes Check to include server metadata (version, author, department,
 // repository) in the Output.
@@ -200,9 +246,15 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 	}
 }
 
-// TestCheck_UnhealthyVersionFails verifies the Check_UnhealthyVersionFails handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCheck_UnhealthyVersionFails asserts that an instance which does not
+// answer the version call is reported unhealthy, unauthenticated, and with an
+// error naming the connectivity half of the check.
+//
+// The prefix is asserted rather than the mere presence of an error, because it
+// is the only thing in the output that says which call failed: held to "some
+// error", this branch and the degraded one below could trade their messages
+// and a caller would be told the credential was refused by an instance that
+// never answered at all.
 func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -223,14 +275,17 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	if out.Authenticated {
 		t.Error("Authenticated = true, want false")
 	}
-	if out.Error == "" {
-		t.Error("Error should not be empty for unhealthy status")
+	if !strings.HasPrefix(out.Error, errPrefixConnectivity) {
+		t.Errorf("Error = %q, want the %q prefix", out.Error, errPrefixConnectivity)
 	}
 }
 
-// TestCheck_DegradedUserFails verifies the Check_DegradedUserFails handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCheck_DegradedUserFails asserts that an instance which answers the
+// version call but refuses the identity lookup is reported degraded, with the
+// version it did send and an error naming the identity half.
+//
+// It is the other side of the pair described above: the prefix is what stops
+// the two failure messages being interchangeable.
 func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -256,24 +311,27 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	if out.Authenticated {
 		t.Error("Authenticated = true, want false")
 	}
-	if out.Error == "" {
-		t.Error("Error should not be empty for degraded status")
+	if !strings.HasPrefix(out.Error, errPrefixIdentity) {
+		t.Errorf("Error = %q, want the %q prefix", out.Error, errPrefixIdentity)
 	}
 }
 
-// TestCheck_CancelledContext verifies the Check_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestCheck_CancelledContext asserts that a context already cancelled is
+// refused before any request is made, and with the context's own error.
+//
+// The mock is testutil.ForbiddenHandler, which fails the test if a request
+// arrives. That is the claim this test announced and did not hold: against a
+// mock that answers, "an error came back" is satisfied just as well by a
+// handler that calls GitLab and lets the transport refuse.
 func TestCheck_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{}`)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
-	ctx := testutil.CancelledCtx(t)
-
-	_, err := Check(ctx, client, Input{})
+	_, err := Check(testutil.CancelledCtx(t), client, Input{})
 	if err == nil {
 		t.Fatal("expected error for canceled context, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Check() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -376,9 +434,9 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 // FormatMarkdownString — unhealthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Unhealthy verifies the MarkdownString_Unhealthy Markdown formatter for a representative string_unhealthy input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_Unhealthy verifies the whole card an unreachable
+// instance renders as: the cross in the heading, no version or identity rows,
+// and the error on a line of its own.
 func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 	out := Output{
 		Status:         "unhealthy",
@@ -428,9 +486,9 @@ func TestFormatMarkdownString_UnhealthyHTMLError(t *testing.T) {
 // FormatMarkdownString — degraded
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Degraded verifies the MarkdownString_Degraded Markdown formatter for a representative string_degraded input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_Degraded verifies the whole card an instance that
+// answered but identified nobody renders as: the warning glyph in the heading,
+// the version rows GitLab did send, and the error beneath them.
 func TestFormatMarkdownString_Degraded(t *testing.T) {
 	out := Output{
 		Status:         "degraded",
@@ -524,17 +582,28 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 // FormatMarkdown wrapper
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Wrapper verifies the Markdown_Wrapper Markdown formatter for a representative _wrapper input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdown_Wrapper asserts that the CallToolResult wrapper carries
+// the card the string formatter renders, and carries it as the one text block
+// a client reads.
+//
+// It reaches no GitLab: the wrapper is pure. Holding it to "content is not
+// empty" is satisfied by a result built from any string at all, which is the
+// one way this thin function can be wrong.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	out := Output{Status: "healthy", GitLabURL: "https://gitlab.example.com"}
 	result := FormatMarkdown(out)
 	if result == nil {
 		t.Fatal("FormatMarkdown returned nil")
 	}
-	if len(result.Content) == 0 {
-		t.Fatal("FormatMarkdown returned empty content")
+	if len(result.Content) != 1 {
+		t.Fatalf("len(Content) = %d, want 1", len(result.Content))
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content block = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if want := toolutil.NormalizeResultMarkdown(FormatMarkdownString(out)); text.Text != want {
+		t.Errorf("FormatMarkdown text =\n%q\nwant:\n%q", text.Text, want)
 	}
 }
 
@@ -542,9 +611,12 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata asserts that the package publishes the two actions,
+// both owned here, and that the status one carries the usage phrase, the alias
+// and the Returns/See also guidance a model reads before calling it.
+//
+// It builds a client only because ActionSpecs takes one; no route is driven
+// here and nothing reaches the mock.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
@@ -681,9 +753,12 @@ func TestActionSpecs_BothActions_StayReadOnly(t *testing.T) {
 // ActionSpec route execution — gitlab_server_status
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallRoute drives the status action through the route every
+// surface dispatches to, and asserts the health output that reaches a caller.
+//
+// Asserting only that something non-nil came back would hold for a route bound
+// to any handler in the tree; what makes this one the status action is that the
+// answer carries the instance and the identity it just read.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
@@ -701,8 +776,21 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
-	if res == nil {
-		t.Fatal("nil result")
+	out, ok := res.(Output)
+	if !ok {
+		t.Fatalf("Route.Handler returned %T, want health.Output", res)
+	}
+	if out.Status != "healthy" {
+		t.Errorf(fmtStatusWant, out.Status, "healthy")
+	}
+	if out.GitLabVersion != testGitLabVersion {
+		t.Errorf("GitLabVersion = %q, want %q", out.GitLabVersion, testGitLabVersion)
+	}
+	if out.Username != "alice" {
+		t.Errorf("Username = %q, want %q", out.Username, "alice")
+	}
+	if out.UserID != 42 {
+		t.Errorf("UserID = %d, want 42", out.UserID)
 	}
 }
 
@@ -710,9 +798,14 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 // ActionSpec route execution — gitlab_server_status unhealthy (API error)
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRouteUnhealthy validates the CallRouteUnhealthy route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallRouteUnhealthy asserts that an instance refusing the
+// version call reaches a caller through the route as an unhealthy report
+// rather than as a handler error.
+//
+// Both halves matter to a model: the route returns nil error, so the failure
+// has to be readable in the output, and the error field has to name the
+// connectivity half. The test was called Unhealthy while asserting nothing
+// that a healthy answer would have failed.
 func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -723,8 +816,15 @@ func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Route.Handler gitlab_server_status: %v", err)
 	}
-	if res == nil {
-		t.Fatal("nil result")
+	out, ok := res.(Output)
+	if !ok {
+		t.Fatalf("Route.Handler returned %T, want health.Output", res)
+	}
+	if out.Status != "unhealthy" {
+		t.Errorf(fmtStatusWant, out.Status, "unhealthy")
+	}
+	if !strings.HasPrefix(out.Error, errPrefixConnectivity) {
+		t.Errorf("Error = %q, want the %q prefix", out.Error, errPrefixConnectivity)
 	}
 }
 

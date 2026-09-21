@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -24,6 +25,13 @@ const (
 	pathVar1 = "/api/v4/admin/ci/variables/MY_VAR"
 	// varJSON identifies the var JSON constant used by this package.
 	varJSON = `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"raw":false,"description":"Test var"}`
+	// bodyForbidden and bodyNotFound are the refusals the mocks answer with.
+	// They are real JSON documents: the bodies here used to carry an unquoted
+	// identifier (`{"message":msgServerError}`), which decodes to nothing, so
+	// ExtractGitLabMessage found no message and any assertion about what
+	// GitLab said would have passed while saying nothing.
+	bodyForbidden = `{"message":"403 Forbidden"}`
+	bodyNotFound  = `{"message":"404 Variable Not Found"}`
 )
 
 // decodeVariableRequest reads the JSON object a handler sent GitLab, so a test
@@ -103,9 +111,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies the List_EmptyResult handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestList_EmptyResult verifies that a GET answering with an empty array
+// yields an empty variable slice rather than a nil one the caller has to
+// guard.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathInstanceVars {
@@ -151,17 +159,21 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingKey verifies that Get_MissingKey returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestGet_MissingKey verifies that Get refuses a call naming no key, and
+// refuses it here rather than letting GitLab answer.
+//
+// The mock forbids every request, so the error cannot have come from a
+// response: with an ordinary mock a 404 would satisfy the same assertion and
+// say nothing about which layer declined.
 func TestGet_MissingKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Get(context.Background(), client, GetInput{})
 	if err == nil {
 		t.Fatal("Get() expected error for missing key")
+	}
+	if err.Error() != "key is required" {
+		t.Errorf("error = %v, want it to name the missing field", err)
 	}
 }
 
@@ -188,31 +200,39 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingKey verifies that Create_MissingKey returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreate_MissingKey verifies that Create refuses a call naming no key
+// before it reaches GitLab, and says which field is missing.
+//
+// The forbidding mock is what makes the second half of that claim: the two
+// required-field guards are checked in order, so a test that accepted any
+// error could not tell the key guard from the value guard either.
 func TestCreate_MissingKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Create(context.Background(), client, CreateInput{Value: "secret"})
 	if err == nil {
 		t.Fatal("Create() expected error for missing key")
 	}
+	if err.Error() != "key is required" {
+		t.Errorf("error = %v, want it to name the missing field", err)
+	}
 }
 
-// TestCreate_MissingValue verifies that Create_MissingValue returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestCreate_MissingValue verifies that Create refuses a call naming a key and
+// no value before it reaches GitLab, naming value rather than key.
+//
+// A variable with no value is the one shape GitLab's own endpoint would take
+// happily, storing the empty string, so this guard is ours and the test has to
+// prove it fired here.
 func TestCreate_MissingValue(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Create(context.Background(), client, CreateInput{Key: "MY_VAR"})
 	if err == nil {
 		t.Fatal("Create() expected error for missing value")
+	}
+	if err.Error() != "value is required" {
+		t.Errorf("error = %v, want it to name the missing field", err)
 	}
 }
 
@@ -239,25 +259,29 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingKey verifies that Update_MissingKey returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestUpdate_MissingKey verifies that Update refuses a call naming no key
+// before it reaches GitLab, and says which field is missing.
+//
+// The key is the path segment rather than a body field, so without the guard
+// the request would go to the collection itself; the forbidding mock is what
+// proves none was sent.
 func TestUpdate_MissingKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Update(context.Background(), client, UpdateInput{})
 	if err == nil {
 		t.Fatal("Update() expected error for missing key")
 	}
+	if err.Error() != "key is required" {
+		t.Errorf("error = %v, want it to name the missing field", err)
+	}
 }
 
 // ---------- Delete ----------.
 
-// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
-// The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDelete_Success verifies that Delete reports no error when GitLab answers
+// its DELETE with 204. The handler returns only an error, so that is the whole
+// of what there is to assert.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathVar1 {
@@ -273,25 +297,29 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingKey verifies that Delete_MissingKey returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestDelete_MissingKey verifies that Delete refuses a call naming no key
+// before it reaches GitLab, and says which field is missing.
+//
+// This is the guard worth forbidding a request over: the key is the path
+// segment, so a delete that let an empty one through would address the
+// collection rather than a variable.
 func TestDelete_MissingKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), client, DeleteInput{})
 	if err == nil {
 		t.Fatal("Delete() expected error for missing key")
 	}
+	if err.Error() != "key is required" {
+		t.Errorf("error = %v, want it to name the missing field", err)
+	}
 }
 
 // ---------- Formatters ----------.
 
-// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown renders a representative variable and compares the
+// whole card, headings, flag emoji and hints included. The formatter reads a
+// value and contacts no API.
 func TestFormatOutputMarkdown(t *testing.T) {
 	v := Output{
 		Key:          "MY_VAR",
@@ -322,9 +350,9 @@ const variableCardHints = "\n---\n\U0001F4A1 **Next steps:**\n" +
 	"- Use action 'update' to change this variable\n" +
 	"- Use action 'delete' to remove this variable\n"
 
-// TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_MaskedValue verifies that a masked variable has its
+// value withheld from the card and the flag reported, comparing the whole
+// rendering rather than looking for the placeholder.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	v := Output{
 		Key:          "SECRET_VAR",
@@ -345,9 +373,9 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Empty verifies the OutputMarkdown_Empty Markdown formatter for a representative output_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_Empty verifies that a zero variable renders nothing
+// at all, so a nil result is never dressed up as a card describing a variable
+// that does not exist.
 func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -355,9 +383,8 @@ func TestFormatOutputMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown compares the whole table a two-variable page renders,
+// its columns, its rows and its pagination line, against the expected text.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -410,9 +437,8 @@ func TestFormatOutputMarkdown_NamesTheEnvironmentScope(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_Empty verifies that a page with no variables renders
+// the empty-state sentence alone, with no table header and no hints.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	const want = "No instance CI/CD variables found.\n"
 	if md := FormatListMarkdown(ListOutput{}); md != want {
@@ -435,12 +461,12 @@ const fmtUnexpErr = "unexpected error: %v"
 // List — API error, with pagination parameters, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableList_APIError verifies that InstanceVariableList returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableList_APIError verifies that List reports an error when
+// GitLab refuses its GET. The hint that refusal carries is asserted by the
+// refusal table further down.
 func TestInstanceVariableList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, bodyForbidden)
 	}))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
@@ -463,7 +489,7 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 			]`, testutil.PaginationHeaders{Page: "2", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "3", PrevPage: "1"})
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, bodyNotFound)
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
@@ -526,9 +552,8 @@ func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableList_CancelledContext verifies the InstanceVariableList_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestInstanceVariableList_CancelledContext verifies that a canceled context
+// aborts List before it builds a request, so nothing reaches GitLab.
 func TestInstanceVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -542,12 +567,12 @@ func TestInstanceVariableList_CancelledContext(t *testing.T) {
 // Get — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableGet_APIError verifies that InstanceVariableGet returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableGet_APIError verifies that Get reports an error when
+// GitLab answers its GET 403, which is the status the handler carries no hint
+// for, so what is asserted is the refusal itself.
 func TestInstanceVariableGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, bodyForbidden)
 	}))
 	_, err := Get(context.Background(), client, GetInput{Key: "MY_VAR"})
 	if err == nil {
@@ -555,9 +580,8 @@ func TestInstanceVariableGet_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableGet_CancelledContext verifies the InstanceVariableGet_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestInstanceVariableGet_CancelledContext verifies that a canceled context
+// aborts Get before it builds a request, so nothing reaches GitLab.
 func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -571,12 +595,12 @@ func TestInstanceVariableGet_CancelledContext(t *testing.T) {
 // Create — API error, all optional fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableCreate_APIError verifies that InstanceVariableCreate returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableCreate_APIError verifies that Create reports an error
+// when GitLab refuses its POST. The hint that refusal carries is asserted by
+// the refusal table further down, which reads it per handler.
 func TestInstanceVariableCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, bodyForbidden)
 	}))
 	_, err := Create(context.Background(), client, CreateInput{Key: "K", Value: "V"})
 	if err == nil {
@@ -584,9 +608,9 @@ func TestInstanceVariableCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableCreate_BadRequest verifies the InstanceVariableCreate_BadRequest handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestInstanceVariableCreate_BadRequest verifies that a POST GitLab answers
+// 400 carries the key-syntax hint rather than the admin-privilege one, which
+// is the other branch of the same handler.
 func TestInstanceVariableCreate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
@@ -629,7 +653,7 @@ func TestInstanceVariableCreate_AllOptionalFields_ReachTheRequestBody(t *testing
 			}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, bodyNotFound)
 	}))
 
 	bTrue := true
@@ -689,7 +713,7 @@ func TestInstanceVariableCreate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 			}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, bodyNotFound)
 	}))
 
 	out, err := Create(context.Background(), client, CreateInput{Key: "PLAIN", Value: "plain-value"})
@@ -701,9 +725,8 @@ func TestInstanceVariableCreate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 	}
 }
 
-// TestInstanceVariableCreate_CancelledContext verifies the InstanceVariableCreate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestInstanceVariableCreate_CancelledContext verifies that a canceled context
+// aborts Create before it builds a request, so nothing reaches GitLab.
 func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -717,12 +740,12 @@ func TestInstanceVariableCreate_CancelledContext(t *testing.T) {
 // Update — API error, all optional fields, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableUpdate_APIError verifies that InstanceVariableUpdate returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableUpdate_APIError verifies that Update reports an error
+// when GitLab refuses its PUT. The hint that refusal carries is asserted by
+// the refusal table further down.
 func TestInstanceVariableUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, bodyForbidden)
 	}))
 	_, err := Update(context.Background(), client, UpdateInput{Key: "K"})
 	if err == nil {
@@ -730,9 +753,9 @@ func TestInstanceVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableUpdate_NotFound verifies that InstanceVariableUpdate_NotFound returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableUpdate_NotFound verifies that a PUT GitLab answers 404
+// sends the caller to the list action rather than to the admin-privilege
+// sentence the 403 branch carries.
 func TestInstanceVariableUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -772,7 +795,7 @@ func TestInstanceVariableUpdate_AllOptionalFields_ReachTheRequestBody(t *testing
 			}`)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, bodyNotFound)
 	}))
 
 	bTrue := true
@@ -821,7 +844,7 @@ func TestInstanceVariableUpdate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 			testutil.RespondJSON(w, http.StatusOK, varJSON)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+		testutil.RespondJSON(w, http.StatusNotFound, bodyNotFound)
 	}))
 
 	out, err := Update(context.Background(), client, UpdateInput{Key: "MY_VAR"})
@@ -833,9 +856,8 @@ func TestInstanceVariableUpdate_UnsetOptionalFields_AreAbsentFromTheRequestBody(
 	}
 }
 
-// TestInstanceVariableUpdate_CancelledContext verifies the InstanceVariableUpdate_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestInstanceVariableUpdate_CancelledContext verifies that a canceled context
+// aborts Update before it builds a request, so nothing reaches GitLab.
 func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -849,12 +871,12 @@ func TestInstanceVariableUpdate_CancelledContext(t *testing.T) {
 // Delete — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestInstanceVariableDelete_APIError verifies that InstanceVariableDelete returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableDelete_APIError verifies that Delete reports an error
+// when GitLab refuses its DELETE. The hint that refusal carries is asserted by
+// the refusal table further down.
 func TestInstanceVariableDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
+		testutil.RespondJSON(w, http.StatusForbidden, bodyForbidden)
 	}))
 	err := Delete(context.Background(), client, DeleteInput{Key: "K"})
 	if err == nil {
@@ -862,9 +884,9 @@ func TestInstanceVariableDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableDelete_NotFound verifies that InstanceVariableDelete_NotFound returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestInstanceVariableDelete_NotFound verifies that a DELETE GitLab answers
+// 404 says the variable may already be gone, which is the one reading of that
+// status a delete has, rather than repeating the privilege sentence.
 func TestInstanceVariableDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -878,9 +900,8 @@ func TestInstanceVariableDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestInstanceVariableDelete_CancelledContext verifies the InstanceVariableDelete_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestInstanceVariableDelete_CancelledContext verifies that a canceled context
+// aborts Delete before it builds a request, so nothing reaches GitLab.
 func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -894,9 +915,9 @@ func TestInstanceVariableDelete_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown — full unmasked, no description
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_FullUnmasked verifies the OutputMarkdown_FullUnmasked Markdown formatter for a representative output_fullunmasked input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_FullUnmasked verifies that a variable neither
+// masked nor hidden has its value printed, with protected and raw reported
+// apart from one another.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:          "DB_HOST",
@@ -921,9 +942,8 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies the OutputMarkdown_NoDescription Markdown formatter for a representative output_nodescription input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatOutputMarkdown_NoDescription verifies that a variable carrying no
+// description leaves the row out rather than printing an empty one.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:          "SIMPLE",
@@ -991,9 +1011,9 @@ func TestFormatOutputMarkdown_HiddenVariable_WithholdsTheValue(t *testing.T) {
 // FormatListMarkdown — with variables, escapes table cells
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies the ListMarkdown_WithVariables Markdown formatter for a representative list_withvariables input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdown_WithVariables compares the whole table for a page
+// whose two rows disagree on both flag columns, so neither column can be
+// rendering the other's value.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -1052,9 +1072,184 @@ func TestInstanceVariables_UnreadableCapturedHidden(t *testing.T) {
 	})
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies the ListMarkdown_EscapesTableCells Markdown formatter for a representative list_escapestablecells input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestInstanceVariableGet_OneFlagAtATime_ReachesItsOwnOutputField verifies that
+// each boolean GitLab sends lands in the Output field named after it, and that
+// the two fields the SDK does not model reach the output from the captured
+// response.
+//
+// A block of flags has no fixture in which no two values agree, and every
+// response this package drove carried masked and raw with the same value, so
+// the two assignments in toOutput could trade places with both gates green and
+// every assertion here passing. One flag per case, compared against a whole
+// Output carrying only that field, distinguishes all four. The scope and the
+// hidden cases ride along because nothing asserted that the captured read
+// reaches the output at all: replacing both with their zero values used to
+// pass this file entire.
+func TestInstanceVariableGet_OneFlagAtATime_ReachesItsOwnOutputField(t *testing.T) {
+	const plain = `{"key":"SOLO","value":"v","variable_type":"env_var"`
+	base := Output{Key: "SOLO", Value: "v", VariableType: "env_var"}
+	cases := []struct {
+		name string
+		body string
+		want Output
+	}{
+		{name: "no flag", body: plain + `}`, want: base},
+		{
+			name: "protected alone",
+			body: plain + `,"protected":true}`,
+			want: Output{Key: "SOLO", Value: "v", VariableType: "env_var", Protected: true},
+		},
+		{
+			name: "masked alone",
+			body: plain + `,"masked":true}`,
+			want: Output{Key: "SOLO", Value: "v", VariableType: "env_var", Masked: true},
+		},
+		{
+			name: "raw alone",
+			body: plain + `,"raw":true}`,
+			want: Output{Key: "SOLO", Value: "v", VariableType: "env_var", Raw: true},
+		},
+		{
+			name: "hidden alone",
+			body: plain + `,"hidden":true}`,
+			want: Output{Key: "SOLO", Value: "v", VariableType: "env_var", Hidden: true},
+		},
+		{
+			name: "environment scope alone",
+			body: plain + `,"environment_scope":"production"}`,
+			want: Output{Key: "SOLO", Value: "v", VariableType: "env_var", EnvironmentScope: "production"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tc.body)
+			}))
+			got, err := Get(context.Background(), client, GetInput{Key: "SOLO"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Get() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestInstanceVariableList_PairsEachVariableWithItsOwnCapturedFields verifies
+// that the captured environment scope and hidden flag reach the variable they
+// were sent for, not the first one in the page.
+//
+// The SDK decodes the array and the capture is read beside it, so the two
+// sequences are joined by position alone: an index that stopped moving would
+// stamp the head variable's scope and hidden flag onto every row, and a page
+// whose variables agree on both cannot show it. These two disagree on both,
+// and the whole slice is compared rather than one row.
+func TestInstanceVariableList_PairsEachVariableWithItsOwnCapturedFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			{"key":"OPEN","value":"open-value","variable_type":"env_var","environment_scope":"production"},
+			{"key":"SEALED","value":"sealed-value","variable_type":"file","hidden":true,"environment_scope":"staging"}
+		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
+	}))
+
+	out, err := List(context.Background(), client, ListInput{})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	want := []Output{
+		{Key: "OPEN", Value: "open-value", VariableType: "env_var", EnvironmentScope: "production"},
+		{Key: "SEALED", Value: "sealed-value", VariableType: "file", Hidden: true, EnvironmentScope: "staging"},
+	}
+	if !reflect.DeepEqual(out.Variables, want) {
+		t.Errorf("List() variables = %+v, want %+v", out.Variables, want)
+	}
+}
+
+// TestInstanceVariables_Refusals_NameTheirOwnOperationAndHint verifies that a
+// refused call is reported under the operation that was refused and carries
+// the corrective sentence written for it.
+//
+// Both halves are plain strings a handler passes to a wrapper, so no gate can
+// be wrong about either: the operation constants of two handlers could be
+// exchanged, and the three admin-privilege sentences could be dealt out to the
+// wrong verbs, with the suite green throughout. What a reader is told then is
+// which call failed, and it is the wrong one.
+func TestInstanceVariables_Refusals_NameTheirOwnOperationAndHint(t *testing.T) {
+	refuse := func(status int, body string) *gitlabclient.Client {
+		return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, status, body)
+		}))
+	}
+	cases := []struct {
+		name     string
+		call     func() error
+		wantOp   string
+		wantHint string
+	}{
+		{
+			name: "list forbidden",
+			call: func() error {
+				_, err := List(context.Background(), refuse(http.StatusForbidden, bodyForbidden), ListInput{})
+				return err
+			},
+			wantOp:   "list instance variables",
+			wantHint: "instance-level CI/CD variables are admin-only. Verify your token has admin scope",
+		},
+		{
+			name: "get missing key",
+			call: func() error {
+				_, err := Get(context.Background(), refuse(http.StatusNotFound, bodyNotFound), GetInput{Key: "GONE"})
+				return err
+			},
+			wantOp:   "get instance variable",
+			wantHint: "verify the variable key exists with gitlab_instance_variable_list; admin-only API",
+		},
+		{
+			name: "create forbidden",
+			call: func() error {
+				_, err := Create(context.Background(), refuse(http.StatusForbidden, bodyForbidden), CreateInput{Key: "K", Value: "V"})
+				return err
+			},
+			wantOp:   "create instance variable",
+			wantHint: "creating instance variables requires admin privileges",
+		},
+		{
+			name: "update forbidden",
+			call: func() error {
+				_, err := Update(context.Background(), refuse(http.StatusForbidden, bodyForbidden), UpdateInput{Key: "K", Value: "V"})
+				return err
+			},
+			wantOp:   "update instance variable",
+			wantHint: "updating instance variables requires admin privileges",
+		},
+		{
+			name: "delete forbidden",
+			call: func() error {
+				return Delete(context.Background(), refuse(http.StatusForbidden, bodyForbidden), DeleteInput{Key: "K"})
+			},
+			wantOp:   "delete instance variable",
+			wantHint: "deleting instance variables requires admin privileges",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.HasPrefix(err.Error(), tc.wantOp+": ") {
+				t.Errorf("error = %v, want it reported under %q", err, tc.wantOp)
+			}
+			if !strings.Contains(err.Error(), "Suggestion: "+tc.wantHint) {
+				t.Errorf("error = %v, want the suggestion %q", err, tc.wantHint)
+			}
+		})
+	}
+}
+
+// TestFormatListMarkdown_EscapesTableCells verifies that a key carrying a pipe
+// is escaped rather than splitting the row into an extra column.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{

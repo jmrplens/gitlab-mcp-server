@@ -16,9 +16,9 @@ const (
 	registerTokensJSON = `[{"id":1,"name":"tok","scopes":["api"],"active":true,"impersonation":true,"revoked":false}]`
 )
 
-// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_Metadata asserts that this package publishes five specs and
+// that each names its owner package and an individual tool. It issues no
+// request: building the specs registers handlers and calls none of them.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -220,9 +220,10 @@ func TestApplyActionMeta_AnEntryThatNamesSomeFields_LeavesTheRestAlone(t *testin
 	}
 }
 
-// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallRoutes drives every spec's route through the catalog
+// surface, over the GET, POST and DELETE paths its five actions use.
+// It asserts each route answers without an error and with a result; what that
+// result holds is asserted by the handler tests.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

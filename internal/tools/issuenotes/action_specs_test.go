@@ -4,6 +4,7 @@ package issuenotes
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -22,8 +23,13 @@ const genericIssueNoteUsage = "Use to execute issuenotes domain action."
 
 // TestActionSpecs_DiscoveryMetadata guards the 1:1 audit R-META metadata: every
 // issue note action must have a non-generic Usage, natural-language aliases,
-// canonical RelatedActions, parameter guidance, and a "Returns: … See also: …"
-// individual-tool description.
+// a RelatedActions list naming its nearest sibling, parameter guidance for the
+// inputs a model has to bind, and a "Returns: … See also: …" individual-tool
+// description.
+//
+// It asks whether the metadata is present and not whether each ID resolves:
+// that is make check-action-ids, over the whole catalog, which a package-local
+// test cannot answer because the catalog is not built here.
 func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
 
@@ -62,6 +68,112 @@ func TestActionSpecs_DiscoveryMetadata(t *testing.T) {
 				if _, ok := spec.ParameterGuidance[p]; !ok {
 					t.Errorf("ParameterGuidance missing %q", p)
 				}
+			}
+		})
+	}
+}
+
+// TestActionSpecs_Classification_MatchesTheActionItRoutes pins the three
+// booleans the spec constructor sets, which nothing else here reads back.
+// Choosing the wrong constructor in ActionSpecs is a straight-line
+// substitution with no branch to flip, so both gates stay green while a write
+// is published as a read: note_create built with issueNoteReadSpec passed the
+// whole suite until this test, and ReadOnly is exactly what --read-only and a
+// read_api token narrow the surface by, so such a spec keeps posting comments
+// on a deployment that asked to serve reads only. Idempotent goes with it
+// because a create announced as idempotent invites a model to retry a call
+// whose outcome it could not observe, leaving two copies of one comment on the
+// issue.
+func TestActionSpecs_Classification_MatchesTheActionItRoutes(t *testing.T) {
+	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
+
+	tests := []struct {
+		tool        string
+		readOnly    bool
+		destructive bool
+		idempotent  bool
+	}{
+		{tool: "gitlab_issue_note_create"},
+		{tool: "gitlab_issue_note_list", readOnly: true, idempotent: true},
+		{tool: "gitlab_issue_note_get", readOnly: true, idempotent: true},
+		{tool: "gitlab_issue_note_update", idempotent: true},
+		{tool: "gitlab_issue_note_delete", destructive: true, idempotent: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if spec.ReadOnly != tt.readOnly {
+				t.Errorf("ReadOnly = %v, want %v", spec.ReadOnly, tt.readOnly)
+			}
+			if spec.Destructive != tt.destructive {
+				t.Errorf("Destructive = %v, want %v", spec.Destructive, tt.destructive)
+			}
+			if spec.Idempotent != tt.idempotent {
+				t.Errorf("Idempotent = %v, want %v", spec.Idempotent, tt.idempotent)
+			}
+		})
+	}
+}
+
+// TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy holds each
+// guidance block against the key it hangs from. TestActionSpecs_DiscoveryMetadata
+// above only asks whether a key is present, so until this test the three shared
+// blocks could trade places in a map literal and nothing failed, and crossing
+// issue_iid with note_id tells a model to put the comment ID where the issue
+// number goes, which is a 404 it has no way to read as its own mistake.
+// The two body blocks are checked
+// for the same reason one level down: create's says what to post and update's
+// says the text replaces the whole note, so a swap turns the warning against
+// appending into advice on a parameter that appends to nothing.
+func TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy(t *testing.T) {
+	byTool := issueNoteSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueNotesActionHandler())))
+
+	shared := []struct {
+		tool  string
+		param string
+		want  toolutil.ParameterGuidance
+	}{
+		{"gitlab_issue_note_create", "project_id", projectIDGuidance()},
+		{"gitlab_issue_note_create", "issue_iid", issueIIDGuidance()},
+		{"gitlab_issue_note_list", "project_id", projectIDGuidance()},
+		{"gitlab_issue_note_list", "issue_iid", issueIIDGuidance()},
+		{"gitlab_issue_note_get", "project_id", projectIDGuidance()},
+		{"gitlab_issue_note_get", "issue_iid", issueIIDGuidance()},
+		{"gitlab_issue_note_get", "note_id", noteIDGuidance()},
+		{"gitlab_issue_note_update", "project_id", projectIDGuidance()},
+		{"gitlab_issue_note_update", "issue_iid", issueIIDGuidance()},
+		{"gitlab_issue_note_update", "note_id", noteIDGuidance()},
+		{"gitlab_issue_note_delete", "project_id", projectIDGuidance()},
+		{"gitlab_issue_note_delete", "issue_iid", issueIIDGuidance()},
+		{"gitlab_issue_note_delete", "note_id", noteIDGuidance()},
+	}
+	for _, tt := range shared {
+		t.Run(tt.tool+"/"+tt.param, func(t *testing.T) {
+			got := byTool[tt.tool].ParameterGuidance[tt.param]
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParameterGuidance[%q] = %+v, want %+v", tt.param, got, tt.want)
+			}
+		})
+	}
+
+	// The per-action blocks are written inline, so they are pinned by the one
+	// sentence that tells them apart rather than by a second copy of the literal.
+	inline := []struct {
+		tool            string
+		param           string
+		wantValueSource string
+	}{
+		{"gitlab_issue_note_create", "body", "The comment text the user wants to post. Markdown is supported."},
+		{"gitlab_issue_note_create", "internal", "Set true only when the user asks for a private/internal note."},
+		{"gitlab_issue_note_list", "order_by", "Field to order notes by: created_at or updated_at."},
+		{"gitlab_issue_note_update", "body", "The new comment text that replaces the existing note body. Markdown is supported."},
+	}
+	for _, tt := range inline {
+		t.Run(tt.tool+"/"+tt.param, func(t *testing.T) {
+			got := byTool[tt.tool].ParameterGuidance[tt.param]
+			if got.ValueSource != tt.wantValueSource {
+				t.Errorf("ParameterGuidance[%q].ValueSource = %q, want %q", tt.param, got.ValueSource, tt.wantValueSource)
 			}
 		})
 	}

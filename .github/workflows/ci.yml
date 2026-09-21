@@ -103,9 +103,22 @@ jobs:
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...
           go tool cover -func=coverage.out
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          # The figure is the one row whose first field is the literal
+          # `total:`. This used to `grep total`, which also matched every
+          # function whose name contains the word (totalsOf, totalTokens, ...),
+          # so COVERAGE held eleven lines, the awk below died on a syntax
+          # error, and since `if` only asks whether awk succeeded, a dead awk
+          # read as "not below the minimum" and the step printed PASS. The
+          # gate had therefore not been enforced since the first such function
+          # was written. A figure that is not one number now fails closed.
+          COVERAGE=$(go tool cover -func=coverage.out | awk '$1 == "total:" {print $3}' | tr -d '%')
+          case "${COVERAGE}" in
+            ''|*[!0-9.]*|*.*.*)
+              echo "FAIL: could not read one total coverage figure, got '${COVERAGE}'"
+              exit 1 ;;
+          esac
           echo "Total coverage: ${COVERAGE}%"
-          if awk "BEGIN {exit !(${COVERAGE} + 0 < ${COVERAGE_MIN} + 0)}"; then
+          if awk -v got="${COVERAGE}" -v min="${COVERAGE_MIN}" 'BEGIN {exit !(got + 0 < min + 0)}'; then
             echo "FAIL: coverage ${COVERAGE}% is below minimum ${COVERAGE_MIN}%"
             exit 1
           fi

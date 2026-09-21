@@ -4,6 +4,8 @@ package instancevariables
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -12,9 +14,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the route returns the expected error or result.
+// TestActionSpecs_CallAllRoutes drives all five canonical routes through the
+// catalog surface, one per HTTP method the package uses, and asserts each
+// returns a result rather than an error: it is the spec's wiring that is under
+// test, not the handlers the routes reach.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET "+pathInstanceVars, func(w http.ResponseWriter, _ *http.Request) {
@@ -58,9 +61,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
-// The test exercises the DELETE path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestActionSpecs_DeleteError validates that the delete route propagates a
+// refusal instead of reporting the deletion done. What the error says is
+// asserted where Delete is called directly; here it is that one arrives.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	byTool := instanceVariableSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -102,9 +105,10 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestCatalogSurface_DeleteConfirmDeclined verifies that a client declining
+// the destructive-action elicitation gets a result back and GitLab is never
+// asked: the mock forbids every request, so a delete that ran anyway fails the
+// test rather than passing quietly.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := instanceVariableSpecsByTool(t, ActionSpecs(client))
@@ -197,6 +201,40 @@ func TestInstanceVariableActionSpecs_AllCarryActionSpecificMetadata(t *testing.T
 			}
 			if spec.IndividualTool.Description == "" {
 				t.Error("IndividualTool.Description is empty, want the action's own description")
+			}
+		})
+	}
+}
+
+// TestInstanceVariableActionSpecs_NoActionLinksToItself verifies that no
+// action offers itself as somewhere else to go, in its related actions or in
+// the "See also" list of the description every individual tool is listed by.
+//
+// It is the property that catches the switch dealing a case body to the wrong
+// action, which nothing else here can: crossing the get and create labels
+// leaves both actions carrying action-specific metadata, so the test above is
+// still satisfied, and both keep naming real catalog IDs, so the catalog test
+// is too. What gives it away is that the metadata then points home: the get
+// action offering ci_variable.instance_get, which is where the model already
+// is. A self-link is a dead loop whatever put it there, so this states the
+// invariant rather than repeating the five curated lists.
+func TestInstanceVariableActionSpecs_NoActionLinksToItself(t *testing.T) {
+	specs := ActionSpecs(testutil.NewTestClient(t, testutil.ForbiddenHandler(t)))
+	if len(specs) != 5 {
+		t.Fatalf("ActionSpecs returned %d specs, want 5", len(specs))
+	}
+	for _, spec := range specs {
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			ownID := "ci_variable." + spec.Name
+			if slices.Contains(spec.RelatedActions, ownID) {
+				t.Errorf("RelatedActions = %v, want it not to name the action's own ID %q", spec.RelatedActions, ownID)
+			}
+			_, seeAlso, found := strings.Cut(spec.IndividualTool.Description, "See also:")
+			if !found {
+				t.Fatalf("Description = %q, want a See also list", spec.IndividualTool.Description)
+			}
+			if strings.Contains(seeAlso, spec.IndividualTool.Name) {
+				t.Errorf("See also = %q, want it not to name the tool's own name %q", seeAlso, spec.IndividualTool.Name)
 			}
 		})
 	}

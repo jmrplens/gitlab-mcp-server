@@ -5,12 +5,15 @@ package issuediscussions
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -24,6 +27,19 @@ const (
 	testProjectPath = "my/project"
 	// fmtIDWant identifies the fmt ID want constant used by this package.
 	fmtIDWant = "ID = %q, want %q"
+)
+
+// The operation each handler signs its errors with. They are spelled out here
+// rather than exported from the handler file so a test compares the message a
+// caller reads against a name written down independently: sharing one
+// constant with the code would make every crossing agree with itself.
+const (
+	opList       = "issue_discussion_list"
+	opGet        = "issue_discussion_get"
+	opCreate     = "issue_discussion_create"
+	opAddNote    = "issue_discussion_add_note"
+	opUpdateNote = "issue_discussion_update_note"
+	opDeleteNote = "issue_discussion_delete_note"
 )
 
 // TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
@@ -97,7 +113,7 @@ func TestCreate_Success(t *testing.T) {
 }
 
 // TestAddNote_Success verifies that AddNote succeeds when the GitLab API returns a valid response.
-// The test exercises the GET path of the underlying GitLab API call.
+// The test exercises the POST path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,8 +154,8 @@ func TestUpdateNote_Success(t *testing.T) {
 }
 
 // TestDeleteNote_Success verifies that DeleteNote succeeds when the GitLab API returns a valid response.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that a 204 is reported as success; the handler publishes no output.
 func TestDeleteNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -149,21 +165,6 @@ func TestDeleteNote_Success(t *testing.T) {
 	err := DeleteNote(t.Context(), client, DeleteNoteInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 99})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
-	}
-}
-
-// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestGet_APIError(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	_, err := Get(t.Context(), client, GetInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID})
-	if err == nil {
-		t.Fatal("expected error for API error response")
 	}
 }
 
@@ -207,72 +208,87 @@ func TestList_AppliesListAndKeysetOptions(t *testing.T) {
 	}
 }
 
-// TestCreate_SendsCreatedAt verifies that Create forwards the created_at
-// backdate field into the request body when supplied.
-func TestCreate_SendsCreatedAt(t *testing.T) {
-	var body string
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":"new123","individual_note":false,"notes":[{"id":5,"body":"x","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}]}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	_, err := Create(t.Context(), client, CreateInput{ProjectID: testProjectID, IssueIID: 10, Body: "x", CreatedAt: "2025-01-01T00:00:00Z"})
-	if err != nil {
+// sentBody runs call against a client whose GitLab records the request body
+// and answers with response, and returns that body decoded.
+func sentBody(t *testing.T, response string, call func(*gitlabclient.Client) error) map[string]any {
+	t.Helper()
+	var raw []byte
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "unreadable request body", http.StatusInternalServerError)
+			return
+		}
+		raw = b
+		testutil.RespondJSON(w, http.StatusOK, response)
+	}))
+	if err := call(client); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
-		t.Errorf("request body %q missing created_at", body)
+	var sent map[string]any
+	if err := json.Unmarshal(raw, &sent); err != nil {
+		t.Fatalf("request body %q is not a JSON object: %v", raw, err)
+	}
+	return sent
+}
+
+// TestHandlers_SendTheBodyAndTheBackdateApart asserts that each writing
+// handler puts the caller's Markdown under body and the backdate under
+// created_at, in their own keys.
+//
+// The tests this replaced looked for the timestamp anywhere in the request,
+// which the two fields trading places satisfies just as well: both are
+// optional strings on the input, so a handler sending the timestamp as the
+// note's text and the text as the backdate passed: the note would read
+// "2025-01-01T00:00:00Z" and the backdate would be dropped as unparseable.
+// Neither gate can see it, because swapping two assignments changes no branch.
+func TestHandlers_SendTheBodyAndTheBackdateApart(t *testing.T) {
+	const (
+		backdate = "2025-01-01T00:00:00Z"
+		text     = "the note a caller wrote"
+	)
+
+	tests := []struct {
+		name     string
+		response string
+		call     func(*gitlabclient.Client) error
+	}{
+		{"Create", discussionJSONCoverage, func(c *gitlabclient.Client) error {
+			_, err := Create(context.Background(), c, CreateInput{
+				ProjectID: testProjectID, IssueIID: 10, Body: text, CreatedAt: backdate,
+			})
+			return err
+		}},
+		{"AddNote", noteJSONCoverage, func(c *gitlabclient.Client) error {
+			_, err := AddNote(context.Background(), c, AddNoteInput{
+				ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, Body: text, CreatedAt: backdate,
+			})
+			return err
+		}},
+		{"UpdateNote", noteJSONCoverage, func(c *gitlabclient.Client) error {
+			_, err := UpdateNote(context.Background(), c, UpdateNoteInput{
+				ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 99, Body: text, CreatedAt: backdate,
+			})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sent := sentBody(t, tt.response, tt.call)
+			if sent["body"] != text {
+				t.Errorf("body = %v, want %q", sent["body"], text)
+			}
+			if sent["created_at"] != backdate {
+				t.Errorf("created_at = %v, want %q", sent["created_at"], backdate)
+			}
+		})
 	}
 }
 
-// TestAddNote_SendsCreatedAt verifies that AddNote forwards the created_at
-// backdate field into the request body when supplied.
-func TestAddNote_SendsCreatedAt(t *testing.T) {
-	var body string
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-		testutil.RespondJSON(w, http.StatusCreated,
-			`{"id":99,"body":"Reply","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, Body: "Reply", CreatedAt: "2025-01-01T00:00:00Z"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
-		t.Errorf("request body %q missing created_at", body)
-	}
-}
-
-// TestUpdateNote_SendsCreatedAt verifies that UpdateNote forwards the
-// created_at override field into the request body when supplied.
-func TestUpdateNote_SendsCreatedAt(t *testing.T) {
-	var body string
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-		testutil.RespondJSON(w, http.StatusOK,
-			`{"id":99,"body":"Updated","author":{"username":"admin"},"created_at":"2025-01-01T00:00:00Z"}`)
-	})
-	client := testutil.NewTestClient(t, handler)
-
-	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: testProjectID, IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 99, Body: "Updated", CreatedAt: "2025-01-01T00:00:00Z"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
-	}
-	if !strings.Contains(body, "2025-01-01T00:00:00Z") {
-		t.Errorf("request body %q missing created_at", body)
-	}
-}
-
-// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_Empty verifies that a list with no discussions
+// renders the empty message alone: no heading, no pagination line and no
+// guidance section, since there is nothing for a reader to act on.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md != "No issue discussions found.\n" {
@@ -281,21 +297,31 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// assertContains verifies that err is non-nil and its message contains substr.
+// assertRequiredField verifies that err is the refusal a handler writes for a
+// missing required field: it opens with the operation that declined and the
+// field it wanted, in that order.
+//
+// The operation is asserted, not just the field, because it is the only part
+// of the message that says which of the six handlers refused. Every handler
+// here writes the same four field names, so a message carrying a sibling's
+// operation tells the caller its call went somewhere it never went, and no
+// gate sees it: an operation label is a string literal, not a branch.
 // ---------------------------------------------------------------------------.
-func assertContains(t *testing.T, err error, substr string) {
+func assertRequiredField(t *testing.T, err error, operation, field string) {
 	t.Helper()
+	want := operation + ": " + field + " is required"
 	if err == nil {
-		t.Fatalf("expected error containing %q, got nil", substr)
+		t.Fatalf("expected error starting with %q, got nil", want)
 	}
-	if !strings.Contains(err.Error(), substr) {
-		t.Errorf("error %q does not contain %q", err.Error(), substr)
+	if !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("error %q does not start with %q", err.Error(), want)
 	}
 }
 
-// TestIssueIIDRequired_Validation verifies the IssueIIDRequired_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestIssueIIDRequired_Validation asserts that every handler refuses an
+// omitted issue_iid itself, naming its own operation and the field, and that
+// none of them reaches GitLab: the mock is a [testutil.ForbiddenHandler], so
+// a guard that let the zero through would fail the subtest twice over.
 func TestIssueIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
@@ -303,41 +329,43 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 
 	tests := []struct {
 		name string
+		op   string
 		fn   func() error
 	}{
-		{"List", func() error { _, e := List(ctx, client, ListInput{ProjectID: pid, IssueIID: 0}); return e }},
-		{"Get", func() error {
+		{"List", opList, func() error { _, e := List(ctx, client, ListInput{ProjectID: pid, IssueIID: 0}); return e }},
+		{"Get", opGet, func() error {
 			_, e := Get(ctx, client, GetInput{ProjectID: pid, IssueIID: 0, DiscussionID: testDiscussionID})
 			return e
 		}},
-		{"Create", func() error {
+		{"Create", opCreate, func() error {
 			_, e := Create(ctx, client, CreateInput{ProjectID: pid, IssueIID: 0, Body: "x"})
 			return e
 		}},
-		{"AddNote", func() error {
+		{"AddNote", opAddNote, func() error {
 			_, e := AddNote(ctx, client, AddNoteInput{ProjectID: pid, IssueIID: 0, DiscussionID: testDiscussionID, Body: "x"})
 			return e
 		}},
-		{"UpdateNote", func() error {
+		{"UpdateNote", opUpdateNote, func() error {
 			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, IssueIID: 0, DiscussionID: testDiscussionID, NoteID: 1, Body: "x"})
 			return e
 		}},
-		{"DeleteNote", func() error {
+		{"DeleteNote", opDeleteNote, func() error {
 			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, IssueIID: 0, DiscussionID: testDiscussionID, NoteID: 1})
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "issue_iid")
+			assertRequiredField(t, tt.fn(), tt.op, "issue_iid")
 		})
 	}
 }
 
 // TestNoteIDRequired_Validation asserts that both handlers taking a note_id
-// name the missing field themselves, for the value an omitted field decodes
-// to (zero) as well as for a negative one, and that neither reaches GitLab:
-// the mock is a [testutil.ForbiddenHandler], so a guard that let either value
-// through would fail the subtest and the no-request assertion alike.
+// name themselves and the missing field, for the value an omitted field
+// decodes to (zero) as well as for a negative one, and that neither reaches
+// GitLab: the mock is a [testutil.ForbiddenHandler], so a guard that let
+// either value through would fail the subtest and the no-request assertion
+// alike.
 //
 // Each handler is held at both values because the guard is a boundary, and a
 // test that pins only one side of it leaves the other free to move. An MCP
@@ -360,60 +388,62 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 
 	tests := []struct {
 		name   string
+		op     string
 		fn     func(int64) error
 		noteID int64
 	}{
-		{"UpdateNote_Omitted", updateNote, 0},
-		{"UpdateNote_Negative", updateNote, -1},
-		{"DeleteNote_Omitted", deleteNote, 0},
-		{"DeleteNote_Negative", deleteNote, -1},
+		{"UpdateNote_Omitted", opUpdateNote, updateNote, 0},
+		{"UpdateNote_Negative", opUpdateNote, updateNote, -1},
+		{"DeleteNote_Omitted", opDeleteNote, deleteNote, 0},
+		{"DeleteNote_Negative", opDeleteNote, deleteNote, -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(tt.noteID), "note_id")
+			assertRequiredField(t, tt.fn(tt.noteID), tt.op, "note_id")
 		})
 	}
 }
 
-// TestProjectIDRequired_Validation verifies the ProjectIDRequired_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestProjectIDRequired_Validation asserts that every handler refuses an
+// omitted project_id itself, naming its own operation and the field, without
+// reaching GitLab.
 func TestProjectIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 
 	tests := []struct {
 		name string
+		op   string
 		fn   func() error
 	}{
-		{"List", func() error { _, e := List(ctx, client, ListInput{IssueIID: 10}); return e }},
-		{"Get", func() error {
+		{"List", opList, func() error { _, e := List(ctx, client, ListInput{IssueIID: 10}); return e }},
+		{"Get", opGet, func() error {
 			_, e := Get(ctx, client, GetInput{IssueIID: 10, DiscussionID: testDiscussionID})
 			return e
 		}},
-		{"Create", func() error { _, e := Create(ctx, client, CreateInput{IssueIID: 10, Body: "x"}); return e }},
-		{"AddNote", func() error {
+		{"Create", opCreate, func() error { _, e := Create(ctx, client, CreateInput{IssueIID: 10, Body: "x"}); return e }},
+		{"AddNote", opAddNote, func() error {
 			_, e := AddNote(ctx, client, AddNoteInput{IssueIID: 10, DiscussionID: testDiscussionID, Body: "x"})
 			return e
 		}},
-		{"UpdateNote", func() error {
+		{"UpdateNote", opUpdateNote, func() error {
 			_, e := UpdateNote(ctx, client, UpdateNoteInput{IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 1, Body: "x"})
 			return e
 		}},
-		{"DeleteNote", func() error {
+		{"DeleteNote", opDeleteNote, func() error {
 			return DeleteNote(ctx, client, DeleteNoteInput{IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 1})
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "project_id")
+			assertRequiredField(t, tt.fn(), tt.op, "project_id")
 		})
 	}
 }
 
-// TestDiscussionIDRequired_Validation verifies the DiscussionIDRequired_Validation handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestDiscussionIDRequired_Validation asserts that every discussion-scoped
+// handler refuses an omitted discussion_id itself, naming its own operation
+// and the field, without reaching GitLab.
 func TestDiscussionIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
@@ -421,24 +451,25 @@ func TestDiscussionIDRequired_Validation(t *testing.T) {
 
 	tests := []struct {
 		name string
+		op   string
 		fn   func() error
 	}{
-		{"Get", func() error { _, e := Get(ctx, client, GetInput{ProjectID: pid, IssueIID: 10}); return e }},
-		{"AddNote", func() error {
+		{"Get", opGet, func() error { _, e := Get(ctx, client, GetInput{ProjectID: pid, IssueIID: 10}); return e }},
+		{"AddNote", opAddNote, func() error {
 			_, e := AddNote(ctx, client, AddNoteInput{ProjectID: pid, IssueIID: 10, Body: "x"})
 			return e
 		}},
-		{"UpdateNote", func() error {
+		{"UpdateNote", opUpdateNote, func() error {
 			_, e := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: pid, IssueIID: 10, NoteID: 1, Body: "x"})
 			return e
 		}},
-		{"DeleteNote", func() error {
+		{"DeleteNote", opDeleteNote, func() error {
 			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: pid, IssueIID: 10, NoteID: 1})
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertContains(t, tt.fn(), "discussion_id")
+			assertRequiredField(t, tt.fn(), tt.op, "discussion_id")
 		})
 	}
 }
@@ -449,9 +480,10 @@ func TestDiscussionIDRequired_Validation(t *testing.T) {
 // Format*Markdown tests — populated + empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_Populated verifies the ListMarkdownString_Populated Markdown formatter for a representative liststring_populated input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatListMarkdownString_Populated renders two threads of three notes
+// between them and asserts the heading, every thread id, every author, every
+// body and every timestamp reach the page, and that it closes with this
+// formatter's own guidance.
 func TestFormatListMarkdownString_Populated(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
@@ -487,11 +519,31 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 			}
 		})
 	}
+	t.Run("hints", func(t *testing.T) {
+		if !strings.HasSuffix(md, discussionListHints) {
+			t.Errorf("list guidance:\n got %q\nwant suffix %q", md, discussionListHints)
+		}
+	})
 }
 
-// TestFormatMarkdownString_Populated verifies the MarkdownString_Populated Markdown formatter for a representative string_populated input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// discussionListHints is the guidance section the issue discussion list ends
+// with, in the order the formatter passes it. It is asserted whole because a
+// hint is a string literal no gate reads: the two could trade places, or one
+// could be the thread card's, and every mutant would still die.
+const discussionListHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'discussion_get' with discussion_id to see full discussion\n" +
+	"- Use action 'discussion_add_note' to reply to a discussion\n"
+
+// discussionCardHints is the same for the single-thread card, whose two hints
+// are deliberately not the list's: a reader holding one thread is told how to
+// reply to it and how to edit a note in it, not how to fetch it again.
+const discussionCardHints = "\n\n---\n\U0001F4A1 **Next steps:**\n" +
+	"- Use action 'discussion_add_note' to reply to this discussion\n" +
+	"- Use action 'discussion_update_note' with note_id to edit a note\n"
+
+// TestFormatMarkdownString_Populated renders one thread and asserts its
+// heading, both authors, both bodies and both timestamps reach the card, and
+// that it closes with the thread card's own guidance rather than the list's.
 func TestFormatMarkdownString_Populated(t *testing.T) {
 	out := Output{
 		ID:             "disc-abc",
@@ -514,11 +566,16 @@ func TestFormatMarkdownString_Populated(t *testing.T) {
 			}
 		})
 	}
+	t.Run("hints", func(t *testing.T) {
+		if !strings.HasSuffix(md, discussionCardHints) {
+			t.Errorf("thread card guidance:\n got %q\nwant suffix %q", md, discussionCardHints)
+		}
+	})
 }
 
-// TestFormatMarkdownString_Empty verifies the MarkdownString_Empty Markdown formatter for a representative string_empty input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatMarkdownString_Empty verifies that a zero thread still renders the
+// card's heading, so a caller reading the result sees what it is looking at
+// rather than an empty response.
 func TestFormatMarkdownString_Empty(t *testing.T) {
 	md := FormatMarkdownString(Output{})
 	if !strings.Contains(md, "Discussion") {
@@ -526,9 +583,10 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString_Populated verifies the NoteMarkdownString_Populated Markdown formatter for a representative notestring_populated input.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the rendered Markdown contains the expected section headings and content.
+// TestFormatNoteMarkdownString_Populated renders one note and asserts the card
+// whole (heading, author, time, body and the two hints in order) because a
+// card assembled from the right pieces in the wrong places passes every
+// substring check.
 func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 	out := NoteOutput{
 		ID:        42,
@@ -568,9 +626,9 @@ func TestFormatNoteMarkdownString_Empty(t *testing.T) {
 // Converter tests — noteToOutput, toOutput, toListOutput
 // ---------------------------------------------------------------------------.
 
-// TestNoteToOutput_AllFields verifies the NoteToOutput_AllFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestNoteToOutput_AllFields drives Create against a thread whose single note
+// carries every field GitLab sends, and asserts each one arrives on the
+// published note: id, body, author, the system flag and both timestamps.
 func TestNoteToOutput_AllFields(t *testing.T) {
 	// Exercise noteToOutput via Create which returns noteToOutput(note).
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -617,9 +675,9 @@ func TestNoteToOutput_AllFields(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_NoUpdatedAt verifies the NoteToOutput_NoUpdatedAt handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestNoteToOutput_NoUpdatedAt asserts that a note GitLab sends without
+// updated_at publishes an empty one rather than borrowing created_at, and
+// that the fields beside it still arrive.
 func TestNoteToOutput_NoUpdatedAt(t *testing.T) {
 	// GitLab always returns created_at; updated_at may be absent.
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -653,9 +711,9 @@ func TestNoteToOutput_NoUpdatedAt(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_EmptyAuthor verifies the NoteToOutput_EmptyAuthor handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestNoteToOutput_EmptyAuthor asserts that the author object GitLab sends
+// empty on a system note is published as an empty object rather than dropped,
+// so a reader dereferencing it does not meet a nil.
 func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{
@@ -690,6 +748,12 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 // which is a fault in the type naming them and is reported rather than
 // swallowed. A string where a note's `imported` is a bool is the shape, on
 // a note alone, inside a thread, and inside a list of threads.
+//
+// Each refusal is then held to naming the handler that made the call. The
+// operation reaches [toolutil.CapturedThread] and its two siblings as an
+// argument, so it is an assignment rather than a branch and no gate can be
+// wrong about it, while a caller reading "issue_discussion_get" after asking
+// for a list is told about a call it never made.
 func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		note := `{"id":1,"body":"x","author":{"id":1,"username":"u"},"imported":"not-a-bool"}`
@@ -703,33 +767,55 @@ func TestHandlers_ACapturedFieldTheTypeCannotHold_IsReported(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, body)
 	}))
-	testutil.AssertCapturedDecodeFailures(t, []testutil.CapturedCase{
-		{Name: "list", Call: func() error {
+	calls := []struct {
+		name string
+		op   string
+		call func() error
+	}{
+		{"list", opList, func() error {
 			_, err := List(t.Context(), client, ListInput{ProjectID: "42", IssueIID: 10})
 			return err
 		}},
-		{Name: "get", Call: func() error {
+		{"get", opGet, func() error {
 			_, err := Get(t.Context(), client, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1"})
 			return err
 		}},
-		{Name: "create", Call: func() error {
+		{"create", opCreate, func() error {
 			_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
 			return err
 		}},
-		{Name: "add note", Call: func() error {
+		{"add note", opAddNote, func() error {
 			_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1", Body: "x"})
 			return err
 		}},
-		{Name: "update note", Call: func() error {
+		{"update note", opUpdateNote, func() error {
 			_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "d1", NoteID: 1, Body: "x"})
 			return err
 		}},
-	})
+	}
+
+	cases := make([]testutil.CapturedCase, 0, len(calls))
+	for _, c := range calls {
+		cases = append(cases, testutil.CapturedCase{Name: c.name, Call: c.call})
+	}
+	testutil.AssertCapturedDecodeFailures(t, cases)
+
+	for _, c := range calls {
+		t.Run(c.name+" names its operation", func(t *testing.T) {
+			err := c.call()
+			if err == nil {
+				t.Fatalf("expected the capture's decode failure from %s, got nil", c.op)
+			}
+			if !strings.HasPrefix(err.Error(), c.op+": ") {
+				t.Errorf("error %q does not name the operation %q", err.Error(), c.op)
+			}
+		})
+	}
 }
 
-// TestToOutput_MultipleNotes verifies the ToOutput_MultipleNotes handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToOutput_MultipleNotes asserts that a thread of three notes reaches the
+// caller whole and in order: the thread's id and individual_note flag, the
+// note count, and the authors at both ends of the slice.
 func TestToOutput_MultipleNotes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -765,9 +851,9 @@ func TestToOutput_MultipleNotes(t *testing.T) {
 	}
 }
 
-// TestToListOutput_MultipleDiscussions verifies the ToListOutput_MultipleDiscussions handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToListOutput_MultipleDiscussions asserts that a page of two threads
+// keeps its order and that the pagination block is filled from GitLab's own
+// headers rather than from the page's length.
 func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
@@ -801,9 +887,8 @@ func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	}
 }
 
-// TestToListOutput_EmptyList verifies the ToListOutput_EmptyList handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestToListOutput_EmptyList asserts that an issue with no discussions is
+// answered with an empty list rather than an error.
 func TestToListOutput_EmptyList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -824,93 +909,61 @@ func TestToListOutput_EmptyList(t *testing.T) {
 // Context cancellation for all 6 handlers
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies the List_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestList_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
+// TestHandlers_CancelledContext_RefuseBeforeTheCall asserts that every handler
+// checks the context first and hands the caller the cancellation unchanged.
+//
+// The mock is a [testutil.ForbiddenHandler], so nothing may reach GitLab, and
+// the error must be [context.Canceled] itself rather than an operation-signed
+// wrap. The second half is what the tests this replaced were missing: they
+// asserted only that some error came back, which a handler that skipped the
+// guard would produce anyway: the transport refuses a canceled request on its
+// own, and the handler would then report it as a GitLab failure, telling the
+// caller its issue or thread could not be found when the call was simply
+// abandoned.
+func TestHandlers_CancelledContext_RefuseBeforeTheCall(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := List(ctx, client, ListInput{ProjectID: "42", IssueIID: 10})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
+	tests := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{"List", func(ctx context.Context) error {
+			_, err := List(ctx, client, ListInput{ProjectID: "42", IssueIID: 10})
+			return err
+		}},
+		{"Get", func(ctx context.Context) error {
+			_, err := Get(ctx, client, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID})
+			return err
+		}},
+		{"Create", func(ctx context.Context) error {
+			_, err := Create(ctx, client, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
+			return err
+		}},
+		{"AddNote", func(ctx context.Context) error {
+			_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, Body: "x"})
+			return err
+		}},
+		{"UpdateNote", func(ctx context.Context) error {
+			_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 100, Body: "x"})
+			return err
+		}},
+		{"DeleteNote", func(ctx context.Context) error {
+			return DeleteNote(ctx, client, DeleteNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 100})
+		}},
 	}
-}
-
-// TestGet_CancelledContext verifies the Get_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestGet_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := Get(ctx, client, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123"})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
-	}
-}
-
-// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestCreate_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := Create(ctx, client, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
-	}
-}
-
-// TestAddNote_CancelledContext verifies the AddNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestAddNote_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := AddNote(ctx, client, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", Body: "x"})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
-	}
-}
-
-// TestUpdateNote_CancelledContext verifies the UpdateNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestUpdateNote_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	_, err := UpdateNote(ctx, client, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", NoteID: 100, Body: "x"})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
-	}
-}
-
-// TestDeleteNote_CancelledContext verifies the DeleteNote_CancelledContext handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
-func TestDeleteNote_CancelledContext(t *testing.T) {
-	ctx := testutil.CancelledCtx(t)
-
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	err := DeleteNote(ctx, client, DeleteNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", NoteID: 100})
-	if err == nil {
-		t.Fatal("expected context.Canceled error, got nil")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call(testutil.CancelledCtx(t))
+			if err == nil {
+				t.Fatal("expected context.Canceled error, got nil")
+			}
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("error = %v, want context.Canceled", err)
+			}
+			if err.Error() != context.Canceled.Error() {
+				t.Errorf("error %q was reported as a GitLab failure; want the bare cancellation", err.Error())
+			}
+		})
 	}
 }
 
@@ -918,68 +971,128 @@ func TestDeleteNote_CancelledContext(t *testing.T) {
 // API error paths for all 6 handlers
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestList_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
-	}))
-	_, err := List(t.Context(), client, ListInput{ProjectID: "42", IssueIID: 10})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
+// apiErrorCase is one handler's refusal contract: the operation it signs its
+// errors with, the status it classifies with a hint of its own, the hint it
+// attaches there, a status it does not classify, and the call that drives it
+// against a client whose GitLab answers a given status.
+type apiErrorCase struct {
+	name     string
+	op       string
+	hint     string
+	call     func(*gitlabclient.Client) error
+	hinted   int
+	unhinted int
+}
+
+// apiErrorCases returns that contract for each of the six handlers.
+func apiErrorCases() []apiErrorCase {
+	return []apiErrorCase{
+		{
+			name: "List", op: opList,
+			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
+			hint: "verify project_id and issue_iid with gitlab_issue_get",
+			call: func(c *gitlabclient.Client) error {
+				_, err := List(context.Background(), c, ListInput{ProjectID: "42", IssueIID: 10})
+				return err
+			},
+		},
+		{
+			name: "Get", op: opGet,
+			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
+			hint: "verify discussion_id with gitlab_list_issue_discussions",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Get(context.Background(), c, GetInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID})
+				return err
+			},
+		},
+		{
+			name: "Create", op: opCreate,
+			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
+			hint: "verify project_id and issue_iid with gitlab_issue_get; creating discussions requires Reporter role or higher",
+			call: func(c *gitlabclient.Client) error {
+				_, err := Create(context.Background(), c, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "AddNote", op: opAddNote,
+			hinted: http.StatusNotFound, unhinted: http.StatusForbidden,
+			hint: "verify discussion_id with gitlab_list_issue_discussions",
+			call: func(c *gitlabclient.Client) error {
+				_, err := AddNote(context.Background(), c, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "UpdateNote", op: opUpdateNote,
+			hinted: http.StatusForbidden, unhinted: http.StatusNotFound,
+			hint: "only the note author can edit a discussion note",
+			call: func(c *gitlabclient.Client) error {
+				_, err := UpdateNote(context.Background(), c, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 100, Body: "x"})
+				return err
+			},
+		},
+		{
+			name: "DeleteNote", op: opDeleteNote,
+			hinted: http.StatusForbidden, unhinted: http.StatusNotFound,
+			hint: "only the note author or a Maintainer can delete a discussion note",
+			call: func(c *gitlabclient.Client) error {
+				return DeleteNote(context.Background(), c, DeleteNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: testDiscussionID, NoteID: 100})
+			},
+		},
 	}
 }
 
-// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestCreate_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+// statusClient returns a client whose GitLab answers every request with code.
+func statusClient(t *testing.T, code int) *gitlabclient.Client {
+	t.Helper()
+	return testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, code, `{"message":"refused"}`)
 	}))
-	_, err := Create(t.Context(), client, CreateInput{ProjectID: "42", IssueIID: 10, Body: "x"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
 }
 
-// TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestAddNote_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-	}))
-	_, err := AddNote(t.Context(), client, AddNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", Body: "x"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
+// TestHandlers_APIError_CarryTheirOwnOperationAndHint asserts what a caller
+// actually reads when GitLab refuses: the error opens with the operation that
+// made the call, and it carries that handler's own suggestion at the status
+// that handler classifies: 404 for the four reads and writes that can be
+// pointed at the wrong project, issue or thread, 403 for the two note actions
+// GitLab refuses on authorship.
+//
+// The second half of each case is what makes the first half mean something. A
+// handler that classified any status would attach its hint to a refusal it
+// knows nothing about, so the same call is driven at a status it does not
+// classify and the hint must be absent there.
+//
+// Both halves are invisible to the mutation and condition gates, which see a
+// branch taken and not the literal it hands the caller: the six hints could be
+// dealt out to the wrong handlers, or the two status constants swapped, with
+// every gate still green. The suite this replaced asserted only that an error
+// came back.
+func TestHandlers_APIError_CarryTheirOwnOperationAndHint(t *testing.T) {
+	for _, tt := range apiErrorCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call(statusClient(t, tt.hinted))
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.HasPrefix(err.Error(), tt.op+": ") {
+				t.Errorf("error %q does not name the operation %q", err.Error(), tt.op)
+			}
+			if !strings.Contains(err.Error(), "Suggestion: "+tt.hint) {
+				t.Errorf("error %q missing its own hint %q", err.Error(), tt.hint)
+			}
 
-// TestUpdateNote_APIError verifies that UpdateNote returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestUpdateNote_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-	}))
-	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", NoteID: 100, Body: "x"})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
-	}
-}
-
-// TestDeleteNote_APIError verifies that DeleteNote returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
-func TestDeleteNote_APIError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-	}))
-	err := DeleteNote(t.Context(), client, DeleteNoteInput{ProjectID: "42", IssueIID: 10, DiscussionID: "abc123", NoteID: 100})
-	if err == nil {
-		t.Fatal(errExpectedAPI)
+			other := tt.call(statusClient(t, tt.unhinted))
+			if other == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.HasPrefix(other.Error(), tt.op+": ") {
+				t.Errorf("error %q does not name the operation %q", other.Error(), tt.op)
+			}
+			if strings.Contains(other.Error(), tt.hint) {
+				t.Errorf("error %q carries the %d hint on a %d refusal", other.Error(), tt.hinted, tt.unhinted)
+			}
+		})
 	}
 }
 

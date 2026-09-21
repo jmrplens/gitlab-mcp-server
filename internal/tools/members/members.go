@@ -28,8 +28,10 @@ type ListInput struct {
 // what lib/api/entities/member.rb sends that the SDK does not carry, read
 // from the captured response (ADR-0021). locked and public_email are on
 // every member, membership_state on every member of an Enterprise instance,
-// and two_factor_enabled, group_saml_identity, group_scim_identity and
-// override when the caller may see them.
+// and group_saml_identity, group_scim_identity and override when the caller
+// may see them. two_factor_enabled is named by neither this type nor the
+// member entity: [toolutil.MemberExtra] carries it for the group member
+// surface, and the member entity does not send it.
 type Output struct {
 	toolutil.HintableOutput
 	ID                int64               `json:"id"`

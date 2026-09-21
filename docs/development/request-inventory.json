@@ -9120,7 +9120,7 @@
       "method": "DELETE",
       "path": "/users/:user_id/impersonation_tokens/:impersonation_token_id",
       "identifiers": {
-        ":impersonation_token_id": 2,
+        ":impersonation_token_id": 3,
         ":user_id": 2
       }
     },
@@ -9259,6 +9259,12 @@
     {
       "package": "internal/tools/instancevariables",
       "kind": "rest",
+      "method": "GET",
+      "path": "/admin/ci/variables/GONE"
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
       "method": "DELETE",
       "path": "/admin/ci/variables/K"
     },
@@ -9266,7 +9272,10 @@
       "package": "internal/tools/instancevariables",
       "kind": "rest",
       "method": "PUT",
-      "path": "/admin/ci/variables/K"
+      "path": "/admin/ci/variables/K",
+      "body": [
+        "value"
+      ]
     },
     {
       "package": "internal/tools/instancevariables",
@@ -9291,6 +9300,12 @@
         "raw",
         "value"
       ]
+    },
+    {
+      "package": "internal/tools/instancevariables",
+      "kind": "rest",
+      "method": "GET",
+      "path": "/admin/ci/variables/SOLO"
     },
     {
       "package": "internal/tools/instancevariables",

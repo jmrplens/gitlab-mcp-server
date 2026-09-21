@@ -3,7 +3,9 @@
 package modelregistry
 
 import (
+	"encoding/base64"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -57,17 +59,24 @@ func hasNaturalLanguageAlias(spec toolutil.ActionSpec) bool {
 	return false
 }
 
-// TestActionSpecs_CallRoute verifies the model registry download route executes successfully.
+// TestActionSpecs_CallRoute verifies the model registry download route carries
+// the caller's four arguments to the endpoint and hands back the typed output.
+//
+// The route is what a model reaches through every surface, and it decodes the
+// argument map itself, so a name that does not match the input struct's json
+// tag arrives empty here and nowhere else. The path is asserted rather than
+// pattern-matched, and the result is type-asserted rather than checked for
+// non-nil: a route that reached some endpoint and returned some value was all
+// this test used to demand.
 func TestActionSpecs_CallRoute(t *testing.T) {
+	const wantPath = "/api/v4/projects/42/packages/ml_models/7/files/models/model.bin"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/ml_models/") {
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("model-binary-data"))
-			return
-		}
-		http.NotFound(w, r)
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, wantPath)
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("model-binary-data"))
 	})
 	client := testutil.NewTestClient(t, mux)
 	specs := ActionSpecs(client)
@@ -81,7 +90,19 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Route.Handler error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("Route.Handler returned nil")
+	out, ok := result.(DownloadOutput)
+	if !ok {
+		t.Fatalf("Route.Handler returned %T, want DownloadOutput", result)
+	}
+	want := DownloadOutput{
+		ProjectID:      "42",
+		ModelVersionID: "7",
+		Path:           "models",
+		Filename:       "model.bin",
+		ContentBase64:  base64.StdEncoding.EncodeToString([]byte("model-binary-data")),
+		SizeBytes:      len("model-binary-data"),
+	}
+	if !reflect.DeepEqual(out, want) {
+		t.Errorf("Route.Handler output = %+v, want %+v", out, want)
 	}
 }

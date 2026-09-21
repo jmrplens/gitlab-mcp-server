@@ -95,6 +95,20 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				groupWikiCardHints,
 		},
 		{
+			// The metadata id GitLab sends beside the page gets a row of its
+			// own. No case above carries one, so the row was written by a line
+			// no assertion reached: deleting it left every expectation here
+			// intact, and both gates indifferent, since a straight-line call
+			// has no branch to flip.
+			name:  "the metadata id GitLab sent is a row of its own",
+			input: Output{Title: "Home", Slug: "home", Format: "markdown", WikiPageMetaID: 4711},
+			want: "## Wiki: Home\n\n" +
+				"- **Slug**: home\n" +
+				"- **Format**: markdown\n" +
+				"- **Page Metadata ID**: 4711\n" +
+				groupWikiCardHints,
+		},
+		{
 			// Every field absent writes no row at all, rather than a label with
 			// nothing after it.
 			name:  "every field empty",
