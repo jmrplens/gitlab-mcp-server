@@ -9,15 +9,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
@@ -240,28 +244,39 @@ func TestAuditRouteOutputSchema_AllSchemasPresent_ReturnsNoFindings(t *testing.T
 }
 
 // TestCollectToolQualityStats_CountsAllDimensions verifies that the summary
-// aggregator counts schema, returns, title, and see-also independently.
+// aggregator counts schema, returns, title, and see-also independently, over
+// a population where every count differs so no two counters could trade
+// places unseen.
 func TestCollectToolQualityStats_CountsAllDimensions(t *testing.T) {
 	t.Parallel()
 
-	toolList := []*mcp.Tool{
-		{Name: "full", Description: "Returns: ok. See also: x.", Title: "T", OutputSchema: map[string]any{"type": "object"}},
-		{Name: "partial", Description: "Returns: ok.", Title: "P"},
-		{Name: "empty"},
+	got := collectToolQualityStats([]*mcp.Tool{
+		{Name: "all", Description: "Returns: ok. See also: x.", Title: "T", OutputSchema: map[string]any{"type": "object"}},
+		{Name: "no_schema", Description: "Returns: ok. See also: x.", Title: "T"},
+		{Name: "no_returns", Description: "See also: x.", Title: "T"},
+		{Name: "see_also_only", Description: "See also: x."},
+	})
+	want := toolQualityStats{Schema: 1, Returns: 2, Title: 3, SeeAlso: 4}
+	if got != want {
+		t.Errorf("collectToolQualityStats() = %+v, want %+v", got, want)
+	}
+}
+
+// TestAuditRouteOutputSchema_CatalogFailure_IsAFinding checks the one branch
+// the compiled-in catalog never takes: a catalog that cannot be built is a
+// finding against the meta surface carrying the error, rather than a silent
+// empty list that would read as every route declaring a schema.
+func TestAuditRouteOutputSchema_CatalogFailure_IsAFinding(t *testing.T) {
+	original := buildActionCatalog
+	t.Cleanup(func() { buildActionCatalog = original })
+	buildActionCatalog = func(*gitlabclient.Client, tools.ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+		return nil, errors.New("specs disagree")
 	}
 
-	got := collectToolQualityStats(toolList)
-	if got.Schema != 1 {
-		t.Errorf("Schema = %d, want 1", got.Schema)
-	}
-	if got.Returns != 2 {
-		t.Errorf("Returns = %d, want 2", got.Returns)
-	}
-	if got.Title != 2 {
-		t.Errorf("Title = %d, want 2", got.Title)
-	}
-	if got.SeeAlso != 1 {
-		t.Errorf("SeeAlso = %d, want 1", got.SeeAlso)
+	got := auditRouteOutputSchema(nil)
+	want := []finding{{"gitlab_meta", "route-output-schema", "failed to build action catalog: specs disagree"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("auditRouteOutputSchema() = %+v, want %+v", got, want)
 	}
 }
 
@@ -277,18 +292,35 @@ func TestCollectToolQualityStats_EmptyInput(t *testing.T) {
 }
 
 // TestPrintReport_EmptyFindingsWritesNoFindingsMessage verifies the report
-// prints the success message when no findings are present.
+// prints the success message when no findings are present, and that the
+// summary's two columns carry their own surface: the individual tools are
+// scored on the left and the meta tools on the right, each dimension from its
+// own population, with populations chosen so that no two cells agree.
 func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 	// Not t.Parallel: captureOutputStdout rebinds os.Stdout and parallel tests would
 	// race for the global writer.
+	individual := []*mcp.Tool{
+		{Name: "ok", Title: "OK", Description: "Returns: it. See also: other.", OutputSchema: map[string]any{"type": "object"}},
+		{Name: "titled", Title: "Titled"},
+		{Name: "returning", Description: "Returns: it."},
+		{Name: "bare"},
+	}
+	meta := []*mcp.Tool{
+		{Name: "gitlab_a", Title: "A", OutputSchema: map[string]any{"type": "object"}},
+		{Name: "gitlab_b"},
+	}
 
 	output := captureOutputStdout(t, func() {
-		printOutputReport([]*mcp.Tool{{Name: "ok", Title: "OK"}}, nil, nil)
+		printOutputReport(individual, meta, nil)
 	})
 
 	for _, want := range []string{
 		"# MCP Output Quality Audit Report",
-		"| Total tools | 1 | 0 |",
+		"| Total tools | 4 | 2 |",
+		"| OutputSchema present | 1/4 (25%) | 1/2 (50%) |",
+		"| Description has 'Returns' | 2/4 (50%) | 0/2 (0%) |",
+		"| Title field set | 2/4 (50%) | 1/2 (50%) |",
+		"| Description has 'See also' | 1/4 (25%) |. |",
 		"**No findings. All quality checks pass.**",
 	} {
 		t.Run(want, func(t *testing.T) {
@@ -330,6 +362,64 @@ func TestPrintReport_GroupsFindingsByCategory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPrintOutputReport_JSON_CarriesEachFieldUnderItsKey decodes the JSON
+// view of a report with one finding and holds every key to the value it was
+// given. The document and each entry are built from positional literals, so
+// the two tool counts, or a finding's tool and category, could trade keys
+// and still encode.
+func TestPrintOutputReport_JSON_CarriesEachFieldUnderItsKey(t *testing.T) {
+	// Not parallel: captureOutputStdout rebinds os.Stdout and outputJSON is global.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+
+	out := captureOutputStdout(t, func() {
+		printOutputReport(
+			[]*mcp.Tool{{Name: "gitlab_a"}, {Name: "gitlab_b"}},
+			[]*mcp.Tool{{Name: "gitlab_c"}},
+			[]finding{{"gitlab_a", "title", "missing Title"}},
+		)
+	})
+
+	var got outputJSONReport
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode output report: %v\n%s", err, out)
+	}
+	want := outputJSONReport{
+		View:            "output",
+		IndividualTools: 2,
+		MetaTools:       1,
+		Findings:        1,
+		Entries:         []jsonEntry{{Tool: "gitlab_a", Category: "title", Detail: "missing Title"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("output JSON = %+v, want %+v", got, want)
+	}
+}
+
+// TestPrintOutputReport_JSON_UnwritableStdout_IsSaidOnStderr checks the one
+// failure the JSON view can have, a stdout that cannot be written, is said on
+// stderr, and that a stdout that can be written leaves stderr empty.
+func TestPrintOutputReport_JSON_UnwritableStdout_IsSaidOnStderr(t *testing.T) {
+	// Not parallel: os.Stdout, os.Stderr and outputJSON are process-wide.
+	outputJSON = true
+	t.Cleanup(func() { outputJSON = false })
+	report := func() { printOutputReport(nil, nil, nil) }
+
+	t.Run("a closed stdout", func(t *testing.T) {
+		stderr := withClosedStdout(t, func() string { return captureStderr(t, report) })
+		if !strings.Contains(stderr, "encode json: ") {
+			t.Errorf("stderr = %q, want the encoding failure reported", stderr)
+		}
+	})
+	t.Run("a writable stdout", func(t *testing.T) {
+		var stderr string
+		captureOutputStdout(t, func() { stderr = captureStderr(t, report) })
+		if stderr != "" {
+			t.Errorf("stderr = %q, want nothing when the report was written", stderr)
+		}
+	})
 }
 
 // TestAuditOutputSchema_MetaKindProducesExpectedDetail verifies the meta kind

@@ -8,9 +8,12 @@
 package main
 
 import (
+	"go/ast"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -326,6 +329,131 @@ func TestAuditRegisterMetaDefinitions_ErrorPaths(t *testing.T) {
 	}
 }
 
+// TestAuditRegisterMetaDefinitions_MethodNamedRegisterMeta_IsNotADefinition
+// verifies the walk reads top-level functions only. A method that happens to
+// be called RegisterMeta registers nothing at package level, and reporting it
+// would put a package on the inventory that the contract says nothing about.
+func TestAuditRegisterMetaDefinitions_MethodNamedRegisterMeta_IsNotADefinition(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "internal/tools/register_meta.go", "package tools\n")
+	writeTestFile(t, root, "internal/tools/hub/hub.go", `package hub
+
+type hub struct{}
+
+func (h *hub) RegisterMeta() {
+	_ = struct{ Name string }{Name: "gitlab_hub"}
+}
+`)
+
+	definitions, err := auditRegisterMetaDefinitions(root)
+	if err != nil {
+		t.Fatalf("auditRegisterMetaDefinitions() error = %v", err)
+	}
+	if len(definitions) != 0 {
+		t.Fatalf("definitions = %#v, want none", definitions)
+	}
+}
+
+// TestAuditRegisterMetaDefinitions_OrderedByPackageThenFile verifies the
+// order a report reads them in, over a tree the walk hands back in a
+// different order than the answer: one package defines RegisterMeta in three
+// files, one of them under a nested directory the walk descends into first,
+// and the other package's directory name sorts after its package name.
+//
+// A report that listed them in walk order would scatter a package's
+// definitions, and the file tie-break is what keeps two definitions of one
+// package together and in a stable order.
+func TestAuditRegisterMetaDefinitions_OrderedByPackageThenFile(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "internal/tools/register_meta.go", "package tools\n")
+	// The walk descends into a/b before reading a/b.go, and reaches z last;
+	// the answer has to put z first and a/b.go before a/b/x.go.
+	writeTestFile(t, root, "internal/tools/a/b/x.go", "package same\n\nfunc RegisterMeta() {}\n")
+	writeTestFile(t, root, "internal/tools/a/b.go", "package same\n\nfunc RegisterMeta() {}\n")
+	writeTestFile(t, root, "internal/tools/a/c.go", "package same\n\nfunc RegisterMeta() {}\n")
+	writeTestFile(t, root, "internal/tools/z/r.go", "package alpha\n\nfunc RegisterMeta() {}\n")
+
+	definitions, err := auditRegisterMetaDefinitions(root)
+	if err != nil {
+		t.Fatalf("auditRegisterMetaDefinitions() error = %v", err)
+	}
+
+	var got []string
+	for _, definition := range definitions {
+		got = append(got, definition.Package+" "+definition.File)
+	}
+	want := []string{
+		"alpha internal/tools/z/r.go",
+		"same internal/tools/a/b.go",
+		"same internal/tools/a/b/x.go",
+		"same internal/tools/a/c.go",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("definitions = %q, want %q", got, want)
+	}
+}
+
+// TestAuditRegisterMetaDefinitionViolations_NamesThePackageAndTheFile pins
+// which part of a definition each field of the violation carries: the subject
+// is the package, and the detail is the reason with the file after it. Both
+// halves of that detail are prose, so a message that put them the other way
+// round would read as a reason nobody could act on.
+func TestAuditRegisterMetaDefinitionViolations_NamesThePackageAndTheFile(t *testing.T) {
+	got := auditRegisterMetaDefinitionViolations([]registerMetaDefinition{
+		{Package: "legacy", File: "internal/tools/legacy/register.go"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("len(violations) = %d, want 1", len(got))
+	}
+	if got[0].tool != "legacy" {
+		t.Errorf("tool = %q, want the package", got[0].tool)
+	}
+	const want = "package-level RegisterMeta is not an approved catalog-first runtime pattern (internal/tools/legacy/register.go)"
+	if got[0].detail != want {
+		t.Errorf("detail = %q, want %q", got[0].detail, want)
+	}
+}
+
+// TestFindRegisterMetaDefinitions_FileOutsideTheRoot_IsAnError checks the
+// one way a definition's file can fail to be named: a root the walked path
+// cannot be made relative to. A relative root against an absolute tree is
+// that case, and a report naming the definition under a wrong or empty file
+// would send a reader to nothing, so the walk stops instead.
+func TestFindRegisterMetaDefinitions_FileOutsideTheRoot_IsAnError(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "internal/tools/legacy/register.go", "package legacy\n\nfunc RegisterMeta() {}\n")
+
+	definitions, err := findRegisterMetaDefinitions("relative-root", filepath.Join(root, "internal", "tools"))
+	if err == nil {
+		t.Fatalf("findRegisterMetaDefinitions() = %#v, want an error for a file outside the root", definitions)
+	}
+	if !strings.Contains(err.Error(), "relative-root") {
+		t.Errorf("error = %q, want it to name the root the file could not be related to", err)
+	}
+}
+
+// TestRegisterMetaToolNames_LiteralTheParserDidNotValidate_IsSkipped checks
+// the walk over an AST it did not parse itself: a string literal whose text
+// does not unquote is skipped rather than recorded raw or panicked on, and
+// the names beside it are still read. The parser refuses such a literal in a
+// file, so this is the only way the branch is reached.
+func TestRegisterMetaToolNames_LiteralTheParserDidNotValidate_IsSkipped(t *testing.T) {
+	name := func(value string) ast.Stmt {
+		return &ast.ExprStmt{X: &ast.CompositeLit{Elts: []ast.Expr{
+			&ast.KeyValueExpr{Key: &ast.Ident{Name: "Name"}, Value: &ast.BasicLit{Kind: token.STRING, Value: value}},
+		}}}
+	}
+	function := &ast.FuncDecl{
+		Name: &ast.Ident{Name: "RegisterMeta"},
+		Body: &ast.BlockStmt{List: []ast.Stmt{name("gitlab_unquoted"), name(`"gitlab_quoted"`)}},
+	}
+
+	got := registerMetaToolNames(function)
+	if !slices.Equal(got, []string{"gitlab_quoted"}) {
+		t.Errorf("registerMetaToolNames() = %q, want only the literal that unquotes", got)
+	}
+}
+
 // TestReferencedRegisterMetaPackages_IgnoresNonIdentifierReceivers verifies
 // the central hub scan records plain package identifiers only, so a
 // RegisterMeta reached through a nested selector or a call result is not
@@ -418,27 +546,65 @@ func writeTestFile(t *testing.T, root, name, content string) {
 }
 
 // captureStdout supports capture stdout assertions in metadata tests.
+//
+// The pipe is drained while the action writes rather than after it returns: a
+// pipe holds 64 KiB, and the full Markdown report of the individual surface
+// is several times that, so a reader that waits would leave the writer
+// blocked forever and the test hung until its timeout.
 func captureStdout(t *testing.T, action func()) string {
 	t.Helper()
-	originalStdout := os.Stdout
+	return captureWrites(t, &os.Stdout, action)
+}
+
+// captureStderr is the same capture over os.Stderr, for what the audits say
+// when they skip a rule or cannot write a report. The file is read at the
+// moment of each write, so rebinding the variable for the action's duration
+// is what the capture needs, and the two sides are bound at the same moment.
+func captureStderr(t *testing.T, action func()) string {
+	t.Helper()
+	return captureWrites(t, &os.Stderr, action)
+}
+
+// captureWrites binds one of the process's output files to a pipe while
+// action runs and returns what was written to it.
+func captureWrites(t *testing.T, file **os.File, action func()) string {
+	t.Helper()
+	original := *file
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("Pipe() error = %v", err)
 	}
-	os.Stdout = writer
+	*file = writer
+	output, wait := drain(reader)
 
 	action()
 
-	os.Stdout = originalStdout
+	*file = original
 	if closeErr := writer.Close(); closeErr != nil {
 		t.Fatalf("Close() writer error = %v", closeErr)
 	}
-	output, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("ReadAll() error = %v", err)
+	if readErr := wait(); readErr != nil {
+		t.Fatalf("ReadAll() error = %v", readErr)
 	}
 	if closeErr := reader.Close(); closeErr != nil {
 		t.Fatalf("Close() reader error = %v", closeErr)
 	}
-	return string(output)
+	return output.String()
+}
+
+// drain reads r on a goroutine of its own and returns the buffer it fills
+// beside the wait that reports what reading it cost. Nothing is asserted off
+// that goroutine: the error comes back to the caller's own.
+func drain(r io.Reader) (*strings.Builder, func() error) {
+	var buffer strings.Builder
+	var readErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, readErr = io.Copy(&buffer, r)
+	}()
+	return &buffer, func() error {
+		<-done
+		return readErr
+	}
 }

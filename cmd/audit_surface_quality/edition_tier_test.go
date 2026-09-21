@@ -4,7 +4,7 @@
 package main
 
 import (
-	"strings"
+	"reflect"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -64,6 +64,12 @@ func TestTierClaim_Descriptions_ReadTheMinimumTier(t *testing.T) {
 			name:        "no parenthetical at all",
 			description: "List a project's branches. Returns: the branches.",
 		},
+		{
+			// Every parenthetical of the sentence is read, not the first alone.
+			name:        "a claim after another parenthetical",
+			description: "Add a note (or a reply) to an epic (Premium). Returns: the note.",
+			want:        edition.Premium, stated: true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,19 +113,15 @@ func TestEditionTierViolations_Disagreement_IsReportedEitherWayRound(t *testing.
 
 	got := editionTierViolations(tools, servedAt)
 
-	if len(got) != 2 {
-		t.Fatalf("editionTierViolations() = %+v, want the two disagreements", got)
+	// The detail names the phrase as the description spelled it and the tier
+	// as the surface spells it, which is what tells the two apart in a
+	// message that would still read as a disagreement the other way round.
+	want := []violation{
+		{"gitlab_served_too_low", editionTierCategory, `the description states "Ultimate" and the surface serves the tool from premium`},
+		{"gitlab_served_too_high", editionTierCategory, `the description states "Premium" and the surface serves the tool from ultimate`},
 	}
-	if got[0].tool != "gitlab_served_too_low" || !strings.Contains(got[0].detail, "premium") {
-		t.Errorf("first violation = %+v, want the tool served below what it states", got[0])
-	}
-	if got[1].tool != "gitlab_served_too_high" || !strings.Contains(got[1].detail, "ultimate") {
-		t.Errorf("second violation = %+v, want the tool served above what it states", got[1])
-	}
-	for _, v := range got {
-		if v.category != editionTierCategory {
-			t.Errorf("category = %q, want %q", v.category, editionTierCategory)
-		}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("editionTierViolations() = %+v, want %+v", got, want)
 	}
 }
 
