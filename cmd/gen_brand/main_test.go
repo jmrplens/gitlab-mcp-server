@@ -106,7 +106,7 @@ func TestRun_WriteThenCheck_RoundTrips(t *testing.T) {
 // backgrounds decode as JPEG data: a corrupted embed would otherwise ship as
 // a broken base64 payload that every renderer fails on silently. The two must
 // also be different images, or every claim about which card carries which
-// background holds vacuously — which card inlines which is asserted by
+// background holds vacuously. Which card inlines which is asserted by
 // TestAssets_EachPathCarriesTheSurfaceItIsFor.
 func TestEmbeddedBackgrounds_AreValidJPEGs(t *testing.T) {
 	for name, art := range map[string][]byte{"bg-wide": bgWide, "bg-tall": bgTall} {
@@ -142,7 +142,7 @@ func short(s string) string {
 // produces the same well-formed fan-out, so a table that hands the favicon's
 // art to the site logo satisfies every other test in this file: only naming
 // what each file is for catches it. Each row states the thing that makes its
-// surface that surface — the site mark is painted by CSS tokens alone, the
+// surface that surface: the site mark is painted by CSS tokens alone, the
 // favicon brings its own ground, the Go const is Go source at a 24-unit
 // viewBox, and each card carries its own canvas and its own background art.
 func TestAssets_EachPathCarriesTheSurfaceItIsFor(t *testing.T) {
@@ -219,8 +219,8 @@ func TestAssets_EachPathCarriesTheSurfaceItIsFor(t *testing.T) {
 
 // TestBgImage_HrefAndDimensionsComeFromItsOwnArguments pins the three
 // parameters against each other. Every caller passes a landscape canvas and a
-// JPEG, so transposing the width and the height inside bgImage — or inlining
-// the other embed — still yields a card that parses, still carries a
+// JPEG, so transposing the width and the height inside bgImage, or inlining
+// the other embed, still yields a card that parses, still carries a
 // background, and crops the art along the wrong axis.
 func TestBgImage_HrefAndDimensionsComeFromItsOwnArguments(t *testing.T) {
 	got := bgImage([]byte{0xff, 0xd8, 0xff}, 7, 9)
@@ -366,9 +366,9 @@ func scaledPath(t *testing.T, d string) string {
 
 // TestBrandMark24_IsTheCanonicalGeometryScaled holds the in-binary mark to
 // the claim its doc comment makes, that it is the canonical fan-out scaled
-// rather than a second drawing of it. It is in fact a second drawing —
+// rather than a second drawing of it. It is in fact a second drawing:
 // brandMark24 re-derives the Bézier control points instead of calling
-// arcPath — so a curve edited in one place and not the other would ship a
+// arcPath, so a curve edited in one place and not the other would ship a
 // site logo and an MCP client icon that no longer match, with every other
 // test in this file green. Comparing element by element against the canonical
 // geometry put through the same ratio is what makes the divergence fail.
@@ -538,7 +538,7 @@ func chdirIntoFixtureRepo(t *testing.T) string {
 
 // chdirIntoNestedModule makes a tree holding two go.mod files, one above the
 // other, the working directory a subdirectory of the inner one, and returns
-// the inner root — the nearest module, and so the root a generator invoked
+// the inner root, the nearest module, and so the root a generator invoked
 // there must write into.
 func chdirIntoNestedModule(t *testing.T) string {
 	t.Helper()

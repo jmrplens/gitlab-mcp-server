@@ -217,8 +217,8 @@ func TestCollectStats_FakeRepository_CountsEveryField(t *testing.T) {
 // classifying switch produced the same three numbers. Here the counts are 2,
 // 3 and 1, and the shorter files of each kind are staged after the longest.
 func TestCollectStats_SeveralFilesPerKind_CountEachKindAndKeepTheLongest(t *testing.T) {
-	// git lists the index in sorted order, so a.go and a_test.go — the two
-	// longest — are seen before the shorter files that must not displace them.
+	// git lists the index in sorted order, so a.go and a_test.go (the two
+	// longest) are seen before the shorter files that must not displace them.
 	root := writeFakeRepository(t, map[string]string{
 		"internal/a/a.go":              "package a\n\nfunc Long() {}\n\nfunc alsoLong() {}\n",
 		"internal/a/b.go":              "package a\n\nfunc short() {}\n",

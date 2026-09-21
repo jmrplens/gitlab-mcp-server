@@ -1914,7 +1914,7 @@ func TestFirstSentence_IsNeverEmptyForTextThatHasAny(t *testing.T) {
 // are 3, so three of the counters in those paragraphs could trade places with a
 // neighbor and every assertion still passed. Only the byte-for-byte comparison
 // against the committed files noticed, and that comparison is skipped on every
-// stacked layer below the one that refreshes them (issue 644) — which is
+// stacked layer below the one that refreshes them (issue 644), which is
 // exactly where a crossing would be introduced.
 //
 // The populations: 1 prompt, 2 base meta-tools, 3 dynamic tools, 4 individual
