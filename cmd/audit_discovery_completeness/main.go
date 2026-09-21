@@ -14,11 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/cmdutil"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
 const schemaVersion = 1
+
+// osExit is os.Exit behind a variable, so a test can drive the command line
+// main assembles and read the code the -check gate asks the process to exit
+// with. The sibling audits keep the same seam.
+var osExit = os.Exit
 
 // variantSuffixes are stripped from action stems when clustering sibling actions.
 var variantSuffixes = []string{"_batch", "_bulk", "_all", "_directory", "_single"}
@@ -183,7 +188,7 @@ func main() {
 	if *checkMode {
 		if checkErr := rep.check(threshold); checkErr != nil {
 			fmt.Fprintln(os.Stderr, checkErr.Error())
-			os.Exit(1)
+			osExit(1)
 		}
 		return
 	}
@@ -257,9 +262,10 @@ func buildReport(gapsOnly bool, minAliases int) report {
 	defer cleanup()
 
 	projected := auditshared.CachedIndividualDescriptions(client)
-	allClusters := collectAllClusters(client)
+	groups := auditshared.CachedActionSpecs(client, true)
+	allClusters := collectAllClusters(groups)
 
-	packagesOut := buildPackageReports(client, allClusters, projected, minAliases, gapsOnly)
+	packagesOut := buildPackageReports(groups, allClusters, projected, minAliases, gapsOnly)
 	clustersOut := sortClusters(allClusters)
 
 	return report{
@@ -270,14 +276,14 @@ func buildReport(gapsOnly bool, minAliases int) report {
 	}
 }
 
-// collectAllClusters gathers the catalog and builds sibling clusters across
-// all owner packages. Some packages register the same (owner, name) from
+// collectAllClusters builds sibling clusters across all owner packages of the
+// collected catalog. Some packages register the same (owner, name) from
 // multiple scope helpers (e.g. project+group badges), so we dedupe by
 // (owner, name) before clustering.
-func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
+func collectAllClusters(groups []tools.ActionSpecGroup) []clusterRecord {
 	specsByOwner := map[string][]toolutil.ActionSpec{}
 	seen := map[string]bool{}
-	for _, group := range auditshared.CachedActionSpecs(client, true) {
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			key := owner + "\x00" + spec.Name
@@ -293,9 +299,14 @@ func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 
 // buildPackageReports analyzes every spec and returns the per-package reports
 // ready for JSON output. Gaps-only mode filters clean packages.
-func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
+//
+// It takes the collected groups rather than the client that would fetch them,
+// the way collectAllClusters does: one catalog read is shared between the two
+// instead of each asking the same cache for the same slice, and a test can
+// hand this the clean spec no live catalog carries.
+func buildPackageReports(groups []tools.ActionSpecGroup, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
-	for _, group := range auditshared.CachedActionSpecs(client, true) {
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			clusterMembers := clusterMembersFor(allClusters, owner, spec.Name)
@@ -810,12 +821,12 @@ func splitOwnerAction(name string) (owner, action string) {
 
 // inferOwnerFromName derives an owner_package guess when spec.OwnerPackage is
 // empty (defensive: catalog-first invariant guarantees this is set in practice).
+//
+// The result is never indexed defensively: [strings.SplitN] returns nil only
+// when asked for zero pieces, so with a limit of two it always yields at least
+// the whole string, and a length guard here could never run.
 func inferOwnerFromName(name string) string {
-	parts := strings.SplitN(name, ".", 2)
-	if len(parts) == 0 {
-		return ""
-	}
-	return parts[0]
+	return strings.SplitN(name, ".", 2)[0]
 }
 
 // emptyParamDescriptions walks an input/output JSON schema and returns the
@@ -971,11 +982,12 @@ func descriptionImpliesEnum(desc string) bool {
 // valid calls — e.g. access_level accepts both "Maintainer" and 40, and
 // protected-environment access-level/approval-rule arrays carry normalized
 // numeric levels.
+//
+// deploy_access_levels needs no name of its own: the substring test above
+// already holds it, so a disjunct for it could never be the one that answered.
 func isNormalizedEnumParam(name string) bool {
 	n := strings.ToLower(name)
-	return strings.Contains(n, "access_level") ||
-		n == "approval_rules" ||
-		n == "deploy_access_levels"
+	return strings.Contains(n, "access_level") || n == "approval_rules"
 }
 
 // walkSchemaForEmptyDescriptions performs a recursive walk over the schema,
@@ -1024,14 +1036,14 @@ func isEmptyOrBoilerplateDescription(propSchema map[string]any) bool {
 	if trimmed == "" {
 		return true
 	}
-	// Drop the leading "The " for the boilerplate check.
+	// Drop the leading "The " for the boilerplate check. A bare "id" needs no
+	// case of its own: it is two characters, so the length test above has
+	// already answered it, and a case below that one could never run.
 	lc := strings.ToLower(trimmed)
 	switch {
 	case len(trimmed) < 4:
 		return true
 	case strings.HasPrefix(lc, "the ") && len(trimmed) <= len("the x")+2:
-		return true
-	case lc == "id":
 		return true
 	}
 	return false
@@ -1077,12 +1089,17 @@ func summarize(packages []packageReport) reportSummary {
 				case "aliases_only_toolname":
 					s.AliasesOnlyToolname++
 				}
+				// Info is the default rather than a third case: severityFor
+				// answers with one of the three names and nothing else, so a
+				// case for it could never be the one that did not match, and
+				// an unrecognized name ranks as info everywhere else here
+				// (see severityRank).
 				switch severityFor(flag, inCluster, finding.Cluster) {
 				case "error":
 					s.Errors++
 				case "warning":
 					s.Warnings++
-				case "info":
+				default:
 					s.Infos++
 				}
 			}

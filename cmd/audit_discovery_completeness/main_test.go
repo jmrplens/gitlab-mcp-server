@@ -6,6 +6,9 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -15,6 +18,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/auditshared"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/releaselinks"
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
@@ -97,6 +101,11 @@ func TestBaseActionStem_StripsVariantAndCRUDSuffixes(t *testing.T) {
 		"notes.delete_all":          "notes",
 		"link_create_batch":         "link",
 		"link_create":               "link",
+		// A name that is nothing but a suffix strips to the empty string: with
+		// an owner the stem falls back to it, and without one the action is
+		// kept as it stands so the cluster stays its own.
+		"release._all": "release",
+		"_all":         "_all",
 	}
 	for in, want := range cases {
 		t.Run(in, func(t *testing.T) {
@@ -769,6 +778,14 @@ func TestUnguidedRequiredIdentifiers(t *testing.T) {
 		spec.ParameterGuidance = guidance
 		return spec
 	}
+	// The central fill's own entry for project_id, read from the fill rather
+	// than spelled here, so the two cases below can differ from it in exactly
+	// one field and the comparison is held field by field: whichever field is
+	// dropped from it, or crossed with its neighbor, one of them notices.
+	central := toolutil.FillScopeParameterGuidanceSingle(specWithSchema("project_id")).ParameterGuidance["project_id"]
+	otherBinding, otherConfusions := central, central
+	otherBinding.ExampleBinding = `params.project_id:42`
+	otherConfusions.CommonConfusions = []string{"not the group that owns it"}
 	cases := []struct {
 		name string
 		spec toolutil.ActionSpec
@@ -795,6 +812,20 @@ func TestUnguidedRequiredIdentifiers(t *testing.T) {
 			name: "guidance richer than the central default is authored",
 			spec: withGuidance(specWithSchema("project_id", "hook_id"), map[string]toolutil.ParameterGuidance{
 				"project_id": {SemanticRole: "scope_project", CommonConfusions: []string{"not the group"}},
+			}),
+			want: nil,
+		},
+		{
+			name: "an example binding of the author's own is authored guidance",
+			spec: withGuidance(specWithSchema("project_id", "hook_id"), map[string]toolutil.ParameterGuidance{
+				"project_id": otherBinding,
+			}),
+			want: nil,
+		},
+		{
+			name: "a confusion added to the central entry is authored guidance",
+			spec: withGuidance(specWithSchema("project_id", "hook_id"), map[string]toolutil.ParameterGuidance{
+				"project_id": otherConfusions,
 			}),
 			want: nil,
 		},
@@ -929,6 +960,12 @@ func TestIsEnumCandidate(t *testing.T) {
 	if cand("access_level", map[string]any{"type": "integer", "description": "Access level: 10=Guest, 30=Developer"}) {
 		t.Error("normalized access_level must NOT be a candidate (actioncompat accepts names)")
 	}
+	if cand("approval_rules", map[string]any{"type": "string", "description": "Approval rule kind: any, code_owner, or report_approver"}) {
+		t.Error("normalized approval_rules must NOT be a candidate")
+	}
+	if cand("deploy_access_levels", map[string]any{"type": "string", "description": "Access kind: developer or maintainer"}) {
+		t.Error("normalized deploy_access_levels must NOT be a candidate (it carries access_level)")
+	}
 	if cand("file_path", map[string]any{"type": "string", "description": "Path like dir/sub or root"}) {
 		t.Error("free-form file_path must NOT be a candidate")
 	}
@@ -1040,8 +1077,16 @@ func TestReportCheck_Scenarios_GatesOnThreshold(t *testing.T) {
 		{name: "error threshold ignores warnings", summary: reportSummary{Warnings: 3, Infos: 4}, threshold: severityError},
 		{name: "warning threshold counts errors and warnings", summary: reportSummary{Errors: 1, Warnings: 2, Infos: 9}, threshold: severityWarning, wantErr: "3 warning-or-worse finding(s)"},
 		{name: "warning threshold ignores infos", summary: reportSummary{Infos: 5}, threshold: severityWarning},
-		{name: "info threshold counts everything", summary: reportSummary{Errors: 1, Warnings: 1, Infos: 1}, threshold: severityInfo, wantErr: "3 info-or-worse finding(s)"},
+		// The three counts differ so that the total names which three were
+		// added: with one of each, a sum that read one counter twice reached
+		// the same 3 and passed.
+		{name: "info threshold counts everything", summary: reportSummary{Errors: 1, Warnings: 2, Infos: 4}, threshold: severityInfo, wantErr: "7 info-or-worse finding(s)"},
 		{name: "clean report passes", summary: reportSummary{}, threshold: severityInfo},
+		// -severity is parsed before the report is built, so a threshold
+		// outside the three levels cannot reach here from the command line;
+		// the gate still has to let it through rather than fail on findings
+		// it was not asked about.
+		{name: "a threshold outside the three levels gates nothing", summary: reportSummary{Errors: 9, Warnings: 9, Infos: 9}, threshold: severityInfo + 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1096,6 +1141,11 @@ func TestSiblingClusters_SpecsWithoutOwner_ClusterByInferredOwner(t *testing.T) 
 	got := clusters[0]
 	if got.Package != "release" {
 		t.Errorf("cluster package = %q, want the inferred owner release", got.Package)
+	}
+	// Package and Stem are both strings and both derived from the same name,
+	// so the record says which is which only where the two differ.
+	if got.Stem != "release.link" {
+		t.Errorf("cluster stem = %q, want release.link", got.Stem)
 	}
 	if !reflect.DeepEqual(got.Members, []string{"release.link_create", "release.link_create_batch"}) {
 		t.Errorf("cluster members = %v, want the two link actions sorted", got.Members)
@@ -1176,6 +1226,15 @@ func TestHasDisambiguation_Scenarios_RequiresSignalAndSiblingReference(t *testin
 		{
 			name:    "signal without any sibling reference",
 			spec:    toolutil.ActionSpec{Name: "link_create_batch", Usage: "Creates multiple links in one call.", RelatedActions: []string{"tag.delete"}},
+			members: []string{"link_create", "link_create_batch"},
+		},
+		{
+			name: "a parameter confusion about something else is not a sibling reference",
+			spec: toolutil.ActionSpec{
+				Name:              "link_create_batch",
+				Usage:             "Creates multiple links in one call.",
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{"links": {CommonConfusions: []string{"not to be confused with a tag"}}},
+			},
 			members: []string{"link_create", "link_create_batch"},
 		},
 		{
@@ -1298,8 +1357,14 @@ func TestIsEmptyOrBoilerplateDescription_Scenarios_FlagsUninformativeText(t *tes
 		{name: "non-string description", prop: map[string]any{"description": 42}, want: true},
 		{name: "blank description", prop: map[string]any{"description": "   "}, want: true},
 		{name: "too short", prop: map[string]any{"description": "ID."}, want: true},
+		// Both length tests are pinned on the character they turn on, so a
+		// boundary moved by one changes an answer here rather than landing
+		// between two fixtures that read the same either way.
+		{name: "the shortest description that says something", prop: map[string]any{"description": "Name"}, want: false},
 		{name: "bare article phrase", prop: map[string]any{"description": "The id"}, want: true},
-		{name: "literal id", prop: map[string]any{"description": "id"}, want: true},
+		{name: "the longest article phrase", prop: map[string]any{"description": "The abc"}, want: true},
+		{name: "one character past the article phrase", prop: map[string]any{"description": "The abcd"}, want: false},
+		{name: "a literal id is caught by its length", prop: map[string]any{"description": "id"}, want: true},
 		{name: "real sentence", prop: map[string]any{"description": "The numeric project identifier."}, want: false},
 	}
 	for _, tt := range tests {
@@ -1377,7 +1442,7 @@ type unformattedOutput struct {
 func TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag(t *testing.T) {
 	spec := toolutil.ActionSpec{
 		Name:           "widget_get",
-		Usage:          "Reads one widget by id.",
+		Usage:          "  Reads one widget by id.  ",
 		Aliases:        []string{"fetch widget", "show widget", "read widget"},
 		RelatedActions: []string{"widget.list"},
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_get"},
@@ -1427,6 +1492,16 @@ func TestAnalyzeSpec_SyntheticSpec_RaisesEachActionFlag(t *testing.T) {
 			t.Error("HasSchema = false, want true for a spec carrying an input schema")
 		}
 	})
+	// The three identity fields are all strings copied off the same spec, so
+	// nothing but a fixture in which no two of them agree can tell the
+	// canonical ID from the tool name a reader would look the action up by.
+	// The usage is padded in the fixture so the trim is pinned here too.
+	t.Run("the finding names the action, its tool and its trimmed usage", func(t *testing.T) {
+		if finding.Action != "widget_get" || finding.Tool != "gitlab_widget_get" || finding.Usage != "Reads one widget by id." {
+			t.Errorf("finding identity = (%q, %q, %q), want (widget_get, gitlab_widget_get, the trimmed usage)",
+				finding.Action, finding.Tool, finding.Usage)
+		}
+	})
 }
 
 // TestCollectFieldFindings_OutputSchemaGap_RaisesOutputFlag verifies the
@@ -1447,9 +1522,16 @@ func TestCollectFieldFindings_OutputSchemaGap_RaisesOutputFlag(t *testing.T) {
 }
 
 // TestSummarize_EveryFlag_CountsPerFlagAndSeverity verifies the summary
-// tallies one action carrying every flag: each per-flag counter reaches one,
-// and the severity totals partition the flags into the error, warning and
-// info buckets they map to outside a cluster.
+// tallies every flag into its own counter and partitions the flags into the
+// error, warning and info buckets they map to outside a cluster, and that a
+// flag the tally does not know counts towards no per-flag total while still
+// ranking as info.
+//
+// Each flag is carried by a different number of findings on purpose. With one
+// finding per flag every counter read one, so a counter wired to its
+// neighbor's case, the one defect this tally can have, was invisible: the
+// eleven increments are the same statement eleven times over and only the
+// number each lands on tells them apart.
 func TestSummarize_EveryFlag_CountsPerFlagAndSeverity(t *testing.T) {
 	flags := []string{
 		"weak_aliases", "generic_usage", "empty_related", "missing_next_steps",
@@ -1457,37 +1539,36 @@ func TestSummarize_EveryFlag_CountsPerFlagAndSeverity(t *testing.T) {
 		"missing_disambiguation", "weak_individual_description",
 		"missing_parameter_guidance", "aliases_only_toolname",
 	}
-	summary := summarize([]packageReport{{
-		Package:  "widgets",
-		Actions:  2,
-		Findings: []actionFinding{{Action: "widget_get", Severity: "error", Flags: flags}},
-	}})
+	var findings []actionFinding
+	for i, flag := range flags {
+		for range i + 1 {
+			findings = append(findings, actionFinding{Action: flag, Severity: "error", Flags: []string{flag}})
+		}
+	}
+	findings = append(findings, actionFinding{Action: "widget_get", Severity: "info", Flags: []string{"not_a_flag"}})
 
-	if summary.Packages != 1 || summary.Actions != 2 {
-		t.Errorf("summary = %+v, want one package with two actions", summary)
+	summary := summarize([]packageReport{{Package: "widgets", Actions: 2, Findings: findings}})
+
+	want := reportSummary{
+		Packages:                  1,
+		Actions:                   2,
+		WeakAliases:               1,
+		GenericUsage:              2,
+		EmptyRelated:              3,
+		MissingNextSteps:          4,
+		EmptyParamDescription:     5,
+		EmptyOutputDescription:    6,
+		ParamEnumCandidate:        7,
+		MissingDisambiguation:     8,
+		WeakIndividualDescription: 9,
+		MissingParameterGuidance:  10,
+		AliasesOnlyToolname:       11,
+		Errors:                    10,
+		Warnings:                  33,
+		Infos:                     24,
 	}
-	counts := map[string]int{
-		"weak_aliases":                summary.WeakAliases,
-		"generic_usage":               summary.GenericUsage,
-		"empty_related":               summary.EmptyRelated,
-		"missing_next_steps":          summary.MissingNextSteps,
-		"empty_param_description":     summary.EmptyParamDescription,
-		"empty_output_description":    summary.EmptyOutputDescription,
-		"param_enum_candidate":        summary.ParamEnumCandidate,
-		"missing_disambiguation":      summary.MissingDisambiguation,
-		"weak_individual_description": summary.WeakIndividualDescription,
-		"missing_parameter_guidance":  summary.MissingParameterGuidance,
-		"aliases_only_toolname":       summary.AliasesOnlyToolname,
-	}
-	for _, flag := range flags {
-		t.Run(flag, func(t *testing.T) {
-			if counts[flag] != 1 {
-				t.Errorf("%s count = %d, want 1", flag, counts[flag])
-			}
-		})
-	}
-	if summary.Errors != 2 || summary.Warnings != 6 || summary.Infos != 3 {
-		t.Errorf("severity totals = %d errors, %d warnings, %d infos; want 2/6/3", summary.Errors, summary.Warnings, summary.Infos)
+	if summary != want {
+		t.Errorf("summary = %+v, want %+v", summary, want)
 	}
 }
 
@@ -1508,5 +1589,274 @@ func TestBuildReport_GapsOnly_DropsCleanPackages(t *testing.T) {
 	}
 	if len(gapsOnly.Clusters) != len(full.Clusters) {
 		t.Errorf("gaps-only clusters = %d, want the full report's %d", len(gapsOnly.Clusters), len(full.Clusters))
+	}
+}
+
+// TestWeakAliases_BlankAlias_CarriesNoSignal verifies a blank entry in the
+// alias list counts for nothing. An alias that is empty or whitespace reaches
+// no model, so counting it would clear the flag with a list that says as
+// little as an empty one.
+func TestWeakAliases_BlankAlias_CarriesNoSignal(t *testing.T) {
+	spec := toolutil.ActionSpec{
+		Name:           "release.link_create_batch",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_release_link_create_batch"},
+		Aliases:        []string{"", "   ", "create multiple release links"},
+	}
+	if !weakAliases(spec, 2) {
+		t.Error("two blank aliases beside one real one should still be weak at minAliases=2")
+	}
+	if weakAliases(spec, 1) {
+		t.Error("the one real alias should clear the flag at minAliases=1")
+	}
+}
+
+// TestSiblingSet_BlankMembersAndSelf_AreDropped verifies the sibling set a
+// disambiguation question is asked against: the action itself is never its own
+// sibling, whatever case or padding the cluster spells it with, and a blank
+// member contributes nothing rather than an empty name every usage string
+// would trivially contain.
+func TestSiblingSet_BlankMembersAndSelf_AreDropped(t *testing.T) {
+	got := siblingSet([]string{"", "   ", "  Link_Create_Batch ", "link_create"}, "link_create_batch")
+	want := map[string]struct{}{"link_create": {}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("siblingSet() = %v, want only link_create", got)
+	}
+}
+
+// TestAnalyzeSpec_VariantAmongCRUDSiblings_IsNotAskedToDisambiguate verifies
+// the third condition of the disambiguation gate: a variant action is only
+// asked to distinguish itself where the cluster holds a variant to be confused
+// with. A cluster of plain CRUD verbs is not that, so the action passes even
+// though its own name carries a variant suffix and it says nothing about its
+// siblings.
+func TestAnalyzeSpec_VariantAmongCRUDSiblings_IsNotAskedToDisambiguate(t *testing.T) {
+	variant := toolutil.ActionSpec{
+		Name:           "widget_publish_directory",
+		OwnerPackage:   "widgets",
+		Usage:          "Publishes a widget.",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_publish_directory"},
+	}
+	crudOnly := []string{"widget_publish_get", "widget_publish_list"}
+
+	finding := analyzeSpec(variant, nil, crudOnly, 3)
+	if containsStr(finding.Flags, "missing_disambiguation") {
+		t.Errorf("flags = %v, want no missing_disambiguation for a cluster with no other variant", finding.Flags)
+	}
+}
+
+// TestBuildPackageReports_CleanAction_IsCountedAndNeverAFinding verifies the
+// two filters between a spec and the report: an action that raises no flag is
+// counted in its package's action total and contributes no finding, and a
+// package whose actions are all clean is dropped from a gaps-only report while
+// a package with a finding survives both.
+//
+// No action of the live catalog is clean today, so nothing that reads it can
+// reach either filter; the groups are planted here instead.
+func TestBuildPackageReports_CleanAction_IsCountedAndNeverAFinding(t *testing.T) {
+	clean := toolutil.ActionSpec{
+		Name:           "widget_get",
+		OwnerPackage:   "widgets",
+		Usage:          "Reads one widget by id.",
+		Aliases:        []string{"fetch widget", "show widget", "read widget"},
+		RelatedActions: []string{"widget.list"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_widget_get"},
+	}
+	flagged := toolutil.ActionSpec{
+		Name:           "gadget_get",
+		OwnerPackage:   "gadgets",
+		Usage:          "Use to execute gadgets domain action.",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_gadget_get"},
+	}
+	groups := []tools.ActionSpecGroup{
+		{ToolName: "gitlab_widget", OwnerPackage: "widgets", Actions: []toolutil.ActionSpec{clean}},
+		{ToolName: "gitlab_gadget", OwnerPackage: "gadgets", Actions: []toolutil.ActionSpec{flagged}},
+	}
+	projected := map[string]string{
+		"gitlab_widget_get": "Reads one widget. Returns: widget. See also: gitlab_widget_list.",
+	}
+
+	t.Run("the full report keeps the clean package with no finding", func(t *testing.T) {
+		got := buildPackageReports(groups, nil, projected, 3, false)
+		if len(got) != 2 {
+			t.Fatalf("packages = %+v, want both the clean and the flagged one", got)
+		}
+		if !reflect.DeepEqual(got[1], packageReport{Package: "widgets", Actions: 1}) {
+			t.Errorf("clean package = %+v, want one action and no finding", got[1])
+		}
+		if got[0].Package != "gadgets" || len(got[0].Findings) != 1 {
+			t.Errorf("flagged package = %+v, want one finding under gadgets", got[0])
+		}
+	})
+
+	t.Run("gaps-only drops the clean package and keeps the flagged one", func(t *testing.T) {
+		got := buildPackageReports(groups, nil, projected, 3, true)
+		if len(got) != 1 || got[0].Package != "gadgets" {
+			t.Fatalf("gaps-only packages = %+v, want only gadgets", got)
+		}
+	})
+}
+
+// TestBuildPackageReports_ClusteredAction_CarriesItsSiblings verifies the join
+// between a spec and the cluster it belongs to: the finding names the whole
+// membership, and the variant that says nothing about its sibling is raised to
+// error severity by it.
+//
+// The cluster is looked up by owner package and action name, both strings and
+// both off the same spec, so a lookup given them the other way round finds
+// nothing and every finding in the report comes back with no cluster and a
+// severity the escalation never reached. Nothing else here reads a cluster off
+// a built report, so that crossing used to pass the whole suite.
+func TestBuildPackageReports_ClusteredAction_CarriesItsSiblings(t *testing.T) {
+	single := toolutil.ActionSpec{
+		Name:           "link_create",
+		OwnerPackage:   "releaselinks",
+		Usage:          "Creates one release asset link.",
+		Aliases:        []string{"add release link", "attach asset", "create asset link"},
+		RelatedActions: []string{"release.link_list"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_release_link_create"},
+	}
+	batch := toolutil.ActionSpec{
+		Name:           "link_create_batch",
+		OwnerPackage:   "releaselinks",
+		Usage:          "Creates release asset links.",
+		Aliases:        []string{"add release links", "attach assets", "create asset links"},
+		RelatedActions: []string{"release.link_list"},
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_release_link_create_batch"},
+	}
+	groups := []tools.ActionSpecGroup{{
+		ToolName:     "gitlab_release_link",
+		OwnerPackage: "releaselinks",
+		Actions:      []toolutil.ActionSpec{single, batch},
+	}}
+
+	got := buildPackageReports(groups, collectAllClusters(groups), nil, 3, true)
+
+	if len(got) != 1 || len(got[0].Findings) != 1 {
+		t.Fatalf("packages = %+v, want one finding: the variant that says nothing about its sibling", got)
+	}
+	finding := got[0].Findings[0]
+	if !reflect.DeepEqual(finding.Cluster, []string{"link_create", "link_create_batch"}) {
+		t.Errorf("cluster = %v, want both members of the releaselinks link cluster", finding.Cluster)
+	}
+	if finding.Action != "link_create_batch" || !containsStr(finding.Flags, "missing_disambiguation") || finding.Severity != "error" {
+		t.Errorf("finding = %+v, want link_create_batch flagged missing_disambiguation at error severity", finding)
+	}
+}
+
+// TestMain_Scenarios_WritesTheReportOrGatesOnIt drives the command line main
+// assembles. The default run writes the JSON document where -output names it
+// and asks for no exit; -check writes no report at all and asks the process to
+// exit 1 only when the threshold it was given is one findings reach, naming
+// the count on stderr. The exit code is the whole of what a caller reads from
+// this command, and nothing below main observes it.
+//
+// The threshold is what separates the two -check answers rather than a
+// contrived catalog: the tree carries no error-severity finding today and
+// plenty of info-level ones, so the same report passes one gate and fails the
+// other. The clean half says so out loud and skips rather than fails if that
+// stops being true, because turning it into a demand would make this test a
+// gate on the whole catalog that nothing asked it to be.
+func TestMain_Scenarios_WritesTheReportOrGatesOnIt(t *testing.T) {
+	tests := []struct {
+		name              string
+		extraArgs         []string
+		wantExit          int
+		wantStderr        string
+		wantReport        bool
+		needsCleanCatalog bool
+	}{
+		{name: "the default run writes the report", wantExit: notExited, wantReport: true},
+		{name: "the gate passes when nothing reaches the threshold", extraArgs: []string{"-check"}, wantExit: notExited, needsCleanCatalog: true},
+		{
+			name:       "the gate exits 1 and says how many",
+			extraArgs:  []string{"-check", "-severity", "info"},
+			wantExit:   1,
+			wantStderr: "info-or-worse finding(s) present",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.needsCleanCatalog && cachedFullReport(t).Summary.Errors > 0 {
+				t.Skip("the catalog carries error-severity findings, so the passing branch cannot be driven from it")
+			}
+			dir := t.TempDir()
+			reportPath := filepath.Join(dir, "discovery-backlog.json")
+			args := append([]string{"audit_discovery_completeness", "-gaps-only", "-output", reportPath}, tt.extraArgs...)
+
+			exited, logged := runMain(t, dir, args)
+
+			if exited != tt.wantExit {
+				t.Errorf("main() asked to exit %d, want %d", exited, tt.wantExit)
+			}
+			assertReportWritten(t, reportPath, tt.wantReport)
+			switch {
+			case tt.wantStderr == "" && logged != "":
+				t.Errorf("stderr = %q, want nothing on the writing path", logged)
+			case tt.wantStderr != "" && !strings.Contains(logged, tt.wantStderr):
+				t.Errorf("stderr = %q, want it to contain %q", logged, tt.wantStderr)
+			}
+		})
+	}
+}
+
+// notExited is the code runMain reports when main returned without asking the
+// process to exit at all, which no real exit status can be.
+const notExited = -1
+
+// runMain drives main with args, os.Exit behind a stub and os.Stderr pointed
+// at a file under dir, and returns the code main asked for and everything it
+// wrote to stderr. The flag set is replaced too: main declares its flags on
+// the default one, which would panic on the second call of a case table.
+func runMain(t *testing.T, dir string, args []string) (exited int, logged string) {
+	t.Helper()
+	stderrPath := filepath.Join(dir, "stderr.txt")
+	stderrFile, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatalf("create the stderr capture: %v", err)
+	}
+
+	oldArgs, oldStderr, oldFlags := os.Args, os.Stderr, flag.CommandLine
+	exited = notExited
+	osExit = func(code int) { exited = code }
+	os.Args, os.Stderr = args, stderrFile
+	flag.CommandLine = flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(stderrFile)
+	t.Cleanup(func() {
+		os.Args, os.Stderr, flag.CommandLine = oldArgs, oldStderr, oldFlags
+		osExit = os.Exit
+		stderrFile.Close()
+	})
+
+	main()
+
+	written, err := os.ReadFile(stderrPath)
+	if err != nil {
+		t.Fatalf("read the stderr capture: %v", err)
+	}
+	return exited, string(written)
+}
+
+// assertReportWritten checks the document at path against what the run was
+// supposed to leave there: a parsable report over a non-empty backlog, or no
+// file at all where the gate answers instead of reporting.
+func assertReportWritten(t *testing.T, path string, want bool) {
+	t.Helper()
+	written, err := os.ReadFile(path)
+	if !want {
+		if err == nil {
+			t.Errorf("the gate wrote %d bytes to %s, want no report", len(written), path)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("read the written report: %v", err)
+	}
+	var got report
+	if unmarshalErr := json.Unmarshal(written, &got); unmarshalErr != nil {
+		t.Fatalf("the written report does not parse: %v", unmarshalErr)
+	}
+	if got.SchemaVersion != schemaVersion || len(got.Packages) == 0 {
+		t.Errorf("written report = schema %d over %d packages, want schema %d and a non-empty backlog",
+			got.SchemaVersion, len(got.Packages), schemaVersion)
 	}
 }
