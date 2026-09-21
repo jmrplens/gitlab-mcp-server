@@ -11,6 +11,10 @@
 // that is that the capability is missing rather than that the cross-link is
 // wrong.
 //
+// A fourth kind is read and reported rather than gated: the corrective prose
+// an error helper hands a model, which names capabilities in whatever spelling
+// the handler happened to write. See the staged rule below.
+//
 // # What it reads
 //
 // Those three sites, out of ./internal/tools/... loaded through
@@ -58,6 +62,38 @@
 // into: an ID assembled at run time would be reported as unreadable and pass.
 // The remedy is to spell the ID as a constant, which every site in the tree
 // does today.
+//
+// # The staged rule over error hints
+//
+// A model reads the prose a handler hands it when a call fails exactly as it
+// reads the rest, and nothing judged it. A hint saying "verify project_id with
+// gitlab_project_get" names a tool the default dynamic surface does not
+// register at all, and on meta only the bare domain tools exist, so the name
+// is right for one surface of three. The canonical ID is the portable form
+// here for the reason it is the portable form in a documentation example: it
+// does not depend on GITLAB_MCP_TOOL_SURFACE.
+//
+// So the hint argument of toolutil.WrapErrWithHint, WrapErrWithStatusHint and
+// NotFoundResult is read too, along with the struct fields such a hint is
+// written into on its way to one, since nineteen domains reach those helpers
+// through a field of their own output. The two are counted apart, because the
+// field rule is the wider of the two and a reader should be able to tell which
+// figure is which. Three spellings are reported: a gitlab_* tool name, a
+// registered alias, and a dotted ID that resolves nowhere.
+//
+// It **reports and never gates**, and the reason is the size of it: 785
+// findings across 137 packages of the 1327 hints this tree writes, every one
+// of them a tool name. A gate cannot land before the code it judges is clean,
+// and until this rule existed nobody had the figure at all. Its own blind
+// spots are counted beside the findings rather than folded into the gate's,
+// so a hint the type checker cannot fold fails nothing.
+//
+// The dotted-ID half of it is already clean, and was not when the rule was
+// written: the five unresolvable IDs it found on its first run were one
+// constant in internal/tools/workitemsavedviews naming
+// "work_item_saved_view.list", where the catalog registers those actions as
+// routes on the issue domain. That one is fixed by spelling the ID through
+// the constant the catalog registers, which is the remedy for the class.
 //
 // # The limit of a clean run
 //

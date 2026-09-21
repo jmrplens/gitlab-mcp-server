@@ -3,6 +3,7 @@ package main
 import (
 	"go/ast"
 	"go/constant"
+	"go/token"
 	"go/types"
 	"path/filepath"
 	"strings"
@@ -12,18 +13,55 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/goprogram"
 )
 
-// The four kinds of site a published action ID is written at.
+// The kinds of site a model-facing capability name is written at. The first
+// four are the published action IDs the gate refuses; the last two are the
+// corrective prose the staged hint rule reports.
 const (
 	kindRelated     = "related"
 	kindHint        = "hint"
 	kindUsage       = "usage"
 	kindDescription = "description"
+	// kindErrorHint is a hint argument of one of the error helpers, and
+	// kindHintField the struct field such a hint is written into on its way to
+	// one. They are counted apart because the second is a wider net than the
+	// argument rule alone: a field named for a hint is judged wherever it is
+	// written, and telling a field that reaches an error helper from one that
+	// reaches a Markdown formatter would need dataflow this walk does not do.
+	kindErrorHint = "error_hint"
+	kindHintField = "hint_field"
 )
 
 // hintActionFunc is the toolutil helper every cross-link hint is written
 // through: toolutil.HintAction(id, purpose) renders "Use action 'id' to
 // purpose" into the Markdown a model reads.
 const hintActionFunc = "HintAction"
+
+// listHintsFunc is the toolutil helper a list formatter builds its next-step
+// hints with: toolutil.ListHints(hint, hint) prepends the preserve-links hint
+// to the ones it is given, so each of its arguments is a hint.
+const listHintsFunc = "ListHints"
+
+// errorHintArgs are the toolutil helpers that hand a model corrective prose
+// when a call fails, each mapped to the argument that prose starts at.
+//
+// The hint is the last parameter of all three, so every argument from that
+// index on is hint text: WrapErrWithHint(op, err, hint),
+// WrapErrWithStatusHint(op, err, code, hint) and NotFoundResult(resource,
+// identifier, hints...).
+var errorHintArgs = map[string]int{
+	"WrapErrWithHint":       2,
+	"WrapErrWithStatusHint": 3,
+	"NotFoundResult":        2,
+}
+
+// hintNameSuffixes are the endings that make a field or a parameter a carrier
+// of hint prose, matched without case.
+//
+// A suffix rather than a substring, because the substring rule admits
+// hintAction and every other name that merely mentions hints. What the tree
+// writes is hint, hints, notFoundHint, forbiddenHint, validationHint and
+// badRequestHint, and each of those is corrective prose a model reads.
+var hintNameSuffixes = []string{"hint", "hints"}
 
 // idListFieldNames are the fields whose every element is a canonical action
 // ID, matched without case so the exported spelling and the unexported one are
@@ -90,6 +128,9 @@ type program struct {
 type paramRef struct {
 	fn    *types.Func
 	index int
+	// variadic says this is the last parameter of a variadic signature, whose
+	// callers spell its elements one by one rather than passing the list.
+	variadic bool
 }
 
 // callSite is one call of a declared function, kept with the package it was
@@ -130,6 +171,7 @@ func collectSites(dir string, patterns []string, overlay map[string][]byte) ([]s
 		prog:        prog,
 		visited:     map[*types.Func]struct{}{},
 		visitedVars: map[*types.Var]struct{}{},
+		recorded:    map[ast.Expr]struct{}{},
 	}
 	for _, pkg := range prog.pkgs {
 		walk := &walker{collector: collect, pkg: pkg}
@@ -183,7 +225,11 @@ func (p *program) indexFuncs(pkg *packages.Package, file *ast.File) {
 			continue
 		}
 		for index := range signature.Params().Len() {
-			p.params[signature.Params().At(index)] = paramRef{fn: obj, index: index}
+			p.params[signature.Params().At(index)] = paramRef{
+				fn:       obj,
+				index:    index,
+				variadic: signature.Variadic() && index == signature.Params().Len()-1,
+			}
 		}
 	}
 }
@@ -264,6 +310,14 @@ type collector struct {
 	// here: a list grown with related = append(related, id) names itself in
 	// its own value.
 	visitedVars map[*types.Var]struct{}
+	// recorded is every expression already turned into a site, so one
+	// expression is one site however many routes reach it. Two do: a call is
+	// visited where it is written, and it is visited again when a parameter of
+	// the function it calls is followed back out to its callers. A helper that
+	// forwards its own hint to another helper puts every one of its callers'
+	// hints on that second path, which is what toolutil.WrapErrWithStatusHint
+	// does to WrapErrWithHint.
+	recorded map[ast.Expr]struct{}
 }
 
 // walker walks one package, writing into the shared collector.
@@ -294,19 +348,39 @@ func (w *walker) visit(node ast.Node) bool {
 	return true
 }
 
-// visitCall records the first argument of every toolutil.HintAction call.
+// visitCall records what one call of a toolutil helper publishes: the first
+// argument of HintAction, which is a canonical ID, and the hint arguments of
+// the three error helpers, which are prose.
 func (w *walker) visitCall(call *ast.CallExpr) {
 	callee, ok := w.callee(call)
-	if !ok || callee.Pkg() == nil {
+	if !ok || callee.Pkg() == nil || callee.Pkg().Path() != goprogram.ToolutilPath {
 		return
 	}
-	if callee.Pkg().Path() != goprogram.ToolutilPath || callee.Name() != hintActionFunc {
+	if callee.Name() == hintActionFunc {
+		if len(call.Args) > 0 {
+			w.recordID(kindHint, call.Args[0])
+		}
 		return
 	}
-	if len(call.Args) == 0 {
-		return
+	if first, isErrorHint := errorHintArgs[callee.Name()]; isErrorHint {
+		w.recordErrorHintArgs(kindErrorHint, call, first)
 	}
-	w.recordID(kindHint, call.Args[0])
+}
+
+// recordErrorHintArgs records the corrective prose one call hands a model,
+// from the argument the hint starts at to the end.
+//
+// A spread passes the hints as one slice rather than as elements, so the last
+// argument is then a list: badges assembles its hints in a local and hands
+// them to NotFoundResult that way.
+func (w *walker) recordErrorHintArgs(kind string, call *ast.CallExpr, first int) {
+	for index := first; index < len(call.Args); index++ {
+		if call.Ellipsis.IsValid() && index == len(call.Args)-1 {
+			w.recordHintList(kind, call.Args[index])
+			continue
+		}
+		w.recordErrorHint(kind, call.Args[index])
+	}
 }
 
 // callee resolves the function a call names, through an import selector or a
@@ -458,7 +532,37 @@ func (w *walker) recordField(fieldName string, fieldType types.Type, value ast.E
 	}
 	if kind, isProse := proseFieldNames[lowered]; isProse && isString(fieldType) {
 		w.recordProse(kind, value)
+		return
 	}
+	if !isHintName(fieldName) {
+		return
+	}
+	switch {
+	case isString(fieldType):
+		w.recordErrorHint(kindHintField, value)
+	case isStringSlice(fieldType):
+		w.recordHintList(kindHintField, value)
+	}
+}
+
+// isHintName reports whether a field or parameter name says it carries hint
+// prose, matched without case so one rule covers the exported spelling and the
+// unexported one.
+func isHintName(name string) bool {
+	lowered := strings.ToLower(name)
+	for _, suffix := range hintNameSuffixes {
+		if strings.HasSuffix(lowered, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isHintKind reports whether a site's value is hint prose rather than a
+// published action ID, which is what decides the rule it is judged by and
+// whether it can fail the gate.
+func isHintKind(kind string) bool {
+	return kind == kindErrorHint || kind == kindHintField
 }
 
 // isStringSlice reports whether a type is []string.
@@ -548,27 +652,69 @@ func (w *walker) followValues(kind string, ident *ast.Ident, record recordFunc) 
 
 // followParameter records the argument every caller passes for one parameter.
 //
-// Only a parameter whose own name says it carries related actions is followed,
-// and the restriction is not fussiness. A parameter is followed out to every
-// call of its function, so following one that is merely a list of strings
-// judges whatever any caller ever passes: actioncatalog.cloneStrings takes one
-// and is called on a group's aliases, its tags and its validation notes, each
-// of which then reads as a cross-link that resolves to nothing. The naming is
-// the same convention the field rule leans on, and a parameter outside it is
-// reported unfolded rather than guessed at.
+// Only a parameter whose own name says it carries the kind of value the site
+// publishes is followed, and the restriction is not fussiness. A parameter is
+// followed out to every call of its function, so following one that is merely
+// a list of strings judges whatever any caller ever passes:
+// actioncatalog.cloneStrings takes one and is called on a group's aliases, its
+// tags and its validation notes, each of which then reads as a cross-link that
+// resolves to nothing. The naming is the same convention the field rule leans
+// on, and a parameter outside it is reported unfolded rather than guessed at.
+//
+// A variadic parameter is read the way its callers spell it, which is two
+// different things: a call that spreads a slice passes the whole list, and a
+// call that spells its elements passes one value each. Reading the second as
+// the first is what the ID rule got away with, since every variadic list of
+// IDs in the tree is spread, and it is not what a list of hints is written as.
 func (w *walker) followParameter(kind string, variable *types.Var, record recordFunc) bool {
 	param, isParam := w.prog.params[variable]
-	if !isParam || !isRelatedParamName(variable.Name()) {
+	if !isParam || !followableParamName(kind, variable.Name()) {
 		return false
 	}
 	w.visitedVars[variable] = struct{}{}
 	for _, caller := range w.prog.callers[param.fn] {
-		if param.index >= len(caller.call.Args) {
-			continue
-		}
-		record(w.inPackage(caller.pkg), kind, caller.call.Args[param.index])
+		w.recordArguments(kind, param, caller, record)
 	}
 	return true
+}
+
+// recordArguments records what one caller passes for a followed parameter.
+func (w *walker) recordArguments(kind string, param paramRef, caller callSite, record recordFunc) {
+	inner := w.inPackage(caller.pkg)
+	args := caller.call.Args
+	if param.index >= len(args) {
+		return
+	}
+	if !param.variadic {
+		record(inner, kind, args[param.index])
+		return
+	}
+	for index := param.index; index < len(args); index++ {
+		if caller.call.Ellipsis.IsValid() && index == len(args)-1 {
+			record(inner, kind, args[index])
+			continue
+		}
+		elementRecorder(kind)(inner, kind, args[index])
+	}
+}
+
+// elementRecorder is how one element of a list of this kind is recorded: an
+// action ID is folded whole, a hint is prose.
+func elementRecorder(kind string) recordFunc {
+	if isHintKind(kind) {
+		return recordHintValue
+	}
+	return recordSingleValue
+}
+
+// followableParamName reports whether a parameter names itself a carrier of
+// the value the site publishes: hint prose for a hint site, related actions
+// for the rest.
+func followableParamName(kind, name string) bool {
+	if isHintKind(kind) {
+		return isHintName(name)
+	}
+	return isRelatedParamName(name)
 }
 
 // isRelatedParamName reports whether a parameter names itself a carrier of
@@ -588,6 +734,12 @@ func recordListValue(w *walker, kind string, expr ast.Expr) { w.recordIDList(kin
 
 // recordSingleValue records an expression as one action ID.
 func recordSingleValue(w *walker, kind string, expr ast.Expr) { w.recordID(kind, expr) }
+
+// recordHintListValue records an expression as a list of hints.
+func recordHintListValue(w *walker, kind string, expr ast.Expr) { w.recordHintList(kind, expr) }
+
+// recordHintValue records an expression as one hint.
+func recordHintValue(w *walker, kind string, expr ast.Expr) { w.recordErrorHint(kind, expr) }
 
 // recordListCall records a list produced by a call: an append, a conversion, a
 // copy of a list recorded elsewhere, or a function whose returns are followed.
@@ -681,12 +833,18 @@ func (w *walker) recordAppend(kind string, call *ast.CallExpr) {
 
 // isAppend reports whether a call is the builtin append.
 func (w *walker) isAppend(call *ast.CallExpr) bool {
+	return w.isBuiltin(call, "append")
+}
+
+// isBuiltin reports whether a call is the named builtin, resolved through the
+// type checker so a local function of the same name cannot fake one.
+func (w *walker) isBuiltin(call *ast.CallExpr, name string) bool {
 	ident, ok := ast.Unparen(call.Fun).(*ast.Ident)
 	if !ok {
 		return false
 	}
 	builtin, ok := w.pkg.TypesInfo.Uses[ident].(*types.Builtin)
-	return ok && builtin.Name() == "append"
+	return ok && builtin.Name() == name
 }
 
 // isIDListRead reports whether an expression reads another field that is
@@ -778,6 +936,187 @@ func (w *walker) recordProse(kind string, expr ast.Expr) {
 	w.addSite(site{Kind: kind, Value: value, Resolved: true}, expr)
 }
 
+// recordErrorHint records one hint string, folding what it can of a sentence
+// assembled at run time.
+//
+// A hint is prose rather than an ID, so the interesting half is the sentence
+// nothing folds whole: dorametrics writes "... omit environment_tiers unless
+// the " + scope + " has ...", and a capability name would be spelled in one of
+// those literal halves or nowhere. [walker.foldProse] keeps the halves. A name
+// that is read out of a field or followed to the values a local carries is
+// recorded where it was written instead, and anything left is reported rather
+// than passed over, like every other site here.
+func (w *walker) recordErrorHint(kind string, expr ast.Expr) {
+	// A hint constructor is asked about before the fold, not after it.
+	// toolutil.HintAction is a one-line helper, so binding its parameters
+	// renders the whole sentence, and recording that would publish the same ID
+	// twice: once here as prose and once at the same call site as the ID the
+	// gate refuses.
+	if call, isCall := ast.Unparen(expr).(*ast.CallExpr); isCall && w.recordHintCall(kind, call) {
+		return
+	}
+	if value, ok := w.foldProse(expr); ok {
+		w.addSite(site{Kind: kind, Value: value, Resolved: true}, expr)
+		return
+	}
+	switch typed := ast.Unparen(expr).(type) {
+	case *ast.Ident:
+		if w.followValues(kind, typed, recordHintValue) {
+			return
+		}
+	case *ast.SelectorExpr:
+		if w.isHintRead(typed) {
+			return
+		}
+	}
+	w.recordUnresolved(kind, expr)
+}
+
+// recordHintCall records the hints a call produces, reporting whether it did.
+//
+// Three shapes are recognized, and each is a hint accounted for somewhere
+// else. toolutil.HintAction composes the one form this whole command exists to
+// ask for, and its ID is judged as an ID at this same call site, so there is
+// nothing the prose rule can add. toolutil.ListHints is a list of hints
+// spelled as its arguments. And a call handed nothing but hints read off
+// fields hands back prose recorded where it was written, which is the bargain
+// [walker.isListCopy] already makes for a list of IDs, with the same hole:
+// what such a body adds of its own is invisible here.
+func (w *walker) recordHintCall(kind string, call *ast.CallExpr) bool {
+	callee, ok := w.callee(call)
+	if ok && callee.Pkg() != nil && callee.Pkg().Path() == goprogram.ToolutilPath {
+		switch callee.Name() {
+		case hintActionFunc:
+			return true
+		case listHintsFunc:
+			w.recordErrorHintArgs(kind, call, 0)
+			return true
+		}
+	}
+	return w.carriesRecordedHints(call)
+}
+
+// carriesRecordedHints reports whether a call was handed nothing but hints
+// read off fields this walk records where they are written.
+func (w *walker) carriesRecordedHints(call *ast.CallExpr) bool {
+	if len(call.Args) == 0 {
+		return false
+	}
+	for _, arg := range call.Args {
+		selector, isSelector := ast.Unparen(arg).(*ast.SelectorExpr)
+		if !isSelector || !w.isHintRead(selector) {
+			return false
+		}
+	}
+	return true
+}
+
+// foldProse folds an expression to the prose it renders, keeping the literal
+// halves of a sentence assembled at run time.
+//
+// The type checker answers whole for a literal, a constant and a concatenation
+// of constants, which is most of them. Past that, only a concatenation is
+// folded, and it is folded to its literal halves with a space where the value
+// goes: a space rather than nothing, so two halves cannot be joined into a
+// token neither of them spells. A call is folded the way an ID is, by binding
+// a one-line helper's parameters.
+func (w *walker) foldProse(expr ast.Expr) (string, bool) {
+	if value, ok := w.constantString(expr); ok {
+		return value, true
+	}
+	switch typed := ast.Unparen(expr).(type) {
+	case *ast.BinaryExpr:
+		if typed.Op != token.ADD {
+			return "", false
+		}
+		left, leftFolded := w.foldProse(typed.X)
+		right, rightFolded := w.foldProse(typed.Y)
+		if !leftFolded && !rightFolded {
+			return "", false
+		}
+		return left + " " + right, true
+	case *ast.CallExpr:
+		return w.foldCall(typed, nil, 0)
+	default:
+		return "", false
+	}
+}
+
+// recordHintList records every hint of a list of them: the []string a
+// not-found output carries, and the slice a spread hands NotFoundResult.
+//
+// A make is the empty list it allocates and publishes no prose, so it is
+// passed over rather than reported; an append is followed through both halves;
+// a name is followed to the values it is given; a read of another hint field
+// is a copy of a list recorded where it was written. Anything else is
+// reported.
+func (w *walker) recordHintList(kind string, value ast.Expr) {
+	switch expr := ast.Unparen(value).(type) {
+	case *ast.CompositeLit:
+		for _, element := range expr.Elts {
+			w.recordErrorHint(kind, element)
+		}
+	case *ast.CallExpr:
+		w.recordHintListCall(kind, expr)
+	case *ast.SelectorExpr:
+		if !w.isHintRead(expr) {
+			w.recordUnresolved(kind, expr)
+		}
+	case *ast.Ident:
+		if expr.Name == "nil" {
+			return
+		}
+		if !w.followValues(kind, expr, recordHintListValue) {
+			w.recordUnresolved(kind, expr)
+		}
+	default:
+		w.recordUnresolved(kind, value)
+	}
+}
+
+// recordHintListCall records a list of hints produced by a call: a make, which
+// allocates and carries no prose; an append, whose first argument is the list
+// being grown and whose rest are elements; or one of the shapes
+// [walker.recordHintCall] recognizes, which is where toolutil.ListHints lands.
+func (w *walker) recordHintListCall(kind string, call *ast.CallExpr) {
+	switch {
+	case w.isBuiltin(call, "make"):
+	case w.isAppend(call):
+		w.recordHintAppend(kind, call)
+	case w.recordHintCall(kind, call):
+	default:
+		w.recordUnresolved(kind, call)
+	}
+}
+
+// recordHintAppend records the arguments of an append: the first is the list
+// being grown and is followed back through the same rule, the rest are hints,
+// unless the call spreads a slice, in which case that slice is a list too.
+func (w *walker) recordHintAppend(kind string, call *ast.CallExpr) {
+	for index, arg := range call.Args {
+		spread := call.Ellipsis.IsValid() && index == len(call.Args)-1
+		if index == 0 || spread {
+			w.recordHintList(kind, arg)
+			continue
+		}
+		w.recordErrorHint(kind, arg)
+	}
+}
+
+// isHintRead reports whether an expression reads a field that is itself hint
+// prose, which makes it a copy of a hint recorded where it was written rather
+// than a new one.
+func (w *walker) isHintRead(selector *ast.SelectorExpr) bool {
+	field, ok := w.selectedField(selector)
+	if !ok {
+		return false
+	}
+	if !isString(field.Type()) && !isStringSlice(field.Type()) {
+		return false
+	}
+	return isHintName(field.Name())
+}
+
 // recordUnresolved records a site the audit could not fold.
 func (w *walker) recordUnresolved(kind string, expr ast.Expr) {
 	w.addSite(site{Kind: kind, Expr: types.ExprString(expr)}, expr)
@@ -798,8 +1137,12 @@ func stringValue(value constant.Value) (string, bool) {
 }
 
 // addSite stamps a site with the package and position of the expression it
-// came from and keeps it.
+// came from and keeps it, once per expression.
 func (w *walker) addSite(recorded site, expr ast.Expr) {
+	if _, seen := w.recorded[expr]; seen {
+		return
+	}
+	w.recorded[expr] = struct{}{}
 	position := w.pkg.Fset.Position(expr.Pos())
 	recorded.Package = trimModulePath(w.pkg.PkgPath)
 	recorded.File = relativePath(position.Filename, w.prog.root)

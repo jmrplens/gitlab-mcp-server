@@ -59,6 +59,43 @@ var declaredAliasMentions = map[string]string{
 	"issue.reopen": "the other half of that same sentence",
 }
 
+// hintToolExemptions are the gitlab_-shaped tokens a hint may spell that name
+// no tool, each with what they name instead.
+//
+// The hint rule refuses every gitlab_* name, registered or not, because the
+// canonical action ID is the one spelling every surface resolves. That makes
+// the table's job narrow: a token this shape that is not a tool name at all.
+// GitLab's own template families are the class, and the documentation gate
+// declares this same token for this same reason, so a spelling one of them
+// passes over cannot be one the other reports.
+var hintToolExemptions = map[string]string{
+	"gitlab_ci_ymls": "a GitLab template family and API path segment (templates/gitlab_ci_ymls), named by the project-template hints beside dockerfiles and gitignores",
+}
+
+// exemptHintTool reports whether a gitlab_-shaped token in a hint is declared
+// not to be a tool name.
+func exemptHintTool(token string) bool {
+	_, declared := hintToolExemptions[token]
+	return declared
+}
+
+// staleHintDeclarations names the entries of [hintToolExemptions] that excused
+// nothing this run.
+//
+// It is reported rather than gated, like everything else the hint rule says:
+// the rule it belongs to reports, and a stale entry there cannot be worth more
+// than the findings around it.
+func staleHintDeclarations(used map[string]struct{}) []string {
+	var stale []string
+	for token := range hintToolExemptions {
+		if _, wasUsed := used[token]; !wasUsed {
+			stale = append(stale, token+" is no longer spelled in any hint (hintToolExemptions)")
+		}
+	}
+	sort.Strings(stale)
+	return stale
+}
+
 // exemptProse reports whether a prose token is declared not to be an action ID.
 func exemptProse(token string) bool {
 	if _, declared := proseExemptions[token]; declared {

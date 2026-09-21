@@ -505,6 +505,8 @@ func TestWriteReport_Rows_ReadFileLineKindAndIDInThatOrder(t *testing.T) {
 		"audit_action_ids: 2 published ID(s) to fix in 1 package(s); 1 alias(es) named in prose; 1 site(s) not folded; 3 stale declaration(s)",
 		"  judged 3 published ID(s) against 4 catalog ID(s) and 2 alias(es)",
 		"  findings by kind: hint 1, related 1",
+		"  gitlab_ci_ymls is no longer spelled in any hint (hintToolExemptions). Remove the entry.",
+		"  error hints: 0 finding(s) in 0 package(s) over 0 hint(s) read; 0 not folded. Reported, not gated",
 		"",
 	}, "\n")
 	if out.String() != want {
