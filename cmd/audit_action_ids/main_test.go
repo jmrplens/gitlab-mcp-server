@@ -182,6 +182,49 @@ func TestRun_Check_CleanPackage_Passes(t *testing.T) {
 	}
 }
 
+// TestRun_Check_HintNamingATool_IsReportedAndPasses drives the whole command
+// over a fixture whose only defect is a hint, and holds the staging decision
+// end to end: the row is in the report, the count is in the summary, and the
+// gate exits 0.
+//
+// It is the assertion that keeps this rule off the critical path. The class is
+// 790 findings wide, so a version of the gate that counted them would refuse
+// every push until the tree was clean, and there would be no run left to
+// measure the tree with.
+func TestRun_Check_HintNamingATool_IsReportedAndPasses(t *testing.T) {
+	root := repoRoot(t)
+	overlay := map[string][]byte{
+		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+// Get hands a model a tool name the dynamic surface does not register.
+func Get() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "verify project_id with gitlab_project_get")
+}
+`),
+	}
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, check: true, verbose: true}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run with -check = %d over a hint finding, want 0; stderr %q", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "gitlab_project_get") {
+		t.Errorf("stdout = %q, want the tool name named", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read") {
+		t.Errorf("stdout = %q, want the count of what the rule read", stdout.String())
+	}
+}
+
 // TestPatternsOrDefault_NoArguments_AuditTheWholeTree holds what a bare run
 // covers: every package that publishes an action ID.
 func TestPatternsOrDefault_NoArguments_AuditTheWholeTree(t *testing.T) {

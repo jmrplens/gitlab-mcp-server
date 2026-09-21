@@ -818,3 +818,338 @@ func TestIsRelatedParamName_NamedSpellings_AreFollowed(t *testing.T) {
 		})
 	}
 }
+
+// TestCollectSites_EveryErrorHintShape_IsFolded drives the walk over one
+// fixture carrying each shape corrective prose is written in, and asserts the
+// folded hints.
+//
+// The shapes are the ones the tree uses. The three error helpers take their
+// hint at a different argument each and NotFoundResult takes several; a
+// constant, a struct field and a list of them are how nineteen domains reach
+// those helpers; a hint handed in as a parameter and one grown in a local are
+// the indirections a handler writes; and toolutil.ListHints and
+// toolutil.HintAction are toolutil's own hint constructors, the second of
+// which is judged as an ID at the same call site and so adds no prose.
+func TestCollectSites_EveryErrorHintShape_IsFolded(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+const hintConst = "read it back with gitlab_demo_get"
+
+var errDemo = errors.New("demo")
+
+type notFoundOutput struct {
+	Resource     string
+	Hints        []string
+	notFoundHint string
+}
+
+var output = notFoundOutput{
+	Hints:        []string{"grow with gitlab_demo_grow", toolutil.HintAction("demo.get", "read one")},
+	notFoundHint: "field hint naming gitlab_demo_field",
+}
+
+func fromHintArgument() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "list them with gitlab_demo_list")
+}
+
+func fromStatusHintArgument() error {
+	return toolutil.WrapErrWithStatusHint("demo_get", errDemo, 404, "verify it with gitlab_demo_verify")
+}
+
+func fromNotFoundResult() {
+	_ = toolutil.NotFoundResult("Demo", "id", "first gitlab_demo_first", "second gitlab_demo_second")
+}
+
+func fromConstant() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, hintConst)
+}
+
+func fromField(out notFoundOutput) {
+	_ = toolutil.NotFoundResult(out.Resource, "id", out.notFoundHint)
+}
+
+func fromEscapedField(out notFoundOutput) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, toolutil.EscapeMdTableCell(out.notFoundHint))
+}
+
+func fromListHints() notFoundOutput {
+	return notFoundOutput{Hints: toolutil.ListHints("listed gitlab_demo_listed")}
+}
+
+func fromParameter(hint string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, hint)
+}
+
+func callsFromParameter() error {
+	return fromParameter("passed gitlab_demo_passed")
+}
+
+func fromLocal() {
+	hints := []string{"local gitlab_demo_local"}
+	hints = append(hints, "appended gitlab_demo_appended")
+	_ = toolutil.NotFoundResult("Demo", "id", hints...)
+}
+`)
+
+	argumentWant := []string{
+		"appended gitlab_demo_appended",
+		"first gitlab_demo_first",
+		"list them with gitlab_demo_list",
+		"local gitlab_demo_local",
+		"passed gitlab_demo_passed",
+		"read it back with gitlab_demo_get",
+		"second gitlab_demo_second",
+		"verify it with gitlab_demo_verify",
+	}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, argumentWant) {
+		t.Errorf("error hint values = %v, want %v", got, argumentWant)
+	}
+
+	fieldWant := []string{
+		"field hint naming gitlab_demo_field",
+		"grow with gitlab_demo_grow",
+		"listed gitlab_demo_listed",
+	}
+	if got := valuesOfKind(sites, kindHintField); !slices.Equal(got, fieldWant) {
+		t.Errorf("hint field values = %v, want %v", got, fieldWant)
+	}
+
+	// The hint read off a field at the call site is the one already recorded
+	// where it was written, escaped on its way through a formatter or not, so
+	// it is passed over rather than counted twice.
+	if got := valuesOfKind(sites, kindHint); !slices.Equal(got, []string{"demo.get"}) {
+		t.Errorf("hint IDs = %v, want the HintAction argument judged as an ID", got)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestCollectSites_HintAssembledAtRunTime_KeepsItsLiteralHalves holds the fold
+// that matters most here, since a capability name is spelled in a literal half
+// or nowhere: dorametrics writes exactly this shape, and a rule that only read
+// what the type checker folds whole would see none of it.
+//
+// The seam is a space rather than nothing, so two halves cannot be read as one
+// token neither of them spells.
+func TestCollectSites_HintAssembledAtRunTime_KeepsItsLiteralHalves(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func fromConcatenation(scope string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, "list with gitlab_demo"+scope+"list_after")
+}
+`)
+
+	folded := valuesOfKind(sites, kindErrorHint)
+	if len(folded) != 1 {
+		t.Fatalf("error hint values = %v, want the one concatenation", folded)
+	}
+	for _, want := range []string{"gitlab_demo", "list_after"} {
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(folded[0], want) {
+				t.Errorf("folded hint %q left out the literal half %q", folded[0], want)
+			}
+		})
+	}
+	if strings.Contains(folded[0], "gitlab_demolist_after") {
+		t.Errorf("folded hint %q joined two halves into a token neither spells", folded[0])
+	}
+}
+
+// TestCollectSites_HintNothingCanFold_IsReported holds this rule's blind spot
+// as a row rather than as a silence. A hint built by a formatter carries no
+// literal a reader could have got wrong, but a rule whose blind spot says
+// nothing is one a future site steps into, so the site is named.
+func TestCollectSites_HintNothingCanFold_IsReported(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+func unfoldable(value string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, fmt.Sprintf("built from %s", value))
+}
+`)
+
+	want := []string{`fmt.Sprintf("built from %s", value)`}
+	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
+		t.Errorf("unresolved = %v, want %v", got, want)
+	}
+	if got := valuesOfKind(sites, kindErrorHint); len(got) != 0 {
+		t.Errorf("error hint values = %v, want nothing folded", got)
+	}
+}
+
+// TestCollectSites_VariadicHintParameter_IsReadAsItsCallersSpellIt holds the
+// one parameter shape that means two different things at the call site.
+//
+// A caller that spreads a slice passes the whole list, and a caller that
+// spells its hints passes one value each. Reading the second as the first is
+// what the parameter rule got away with while the only variadic lists it met
+// were the spread lists of IDs, and it is not how a hint is written.
+func TestCollectSites_VariadicHintParameter_IsReadAsItsCallersSpellIt(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import "github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+
+func takesHints(hints ...string) {
+	_ = toolutil.NotFoundResult("Demo", "id", hints...)
+}
+
+func spellsTheElements() {
+	takesHints("first gitlab_demo_first", "second gitlab_demo_second")
+}
+
+func spreadsAList() {
+	takesHints([]string{"spread gitlab_demo_spread"}...)
+}
+`)
+
+	want := []string{"first gitlab_demo_first", "second gitlab_demo_second", "spread gitlab_demo_spread"}
+	if got := valuesOfKind(sites, kindErrorHint); !slices.Equal(got, want) {
+		t.Errorf("error hint values = %v, want %v", got, want)
+	}
+	if got := unresolvedExprs(sites); len(got) != 0 {
+		t.Errorf("unresolved = %v, want none", got)
+	}
+}
+
+// TestCollectSites_HintShapesNothingCanRead_AreReportedOneByOne holds every
+// shape the hint rules decline, so that declining is a row a reader can see
+// rather than a silence.
+//
+// Two of them are declined on purpose and produce nothing: a nil list and a
+// make, which allocate no prose between them. The rest are values this walk
+// cannot follow, and each is named with the expression as it was written,
+// since naming what could not be read is the only honest alternative to
+// passing over it.
+func TestCollectSites_HintShapesNothingCanRead_AreReportedOneByOne(t *testing.T) {
+	sites := collectFixture(t, `package fixture
+
+import (
+	"errors"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
+)
+
+var errDemo = errors.New("demo")
+
+type carrier struct {
+	Hints        []string
+	Notes        []string
+	notFoundHint string
+	Label        string
+}
+
+type odd struct {
+	hint int
+}
+
+var table = map[string][]string{"a": {"table gitlab_demo_table"}}
+
+var (
+	source    = carrier{Hints: []string{"source gitlab_demo_source"}}
+	copied    = carrier{Hints: source.Hints}
+	empty     = carrier{Hints: nil}
+	allocated = carrier{Hints: make([]string, 0, 2)}
+	indexed   = carrier{Hints: table["a"]}
+	called    = carrier{Hints: build()}
+	noted     = carrier{Hints: other.Notes}
+	named     = carrier{notFoundHint: other.Label}
+	other     = carrier{Label: "label gitlab_demo_label"}
+)
+
+func build() []string {
+	out := []string{}
+	return out
+}
+
+func describe(value string) string {
+	trimmed := value
+	return trimmed
+}
+
+func render(value int) string {
+	shown := value
+	return string(rune(shown))
+}
+
+func fromPlainListParameter(values []string) carrier {
+	return carrier{Hints: values}
+}
+
+func fromUnfoldableConcatenation(left, right string) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, left+right)
+}
+
+func fromQualifiedConstant() error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, describe(toolutil.HintPreserveLinks))
+}
+
+func fromFieldOfAnotherType(o odd) error {
+	return toolutil.WrapErrWithHint("demo_get", errDemo, render(o.hint))
+}
+`)
+
+	// The copy of a hint list, the nil and the make publish nothing: the first
+	// is recorded where it was written and the other two hold no prose.
+	if got := valuesOfKind(sites, kindHintField); !slices.Equal(got, []string{"source gitlab_demo_source"}) {
+		t.Errorf("hint field values = %v, want the one list written as a literal", got)
+	}
+	want := []string{
+		"build()",
+		"describe(toolutil.HintPreserveLinks)",
+		"left + right",
+		"other.Label",
+		"other.Notes",
+		"render(o.hint)",
+		`table["a"]`,
+		"values",
+	}
+	if got := unresolvedExprs(sites); !slices.Equal(got, want) {
+		t.Errorf("unresolved = %v, want %v", got, want)
+	}
+}
+
+// TestIsHintName_NamedSpellings_AreRead holds the naming rule the hint field
+// and parameter rules lean on. A suffix rather than a substring, or every name
+// that merely mentions hints would be read as carrying one.
+func TestIsHintName_NamedSpellings_AreRead(t *testing.T) {
+	cases := map[string]bool{
+		"hint":           true,
+		"hints":          true,
+		"Hints":          true,
+		"notFoundHint":   true,
+		"badRequestHint": true,
+		"hintAction":     false,
+		"usage":          false,
+		"related":        false,
+	}
+	for name, want := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := isHintName(name); got != want {
+				t.Errorf("isHintName(%q) = %t, want %t", name, got, want)
+			}
+		})
+	}
+}

@@ -23,9 +23,11 @@ import (
 // run too, so that list stopped being the one place a spelling was tolerated
 // and became the prose half of the same refusal, with declaredAliasMentions
 // the only thing that excuses one. It also adds declarations_judged, which is
-// about the run rather than the tree. The counts move across both lines, so a
-// reader comparing two runs across either is comparing two rules.
-const schemaVersion = 3
+// about the run rather than the tree. Version 4 adds the `hints` section, the
+// staged rule over the corrective prose an error helper hands a model, which
+// reports and never gates. The counts move across all three lines, so a reader
+// comparing two runs across any of them is comparing two rules.
+const schemaVersion = 4
 
 // Finding is one published action ID that is not a canonical catalog ID.
 type Finding struct {
@@ -81,6 +83,9 @@ type Report struct {
 	Findings      []Finding    `json:"findings"`
 	AliasRefs     []Finding    `json:"alias_references"`
 	Unresolved    []Unresolved `json:"unresolved"`
+	// Hints is the staged rule over corrective prose, which reports and never
+	// gates, so nothing it holds is read by [Report.Clean].
+	Hints HintReport `json:"hints"`
 	// StaleExemptions are the declarations that excused nothing, of either
 	// table, each named with the table it is in.
 	StaleExemptions []string `json:"stale_exemptions,omitempty"`
@@ -110,6 +115,12 @@ type Report struct {
 // Those two are declared in declaredAliasMentions, which only a prose site
 // consults.
 //
+// A hint site is judged by neither of those rules and lands in [HintReport]
+// instead. It is corrective prose rather than a published ID, the class it
+// names is everywhere in the tree, and a gate cannot land before the code it
+// judges is clean, so that half reports and nothing in it reaches
+// [Report.Clean].
+//
 // declarationsJudged says whether the sites cover the whole tree, which is the
 // only run that can hold the declaration tables to it.
 func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report {
@@ -122,10 +133,15 @@ func classify(sites []site, ids *actionids.IDs, declarationsJudged bool) Report 
 			ByKind:             map[string]int{},
 			JudgedByKind:       map[string]int{},
 		},
+		Hints:             newHintReport(),
 		usedExemptions:    map[string]struct{}{},
 		usedAliasMentions: map[string]struct{}{},
 	}
 	for _, at := range sites {
+		if isHintKind(at.Kind) {
+			report.judgeHint(at, ids)
+			continue
+		}
 		if !at.Resolved {
 			report.Unresolved = append(report.Unresolved, Unresolved{
 				Package: at.Package, File: at.File, Line: at.Line, Kind: at.Kind, Expression: at.Expr,
@@ -191,6 +207,7 @@ func (r *Report) finish() {
 		r.StaleExemptions = staleDeclarations(r.usedExemptions, r.usedAliasMentions)
 	}
 	r.Summary.Stale = len(r.StaleExemptions)
+	r.Hints.finish(r.Summary.DeclarationsJudged)
 }
 
 // Clean reports whether this run found nothing the gate refuses.
@@ -262,7 +279,10 @@ func isProseKind(kind string) bool {
 // then what the run saw.
 //
 // The alias references and the unfolded sites are printed whatever -v says,
-// because both fail the gate. -v decides only how much of a clean run is shown.
+// because both fail the gate. -v decides only how much of a clean run is
+// shown, and how much of the staged hint rule: its count is always printed and
+// its rows only when they are asked for, since nothing there fails a build and
+// the backlog is hundreds of rows long.
 func writeReport(out io.Writer, report Report, verbose bool) {
 	writeGroups(out, report.Findings, findingVerb)
 	if len(report.AliasRefs) > 0 || verbose {
@@ -272,6 +292,7 @@ func writeReport(out io.Writer, report Report, verbose bool) {
 	writeUnresolved(out, report.Unresolved)
 	writeStale(out, report.StaleExemptions)
 	writeSummary(out, report.Summary, verbose)
+	writeHintReport(out, report.Hints, verbose)
 }
 
 // writeStale prints the declarations that excused nothing, which is a finding
