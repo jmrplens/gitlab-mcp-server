@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -227,8 +228,11 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() error = nil, want symlink escape failure")
 	}
-	if !strings.Contains(err.Error(), "link.md") {
-		t.Fatalf("run() error = %v, want link.md", err)
+	// The path inside the root, not the directory the walk was pointed at: the
+	// stat that refuses the link is the one that has to name it, and the
+	// directory's own name appears in the message either way.
+	if want := "stat " + filepath.Join("docs", "link.md"); !strings.Contains(err.Error(), want) {
+		t.Fatalf("run() error = %v, want it to name %q", err, want)
 	}
 }
 
@@ -609,4 +613,337 @@ func TestResolveInputPath_RelativeRootAbsoluteItem_ReturnsError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "resolve "+item) {
 		t.Fatalf("resolveInputPath() error = %v, want resolve failure", err)
 	}
+}
+
+// redirectStdStreams points os.Stdout and os.Stderr at files for the duration
+// of the test and returns a reader for what each received. main writes to both
+// through the package-level variables at call time rather than through a copy
+// bound at init, so replacing them here is what the command itself observes.
+//
+// Files rather than pipes: a pipe's buffer is finite, and a test that has to
+// drain it concurrently with the code it drives is a second thing to get right.
+func redirectStdStreams(t *testing.T) (readOut, readErr func() string) {
+	t.Helper()
+	open := func(name string) (*os.File, func() string) {
+		path := filepath.Join(t.TempDir(), name)
+		file, err := os.Create(path)
+		if err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+		t.Cleanup(func() { _ = file.Close() })
+		return file, func() string { return readTestFile(t, path) }
+	}
+	outFile, readOut := open("stdout")
+	errFile, readErr := open("stderr")
+	previousOut, previousErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outFile, errFile
+	t.Cleanup(func() { os.Stdout, os.Stderr = previousOut, previousErr })
+	return readOut, readErr
+}
+
+// TestMain_CheckOverEachTree_ReportsTheFailureAndExitsAccordingly verifies the
+// one decision main makes: a run that returned an error is printed on stderr
+// and asks the process to exit 1, and a run that returned none asks for no exit
+// at all.
+//
+// It matters more than its size suggests. `make audit-docs` invokes this
+// command as `--check` and reads nothing but the process status, so a main that
+// inverted the test would let a stale tree pass the documentation gate in
+// silence. The status and the message are asserted together, since a main that
+// exited 1 without saying why, or explained itself and exited 0, would each be
+// wrong in a way the other assertion alone would not catch.
+func TestMain_CheckOverEachTree_ReportsTheFailureAndExitsAccordingly(t *testing.T) {
+	tests := []struct {
+		name        string
+		readme      string
+		wantExit    int
+		wantStderr  string
+		wantNoError bool
+	}{
+		{
+			name:       "a stale table exits 1 and names the file on stderr",
+			readme:     "| A | B |\n| --- | --- |\n| longer | x |\n",
+			wantExit:   1,
+			wantStderr: "README.md",
+		},
+		{
+			name:        "a formatted tree never asks the process to exit",
+			readme:      "# Title\n",
+			wantExit:    -1,
+			wantNoError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeTestFile(t, filepath.Join(root, "README.md"), tt.readme)
+			if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
+				t.Fatalf("mkdir docs: %v", err)
+			}
+			_, readErr := redirectStdStreams(t)
+			previousArgs, previousExit := os.Args, osExit
+			t.Cleanup(func() { os.Args, osExit = previousArgs, previousExit })
+			os.Args = []string{"format_md_tables", "--root", root, "--check"}
+			got := -1
+			osExit = func(code int) { got = code }
+
+			main()
+
+			if got != tt.wantExit {
+				t.Errorf("main() exit = %d, want %d", got, tt.wantExit)
+			}
+			stderr := readErr()
+			if tt.wantNoError {
+				if stderr != "" {
+					t.Errorf("stderr = %q, want nothing for a formatted tree", stderr)
+				}
+				return
+			}
+			if !strings.Contains(stderr, tt.wantStderr) {
+				t.Errorf("stderr = %q, want it to name %q", stderr, tt.wantStderr)
+			}
+		})
+	}
+}
+
+// TestParseOptions_EachArgumentShape_ResolvesTheWholeOptionSet verifies what
+// parseOptions decides, field by field, for the four argument shapes the
+// command is invoked with.
+//
+// The whole struct is compared rather than the field a case is about, because
+// check and pathsAreDefaults are two booleans set by two different mechanisms
+// and nothing downstream would look odd if a reader confused them: the last
+// case is the one where they disagree, so no pair of assignments can satisfy
+// every case while naming the wrong flag.
+func TestParseOptions_EachArgumentShape_ResolvesTheWholeOptionSet(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want options
+	}{
+		{
+			name: "no arguments formats the default trees",
+			args: nil,
+			want: options{root: defaultRoot, check: false, paths: defaultPaths, pathsAreDefaults: true},
+		},
+		{
+			name: "--check alone keeps the defaults and refuses to write",
+			args: []string{"--check"},
+			want: options{root: defaultRoot, check: true, paths: defaultPaths, pathsAreDefaults: true},
+		},
+		{
+			name: "a named path is not a default",
+			args: []string{"custom.md"},
+			want: options{root: defaultRoot, check: false, paths: []string{"custom.md"}, pathsAreDefaults: false},
+		},
+		{
+			name: "--check with named paths and a root sets every field apart",
+			args: []string{"--check", "--root", "elsewhere", "a.md", "b.md"},
+			want: options{root: "elsewhere", check: true, paths: []string{"a.md", "b.md"}, pathsAreDefaults: false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseOptions(tt.args)
+			if err != nil {
+				t.Fatalf("parseOptions() error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseOptions(%q) = %+v, want %+v", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDiscoverMarkdownFiles_InputsGivenOutOfOrder_SortsThemLexically verifies
+// the discovery order is the formatter's own and not whatever order the inputs
+// arrived in.
+//
+// The existing directory walk hands its entries back already sorted, so the
+// sort was never asked to move anything and its comparator could have been
+// written backwards without a test noticing. Naming two files in reverse is
+// what puts the comparison to work.
+func TestDiscoverMarkdownFiles_InputsGivenOutOfOrder_SortsThemLexically(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "zebra.md"), "# Z\n")
+	writeTestFile(t, filepath.Join(root, "alpha.md"), "# A\n")
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	files, err := discoverMarkdownFiles(rootFS, root, []string{"zebra.md", "alpha.md"}, false)
+	if err != nil {
+		t.Fatalf("discoverMarkdownFiles() error: %v", err)
+	}
+	want := []string{"alpha.md", "zebra.md"}
+	if !reflect.DeepEqual(files, want) {
+		t.Errorf("discoverMarkdownFiles() = %v, want %v", files, want)
+	}
+}
+
+// TestMarkdownFilesInDir_AbsentDirectory_ReturnsTheWalkErrorNamingTheInput
+// verifies the walk's own error is returned rather than walked past.
+//
+// [iofs.WalkDir] reports a root it could not stat by calling the callback with
+// a nil entry and the error, so the err check has to come first: without it the
+// next operand would dereference that nil. The message is asserted against the
+// caller's spelling of the path rather than the resolved one, which is the pair
+// the two string parameters make and which no fixture where the two agree could
+// tell apart.
+func TestMarkdownFilesInDir_AbsentDirectory_ReturnsTheWalkErrorNamingTheInput(t *testing.T) {
+	root := t.TempDir()
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	_, err = markdownFilesInDir(rootFS, "absent", "docs/../absent")
+	if err == nil {
+		t.Fatal("markdownFilesInDir() error = nil, want a walk failure")
+	}
+	if !strings.HasPrefix(err.Error(), "walk docs/../absent:") {
+		t.Errorf("markdownFilesInDir() error = %v, want it to open with the caller's own spelling", err)
+	}
+}
+
+// TestDiscoverMarkdownFiles_SymlinkNamedMarkdown_PointingAtADirectoryIsSkipped
+// verifies that a link whose name ends in .md but which resolves to a directory
+// is left out of the file list.
+//
+// The directory entry a walk reads says "symlink", not "directory", so the walk
+// alone would hand it on to the formatter, which would then try to read a
+// directory as Markdown. The stat after it is what decides, and only a link
+// like this one makes that stat answer differently from the entry.
+func TestDiscoverMarkdownFiles_SymlinkNamedMarkdown_PointingAtADirectoryIsSkipped(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "docs", "real.md"), "# Real\n")
+	if err := os.MkdirAll(filepath.Join(root, "docs", "sub"), 0o750); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	if err := os.Symlink("sub", filepath.Join(root, "docs", "link.md")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	files, err := discoverMarkdownFiles(rootFS, root, []string{"docs"}, false)
+	if err != nil {
+		t.Fatalf("discoverMarkdownFiles() error: %v", err)
+	}
+	want := []string{filepath.Join("docs", "real.md")}
+	if !reflect.DeepEqual(files, want) {
+		t.Errorf("discoverMarkdownFiles() = %v, want %v", files, want)
+	}
+}
+
+// TestResolveInputPath_PathsLeavingTheRoot_AreRefused verifies both spellings a
+// path that leaves the root can take.
+//
+// The guard is two comparisons, and only one of them was exercised: the parent
+// directory itself resolves to exactly "..", while anything under it resolves
+// to a path with that prefix. A guard that tested only the prefix would admit
+// the parent directory, which is the one the defaults would then walk whole.
+func TestResolveInputPath_PathsLeavingTheRoot_AreRefused(t *testing.T) {
+	root := t.TempDir()
+	tests := []struct {
+		name string
+		item string
+	}{
+		{name: "the parent directory itself", item: ".."},
+		{name: "a file under the parent directory", item: filepath.Join("..", "outside.md")},
+		{name: "a path that climbs out and back", item: filepath.Join("docs", "..", "..", "outside.md")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := resolveInputPath(root, tt.item); err == nil ||
+				!strings.Contains(err.Error(), "escapes root") {
+				t.Errorf("resolveInputPath(%q) error = %v, want an escape refusal", tt.item, err)
+			}
+		})
+	}
+}
+
+// TestMarkdownFilesForInput_MissingPath_NamesTheCallersSpelling verifies the
+// stat failure quotes the argument as it was typed rather than the path it was
+// resolved to.
+//
+// The existing missing-path case names a file at the root, where the two
+// spellings are the same string; a path that cleans to something shorter is
+// what separates them, and the whole point of the message is to let a reader
+// find the bad argument in their own command line.
+func TestMarkdownFilesForInput_MissingPath_NamesTheCallersSpelling(t *testing.T) {
+	root := t.TempDir()
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	item := filepath.Join("docs", "..", "missing.md")
+	_, err = markdownFilesForInput(rootFS, root, item)
+	if err == nil {
+		t.Fatal("markdownFilesForInput() error = nil, want a stat failure")
+	}
+	if !strings.HasPrefix(err.Error(), "stat "+item+":") {
+		t.Errorf("markdownFilesForInput() error = %v, want it to open with %q", err, "stat "+item)
+	}
+}
+
+// TestRun_OnlyTheStaleFilesAreCountedAndListed verifies that the number the
+// command reports and the files it names are the same set, in check mode and
+// when formatting.
+//
+// A root holding one clean file beside two stale ones is what separates the two
+// counters: with every file stale, a summary counting the files discovered and
+// one counting the files changed print the same number, and a run that reported
+// "3 file(s)" over a list of two would read as correct.
+func TestRun_OnlyTheStaleFilesAreCountedAndListed(t *testing.T) {
+	stale := "| A | B |\n| --- | --- |\n| longer | x |\n"
+	clean := "# Clean\n"
+
+	stage := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "README.md"), stale)
+		writeTestFile(t, filepath.Join(root, "docs", "clean.md"), clean)
+		writeTestFile(t, filepath.Join(root, "docs", "stale.md"), stale)
+		return root
+	}
+
+	t.Run("check mode names the two stale files and no other", func(t *testing.T) {
+		root := stage(t)
+		var stdout bytes.Buffer
+		err := run([]string{"--root", root, "--check"}, &stdout)
+		if err == nil {
+			t.Fatal("run() error = nil, want a stale-table failure")
+		}
+		want := "markdown tables are out of date in 2 file(s): README.md, docs/stale.md"
+		if err.Error() != want {
+			t.Errorf("run() error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("formatting reports the two it rewrote and no other", func(t *testing.T) {
+		root := stage(t)
+		var stdout bytes.Buffer
+		if err := run([]string{"--root", root}, &stdout); err != nil {
+			t.Fatalf("run() error: %v", err)
+		}
+		want := "Formatted Markdown tables in 2 file(s):\n- README.md\n- docs/stale.md\n"
+		if stdout.String() != want {
+			t.Errorf("stdout = %q, want %q", stdout.String(), want)
+		}
+		if got := readTestFile(t, filepath.Join(root, "docs", "clean.md")); got != clean {
+			t.Errorf("docs/clean.md = %q, want it untouched", got)
+		}
+	})
 }
