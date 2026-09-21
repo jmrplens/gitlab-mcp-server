@@ -501,10 +501,10 @@ func surfaceSentence(surface Surface) string {
 // binding: an opening line can stay put while the paragraphs under it are
 // exchanged, and what a model does with a surface comes from those.
 //
-// Each marker is the thing that decides which surface the text is about — the
+// Each marker is the thing that decides which surface the text is about: the
 // two tools that are the only way into the catalog on the dynamic surface, the
 // dispatcher envelope that is the meta surface, and the sentence denying both
-// that is the individual one — so a rewording that keeps the meaning keeps the
+// that is the individual one. So a rewording that keeps the meaning keeps the
 // marker, and one that moves the meaning to another surface fails here.
 func TestContract_TellsEachSurfaceItsOwnMechanism(t *testing.T) {
 	const (

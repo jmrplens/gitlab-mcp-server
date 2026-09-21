@@ -119,7 +119,7 @@ func TestRetired_CoversTheTwoClassesTheMoveCouldDecide(t *testing.T) {
 // two that are carried by entries can have their spellings exchanged and all of
 // them still pass: the counts above are read through the same constants they
 // were written with. What changes is only what a reader gets, and it is the one
-// thing the table exists for — MT-201 would answer "simulated-result" for a
+// thing the table exists for: MT-201 would answer "simulated-result" for a
 // case whose whole reason for retiring was that it called a tool no client
 // registers.
 //

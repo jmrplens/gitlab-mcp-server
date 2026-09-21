@@ -422,7 +422,7 @@ func TestWalkFiles_NestedCheckoutBelowASymlinkedRoot_IsPruned(t *testing.T) {
 // branch a filesystem the tests own never produces: a root whose symlink
 // resolves and whose target then refuses to be stated. Resolution has already
 // succeeded there, so the answer cannot be an error, and it must not be a nil
-// dereference either — the walk falls back to the link itself, exactly as it
+// dereference either: the walk falls back to the link itself, exactly as it
 // does for a link to a plain file.
 func TestWalkFiles_SymlinkedRootThatCannotBeStated_IsWalkedAsTheLink(t *testing.T) {
 	base := t.TempDir()

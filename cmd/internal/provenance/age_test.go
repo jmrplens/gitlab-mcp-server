@@ -113,7 +113,7 @@ func TestDays_AnAgeInHours_TruncatesToWholeDays(t *testing.T) {
 // both of its edges: a record taken inside the window adds no problem to the
 // ones its command found for itself, and neither edge is outside it. Both
 // refusals are written as strict comparisons, so either one loosened by an
-// instant would refuse a record it was meant to accept — the one taken as the
+// instant would refuse a record it was meant to accept: the one taken as the
 // gate reads it as a regeneration that has not happened, the one exactly
 // [MaxAge] old as one that has aged out.
 //

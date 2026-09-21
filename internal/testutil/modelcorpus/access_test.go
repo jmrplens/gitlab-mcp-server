@@ -604,8 +604,8 @@ func digestOf(one Case) string {
 // Nothing here is a mutant a gate could report: dropping a printf argument
 // flips no operator and removes no branch.
 //
-// Two of the rows are shapes no real case may have — a step carrying both an
-// action and a standalone tool, an argument carrying two truths — because the
+// Two of the rows are shapes no real case may have (a step carrying both an
+// action and a standalone tool, an argument carrying two truths) because the
 // question is which fields the fold reads, and holding each row to one field's
 // difference is what makes the answer per field rather than per shape.
 func TestDigest_MovesForEveryFieldACaseDeclares(t *testing.T) {

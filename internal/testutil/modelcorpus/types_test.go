@@ -692,8 +692,8 @@ func TestSurfaces_AreTheThreeTheContractsCover(t *testing.T) {
 //
 // Nothing else here can see that join: this package is untagged and cannot
 // import the harness, the contract table is keyed by these same constants, and
-// the whole suite stays green with the meta and individual spellings exchanged
-// — which would run every meta-restricted case on the individual surface, and
+// the whole suite stays green with the meta and individual spellings
+// exchanged, which would run every meta-restricted case on the individual surface, and
 // introduce it with the wrong contract, in a run that costs money to take. The
 // server's own names are the oracle rather than a second copy of the literals.
 func TestSurfaces_AreSpelledAsTheServerSpellsThem(t *testing.T) {

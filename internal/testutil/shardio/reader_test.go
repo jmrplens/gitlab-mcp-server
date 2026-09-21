@@ -209,7 +209,7 @@ func TestRead_ReportsALineItCannotRead(t *testing.T) {
 // and can hold thousands, so an error that names the file and not the line says
 // only that the run is unreadable. A blank line is skipped rather than counted,
 // because the writer ends every line with a newline and the last one therefore
-// reads as empty — which is exactly what makes a counter of records rather than
+// reads as empty, which is exactly what makes a counter of records rather than
 // of lines read correctly on a shard with nothing skipped and send a reader to
 // the wrong line on every other one. Both branches are driven because they hold
 // the same number and were not written together.
