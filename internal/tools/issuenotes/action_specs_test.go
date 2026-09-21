@@ -119,7 +119,7 @@ func TestActionSpecs_Classification_MatchesTheActionItRoutes(t *testing.T) {
 // TestActionSpecs_ParameterGuidance_DescribesTheParameterItIsKeyedBy holds each
 // guidance block against the key it hangs from. TestActionSpecs_DiscoveryMetadata
 // above only asks whether a key is present, so until this test the three shared
-// blocks could trade places in a map literal and nothing failed — and crossing
+// blocks could trade places in a map literal and nothing failed, and crossing
 // issue_iid with note_id tells a model to put the comment ID where the issue
 // number goes, which is a 404 it has no way to read as its own mistake.
 // The two body blocks are checked

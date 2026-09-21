@@ -240,7 +240,7 @@ func sentBody(t *testing.T, response string, call func(*gitlabclient.Client) err
 // The tests this replaced looked for the timestamp anywhere in the request,
 // which the two fields trading places satisfies just as well: both are
 // optional strings on the input, so a handler sending the timestamp as the
-// note's text and the text as the backdate passed — the note would read
+// note's text and the text as the backdate passed: the note would read
 // "2025-01-01T00:00:00Z" and the backdate would be dropped as unparseable.
 // Neither gate can see it, because swapping two assignments changes no branch.
 func TestHandlers_SendTheBodyAndTheBackdateApart(t *testing.T) {
@@ -584,7 +584,7 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 }
 
 // TestFormatNoteMarkdownString_Populated renders one note and asserts the card
-// whole — heading, author, time, body and the two hints in order — because a
+// whole (heading, author, time, body and the two hints in order) because a
 // card assembled from the right pieces in the wrong places passes every
 // substring check.
 func TestFormatNoteMarkdownString_Populated(t *testing.T) {
@@ -916,7 +916,7 @@ func TestToListOutput_EmptyList(t *testing.T) {
 // the error must be [context.Canceled] itself rather than an operation-signed
 // wrap. The second half is what the tests this replaced were missing: they
 // asserted only that some error came back, which a handler that skipped the
-// guard would produce anyway — the transport refuses a canceled request on its
+// guard would produce anyway: the transport refuses a canceled request on its
 // own, and the handler would then report it as a GitLab failure, telling the
 // caller its issue or thread could not be found when the call was simply
 // abandoned.
@@ -1054,7 +1054,7 @@ func statusClient(t *testing.T, code int) *gitlabclient.Client {
 // TestHandlers_APIError_CarryTheirOwnOperationAndHint asserts what a caller
 // actually reads when GitLab refuses: the error opens with the operation that
 // made the call, and it carries that handler's own suggestion at the status
-// that handler classifies — 404 for the four reads and writes that can be
+// that handler classifies: 404 for the four reads and writes that can be
 // pointed at the wrong project, issue or thread, 403 for the two note actions
 // GitLab refuses on authorship.
 //

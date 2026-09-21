@@ -722,8 +722,8 @@ func TestDecorateKeyMeta_EntryFillsNothing_LeavesEveryGenericOptionAlone(t *test
 // output by the key ID only that endpoint's answer carries.
 //
 // The name is asserted because nothing else in the package reads it. Crossing
-// the two names over their routes — registering user.key_get_by_fingerprint
-// for the by-ID handler and the reverse — compiles, leaves both IDs resolvable
+// the two names over their routes (registering user.key_get_by_fingerprint
+// for the by-ID handler and the reverse) compiles, leaves both IDs resolvable
 // in the catalog, and kept the whole suite green. keys_catalog_test.go cannot
 // see it either: it asks whether a published ID resolves, and after the
 // crossing both still do. An ID that resolves to the wrong handler is worse

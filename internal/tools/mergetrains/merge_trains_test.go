@@ -121,7 +121,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 // The distinctness is the point. The fixture it replaced gave the car and its
 // user the id 1 and gave the car's status and the merge request's state both
 // "merged", so a converter reading either from its neighbor produced exactly
-// the same output — a defect no mutation of a branch and no condition counter
+// the same output, a defect no mutation of a branch and no condition counter
 // can see, because a straight-line assignment has neither.
 const populatedTrainJSON = `{"id":1,` +
 	`"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug",` +
@@ -501,7 +501,7 @@ func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 // Setting them together and checking each key is present cannot: every one is a
 // pointer written under a guard of its own, so two guards filling each other's
 // field send exactly the same body when both flags are true. The empty case is
-// the other half of the claim — client-go omits every option nobody set, so no
+// the other half of the claim: client-go omits every option nobody set, so no
 // value is sent that the caller never asked to send.
 func TestAddMergeRequestToMergeTrain_Options(t *testing.T) {
 	tests := []struct {

@@ -959,8 +959,8 @@ func TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
 				got := refusalMessage(t, r.hinted, r.call)
 				assertRefusalOperation(t, got, r.operation)
 				// The trailing colon is the boundary the wrapper writes before
-				// the cause, so a hint that is a prefix of a sibling's — edit's
-				// is exactly get's, shorter — cannot pass for it.
+				// the cause, so a hint that is a prefix of a sibling's (edit's
+				// is exactly get's, shorter) cannot pass for it.
 				if want := "Suggestion: " + r.hint + ":"; !strings.Contains(got, want) {
 					t.Errorf("error %q does not carry %q", got, want)
 				}

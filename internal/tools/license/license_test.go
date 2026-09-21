@@ -251,7 +251,7 @@ func TestGet_Error(t *testing.T) {
 //
 // The status a handler pairs its hint with is a constant in a straight-line
 // call, so neither gate can be wrong about it, and the tests here asserted only
-// that some error came back — which every branch of WrapErrWithStatusHint
+// that some error came back, which every branch of WrapErrWithStatusHint
 // returns. Verified by hand, by changing the status this handler names to
 // http.StatusNotFound, which the suite passed.
 func TestGet_TheAdministratorAdviceGoesWithTheForbidden(t *testing.T) {
@@ -669,7 +669,7 @@ func TestFormatAddMarkdown_Coverage(t *testing.T) {
 // action", and neither is a name any surface resolves: the canonical IDs carry
 // the admin domain, the individual tools are called gitlab_add_license and
 // gitlab_metadata, and a model following the hint verbatim is answered
-// "unknown action". Nothing sees this on its own — a hint is a string, so
+// "unknown action". Nothing sees this on its own: a hint is a string, so
 // neither gate has a branch to flip, and cmd/audit_action_ids reads the
 // catalog metadata rather than a handler's prose.
 func TestGet_NoLicenseInstalled(t *testing.T) {

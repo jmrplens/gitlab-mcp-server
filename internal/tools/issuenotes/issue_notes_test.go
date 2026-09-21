@@ -577,7 +577,7 @@ func TestFormatOutputMarkdown_ResolvableUnresolved(t *testing.T) {
 // tests beside it set System and Internal both false, so until this test
 // crossing them in toNoteMarkdown passed the whole suite while every system
 // note rendered as an internal one and every internal note as a system note.
-// Neither gate can see it — the crossing is a straight-line assignment with no
+// Neither gate can see it: the crossing is a straight-line assignment with no
 // branch to flip.
 // Reading a public comment as internal is the half that misleads a user about
 // who can see what they wrote.

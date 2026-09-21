@@ -309,8 +309,8 @@ func TestActionSpecs_ScopeEnum(t *testing.T) {
 }
 
 // TestActionIDConstants_AreTheIDsTheSpecsRegister holds both blocks of
-// canonical action IDs this package keeps — the one markdown.go builds its
-// hints from and the one action_specs.go names related actions with — to the
+// canonical action IDs this package keeps (the one markdown.go builds its
+// hints from and the one action_specs.go names related actions with) to the
 // IDs [ActionSpecs] really registers, and to each other.
 //
 // A dotted ID is a string literal, so no mutation of a branch and no condition

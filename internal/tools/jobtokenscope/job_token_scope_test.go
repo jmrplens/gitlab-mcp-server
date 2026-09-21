@@ -71,7 +71,7 @@ func assertAddressed(t *testing.T, got capturedRequest, method, path string) {
 
 // TestGetAccessSettings_Success reads the settings both ways. The whole answer
 // of this action is one boolean, and a fixture that only ever says true cannot
-// tell a handler reading GitLab's flag from one returning a constant — which
+// tell a handler reading GitLab's flag from one returning a constant, which
 // would report every project as restricted, including the ones open to any job
 // token.
 func TestGetAccessSettings_Success(t *testing.T) {
@@ -548,7 +548,7 @@ func TestGetAccessSettings_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PatchAccessSettings — canceled context
+// PatchAccessSettings: canceled context
 // ---------------------------------------------------------------------------.
 
 // TestPatchAccessSettings_CancelledContext verifies PatchAccessSettings when cancelled context.
@@ -562,7 +562,7 @@ func TestPatchAccessSettings_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListInboundAllowlist — canceled context, pagination
+// ListInboundAllowlist: canceled context, pagination
 // ---------------------------------------------------------------------------.
 
 // TestListInboundAllowlist_CancelledContext verifies ListInboundAllowlist when cancelled context.
@@ -654,7 +654,7 @@ func TestListInboundAllowlist_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AddProjectAllowlist — canceled context
+// AddProjectAllowlist: canceled context
 // ---------------------------------------------------------------------------.
 
 // TestAddProjectAllowlist_CancelledContext verifies AddProjectAllowlist when cancelled context.
@@ -682,7 +682,7 @@ func TestRemoveProjectAllowlist_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ListGroupAllowlist — canceled context, pagination, empty
+// ListGroupAllowlist: canceled context, pagination, empty
 // ---------------------------------------------------------------------------.
 
 // TestListGroupAllowlist_CancelledContext verifies ListGroupAllowlist when cancelled context.
@@ -771,7 +771,7 @@ func TestListGroupAllowlist_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AddGroupAllowlist — canceled context
+// AddGroupAllowlist: canceled context
 // ---------------------------------------------------------------------------.
 
 // TestAddGroupAllowlist_CancelledContext verifies AddGroupAllowlist when cancelled context.
@@ -785,7 +785,7 @@ func TestAddGroupAllowlist_CancelledContext(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// RemoveGroupAllowlist — canceled context
+// RemoveGroupAllowlist: canceled context
 // ---------------------------------------------------------------------------.
 
 // TestRemoveGroupAllowlist_CancelledContext verifies RemoveGroupAllowlist when cancelled context.

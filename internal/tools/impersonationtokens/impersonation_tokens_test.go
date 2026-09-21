@@ -1200,7 +1200,7 @@ func TestCreateHandlers_TheBodyGitLabReceives_CarriesWhatTheCallerGave(t *testin
 // status is an argument rather than a branch of this package, so a handler
 // hinting on 404 where its endpoint refuses with 403 keeps returning an error
 // and the error tests beside this one, which read only the operation name, keep
-// passing — while the model loses the one sentence saying what to do next.
+// passing, while the model loses the one sentence saying what to do next.
 func TestHandlers_TheHintedStatus_IsTheOneItsEndpointRefusesWith(t *testing.T) {
 	cases := []struct {
 		name   string

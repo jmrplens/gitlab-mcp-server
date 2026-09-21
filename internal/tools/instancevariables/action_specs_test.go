@@ -214,7 +214,7 @@ func TestInstanceVariableActionSpecs_AllCarryActionSpecificMetadata(t *testing.T
 // action, which nothing else here can: crossing the get and create labels
 // leaves both actions carrying action-specific metadata, so the test above is
 // still satisfied, and both keep naming real catalog IDs, so the catalog test
-// is too. What gives it away is that the metadata then points home — the get
+// is too. What gives it away is that the metadata then points home: the get
 // action offering ci_variable.instance_get, which is where the model already
 // is. A self-link is a dead loop whatever put it there, so this states the
 // invariant rather than repeating the five curated lists.
