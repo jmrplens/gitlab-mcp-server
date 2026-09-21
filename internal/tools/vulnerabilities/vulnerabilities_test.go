@@ -20,6 +20,7 @@ const sampleVulnNode = `{
   "title": "SQL Injection in login",
   "severity": "CRITICAL",
   "state": "DETECTED",
+  "webUrl": "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42",
   "reportType": "SAST",
   "detectedAt": "2026-01-15T10:00:00Z",
   "dismissedAt": null,
@@ -33,7 +34,8 @@ const sampleVulnNode = `{
   },
   "scanner": {
     "name": "semgrep",
-    "vendor": "GitLab"
+    "vendor": "GitLab",
+    "externalId": "semgrep-sast"
   },
   "location": {
     "file": "app/controllers/sessions_controller.rb",
@@ -48,6 +50,7 @@ const sampleVulnGetNode = `{
   "title": "SQL Injection in login",
   "severity": "CRITICAL",
   "state": "DETECTED",
+  "webUrl": "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42",
   "description": "User input is concatenated into SQL query without sanitization.",
   "reportType": "SAST",
   "detectedAt": "2026-01-15T10:00:00Z",
@@ -69,7 +72,8 @@ const sampleVulnGetNode = `{
   ],
   "scanner": {
     "name": "semgrep",
-    "vendor": "GitLab"
+    "vendor": "GitLab",
+    "externalId": "semgrep-sast"
   },
   "location": {
     "file": "app/controllers/sessions_controller.rb",
@@ -91,6 +95,7 @@ const sampleMutationVuln = `{
   "title": "SQL Injection in login",
   "severity": "CRITICAL",
   "state": "DISMISSED",
+  "webUrl": "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42",
   "reportType": "SAST",
   "detectedAt": "2026-01-15T10:00:00Z",
   "dismissedAt": "2026-02-01T12:00:00Z",
@@ -105,7 +110,8 @@ const sampleMutationVuln = `{
   },
   "scanner": {
     "name": "semgrep",
-    "vendor": "GitLab"
+    "vendor": "GitLab",
+    "externalId": "semgrep-sast"
   }
 }`
 
@@ -478,11 +484,15 @@ func TestGet_Success(t *testing.T) {
 	if !v.HasMR {
 		t.Error("expected HasMR=true (mergeRequest present)")
 	}
+	if v.WebURL != "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42" {
+		t.Errorf("WebURL = %q, want the vulnerability's own page", v.WebURL)
+	}
 	if v.Scanner == nil {
 		t.Fatal("expected a scanner")
 	}
-	if *v.Scanner != (ScannerItem{Name: "semgrep", Vendor: "GitLab"}) {
-		t.Errorf("Scanner = %+v, want {semgrep GitLab}", *v.Scanner)
+	wantScanner := ScannerItem{Name: "semgrep", Vendor: "GitLab", ScannerID: "semgrep-sast"}
+	if *v.Scanner != wantScanner {
+		t.Errorf("Scanner = %+v, want %+v", *v.Scanner, wantScanner)
 	}
 	if v.Location == nil {
 		t.Fatal("expected a location")
@@ -552,6 +562,75 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
+// TestGet_EveryAddressLandsInItsOwnFieldAndTheCardLinksTheVulnerability pins
+// where the addresses a vulnerability carries end up.
+//
+// web_url was declared on the output type and rendered as the card's URL row
+// while no document selected webUrl at all, so the field was always empty and
+// the card offered no link to the vulnerability: the one thing a reader wants
+// most. Every address in the fixture is distinct, so a field filled from the
+// one beside it (the blob path, an identifier's page) fails here instead of
+// reading as correct.
+func TestGet_EveryAddressLandsInItsOwnFieldAndTheCardLinksTheVulnerability(t *testing.T) {
+	const (
+		webURL     = "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/77"
+		blobPath   = "/my-group/my-project/-/blob/main/app/models/user.rb"
+		primaryURL = "https://cwe.mitre.org/data/definitions/89.html"
+		secondURL  = "https://nvd.nist.gov/vuln/detail/CVE-2026-1234"
+	)
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerability(id": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"vulnerability": {
+					"id": "gid://gitlab/Vulnerability/77",
+					"title": "SQL Injection in login",
+					"severity": "CRITICAL",
+					"state": "DETECTED",
+					"webUrl": "`+webURL+`",
+					"reportType": "SAST",
+					"detectedAt": "2026-01-15T10:00:00Z",
+					"primaryIdentifier": {"name": "CWE-89", "externalType": "cwe", "externalId": "89", "url": "`+primaryURL+`"},
+					"identifiers": [
+						{"name": "CWE-89", "externalType": "cwe", "externalId": "89", "url": "`+primaryURL+`"},
+						{"name": "CVE-2026-1234", "externalType": "cve", "externalId": "CVE-2026-1234", "url": "`+secondURL+`"}
+					],
+					"scanner": {"name": "semgrep", "vendor": "GitLab", "externalId": "semgrep-sast"},
+					"location": {"file": "app/models/user.rb", "startLine": "12", "endLine": "12", "blobPath": "`+blobPath+`"}
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	out, err := Get(context.Background(), client, GetInput{ID: "gid://gitlab/Vulnerability/77"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+
+	v := out.Vulnerability
+	if v.WebURL != webURL {
+		t.Errorf("WebURL = %q, want %q", v.WebURL, webURL)
+	}
+	if v.Location == nil || v.Location.BlobPath != blobPath {
+		t.Errorf("Location = %+v, want the blob path %q", v.Location, blobPath)
+	}
+	if v.PrimaryID == nil || v.PrimaryID.URL != primaryURL {
+		t.Errorf("PrimaryID = %+v, want the identifier page %q", v.PrimaryID, primaryURL)
+	}
+	if len(v.Identifiers) != 2 || v.Identifiers[1].URL != secondURL {
+		t.Errorf("Identifiers = %+v, want the second one at %q", v.Identifiers, secondURL)
+	}
+	if v.Scanner == nil || v.Scanner.ScannerID != "semgrep-sast" {
+		t.Errorf("Scanner = %+v, want the report's scanner id semgrep-sast", v.Scanner)
+	}
+
+	card := FormatGetMarkdown(out)
+	wantRow := "- **URL**: [" + webURL + "](" + webURL + ")\n"
+	if !strings.Contains(card, wantRow) {
+		t.Errorf("card is missing the URL row %q:\n%s", wantRow, card)
+	}
+}
+
 // Dismiss tests.
 
 // TestDismiss_Success verifies that dismissing a vulnerability sends the id,
@@ -611,6 +690,11 @@ func TestDismiss_Success(t *testing.T) {
 	}
 	if out.Vulnerability.DismissedAt != "2026-02-01T12:00:00Z" {
 		t.Errorf("DismissedAt = %q, want %q", out.Vulnerability.DismissedAt, "2026-02-01T12:00:00Z")
+	}
+	// The mutations answer with the same node the get answers with, so the
+	// dismissal confirmation links the vulnerability a triager just acted on.
+	if out.Vulnerability.WebURL != "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42" {
+		t.Errorf("WebURL = %q, want the vulnerability's own page", out.Vulnerability.WebURL)
 	}
 }
 
@@ -936,6 +1020,51 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
+// TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept verifies the
+// other side of the same decision: a row GitLab sent an address for renders
+// the title as a link to the vulnerability's own page, and the footer then
+// carries the instruction to keep it.
+//
+// The pair matters because the instruction and the link have to move together.
+// webUrl was declared on the output type and selected by no document until
+// issue 876, so the table had no link to keep and said so; the footer is read
+// off the rows now rather than fixed, and this is the case that says the read
+// answers yes. The whole render is compared, so the link landing in the wrong
+// column fails here rather than reading as correct.
+func TestFormatListMarkdown_LinksTheTitleAndAsksForTheLinksToBeKept(t *testing.T) {
+	const webURL = "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/1"
+	out := ListOutput{
+		Vulnerabilities: []Item{
+			{
+				ID:         "gid://gitlab/Vulnerability/1",
+				Title:      "SQL Injection",
+				Severity:   "CRITICAL",
+				State:      "DETECTED",
+				ReportType: "SAST",
+				DetectedAt: "2026-01-15T10:00:00Z",
+				WebURL:     webURL,
+				Scanner:    &ScannerItem{Name: "semgrep"},
+				PrimaryID:  &IdentifierItem{Name: "CWE-89"},
+			},
+		},
+	}
+
+	want := "## Vulnerabilities (1)\n\n" +
+		"| ID | Severity | Title | State | Scanner | Report Type | Detected |\n" +
+		"| --- | --- | --- | --- | --- | --- | --- |\n" +
+		"| `gid://gitlab/Vulnerability/1` | 🔴 CRITICAL | [SQL Injection (CWE-89)](" + webURL + ") | DETECTED | semgrep | SAST | 15 Jan 2026 10:00 UTC |\n\n" +
+		"Showing 1 items | no more pages\n" +
+		"\n---\n💡 **Next steps:**\n" +
+		"- When presenting these results, always include the clickable [text](url) links from the table so the user can navigate to GitLab\n" +
+		"- Use action 'vulnerability.get' to read one vulnerability in full, naming the ID above\n" +
+		"- Use action 'vulnerability.severity_count' to see how many vulnerabilities the project has at each severity\n" +
+		"- Use action 'security_finding.list' to read the findings one pipeline's scanners reported\n"
+
+	if got := FormatListMarkdown(out); got != want {
+		t.Errorf("FormatListMarkdown() =\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // TestFormatListMarkdown_TitleAndPrimaryIdentifier verifies which identifier
 // earns a place beside the title in a list row.
 //
@@ -1042,6 +1171,7 @@ func TestFormatGetMarkdown(t *testing.T) {
 				{Name: "CWE-89", ExternalType: "cwe", ExternalID: "89"},
 			},
 			Project:  &ProjectItem{FullPath: "my-group/my-project"},
+			WebURL:   "https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42",
 			Solution: "Use prepared statements",
 		},
 	}
@@ -1060,6 +1190,8 @@ func TestFormatGetMarkdown(t *testing.T) {
 		"- **Has Remediations**: ❌\n" +
 		"- **Project**:\n" +
 		"  - **Full Path**: my-group/my-project\n" +
+		"- **URL**: [https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42]" +
+		"(https://gitlab.example.com/my-group/my-project/-/security/vulnerabilities/42)\n" +
 		"- **Solution**: Use prepared statements\n" +
 		"- **Description**: A serious vulnerability\n\n" +
 		"### Identifiers\n\n" +
