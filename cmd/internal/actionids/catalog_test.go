@@ -3,6 +3,10 @@ package actionids
 import (
 	"slices"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/mcpsurface"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v3/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/tools/actioncompat"
 )
 
 // buildTestIDs builds the real catalog once for the assertions below.
@@ -90,6 +94,87 @@ func TestBuild_EveryAlias_IsNotAlsoAnID(t *testing.T) {
 		if ids.IsID(alias) {
 			t.Errorf("%q is recorded as both a catalog ID and an alias", alias)
 		}
+	}
+}
+
+// TestBuild_EachClientCatalog_IsFoldedIntoTheUnion holds why Build runs twice.
+// Nothing observes the loss of one build while the GitLab.com catalog covers
+// the self-managed one, so the union is stated here as a property rather than
+// left to a count: the day an action is gated the other way, this is what
+// fails.
+func TestBuild_EachClientCatalog_IsFoldedIntoTheUnion(t *testing.T) {
+	union := buildTestIDs(t)
+
+	selfManaged, cleanup := mcpsurface.NewStubClient()
+	defer cleanup()
+	for name, client := range map[string]*gitlabclient.Client{
+		"self-managed": selfManaged,
+		"gitlab.com":   mcpsurface.NewGitLabComClient(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			catalog, err := catalogFor(client)
+			if err != nil {
+				t.Fatalf("catalogFor: %v", err)
+			}
+			actions := catalog.Actions()
+			if len(actions) == 0 {
+				t.Fatal("this build contributed no actions, so the union would be built from nothing")
+			}
+			for _, action := range actions {
+				if !union.IsID(string(action.ID)) {
+					t.Errorf("IsID(%q) = false, want every action of this build in the union", action.ID)
+				}
+			}
+		})
+	}
+}
+
+// TestBuild_EveryCatalogActionID_IsNonEmpty holds the property that makes
+// addCatalog's empty-ID guard unreachable: the catalog composes an ID from a
+// domain and a required action name, so nothing it hands over normalizes away
+// and no alias is ever recorded against nothing.
+func TestBuild_EveryCatalogActionID_IsNonEmpty(t *testing.T) {
+	selfManaged, cleanup := mcpsurface.NewStubClient()
+	defer cleanup()
+
+	catalog, err := catalogFor(selfManaged)
+	if err != nil {
+		t.Fatalf("catalogFor: %v", err)
+	}
+	for _, action := range catalog.Actions() {
+		if Normalize(string(action.ID)) == "" {
+			t.Errorf("action %q of tool %q has an ID that normalizes to nothing", action.Name, action.ToolName)
+		}
+	}
+}
+
+// TestBuild_EveryCompatibilityAlias_ResolvesToItsCanonical holds the oracle's
+// claim about the historical aliases: each one resolves, and what it resolves
+// to is an action the catalog really holds. The catalog and Build record these
+// twice over, so the property is asserted rather than either path.
+func TestBuild_EveryCompatibilityAlias_ResolvesToItsCanonical(t *testing.T) {
+	ids := buildTestIDs(t)
+
+	aliases := actioncompat.ActionAliases()
+	if len(aliases) == 0 {
+		t.Fatal("the compatibility table is empty, so this test asserts nothing")
+	}
+	for _, alias := range aliases {
+		t.Run(alias.Alias, func(t *testing.T) {
+			if !ids.IsID(alias.Canonical) {
+				t.Errorf("%q names canonical %q, which the catalog does not hold", alias.Alias, alias.Canonical)
+			}
+			if ids.IsID(alias.Alias) {
+				return
+			}
+			canonical, isAlias := ids.Alias(alias.Alias)
+			if !isAlias {
+				t.Fatalf("Alias(%q) = false, want the compatibility table's alias", alias.Alias)
+			}
+			if canonical != Normalize(alias.Canonical) {
+				t.Errorf("Alias(%q) = %q, want %q", alias.Alias, canonical, Normalize(alias.Canonical))
+			}
+		})
 	}
 }
 
@@ -192,6 +277,76 @@ func TestIDs_AddAlias_KeepsTheFirstTarget(t *testing.T) {
 	}
 }
 
+// TestIDs_AddID_MalformedID_RecordsNoHalves holds what the prose rule is
+// allowed to filter on. A value with no separator, or with an empty half, is
+// still kept as an ID because the catalog gave it, and contributes nothing to
+// the domain and member sets: admitting "nodot" as a domain would make every
+// bare word in a sentence read as a cross-link.
+func TestIDs_AddID_MalformedID_RecordsNoHalves(t *testing.T) {
+	cases := []struct {
+		name      string
+		id        string
+		domain    string
+		member    string
+		hasDomain bool
+		hasMember bool
+	}{
+		{"no separator at all", "nodot", "nodot", "", false, false},
+		{"an empty domain half", ".get", "", "get", false, false},
+		{"an empty member half", "demo.", "demo", "", true, false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ids := New([]string{testCase.id}, nil)
+
+			if !ids.IsID(testCase.id) {
+				t.Fatalf("IsID(%q) = false, want the value the catalog gave", testCase.id)
+			}
+			if got := ids.HasDomain(testCase.domain); got != testCase.hasDomain {
+				t.Errorf("HasDomain(%q) = %t, want %t", testCase.domain, got, testCase.hasDomain)
+			}
+			if got := ids.HasMember(testCase.member); got != testCase.hasMember {
+				t.Errorf("HasMember(%q) = %t, want %t", testCase.member, got, testCase.hasMember)
+			}
+		})
+	}
+}
+
+// TestIDs_AddID_ReturnsTheNormalizedSpelling holds the contract addCatalog
+// reads: the returned spelling is what an action's aliases are recorded
+// against, so a value that arrives with capitals or spacing comes back the way
+// the dynamic registry resolves one, and a value that is no ID comes back
+// empty.
+func TestIDs_AddID_ReturnsTheNormalizedSpelling(t *testing.T) {
+	ids := New(nil, nil)
+
+	if got := ids.addID("  Demo.Update  "); got != "demo.update" {
+		t.Errorf("addID = %q, want demo.update", got)
+	}
+	if got := ids.addID("   "); got != "" {
+		t.Errorf("addID of a blank value = %q, want the empty string", got)
+	}
+}
+
+// TestIDs_AddAlias_TargetIsNormalized holds that what an alias resolves to is
+// spelled the way a canonical ID is. A caller puts the answer back through
+// IsID, so a target kept as it was written would miss on case or spacing and
+// read as a cross-link to nothing.
+func TestIDs_AddAlias_TargetIsNormalized(t *testing.T) {
+	ids := New([]string{"demo.first"}, map[string]string{"  Demo.Alias ": "  Demo.First  "})
+
+	canonical, isAlias := ids.Alias("demo.alias")
+	if !isAlias {
+		t.Fatal("Alias(demo.alias) = false, want the alias the set was built with")
+	}
+	if canonical != "demo.first" {
+		t.Errorf("Alias(demo.alias) = %q, want demo.first", canonical)
+	}
+	if !ids.IsID(canonical) {
+		t.Errorf("the resolved target %q is no canonical ID, so a caller could not follow it", canonical)
+	}
+}
+
 // TestIDs_AddCatalog_NilCatalog_IsNoBuild holds that a build that produced
 // nothing contributes nothing rather than panicking, since the union takes two
 // builds and either may be the one that failed to carry a group.
@@ -242,5 +397,69 @@ func TestIDs_Closest_NearMissAndDistantMiss(t *testing.T) {
 	}
 	if got := ids.Closest("unrelated.something_entirely_else"); got != "" {
 		t.Errorf("Closest for a distant ID = %q, want nothing", got)
+	}
+}
+
+// TestIDs_Closest_ADistanceEqualToTheBound_IsStillALead holds that the bound is
+// inclusive. A candidate exactly at it is the furthest one worth naming, and
+// dropping it would silence the lead a reader gets from a two-character typo,
+// which is the commonest one there is.
+func TestIDs_Closest_ADistanceEqualToTheBound_IsStillALead(t *testing.T) {
+	ids := New([]string{"demo.get"}, nil)
+
+	if got := ids.Closest("demo.g"); got != "demo.get" {
+		t.Errorf("Closest(demo.g) = %q, want demo.get at exactly the bound", got)
+	}
+}
+
+// TestIDs_Closest_TwoCandidatesWithinTheBound_PicksTheNearest holds both halves
+// of the comparison a second candidate goes through: a strictly nearer one
+// replaces the leader, and a tie keeps whichever the sorted list reached first,
+// which is what makes a suggestion the same on every run.
+func TestIDs_Closest_TwoCandidatesWithinTheBound_PicksTheNearest(t *testing.T) {
+	cases := []struct {
+		name string
+		ids  []string
+		id   string
+		want string
+	}{
+		{"a later candidate that is strictly nearer wins", []string{"demo.aet", "demo.get"}, "demo.get", "demo.get"},
+		{"a tie keeps the first in sorted order", []string{"demo.aget", "demo.bget"}, "demo.xget", "demo.aget"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := New(testCase.ids, nil).Closest(testCase.id); got != testCase.want {
+				t.Errorf("Closest(%q) = %q, want %q", testCase.id, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestEditDistance_KnownDistances_AreLevenshtein holds the measure Closest
+// ranks by against distances that are the same in any textbook. Every
+// suggestion the two gates print rests on it, and a wrong distance is silent:
+// nothing downstream can tell one from a catalog that really lacks the ID.
+func TestEditDistance_KnownDistances_AreLevenshtein(t *testing.T) {
+	cases := []struct {
+		name  string
+		left  string
+		right string
+		want  int
+	}{
+		{"both empty", "", "", 0},
+		{"everything inserted", "", "abc", 3},
+		{"everything deleted", "abc", "", 3},
+		{"identical", "abc", "abc", 0},
+		{"one substitution", "a", "b", 1},
+		{"kitten and sitting", "kitten", "sitting", 3},
+		{"flaw and lawn", "flaw", "lawn", 2},
+		{"an action ID missing one letter", "issue.list", "issue.lst", 1},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := editDistance(testCase.left, testCase.right); got != testCase.want {
+				t.Errorf("editDistance(%q, %q) = %d, want %d", testCase.left, testCase.right, got, testCase.want)
+			}
+		})
 	}
 }
