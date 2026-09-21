@@ -1,10 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"regexp"
-	"sort"
+	"slices"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
 )
@@ -166,18 +167,14 @@ func (h *HintReport) finish(declarationsJudged bool) {
 	if declarationsJudged {
 		h.StaleDeclarations = staleHintDeclarations(h.usedToolExemptions)
 	}
-	sort.Slice(h.Rows, func(i, j int) bool {
-		if h.Rows[i].Package != h.Rows[j].Package ||
-			h.Rows[i].File != h.Rows[j].File ||
-			h.Rows[i].Line != h.Rows[j].Line {
-			return lessPosition(h.Rows[i].Package, h.Rows[i].File, h.Rows[i].Line,
-				h.Rows[j].Package, h.Rows[j].File, h.Rows[j].Line)
-		}
-		return h.Rows[i].Name < h.Rows[j].Name
+	slices.SortFunc(h.Rows, func(left, right HintFinding) int {
+		return cmp.Or(
+			comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line),
+			cmp.Compare(left.Name, right.Name),
+		)
 	})
-	sort.Slice(h.NotFolded, func(i, j int) bool {
-		return lessPosition(h.NotFolded[i].Package, h.NotFolded[i].File, h.NotFolded[i].Line,
-			h.NotFolded[j].Package, h.NotFolded[j].File, h.NotFolded[j].Line)
+	slices.SortFunc(h.NotFolded, func(left, right Unresolved) int {
+		return comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line)
 	})
 	packages := map[string]struct{}{}
 	for _, row := range h.Rows {

@@ -220,10 +220,14 @@ func TestFixHints_AToolTheCatalogDoesNotPublish_IsReportedNotGuessed(t *testing.
 	}
 }
 
-// TestFixHints_SitesThatAreNotFoldedHints_SelectNoPackage holds the two
-// filters the walk's own record is read through: a site of another kind and a
-// hint the type checker could not fold both leave the package alone, because
-// neither says what text to look for.
+// TestFixHints_SitesThatAreNotFoldedHints_SelectNoPackage holds the filter the
+// walk's own record is read through, one term at a time.
+//
+// Each case fails exactly one term and satisfies the other three, which is
+// what makes every term decide something a caller can see. A case failing two
+// at once would let either of them be dropped without anything noticing, which
+// is how this filter came to have four mutants no test could kill: it used to
+// be applied twice, and the second application hid the first.
 func TestFixHints_SitesThatAreNotFoldedHints_SelectNoPackage(t *testing.T) {
 	const hint = "verify demo_id with gitlab_fetch_demo first"
 	for _, testCase := range []struct {
@@ -231,8 +235,9 @@ func TestFixHints_SitesThatAreNotFoldedHints_SelectNoPackage(t *testing.T) {
 		at   site
 	}{
 		{name: "another kind", at: site{Package: "demo", File: "demo/demo.go", Kind: kindRelated, Value: hint, Resolved: true}},
-		{name: "not folded", at: site{Package: "demo", File: "demo/demo.go", Kind: kindErrorHint, Expr: "buildHint(x)"}},
+		{name: "not folded", at: site{Package: "demo", File: "demo/demo.go", Kind: kindErrorHint, Value: hint}},
 		{name: "no package", at: site{File: "demo/demo.go", Kind: kindErrorHint, Value: hint, Resolved: true}},
+		{name: "no text", at: site{Package: "demo", File: "demo/demo.go", Kind: kindErrorHint, Resolved: true}},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			root := stagePackage(t, "demo", map[string]string{

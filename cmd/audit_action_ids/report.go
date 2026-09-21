@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v3/cmd/internal/actionids"
@@ -194,9 +193,8 @@ func (r *Report) judge(at site, candidate string, ids *actionids.IDs) {
 func (r *Report) finish() {
 	sortFindings(r.Findings)
 	sortFindings(r.AliasRefs)
-	sort.Slice(r.Unresolved, func(i, j int) bool {
-		return lessPosition(r.Unresolved[i].Package, r.Unresolved[i].File, r.Unresolved[i].Line,
-			r.Unresolved[j].Package, r.Unresolved[j].File, r.Unresolved[j].Line)
+	slices.SortFunc(r.Unresolved, func(left, right Unresolved) int {
+		return comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line)
 	})
 	packages := map[string]struct{}{}
 	for _, finding := range r.Findings {
@@ -242,26 +240,28 @@ func (r *Report) Clean() bool {
 // sortFindings orders findings by position, then by the ID, so two runs over
 // one tree produce the same file.
 func sortFindings(findings []Finding) {
-	sort.Slice(findings, func(i, j int) bool {
-		if findings[i].Package != findings[j].Package ||
-			findings[i].File != findings[j].File ||
-			findings[i].Line != findings[j].Line {
-			return lessPosition(findings[i].Package, findings[i].File, findings[i].Line,
-				findings[j].Package, findings[j].File, findings[j].Line)
-		}
-		return findings[i].ID < findings[j].ID
+	slices.SortFunc(findings, func(left, right Finding) int {
+		return cmp.Or(
+			comparePosition(left.Package, left.File, left.Line, right.Package, right.File, right.Line),
+			cmp.Compare(left.ID, right.ID),
+		)
 	})
 }
 
-// lessPosition orders two source positions.
-func lessPosition(leftPkg, leftFile string, leftLine int, rightPkg, rightFile string, rightLine int) bool {
-	if leftPkg != rightPkg {
-		return leftPkg < rightPkg
-	}
-	if leftFile != rightFile {
-		return leftFile < rightFile
-	}
-	return leftLine < rightLine
+// comparePosition orders two source positions: package, then file, then line.
+//
+// A comparison rather than a "less" predicate, and the difference is not
+// style. The predicate form reads "if the packages differ, return leftPkg <
+// rightPkg", and that < carries a boundary no input reaches: inside "they
+// differ", < and <= cannot be told apart. Mutation testing reported one
+// survivor per field that way, in this function and at every call site that
+// repeated its shape, and none of them was a test anybody could have written.
+func comparePosition(leftPkg, leftFile string, leftLine int, rightPkg, rightFile string, rightLine int) int {
+	return cmp.Or(
+		cmp.Compare(leftPkg, rightPkg),
+		cmp.Compare(leftFile, rightFile),
+		cmp.Compare(leftLine, rightLine),
+	)
 }
 
 // candidateIDs picks the strings one site offers a model as an action ID.

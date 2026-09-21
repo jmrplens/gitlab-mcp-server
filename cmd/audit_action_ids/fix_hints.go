@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,12 +75,9 @@ type hintFixReport struct {
 // a printer, so nothing else in the file moves.
 func fixHints(dir string, sites []site, ids *actionids.IDs, includeTests bool) (hintFixReport, error) {
 	report := hintFixReport{}
-	for _, pkg := range packagesWithHints(sites) {
-		values := hintValues(sites, pkg)
-		if len(values) == 0 {
-			continue
-		}
-		if err := fixHintsInPackage(dir, pkg, values, ids, includeTests, &report); err != nil {
+	packages, values := hintValuesByPackage(sites)
+	for _, pkg := range packages {
+		if err := fixHintsInPackage(dir, pkg, values[pkg], ids, includeTests, &report); err != nil {
 			return report, err
 		}
 	}
@@ -153,40 +152,35 @@ func hintProse(values []string) candidate {
 // token, and that one is a judgement each time: whether the sentence moved or
 // the name did is not something the text says.
 
-// packagesWithHints is every audited package that folded at least one hint,
-// in order, so a run rewrites the same files in the same order twice.
-func packagesWithHints(sites []site) []string {
-	seen := map[string]struct{}{}
-	var packages []string
-	for _, at := range sites {
-		if !isHintKind(at.Kind) || !at.Resolved || at.Package == "" {
-			continue
-		}
-		if _, recorded := seen[at.Package]; recorded {
-			continue
-		}
-		seen[at.Package] = struct{}{}
-		packages = append(packages, at.Package)
-	}
-	sort.Strings(packages)
-	return packages
-}
-
-// hintValues is every hint text one package folded.
+// hintValuesByPackage groups every hint text the walk folded under the package
+// it was written in, and returns the packages in order so a run rewrites the
+// same files in the same order twice.
 //
 // Package scope rather than file scope, because a hint is commonly a const
 // shared by a dozen handlers and the site the walk recorded is the call rather
 // than the declaration, which is in whichever file of the package its author
 // put it.
-func hintValues(sites []site, pkg string) []string {
-	var values []string
+//
+// One pass, and the reason is the rule rather than the cost. This was a pair of
+// functions, one choosing the packages and one collecting their values, and
+// both applied the same four-term filter. The second hid the first: a site the
+// package filter should have rejected was let through by a flipped operator,
+// collected no values, and was skipped one line later for having none, so
+// mutation testing reported four survivors no test could ever have killed.
+// With one filter each term decides something a caller can see.
+func hintValuesByPackage(sites []site) (packages []string, values map[string][]string) {
+	values = map[string][]string{}
 	for _, at := range sites {
-		if at.Package != pkg || !isHintKind(at.Kind) || !at.Resolved || at.Value == "" {
+		if !isHintKind(at.Kind) || !at.Resolved || at.Package == "" || at.Value == "" {
 			continue
 		}
-		values = append(values, at.Value)
+		if _, seen := values[at.Package]; !seen {
+			packages = append(packages, at.Package)
+		}
+		values[at.Package] = append(values[at.Package], at.Value)
 	}
-	return values
+	sort.Strings(packages)
+	return packages, values
 }
 
 // goFilesOf splits one directory's Go source into the production files and
@@ -270,7 +264,12 @@ func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (cha
 	// after the first one reading offsets into an array the previous edit had
 	// already moved, and the descending order that hides that is a property of
 	// the loop rather than of the data.
-	sort.Slice(edits, func(i, j int) bool { return edits[i].start < edits[j].start })
+	//
+	// Ordered by a comparison rather than by a "less", because no two edits
+	// share a start: they are distinct positions in one file, so < and <= are
+	// the same function here and mutation testing reports a survivor no test
+	// could kill.
+	slices.SortFunc(edits, func(left, right replacement) int { return cmp.Compare(left.start, right.start) })
 	rewritten := make([]byte, 0, len(source))
 	written := 0
 	for _, edit := range edits {
