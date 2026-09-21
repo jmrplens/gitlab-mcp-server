@@ -96,6 +96,23 @@ limitation is the tool's rather than the package's, which is why
 `make check-spec-conditions` reports such a package as not measured instead
 of failing on it.
 
+**`PKG` names one package and gremlins reads it as a directory to walk.** It
+mutates everything below the path it is given, so a package with anything under
+it is measured together with its whole subtree, and a figure reported for the
+parent is a figure about several packages. Measured on `./cmd/audit_1to1`: 789
+runnable mutants, of which **27 are the package's own** and 762 belong to its
+seven sub-packages, every one of which the sweep also measures separately. It
+reaches fixtures the same way, so the planted trees under a command's
+`testdata` were being mutated as though they were source.
+
+`scripts/coverage-mutants.sh` therefore passes `--exclude-files=/` unless the
+caller states an exclusion of their own. That flag is a regexp over the path
+**relative to the target**, which is the one fact the rule rests on and was
+measured rather than assumed: on that package `^internal/` and `/` both leave
+24, while the module-relative `^cmd/audit_1to1/internal/` leaves all 789 and so
+matches nothing. A path with a separator in it is exactly a file below the
+package, and a leaf package has none, so the flag changes no figure there.
+
 **A gremlins run over a `package main` directory reports every mutant killed
 and has tested none of them, so the recipe stages such a package before
 measuring it.** gremlins names the package to run the tests in by walking the
