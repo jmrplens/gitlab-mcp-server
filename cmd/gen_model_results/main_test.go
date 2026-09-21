@@ -361,13 +361,15 @@ func TestRun_UsageErrors(t *testing.T) {
 	}
 
 	// A rehearsal rehearses folding a run in, so with no run to fold it has
-	// nothing to rehearse and says which flag is missing.
+	// nothing to rehearse. The message has to be the rehearsal's own and not
+	// the "nothing to do" that a flagless call gets: both name -shards, so an
+	// assertion on that word alone would pass with this refusal deleted.
 	status, _, stderr = drive(t, root, options{dryRun: true})
 	if status != exitUsage {
 		t.Errorf("-dry-run with no -shards exited %d, want a usage error", status)
 	}
-	if !strings.Contains(stderr, "-shards") {
-		t.Errorf("the message %q does not say what is missing", stderr)
+	if !strings.Contains(stderr, "rehearses folding a run in") {
+		t.Errorf("the message %q does not say what -dry-run was missing", stderr)
 	}
 
 	status, _, stderr = drive(t, root, options{refold: true, render: true})
@@ -988,27 +990,99 @@ func TestRun_ARefoldCarryingACaseTheRowNeverHeld_AddsItAndReplacesNothing(t *tes
 
 // TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded is
 // the failure a rehearsal has that a real fold has not: it writes into a
-// directory it makes for itself, and where that directory cannot be made there
-// is nowhere to rehearse into.
+// directory it makes for itself, clearing whatever the last rehearsal left
+// before it copies the pages in.
 //
-// Reported rather than fallen back from, because the fallback would be the
-// repository: a rehearsal that quietly wrote where a real fold writes is the
-// one thing the dry run exists to make impossible.
+// Either step can fail, and both stop the run. Carrying on past the first would
+// rehearse into a tree holding an earlier run's pages, which is the mixture the
+// directory is cleared to avoid; carrying on past the second would leave the
+// rehearsal writing where a real fold writes, which is the one thing a dry run
+// exists to make impossible. The two arrangements below are what reaches each:
+// a file where a parent directory belongs stops the removal, and a link to
+// nothing reads as absent to the removal and cannot then be created.
 func TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		arrange func(t *testing.T, root string)
+		says    string
+	}{
+		{
+			name: "a file where the rehearsal's parent directory belongs",
+			arrange: func(t *testing.T, root string) {
+				t.Helper()
+				if err := os.WriteFile(filepath.Join(root, "dist"), []byte("not a directory\n"), 0o600); err != nil {
+					t.Fatalf("plant the file in the way: %v", err)
+				}
+			},
+			says: "clear the dry-run directory",
+		},
+		{
+			name: "a link to nothing where that directory belongs",
+			arrange: func(t *testing.T, root string) {
+				t.Helper()
+				if runtimeIsWindows() {
+					t.Skip("making a link needs a privilege Windows does not grant by default")
+				}
+				if err := os.MkdirAll(filepath.Join(root, "dist"), 0o750); err != nil {
+					t.Fatalf("make the parent: %v", err)
+				}
+				if err := os.Symlink("nowhere", filepath.Join(root, "dist", "modeleval")); err != nil {
+					t.Fatalf("plant the link in the way: %v", err)
+				}
+			},
+			says: "make the dry-run directory",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := newRoot(t)
+			testCase.arrange(t, root)
+
+			status, _, stderr := drive(t, root, options{shards: writeShard(t, publishableShard()), render: true, dryRun: true})
+			if status != exitUsage {
+				t.Fatalf("the dry run exited %d, want the unusable scratch tree reported", status)
+			}
+			if !strings.Contains(stderr, testCase.says) {
+				t.Errorf("the message %q does not say it could not %q", stderr, testCase.says)
+			}
+			if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
+				t.Errorf("a rehearsal that could not build its own tree wrote the committed record; stat said %v", err)
+			}
+		})
+	}
+}
+
+// TestRun_ARecordThatCannotBeWritten_IsReportedRatherThanClaimedAsWritten is
+// the one failure a generator must never absorb.
+//
+// The line this command prints after folding a run in says the record was
+// written, and a maintainer reads that instead of the file. A write that failed
+// and was passed over would leave the run reported as published with nothing on
+// disk, and the next gate would then report the pages as stale against a record
+// that was never there.
+//
+// The arrangement is a link to nothing where the record's own directory
+// belongs, which is the one shape that reads as an absent record -- the state a
+// first fold expects -- and cannot be created either.
+func TestRun_ARecordThatCannotBeWritten_IsReportedRatherThanClaimedAsWritten(t *testing.T) {
+	if runtimeIsWindows() {
+		t.Skip("making a link needs a privilege Windows does not grant by default")
+	}
 	root := newRoot(t)
-	// dist/ is where the rehearsal goes, and here it is a file.
-	if err := os.WriteFile(filepath.Join(root, "dist"), []byte("not a directory\n"), 0o600); err != nil {
-		t.Fatalf("plant the file in the way: %v", err)
+	if err := os.RemoveAll(filepath.Join(root, "docs")); err != nil {
+		t.Fatalf("clear the page tree: %v", err)
+	}
+	if err := os.Symlink("nowhere", filepath.Join(root, "docs")); err != nil {
+		t.Fatalf("plant the link in the way: %v", err)
 	}
 
-	status, _, stderr := drive(t, root, options{shards: writeShard(t, publishableShard()), render: true, dryRun: true})
+	status, stdout, stderr := drive(t, root, options{shards: writeShard(t, publishableShard())})
 	if status != exitUsage {
-		t.Fatalf("the dry run exited %d, want the unusable scratch tree reported", status)
+		t.Fatalf("the fold exited %d, want the record it could not write reported", status)
 	}
-	if !strings.Contains(stderr, "dry-run directory") {
-		t.Errorf("the message %q does not name what could not be prepared", stderr)
+	if !strings.Contains(stderr, recordRelPath) {
+		t.Errorf("the message %q does not name the record", stderr)
 	}
-	if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
-		t.Errorf("a rehearsal that could not build its own tree wrote the committed record; stat said %v", err)
+	if strings.Contains(stdout, "wrote "+recordRelPath) {
+		t.Errorf("the fold said %q, claiming a write that did not happen", stdout)
 	}
 }

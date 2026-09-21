@@ -351,6 +351,44 @@ func TestDocument_Marshal_IsTheSameBytesHoweverTheRowsArrived(t *testing.T) {
 	}
 }
 
+// TestDocument_EveryPartOfARow_SurvivesTheFileItIsWrittenTo states the property
+// that makes the two error arms around this marshaling unreachable, and that
+// nothing else in the package asserts.
+//
+// [document.marshal] and [runWrite] both branch on an error encoding/json
+// cannot produce for this type: a document is strings, ints, bools, pointers to
+// them, slices of them and maps keyed by string, with no channel, no function,
+// no cycle and no float that could be a NaN. Deleting either arm is what
+// errcheck refuses, so the arm stays and what is asserted instead is the claim
+// behind it -- that every block of a row reaches the file and comes back. A
+// field the file cannot carry fails the marshal here, and one it silently drops
+// fails the comparison; what this cannot see is two fields exchanging tags,
+// which a round trip restores as symmetrically as it wrote.
+func TestDocument_EveryPartOfARow_SurvivesTheFileItIsWrittenTo(t *testing.T) {
+	one := publishOne(t, twoCaseShard())
+	if len(one.Cases) != 2 {
+		t.Fatalf("the fixture row carries %d case(s), want the two the shard measured", len(one.Cases))
+	}
+	one.Key.TierPin, one.Key.MetaParamSchema, one.Key.SliceSize = "ultimate", "compact", 128
+	one.Provenance.TierPin, one.Provenance.MetaParamSchema, one.Provenance.SliceSize = "ultimate", "compact", 128
+	one.Counts.Shown = &shown{Min: 96, Max: 312, Overflowed: 2}
+
+	body, err := document{SchemaVersion: recordSchemaVersion, Note: recordNote, Rows: []row{one}}.marshal()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	read, err := unmarshalDocument(body)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(read.Rows) != 1 {
+		t.Fatalf("the record came back holding %d row(s), want one", len(read.Rows))
+	}
+	if !reflect.DeepEqual(read.Rows[0], one) {
+		t.Errorf("the row came back as\n got %+v\nwant %+v", read.Rows[0], one)
+	}
+}
+
 // TestUnmarshalDocument_AnotherSchemaVersion_IsRefused is the rule every record
 // in this tree is held to: a document written by another version of this
 // command may spell a field differently, and reading what we recognize would
