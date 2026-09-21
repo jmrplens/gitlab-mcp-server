@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -235,6 +236,18 @@ func TestProjectMembersList_WithPagination(t *testing.T) {
 	}
 }
 
+// assertQueryParam reports a query parameter GitLab was not sent as expected.
+// It reports with t.Errorf and never t.Fatalf because its callers run on the
+// httptest handler's goroutine, where an abort would kill the server's
+// goroutine instead of failing the test. The parameters are asserted one by
+// one for the same reason: a subtest cannot be opened off the test goroutine.
+func assertQueryParam(t *testing.T, q url.Values, key, want string) {
+	t.Helper()
+	if got := q.Get(key); got != want {
+		t.Errorf("query %s = %q, want %q", key, got, want)
+	}
+}
+
 // TestProjectMembersList_AllListOptions verifies that projectMembersList
 // forwards order_by, sort, show_seat_info, user_ids[], and keyset pagination
 // (pagination + page_token) query parameters to the GitLab API.
@@ -245,20 +258,11 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 			return
 		}
 		q := r.URL.Query()
-		checks := map[string]string{
-			"order_by":       "access_level",
-			"sort":           "desc",
-			"show_seat_info": "true",
-			"pagination":     "keyset",
-			"page_token":     "tok42",
-		}
-		for key, want := range checks {
-			t.Run(key, func(t *testing.T) {
-				if got := q.Get(key); got != want {
-					t.Errorf("query %s = %q, want %q", key, got, want)
-				}
-			})
-		}
+		assertQueryParam(t, q, "order_by", "access_level")
+		assertQueryParam(t, q, "sort", "desc")
+		assertQueryParam(t, q, "show_seat_info", "true")
+		assertQueryParam(t, q, "pagination", "keyset")
+		assertQueryParam(t, q, "page_token", "tok42")
 		if got := q["user_ids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "20" {
 			t.Errorf("query user_ids[] = %v, want [10 20]", got)
 		}
@@ -371,9 +375,8 @@ func TestMemberGet_Success(t *testing.T) {
 // TestMemberGet_ReadsWhatTheSDKDoesNotModel verifies a project member
 // carries, beside what client-go decoded, the fields lib/api/entities/member.rb
 // sends and gl.ProjectMember does not: locked and public_email on every
-// member, membership_state on an Enterprise one, and two_factor_enabled,
-// group_saml_identity, group_scim_identity and override when the caller may
-// see them.
+// member, membership_state on an Enterprise one, and group_saml_identity,
+// group_scim_identity and override when the caller may see them.
 func TestMemberGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathProjectMember10 {
@@ -381,7 +384,7 @@ func TestMemberGet_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"alice","access_level":30,"locked":true,`+
-			`"public_email":"alice@public.example","membership_state":"active","two_factor_enabled":true,"override":false,`+
+			`"public_email":"alice@public.example","membership_state":"active","override":false,`+
 			`"group_saml_identity":{"extern_uid":"u1","provider":"group_saml","saml_provider_id":3},`+
 			`"group_scim_identity":{"extern_uid":"s1","group_id":9,"active":true}}`)
 	}))
@@ -407,7 +410,7 @@ func TestProjectMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"jdoe","access_level":30,"locked":true,"two_factor_enabled":true},`+
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"username":"jdoe","access_level":30,"locked":true},`+
 			`{"id":2,"username":"asmith","access_level":40,"locked":false}]`)
 	}))
 
@@ -417,6 +420,129 @@ func TestProjectMembersList_ReadsWhatTheSDKDoesNotModel(t *testing.T) {
 	}
 	if len(out.Members) != 2 || !out.Members[0].Locked || out.Members[1].Locked {
 		t.Errorf("List() members = %+v, want each paired with its captured fields", out.Members)
+	}
+}
+
+// TestMemberGet_MapsEveryValueGitLabSent_ToItsOwnField verifies that a member
+// GitLab answered in full reaches the caller as one whole object, every value
+// under the field it belongs to.
+//
+// Why it matters: ToOutput is twenty straight-line assignments split between
+// what the SDK decoded and what the capture read beside it, and no branch
+// separates them, so neither gate can see a pair that trades places. Every
+// value in the fixture is distinct for that reason: name against state, the
+// avatar URL against the web URL, the avatar path against the membership
+// state, and the member's own email against the public one. The whole struct
+// is compared rather than a field or two, so a value that lands nowhere is
+// caught beside one that lands in the wrong place.
+func TestMemberGet_MapsEveryValueGitLabSent_ToItsOwnField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathProjectMember10 {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"member-username","name":"Member Name",`+
+			`"state":"active","access_level":30,"web_url":"https://gitlab.example.com/member-web",`+
+			`"avatar_url":"https://gitlab.example.com/avatar-url.png","avatar_path":"/uploads/avatar-path.png",`+
+			`"email":"member-email@example.com","public_email":"member-public@example.com",`+
+			`"membership_state":"awaiting","created_at":"2026-01-15T10:00:00Z","expires_at":"2026-06-30",`+
+			`"created_by":{"id":99,"username":"creator-username","name":"Creator Name","state":"blocked",`+
+			`"avatar_url":"https://gitlab.example.com/creator-avatar.png","web_url":"https://gitlab.example.com/creator-web"},`+
+			`"group_saml_identity":{"extern_uid":"saml-uid","provider":"group_saml","saml_provider_id":3},`+
+			`"group_scim_identity":{"extern_uid":"scim-uid","group_id":9,"active":true},"override":false,`+
+			`"custom_attributes":[{"key":"attribute-key","value":"attribute-value"}],`+
+			`"member_role":{"id":7,"name":"Role Name","description":"Role description","group_id":11,`+
+			`"base_access_level":40,"read_vulnerability":true}}`)
+	}))
+
+	got, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+	if err != nil {
+		t.Fatalf("Get() unexpected error: %v", err)
+	}
+	want := Output{
+		ID:          10,
+		Username:    "member-username",
+		Name:        "Member Name",
+		State:       "active",
+		AvatarURL:   "https://gitlab.example.com/avatar-url.png",
+		AccessLevel: 30,
+		WebURL:      "https://gitlab.example.com/member-web",
+		CreatedAt:   "2026-01-15T10:00:00Z",
+		CreatedBy: &CreatedByOutput{
+			ID: 99, Username: "creator-username", Name: "Creator Name", State: "blocked",
+			AvatarURL: "https://gitlab.example.com/creator-avatar.png",
+			WebURL:    "https://gitlab.example.com/creator-web",
+		},
+		ExpiresAt:         "2026-06-30",
+		Email:             "member-email@example.com",
+		PublicEmail:       "member-public@example.com",
+		GroupSAMLIdentity: &SAMLIdentityOutput{ExternUID: "saml-uid", Provider: "group_saml", SAMLProviderID: 3},
+		GroupSCIMIdentity: &SCIMIdentityOutput{ExternUID: "scim-uid", GroupID: 9, Active: true},
+		Override:          new(false),
+		MembershipState:   "awaiting",
+		MemberRole: &MemberRoleOutput{
+			ID: 7, Name: "Role Name", Description: "Role description",
+			GroupID: 11, BaseAccessLevel: 40, ReadVulnerability: true,
+		},
+		AvatarPath:       "/uploads/avatar-path.png",
+		CustomAttributes: []toolutil.CustomAttributeOutput{{Key: "attribute-key", Value: "attribute-value"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Get() =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// TestMemberGet_EachFlagGitLabSet_LandsOnItsOwnField verifies that each of the
+// three booleans a membership carries reaches the field it names, by sending
+// one at a time and comparing the whole member against one carrying only that
+// flag.
+//
+// Why it matters: locked is read from the captured response and is_using_seat
+// from the SDK's own decode, so the pair can trade sources with no branch to
+// flip and no fixture where both being true would show it. Driving one flag at
+// a time is also what GitLab really answers, and is the only arrangement in
+// which all three are told apart.
+func TestMemberGet_EachFlagGitLabSet_LandsOnItsOwnField(t *testing.T) {
+	tests := []struct {
+		name string
+		sent string
+		want Output
+	}{
+		{
+			name: "locked",
+			sent: `,"locked":true`,
+			want: Output{ID: 10, Username: testUsername, AccessLevel: 30, Locked: true},
+		},
+		{
+			name: "is_using_seat",
+			sent: `,"is_using_seat":true`,
+			want: Output{ID: 10, Username: testUsername, AccessLevel: 30, IsUsingSeat: true},
+		},
+		{
+			name: "override",
+			sent: `,"override":true`,
+			want: Output{ID: 10, Username: testUsername, AccessLevel: 30, Override: new(true)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != pathProjectMember10 {
+					http.NotFound(w, r)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":10,"username":"`+testUsername+`","access_level":30`+tt.sent+`}`)
+			}))
+
+			got, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 10})
+			if err != nil {
+				t.Fatalf("Get() unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Get() =\n%+v\nwant\n%+v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -1110,18 +1236,23 @@ func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 // TestFormatListMarkdownString_ClickableUsernameLinks verifies that a page
 // whose members carry a profile URL links each handle and leads its guidance
 // with the instruction to keep those links.
+//
+// The account state and the membership state are deliberately different words.
+// Every other list test leaves the membership state empty, so this is the only
+// row that renders both columns with content in them, and the two would be
+// told apart by emptiness alone rather than by what each says.
 func TestFormatListMarkdownString_ClickableUsernameLinks(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
 			{
 				Username: "alice", Name: "Alice", AccessLevel: 30,
 				State: "active", WebURL: "https://gitlab.example.com/alice",
-				MembershipState: "active", ExpiresAt: "2026-06-30",
+				MembershipState: "awaiting", ExpiresAt: "2026-06-30",
 			},
 		},
 	}
 	want := "## Project Members (1)\n\n" + memberListHeader +
-		"| [@alice](https://gitlab.example.com/alice) | Alice | Developer (30) | active | active | 30 Jun 2026 |\n" +
+		"| [@alice](https://gitlab.example.com/alice) | Alice | Developer (30) | active | awaiting | 30 Jun 2026 |\n" +
 		"\n---\n💡 **Next steps:**\n" +
 		"- " + toolutil.HintPreserveLinks + "\n" +
 		"- Use action 'project.member_get' to see one member's details\n" +
