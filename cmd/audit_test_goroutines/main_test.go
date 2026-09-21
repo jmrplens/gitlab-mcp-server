@@ -98,6 +98,91 @@ func TestDirty(t *testing.T) {
 }
 `
 
+// advisoryFixture holds one errorf site and no abort: the tree that separates
+// what the gate refuses from what it only reports.
+const advisoryFixture = `package fixture
+
+import (
+	"net/http"
+	"testing"
+)
+
+func TestAdvisory(t *testing.T) {
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("advisory: no return follows")
+	})
+}
+`
+
+// mixedTree plants four files whose tallies differ from one another, and whose
+// five summary counters — 5 abort sites, 3 tail-position, 2 truncating, 1
+// advisory, across 4 files — are five different numbers. That is what the
+// report's own arithmetic cannot supply: every earlier fixture makes several
+// of those counts equal, so a permutation of the format arguments or of the
+// per-file columns reads exactly the same as the correct report.
+var mixedTree = map[string]string{
+	"alpha_test.go": `package fixture
+
+import (
+	"net/http"
+	"testing"
+)
+
+func TestAlpha(t *testing.T) {
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("tail position")
+	})
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.FailNow()
+	})
+}
+`,
+	"bravo_test.go": `package fixture
+
+import (
+	"net/http"
+	"testing"
+)
+
+func TestBravo(t *testing.T) {
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("tail position")
+	})
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("the handler still owes a response")
+		w.WriteHeader(http.StatusOK)
+	})
+}
+`,
+	"charlie_test.go": `package fixture
+
+import (
+	"net/http"
+	"testing"
+)
+
+func TestCharlie(t *testing.T) {
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("the handler still owes a response")
+		w.WriteHeader(http.StatusOK)
+	})
+}
+`,
+	"delta_test.go": `package fixture
+
+import (
+	"net/http"
+	"testing"
+)
+
+func TestDelta(t *testing.T) {
+	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("advisory: nothing returns after this")
+	})
+}
+`,
+}
+
 // cleanFixture holds a handler that follows the contract and an abort on the
 // test goroutine, so a scan of it must report nothing.
 const cleanFixture = `package fixture
@@ -300,6 +385,56 @@ func TestImportsTesting_ImportShapes_AnswersForEachOne(t *testing.T) {
 	}
 }
 
+// TestImportsTesting_ImportWithoutAPath_IsSkipped verifies the guard on an
+// import spec carrying no path. A parser never produces one, but
+// importsTesting is handed whatever *ast.File its caller holds, and reading
+// the absent path would dereference nil instead of moving to the next import.
+func TestImportsTesting_ImportWithoutAPath_IsSkipped(t *testing.T) {
+	pathless := &ast.ImportSpec{}
+	testingImport := &ast.ImportSpec{Path: &ast.BasicLit{Kind: token.STRING, Value: `"testing"`}}
+
+	if got := importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless}}); got {
+		t.Errorf("importsTesting(one pathless import) = true, want false")
+	}
+	if got := importsTesting(&ast.File{Imports: []*ast.ImportSpec{pathless, testingImport}}); !got {
+		t.Errorf("importsTesting(pathless import before testing) = false, want true")
+	}
+}
+
+// TestScan_FindingsOfBothWalks_AreOrderedTogether verifies the work list is
+// ordered by file whichever walk produced each finding. Test files are walked
+// before the harness library's own files, so a library file whose path sorts
+// first is collected second and only the sort puts it back in front; without
+// it the two walks would be concatenated and a reader would see one ordered
+// list per corpus rather than one list.
+func TestScan_FindingsOfBothWalks_AreOrderedTogether(t *testing.T) {
+	root := t.TempDir()
+	harnessDir := filepath.Join(root, "test", "e2e", "internal", "harness")
+	if err := os.MkdirAll(harnessDir, 0o750); err != nil {
+		t.Fatalf("create the harness tree: %v", err)
+	}
+	library := filepath.Join(harnessDir, "aardvark.go")
+	suite := filepath.Join(harnessDir, "zebra_test.go")
+	// sequential: two files planted for one scan, not two cases
+	for path, source := range map[string]string{library: harnessLibraryFixture, suite: dirtyFixture} {
+		if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+
+	report, err := scan([]string{root})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	got := []string{}
+	for _, finding := range report.Fatal {
+		got = append(got, finding.File)
+	}
+	if want := []string{library, suite}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("fatal findings came from %v, want %v", got, want)
+	}
+}
+
 // expectedSite names one finding by the marker comment on its source line,
 // so the fixture can be edited without recounting line numbers.
 type expectedSite struct {
@@ -487,6 +622,20 @@ func TestErrorf(t *testing.T) {
 			want: []expectedSite{{marker: "SITE", call: "t.Error", kind: "errorf_no_return", boundary: "http.HandlerFunc"}},
 		},
 		{
+			name: "a registration written with no arguments is not a boundary",
+			source: `package fixture
+
+import "testing"
+
+func TestEmptyRegistration(t *testing.T) {
+	server.AddTool()
+	server.AddResource()
+	server.AddPrompt()
+}
+`,
+			want: nil,
+		},
+		{
 			name: "shapes outside the contract report nothing",
 			source: `package fixture
 
@@ -499,9 +648,12 @@ func TestSkipped(t *testing.T) {
 	s := struct{ Fatal func(string) }{}
 	_ = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.Fatal("not a testing receiver")
+		deps.t.Fatal("a receiver reached through a field is not an identifier")
 		helper()
 		t.Log("not an assertion")
 	})
+	go helper()
+	mux.HandleFunc("/x", handlerVar)
 	_ = map[string]func(){"OnHandler": func() { t.Fatal("string key") }}
 	_ = struct{ Callback func() }{Callback: func() { t.Fatal("key without Handler suffix") }}
 	_ = struct{ ElicitationHandler func() }{ElicitationHandler: handler}
@@ -579,21 +731,42 @@ func TestScan_MissingDirectory_ReturnsError(t *testing.T) {
 	}
 }
 
-// TestScan_InvalidSource_ReturnsParseError verifies a test file that does not
-// parse aborts the scan with the file named in the error.
+// TestScan_InvalidSource_ReturnsParseError verifies a file that does not parse
+// aborts the scan with the file named in the error, on each of the two walks a
+// scan makes. The harness library case is its own: that walk runs only after
+// the test-file walk has returned without error, so a tree whose tests all
+// parse is the only one that reaches its failure at all.
 func TestScan_InvalidSource_ReturnsParseError(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "broken_test.go")
-	if err := os.WriteFile(path, []byte("package fixture\n\nfunc (\n"), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
+	const unparseable = "package fixture\n\nfunc (\n"
+	testCases := []struct {
+		name string
+		sub  []string
+		file string
+	}{
+		{name: "a test file", file: "broken_test.go"},
+		{name: "a harness library file", sub: []string{"test", "e2e", "internal", "harness"}, file: "broken.go"},
 	}
 
-	_, err := scan([]string{dir})
-	if err == nil {
-		t.Fatal("scan of unparseable source returned nil error")
-	}
-	if !strings.HasPrefix(err.Error(), "parse "+path+": ") {
-		t.Fatalf("scan error = %q, want parse error naming %s", err, path)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(append([]string{root}, tc.sub...)...)
+			if err := os.MkdirAll(dir, 0o750); err != nil {
+				t.Fatalf("create %s: %v", dir, err)
+			}
+			path := filepath.Join(dir, tc.file)
+			if err := os.WriteFile(path, []byte(unparseable), 0o600); err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
+
+			_, err := scan([]string{root})
+			if err == nil {
+				t.Fatal("scan of unparseable source returned nil error")
+			}
+			if !strings.HasPrefix(err.Error(), "parse "+path+": ") {
+				t.Fatalf("scan error = %q, want parse error naming %s", err, path)
+			}
+		})
 	}
 }
 
@@ -657,6 +830,17 @@ func TestRun_ModesAndExitCodes(t *testing.T) {
 				return fmt.Sprintf("%-72s fatal=%-3d errorf_no_return=%d\n", file, 1, 1) +
 					"\nsummary: 1 fatal sites (A=1 tail-position, B=0 truncating) + 1 advisory errorf-without-return across 1 files\n" +
 					"check: FAIL. 1 abort site(s) off the test goroutine (1 advisory errorf sites not gated)\n"
+			},
+		},
+		{
+			name:     "advisory sites alone pass the check",
+			fixture:  advisoryFixture,
+			check:    true,
+			wantExit: 0,
+			wantStdout: func(_, file, _ string) string {
+				return fmt.Sprintf("%-72s fatal=%-3d errorf_no_return=%d\n", file, 0, 1) +
+					"\nsummary: 0 fatal sites (A=0 tail-position, B=0 truncating) + 1 advisory errorf-without-return across 1 files\n" +
+					"check: PASS. No testing.T aborts off the test goroutine (1 advisory errorf site(s))\n"
 			},
 		},
 		{
@@ -735,6 +919,43 @@ func TestRun_ModesAndExitCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRun_MixedTree_ReportsEachFileAndEveryCounter verifies the whole report
+// over a tree where no two counts agree: the four per-file rows in path order
+// with their own two columns, the five figures of the summary line, and the
+// two the failing verdict quotes. Each of those numbers is read from a
+// different field, and on the single-file fixtures above they are all 0 or all
+// 1, so nothing there could tell one field from another.
+func TestRun_MixedTree_ReportsEachFileAndEveryCounter(t *testing.T) {
+	dir := t.TempDir()
+	// sequential: four files planted for one run, not four cases
+	for name, source := range mixedTree {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	got := runOutcome{exit: run([]string{dir}, "", true, &stdout, &stderr)}
+	got.stdout, got.stderr = stdout.String(), stderr.String()
+
+	var want strings.Builder
+	for _, row := range []struct {
+		name          string
+		fatal, errorf int
+	}{
+		{"alpha_test.go", 2, 0},
+		{"bravo_test.go", 2, 0},
+		{"charlie_test.go", 1, 0},
+		{"delta_test.go", 0, 1},
+	} {
+		fmt.Fprintf(&want, "%-72s fatal=%-3d errorf_no_return=%d\n", filepath.Join(dir, row.name), row.fatal, row.errorf)
+	}
+	want.WriteString("\nsummary: 5 fatal sites (A=3 tail-position, B=2 truncating) + 1 advisory errorf-without-return across 4 files\n")
+	want.WriteString("check: FAIL. 5 abort site(s) off the test goroutine (1 advisory errorf sites not gated)\n")
+
+	assertRunOutcome(t, got, 1, want.String(), "")
 }
 
 // runOutcome captures what one run invocation produced.
