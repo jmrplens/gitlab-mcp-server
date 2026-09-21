@@ -31,10 +31,15 @@ const maxFoldDepth = 3
 // the same scope the helper's body is read in: one helper calling another
 // passes its own parameter along, and folding that argument without the
 // caller's bindings loses the value one step in.
+//
+// The bound is applied by [walker.foldExpr] and not here, although the depth
+// is carried through both. Every way into this function has been through that
+// guard already: a site enters at depth zero, and a nested call is reached
+// only by folding an expression, which refuses past the bound before it looks
+// at what the expression is. A second copy of the test here would be a branch
+// no depth can take, and it read as the bound while the one that enforces it
+// sat one function away.
 func (w *walker) foldCall(call *ast.CallExpr, argBound map[*types.Var]string, depth int) (string, bool) {
-	if depth > maxFoldDepth {
-		return "", false
-	}
 	callee, ok := w.callee(call)
 	if !ok {
 		return "", false

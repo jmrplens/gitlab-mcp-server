@@ -357,9 +357,11 @@ func (w *walker) visitCall(call *ast.CallExpr) {
 		return
 	}
 	if callee.Name() == hintActionFunc {
-		if len(call.Args) > 0 {
-			w.recordID(kindHint, call.Args[0])
-		}
+		// The ID is read without asking whether it is there: HintAction
+		// declares it as a required first parameter, so a call this walk
+		// reaches has one. A length guard would be a branch no source that
+		// type-checks can take, and the run stops on a package that did not.
+		w.recordID(kindHint, call.Args[0])
 		return
 	}
 	if first, isErrorHint := errorHintArgs[callee.Name()]; isErrorHint {
@@ -431,10 +433,13 @@ func (w *walker) visitCompositeLit(lit *ast.CompositeLit) {
 
 // recordPositionalField records one element of a struct literal written
 // without field names, which names its fields by order.
+//
+// The index is used without being bounded, for the same reason the ID of a
+// HintAction call is read without being counted: Go demands one element per
+// field of a positional literal, so a literal that type-checks has no element
+// past the last field and a guard here would answer a question no source can
+// ask.
 func (w *walker) recordPositionalField(structType *types.Struct, index int, value ast.Expr) {
-	if index >= structType.NumFields() {
-		return
-	}
 	field := structType.Field(index)
 	w.recordField(field.Name(), field.Type(), value)
 }
