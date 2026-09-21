@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1673,13 +1674,12 @@ func TestRun_WhenTheInventoryIsRead_NamesEveryGraphQLPackageTheWalkNeverSaw(t *t
 			"internal/tools/terraformstates",
 			"internal/tools/workitems",
 		}
-		if len(named) != len(want) {
-			t.Fatalf("report uncovered packages = %v, want the four recorded ones", named)
-		}
-		for i, pkg := range want {
-			if named[i] != pkg {
-				t.Errorf("report uncovered package %d = %q, want %q; the list is %v", i, named[i], pkg, named)
-			}
+		// Compared whole rather than element by element: the order is part of
+		// the claim, and a length check followed by a per-element loop says
+		// the same thing in two places while reporting a reordering as four
+		// separate failures.
+		if !slices.Equal(named, want) {
+			t.Errorf("report uncovered packages = %v, want %v", named, want)
 		}
 	})
 	t.Run("only the GraphQL rows are counted", func(t *testing.T) {

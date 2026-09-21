@@ -37,6 +37,7 @@ func makeToolsPackage(t *testing.T, root, name string) {
 // is filled from.
 func TestSummarize_Rows_CountThePathsAndTheCatalog(t *testing.T) {
 	root := t.TempDir()
+	// sequential: setup steps building one tree, asserted by the counts below
 	for _, pkg := range []string{"issues", "tags", "adminspecs", "systemhooks"} {
 		makeToolsPackage(t, root, pkg)
 	}
