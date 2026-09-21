@@ -1000,11 +1000,20 @@ func TestRun_ARefoldCarryingACaseTheRowNeverHeld_AddsItAndReplacesNothing(t *tes
 // exists to make impossible. The two arrangements below are what reaches each:
 // a file where a parent directory belongs stops the removal, and a link to
 // nothing reads as absent to the removal and cannot then be created.
+//
+// Which step the first arrangement stops at is the platform's answer and not
+// ours. A removal below a regular file is ENOTDIR on Unix and "the system
+// cannot find the path specified" on Windows, which os.RemoveAll reads as
+// nothing to remove, so there the run gets past the clearing and is stopped by
+// the creation instead. Both are refusals that write no record, which is what
+// this test is for, so the case names the message each platform produces
+// rather than skipping the half of the assertion that still holds.
 func TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded(t *testing.T) {
 	for _, testCase := range []struct {
-		name    string
-		arrange func(t *testing.T, root string)
-		says    string
+		name        string
+		arrange     func(t *testing.T, root string)
+		says        string
+		saysWindows string
 	}{
 		{
 			name: "a file where the rehearsal's parent directory belongs",
@@ -1014,7 +1023,8 @@ func TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded(t
 					t.Fatalf("plant the file in the way: %v", err)
 				}
 			},
-			says: "clear the dry-run directory",
+			says:        "clear the dry-run directory",
+			saysWindows: "make the dry-run directory",
 		},
 		{
 			name: "a link to nothing where that directory belongs",
@@ -1041,8 +1051,12 @@ func TestRun_ADryRunThatCannotBuildItsScratchTree_IsReportedAndNothingIsFolded(t
 			if status != exitUsage {
 				t.Fatalf("the dry run exited %d, want the unusable scratch tree reported", status)
 			}
-			if !strings.Contains(stderr, testCase.says) {
-				t.Errorf("the message %q does not say it could not %q", stderr, testCase.says)
+			says := testCase.says
+			if runtimeIsWindows() && testCase.saysWindows != "" {
+				says = testCase.saysWindows
+			}
+			if !strings.Contains(stderr, says) {
+				t.Errorf("the message %q does not say it could not %q", stderr, says)
 			}
 			if _, err := os.Stat(filepath.Join(root, recordRelPath)); !os.IsNotExist(err) {
 				t.Errorf("a rehearsal that could not build its own tree wrote the committed record; stat said %v", err)
