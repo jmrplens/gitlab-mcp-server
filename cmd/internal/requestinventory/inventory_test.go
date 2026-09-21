@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -101,6 +102,76 @@ func TestRender_Inventory_IsIndentedJSONEndingInANewline(t *testing.T) {
 	}
 }
 
+// TestRow_EveryField_CarriesTheNameTheArtifactSpellsIt verifies each field's
+// JSON name against a document written out by hand, in both directions.
+//
+// A round trip through [Render] and [Read] cannot see this, because it encodes
+// and decodes through the same tags: any permutation of them survives it whole.
+// Two of those permutations are silent and costly. `package` and `path` are
+// interchangeable by shape, and `package` is the only handle an action is
+// joined to the requests its owner made, so exchanging them detaches every
+// action from every request while the file still parses. `query` and `body`
+// are interchangeable too, and R-PATH judges the body names against the params
+// GitLab marks optional on a route that takes a body, so exchanging them puts
+// the wrong list to the wrong oracle.
+func TestRow_EveryField_CarriesTheNameTheArtifactSpellsIt(t *testing.T) {
+	const document = `{
+		"package": "internal/tools/issues",
+		"kind": "rest",
+		"method": "GET",
+		"path": "/projects/:project_id/issues",
+		"query": ["state"],
+		"body": ["title"],
+		"operation": "query issueList",
+		"variables": ["fullPath"],
+		"identifiers": {":project_id": 3}
+	}`
+	row := Row{
+		Package:     "internal/tools/issues",
+		Kind:        "rest",
+		Method:      "GET",
+		Path:        "/projects/:project_id/issues",
+		Query:       []string{"state"},
+		Body:        []string{"title"},
+		Operation:   "query issueList",
+		Variables:   []string{"fullPath"},
+		Identifiers: map[string]int{":project_id": 3},
+	}
+
+	t.Run("a document names the field it fills", func(t *testing.T) {
+		var decoded Row
+		if err := json.Unmarshal([]byte(document), &decoded); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
+		if !reflect.DeepEqual(decoded, row) {
+			t.Errorf("decoded %+v, want %+v", decoded, row)
+		}
+	})
+
+	t.Run("a rendered row writes the value under that same name", func(t *testing.T) {
+		var rendered struct {
+			Requests []map[string]any `json:"requests"`
+		}
+		if err := json.Unmarshal(Render([]Row{row}), &rendered); err != nil {
+			t.Fatalf("Unmarshal error = %v", err)
+		}
+		want := map[string]any{
+			"package":     "internal/tools/issues",
+			"kind":        "rest",
+			"method":      "GET",
+			"path":        "/projects/:project_id/issues",
+			"query":       []any{"state"},
+			"body":        []any{"title"},
+			"operation":   "query issueList",
+			"variables":   []any{"fullPath"},
+			"identifiers": map[string]any{":project_id": float64(3)},
+		}
+		if len(rendered.Requests) != 1 || !reflect.DeepEqual(rendered.Requests[0], want) {
+			t.Errorf("rendered %+v, want %+v", rendered.Requests, want)
+		}
+	})
+}
+
 // TestRead_TheRepositorysOwnInventory_IsUsable verifies the committed artifact
 // against the reader the audit uses, since a shape change that only the
 // generator knew about would leave the audit reading an empty file and
@@ -126,6 +197,40 @@ func TestRead_TheRepositorysOwnInventory_IsUsable(t *testing.T) {
 	}
 	if rest == 0 || graphql == 0 {
 		t.Errorf("the committed inventory holds %d REST and %d GraphQL rows, want both kinds", rest, graphql)
+	}
+}
+
+// TestKinds_EachOne_ClassifiesTheRowsThatLookLikeIt verifies which of the two
+// kind constants is which, against the committed artifact.
+//
+// The test beside this one requires every row to carry a kind one of the two
+// constants names, which pins the pair of spellings and says nothing about
+// which is which: exchanging the two values leaves every row matching the other
+// constant and every count above zero. What separates them is what a GraphQL
+// request looks like, so that is what is asserted — an operation, at /graphql —
+// and a REST row is the one carrying no operation at all.
+func TestKinds_EachOne_ClassifiesTheRowsThatLookLikeIt(t *testing.T) {
+	inventory, err := Read(repoRoot(t))
+	if err != nil {
+		t.Fatalf("Read() error = %v, want the committed artifact", err)
+	}
+
+	graphql := 0
+	for _, row := range inventory.Requests {
+		switch row.Kind {
+		case KindGraphQL:
+			graphql++
+			if row.Operation == "" || row.Path != "/graphql" {
+				t.Errorf("row %+v is recorded as %q and is no GraphQL request", row, KindGraphQL)
+			}
+		case KindREST:
+			if row.Operation != "" {
+				t.Errorf("row %+v is recorded as %q and names a GraphQL operation", row, KindREST)
+			}
+		}
+	}
+	if graphql == 0 {
+		t.Errorf("no row of the committed inventory is recorded as %q", KindGraphQL)
 	}
 }
 
