@@ -133,7 +133,7 @@ func Modify(ctx context.Context, client *gitlabclient.Client, input ModifyInput)
 	u, _, err := client.GL().Users.ModifyUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("modify_user", err, http.StatusForbidden,
-			"modifying users requires admin token; verify user_id with gitlab_get_user; email/username changes must remain unique")
+			"modifying users requires admin token; verify user_id with user.get; email/username changes must remain unique")
 	}
 	return userOutput("modify_user", u, captured)
 }

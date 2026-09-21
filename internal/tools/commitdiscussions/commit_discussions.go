@@ -134,7 +134,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListCommitDiscussions(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_list", err, http.StatusNotFound,
-			"verify project_id and commit_sha with gitlab_commit_get")
+			"verify project_id and commit_sha with repository.commit_get")
 	}
 	extras, err := toolutil.CapturedDiscussions(captured, len(discussions))
 	if err != nil {
@@ -152,7 +152,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetCommitDiscussion(string(input.ProjectID), input.CommitSHA, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("commit_discussion_get", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_commit_discussions")
+			"verify discussion_id with repository.commit_discussion_list")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -199,7 +199,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	note, _, err := client.GL().Discussions.AddCommitDiscussionNote(string(input.ProjectID), input.CommitSHA, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("commit_discussion_add_note", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_commit_discussions")
+			"verify discussion_id with repository.commit_discussion_list")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {

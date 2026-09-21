@@ -15,9 +15,9 @@ type releaseNotFoundOutput struct {
 func formatReleaseNotFound(out releaseNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Release", out.Identifier,
-		"Use gitlab_release_list with project_id to list releases",
+		"Use release.list with project_id to list releases",
 		"Verify the tag_name is correct (case-sensitive)",
-		"A tag may exist without a release - check with gitlab_tag_get",
+		"A tag may exist without a release - check with tag.get",
 	)
 }
 

@@ -17,7 +17,7 @@ type groupNotFoundOutput struct {
 func formatGroupNotFound(out groupNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Group", out.Identifier,
-		"Use gitlab_group_list to list accessible groups",
+		"Use group.list to list accessible groups",
 		"If using a path, ensure it is URL-encoded (e.g. my%2Fgroup)",
 		"Verify your token has access to this group",
 	)

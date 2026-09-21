@@ -100,7 +100,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	releases, resp, err := client.GL().GroupReleases.ListGroupReleases(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupReleases", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupReleases", err, http.StatusNotFound, "verify group_id with group.get")
 	}
 	out := make([]Output, len(releases))
 	for i, r := range releases {

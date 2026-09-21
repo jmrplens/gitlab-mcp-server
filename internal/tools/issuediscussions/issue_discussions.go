@@ -111,7 +111,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListIssueDiscussions(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_list", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get")
+			"verify project_id and issue_iid with issue.get")
 	}
 	threads, err := toolutil.CapturedThreads("issue_discussion_list", discussions, captured)
 	if err != nil {
@@ -138,7 +138,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetIssueDiscussion(string(input.ProjectID), input.IssueIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_get", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_issue_discussions")
+			"verify discussion_id with issue.discussion_list")
 	}
 	return toolutil.CapturedThread("issue_discussion_get", d, captured)
 }
@@ -162,7 +162,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateIssueDiscussion(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_create", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get; creating discussions requires Reporter role or higher")
+			"verify project_id and issue_iid with issue.get; creating discussions requires Reporter role or higher")
 	}
 	return toolutil.CapturedThread("issue_discussion_create", d, captured)
 }
@@ -189,7 +189,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 	note, _, err := client.GL().Discussions.AddIssueDiscussionNote(string(input.ProjectID), input.IssueIID, input.DiscussionID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_add_note", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_list_issue_discussions")
+			"verify discussion_id with issue.discussion_list")
 	}
 	return toolutil.CapturedThreadNote("issue_discussion_add_note", note, captured)
 }

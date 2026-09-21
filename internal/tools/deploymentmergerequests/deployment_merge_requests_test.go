@@ -160,7 +160,7 @@ func TestList_InvalidDeploymentID(t *testing.T) {
 // deploymentListHint is the one recovery this action offers, and it is
 // attached to 404 alone: a deployment id that does not exist is what sending
 // the caller to the deployment listing answers.
-const deploymentListHint = "verify project_id and deployment_id with gitlab_deployment_list"
+const deploymentListHint = "verify project_id and deployment_id with environment.deployment_list"
 
 // TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
 // The test exercises the GET path of the underlying GitLab API call.

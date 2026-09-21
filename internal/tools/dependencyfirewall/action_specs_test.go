@@ -182,7 +182,7 @@ func TestActionSpecs_NotFoundNamesTheFeatureFlag(t *testing.T) {
 		t.Fatalf("MarkdownForResult() = %#v, want an informational error result", callResult)
 	}
 	text := resultText(t, callResult.Content)
-	for _, want := range []string{FeatureFlag, "group/project", "Premium", "gitlab_project_get"} {
+	for _, want := range []string{FeatureFlag, "group/project", "Premium", "project.get"} {
 		t.Run("mentions/"+want, func(t *testing.T) {
 			if !strings.Contains(text, want) {
 				t.Errorf("not-found guidance is missing %q:\n%s", want, text)

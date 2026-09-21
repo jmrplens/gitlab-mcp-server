@@ -37,7 +37,7 @@ func TestGet(t *testing.T) {
 }
 
 // TestGet_Error checks that a project GitLab will not serve is refused with
-// the hint that routes the caller to the tool which verifies the id.
+// the hint that routes the caller to the action which verifies the id.
 //
 // The hint is keyed on one status, so a wrong code drops the only actionable
 // part of the refusal while leaving an error that still looks correct.
@@ -49,7 +49,7 @@ func TestGet_Error(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "Suggestion: verify project_id with gitlab_project_get") {
+	if !strings.Contains(err.Error(), "Suggestion: verify project_id with project.get") {
 		t.Errorf("404 refusal %q carries no project lookup hint", err)
 	}
 }

@@ -25,7 +25,7 @@ type tagNotFoundOutput struct {
 func formatTagNotFound(out tagNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Tag", out.Identifier,
-		"Use gitlab_tag_list with project_id to list tags",
+		"Use tag.list with project_id to list tags",
 		"Verify the tag name is spelled correctly (case-sensitive)",
 	)
 }

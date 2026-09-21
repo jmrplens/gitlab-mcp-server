@@ -96,7 +96,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	milestones, resp, err := client.GL().Milestones.ListMilestones(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("milestoneList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get")
+			"verify project_id with project.get")
 	}
 
 	out := make([]Output, len(milestones))
@@ -272,7 +272,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	m, _, err := client.GL().Milestones.GetMilestone(string(input.ProjectID), globalID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("milestoneGet", err, http.StatusNotFound,
-			"verify milestone_iid with gitlab_milestone_list; project_id must match the project that owns the milestone")
+			"verify milestone_iid with project.milestone_list; project_id must match the project that owns the milestone")
 	}
 	return ToOutput(m), nil
 }
@@ -425,7 +425,7 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	issues, resp, err := client.GL().Milestones.GetMilestoneIssues(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return MilestoneIssuesOutput{}, toolutil.WrapErrWithStatusHint("milestoneGetIssues", err, http.StatusNotFound,
-			"verify milestone_iid with gitlab_milestone_list")
+			"verify milestone_iid with project.milestone_list")
 	}
 
 	items := make([]IssueItem, len(issues))
@@ -473,7 +473,7 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 	mrs, resp, err := client.GL().Milestones.GetMilestoneMergeRequests(string(input.ProjectID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return MilestoneMergeRequestsOutput{}, toolutil.WrapErrWithStatusHint("milestoneGetMergeRequests", err, http.StatusNotFound,
-			"verify milestone_iid with gitlab_milestone_list")
+			"verify milestone_iid with project.milestone_list")
 	}
 
 	items := make([]MergeRequestItem, len(mrs))

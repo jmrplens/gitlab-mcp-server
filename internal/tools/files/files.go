@@ -18,7 +18,7 @@ import (
 )
 
 // hintVerifyFilePathRef is the 404 hint shared by repository file tools.
-const hintVerifyFilePathRef = "verify file_path and ref exist with gitlab_repository_tree"
+const hintVerifyFilePathRef = "verify file_path and ref exist with repository.tree"
 
 // GetInput defines parameters for retrieving a file from a repository.
 type GetInput struct {
@@ -69,7 +69,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	f, _, err := client.GL().RepositoryFiles.GetFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return Output{}, toolutil.WrapErrWithHint("fileGet", err, "verify the file_path and ref exist; use gitlab_repository_tree to browse files")
+			return Output{}, toolutil.WrapErrWithHint("fileGet", err, "verify the file_path and ref exist; use repository.tree to browse files")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("fileGet", err)
 	}
@@ -191,7 +191,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	info, _, err := client.GL().RepositoryFiles.CreateFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileCreate", err, "the file may already exist. Use gitlab_file_update to modify an existing file, or verify the branch name")
+			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileCreate", err, "the file may already exist. Use repository.file_update to modify an existing file, or verify the branch name")
 		}
 		return FileInfoOutput{}, toolutil.WrapErrWithMessage("fileCreate", err)
 	}
@@ -332,7 +332,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().RepositoryFiles.DeleteFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return toolutil.WrapErrWithHint("fileDelete", err, "the file does not exist at the specified path or branch. Verify with gitlab_file_get first")
+			return toolutil.WrapErrWithHint("fileDelete", err, "the file does not exist at the specified path or branch. Verify with repository.file_get first")
 		}
 		return toolutil.WrapErrWithMessage("fileDelete", err)
 	}
@@ -396,7 +396,7 @@ func Blame(ctx context.Context, client *gitlabclient.Client, input BlameInput) (
 	ranges, _, err := client.GL().RepositoryFiles.GetFileBlame(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BlameOutput{}, toolutil.WrapErrWithStatusHint("fileBlame", err, http.StatusNotFound,
-			"verify file_path and ref exist with gitlab_repository_tree; range_start/range_end must be 1-based and within the file's line count")
+			"verify file_path and ref exist with repository.tree; range_start/range_end must be 1-based and within the file's line count")
 	}
 	out := make([]BlameRangeOutput, len(ranges))
 	for i, r := range ranges {

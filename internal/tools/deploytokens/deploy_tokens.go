@@ -176,7 +176,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	tokens, resp, err := client.GL().DeployTokens.ListProjectDeployTokens(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_token_list_project", err, http.StatusForbidden,
-			"listing project deploy tokens requires Maintainer role; verify project_id with gitlab_project_get")
+			"listing project deploy tokens requires Maintainer role; verify project_id with project.get")
 	}
 
 	return buildListOutput(tokens, resp), nil
@@ -194,7 +194,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	tokens, resp, err := client.GL().DeployTokens.ListGroupDeployTokens(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("deploy_token_list_group", err, http.StatusForbidden,
-			"listing group deploy tokens requires Owner role; verify group_id with gitlab_group_get")
+			"listing group deploy tokens requires Owner role; verify group_id with group.get")
 	}
 
 	return buildListOutput(tokens, resp), nil
@@ -212,7 +212,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	token, _, err := client.GL().DeployTokens.GetProjectDeployToken(string(input.ProjectID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_get_project", err, http.StatusNotFound,
-			"verify deploy_token_id with gitlab_deploy_token_list_project; the token may have been revoked")
+			"verify deploy_token_id with access.deploy_token_list_project; the token may have been revoked")
 	}
 
 	return toOutput(token), nil
@@ -230,7 +230,7 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 	token, _, err := client.GL().DeployTokens.GetGroupDeployToken(string(input.GroupID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_get_group", err, http.StatusNotFound,
-			"verify deploy_token_id with gitlab_deploy_token_list_group; the token may have been revoked")
+			"verify deploy_token_id with access.deploy_token_list_group; the token may have been revoked")
 	}
 
 	return toOutput(token), nil

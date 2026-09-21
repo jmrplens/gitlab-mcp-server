@@ -27,13 +27,13 @@ const fmtUnexpErr = "unexpected error: %v"
 // four values that could trade places, and a hint taken from the source it is
 // checking against cannot notice that; written out, a crossing fails.
 const (
-	wantListNotFoundHint = "verify project_path with gitlab_project_get; uses GraphQL. " +
+	wantListNotFoundHint = "verify project_path with project.get; uses GraphQL. " +
 		"Terraform states require Maintainer role to view"
-	wantGetNotFoundHint     = "verify state name with gitlab_list_terraform_states; the state may not exist for this project"
+	wantGetNotFoundHint     = "verify state name with admin.terraform_state_list; the state may not exist for this project"
 	wantDeleteForbiddenHint = "deleting Terraform states requires Maintainer role; deletion is irreversible. " +
 		"All versions are removed"
-	wantDeleteVersionNotFoundHint = "verify serial with gitlab_list_terraform_states; cannot delete the latest version. " +
-		"Use gitlab_delete_terraform_state to remove the entire state"
+	wantDeleteVersionNotFoundHint = "verify serial with admin.terraform_state_list; cannot delete the latest version. " +
+		"Use admin.terraform_state_delete to remove the entire state"
 )
 
 // TestList verifies List.
@@ -326,7 +326,7 @@ func TestLock_Error(t *testing.T) {
 
 // TestLock_BadRequest_HintsSDKLimitation verifies that the guaranteed 400 from
 // GitLab (client-go sends no Terraform lock-info body) is wrapped with a hint
-// pointing at the terraform CLI and gitlab_unlock_terraform_state.
+// pointing at the terraform CLI and admin.terraform_state_unlock.
 func TestLock_BadRequest_HintsSDKLimitation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad request"}`)
@@ -335,7 +335,7 @@ func TestLock_BadRequest_HintsSDKLimitation(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedErr)
 	}
-	if !strings.Contains(err.Error(), "lock-info body") || !strings.Contains(err.Error(), "gitlab_unlock_terraform_state") {
+	if !strings.Contains(err.Error(), "lock-info body") || !strings.Contains(err.Error(), "admin.terraform_state_unlock") {
 		t.Errorf("error = %q, want SDK-limitation hint with unlock alternative", err.Error())
 	}
 }

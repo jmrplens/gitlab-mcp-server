@@ -336,7 +336,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	commits, resp, err := client.GL().Commits.ListCommits(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("commitList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get and ref_name (branch/tag/SHA) with gitlab_branch_list or gitlab_tag_list")
+			"verify project_id with project.get and ref_name (branch/tag/SHA) with branch.list or tag.list")
 	}
 
 	out := make([]Output, len(commits))
@@ -472,7 +472,7 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 	diffs, resp, err := client.GL().Commits.GetCommitDiff(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return DiffOutput{}, toolutil.WrapErrWithStatusHint("commitDiff", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get; large diffs may be truncated by GitLab. Use unidiff=true for git-compatible format")
+			"verify SHA with repository.commit_get; large diffs may be truncated by GitLab. Use unidiff=true for git-compatible format")
 	}
 
 	out := make([]toolutil.DiffOutput, len(diffs))
@@ -534,7 +534,7 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 	refs, resp, err := client.GL().Commits.GetCommitRefs(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return RefsOutput{}, toolutil.WrapErrWithStatusHint("getCommitRefs", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get. Refs lists branches/tags containing the commit")
+			"verify SHA with repository.commit_get. Refs lists branches/tags containing the commit")
 	}
 	out := make([]RefOutput, len(refs))
 	for i, r := range refs {
@@ -599,7 +599,7 @@ func GetComments(ctx context.Context, client *gitlabclient.Client, input Comment
 	comments, resp, err := client.GL().Commits.GetCommitComments(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return CommentsOutput{}, toolutil.WrapErrWithStatusHint("getCommitComments", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get")
+			"verify SHA with repository.commit_get")
 	}
 	extras, err := toolutil.CapturedCommitComments(captured, len(comments))
 	if err != nil {
@@ -664,7 +664,7 @@ func PostComment(ctx context.Context, client *gitlabclient.Client, input PostCom
 				"when line is set, line_type must be 'new' or 'old' and path must point to a file changed in the commit")
 		}
 		return CommentOutput{}, toolutil.WrapErrWithStatusHint("postCommitComment", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get; commenting requires Reporter+ role")
+			"verify SHA with repository.commit_get; commenting requires Reporter+ role")
 	}
 	extra, err := toolutil.CapturedCommitComment(captured)
 	if err != nil {
@@ -755,7 +755,7 @@ func GetStatuses(ctx context.Context, client *gitlabclient.Client, input Statuse
 	statuses, resp, err := client.GL().Commits.GetCommitStatuses(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return StatusesOutput{}, toolutil.WrapErrWithStatusHint("getCommitStatuses", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get. Statuses are populated by CI jobs and external integrations")
+			"verify SHA with repository.commit_get. Statuses are populated by CI jobs and external integrations")
 	}
 	out := make([]StatusOutput, len(statuses))
 	for i, s := range statuses {
@@ -842,7 +842,7 @@ func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatus
 				"state must be one of: pending, running, success, failed, canceled, skipped. Status names are case-sensitive")
 		}
 		return StatusOutput{}, toolutil.WrapErrWithStatusHint("setCommitStatus", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get")
+			"verify SHA with repository.commit_get")
 	}
 	return statusToOutput(s), nil
 }
@@ -886,7 +886,7 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 	mrs, _, err := client.GL().Commits.ListMergeRequestsByCommit(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
 	if err != nil {
 		return MRsByCommitOutput{}, toolutil.WrapErrWithStatusHint("listMergeRequestsByCommit", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get. Returns MRs that include this commit")
+			"verify SHA with repository.commit_get. Returns MRs that include this commit")
 	}
 	out := make([]BasicMROutput, len(mrs))
 	for i, mr := range mrs {
@@ -1099,7 +1099,7 @@ func GetGPGSignature(ctx context.Context, client *gitlabclient.Client, input GPG
 	sig, _, err := rawGetGPGSignature(ctx, client, input.ProjectID, input.SHA)
 	if err != nil {
 		return GPGSignatureOutput{}, toolutil.WrapErrWithStatusHint("getGPGSignature", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get. 404 also returned for unsigned commits or unsupported signature types")
+			"verify SHA with repository.commit_get. 404 also returned for unsigned commits or unsupported signature types")
 	}
 	return GPGSignatureOutput{
 		SignatureType:      sig.SignatureType,

@@ -72,7 +72,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	t, _, err := client.GL().DockerfileTemplate.GetTemplate(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_dockerfile_template", err, http.StatusNotFound, "verify name with gitlab_list_dockerfile_templates")
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_dockerfile_template", err, http.StatusNotFound, "verify name with template.dockerfile_list")
 	}
 	return GetOutput{Name: t.Name, Content: t.Content}, nil
 }

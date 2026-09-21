@@ -149,7 +149,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().GroupSSHCertificates.DeleteGroupSSHCertificate(in.GroupID.String(), in.CertificateID)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with gitlab_list_group_ssh_certificates")
+		return toolutil.WrapErrWithStatusHint("delete group SSH certificate", err, http.StatusNotFound, "verify cert_id with group.ssh_cert_list")
 	}
 	return nil
 }

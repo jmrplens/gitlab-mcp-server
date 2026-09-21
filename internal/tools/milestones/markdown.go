@@ -17,7 +17,7 @@ type milestoneNotFoundOutput struct {
 func formatMilestoneNotFound(out milestoneNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Milestone", out.Identifier,
-		"Use gitlab_milestone_list with project_id to list milestones",
+		"Use project.milestone_list with project_id to list milestones",
 		"Verify the milestone IID is correct for this project",
 	)
 }

@@ -156,7 +156,7 @@ func validateDetachIdentifier(identifier string) error {
 // files the arithmetic mutant on that plus as not covered rather than not
 // viable, and no test can ever kill it: subtracting one string from another
 // does not compile.
-var errDetachIdentifier = errors.New("detach requires the persisted profile's numeric ID (from gitlab_list_project_scan_profile_statuses), not a scan-type name")
+var errDetachIdentifier = errors.New("detach requires the persisted profile's numeric ID (from security_scan_profile.list_project_statuses), not a scan-type name")
 
 // isAllDigits reports whether s is non-empty and consists solely of ASCII
 // digits.
@@ -218,7 +218,7 @@ func Detach(ctx context.Context, client *gitlabclient.Client, input DetachInput)
 	}
 	if _, err := client.GL().SecurityScanProfiles.DetachSecurityScanProfile(opts, gl.WithContext(ctx)); err != nil {
 		return MutationOutput{}, toolutil.WrapErrWithHint("detach security scan profile", err,
-			"detach requires the persisted profile's numeric ID (from gitlab_list_project_scan_profile_statuses), not a scan-type name; targets must belong to a group namespace and share one root namespace; requires Maintainer or Owner and Ultimate")
+			"detach requires the persisted profile's numeric ID (from security_scan_profile.list_project_statuses), not a scan-type name; targets must belong to a group namespace and share one root namespace; requires Maintainer or Owner and Ultimate")
 	}
 	return MutationOutput{
 		Status:                "success",

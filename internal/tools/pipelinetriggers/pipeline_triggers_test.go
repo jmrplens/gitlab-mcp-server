@@ -1132,7 +1132,7 @@ func TestRunTrigger_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_ci_lint") {
+	if !strings.Contains(err.Error(), "template.lint") {
 		t.Fatalf("error = %v, want CI lint hint", err)
 	}
 }

@@ -330,7 +330,7 @@ func TestGet_EmptyKey_Cov(t *testing.T) {
 // http.StatusForbidden by hand left every test green, since the error tests
 // assert only that err is non-nil.
 func TestGet_Error_SuggestsTheListActionOnNotFoundAlone(t *testing.T) {
-	const listHint = "Suggestion: verify name with gitlab_list_ci_yml_templates"
+	const listHint = "Suggestion: verify name with template.ci_yml_list"
 
 	cases := []struct {
 		name     string

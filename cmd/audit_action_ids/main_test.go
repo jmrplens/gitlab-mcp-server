@@ -159,7 +159,7 @@ var Unfolded = toolutil.ActionSpecOptions{
 	if code != 1 {
 		t.Fatalf("run with -check = %d, want 1; stdout %q", code, stdout.String())
 	}
-	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing\n"
+	const want = "\nERROR: 2 published ID(s) resolve to no action, 1 name a registered alias rather than a catalog ID, 3 site(s) could not be folded, 0 declaration(s) excuse nothing, 0 hint(s) name a tool rather than an action\n"
 	if stderr.String() != want {
 		t.Errorf("stderr = %q, want %q", stderr.String(), want)
 	}
@@ -182,16 +182,16 @@ func TestRun_Check_CleanPackage_Passes(t *testing.T) {
 	}
 }
 
-// TestRun_Check_HintNamingATool_IsReportedAndPasses drives the whole command
-// over a fixture whose only defect is a hint, and holds the staging decision
-// end to end: the row is in the report, the count is in the summary, and the
-// gate exits 0.
+// TestRun_Check_HintNamingATool_IsReportedAndFails drives the whole command
+// over a fixture whose only defect is a hint, and holds the flip end to end:
+// the row is in the report, the count is in the summary, and the gate exits
+// non-zero.
 //
-// It is the assertion that keeps this rule off the critical path. The class is
-// 790 findings wide, so a version of the gate that counted them would refuse
-// every push until the tree was clean, and there would be no run left to
-// measure the tree with.
-func TestRun_Check_HintNamingATool_IsReportedAndPasses(t *testing.T) {
+// It passed until the tree was clean, which was the staging: the class opened
+// at 785 findings, and a gate refusing them then would have refused every push
+// with no run left to measure the tree with. It fails now, which is what stops
+// the 786th being written.
+func TestRun_Check_HintNamingATool_IsReportedAndFails(t *testing.T) {
 	root := repoRoot(t)
 	overlay := map[string][]byte{
 		filepath.Join(root, filepath.FromSlash(fixtureDir), "fixture.go"): []byte(`package fixture
@@ -214,14 +214,17 @@ func Get() error {
 
 	code := run(auditConfig{dir: root, patterns: []string{"./" + fixtureDir + "/..."}, overlay: overlay, check: true, verbose: true}, &stdout, &stderr)
 
-	if code != 0 {
-		t.Fatalf("run with -check = %d over a hint finding, want 0; stderr %q", code, stderr.String())
+	if code == 0 {
+		t.Fatalf("run with -check = 0 over a hint finding, want a refusal; stdout %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "gitlab_project_get") {
 		t.Errorf("stdout = %q, want the tool name named", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read") {
 		t.Errorf("stdout = %q, want the count of what the rule read", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "hint(s) name a tool rather than an action") {
+		t.Errorf("stderr = %q, want the failure line to name this rule rather than only the count", stderr.String())
 	}
 }
 

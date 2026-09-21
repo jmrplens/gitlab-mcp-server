@@ -378,7 +378,10 @@ func TestCreateExport_NotFoundHint(t *testing.T) {
 		t.Fatal("expected error for missing pipeline")
 	}
 	errText := err.Error()
-	for _, want := range []string{"pipeline_id", "gitlab_pipeline", "dependency scanning", "SBOM"} {
+	// The capability the hint sends a reader to is named by its canonical
+	// action ID, which every surface resolves, rather than by the meta tool
+	// and an action argument, which only one of the three registers.
+	for _, want := range []string{"pipeline_id", "pipeline.latest", "dependency scanning", "SBOM"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(errText, want) {
 				t.Fatalf("error missing %q: %v", want, err)

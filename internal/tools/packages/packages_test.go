@@ -768,7 +768,7 @@ func TestPackageGroupList_APIError(t *testing.T) {
 	}
 	// The hint is what the comment promises and what a model acts on, so it is
 	// asserted rather than left to the operation prefix alone.
-	if !strings.Contains(err.Error(), "verify group_id with gitlab_group_get") {
+	if !strings.Contains(err.Error(), "verify group_id with group.get") {
 		t.Errorf("error = %v, want the hint naming how to check the group", err)
 	}
 }

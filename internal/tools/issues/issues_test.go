@@ -5707,7 +5707,7 @@ func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 			_, err := Create(ctx, c, CreateInput{ProjectID: testProjectID, Title: testIssueTitle})
 			return err
 		}},
-		{"Get/404", http.StatusNotFound, "use gitlab_issue_list to see existing issues", func(ctx context.Context, c *gitlabclient.Client) error {
+		{"Get/404", http.StatusNotFound, "use issue.list to see existing issues", func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := Get(ctx, c, get)
 			return err
 		}},
@@ -5715,7 +5715,7 @@ func TestStatusHints_EachStatusPicksItsOwnRemedy(t *testing.T) {
 			_, err := List(ctx, c, ListInput{ProjectID: testProjectID})
 			return err
 		}},
-		{"Update/404", http.StatusNotFound, "Use gitlab_issue_list to check available issues", func(ctx context.Context, c *gitlabclient.Client) error {
+		{"Update/404", http.StatusNotFound, "Use issue.list to check available issues", func(ctx context.Context, c *gitlabclient.Client) error {
 			_, err := Update(ctx, c, UpdateInput{ProjectID: testProjectID, IssueIID: 10, Title: "x"})
 			return err
 		}},

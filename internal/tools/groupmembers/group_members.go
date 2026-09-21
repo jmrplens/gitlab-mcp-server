@@ -247,7 +247,7 @@ func GetMember(ctx context.Context, client *gitlabclient.Client, input GetInput)
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id with gitlab_list_users. Inherited members are not returned, use gitlab_group_member_get_inherited for those")
+			"verify group_id with group.get and user_id with user.list. Inherited members are not returned, use group.group_member_get_inherited for those")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -270,7 +270,7 @@ func GetInheritedMember(ctx context.Context, client *gitlabclient.Client, input 
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_get_inherited", err, http.StatusNotFound,
-			"the user is not a member of this group or any ancestor group; verify with gitlab_group_members_list (include_inherited=true)")
+			"the user is not a member of this group or any ancestor group; verify with group.members (include_inherited=true)")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -312,7 +312,7 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
-				"the user is already a direct member of this group. Use gitlab_group_member_edit to change their access level instead")
+				"the user is already a direct member of this group. Use group.group_member_edit to change their access level instead")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
@@ -323,7 +323,7 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 				"access_level must be one of 5/10/15/20/25/30/40/50/60 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported); expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_add", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id/username with gitlab_list_users")
+			"verify group_id with group.get and user_id/username with user.list")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -360,7 +360,7 @@ func EditMember(ctx context.Context, client *gitlabclient.Client, input EditInpu
 				"editing members requires Owner role; cannot edit inherited members (only direct members) and cannot grant access higher than your own role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_edit", err, http.StatusNotFound,
-			"the user is not a direct member of this group. Use gitlab_group_members_list to confirm direct membership before editing")
+			"the user is not a direct member of this group. Use group.members to confirm direct membership before editing")
 	}
 	extra, err := toolutil.CapturedMember(captured)
 	if err != nil {
@@ -393,7 +393,7 @@ func RemoveMember(ctx context.Context, client *gitlabclient.Client, input Remove
 				"inherited members cannot be removed from this group. They must be removed from the ancestor group where they were added directly. Removing direct members requires Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint("group_member_remove", err, http.StatusNotFound,
-			"the user is not a direct member of this group; use gitlab_group_members_list to confirm direct membership")
+			"the user is not a direct member of this group; use group.members to confirm direct membership")
 	}
 	return nil
 }
@@ -435,7 +435,7 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
-				"this group is already shared with the target group. Use gitlab_group_unshare first to change the access level")
+				"this group is already shared with the target group. Use group.group_member_unshare first to change the access level")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
@@ -446,7 +446,7 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 				"group_access must be one of 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project group shares")
 		}
 		return ShareOutput{}, toolutil.WrapErrWithStatusHint("group_share", err, http.StatusNotFound,
-			"verify group_id and share_group_id with gitlab_group_get. share_group_id must be a numeric group ID, not a path")
+			"verify group_id and share_group_id with group.get. share_group_id must be a numeric group ID, not a path")
 	}
 	return ShareOutput{
 		ID:          g.ID,
@@ -470,7 +470,7 @@ func UnshareGroup(ctx context.Context, client *gitlabclient.Client, input Unshar
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("group_unshare", err, http.StatusNotFound,
-			"the share does not exist. Use gitlab_group_get to inspect shared_with_groups for the current shares")
+			"the share does not exist. Use group.get to inspect shared_with_groups for the current shares")
 	}
 	return nil
 }
@@ -507,7 +507,7 @@ func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input
 	)
 	if err != nil {
 		return BillableMembersOutput{}, toolutil.WrapErrWithStatusHint("group_billable_members_list", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get. Billable members are a Premium/Ultimate feature and require Owner access on the group")
+			"verify group_id with group.get. Billable members are a Premium/Ultimate feature and require Owner access on the group")
 	}
 	extras, err := toolutil.CapturedBillableMembers(captured, len(members))
 	if err != nil {
@@ -545,7 +545,7 @@ func ListBillableMemberMemberships(ctx context.Context, client *gitlabclient.Cli
 	)
 	if err != nil {
 		return BillableMembershipsOutput{}, toolutil.WrapErrWithStatusHint("group_billable_member_memberships_list", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members. The user must be a billable member of the group (Premium/Ultimate)")
+			"verify group_id with group.get and user_id with group.group_billable_members_list. The user must be a billable member of the group (Premium/Ultimate)")
 	}
 	out := BillableMembershipsOutput{
 		Memberships: make([]BillableMembershipOutput, len(memberships)),
@@ -576,10 +576,10 @@ func RemoveBillableMember(ctx context.Context, client *gitlabclient.Client, inpu
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return toolutil.WrapErrWithHint("group_billable_member_remove", err,
-				"only directly removable billable members can be removed here; check the 'removable' flag from gitlab_list_billable_group_members. Inherited members must be removed from their source group")
+				"only directly removable billable members can be removed here; check the 'removable' flag from group.group_billable_members_list. Inherited members must be removed from their source group")
 		}
 		return toolutil.WrapErrWithStatusHint("group_billable_member_remove", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members")
+			"verify group_id with group.get and user_id with group.group_billable_members_list")
 	}
 	return nil
 }

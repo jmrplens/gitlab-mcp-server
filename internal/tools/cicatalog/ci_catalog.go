@@ -489,7 +489,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithHint("get_catalog_resource", err,
-			"verify the resource exists with gitlab_list_catalog_resources; id must be a GID (gid://gitlab/Ci::CatalogResource/N) or use full_path of the hosting project")
+			"verify the resource exists with ci_catalog.list; id must be a GID (gid://gitlab/Ci::CatalogResource/N) or use full_path of the hosting project")
 	}
 
 	if resp.Data.CiCatalogResource == nil {

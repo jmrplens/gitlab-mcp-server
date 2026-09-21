@@ -880,7 +880,7 @@ func MembersList(ctx context.Context, client *gitlabclient.Client, input Members
 	memberList, resp, err := client.GL().Groups.ListAllGroupMembers(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return MemberListOutput{}, toolutil.WrapErrWithStatusHint("MembersList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; private group membership requires the caller to be a member")
+			"verify group_id with group.get; private group membership requires the caller to be a member")
 	}
 	extras, err := toolutil.CapturedMembers(captured, len(memberList))
 	if err != nil {
@@ -914,7 +914,7 @@ func SubgroupsList(ctx context.Context, client *gitlabclient.Client, input Subgr
 	groups, resp, err := client.GL().Groups.ListDescendantGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("SubgroupsList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; subgroup listing returns descendants at all depths")
+			"verify group_id with group.get; subgroup listing returns descendants at all depths")
 	}
 
 	return groupListOutput("SubgroupsList", groups, resp, captured)
@@ -1549,7 +1549,7 @@ func TransferProject(ctx context.Context, client *gitlabclient.Client, input Tra
 				"the project may already belong to this group, or the target group is incompatible (e.g. visibility mismatch, missing CI/CD setup)")
 		}
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("groupTransferProject", err, http.StatusNotFound,
-			"verify both group_id and project_id with gitlab_group_get and gitlab_project_get")
+			"verify both group_id and project_id with group.get and project.get")
 	}
 	return groupDetail("TransferProject", g, captured)
 }
@@ -1617,7 +1617,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 	projects, resp, err := client.GL().Groups.ListGroupProjects(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectsOutput{}, toolutil.WrapErrWithStatusHint("groupListProjects", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get. Use include_subgroups=true to also list projects in descendant groups")
+			"verify group_id with group.get. Use include_subgroups=true to also list projects in descendant groups")
 	}
 
 	return ListProjectsOutput{Projects: projectItemsFromGroup(projects, input.Simple), Pagination: toolutil.PaginationFromResponse(resp)}, nil
@@ -1686,7 +1686,7 @@ func SharedWithList(ctx context.Context, client *gitlabclient.Client, input Shar
 	groups, resp, err := client.GL().Groups.ListGroupsSharedWith(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("SharedWithList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; this lists groups shared *with* the target group (group-to-group shares)")
+			"verify group_id with group.get; this lists groups shared *with* the target group (group-to-group shares)")
 	}
 
 	return groupListOutput("SharedWithList", groups, resp, captured)
@@ -1751,7 +1751,7 @@ func InvitedList(ctx context.Context, client *gitlabclient.Client, input Invited
 	groups, resp, err := client.GL().Groups.ListInvitedGroups(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("InvitedList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; this lists groups invited to the target group")
+			"verify group_id with group.get; this lists groups invited to the target group")
 	}
 
 	return groupListOutput("InvitedList", groups, resp, captured)
@@ -1812,7 +1812,7 @@ func TransferLocationsList(ctx context.Context, client *gitlabclient.Client, inp
 	locations, resp, err := client.GL().Groups.ListTransferLocations(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return TransferLocationsListOutput{}, toolutil.WrapErrWithStatusHint("TransferLocationsList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; returns groups you can transfer this group into (requires Owner role on the target)")
+			"verify group_id with group.get; returns groups you can transfer this group into (requires Owner role on the target)")
 	}
 
 	out := TransferLocationsListOutput{

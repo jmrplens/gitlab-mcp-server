@@ -98,7 +98,7 @@ type ListProjectStatusChecksInput struct {
 // ListProjectStatusChecks lists project-level external status checks.
 func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectStatusChecksInput) (ListProjectStatusCheckOutput, error) {
 	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectStatusChecks",
-		"deprecated endpoint - prefer gitlab_list_project_external_status_checks; requires Maintainer role and Premium/Ultimate license",
+		"deprecated endpoint - prefer external_status_check.list_project; requires Maintainer role and Premium/Ultimate license",
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListOptions{}
 			toolutil.ApplyListOptions(listOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -154,7 +154,7 @@ func ListProjectMRExternalStatusChecks(ctx context.Context, client *gitlabclient
 	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectMergeRequestExternalStatusChecks(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListMergeStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectMRExternalStatusChecks", err, http.StatusNotFound,
-			"verify merge_request_iid (project-scoped, not the global ID) with gitlab_mr_list; requires Maintainer role + Premium/Ultimate")
+			"verify merge_request_iid (project-scoped, not the global ID) with merge_request.list; requires Maintainer role + Premium/Ultimate")
 	}
 	items := make([]MergeStatusCheckOutput, len(checks))
 	for i, c := range checks {
@@ -175,7 +175,7 @@ type ListProjectInput struct {
 // ListProjectExternalStatusChecks lists external status checks for a project.
 func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListProjectStatusCheckOutput, error) {
 	return listProjectStatusChecks(ctx, input.ProjectID, "listProjectExternalStatusChecks",
-		"requires Maintainer role and Premium/Ultimate license; verify project_id with gitlab_project_get",
+		"requires Maintainer role and Premium/Ultimate license; verify project_id with project.get",
 		func(projectID string, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
 			listOptions := &gl.ListProjectExternalStatusChecksOptions{}
 			toolutil.ApplyListOptions(&listOptions.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
@@ -221,7 +221,7 @@ func CreateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	check, _, err := client.GL().ExternalStatusChecks.CreateProjectExternalStatusCheck(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("createProjectExternalStatusCheck", err, http.StatusBadRequest,
-			"name must be unique within the project; external_url must be a valid HTTPS URL reachable from GitLab; protected_branch_ids must be IDs (not names) from gitlab_protected_branches_list")
+			"name must be unique within the project; external_url must be a valid HTTPS URL reachable from GitLab; protected_branch_ids must be IDs (not names) from branch.list_protected")
 	}
 	return toProjectStatusCheckOutput(check), nil
 }
@@ -246,7 +246,7 @@ func DeleteProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	_, err := client.GL().ExternalStatusChecks.DeleteProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, &gl.DeleteProjectExternalStatusCheckOptions{}, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("deleteProjectExternalStatusCheck", err, http.StatusForbidden,
-			"requires Maintainer role; verify check_id with gitlab_list_project_external_status_checks; deletion is irreversible")
+			"requires Maintainer role; verify check_id with external_status_check.list_project; deletion is irreversible")
 	}
 	return nil
 }
@@ -288,7 +288,7 @@ func UpdateProjectExternalStatusCheck(ctx context.Context, client *gitlabclient.
 	check, _, err := client.GL().ExternalStatusChecks.UpdateProjectExternalStatusCheck(string(input.ProjectID), input.CheckID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("updateProjectExternalStatusCheck", err, http.StatusNotFound,
-			"verify check_id with gitlab_list_project_external_status_checks; name must remain unique; external_url must be valid HTTPS")
+			"verify check_id with external_status_check.list_project; name must remain unique; external_url must be valid HTTPS")
 	}
 	return toProjectStatusCheckOutput(check), nil
 }
@@ -317,7 +317,7 @@ func RetryFailedExternalStatusCheckForProjectMR(ctx context.Context, client *git
 	_, err := client.GL().ExternalStatusChecks.RetryFailedExternalStatusCheckForProjectMergeRequest(string(input.ProjectID), input.MRIID, input.CheckID, &gl.RetryFailedExternalStatusCheckForProjectMergeRequestOptions{}, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("retryFailedExternalStatusCheckForProjectMR", err, http.StatusUnprocessableEntity,
-			"check must currently be in 'failed' state to retry; verify status with gitlab_list_project_mr_external_status_checks; rate-limited per project")
+			"check must currently be in 'failed' state to retry; verify status with external_status_check.list_project_mr_checks; rate-limited per project")
 	}
 	return nil
 }
@@ -359,7 +359,7 @@ func SetProjectMRExternalStatusCheckStatus(ctx context.Context, client *gitlabcl
 	_, err := client.GL().ExternalStatusChecks.SetProjectMergeRequestExternalStatusCheckStatus(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("setProjectMRExternalStatusCheckStatus", err, http.StatusBadRequest,
-			"sha must match the current MR head (use gitlab_mr_get to confirm); status must be 'passed' or 'failed'; only the external service that created the check (HMAC-authenticated) can set its status")
+			"sha must match the current MR head (use merge_request.get to confirm); status must be 'passed' or 'failed'; only the external service that created the check (HMAC-authenticated) can set its status")
 	}
 	return nil
 }

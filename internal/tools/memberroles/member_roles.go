@@ -10,7 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const groupMemberRoleSelfManagedHint = "group-level custom roles are deprecated on self-managed GitLab; use instance-level member roles with list_instance/create_instance on gitlab_member_role, or retry group-level roles only on GitLab.com Ultimate where supported"
+const groupMemberRoleSelfManagedHint = "group-level custom roles are deprecated on self-managed GitLab; use instance-level member roles with member_role.list_instance or member_role.create_instance, or retry group-level roles only on GitLab.com Ultimate where supported"
 
 // The two group operations name themselves three times each: the deprecation
 // hint, the status hint and the captured-response reader all take the operation
@@ -366,7 +366,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 			return ListOutput{}, toolutil.WrapErrWithHint(opListGroupMemberRoles, err, groupMemberRoleSelfManagedHint)
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(opListGroupMemberRoles, err, http.StatusForbidden,
-			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with gitlab_group_list")
+			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with group.list")
 	}
 	return capturedRoleList(opListGroupMemberRoles, roles, captured)
 }
@@ -441,7 +441,7 @@ func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteI
 	_, err := client.GL().MemberRolesService.DeleteInstanceMemberRole(in.MemberRoleID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete instance member role", err, http.StatusForbidden,
-			"requires admin + self-managed Ultimate; verify member_role_id with gitlab_list_instance_member_roles; deletion is irreversible and may fail if role is still assigned")
+			"requires admin + self-managed Ultimate; verify member_role_id with member_role.list_instance; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }
@@ -465,7 +465,7 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGrou
 			return toolutil.WrapErrWithHint("delete group member role", err, groupMemberRoleSelfManagedHint)
 		}
 		return toolutil.WrapErrWithStatusHint("delete group member role", err, http.StatusForbidden,
-			"requires Owner + Ultimate; verify member_role_id with gitlab_list_group_member_roles; deletion is irreversible and may fail if role is still assigned")
+			"requires Owner + Ultimate; verify member_role_id with member_role.list_group; deletion is irreversible and may fail if role is still assigned")
 	}
 	return nil
 }

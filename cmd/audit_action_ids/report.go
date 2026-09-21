@@ -24,9 +24,10 @@ import (
 // and became the prose half of the same refusal, with declaredAliasMentions
 // the only thing that excuses one. It also adds declarations_judged, which is
 // about the run rather than the tree. Version 4 adds the `hints` section, the
-// staged rule over the corrective prose an error helper hands a model, which
-// reports and never gates. The counts move across all three lines, so a reader
-// comparing two runs across any of them is comparing two rules.
+// rule over the corrective prose an error helper hands a model, which was
+// staged at 785 findings and gates now that the tree is clean; its unfolded
+// sites are still only reported. The counts move across all three lines, so a
+// reader comparing two runs across any of them is comparing two rules.
 const schemaVersion = 4
 
 // Finding is one published action ID that is not a canonical catalog ID.
@@ -212,17 +213,28 @@ func (r *Report) finish() {
 
 // Clean reports whether this run found nothing the gate refuses.
 //
-// Four things fail it, and the reason each is here rather than reported is the
+// Five things fail it, and the reason each is here rather than reported is the
 // same one: a published ID that is not a canonical catalog ID, an ID that
-// resolves only as an alias, a declaration that excuses nothing, and a site
-// the type checker could not fold. The last is the one that needs saying out
-// loud. It is the audit's own blind spot rather than a defect of the tree, and
-// it fails anyway, because a gate whose blind spot is silent is one any future
-// site can step into: an ID assembled at run time would be reported as
-// unreadable and pass, which is the shape every wrong ID would then take.
+// resolves only as an alias, a declaration that excuses nothing, a site the
+// type checker could not fold, and a hint that names a tool.
+//
+// The unfoldable site is the one that needs saying out loud. It is the audit's
+// own blind spot rather than a defect of the tree, and it fails anyway,
+// because a gate whose blind spot is silent is one any future site can step
+// into: an ID assembled at run time would be reported as unreadable and pass,
+// which is the shape every wrong ID would then take.
+//
+// The hint rule joined them when its count reached zero, which is the order
+// this had to happen in: it opened at 785 findings across 137 packages, and a
+// gate cannot land before the code it judges is clean. Its own unfoldable
+// sites are counted apart and do not fail, which is the one place this departs
+// from the paragraph above, because a hint the type checker cannot fold is
+// text a reader can still read: three sites build one from a function call or
+// a format string and carry no tool name between them.
 func (r *Report) Clean() bool {
 	return r.Summary.Findings == 0 && r.Summary.AliasHits == 0 &&
-		r.Summary.Unresolved == 0 && r.Summary.Stale == 0
+		r.Summary.Unresolved == 0 && r.Summary.Stale == 0 &&
+		r.Hints.Findings == 0
 }
 
 // sortFindings orders findings by position, then by the ID, so two runs over

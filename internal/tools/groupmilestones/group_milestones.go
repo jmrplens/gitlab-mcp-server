@@ -14,7 +14,7 @@ import (
 )
 
 // hintVerifyGroupMilestoneID is the 404 hint shared by group milestone tools.
-const hintVerifyGroupMilestoneID = "verify milestone_id with gitlab_group_milestone_list"
+const hintVerifyGroupMilestoneID = "verify milestone_id with group.group_milestone_list"
 
 // ---------- Input types ----------.
 
@@ -219,7 +219,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	milestones, resp, err := client.GL().GroupMilestones.ListGroupMilestones(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; group milestones differ from project milestones")
+			"verify group_id with group.get; group milestones differ from project milestones")
 	}
 	extras, err := toolutil.CapturedMilestones(captured, len(milestones))
 	if err != nil {
@@ -446,7 +446,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	m, _, err := client.GL().GroupMilestones.UpdateGroupMilestone(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupMilestoneUpdate", err, http.StatusBadRequest,
-			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with gitlab_group_milestone_list")
+			"state_event must be 'close' or 'activate'; start_date/due_date must be YYYY-MM-DD; verify milestone_id with group.group_milestone_list")
 	}
 	extra, err := toolutil.CapturedMilestone(captured)
 	if err != nil {
@@ -611,7 +611,7 @@ func GetBurndownChartEvents(ctx context.Context, client *gitlabclient.Client, in
 	events, resp, err := client.GL().GroupMilestones.GetGroupMilestoneBurndownChartEvents(string(input.GroupID), globalID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return BurndownChartEventsOutput{}, toolutil.WrapErrWithStatusHint("groupMilestoneGetBurndownChartEvents", err, http.StatusNotFound,
-			"verify milestone_id with gitlab_group_milestone_list; burndown charts require GitLab Premium or higher")
+			"verify milestone_id with group.group_milestone_list; burndown charts require GitLab Premium or higher")
 	}
 
 	items := make([]BurndownChartEventItem, len(events))

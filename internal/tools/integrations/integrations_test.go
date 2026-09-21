@@ -798,7 +798,7 @@ func TestIntegrationHandlers_StatusHint_OnlyAtTheStatusItNames(t *testing.T) {
 			_, err := SetGroupIntegration(t.Context(), c, SetGroupIntegrationInput{GroupID: testGroupPath, Slug: testSlugSlack})
 			return err
 		}},
-		{"delete_group", http.StatusForbidden, "verify slug with gitlab_list_group_integrations", func(t *testing.T, c *gitlabclient.Client) error {
+		{"delete_group", http.StatusForbidden, "verify slug with project.integration_list_group", func(t *testing.T, c *gitlabclient.Client) error {
 			t.Helper()
 			return DeleteGroupIntegration(t.Context(), c, DeleteGroupIntegrationInput{GroupID: testGroupPath, Slug: testSlugSlack})
 		}},

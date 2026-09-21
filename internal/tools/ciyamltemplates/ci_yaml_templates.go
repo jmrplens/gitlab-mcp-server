@@ -93,7 +93,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	t, _, err := client.GL().CIYMLTemplate.GetTemplate(input.Key, gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_ci_yml_template", err, http.StatusNotFound, "verify name with gitlab_list_ci_yml_templates")
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_ci_yml_template", err, http.StatusNotFound, "verify name with template.ci_yml_list")
 	}
 	return GetOutput{Name: t.Name, Content: t.Content}, nil
 }

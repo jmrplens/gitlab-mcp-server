@@ -355,7 +355,7 @@ func ListIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 	emojis, resp, err := client.GL().AwardEmoji.ListIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issue_emoji_list", err, 404,
-			"verify the issue exists with gitlab_issue_get (correct project_id and issue_iid)")
+			"verify the issue exists with issue.get (correct project_id and issue_iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -390,7 +390,7 @@ func CreateIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	emoji, _, err := client.GL().AwardEmoji.CreateIssueAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_emoji_create", err, 404,
-			"verify the issue exists with gitlab_issue_get; emoji name must be a valid GitLab shortname without colons (e.g. \"thumbsup\")")
+			"verify the issue exists with issue.get; emoji name must be a valid GitLab shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -412,7 +412,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 			return toolutil.WrapErrWithHint("issue_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed. List awards with gitlab_issue_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed. List awards with issue.emoji_issue_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("issue_emoji_delete", err)
 	}
@@ -425,7 +425,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 func ListIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "issue_iid", Operation: "issue_note_emoji_list"},
 		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
-		"verify the issue and note exist with gitlab_issue_note_get (correct project_id, issue_iid, note_id)", client.GL().AwardEmoji.ListIssuesAwardEmojiOnNote)
+		"verify the issue and note exist with issue.note_get (correct project_id, issue_iid, note_id)", client.GL().AwardEmoji.ListIssuesAwardEmojiOnNote)
 }
 
 // GetIssueNoteAwardEmoji gets a single award emoji on an issue note.
@@ -452,7 +452,7 @@ func GetIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, in
 // CreateIssueNoteAwardEmoji creates an award emoji on an issue note.
 func CreateIssueNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input IssueCreateOnNoteInput) (Output, error) {
 	return createNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, Name: input.Name, IIDField: "issue_iid", Operation: "issue_note_emoji_create"},
-		"verify the issue note exists with gitlab_issue_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
+		"verify the issue note exists with issue.note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
 		client.GL().AwardEmoji.CreateIssuesAwardEmojiOnNote)
 }
 
@@ -476,7 +476,7 @@ func ListMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MR
 	emojis, resp, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mr_emoji_list", err, 404,
-			"verify the merge request exists with gitlab_mr_get (correct project_id and merge_request_iid)")
+			"verify the merge request exists with merge_request.get (correct project_id and merge_request_iid)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -516,7 +516,7 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 			}
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mr_emoji_create", err, 404,
-			"verify the merge request exists with gitlab_mr_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
+			"verify the merge request exists with merge_request.get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -565,7 +565,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 			return toolutil.WrapErrWithHint("mr_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed. List awards with gitlab_mr_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed. List awards with merge_request.emoji_mr_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("mr_emoji_delete", err)
 	}
@@ -578,7 +578,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 func ListMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "merge_request_iid", Operation: "mr_note_emoji_list"},
 		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
-		"verify the MR and note exist with gitlab_mr_note_get (correct project_id, merge_request_iid, note_id)", client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote)
+		"verify the MR and note exist with mr_review.note_get (correct project_id, merge_request_iid, note_id)", client.GL().AwardEmoji.ListMergeRequestAwardEmojiOnNote)
 }
 
 // GetMRNoteAwardEmoji gets a single award emoji on a merge request note.
@@ -605,7 +605,7 @@ func GetMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input
 // CreateMRNoteAwardEmoji creates an award emoji on a merge request note.
 func CreateMRNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRCreateOnNoteInput) (Output, error) {
 	return createNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, Name: input.Name, IIDField: "merge_request_iid", Operation: "mr_note_emoji_create"},
-		"verify the MR note exists with gitlab_mr_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
+		"verify the MR note exists with mr_review.note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
 		client.GL().AwardEmoji.CreateMergeRequestAwardEmojiOnNote)
 }
 
@@ -629,7 +629,7 @@ func ListSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 	emojis, resp, err := client.GL().AwardEmoji.ListSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("snippet_emoji_list", err, 404,
-			"verify the snippet exists with gitlab_project_snippet_get (correct project_id and snippet_id)")
+			"verify the snippet exists with snippet.project_get (correct project_id and snippet_id)")
 	}
 	return toListOutput(emojis, resp), nil
 }
@@ -664,7 +664,7 @@ func CreateSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 	emoji, _, err := client.GL().AwardEmoji.CreateSnippetAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_emoji_create", err, 404,
-			"verify the snippet exists with gitlab_project_snippet_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
+			"verify the snippet exists with snippet.project_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
 }
@@ -686,7 +686,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed. List awards with gitlab_snippet_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed. List awards with snippet.emoji_snippet_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("snippet_emoji_delete", err)
 	}
@@ -699,7 +699,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 func ListSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetListOnNoteInput) (ListOutput, error) {
 	return listNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, IIDField: "snippet_id", Operation: "snippet_note_emoji_list"},
 		emojiListQuery{pagination: input.PaginationInput, keyset: input.KeysetPaginationInput, orderBy: input.OrderBy, sort: input.Sort},
-		"verify the snippet and note exist with gitlab_snippet_note_get (correct project_id, snippet_id, note_id)", client.GL().AwardEmoji.ListSnippetAwardEmojiOnNote)
+		"verify the snippet and note exist with snippet.note_get (correct project_id, snippet_id, note_id)", client.GL().AwardEmoji.ListSnippetAwardEmojiOnNote)
 }
 
 // GetSnippetNoteAwardEmoji gets a single award emoji on a snippet note.
@@ -726,7 +726,7 @@ func GetSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, 
 // CreateSnippetNoteAwardEmoji creates an award emoji on a snippet note.
 func CreateSnippetNoteAwardEmoji(ctx context.Context, client *gitlabclient.Client, input SnippetCreateOnNoteInput) (Output, error) {
 	return createNoteAwardEmoji(ctx, noteEmojiRequest{ProjectID: input.ProjectID, IID: input.IID, NoteID: input.NoteID, Name: input.Name, IIDField: "snippet_id", Operation: "snippet_note_emoji_create"},
-		"verify the snippet note exists with gitlab_snippet_note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
+		"verify the snippet note exists with snippet.note_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")",
 		client.GL().AwardEmoji.CreateSnippetAwardEmojiOnNote)
 }
 

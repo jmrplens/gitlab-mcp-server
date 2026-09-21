@@ -282,7 +282,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	envs, resp, err := client.GL().GroupProtectedEnvironments.ListGroupProtectedEnvironments(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("listGroupProtectedEnvironments", err, http.StatusForbidden,
-			"requires Owner role + Premium/Ultimate; verify group_id with gitlab_group_list; group protected environments cascade to all subgroup projects")
+			"requires Owner role + Premium/Ultimate; verify group_id with group.list; group protected environments cascade to all subgroup projects")
 	}
 	out := make([]Output, len(envs))
 	for i, e := range envs {
@@ -363,7 +363,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("updateGroupProtectedEnvironment", err,
-				"use protected_env_list on gitlab_group to verify the environment; valid tiers are production, staging, testing, development, other; provide _destroy=true on individual rule entries to remove them; partial updates merge with existing rules")
+				"use group.protected_env_list to verify the environment; valid tiers are production, staging, testing, development, other; provide _destroy=true on individual rule entries to remove them; partial updates merge with existing rules")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("updateGroupProtectedEnvironment", err)
 	}
@@ -385,7 +385,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return toolutil.WrapErrWithHint("unprotectGroupEnvironment", err,
-				"requires Owner + Premium/Ultimate; use protected_env_list on gitlab_group to verify the environment; valid tiers are production, staging, testing, development, other; unprotection cascades and removes restrictions on subgroup projects")
+				"requires Owner + Premium/Ultimate; use group.protected_env_list to verify the environment; valid tiers are production, staging, testing, development, other; unprotection cascades and removes restrictions on subgroup projects")
 		}
 		return toolutil.WrapErrWithMessage("unprotectGroupEnvironment", err)
 	}

@@ -132,7 +132,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	rc, _, err := client.GL().RunnerControllers.GetRunnerController(input.ControllerID, gl.WithContext(ctx))
 	if err != nil {
 		return DetailsOutput{}, toolutil.WrapErrWithStatusHint("get runner controller", err, http.StatusNotFound,
-			"verify controller_id with gitlab_runner_controller_list; admin-only API")
+			"verify controller_id with runner.controller_list; admin-only API")
 	}
 	return toDetailsOutput(rc), nil
 }
@@ -210,7 +210,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating runner controllers requires admin privileges")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update runner controller", err, http.StatusNotFound,
-			"verify controller_id with gitlab_runner_controller_list")
+			"verify controller_id with runner.controller_list")
 	}
 	return toOutput(rc), nil
 }
@@ -240,7 +240,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting runner controllers requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint("delete runner controller", err, http.StatusNotFound,
-			"the controller may already be deleted. Verify controller_id with gitlab_runner_controller_list")
+			"the controller may already be deleted. Verify controller_id with runner.controller_list")
 	}
 	return nil
 }

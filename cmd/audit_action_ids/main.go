@@ -116,8 +116,8 @@ func run(cfg auditConfig, stdout, stderr io.Writer) int {
 	}
 	if cfg.check && !report.Clean() {
 		fmt.Fprintf(stderr,
-			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing\n",
-			report.Summary.Findings, report.Summary.AliasHits, report.Summary.Unresolved, report.Summary.Stale)
+			"\nERROR: %d published ID(s) resolve to no action, %d name a registered alias rather than a catalog ID, %d site(s) could not be folded, %d declaration(s) excuse nothing, %d hint(s) name a tool rather than an action\n",
+			report.Summary.Findings, report.Summary.AliasHits, report.Summary.Unresolved, report.Summary.Stale, report.Hints.Findings)
 		return 1
 	}
 	return 0

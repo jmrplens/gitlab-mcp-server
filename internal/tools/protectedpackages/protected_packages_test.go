@@ -745,7 +745,7 @@ func TestUpdate_AnswersEachRefusalWithItsOwnHint(t *testing.T) {
 			name:   "404 keeps the rule id hint",
 			status: http.StatusNotFound,
 			body:   `{"message":"404 Not found"}`,
-			want:   "verify rule_id with gitlab_list_package_protection_rules",
+			want:   "verify rule_id with package.protection_rule_list",
 		},
 	}
 	for _, tc := range cases {

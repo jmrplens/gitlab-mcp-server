@@ -158,7 +158,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_path with gitlab_group_get")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_custom_emoji", err, http.StatusNotFound, "verify group_path with group.get")
 	}
 
 	// GitLab answers a rejected document with HTTP 200 and a top-level errors
@@ -270,7 +270,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 		Variables: vars,
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound, "verify id with gitlab_list_custom_emoji")
+		return toolutil.WrapErrWithStatusHint("delete_custom_emoji", err, http.StatusNotFound, "verify id with custom_emoji.list")
 	}
 
 	if len(resp.Data.DestroyCustomEmoji.Errors) > 0 {

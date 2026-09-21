@@ -396,7 +396,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesRunnerID(actionName) {
 		guidance["runner_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "runner_identifier",
-			ValueSource:  "Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get. runner_id is the global runner ID.",
+			ValueSource:  "Use runner.list, runner.list_project, runner.list_group, or runner.get. runner_id is the global runner ID.",
 			CommonConfusions: []string{
 				"Do not pass project_id as runner_id.",
 				"For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.",
@@ -406,7 +406,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesProjectID(actionName) {
 		guidance["project_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "scope_owner_project",
-			ValueSource:  "Use gitlab_project get/list outputs. Accepts numeric ID or namespace/project path.",
+			ValueSource:  "Use project.get or project.list outputs. Accepts numeric ID or namespace/project path.",
 			CommonConfusions: []string{
 				"project_id identifies the project scope, not the runner.",
 				"Use runner_id for the runner to enable, disable, reset, or inspect.",
@@ -416,7 +416,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesGroupID(actionName) {
 		guidance["group_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "scope_owner_group",
-			ValueSource:  "Use gitlab_group get/list outputs. Accepts numeric ID or full group path.",
+			ValueSource:  "Use group.get or group.list outputs. Accepts numeric ID or full group path.",
 		}
 	}
 	if len(guidance) == 0 {

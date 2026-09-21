@@ -20,7 +20,10 @@ func assertEnterpriseUserHint(t *testing.T, err error) {
 		t.Fatal("expected enterprise user error, got nil")
 	}
 	errText := err.Error()
-	for _, want := range []string{"user_id", "gitlab_enterprise_user", "gitlab_list_enterprise_users", "enterprise namespace"} {
+	// The hint names the capability once, by the canonical ID: it used to name
+	// the meta tool beside it, which is a spelling the dynamic and individual
+	// surfaces cannot resolve.
+	for _, want := range []string{"user_id", "enterprise_user.list", "enterprise namespace"} {
 		if !strings.Contains(errText, want) {
 			t.Fatalf("error missing %q: %v", want, err)
 		}

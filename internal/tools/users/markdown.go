@@ -37,7 +37,7 @@ type userNotFoundOutput struct {
 
 func formatUserNotFound(out userNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult("User", out.Identifier,
-		"Use gitlab_list_users to search users by username or email",
+		"Use user.list to search users by username or email",
 		"The user may have been blocked or deleted")
 }
 

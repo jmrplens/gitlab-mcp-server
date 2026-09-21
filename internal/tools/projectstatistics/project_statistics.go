@@ -35,7 +35,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}
 	stats, _, err := client.GL().ProjectStatistics.Last30DaysStatistics(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_statistics", err, http.StatusNotFound, "verify project_id with project.get")
 	}
 	days := make([]DayStat, 0, len(stats.Fetches.Days))
 	for _, d := range stats.Fetches.Days {

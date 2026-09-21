@@ -210,7 +210,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_work_item", err, http.StatusNotFound,
-			"verify full_path (group or project path) and iid (work item IID) with gitlab_list_work_items; Work Items API is experimental. Verify GitLab version supports the work item type")
+			"verify full_path (group or project path) and iid (work item IID) with issue.work_item_list; Work Items API is experimental. Verify GitLab version supports the work item type")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -291,7 +291,7 @@ type ListOutput struct {
 	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
 }
 
-const errHintWorkItemsFullPath = "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)"
+const errHintWorkItemsFullPath = "verify full_path with project.list or group.list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)"
 
 // buildListOptions translates the tool input into SDK list options.
 //
@@ -798,7 +798,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
-			"verify full_path + iid with gitlab_list_work_items; only widget-supported fields can be updated for the type; state_event values: close|reopen")
+			"verify full_path + iid with issue.work_item_list; only widget-supported fields can be updated for the type; state_event values: close|reopen")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -940,7 +940,7 @@ func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input L
 	types, resp, err := client.GL().WorkItems.ListWorkItemTypes(input.FullPath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return WorkItemTypeListOutput{}, toolutil.WrapErrWithStatusHint("list_work_item_types", err, http.StatusNotFound,
-			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types")
+			"verify full_path with project.list or group.list; Work Items API requires Premium/Ultimate for some types")
 	}
 	out := make([]WorkItemTypeOutput, 0, len(types))
 	for _, t := range types {

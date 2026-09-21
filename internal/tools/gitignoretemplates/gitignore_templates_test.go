@@ -473,10 +473,10 @@ func TestList_ErrorStatuses_SuggestTheTokenScopeOnlyOnForbidden(t *testing.T) {
 // TestGet_ErrorStatuses_SuggestTheListActionOnlyOnNotFound asserts the same
 // property for the get handler: a key GitLab does not know is answered with
 // the action that lists the keys, and a refusal for any other reason is not.
-// A model handed "verify name with gitlab_list_gitignore_templates" after a
+// A model handed "verify name with template.gitignore_list" after a
 // 403 would go looking for a spelling mistake instead of at its credential.
 func TestGet_ErrorStatuses_SuggestTheListActionOnlyOnNotFound(t *testing.T) {
-	const listHint = "Suggestion: verify name with gitlab_list_gitignore_templates"
+	const listHint = "Suggestion: verify name with " + actionGitignoreList
 
 	cases := []struct {
 		name     string

@@ -34,7 +34,7 @@ type ScheduleExportOutput struct {
 func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input ScheduleExportInput) (ScheduleExportOutput, error) {
 	_, err := client.GL().GroupImportExport.ScheduleExport(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return ScheduleExportOutput{}, toolutil.WrapErrWithStatusHint("schedule_group_export", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
+		return ScheduleExportOutput{}, toolutil.WrapErrWithStatusHint("schedule_group_export", err, http.StatusNotFound, "verify group_id with group.get")
 	}
 	return ScheduleExportOutput{Message: "Group export scheduled successfully"}, nil
 }
@@ -81,7 +81,7 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 		if errors.Is(err, gitlabclient.ErrResponseTooLarge) {
 			return ExportDownloadOutput{}, toolutil.WrapErrWithHint("download_group_export", err, errExportTooLarge)
 		}
-		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("download_group_export", err, http.StatusNotFound, "export must be scheduled first with gitlab_schedule_group_export")
+		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("download_group_export", err, http.StatusNotFound, "export must be scheduled first with group.group_export_schedule")
 	}
 
 	return exportDownloadOutput(reader)

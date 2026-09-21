@@ -28,7 +28,7 @@ type mergeRequestNotFoundOutput struct {
 func formatMergeRequestNotFound(out mergeRequestNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Merge Request", out.Identifier,
-		"Use gitlab_mr_list with project_id to list available merge requests",
+		"Use merge_request.list with project_id to list available merge requests",
 		"Verify the merge request IID is correct for this project",
 		"The merge request may have been deleted",
 	)

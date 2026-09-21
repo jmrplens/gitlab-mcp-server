@@ -1074,11 +1074,11 @@ func TestRunnerStatusSpecificAPIErrors(t *testing.T) {
 			_, err := Register(ctx, client, RegisterInput{Token: "reg-token"})
 			return err
 		}},
-		{name: "ResetGroupNotFound", status: http.StatusNotFound, want: "gitlab_group_get", call: func(ctx context.Context, client *gitlabclient.Client) error {
+		{name: "ResetGroupNotFound", status: http.StatusNotFound, want: "group.get", call: func(ctx context.Context, client *gitlabclient.Client) error {
 			_, err := ResetGroupRegToken(ctx, client, ResetGroupRegTokenInput{GroupID: "42"})
 			return err
 		}},
-		{name: "ResetProjectNotFound", status: http.StatusNotFound, want: "gitlab_project_get", call: func(ctx context.Context, client *gitlabclient.Client) error {
+		{name: "ResetProjectNotFound", status: http.StatusNotFound, want: "project.get", call: func(ctx context.Context, client *gitlabclient.Client) error {
 			_, err := ResetProjectRegToken(ctx, client, ResetProjectRegTokenInput{ProjectID: "99"})
 			return err
 		}},

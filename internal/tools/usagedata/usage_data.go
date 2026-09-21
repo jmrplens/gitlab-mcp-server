@@ -89,7 +89,7 @@ func GetNonSQLMetrics(ctx context.Context, client *gitlabclient.Client, _ GetNon
 		// usage_data_non_sql_metrics feature flag enabled.
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return NonSQLMetricsOutput{}, toolutil.WrapErrWithHint("get_non_sql_metrics", err,
-				"this endpoint is unavailable on GitLab 19 even with the usage_data_non_sql_metrics feature flag. Use gitlab_get_metric_definitions or gitlab_get_service_ping instead")
+				"this endpoint is unavailable on GitLab 19 even with the usage_data_non_sql_metrics feature flag. Use admin.usage_data_metric_definitions or admin.usage_data_service_ping instead")
 		}
 		return NonSQLMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_non_sql_metrics", err, http.StatusForbidden,
 			"requires administrator access; self-managed only; service ping must be enabled")

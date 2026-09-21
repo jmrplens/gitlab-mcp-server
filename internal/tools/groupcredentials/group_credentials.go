@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	groupCredentialInventoryHint = "verify group_id with gitlab_group_get; group credential inventory can return 404 when this GitLab instance does not expose the /groups/:id/manage endpoints; requires Ultimate and Owner or admin access"
+	groupCredentialInventoryHint = "verify group_id with group.get; group credential inventory can return 404 when this GitLab instance does not expose the /groups/:id/manage endpoints; requires Ultimate and Owner or admin access"
 	groupCredentialTokenHint     = "verify token_id with credential_list_pats; if credential_list_pats returns 404, group credential inventory may be unavailable on this GitLab instance; requires Ultimate and Owner or admin access"
 	//nolint:gosec // Error hint text only; no secret material.
 	groupCredentialSSHKeyHint = "verify key_id with credential_list_ssh_keys; if credential_list_ssh_keys returns 404, group credential inventory may be unavailable on this GitLab instance; requires Ultimate and Owner or admin access"

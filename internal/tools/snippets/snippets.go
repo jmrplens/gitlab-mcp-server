@@ -390,7 +390,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	snippet, _, err := client.GL().Snippets.GetSnippet(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_get", err, http.StatusNotFound,
-			"verify snippet_id with gitlab_snippet_list; private snippets are only accessible to the author")
+			"verify snippet_id with snippet.list; private snippets are only accessible to the author")
 	}
 	return convertSnippet(snippet), nil
 }
@@ -408,7 +408,7 @@ func Content(ctx context.Context, client *gitlabclient.Client, input ContentInpu
 	data, _, err := client.GL().Snippets.SnippetContent(input.SnippetID, gl.WithContext(ctx))
 	if err != nil {
 		return ContentOutput{}, toolutil.WrapErrWithStatusHint("snippet_content", err, http.StatusNotFound,
-			"verify snippet_id with gitlab_snippet_list; for multi-file snippets use gitlab_snippet_file_content with a specific file_path")
+			"verify snippet_id with snippet.list; for multi-file snippets use snippet.file_content with a specific file_path")
 	}
 	return ContentOutput{SnippetID: input.SnippetID, Content: string(data)}, nil
 }
@@ -506,7 +506,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	snippet, _, err := client.GL().Snippets.UpdateSnippet(input.SnippetID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_update", err, http.StatusForbidden,
-			"updating a snippet requires being the author or having admin privileges; verify snippet_id with gitlab_snippet_list")
+			"updating a snippet requires being the author or having admin privileges; verify snippet_id with snippet.list")
 	}
 	return convertSnippet(snippet), nil
 }

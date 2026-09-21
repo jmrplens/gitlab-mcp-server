@@ -151,7 +151,7 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 	)
 	if err != nil {
 		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_project", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; the project may have container registry disabled or no repositories yet")
+			"verify project_id with project.get; the project may have container registry disabled or no repositories yet")
 	}
 	extras, err := toolutil.CapturedRegistryRepositories(captured, len(repos))
 	if err != nil {
@@ -196,7 +196,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	)
 	if err != nil {
 		return RepositoryListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_group", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; the group may have no projects with container registry enabled")
+			"verify group_id with group.get; the group may have no projects with container registry enabled")
 	}
 	extras, err := toolutil.CapturedRegistryRepositories(captured, len(repos))
 	if err != nil {
@@ -238,7 +238,7 @@ func GetRepository(ctx context.Context, client *gitlabclient.Client, input GetRe
 	)
 	if err != nil {
 		return RepositoryOutput{}, toolutil.WrapErrWithStatusHint("registry_get_repository", err, http.StatusNotFound,
-			"verify repository_id with gitlab_registry_list_project; container repositories must be queried by ID, not name")
+			"verify repository_id with package.registry_list_project; container repositories must be queried by ID, not name")
 	}
 	extra, err := toolutil.CapturedRegistryRepository(captured)
 	if err != nil {
@@ -270,7 +270,7 @@ func DeleteRepository(ctx context.Context, client *gitlabclient.Client, input De
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("registry_delete_repository", err, http.StatusForbidden,
-			"deleting container repositories requires Maintainer role or higher; verify repository_id with gitlab_registry_list_project")
+			"deleting container repositories requires Maintainer role or higher; verify repository_id with package.registry_list_project")
 	}
 	return nil
 }
@@ -310,7 +310,7 @@ func ListTags(ctx context.Context, client *gitlabclient.Client, input ListTagsIn
 	)
 	if err != nil {
 		return TagListOutput{}, toolutil.WrapErrWithStatusHint("registry_list_tags", err, http.StatusNotFound,
-			"verify repository_id with gitlab_registry_list_project; the repository may have no tags or be in the process of being created")
+			"verify repository_id with package.registry_list_project; the repository may have no tags or be in the process of being created")
 	}
 	out := TagListOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, t := range tags {
@@ -346,7 +346,7 @@ func GetTag(ctx context.Context, client *gitlabclient.Client, input GetTagInput)
 	)
 	if err != nil {
 		return TagOutput{}, toolutil.WrapErrWithStatusHint("registry_get_tag", err, http.StatusNotFound,
-			"verify tag_name with gitlab_registry_list_tags; tag names are case-sensitive and must match exactly")
+			"verify tag_name with package.registry_tag_list; tag names are case-sensitive and must match exactly")
 	}
 	return convertTag(tag), nil
 }
@@ -378,7 +378,7 @@ func DeleteTag(ctx context.Context, client *gitlabclient.Client, input DeleteTag
 	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("registry_delete_tag", err, http.StatusForbidden,
-			"deleting registry tags requires Developer role or higher; verify tag_name with gitlab_registry_list_tags")
+			"deleting registry tags requires Developer role or higher; verify tag_name with package.registry_tag_list")
 	}
 	return nil
 }

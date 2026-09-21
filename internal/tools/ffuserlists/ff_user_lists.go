@@ -108,7 +108,7 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 				"feature flag user lists require GitLab Premium/Ultimate. Verify the project tier and that you have Developer+ role")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("ff_user_list_list", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	extras, err := toolutil.CapturedFeatureFlagUserLists(captured, len(lists))
 	if err != nil {
@@ -138,7 +138,7 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_get", err, http.StatusNotFound,
-			"verify user_list_iid with gitlab_ff_user_list_list. User lists are scoped per-project and require Premium/Ultimate")
+			"verify user_list_iid with feature_flags.ff_user_list_list. User lists are scoped per-project and require Premium/Ultimate")
 	}
 	extra, err := toolutil.CapturedFeatureFlagUserList(captured)
 	if err != nil {
@@ -203,7 +203,7 @@ func UpdateUserList(ctx context.Context, client *gitlabclient.Client, input Upda
 				"updating feature flag user lists requires Developer+ role on a Premium/Ultimate project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_update", err, http.StatusNotFound,
-			"verify user_list_iid with gitlab_ff_user_list_list")
+			"verify user_list_iid with feature_flags.ff_user_list_list")
 	}
 	extra, err := toolutil.CapturedFeatureFlagUserList(captured)
 	if err != nil {
@@ -229,7 +229,7 @@ func DeleteUserList(ctx context.Context, client *gitlabclient.Client, input Dele
 				"deleting feature flag user lists requires Developer+ role; the list cannot be in use by an enabled feature flag strategy")
 		}
 		return toolutil.WrapErrWithStatusHint("ff_user_list_delete", err, http.StatusNotFound,
-			"verify user_list_iid with gitlab_ff_user_list_list")
+			"verify user_list_iid with feature_flags.ff_user_list_list")
 	}
 	return nil
 }

@@ -511,7 +511,7 @@ func TestGet_ErrorHint_OnlyOnNotFound(t *testing.T) {
 			if !strings.HasPrefix(err.Error(), "get_dockerfile_template: ") {
 				t.Errorf("error = %q, want it to name the operation", err.Error())
 			}
-			const hint = "Suggestion: verify name with gitlab_list_dockerfile_templates"
+			const hint = "Suggestion: verify name with template.dockerfile_list"
 			if got := strings.Contains(err.Error(), hint); got != tc.wantHint {
 				t.Errorf("error %q carries %q = %v, want %v", err.Error(), hint, got, tc.wantHint)
 			}

@@ -11,7 +11,7 @@ import (
 )
 
 // hintVerifyUID is the error hint shared by SCIM identity tools.
-const hintVerifyUID = "verify uid with gitlab_group_scim action 'list' or gitlab_list_group_scim_identities; SCIM identities exist only after group SAML SSO SCIM provisioning has synchronized users"
+const hintVerifyUID = "verify uid with group_scim.list; SCIM identities exist only after group SAML SSO SCIM provisioning has synchronized users"
 
 // ListInput holds parameters for listing SCIM identities for a group.
 type ListInput struct {

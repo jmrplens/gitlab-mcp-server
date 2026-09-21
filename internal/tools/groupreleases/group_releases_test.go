@@ -155,7 +155,7 @@ func TestList_NotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "listGroupReleases") {
 		t.Errorf("error %q does not name the operation", err)
 	}
-	if !strings.Contains(err.Error(), "Suggestion: verify group_id with gitlab_group_get") {
+	if !strings.Contains(err.Error(), "Suggestion: verify group_id with group.get") {
 		t.Errorf("error %q does not carry the group_id hint", err)
 	}
 }

@@ -19,7 +19,7 @@ type deploymentNotFoundOutput struct {
 func formatDeploymentNotFound(out deploymentNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Deployment", out.Identifier,
-		"Use gitlab_deployment_list with project_id to list deployments",
+		"Use environment.deployment_list with project_id to list deployments",
 		"Verify the deployment_id is correct for this project",
 	)
 }

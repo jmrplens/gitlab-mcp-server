@@ -16,8 +16,8 @@ import (
 
 // Shared hints used by error wrappers (kept as constants to satisfy S1192).
 const (
-	hintVerifyIssue        = "verify project_id and issue_iid with gitlab_issue_get"
-	hintConfirmIssueExists = "verify project_id and issue_iid; use gitlab_issue_get to confirm the issue exists"
+	hintVerifyIssue        = "verify project_id and issue_iid with issue.get"
+	hintConfirmIssueExists = "verify project_id and issue_iid; use issue.get to confirm the issue exists"
 )
 
 // CreateInput defines parameters for creating a new issue.
@@ -393,11 +393,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
-				"verify project_id with gitlab_project_get; the project must exist and your token must have at least Reporter role")
+				"verify project_id with project.get; the project must exist and your token must have at least Reporter role")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
 			return Output{}, toolutil.WrapErrWithHint("issueCreate", err,
-				"check that referenced labels, assignee_ids and milestone_id exist in this project (use gitlab_label_list, gitlab_get_user, gitlab_milestone_list)")
+				"check that referenced labels, assignee_ids and milestone_id exist in this project (use project.label_list, user.get, project.milestone_list)")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueCreate", err)
 	}
@@ -482,7 +482,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("issueGet", err,
-				"verify project_id and issue_iid; use gitlab_issue_list to see existing issues in the project")
+				"verify project_id and issue_iid; use issue.list to see existing issues in the project")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueGet", err)
 	}
@@ -581,7 +581,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get. Issues must be enabled in project settings")
+			"verify the project exists with project.get. Issues must be enabled in project settings")
 	}
 	return issueListOutput("issueList", issues, resp, captured)
 }
@@ -666,7 +666,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("issueUpdate", err,
-				"verify project_id and issue_iid. Use gitlab_issue_list to check available issues")
+				"verify project_id and issue_iid. Use issue.list to check available issues")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueUpdate", err)
 	}
@@ -689,7 +689,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return toolutil.WrapErrWithHint("issueDelete", err,
-				"only project owners or administrators can delete issues. Use gitlab_issue_update with state_event='close' instead")
+				"only project owners or administrators can delete issues. Use issue.update with state_event='close' instead")
 		}
 		return toolutil.WrapErrWithMessage("issueDelete", err)
 	}
@@ -755,7 +755,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("issueListGroup", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
+			"verify the group exists with group.get. Use full_path or numeric ID")
 	}
 
 	page, err := issueListOutput("issueListGroup", issues, resp, captured)
@@ -882,7 +882,7 @@ func GetByID(ctx context.Context, client *gitlabclient.Client, input GetByIDInpu
 	issue, _, err := client.GL().Issues.GetIssueByID(input.IssueID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueGetByID", err, http.StatusNotFound,
-			"issue_id is the global database ID, not the project-scoped iid; for iid lookups use gitlab_issue_get with project_id+issue_iid")
+			"issue_id is the global database ID, not the project-scoped iid; for iid lookups use issue.get with project_id+issue_iid")
 	}
 	return issueOutput("issueGetByID", issue, captured)
 }
@@ -952,7 +952,7 @@ func Move(ctx context.Context, client *gitlabclient.Client, input MoveInput) (Ou
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("issueMove", err,
-				"target project not found or you lack access. Use gitlab_project_list to verify the target project")
+				"target project not found or you lack access. Use project.list to verify the target project")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("issueMove", err)
 	}
@@ -1503,7 +1503,7 @@ func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input List
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
 		operation: "issueListMRsClosing",
-		hint:      "verify project_id and issue_iid with gitlab_issue_get - only MRs that include 'Closes #N' are returned",
+		hint:      "verify project_id and issue_iid with issue.get - only MRs that include 'Closes #N' are returned",
 		list: func(projectID string, issueIID int64, lo mrListOptions, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsClosingIssueOptions{}
 			lo.applyTo(&listOptions.ListOptions)
@@ -1531,7 +1531,7 @@ func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input List
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
 		operation: "issueListMRsRelated",
-		hint:      "verify project_id and issue_iid with gitlab_issue_get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
+		hint:      "verify project_id and issue_iid with issue.get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
 		list: func(projectID string, issueIID int64, lo mrListOptions, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsRelatedToIssueOptions{}
 			lo.applyTo(&listOptions.ListOptions)

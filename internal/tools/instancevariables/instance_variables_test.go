@@ -764,7 +764,7 @@ func TestInstanceVariableUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_instance_variable_list") {
+	if !strings.Contains(err.Error(), actionInstanceVariableList) {
 		t.Fatalf("error = %v, want list hint", err)
 	}
 }
@@ -1203,7 +1203,7 @@ func TestInstanceVariables_Refusals_NameTheirOwnOperationAndHint(t *testing.T) {
 				return err
 			},
 			wantOp:   "get instance variable",
-			wantHint: "verify the variable key exists with gitlab_instance_variable_list; admin-only API",
+			wantHint: "verify the variable key exists with ci_variable.instance_list; admin-only API",
 		},
 		{
 			name: "create forbidden",

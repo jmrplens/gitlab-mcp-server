@@ -13,7 +13,7 @@ import (
 )
 
 // hintVerifyMR is the 404 hint shared by MR-changes tools.
-const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_mr_list"
+const hintVerifyMR = "verify project_id and merge_request_iid with merge_request.list"
 
 // GetInput defines parameters for listing changed files in a merge request.
 type GetInput struct {
@@ -318,7 +318,7 @@ func GetDiffVersion(ctx context.Context, client *gitlabclient.Client, input Diff
 		string(input.ProjectID), input.MRIID, input.VersionID, opts, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with gitlab_mr_diff_versions_list")
+		return DiffVersionOutput{}, toolutil.WrapErrWithStatusHint("mrDiffVersionGet", err, http.StatusNotFound, "verify version_id with mr_review.diff_versions_list")
 	}
 	extra, err := toolutil.CapturedMergeRequestDiff(captured)
 	if err != nil {

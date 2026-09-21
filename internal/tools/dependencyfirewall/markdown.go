@@ -89,6 +89,6 @@ func formatNotFound(out notFoundOutput) *mcp.CallToolResult {
 		"Dependency Firewall", "on "+out.ProjectID,
 		"The Dependency Firewall API is served behind the "+FeatureFlag+" feature flag, added in GitLab 19.4 and disabled by default. An instance without it answers 404 for every project, so ask an administrator whether the flag is enabled",
 		"The API needs GitLab Premium or Ultimate. It is an experiment, so its shape can change between releases",
-		"Verify the project with gitlab_project_get. A project the token cannot read answers 404 here too",
+		"Verify the project with project.get. A project the token cannot read answers 404 here too",
 	)
 }

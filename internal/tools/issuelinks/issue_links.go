@@ -229,7 +229,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	relations, _, err := client.GL().IssueLinks.ListIssueRelations(string(input.ProjectID), int64(input.IssueIID), gitlab.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint(toolListIssueLinks, err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get and issue_iid with gitlab_issue_list")
+			"verify project_id with project.get and issue_iid with issue.list")
 	}
 
 	extras, err := capturedRelations(captured, len(relations))
@@ -266,7 +266,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	link, _, err := client.GL().IssueLinks.GetIssueLink(string(input.ProjectID), int64(input.IssueIID), int64(input.IssueLinkID), gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint(toolGetIssueLink, err, http.StatusNotFound,
-			"verify issue_link_id with gitlab_issue_link_list; the link must belong to the specified issue")
+			"verify issue_link_id with issue.link_list; the link must belong to the specified issue")
 	}
 	return toOutput(link), nil
 }
@@ -329,7 +329,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, _, err := client.GL().IssueLinks.DeleteIssueLink(string(input.ProjectID), int64(input.IssueIID), int64(input.IssueLinkID), gitlab.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint(toolDeleteIssueLink, err, http.StatusNotFound,
-			"verify issue_link_id with gitlab_issue_link_list; deleting issue links requires Reporter role or higher")
+			"verify issue_link_id with issue.link_list; deleting issue links requires Reporter role or higher")
 	}
 	return nil
 }

@@ -101,7 +101,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	labels, resp, err := client.GL().GroupLabels.ListGroupLabels(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupLabelList", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get")
+			"verify group_id with group.get")
 	}
 	extras, err := toolutil.CapturedLabels(captured, len(labels))
 	if err != nil {
@@ -127,7 +127,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	l, _, err := client.GL().GroupLabels.GetGroupLabel(string(input.GroupID), string(input.LabelID), gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelGet", err, http.StatusNotFound,
-			"verify label_id (numeric ID or name) with gitlab_group_label_list; label names are case-sensitive")
+			"verify label_id (numeric ID or name) with group.group_label_list; label names are case-sensitive")
 	}
 	return capturedOutput("groupLabelGet", l, captured)
 }
@@ -190,7 +190,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	l, _, err := client.GL().GroupLabels.UpdateGroupLabel(string(input.GroupID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelUpdate", err, http.StatusBadRequest,
-			"new_name must be unique within the group; color must be a 6-digit hex string with leading #; verify label_id with gitlab_group_label_list")
+			"new_name must be unique within the group; color must be a 6-digit hex string with leading #; verify label_id with group.group_label_list")
 	}
 	return capturedOutput("groupLabelUpdate", l, captured)
 }

@@ -43,32 +43,51 @@ func TestClassify_HintSpellings_AreKeptApartByRule(t *testing.T) {
 	}
 }
 
-// TestClassify_Hints_NeverReachTheGate holds the staging decision itself: the
-// whole hint section reports, so a tree full of findings and unfoldable hints
-// is still a tree -check passes.
+// TestClassify_Hints_FailTheGateAndTheirUnfoldableSitesDoNot holds the two
+// halves of the flip apart, because they moved in opposite directions and one
+// test asserting only the first would leave the second free.
 //
-// It is the assertion this layer exists to make. The class is 790 findings
-// wide today, and a gate that refused them would refuse every push until the
-// tree was clean, which is the opposite order to the one work happens in.
-func TestClassify_Hints_NeverReachTheGate(t *testing.T) {
-	report := classify([]site{
-		hintSite(1, "list them with gitlab_demo_list first"),
+// A hint that names a tool fails -check now. The rule was staged for exactly
+// as long as the tree needed: it opened at 785 findings and a gate refusing
+// them would have refused every push until the tree was clean, which is the
+// opposite order to the one work happens in.
+//
+// A hint the type checker could not fold still fails nothing, which is a
+// deliberate departure from how the gate treats its own unfoldable sites. A
+// published ID that cannot be read is an ID nobody can check; an unfoldable
+// hint is still a sentence a reader reads, and the three in the tree carry no
+// tool name between them.
+func TestClassify_Hints_FailTheGateAndTheirUnfoldableSitesDoNot(t *testing.T) {
+	unfoldable := []site{
 		{Package: "p", File: "p/a.go", Line: 2, Kind: kindErrorHint, Expr: "buildHint(x)"},
 		{Package: "p", File: "p/a.go", Line: 3, Kind: kindHintField, Expr: "other.Hint"},
-	}, stubCatalog(), false)
+	}
 
-	if !report.Clean() {
-		t.Errorf("Clean() = false over hint findings alone; summary %+v", report.Summary)
-	}
-	if report.Summary.Unresolved != 0 || len(report.Unresolved) != 0 {
-		t.Errorf("unresolved = %+v, want the hint sites kept out of the gate's bucket", report.Unresolved)
-	}
-	if report.Hints.Unfolded != 2 {
-		t.Errorf("hints not folded = %d, want both", report.Hints.Unfolded)
-	}
-	if report.Hints.NotFolded[0].Expression != "buildHint(x)" || report.Hints.NotFolded[1].Kind != kindHintField {
-		t.Errorf("not folded = %+v, want both sites with their own kind", report.Hints.NotFolded)
-	}
+	t.Run("a tool name fails it", func(t *testing.T) {
+		report := classify(append([]site{hintSite(1, "list them with gitlab_demo_list first")}, unfoldable...), stubCatalog(), false)
+		if report.Clean() {
+			t.Errorf("Clean() = true over a hint naming a tool; hints %+v", report.Hints)
+		}
+		if report.Hints.Findings != 1 {
+			t.Errorf("hint findings = %d, want the one tool name", report.Hints.Findings)
+		}
+	})
+
+	t.Run("an unfoldable hint alone does not", func(t *testing.T) {
+		report := classify(unfoldable, stubCatalog(), false)
+		if !report.Clean() {
+			t.Errorf("Clean() = false over unfoldable hints alone; summary %+v hints %+v", report.Summary, report.Hints)
+		}
+		if report.Summary.Unresolved != 0 || len(report.Unresolved) != 0 {
+			t.Errorf("unresolved = %+v, want the hint sites kept out of the gate's bucket", report.Unresolved)
+		}
+		if report.Hints.Unfolded != 2 {
+			t.Errorf("hints not folded = %d, want both", report.Hints.Unfolded)
+		}
+		if report.Hints.NotFolded[0].Expression != "buildHint(x)" || report.Hints.NotFolded[1].Kind != kindHintField {
+			t.Errorf("not folded = %+v, want both sites with their own kind", report.Hints.NotFolded)
+		}
+	})
 }
 
 // TestClassify_HintsReadByKind_CountTheTwoSitesApart holds the split the
@@ -202,7 +221,7 @@ func TestWriteHintReport_Rows_AreAskedForAndTheCountIsNot(t *testing.T) {
 	writeHintReport(&quiet, report.Hints, false)
 	writeHintReport(&loud, report.Hints, true)
 
-	const count = "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read; 1 not folded. Reported, not gated"
+	const count = "error hints: 1 finding(s) in 1 package(s) over 1 hint(s) read; 1 not folded (reported, not gated)"
 	for _, want := range []string{count, "hint findings by rule: tool_name 1"} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(quiet.String(), want) {

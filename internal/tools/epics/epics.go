@@ -18,7 +18,7 @@ import (
 // errHintEpicListPath is the hint both list paths attach to a 404: either one
 // can be reached with a group path that does not resolve, or on an instance
 // whose license does not carry epics at all.
-const errHintEpicListPath = "verify full_path with gitlab_group_list; epics require GitLab Premium or Ultimate"
+const errHintEpicListPath = "verify full_path with group.list; epics require GitLab Premium or Ultimate"
 
 // LinkedItem represents a linked work item summary.
 type LinkedItem struct {
@@ -1151,7 +1151,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("epicGet", err, http.StatusNotFound,
-			"verify iid with gitlab_epic_list; full_path must be the group path (e.g. group/subgroup) where the epic lives")
+			"verify iid with group.epic_list; full_path must be the group path (e.g. group/subgroup) where the epic lives")
 	}
 	return toOutput(wi), nil
 }
@@ -1172,7 +1172,7 @@ func GetLinks(ctx context.Context, client *gitlabclient.Client, input GetLinksIn
 	epics, _, err := rawListEpics(ctx, client, epicChildrenPath(input.FullPath, input.IID), nil)
 	if err != nil {
 		return LinksOutput{}, toolutil.WrapErrWithStatusHint("epicGetLinks", err, http.StatusNotFound,
-			"verify iid with gitlab_epic_list; child epics are returned only when the parent epic exists in the given group")
+			"verify iid with group.epic_list; child epics are returned only when the parent epic exists in the given group")
 	}
 	out := make([]LinksItem, len(epics))
 	for i, e := range epics {
@@ -1278,7 +1278,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("epicUpdate", err, http.StatusBadRequest,
-			"state_event must be 'close' or 'reopen'; dates must be YYYY-MM-DD; verify iid with gitlab_epic_list")
+			"state_event must be 'close' or 'reopen'; dates must be YYYY-MM-DD; verify iid with group.epic_list")
 	}
 	return toOutput(wi), nil
 }

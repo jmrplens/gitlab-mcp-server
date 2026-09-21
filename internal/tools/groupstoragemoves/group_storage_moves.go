@@ -165,7 +165,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group storage move", err, http.StatusNotFound,
-			"requires admin + Premium/Ultimate; verify id with gitlab_retrieve_all_group_storage_moves")
+			"requires admin + Premium/Ultimate; verify id with storage_move.retrieve_all_group")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
@@ -190,7 +190,7 @@ func GetForGroup(ctx context.Context, client *gitlabclient.Client, in GroupMoveI
 	move, _, err := client.GL().GroupRepositoryStorageMove.GetStorageMoveForGroup(in.GroupID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group storage move for group", err, http.StatusNotFound,
-			"requires admin + Premium/Ultimate; verify the group_id + id pair with gitlab_retrieve_group_storage_moves, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion")
+			"requires admin + Premium/Ultimate; verify the group_id + id pair with storage_move.retrieve_group, which lists this group's own moves; a move id belonging to another group answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {

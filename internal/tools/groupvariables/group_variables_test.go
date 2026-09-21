@@ -636,7 +636,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "gitlab_group_variable_list") {
+	if !strings.Contains(err.Error(), "ci_variable.group_list") {
 		t.Fatalf("error = %v, want list hint", err)
 	}
 }

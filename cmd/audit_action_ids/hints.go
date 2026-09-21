@@ -218,7 +218,7 @@ func writeHintReport(out io.Writer, hints HintReport, verbose bool) {
 	for _, entry := range hints.StaleDeclarations {
 		fmt.Fprintf(out, "  %s. Remove the entry.\n", entry)
 	}
-	fmt.Fprintf(out, "  error hints: %d finding(s) in %d package(s) over %d hint(s) read; %d not folded. Reported, not gated\n",
+	fmt.Fprintf(out, "  error hints: %d finding(s) in %d package(s) over %d hint(s) read; %d not folded (reported, not gated)\n",
 		hints.Findings, hints.Packages, hints.Read, hints.Unfolded)
 	if len(hints.ByRule) > 0 {
 		fmt.Fprintf(out, "    hint findings by rule: %s\n", byCount(hints.ByRule))

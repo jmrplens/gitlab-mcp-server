@@ -103,7 +103,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		string(input.ProjectID), input.TemplateType, input.Key, gl.WithContext(ctx),
 	)
 	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_template", err, http.StatusNotFound, "verify template_type and template_name with gitlab_list_project_templates")
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_template", err, http.StatusNotFound, "verify template_type and template_name with template.project_template_list")
 	}
 	return GetOutput{TemplateItem: templateFromGL(tpl)}, nil
 }

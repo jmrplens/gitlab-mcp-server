@@ -1119,7 +1119,7 @@ func TestSnippetStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *te
 		{
 			name:   "get",
 			status: http.StatusNotFound,
-			hint:   "requires admin; verify id with gitlab_retrieve_all_snippet_storage_moves; the move record may have been pruned after completion",
+			hint:   "requires admin; verify id with storage_move.retrieve_all_snippet; the move record may have been pruned after completion",
 			call: func(c *gitlabclient.Client) error {
 				_, err := Get(context.Background(), c, IDInput{ID: 1})
 				return err
@@ -1128,7 +1128,7 @@ func TestSnippetStorageMoves_StatusHint_IsOfferedOnlyAtTheStatusItExplains(t *te
 		{
 			name:   "get_for_snippet",
 			status: http.StatusNotFound,
-			hint:   "requires admin; verify the snippet_id + id pair with gitlab_retrieve_snippet_storage_moves, which lists this snippet's own moves; a move id belonging to another snippet answers 404 here, and the record may have been pruned after completion",
+			hint:   "requires admin; verify the snippet_id + id pair with storage_move.retrieve_snippet, which lists this snippet's own moves; a move id belonging to another snippet answers 404 here, and the record may have been pruned after completion",
 			call: func(c *gitlabclient.Client) error {
 				_, err := GetForSnippet(context.Background(), c, SnippetMoveInput{SnippetID: 55, ID: 1})
 				return err

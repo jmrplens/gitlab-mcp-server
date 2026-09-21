@@ -133,7 +133,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	pipelines, resp, err := client.GL().Pipelines.ListProjectPipelines(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipelineList", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get; pipelines require CI/CD enabled and at least one .gitlab-ci.yml run")
+			"verify the project exists with project.get; pipelines require CI/CD enabled and at least one .gitlab-ci.yml run")
 	}
 
 	out := make([]Output, len(pipelines))
@@ -250,7 +250,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineGet", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list. Pipeline IDs are project-scoped")
+			"verify pipeline_id with pipeline.list. Pipeline IDs are project-scoped")
 	}
 	return capturedDetail("pipelineGet", p, captured)
 }
@@ -329,7 +329,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCancel", err,
-				"pipeline may have already completed, or you lack permissions. Use gitlab_pipeline_get to check current status")
+				"pipeline may have already completed, or you lack permissions. Use pipeline.get to check current status")
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCancel", err)
 	}
@@ -353,7 +353,7 @@ func Retry(ctx context.Context, client *gitlabclient.Client, input ActionInput) 
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 403) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineRetry", err,
-				"pipeline may still be running, or there are no failed jobs. Use gitlab_pipeline_get to check status")
+				"pipeline may still be running, or there are no failed jobs. Use pipeline.get to check status")
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineRetry", err)
 	}
@@ -418,7 +418,7 @@ func GetVariables(ctx context.Context, client *gitlabclient.Client, input GetInp
 	vars, _, err := client.GL().Pipelines.GetPipelineVariables(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return VariablesOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetVariables", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list. Reading variables requires Maintainer+ role on the project")
+			"verify pipeline_id with pipeline.list. Reading variables requires Maintainer+ role on the project")
 	}
 	out := make([]VariableOutput, len(vars))
 	for i, v := range vars {
@@ -468,7 +468,7 @@ func GetTestReport(ctx context.Context, client *gitlabclient.Client, input GetIn
 	report, _, err := client.GL().Pipelines.GetPipelineTestReport(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return TestReportOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReport", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list. Test reports require at least one job that uploaded a JUnit-format artifact")
+			"verify pipeline_id with pipeline.list. Test reports require at least one job that uploaded a JUnit-format artifact")
 	}
 	suites := make([]TestSuiteOutput, len(report.TestSuites))
 	for i, s := range report.TestSuites {
@@ -531,7 +531,7 @@ func GetTestReportSummary(ctx context.Context, client *gitlabclient.Client, inpu
 	summary, _, err := client.GL().Pipelines.GetPipelineTestReportSummary(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return TestReportSummaryOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReportSummary", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list. Test report summary requires JUnit artifacts uploaded by pipeline jobs")
+			"verify pipeline_id with pipeline.list. Test report summary requires JUnit artifacts uploaded by pipeline jobs")
 	}
 	suites := make([]TestSuiteSummaryOutput, len(summary.TestSuites))
 	for i, s := range summary.TestSuites {
@@ -714,7 +714,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, 400) {
 			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCreate", err,
-				"the project may not have a .gitlab-ci.yml, or the ref does not exist. Use gitlab_file_get to check if .gitlab-ci.yml exists on the target ref")
+				"the project may not have a .gitlab-ci.yml, or the ref does not exist. Use repository.file_get to check if .gitlab-ci.yml exists on the target ref")
 		}
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCreate", err)
 	}
@@ -753,7 +753,7 @@ func UpdateMetadata(ctx context.Context, client *gitlabclient.Client, input Upda
 				"updating pipeline metadata (name) requires Developer+ role; pipeline must not be archived")
 		}
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineUpdateMetadata", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list")
+			"verify pipeline_id with pipeline.list")
 	}
 	return capturedDetail("pipelineUpdateMetadata", p, captured)
 }

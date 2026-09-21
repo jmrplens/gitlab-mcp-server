@@ -76,7 +76,7 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return PushRuleOutput{}, toolutil.WrapErrWithHint("groupGetPushRules", err,
-				"no push rules configured on this group, or the feature requires GitLab Premium/Ultimate. Use gitlab_group_add_push_rule to create one")
+				"no push rules configured on this group, or the feature requires GitLab Premium/Ultimate. Use group.push_rule_add to create one")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("groupGetPushRules", err, http.StatusForbidden,
 			"reading group push rules requires Premium/Ultimate licensing and Owner role on the group")
@@ -178,7 +178,7 @@ func AddPushRule(ctx context.Context, client *gitlabclient.Client, input AddPush
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return PushRuleOutput{}, toolutil.WrapErrWithHint("groupAddPushRule", err,
-				"push rules already exist on this group (use gitlab_group_edit_push_rule to update), one of the regex patterns is invalid, or the feature requires GitLab Premium/Ultimate")
+				"push rules already exist on this group (use group.push_rule_edit to update), one of the regex patterns is invalid, or the feature requires GitLab Premium/Ultimate")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("groupAddPushRule", err, http.StatusForbidden,
 			"adding group push rules requires Owner role and Premium/Ultimate licensing")
@@ -264,7 +264,7 @@ func EditPushRule(ctx context.Context, client *gitlabclient.Client, input EditPu
 				"one of the regex patterns is invalid (use a Go-compatible regex syntax), or the field requires Premium/Ultimate")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("groupEditPushRule", err, http.StatusNotFound,
-			"no push rules currently exist on this group. Use gitlab_group_add_push_rule first")
+			"no push rules currently exist on this group. Use group.push_rule_add first")
 	}
 	return pushRuleOutputFromGL(rule), nil
 }

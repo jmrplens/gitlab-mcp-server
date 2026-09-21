@@ -204,7 +204,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	v, _, err := client.GL().ProjectVariables.GetVariable(string(input.ProjectID), input.Key, opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get CI/CD variable", err, http.StatusNotFound,
-			"verify the variable key with gitlab_ci_variable_list; for scoped vars supply matching environment_scope filter")
+			"verify the variable key with ci_variable.list; for scoped vars supply matching environment_scope filter")
 	}
 	return toOutput(v), nil
 }
@@ -306,7 +306,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating CI/CD variables requires Maintainer or Owner role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateCIVariable, err, http.StatusNotFound,
-			"verify the variable key and environment_scope with gitlab_ci_variable_list")
+			"verify the variable key and environment_scope with ci_variable.list")
 	}
 	return toOutput(v), nil
 }
@@ -337,7 +337,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting CI/CD variables requires Maintainer or Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint(opDeleteCIVariable, err, http.StatusNotFound,
-			"the variable may already be deleted. Verify with gitlab_ci_variable_list")
+			"the variable may already be deleted. Verify with ci_variable.list")
 	}
 	return nil
 }

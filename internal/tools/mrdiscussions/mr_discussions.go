@@ -153,7 +153,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	d, _, err := client.GL().Discussions.CreateMergeRequestDiscussion(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionCreate", err, http.StatusBadRequest,
-			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; use gitlab_mr_changes_get to fetch the diff context")
+			"for inline diff comments, position requires base_sha, head_sha, start_sha, position_type=text, and a valid old_path/new_path with line numbers; use mr_review.changes_get to fetch the diff context")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -180,7 +180,7 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionResolve", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussion_list; only thread (resolvable) discussions can be resolved")
+			"verify discussion_id with mr_review.discussion_list; only thread (resolvable) discussions can be resolved")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -208,7 +208,7 @@ func Reply(ctx context.Context, client *gitlabclient.Client, input ReplyInput) (
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionReply", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussion_list")
+			"verify discussion_id with mr_review.discussion_list")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {
@@ -237,7 +237,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionList", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get")
+			"verify project_id and merge_request_iid with merge_request.get")
 	}
 	extras, err := toolutil.CapturedDiscussions(captured, len(discussions))
 	if err != nil {
@@ -288,7 +288,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, _, err := client.GL().Discussions.GetMergeRequestDiscussion(string(input.ProjectID), input.MRIID, input.DiscussionID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("mrDiscussionGet", err, http.StatusNotFound,
-			"verify discussion_id with gitlab_mr_discussion_list")
+			"verify discussion_id with mr_review.discussion_list")
 	}
 	extra, err := toolutil.CapturedDiscussion(captured)
 	if err != nil {
@@ -328,7 +328,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 				"only the note author can edit body; only Maintainers can change the resolved flag on resolvable threads")
 		}
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("mrDiscussionNoteUpdate", err, http.StatusNotFound,
-			"verify note_id with gitlab_mr_discussion_get")
+			"verify note_id with mr_review.discussion_get")
 	}
 	extra, err := toolutil.CapturedNote(captured)
 	if err != nil {

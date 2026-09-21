@@ -1417,11 +1417,11 @@ func TestReadHandlers_NotFoundHint_GatedOnTheStatus(t *testing.T) {
 		hint string
 		call func(client *gitlabclient.Client) error
 	}{
-		{"List", "gitlab_pipeline_list", func(c *gitlabclient.Client) error {
+		{"List", actionPipelineList, func(c *gitlabclient.Client) error {
 			_, e := List(ctx, c, ListInput{ProjectID: "42", PipelineID: 10})
 			return e
 		}},
-		{"ListProject", "gitlab_project_get", func(c *gitlabclient.Client) error {
+		{"ListProject", "project.get", func(c *gitlabclient.Client) error {
 			_, e := ListProject(ctx, c, ListProjectInput{ProjectID: "42"})
 			return e
 		}},
@@ -1445,7 +1445,7 @@ func TestReadHandlers_NotFoundHint_GatedOnTheStatus(t *testing.T) {
 			_, e := DownloadArtifacts(ctx, c, DownloadArtifactsInput{ProjectID: "42", RefName: "main", JobName: "build"})
 			return e
 		}},
-		{"DownloadSingleArtifact", "gitlab_job_artifacts to list", func(c *gitlabclient.Client) error {
+		{"DownloadSingleArtifact", "job.artifacts to list", func(c *gitlabclient.Client) error {
 			_, e := DownloadSingleArtifact(ctx, c, SingleArtifactInput{ProjectID: "42", JobID: 100, ArtifactPath: "a.txt"})
 			return e
 		}},
@@ -1636,7 +1636,7 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
 	}))
 	_, err := Cancel(context.Background(), client, CancelInput{ProjectID: "42", JobID: 100})
-	assertContains(t, err, "gitlab_job_list")
+	assertContains(t, err, actionJobList)
 }
 
 // TestJobCancel_ForceTrue verifies Cancel with Force=true routes to
@@ -1712,7 +1712,7 @@ func TestJobRetry_NotFoundAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
 	}))
 	_, err := Retry(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
-	assertContains(t, err, "gitlab_job_list")
+	assertContains(t, err, actionJobList)
 }
 
 // TestJobRetry_CancelledContext verifies JobRetry when cancelled context.
@@ -2013,7 +2013,7 @@ func TestErase_NotFoundAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
 	}))
 	_, err := Erase(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
-	assertContains(t, err, "gitlab_job_list")
+	assertContains(t, err, actionJobList)
 }
 
 // TestErase_CancelledContext verifies Erase when cancelled context.
@@ -2091,7 +2091,7 @@ func TestPlay_NotFoundAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
 	}))
 	_, err := Play(context.Background(), client, PlayInput{ProjectID: "42", JobID: 100})
-	assertContains(t, err, "gitlab_job_list")
+	assertContains(t, err, actionJobList)
 }
 
 // TestPlay_CancelledContext verifies Play when cancelled context.
@@ -2285,7 +2285,7 @@ func TestDeleteProjectArtifacts_NotFoundAPIError(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
 	}))
 	err := DeleteProjectArtifacts(context.Background(), client, DeleteProjectArtifactsInput{ProjectID: "42"})
-	assertContains(t, err, "gitlab_project_get")
+	assertContains(t, err, "project.get")
 }
 
 // ---------------------------------------------------------------------------

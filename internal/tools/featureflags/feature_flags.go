@@ -198,7 +198,7 @@ func ListFeatureFlags(ctx context.Context, client *gitlabclient.Client, input Li
 				"feature flags require GitLab Premium/Ultimate. Verify the project's tier and that you have Developer+ role")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_flag_list", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	out := ListOutput{
 		FeatureFlags: make([]Output, 0, len(flags)),
@@ -223,7 +223,7 @@ func GetFeatureFlag(ctx context.Context, client *gitlabclient.Client, input GetI
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_get", err, http.StatusNotFound,
-			"verify the flag name with gitlab_feature_flag_list. Names are case-sensitive")
+			"verify the flag name with feature_flags.feature_flag_list. Names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }
@@ -304,7 +304,7 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 				"updating feature flags requires Developer+ role on a Premium/Ultimate project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_update", err, http.StatusNotFound,
-			"verify the flag name with gitlab_feature_flag_list. Names are case-sensitive")
+			"verify the flag name with feature_flags.feature_flag_list. Names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }
@@ -326,7 +326,7 @@ func DeleteFeatureFlag(ctx context.Context, client *gitlabclient.Client, input D
 				"deleting feature flags requires Maintainer+ role on a Premium/Ultimate project")
 		}
 		return toolutil.WrapErrWithStatusHint("feature_flag_delete", err, http.StatusNotFound,
-			"verify the flag name with gitlab_feature_flag_list")
+			"verify the flag name with feature_flags.feature_flag_list")
 	}
 	return nil
 }

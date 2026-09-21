@@ -146,7 +146,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if err != nil {
 		if !strings.Contains(err.Error(), "cannot unmarshal array") {
 			return Output{}, toolutil.WrapErrWithStatusHint("namespace_get", err, http.StatusNotFound,
-				"verify id (numeric) or path (URL-encoded full path) with gitlab_namespace_list or gitlab_namespace_search")
+				"verify id (numeric) or path (URL-encoded full path) with user.namespace_list or user.namespace_search")
 		}
 		return getFromArray(ctx, client, input.ID)
 	}

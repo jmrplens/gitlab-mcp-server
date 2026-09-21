@@ -38,7 +38,7 @@ func ListSSHKeysForUser(ctx context.Context, client *gitlabclient.Client, input 
 	keys, resp, err := client.GL().Users.ListSSHKeysForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list_ssh_keys_for_user", err, http.StatusNotFound,
-			"verify user_id with gitlab_get_user; the user may have no SSH keys")
+			"verify user_id with user.get; the user may have no SSH keys")
 	}
 
 	extras, err := toolutil.CapturedKeys(captured, len(keys))
@@ -74,7 +74,7 @@ func GetSSHKey(ctx context.Context, client *gitlabclient.Client, input GetSSHKey
 	k, _, err := client.GL().Users.GetSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_list_ssh_keys; the key may have been deleted")
+			"verify key_id with user.ssh_keys; the key may have been deleted")
 	}
 	extra, err := toolutil.CapturedKey(captured)
 	if err != nil {
@@ -184,7 +184,7 @@ func AddSSHKeyForUser(ctx context.Context, client *gitlabclient.Client, input Ad
 	k, _, err := client.GL().Users.AddSSHKeyForUser(input.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("add_ssh_key_for_user", err, http.StatusForbidden,
-			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with gitlab_get_user")
+			"adding SSH keys for other users requires admin token; key must be valid SSH public key and unique; verify user_id with user.get")
 	}
 	extra, err := toolutil.CapturedKey(captured)
 	if err != nil {
@@ -216,7 +216,7 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, input Delete
 	_, err := client.GL().Users.DeleteSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithStatusHint("delete_ssh_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_list_ssh_keys; the key may already have been deleted")
+			"verify key_id with user.ssh_keys; the key may already have been deleted")
 	}
 	return DeleteSSHKeyOutput{KeyID: input.KeyID, Deleted: true}, nil
 }

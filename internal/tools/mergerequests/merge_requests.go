@@ -19,7 +19,7 @@ import (
 )
 
 // hintVerifyMR is the 404 hint shared by MR tools.
-const hintVerifyMR = "verify project_id and merge_request_iid with gitlab_mr_get"
+const hintVerifyMR = "verify project_id and merge_request_iid with merge_request.get"
 
 // CreateInput defines parameters for creating a merge request.
 type CreateInput struct {
@@ -563,11 +563,11 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return Output{}, toolutil.WrapErrWithHint("mrCreate", err,
-				"an MR for this source branch may already exist. Use gitlab_mr_list with source_branch filter to find it")
+				"an MR for this source branch may already exist. Use merge_request.list with source_branch filter to find it")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("mrCreate", err,
-				"verify both source_branch and target_branch exist. Use gitlab_branch_list to check")
+				"verify both source_branch and target_branch exist. Use branch.list to check")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrCreate", err)
 	}
@@ -601,7 +601,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrGet", err,
-				"verify project_id and merge_request_iid (the project-scoped IID, not the global merge_request_id); use gitlab_mr_list to find existing MRs")
+				"verify project_id and merge_request_iid (the project-scoped IID, not the global merge_request_id); use merge_request.list to find existing MRs")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrGet", err)
 	}
@@ -626,7 +626,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	mrs, resp, err := client.GL().MergeRequests.ListProjectMergeRequests(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrList", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	return mergeRequestListOutput("mrList", mrs, resp, captured)
 }
@@ -746,7 +746,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return Output{}, toolutil.WrapErrWithHint("mrUpdate", err,
-				"verify project_id and merge_request_iid. Use gitlab_mr_list to check available MRs")
+				"verify project_id and merge_request_iid. Use merge_request.list to check available MRs")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("mrUpdate", err)
 	}
@@ -845,7 +845,7 @@ func Approve(ctx context.Context, client *gitlabclient.Client, input ApproveInpu
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return ApproveOutput{}, toolutil.WrapErrWithHint("mrApprove", err,
-				"MR not found or approval features require GitLab Premium. Use gitlab_mr_get to verify")
+				"MR not found or approval features require GitLab Premium. Use merge_request.get to verify")
 		}
 		return ApproveOutput{}, toolutil.WrapErrWithMessage("mrApprove", err)
 	}
@@ -872,7 +872,7 @@ func Unapprove(ctx context.Context, client *gitlabclient.Client, input ApproveIn
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return toolutil.WrapErrWithHint("mrUnapprove", err,
-				"verify project_id and merge_request_iid; unapproval requires you to have previously approved the MR (use gitlab_mr_approve first if you have not)")
+				"verify project_id and merge_request_iid; unapproval requires you to have previously approved the MR (use merge_request.approve first if you have not)")
 		}
 		return toolutil.WrapErrWithMessage("mrUnapprove", err)
 	}
@@ -974,7 +974,7 @@ func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInpu
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
-		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get",
+		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with merge_request.get",
 	},
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
@@ -1012,7 +1012,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 	pipelineList, _, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return PipelinesOutput{}, toolutil.WrapErrWithStatusHint("mrPipelines", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get. The MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
+			"verify project_id and merge_request_iid with merge_request.get. The MR may have no pipelines yet (use merge_request.create_pipeline to trigger one)")
 	}
 
 	out := make([]pipelines.Output, len(pipelineList))
@@ -1044,7 +1044,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return toolutil.WrapErrWithHint("mrDelete", err,
-				"only project owners can delete MRs. Use gitlab_mr_update with state_event='close' to close it instead")
+				"only project owners can delete MRs. Use merge_request.update with state_event='close' to close it instead")
 		}
 		return toolutil.WrapErrWithMessage("mrDelete", err)
 	}
@@ -1085,7 +1085,7 @@ func Rebase(ctx context.Context, client *gitlabclient.Client, input RebaseInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) || toolutil.IsHTTPStatus(err, http.StatusConflict) {
 			return RebaseOutput{}, toolutil.WrapErrWithHint("mrRebase", err,
-				"rebase may have conflicts requiring manual resolution, or a rebase is already in progress. Use gitlab_mr_get to check rebase_in_progress")
+				"rebase may have conflicts requiring manual resolution, or a rebase is already in progress. Use merge_request.get to check rebase_in_progress")
 		}
 		return RebaseOutput{}, toolutil.WrapErrWithMessage("mrRebase", err)
 	}
@@ -1357,7 +1357,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	mrs, resp, err := client.GL().MergeRequests.ListGroupMergeRequests(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGroup", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
+			"verify the group exists with group.get. Use full_path or numeric ID")
 	}
 	return mergeRequestListOutput("mrListGroup", mrs, resp, captured)
 }
@@ -1496,7 +1496,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get. Use gitlab_mr_update with reviewer_ids to assign reviewers")
+			"verify project_id and merge_request_iid with merge_request.get. Use merge_request.update with reviewer_ids to assign reviewers")
 	}
 	out := make([]ReviewerOutput, len(reviewers))
 	for i, r := range reviewers {
@@ -1552,7 +1552,7 @@ func CreatePipeline(ctx context.Context, client *gitlabclient.Client, input Crea
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return pipelines.Output{}, toolutil.WrapErrWithHint("mrCreatePipeline", err,
-				"the MR's source branch may have no .gitlab-ci.yml or the pipeline configuration is invalid; use gitlab_ci_lint to validate the YAML")
+				"the MR's source branch may have no .gitlab-ci.yml or the pipeline configuration is invalid; use template.lint to validate the YAML")
 		}
 		return pipelines.Output{}, toolutil.WrapErrWithStatusHint("mrCreatePipeline", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -1594,7 +1594,7 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrIssuesClosed: project_id is required",
-		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced via 'Closes #N' in MR description/commits are returned",
+		notFoundHint:      "verify project_id and merge_request_iid with merge_request.get - only issues referenced via 'Closes #N' in MR description/commits are returned",
 	},
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.GetIssuesClosedOnMergeOptions{}
@@ -1646,7 +1646,7 @@ func CancelAutoMerge(ctx context.Context, client *gitlabclient.Client, input Get
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusMethodNotAllowed) || toolutil.IsHTTPStatus(err, http.StatusNotAcceptable) {
 			return Output{}, toolutil.WrapErrWithHint("mrCancelAutoMerge", err,
-				"the MR may already be merged/closed, or auto-merge was not enabled. Use gitlab_mr_get to check state and auto_merge_enabled")
+				"the MR may already be merged/closed, or auto-merge was not enabled. Use merge_request.get to check state and auto_merge_enabled")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mrCancelAutoMerge", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -1904,7 +1904,7 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 			orderBy: input.OrderBy, sort: input.Sort,
 		},
 		missingProjectMsg: "mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
-		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced in MR description/commits/notes are returned",
+		notFoundHint:      "verify project_id and merge_request_iid with merge_request.get - only issues referenced in MR description/commits/notes are returned",
 	},
 		func(projectID string, mrIID int64, lo mrItemListOptions, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.ListRelatedIssuesOptions{}
@@ -1963,7 +1963,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
 			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this MR already exists"}
 			return CreateTodoOutput{}, toolutil.WrapErrWithHint("mrCreateTodo", err,
-				"a pending todo for this MR already exists for the authenticated user. Use gitlab_todo_list to inspect it")
+				"a pending todo for this MR already exists for the authenticated user. Use user.todo_list to inspect it")
 		}
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -2078,10 +2078,10 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return DependencyOutput{}, toolutil.WrapErrWithHint("mrCreateDependency", err,
-				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists. Use gitlab_mr_dependencies_list to inspect current dependencies")
+				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists. Use merge_request.dependencies_list to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
+			"verify project_id and merge_request_iid with merge_request.get; blocking_merge_request_id is a global database ID, not an IID")
 	}
 	var extra dependencyExtra
 	if decodeErr := captured.Decode(&extra); decodeErr != nil {
@@ -2121,7 +2121,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"MR dependencies require GitLab Premium or Ultimate")
 		}
 		return toolutil.WrapErrWithStatusHint("mrDeleteDependency", err, http.StatusNotFound,
-			"dependency not currently active. Use gitlab_mr_dependencies_list to inspect existing dependencies")
+			"dependency not currently active. Use merge_request.dependencies_list to inspect existing dependencies")
 	}
 	return nil
 }

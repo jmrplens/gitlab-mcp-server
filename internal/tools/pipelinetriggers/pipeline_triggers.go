@@ -152,7 +152,7 @@ func ListTriggers(ctx context.Context, client *gitlabclient.Client, input ListIn
 	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_list", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get and that you have Maintainer+ role (trigger tokens are sensitive)")
+			"verify the project exists with project.get and that you have Maintainer+ role (trigger tokens are sensitive)")
 	}
 	extras, err := toolutil.CapturedPipelineTriggers(captured, len(triggers))
 	if err != nil {
@@ -182,7 +182,7 @@ func GetTrigger(ctx context.Context, client *gitlabclient.Client, input GetInput
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_get", err, http.StatusNotFound,
-			"verify trigger_id with gitlab_pipeline_trigger_list. Trigger tokens are scoped to a single project")
+			"verify trigger_id with pipeline.trigger_list. Trigger tokens are scoped to a single project")
 	}
 	extra, err := toolutil.CapturedPipelineTrigger(captured)
 	if err != nil {
@@ -212,7 +212,7 @@ func CreateTrigger(ctx context.Context, client *gitlabclient.Client, input Creat
 				"creating trigger tokens requires Maintainer+ role on the project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_create", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get")
+			"verify the project exists with project.get")
 	}
 	extra, err := toolutil.CapturedPipelineTrigger(captured)
 	if err != nil {
@@ -245,7 +245,7 @@ func UpdateTrigger(ctx context.Context, client *gitlabclient.Client, input Updat
 				"only the trigger owner or Maintainer+ can edit trigger tokens")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_update", err, http.StatusNotFound,
-			"verify trigger_id with gitlab_pipeline_trigger_list")
+			"verify trigger_id with pipeline.trigger_list")
 	}
 	extra, err := toolutil.CapturedPipelineTrigger(captured)
 	if err != nil {
@@ -271,7 +271,7 @@ func DeleteTrigger(ctx context.Context, client *gitlabclient.Client, input Delet
 				"only the trigger owner or Maintainer+ can delete trigger tokens. The token is invalidated immediately on deletion")
 		}
 		return toolutil.WrapErrWithStatusHint("pipeline_trigger_delete", err, http.StatusNotFound,
-			"verify trigger_id with gitlab_pipeline_trigger_list")
+			"verify trigger_id with pipeline.trigger_list")
 	}
 	return nil
 }
@@ -308,14 +308,14 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
-				"the token is invalid or has been revoked. Use gitlab_pipeline_trigger_list to find a valid token (Maintainer+ required to read tokens)")
+				"the token is invalid or has been revoked. Use pipeline.trigger_list to find a valid token (Maintainer+ required to read tokens)")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
-				"the ref does not exist, the project has no .gitlab-ci.yml, or CI/CD is disabled. Verify with gitlab_branch_get/gitlab_tag_get and gitlab_ci_lint")
+				"the ref does not exist, the project has no .gitlab-ci.yml, or CI/CD is disabled. Verify with branch.get/tag.get and template.lint")
 		}
 		return RunOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_run", err, http.StatusNotFound,
-			"verify project_id and that the ref (branch/tag) exists with gitlab_branch_get or gitlab_tag_get")
+			"verify project_id and that the ref (branch/tag) exists with branch.get or tag.get")
 	}
 	extra, err := toolutil.CapturedPipeline(captured)
 	if err != nil {

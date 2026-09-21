@@ -30,8 +30,8 @@ type fileNotFoundOutput struct {
 
 func formatFileNotFound(out fileNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult("File", out.Identifier,
-		"Use gitlab_file_metadata to verify the path and ref",
-		"Use gitlab_repository_tree to list repository paths")
+		"Use repository.file_metadata to verify the path and ref",
+		"Use repository.tree to list repository paths")
 }
 
 // FormatOutputMarkdown renders one repository file as a card: its metadata,

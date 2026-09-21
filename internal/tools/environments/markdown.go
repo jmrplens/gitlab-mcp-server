@@ -17,7 +17,7 @@ type environmentNotFoundOutput struct {
 func formatEnvironmentNotFound(out environmentNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		"Environment", out.Identifier,
-		"Use gitlab_environment_list with project_id to list environments",
+		"Use environment.list with project_id to list environments",
 		"Verify the environment_id is correct for this project",
 	)
 }

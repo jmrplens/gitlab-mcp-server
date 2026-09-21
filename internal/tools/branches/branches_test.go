@@ -325,8 +325,11 @@ func TestBranchCreateRef_NotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Create() error should mention ref not found, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "gitlab_branch_list") {
-		t.Errorf("Create() error should suggest gitlab_branch_list, got: %v", err)
+	// The hint names the capability by its canonical action ID, which every
+	// surface resolves, rather than by the individual tool, which only one of
+	// the three registers.
+	if !strings.Contains(err.Error(), actionBranchList) {
+		t.Errorf("Create() error should suggest %s, got: %v", actionBranchList, err)
 	}
 }
 
@@ -978,7 +981,7 @@ func TestProtectedBranchUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
 	}
-	if !strings.Contains(err.Error(), "gitlab_branch_protect") {
+	if !strings.Contains(err.Error(), actionBranchProtect) {
 		t.Fatalf("error missing protect hint: %v", err)
 	}
 }
@@ -1342,7 +1345,7 @@ func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	if !ok {
 		t.Fatalf("content type = %T, want TextContent", result.Content[0])
 	}
-	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, "gitlab_branch_list"} {
+	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, actionBranchList} {
 		t.Run(want, func(t *testing.T) {
 			if !strings.Contains(content.Text, want) {
 				t.Fatalf("markdown missing %q:\n%s", want, content.Text)
@@ -1709,7 +1712,7 @@ func TestBranchDelete_ProtectedBranch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for protected branch")
 	}
-	if !strings.Contains(err.Error(), "gitlab_branch_unprotect") {
+	if !strings.Contains(err.Error(), actionBranchUnprotect) {
 		t.Errorf("expected unprotect hint, got: %v", err)
 	}
 }
@@ -1725,7 +1728,7 @@ func TestBranchDelete_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for not-found branch")
 	}
-	if !strings.Contains(err.Error(), "gitlab_branch_list") {
+	if !strings.Contains(err.Error(), actionBranchList) {
 		t.Errorf("expected list hint, got: %v", err)
 	}
 }

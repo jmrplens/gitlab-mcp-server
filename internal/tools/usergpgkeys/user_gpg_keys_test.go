@@ -846,7 +846,7 @@ func TestStatusHints_EachHandlerHintsOnTheStatusItNames(t *testing.T) {
 			call: func(c *gitlabclient.Client) error { _, err := List(context.Background(), c, ListInput{}); return err },
 		},
 		{
-			name: "list_for_user", status: http.StatusNotFound, hint: "gitlab_get_user",
+			name: "list_for_user", status: http.StatusNotFound, hint: "user.get",
 			call: func(c *gitlabclient.Client) error {
 				_, err := ListForUser(context.Background(), c, ListForUserInput{UserID: 42})
 				return err

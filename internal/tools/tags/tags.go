@@ -165,9 +165,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.ContainsAny(err, "already exists"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists. Use gitlab_tag_get to view it")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists. Use tag.get to view it")
 		case toolutil.ContainsAny(err, "Target", "is invalid"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist. Use gitlab_branch_list or gitlab_tag_list to verify")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist. Use branch.list or tag.list to verify")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("tagCreate", err)
 		}
@@ -213,7 +213,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	tags, resp, err := client.GL().Tags.ListTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("tagList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get")
+			"verify project_id with project.get")
 	}
 	out := make([]Output, len(tags))
 	for i, t := range tags {
@@ -240,7 +240,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	t, _, err := client.GL().Tags.GetTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("tagGet", err, http.StatusNotFound,
-			"verify tag_name with gitlab_tag_list; tag names are case-sensitive")
+			"verify tag_name with tag.list; tag names are case-sensitive")
 	}
 	return toOutput(t), nil
 }
@@ -296,7 +296,7 @@ func GetSignature(ctx context.Context, client *gitlabclient.Client, input Signat
 	sig, _, err := client.GL().Tags.GetTagSignature(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return SignatureOutput{}, toolutil.WrapErrWithStatusHint("tagGetSignature", err, http.StatusNotFound,
-			"the tag may not be signed, or verify tag_name with gitlab_tag_list")
+			"the tag may not be signed, or verify tag_name with tag.list")
 	}
 	out := SignatureOutput{
 		SignatureType:      sig.SignatureType,
@@ -423,7 +423,7 @@ func ListProtectedTags(ctx context.Context, client *gitlabclient.Client, input L
 	tags, resp, err := client.GL().ProtectedTags.ListProtectedTags(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProtectedTagsOutput{}, toolutil.WrapErrWithStatusHint("tagListProtected", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; protected tags require Maintainer or Owner role to view")
+			"verify project_id with project.get; protected tags require Maintainer or Owner role to view")
 	}
 	out := make([]ProtectedTagOutput, len(tags))
 	for i, pt := range tags {
@@ -446,7 +446,7 @@ func GetProtectedTag(ctx context.Context, client *gitlabclient.Client, input Get
 	pt, _, err := client.GL().ProtectedTags.GetProtectedTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagGetProtected", err, http.StatusNotFound,
-			"the tag may not be protected. Use gitlab_tag_list_protected to verify")
+			"the tag may not be protected. Use tag.list_protected to verify")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }
@@ -519,7 +519,7 @@ func UnprotectTag(ctx context.Context, client *gitlabclient.Client, input Unprot
 	_, err := client.GL().ProtectedTags.UnprotectRepositoryTags(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("tagUnprotect", err, http.StatusForbidden,
-			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected. Use gitlab_tag_list_protected to verify")
+			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected. Use tag.list_protected to verify")
 	}
 	return nil
 }

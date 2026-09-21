@@ -10,7 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v3/internal/toolutil"
 )
 
-const groupLDAPLinkHint = "verify group_id with gitlab_group_get; provide either cn or filter, and use the LDAP provider name configured on the GitLab instance; requires Premium/Ultimate and Owner access"
+const groupLDAPLinkHint = "verify group_id with group.get; provide either cn or filter, and use the LDAP provider name configured on the GitLab instance; requires Premium/Ultimate and Owner access"
 
 // Output represents a single group LDAP link.
 type Output struct {

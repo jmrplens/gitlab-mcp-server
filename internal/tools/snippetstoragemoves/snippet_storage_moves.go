@@ -171,7 +171,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in IDInput) (Output, 
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMove(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move", err, http.StatusNotFound,
-			"requires admin; verify id with gitlab_retrieve_all_snippet_storage_moves; the move record may have been pruned after completion")
+			"requires admin; verify id with storage_move.retrieve_all_snippet; the move record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {
@@ -196,7 +196,7 @@ func GetForSnippet(ctx context.Context, client *gitlabclient.Client, in SnippetM
 	move, _, err := client.GL().SnippetRepositoryStorageMove.GetStorageMoveForSnippet(in.SnippetID, in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get snippet storage move for snippet", err, http.StatusNotFound,
-			"requires admin; verify the snippet_id + id pair with gitlab_retrieve_snippet_storage_moves, which lists this snippet's own moves; a move id belonging to another snippet answers 404 here, and the record may have been pruned after completion")
+			"requires admin; verify the snippet_id + id pair with storage_move.retrieve_snippet, which lists this snippet's own moves; a move id belonging to another snippet answers 404 here, and the record may have been pruned after completion")
 	}
 	extra, err := toolutil.CapturedStorageMove(captured)
 	if err != nil {

@@ -176,7 +176,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	envs, resp, err := client.GL().Environments.ListEnvironments(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("environmentList", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; states filter must be one of {available, stopping, stopped}")
+			"verify project_id with project.get; states filter must be one of {available, stopping, stopped}")
 	}
 	out := ListOutput{
 		Environments: make([]Output, 0, len(envs)),
@@ -202,7 +202,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	env, _, err := client.GL().Environments.GetEnvironment(string(input.ProjectID), input.EnvironmentID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("environmentGet", err, http.StatusNotFound,
-			"verify environment_id with gitlab_environment_list; the environment may have been deleted")
+			"verify environment_id with environment.list; the environment may have been deleted")
 	}
 	return toOutput(env), nil
 }
@@ -289,7 +289,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	env, _, err := client.GL().Environments.EditEnvironment(string(input.ProjectID), input.EnvironmentID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("environmentUpdate", err, http.StatusNotFound,
-			"verify environment_id with gitlab_environment_list; tier must be one of {production, staging, testing, development, other}; requires Developer role")
+			"verify environment_id with environment.list; tier must be one of {production, staging, testing, development, other}; requires Developer role")
 	}
 	return toOutput(env), nil
 }
@@ -308,7 +308,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Environments.DeleteEnvironment(string(input.ProjectID), input.EnvironmentID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("environmentDelete", err, http.StatusForbidden,
-			"environment must be stopped before deletion; use gitlab_environment_stop first; requires Maintainer role")
+			"environment must be stopped before deletion; use environment.stop first; requires Maintainer role")
 	}
 	return nil
 }

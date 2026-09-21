@@ -783,7 +783,7 @@ func TestUpdate_NotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for not found response")
 	}
-	if !strings.Contains(err.Error(), "gitlab_protected_environment_protect") {
+	if !strings.Contains(err.Error(), "environment.protected_protect") {
 		t.Fatalf("error = %v, want protect hint", err)
 	}
 }

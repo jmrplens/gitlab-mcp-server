@@ -106,7 +106,7 @@ func New(ids []string, aliases map[string]string) *IDs {
 // because the whole value of the map is that what comes out of it is a
 // canonical ID: a caller that had to re-check the answer would be keeping the
 // invariant itself, which is what putting it here avoids.
-func NewWithTools(ids []string, aliases map[string]string, tools map[string]string) *IDs {
+func NewWithTools(ids []string, aliases, toolNames map[string]string) *IDs {
 	built := &IDs{
 		ids:     map[string]struct{}{},
 		aliases: map[string]string{},
@@ -120,7 +120,7 @@ func NewWithTools(ids []string, aliases map[string]string, tools map[string]stri
 	for alias, canonical := range aliases {
 		built.addAlias(alias, canonical)
 	}
-	for tool, id := range tools {
+	for tool, id := range toolNames {
 		built.addTool(tool, id)
 	}
 	built.finish()

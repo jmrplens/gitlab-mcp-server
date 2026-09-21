@@ -293,7 +293,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	services, _, err := client.GL().Services.ListServices(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_integrations", err, http.StatusForbidden,
-			"requires Maintainer role on the project; verify project_id with gitlab_project_list; lists active integrations only")
+			"requires Maintainer role on the project; verify project_id with project.list; lists active integrations only")
 	}
 	items := make([]IntegrationItem, 0, len(services))
 	for _, s := range services {
@@ -325,7 +325,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	result, err := getter(ctx, client.GL().Services, string(input.ProjectID))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_integration", err, http.StatusNotFound,
-			"verify slug is a valid integration name (e.g. slack, jira, microsoft-teams, jenkins); integration must be active on the project; use gitlab_list_integrations to enumerate enabled integrations")
+			"verify slug is a valid integration name (e.g. slack, jira, microsoft-teams, jenkins); integration must be active on the project; use project.integration_list to enumerate enabled integrations")
 	}
 	if result == nil {
 		return GetOutput{}, toolutil.WrapErrWithMessage("get_integration", fmt.Errorf("integration %s returned nil", input.Slug))
@@ -350,7 +350,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	err := deleter(ctx, client.GL().Services, string(input.ProjectID))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_integration", err, http.StatusForbidden,
-			"requires Maintainer role; deactivates the integration on the project; verify slug with gitlab_list_integrations; deletion is irreversible (configuration is removed)")
+			"requires Maintainer role; deactivates the integration on the project; verify slug with project.integration_list; deletion is irreversible (configuration is removed)")
 	}
 	return nil
 }

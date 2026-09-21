@@ -68,24 +68,84 @@ func fixHints(dir string, sites []site, ids *actionids.IDs, includeTests bool) (
 		if len(values) == 0 {
 			continue
 		}
-		files, err := goFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)), includeTests)
-		if err != nil {
+		if err := fixHintsInPackage(dir, pkg, values, ids, includeTests, &report); err != nil {
 			return report, err
-		}
-		for _, file := range files {
-			changed, fixes, unresolved, fixErr := fixHintsInFile(dir, file, values, ids)
-			if fixErr != nil {
-				return report, fixErr
-			}
-			report.Fixes = append(report.Fixes, fixes...)
-			report.Unresolved = append(report.Unresolved, unresolved...)
-			if changed {
-				report.Files++
-			}
 		}
 	}
 	return report, nil
 }
+
+// fixHintsInPackage rewrites one package: its production files first, and its
+// test files after, under the same rule.
+//
+// The order is not cosmetic. What decides whether a literal belongs to a hint
+// is the hint text the walk folded, and the production rewrite is what makes
+// that text stop naming the tool, so a test pass run afterwards would find
+// nothing to match. They have to be one pass over one set of values.
+func fixHintsInPackage(dir, pkg string, values []string, ids *actionids.IDs, includeTests bool, report *hintFixReport) error {
+	admit := hintProse(values)
+	production, err := productionFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
+	if err != nil {
+		return err
+	}
+	rewritten := 0
+	for _, file := range production {
+		fixes, fixErr := fixOneFile(dir, file, admit, ids, report)
+		if fixErr != nil {
+			return fixErr
+		}
+		rewritten += fixes
+	}
+	if !includeTests || rewritten == 0 {
+		return nil
+	}
+	tests, err := testFilesOf(filepath.Join(dir, filepath.FromSlash(pkg)))
+	if err != nil {
+		return err
+	}
+	for _, file := range tests {
+		if _, fixErr := fixOneFile(dir, file, admit, ids, report); fixErr != nil {
+			return fixErr
+		}
+	}
+	return nil
+}
+
+// fixOneFile rewrites one file into the report and says how many names moved.
+func fixOneFile(dir, file string, admit candidate, ids *actionids.IDs, report *hintFixReport) (int, error) {
+	changed, fixes, unresolved, err := fixHintsInFile(dir, file, admit, ids)
+	if err != nil {
+		return 0, err
+	}
+	report.Fixes = append(report.Fixes, fixes...)
+	report.Unresolved = append(report.Unresolved, unresolved...)
+	if changed {
+		report.Files++
+	}
+	return len(fixes), nil
+}
+
+// candidate decides which string literals a pass rewrites. The production pass
+// and the test pass ask different questions of the same file shape, and the
+// difference is the whole reason both are safe.
+type candidate func(text string) bool
+
+// hintProse admits a literal that is a piece of prose belonging to some hint
+// the walk folded, which is the production rule.
+func hintProse(values []string) candidate {
+	return func(text string) bool { return partOfAHint(text, values) }
+}
+
+// A test file is held to the SAME prose rule as production, and the narrower
+// rule that suggests itself does not work. Admitting any test literal that
+// spells a tool name the package's own hints had just stopped spelling looks
+// exact and is not: a test asserts an individual tool's name as often as it
+// asserts a hint, in the same file and with the same literal, and measured on
+// this tree that rule turned 98 failing assertions into 351. The suite caught
+// it, which is the argument for running it rather than for keeping the rule.
+// What the prose rule leaves behind is the assertion written as the bare
+// token, and that one is a judgement each time: whether the sentence moved or
+// the name did is not something the text says.
 
 // packagesWithHints is every audited package that folded at least one hint,
 // in order, so a run rewrites the same files in the same order twice.
@@ -123,8 +183,19 @@ func hintValues(sites []site, pkg string) []string {
 	return values
 }
 
-// goFilesOf is the Go source of one directory, sorted, without descending.
-func goFilesOf(dir string, includeTests bool) ([]string, error) {
+// testFilesOf is the test source of one directory, sorted.
+func testFilesOf(dir string) ([]string, error) {
+	return goFiles(dir, func(name string) bool { return strings.HasSuffix(name, "_test.go") })
+}
+
+// productionFilesOf is the non-test Go source of one directory, sorted.
+func productionFilesOf(dir string) ([]string, error) {
+	return goFiles(dir, func(name string) bool { return !strings.HasSuffix(name, "_test.go") })
+}
+
+// goFiles is every .go file of one directory the predicate admits, sorted, so
+// a run rewrites the same files in the same order twice.
+func goFiles(dir string, admit func(name string) bool) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", dir, err)
@@ -135,7 +206,7 @@ func goFilesOf(dir string, includeTests bool) ([]string, error) {
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") {
 			continue
 		}
-		if !includeTests && strings.HasSuffix(name, "_test.go") {
+		if !admit(name) {
 			continue
 		}
 		files = append(files, filepath.Join(dir, name))
@@ -153,27 +224,26 @@ type replacement struct {
 }
 
 // fixHintsInFile rewrites one file and says what it changed.
-func fixHintsInFile(root, file string, values []string, ids *actionids.IDs) (bool, []hintFix, []hintFix, error) {
-	source, err := os.ReadFile(file) //#nosec G304 -- a Go file of a package this run audits
-	if err != nil {
-		return false, nil, nil, fmt.Errorf("read %s: %w", file, err)
+func fixHintsInFile(root, file string, admit candidate, ids *actionids.IDs) (changed bool, fixes, unresolved []hintFix, err error) {
+	source, readErr := os.ReadFile(file) //#nosec G304 -- a Go file of a package this run audits
+	if readErr != nil {
+		return false, nil, nil, fmt.Errorf("read %s: %w", file, readErr)
 	}
 	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, file, source, parser.ParseComments)
-	if err != nil {
-		return false, nil, nil, fmt.Errorf("parse %s: %w", file, err)
+	parsed, parseErr := parser.ParseFile(fset, file, source, parser.ParseComments)
+	if parseErr != nil {
+		return false, nil, nil, fmt.Errorf("parse %s: %w", file, parseErr)
 	}
 
 	shown := relativePath(file, root)
 	var edits []replacement
-	var fixes, unresolved []hintFix
 	ast.Inspect(parsed, func(node ast.Node) bool {
 		lit, ok := node.(*ast.BasicLit)
 		if !ok || lit.Kind != token.STRING {
 			return true
 		}
 		text, unquoteErr := strconv.Unquote(lit.Value)
-		if unquoteErr != nil || !partOfAHint(text, values) {
+		if unquoteErr != nil || !admit(text) {
 			return true
 		}
 		line := fset.Position(lit.Pos()).Line
@@ -206,6 +276,7 @@ func fixHintsInFile(root, file string, values []string, ids *actionids.IDs) (boo
 		written = edit.end
 	}
 	rewritten = append(rewritten, source[written:]...)
+	//#nosec G703 -- the path is a Go file this run read out of a package it audits
 	if writeErr := os.WriteFile(file, rewritten, 0o600); writeErr != nil {
 		return false, nil, nil, fmt.Errorf("write %s: %w", file, writeErr)
 	}

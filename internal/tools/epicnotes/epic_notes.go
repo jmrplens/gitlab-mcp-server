@@ -288,7 +288,7 @@ func listWith(ctx context.Context, client *gitlabclient.Client, query string, in
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicNoteList", err,
-			"verify full_path (group path) and iid (epic IID) with gitlab_epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
+			"verify full_path (group path) and iid (epic IID) with group.epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -347,7 +347,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("epicNoteGet", err,
-			"verify full_path + iid with gitlab_epic_list; verify note_id (numeric) with gitlab_epic_note_list; system-generated notes may have restricted access")
+			"verify full_path + iid with group.epic_list; verify note_id (numeric) with group.epic_note_list; system-generated notes may have restricted access")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -391,7 +391,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	workItemGID, err := resolveWorkItemGID(ctx, client, input.FullPath, input.IID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithHint("epicNoteCreate", err,
-			"failed to resolve epic GID; verify full_path + iid with gitlab_epic_list; requires Reporter role on the group")
+			"failed to resolve epic GID; verify full_path + iid with group.epic_list; requires Reporter role on the group")
 	}
 
 	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
@@ -432,7 +432,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 
 	note, err := toolutil.ExecGraphQLNoteMutation[gqlNoteNode](ctx, client.GL().GraphQL, toolutil.GraphQLNoteMutation{
 		Op:         "epicNoteUpdate",
-		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with gitlab_epic_note_list; body is GFM with 1MB max; system notes cannot be edited",
+		Hint:       "only the note author or a Maintainer/Owner can edit; verify note_id with group.epic_note_list; body is GFM with 1MB max; system notes cannot be edited",
 		PayloadKey: "updateNote",
 		Query:      mutationUpdateNote,
 		Variables: map[string]any{

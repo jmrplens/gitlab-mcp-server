@@ -910,7 +910,7 @@ func TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
 		{
 			name: "list", hinted: http.StatusNotFound, other: http.StatusForbidden,
 			operation: "listGroupWikis",
-			hint:      "verify group_id with gitlab_group_get; group wikis require GitLab Premium or higher",
+			hint:      "verify group_id with group.get; group wikis require GitLab Premium or higher",
 			call: func(client *gitlabclient.Client) error {
 				_, err := List(context.Background(), client, ListInput{GroupID: "mygroup"})
 				return err
@@ -919,7 +919,7 @@ func TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
 		{
 			name: "get", hinted: http.StatusNotFound, other: http.StatusForbidden,
 			operation: "getGroupWikiPage",
-			hint:      "verify slug with gitlab_group_wiki_list; slugs are case-sensitive and use hyphens for spaces",
+			hint:      "verify slug with group.wiki_list; slugs are case-sensitive and use hyphens for spaces",
 			call: func(client *gitlabclient.Client) error {
 				_, err := Get(context.Background(), client, GetInput{GroupID: "mygroup", Slug: "home"})
 				return err
@@ -938,7 +938,7 @@ func TestGroupWikis_RefusalsCarryTheirOwnOperationAndHint(t *testing.T) {
 		{
 			name: "edit", hinted: http.StatusNotFound, other: http.StatusForbidden,
 			operation: "editGroupWikiPage",
-			hint:      "verify slug with gitlab_group_wiki_list; slugs are case-sensitive",
+			hint:      "verify slug with group.wiki_list; slugs are case-sensitive",
 			call: func(client *gitlabclient.Client) error {
 				_, err := Edit(context.Background(), client, EditInput{GroupID: "mygroup", Slug: "home", Title: "Renamed"})
 				return err

@@ -371,7 +371,7 @@ func TestProjectAliases_Failure_HintsOnTheStatusEachHandlerKeysOn(t *testing.T) 
 				return err
 			},
 			wantOp:   "get project alias",
-			wantHint: "verify the alias name with gitlab_list_project_aliases",
+			wantHint: "verify the alias name with project_alias.list",
 		},
 		{
 			name:   "create bad request names the project_id and the collision",
@@ -390,7 +390,7 @@ func TestProjectAliases_Failure_HintsOnTheStatusEachHandlerKeysOn(t *testing.T) 
 				return Delete(ctx, c, DeleteInput{Name: "missing-alias"})
 			},
 			wantOp:   "delete project alias",
-			wantHint: "verify the alias name with gitlab_list_project_aliases",
+			wantHint: "verify the alias name with project_alias.list",
 		},
 	}
 

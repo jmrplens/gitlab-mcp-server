@@ -248,7 +248,7 @@ func ListGroupBoards(ctx context.Context, client *gitlabclient.Client, input Lis
 				"group issue boards require GitLab Premium or Ultimate (multiple boards per group); on Free tier groups have a single implicit board only")
 		}
 		return ListGroupBoardsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get")
+			"verify the group exists with group.get")
 	}
 	out := ListGroupBoardsOutput{Pagination: toolutil.PaginationFromResponse(resp)}
 	for _, b := range boards {
@@ -277,7 +277,7 @@ func GetGroupBoard(ctx context.Context, client *gitlabclient.Client, input GetGr
 	board, _, err := rawGetGroupBoard(ctx, client, string(input.GroupID), input.BoardID)
 	if err != nil {
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_get", err, http.StatusNotFound,
-			"board_id not found on this group. Use gitlab_group_board_list to discover current board IDs")
+			"board_id not found on this group. Use group.group_board_list to discover current board IDs")
 	}
 	return convertGroupBoardAPI(board), nil
 }
@@ -310,10 +310,10 @@ func CreateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Cr
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_create", err,
-				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via gitlab_milestone_list / gitlab_group_label_list")
+				"name is required and must be unique within the group; verify all referenced milestone/iteration/label IDs exist via project.milestone_list / group.group_label_list")
 		}
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_create", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get")
+			"verify the group exists with group.get")
 	}
 	return convertGroupBoardAPI(board), nil
 }
@@ -365,10 +365,10 @@ func UpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, input Up
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return GroupBoardOutput{}, toolutil.WrapErrWithHint("group_board_update", err,
-				"verify referenced assignee_id (gitlab_get_user), milestone_id (gitlab_milestone_list), and label IDs exist; weight is 0-9")
+				"verify referenced assignee_id (user.get), milestone_id (project.milestone_list), and label IDs exist; weight is 0-9")
 		}
 		return GroupBoardOutput{}, toolutil.WrapErrWithStatusHint("group_board_update", err, http.StatusNotFound,
-			"board_id not found. Use gitlab_group_board_list to verify")
+			"board_id not found. Use group.group_board_list to verify")
 	}
 	return convertGroupBoardAPI(board), nil
 }
@@ -433,7 +433,7 @@ func ListGroupBoardLists(ctx context.Context, client *gitlabclient.Client, input
 	lists, resp, err := client.GL().GroupIssueBoards.ListGroupIssueBoardLists(string(input.GroupID), input.BoardID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListBoardListsOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_list", err, http.StatusNotFound,
-			"board_id not found on this group. Use gitlab_group_board_list to discover board IDs")
+			"board_id not found on this group. Use group.group_board_list to discover board IDs")
 	}
 	extras, err := toolutil.CapturedBoardLists(captured, len(lists))
 	if err != nil {
@@ -468,7 +468,7 @@ func GetGroupBoardList(ctx context.Context, client *gitlabclient.Client, input G
 	list, _, err := client.GL().GroupIssueBoards.GetGroupIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, gl.WithContext(ctx))
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_get", err, http.StatusNotFound,
-			"list_id not found on this board. Use gitlab_group_board_list_lists to discover list IDs (each list represents a label column)")
+			"list_id not found on this board. Use group.group_board_list_lists to discover list IDs (each list represents a label column)")
 	}
 	extra, err := toolutil.CapturedBoardList(captured)
 	if err != nil {
