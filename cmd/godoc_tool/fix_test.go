@@ -639,6 +639,26 @@ func TestGenerateHandlerDoc_HelperShapes(t *testing.T) {
 			want: "buildParams constructs the request parameters from the input.",
 		},
 		{
+			name: "a name containing ToOutput converts",
+			decl: "func widgetToOutput() {}",
+			want: "widgetToOutput converts the GitLab API response to the tool output format.",
+		},
+		{
+			name: "one result is not the handler sentence",
+			decl: "func listThings() *Output { return nil }",
+			want: "listThings implements the list things helper used by sample.",
+		},
+		{
+			name: "three results are not the handler sentence",
+			decl: "func listThings() (*Output, int, error) { return nil, 0, nil }",
+			want: "listThings implements the list things helper used by sample.",
+		},
+		{
+			name: "no results at all is not the handler sentence",
+			decl: "func listThings() {}",
+			want: "listThings implements the list things helper used by sample.",
+		},
+		{
 			name: "falls through to the helper rules",
 			decl: "func widgetize() {}",
 			want: "widgetize implements the widgetize helper used by sample.",
@@ -764,6 +784,9 @@ func TestGenerateTestHelperDoc_PrefixRules(t *testing.T) {
 		{name: "missingKeys", want: "missingKeys returns missing keys values for assertion messages."},
 		{name: "textOf", want: "textOf extracts text of from MCP result content for assertions."},
 		{name: "helperThing", want: "helperThing supports helper thing assertions in sample tests."},
+		// An exported function in a test file is not a helper: it takes the
+		// exported-function generator, so the prefix rules above never see it.
+		{name: "AssertBody", want: "AssertBody coordinates assert body for the sample package."},
 	}
 
 	for _, tc := range testCases {
@@ -800,6 +823,9 @@ func TestGenerateMethodDoc_TemplatesAndPrefixes(t *testing.T) {
 		{name: "cleanup", decl: "func (fixture) cleanupProject() {}", want: "cleanupProject removes cleanup project fixture resources for fixture when present."},
 		{name: "delete", decl: "func (fixture) deleteProject() {}", want: "deleteProject removes delete project fixture resources for fixture when present."},
 		{name: "unrecognized name", decl: "func (widget) Render() string { return \"\" }", want: "Render handles render for widget."},
+		{name: "two results are not the bool sentence", decl: "func (widget) Render() (bool, error) { return true, nil }", want: "Render handles render for widget."},
+		{name: "a named non-bool result is not the bool sentence", decl: "func (widget) Render() error { return nil }", want: "Render handles render for widget."},
+		{name: "a qualified result is not the bool sentence", decl: "func (widget) Render() time.Duration { return 0 }", want: "Render handles render for widget."},
 		{name: "no receiver falls back", decl: "func doThing() {}", want: "doThing handles do thing for receiver."},
 	}
 
@@ -811,6 +837,23 @@ func TestGenerateMethodDoc_TemplatesAndPrefixes(t *testing.T) {
 				t.Errorf("generateMethodDoc() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGenerateMethodDoc_EmptyReceiverListNamesTheReceiver verifies a
+// declaration carrying a receiver field list with no fields in it is
+// described against "receiver" rather than dereferencing the missing field.
+// A parse never yields one, so the declaration is built by hand.
+func TestGenerateMethodDoc_EmptyReceiverListNamesTheReceiver(t *testing.T) {
+	t.Parallel()
+
+	decl := &ast.FuncDecl{
+		Recv: &ast.FieldList{},
+		Name: ast.NewIdent("Render"),
+		Type: &ast.FuncType{},
+	}
+	if got, want := generateMethodDoc(decl), "Render handles render for receiver."; got != want {
+		t.Errorf("generateMethodDoc(empty receiver list) = %q, want %q", got, want)
 	}
 }
 
@@ -918,6 +961,43 @@ func TestGenerateTestDoc_NameShapes(t *testing.T) {
 	}
 }
 
+// TestIsReorderablePredicate_EveryVerbAndNothingElse verifies the whole
+// predicate table: each of the 52 verbs is one, and a word that is not in the
+// table is not, including "is", which startsWithPredicate admits separately
+// and this must not. The table decides which half of a scenario name moves
+// ahead of the other, and the switch reads each verb only when the ones before
+// it do not match, so driving one case says nothing about the next.
+func TestIsReorderablePredicate_EveryVerbAndNothingElse(t *testing.T) {
+	t.Parallel()
+
+	predicates := []string{
+		"accepts", "allows", "applies", "avoids", "binds", "blocks", "captures", "catches", "checks",
+		"classifies", "clamps", "computes", "converts", "creates", "deduplicates", "derives", "detects",
+		"does", "excludes", "falls", "flags", "flows", "handles", "ignores", "includes", "isolates",
+		"leaves", "lists", "matches", "omits", "parses", "passes", "prefers", "preserves", "projects",
+		"records", "rejects", "repairs", "reports", "requires", "respects", "retries", "returns",
+		"scales", "selects", "sorts", "strips", "sums", "suppresses", "syncs", "uses", "validates",
+		"writes",
+	}
+	for _, word := range predicates {
+		t.Run(word, func(t *testing.T) {
+			t.Parallel()
+			if !isReorderablePredicate(word) {
+				t.Errorf("isReorderablePredicate(%q) = false, want true", word)
+			}
+		})
+	}
+
+	for _, word := range []string{"", "is", "empty", "Returns", "return", "returnsError", "reportsWhether"} {
+		t.Run("not a predicate: "+word, func(t *testing.T) {
+			t.Parallel()
+			if isReorderablePredicate(word) {
+				t.Errorf("isReorderablePredicate(%q) = true, want false", word)
+			}
+		})
+	}
+}
+
 // TestSubjectScenarioPhrase_ClauseOrdering verifies how a scenario is turned
 // into prose: a predicate moves ahead of its context, a non-predicate
 // behavior reads as a "when" clause, and a single-segment scenario is split
@@ -1006,8 +1086,12 @@ func TestInferAction_PrefixesAndFallback(t *testing.T) {
 }
 
 // TestCamelToWords_SplitsAndInitialisms verifies identifier-to-prose
-// conversion: the empty name, digit boundaries, underscores, preserved
-// initialisms and the multi-word replacements.
+// conversion: the empty name, digit boundaries in both directions, a run of
+// digits staying one word, underscores, preserved initialisms and the
+// multi-word replacements. The last case pins that the classifiers are ASCII
+// only, so a case boundary either side of a non-ASCII letter is not a word
+// boundary; that is a limitation of generated prose and not a defect, and
+// pinning it is what would make a change to it deliberate.
 func TestCamelToWords_SplitsAndInitialisms(t *testing.T) {
 	t.Parallel()
 
@@ -1020,6 +1104,9 @@ func TestCamelToWords_SplitsAndInitialisms(t *testing.T) {
 		{name: "underscore only collapses to nothing", in: "_", want: "resources"},
 		{name: "underscores", in: "project_id", want: "project ID"},
 		{name: "digit boundary", in: "v2Client", want: "v 2 client"},
+		{name: "a run of digits stays one word", in: "port8080Number", want: "port 8080 number"},
+		{name: "a trailing digit run splits once and the head is an initialism", in: "sha256", want: "SHA 256"},
+		{name: "non-ASCII is neither upper nor lower, so no split", in: "caféMenu", want: "cafémenu"},
 		{name: "initialism", in: "JSONPayload", want: "JSON payload"},
 		{name: "multi-word replacement", in: "GitLabCICD", want: "GitLab CI/CD"},
 	}
@@ -1091,9 +1178,69 @@ func TestFirstDoc_PrefersTheSymbolComment(t *testing.T) {
 	}
 }
 
+// TestReusableDoc_WhichCommentsAreKept verifies which existing comment stops
+// a symbol being documented again: a hand-written one is kept, a comment
+// group with no comments in it and a generated one are not, and a symbol
+// under a grouped declaration falls back to the group's comment only when it
+// has none of its own.
+func TestReusableDoc_WhichCommentsAreKept(t *testing.T) {
+	t.Parallel()
+
+	written := &ast.CommentGroup{List: []*ast.Comment{{Text: "// helper resolves the project."}}}
+	generated := &ast.CommentGroup{List: []*ast.Comment{{Text: "// helper verifies the behavior of helper."}}}
+	empty := &ast.CommentGroup{}
+
+	t.Run("reusableDoc", func(t *testing.T) {
+		t.Parallel()
+		testCases := []struct {
+			name string
+			doc  *ast.CommentGroup
+			want bool
+		}{
+			{name: "hand-written", doc: written, want: true},
+			{name: "nil", doc: nil, want: false},
+			{name: "no comments in the group", doc: empty, want: false},
+			{name: "generated", doc: generated, want: false},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				if got := reusableDoc(tc.doc); got != tc.want {
+					t.Errorf("reusableDoc(%s) = %t, want %t", tc.name, got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("reusableSpecDoc", func(t *testing.T) {
+		t.Parallel()
+		testCases := []struct {
+			name              string
+			primary, fallback *ast.CommentGroup
+			want              bool
+		}{
+			{name: "the symbol's own is kept", primary: written, want: true},
+			{name: "the group's is used when the symbol has none", fallback: written, want: true},
+			{name: "the group's is not consulted when the symbol has one", primary: generated, fallback: written, want: false},
+			{name: "neither has one", want: false},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				if got := reusableSpecDoc(tc.primary, tc.fallback); got != tc.want {
+					t.Errorf("reusableSpecDoc(%s) = %t, want %t", tc.name, got, tc.want)
+				}
+			})
+		}
+	})
+}
+
 // TestDocInsertions_SkipTokensTheyDoNotOwn verifies the type and value
 // insertion helpers ignore a declaration introduced by another token, which
-// is what keeps import blocks out of the rewrite.
+// is what keeps import blocks out of the rewrite, and that a const the author
+// has already documented is skipped for the other reason, its own comment.
+// Both reasons are read by one condition, so a helper that only ever meets
+// the first has never had the second evaluated.
 func TestDocInsertions_SkipTokensTheyDoNotOwn(t *testing.T) {
 	t.Parallel()
 
@@ -1106,6 +1253,17 @@ func TestDocInsertions_SkipTokensTheyDoNotOwn(t *testing.T) {
 			t.Error("valueSpecDocInsertion() = true for an import declaration, want false")
 		}
 	})
+	t.Run("a documented const is left alone", func(t *testing.T) {
+		t.Parallel()
+		decl := &ast.GenDecl{Tok: token.CONST}
+		spec := &ast.ValueSpec{
+			Names: []*ast.Ident{ast.NewIdent("Limit")},
+			Doc:   &ast.CommentGroup{List: []*ast.Comment{{Text: "// Limit is the page size."}}},
+		}
+		if _, ok := valueSpecDocInsertion(fset, decl, spec); ok {
+			t.Error("valueSpecDocInsertion() = true for a documented const, want false")
+		}
+	})
 	t.Run("type spec under a const declaration", func(t *testing.T) {
 		t.Parallel()
 		decl := &ast.GenDecl{Tok: token.CONST}
@@ -1114,6 +1272,64 @@ func TestDocInsertions_SkipTokensTheyDoNotOwn(t *testing.T) {
 			t.Error("typeSpecDocInsertion() = true for a const declaration, want false")
 		}
 	})
+}
+
+// TestCollectDocInsertions_IgnoresADeclarationItCannotClassify verifies a
+// top-level declaration that is neither a function nor a generic one yields
+// no insertion. ast.BadDecl is the third and last kind, produced only by a
+// parse the fixer refuses before it reaches here, so it is built by hand.
+func TestCollectDocInsertions_IgnoresADeclarationItCannotClassify(t *testing.T) {
+	t.Parallel()
+
+	file := &ast.File{Name: ast.NewIdent("sample"), Decls: []ast.Decl{&ast.BadDecl{}}}
+	if got := collectDocInsertions(token.NewFileSet(), file, "sample", false); len(got) != 0 {
+		t.Errorf("collectDocInsertions(BadDecl) = %+v, want none", got)
+	}
+}
+
+// TestRuneClassifiers_ASCIIRangesAndTheirEdges verifies the three classifiers
+// the word-splitter is built from, each at both edges of its range and just
+// outside them. They are the whole rule for where a generated sentence breaks
+// an identifier, and the splitter drives each of them with identifier
+// characters only, so nothing it does asks what they answer below '0' or
+// above 'z'.
+func TestRuneClassifiers_ASCIIRangesAndTheirEdges(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name                string
+		r                   rune
+		upper, lower, digit bool
+	}{
+		{name: "slash, just below the digits", r: '/'},
+		{name: "zero", r: '0', digit: true},
+		{name: "nine", r: '9', digit: true},
+		{name: "colon, just above the digits", r: ':'},
+		{name: "at sign, just below the uppercase letters", r: '@'},
+		{name: "A", r: 'A', upper: true},
+		{name: "Z", r: 'Z', upper: true},
+		{name: "bracket, just above the uppercase letters", r: '['},
+		{name: "backtick, just below the lowercase letters", r: '`'},
+		{name: "a", r: 'a', lower: true},
+		{name: "z", r: 'z', lower: true},
+		{name: "brace, just above the lowercase letters", r: '{'},
+		{name: "a non-ASCII letter is none of the three", r: 'é'},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isUpper(tc.r); got != tc.upper {
+				t.Errorf("isUpper(%q) = %t, want %t", tc.r, got, tc.upper)
+			}
+			if got := isLower(tc.r); got != tc.lower {
+				t.Errorf("isLower(%q) = %t, want %t", tc.r, got, tc.lower)
+			}
+			if got := isDigit(tc.r); got != tc.digit {
+				t.Errorf("isDigit(%q) = %t, want %t", tc.r, got, tc.digit)
+			}
+		})
+	}
 }
 
 // TestGenerateFuncDoc_MethodDecl_UsesMethodDoc verifies generateFuncDoc routes

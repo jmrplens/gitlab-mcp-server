@@ -96,6 +96,76 @@ func TestRunMain_AuditSuccess(t *testing.T) {
 	}
 }
 
+// TestRunMain_FixFlagsReachTheRightSwitch verifies each of the fix
+// subcommand's two flags reaches its own switch and neither reaches the
+// other's: --dry-run alone announces the rewrite without writing it and does
+// not move the comment, --move-package-doc alone writes doc.go and documents
+// nothing, and the two together write nothing at all. Both are booleans bound
+// in adjacent lines, so a crossed pair compiles and leaves --dry-run writing
+// files.
+func TestRunMain_FixFlagsReachTheRightSwitch(t *testing.T) {
+	const source = "// Package sample provides a fixture.\npackage sample\n\nfunc ListProjects() {}\n"
+	testCases := []struct {
+		name          string
+		flags         []string
+		wantStdout    string
+		wantSource    string
+		wantDocGoFile bool
+	}{
+		{
+			name:       "neither flag documents the symbol in place",
+			wantStdout: "documented ",
+			wantSource: "// Package sample provides a fixture.\npackage sample\n\n// ListProjects lists projects for the sample package.\nfunc ListProjects() {}\n",
+		},
+		{
+			name:       "dry-run announces the rewrite and writes nothing",
+			flags:      []string{"--dry-run"},
+			wantStdout: "// dry-run: would update ",
+			wantSource: source,
+		},
+		{
+			name:          "move-package-doc moves the comment and documents nothing",
+			flags:         []string{"--move-package-doc"},
+			wantStdout:    "moved the package comment of sample ",
+			wantSource:    "package sample\n\nfunc ListProjects() {}\n",
+			wantDocGoFile: true,
+		},
+		{
+			name:       "both flags announce the move and write nothing",
+			flags:      []string{"--dry-run", "--move-package-doc"},
+			wantStdout: "// dry-run: would move the package comment of sample ",
+			wantSource: source,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() { dryRun = false })
+			dir := t.TempDir()
+			path := writeFixFile(t, dir, "sample.go", source)
+
+			var stdout, stderr bytes.Buffer
+			var code int
+			out := captureFixStdout(t, func() {
+				code = runMain(append([]string{"godoc_tool", "fix"}, append(tc.flags, path)...), &stdout, &stderr)
+			})
+			if code != 0 {
+				t.Fatalf("runMain(fix %v) = %d, want 0 (stderr %q)", tc.flags, code, stderr.String())
+			}
+			if !strings.HasPrefix(out, tc.wantStdout) {
+				t.Errorf("stdout = %q, want it to start with %q", out, tc.wantStdout)
+			}
+			if got := readFixFile(t, path); got != tc.wantSource {
+				t.Errorf("sample.go =\n%s\nwant\n%s", got, tc.wantSource)
+			}
+			_, statErr := os.Stat(filepath.Join(dir, "doc.go"))
+			if gotDocGo := statErr == nil; gotDocGo != tc.wantDocGoFile {
+				t.Errorf("doc.go exists = %t, want %t", gotDocGo, tc.wantDocGoFile)
+			}
+		})
+	}
+}
+
 // TestRunMain_FixDocumentsPaths verifies the fix subcommand returns 0 both when
 // it documents a file directly and when --move-package-doc routes the paths to
 // the package-comment mover.

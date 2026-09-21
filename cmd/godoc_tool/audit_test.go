@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/doc"
 	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -26,7 +28,10 @@ var errUnexpectedSuccess = errors.New("expected command to fail")
 //
 // The test builds temporary packages with file comments attached to package
 // clauses, then audits them directly without invoking go list. It protects the
-// Godoc rule that each package must have one canonical package comment.
+// Godoc rule that each package must have one canonical package comment, and
+// that a comment group with no text in it, which is what a build constraint
+// sitting directly above the package clause leaves once go/ast strips the
+// directive, is a missing comment rather than a malformed one.
 func TestAuditPackage_DetectsPackageCommentProblems(t *testing.T) {
 	t.Parallel()
 
@@ -39,6 +44,13 @@ func TestAuditPackage_DetectsPackageCommentProblems(t *testing.T) {
 			name: "missing package doc",
 			files: map[string]string{
 				"sample.go": "package sample\n",
+			},
+			categories: []string{categoryPackageDocMissing},
+		},
+		{
+			name: "a build constraint alone is not a package doc",
+			files: map[string]string{
+				"sample.go": "//go:build linux\npackage sample\n",
 			},
 			categories: []string{categoryPackageDocMissing},
 		},
@@ -108,12 +120,14 @@ func TestAuditPackage_AcceptsCommandPackageDoc(t *testing.T) {
 // TestAuditPackage_CommandPackageDocForm verifies a main package whose
 // comment does not open with "Command " is reported, and that the expected
 // opening named in the finding is the command form rather than "Package
-// main". A subdirectory beside the source is ignored by the parser.
+// main". A subdirectory and a non-Go file beside the source are both
+// ignored by the parser.
 func TestAuditPackage_CommandPackageDocForm(t *testing.T) {
 	t.Parallel()
 
 	pkg := writePackageFixture(t, "main", map[string]string{
-		"doc.go": "// widget audits widgets.\npackage main\n",
+		"doc.go":    "// widget audits widgets.\npackage main\n",
+		"README.md": "# widget\n\nNot Go, so not parsed.\n",
 	})
 	if err := os.MkdirAll(filepath.Join(pkg.Dir, "testdata"), 0o750); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -215,6 +229,126 @@ var (
 	}
 	if hasCategory(findings, categoryConstForm) || hasCategory(findings, categoryVarForm) {
 		t.Fatalf("grouped const/var comments should be accepted: %#v", findings)
+	}
+}
+
+// symbolFinding is a source-symbol finding of the sample package: no file,
+// because go/doc reports a symbol without one.
+func symbolFinding(category, name, detail string) finding {
+	return finding{Category: category, ImportPath: "example.com/sample", Package: "sample", Name: name, Detail: detail}
+}
+
+// TestAuditPackage_ReportsEachSymbolUnderItsOwnCategory verifies the whole
+// record of every source-symbol finding: which symbol is reported, under
+// which category, with which sentence. Checking that a category is present
+// somewhere let the missing and form categories of one kind be crossed
+// without a test noticing, as long as the fixture had one symbol of each;
+// this fixture has one of each for every kind, the type-associated
+// constructors, constants and variables included, and holds each to its
+// own name.
+func TestAuditPackage_ReportsEachSymbolUnderItsOwnCategory(t *testing.T) {
+	t.Parallel()
+
+	pkg := writePackageFixture(t, "sample", map[string]string{
+		"doc.go": "// Package sample provides a fixture.\npackage sample\n",
+		"sample.go": `package sample
+
+func MissingFunc() {}
+
+// Does not start with its name.
+func FormFunc() {}
+
+type MissingType struct{}
+
+// Describes a type without naming it.
+type FormType struct{}
+
+// Widget is documented.
+type Widget struct{}
+
+func NewWidget() Widget { return Widget{} }
+
+// Builds a widget.
+func BuildWidget() Widget { return Widget{} }
+
+func (Widget) MissingMethod() {}
+
+// Does something.
+func (Widget) FormMethod() {}
+
+const MissingConst = 1
+
+// Not the name.
+const FormConst = 2
+
+var MissingVar = 1
+
+// Not the name either.
+var FormVar = 2
+
+// Mode is documented.
+type Mode int
+
+const MissingTypedConst Mode = 1
+
+var MissingTypedVar Mode
+`,
+	})
+
+	findings, err := auditPackage(pkg, false)
+	if err != nil {
+		t.Fatalf("auditPackage() error = %v", err)
+	}
+	sortFindings(findings)
+	want := []finding{
+		symbolFinding(categoryConstForm, "FormConst", `const comment must start with one exported name in the group; got "Not the name."`),
+		symbolFinding(categoryConstMissing, "MissingConst", "missing const documentation"),
+		symbolFinding(categoryConstMissing, "MissingTypedConst", "missing const documentation"),
+		symbolFinding(categoryFuncForm, "BuildWidget", `func comment must start with "BuildWidget"; got "Builds a widget."`),
+		symbolFinding(categoryFuncForm, "FormFunc", `func comment must start with "FormFunc"; got "Does not start with its name."`),
+		symbolFinding(categoryFuncMissing, "MissingFunc", "missing func documentation"),
+		symbolFinding(categoryFuncMissing, "NewWidget", "missing func documentation"),
+		symbolFinding(categoryMethodForm, "FormMethod", `method comment must start with "FormMethod"; got "Does something."`),
+		symbolFinding(categoryMethodMissing, "MissingMethod", "missing method documentation"),
+		symbolFinding(categoryTypeForm, "FormType", `type comment must start with "FormType"; got "Describes a type without naming it."`),
+		symbolFinding(categoryTypeMissing, "MissingType", "missing type documentation"),
+		symbolFinding(categoryVarForm, "FormVar", `var comment must start with one exported name in the group; got "Not the name either."`),
+		symbolFinding(categoryVarMissing, "MissingTypedVar", "missing var documentation"),
+		symbolFinding(categoryVarMissing, "MissingVar", "missing var documentation"),
+	}
+	if !reflect.DeepEqual(findings, want) {
+		t.Fatalf("auditPackage() findings =\n%+v\nwant\n%+v", findings, want)
+	}
+}
+
+// TestCheckPackageDocs_FindingsNameTheFileAndThePackage verifies the whole
+// record of each package-comment finding: the file it names, the package
+// name it carries and its sentence. The three categories reach newFinding
+// with a path where the symbol findings pass none, so the file and the name
+// could be crossed there without a presence check noticing.
+func TestCheckPackageDocs_FindingsNameTheFileAndThePackage(t *testing.T) {
+	t.Parallel()
+
+	pkg := writePackageFixture(t, "sample", map[string]string{
+		"a.go": "// Package sample provides a fixture.\npackage sample\n",
+		"b.go": "// b.go is a file header.\npackage sample\n",
+	})
+	aPath := filepath.ToSlash(filepath.Join(pkg.Dir, "a.go"))
+	bPath := filepath.ToSlash(filepath.Join(pkg.Dir, "b.go"))
+
+	findings, err := auditPackage(pkg, false)
+	if err != nil {
+		t.Fatalf("auditPackage() error = %v", err)
+	}
+	sortFindings(findings)
+	want := []finding{
+		{Category: categoryPackageDocLocation, ImportPath: "example.com/sample", Package: "sample", File: aPath, Name: "sample", Detail: "package comment lives in a.go; keep it in doc.go"},
+		{Category: categoryPackageDocMultiple, ImportPath: "example.com/sample", Package: "sample", File: aPath + ", " + bPath, Name: "sample", Detail: "multiple package comments; keep one canonical doc.go comment"},
+		{Category: categoryPackageDocForm, ImportPath: "example.com/sample", Package: "sample", File: bPath, Name: "sample", Detail: `package comment must start with "Package sample"; got "b.go is a file header."`},
+	}
+	sortFindings(want)
+	if !reflect.DeepEqual(findings, want) {
+		t.Fatalf("auditPackage() findings =\n%+v\nwant\n%+v", findings, want)
 	}
 }
 
@@ -548,6 +682,30 @@ func TestRun_ErrorPaths(t *testing.T) {
 	}
 }
 
+// TestRun_FailOnFindings_SucceedsOnACleanModule verifies --fail-on-findings
+// returns no error when the module has none, so the exit code follows the
+// finding count rather than the flag. The fixture module is documented down
+// to its one exported function.
+func TestRun_FailOnFindings_SucceedsOnACleanModule(t *testing.T) {
+	dir := t.TempDir()
+	writeAuditFile(t, dir, "go.mod", "module example.com/clean\n\ngo 1.27\n")
+	writeAuditFile(t, dir, "a/doc.go", "// Package a is documented.\npackage a\n")
+	writeAuditFile(t, dir, "a/a.go", "package a\n\n// Present is documented.\nfunc Present() {}\n")
+	t.Chdir(dir)
+
+	out, err := runForTest([]string{"--fail-on-findings", "--format=json"})
+	if err != nil {
+		t.Fatalf("run(--fail-on-findings) over a clean module error = %v", err)
+	}
+	var got report
+	if unmarshalErr := json.Unmarshal([]byte(out), &got); unmarshalErr != nil {
+		t.Fatalf("decode report: %v\n%s", unmarshalErr, out)
+	}
+	if len(got.Findings) != 0 {
+		t.Fatalf("Findings = %+v, want none", got.Findings)
+	}
+}
+
 // TestAuditPackage_ParseFailures verifies a package directory that cannot be
 // read and a source file that cannot be parsed both fail the audit rather
 // than being reported as clean.
@@ -841,6 +999,57 @@ func TestWriteCountTable_SortsByCountAndTruncatesToLimit(t *testing.T) {
 	}
 }
 
+// TestWriteCountTable_OrderDoesNotDependOnMapIteration verifies the rendered
+// table is the same bytes however the counts map happens to iterate. Go
+// randomizes that order on every range, and the rows reach sort.Slice in it,
+// so a report built from one is only reproducible if the sort settles every
+// tie; a tie left to the sort would make the audit's own output differ
+// between two runs over one tree, which is what a reader diffing two reports
+// would read as a change. Rendering repeatedly is what puts the question to
+// many orders, since one call can only ask about one.
+func TestWriteCountTable_OrderDoesNotDependOnMapIteration(t *testing.T) {
+	t.Parallel()
+
+	counts := map[string]int{"delta": 1, "alpha": 1, "charlie": 1, "bravo": 2, "echo": 2}
+	want := "## Title\n\n| Name | Count |\n| --- | ---: |\n" +
+		"| bravo | 2 |\n| echo | 2 |\n| alpha | 1 |\n| charlie | 1 |\n| delta | 1 |\n\n"
+
+	for i := range 64 {
+		var b strings.Builder
+		writeCountTable(&b, "## Title", counts, 0)
+		if b.String() != want {
+			t.Fatalf("writeCountTable() on iteration %d = %q, want %q", i, b.String(), want)
+		}
+	}
+}
+
+// TestRenderMarkdown_CapsThePackageTableAndNotTheCategoryTable verifies the
+// two limits renderMarkdown passes: the per-package table keeps 25 rows and
+// the per-category table keeps every row. Both tables render the same way, so
+// with fewer than 25 entries of either kind the two limits are
+// interchangeable and swapping them changes no output.
+func TestRenderMarkdown_CapsThePackageTableAndNotTheCategoryTable(t *testing.T) {
+	t.Parallel()
+
+	byCategory := map[string]int{}
+	byPackage := map[string]int{}
+	for i := range 30 {
+		byCategory[fmt.Sprintf("category_%02d", i)] = 30 - i
+		byPackage[fmt.Sprintf("example.com/pkg%02d", i)] = 30 - i
+	}
+
+	got := renderMarkdown(report{ByCategory: byCategory, ByPackage: byPackage})
+	if want := 30; strings.Count(got, "| category_") != want {
+		t.Errorf("category rows = %d, want %d (every category is listed)", strings.Count(got, "| category_"), want)
+	}
+	if want := 25; strings.Count(got, "| example.com/pkg") != want {
+		t.Errorf("package rows = %d, want %d (the package table is capped)", strings.Count(got, "| example.com/pkg"), want)
+	}
+	if !strings.Contains(got, "| example.com/pkg24 | 6 |") || strings.Contains(got, "| example.com/pkg25 |") {
+		t.Errorf("the package table did not stop after its 25th row:\n%s", got)
+	}
+}
+
 // TestMd_EscapesPipesAndBlanks verifies the Markdown cell formatter renders
 // an empty value as a dash and escapes table separators.
 func TestMd_EscapesPipesAndBlanks(t *testing.T) {
@@ -865,19 +1074,21 @@ func TestMd_EscapesPipesAndBlanks(t *testing.T) {
 	}
 }
 
+// reversedFindings returns a copy of findings in the opposite order.
+func reversedFindings(findings []finding) []finding {
+	out := slices.Clone(findings)
+	slices.Reverse(out)
+	return out
+}
+
 // TestSortFindings_OrdersByPathFileCategoryName verifies the report's stable
-// ordering, exercising each tie-break in turn.
+// ordering, exercising each tie-break in turn and in both directions: the
+// same list sorted from a reversed start must reach the same order, which is
+// what holds each comparison to the direction it is written in rather than
+// to whichever one the input happened to need.
 func TestSortFindings_OrdersByPathFileCategoryName(t *testing.T) {
 	t.Parallel()
 
-	findings := []finding{
-		{ImportPath: "b", File: "a.go", Category: "func_missing", Name: "A"},
-		{ImportPath: "a", File: "b.go", Category: "func_missing", Name: "A"},
-		{ImportPath: "a", File: "a.go", Category: "type_missing", Name: "A"},
-		{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "B"},
-		{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "A"},
-	}
-	sortFindings(findings)
 	want := []finding{
 		{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "A"},
 		{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "B"},
@@ -885,8 +1096,39 @@ func TestSortFindings_OrdersByPathFileCategoryName(t *testing.T) {
 		{ImportPath: "a", File: "b.go", Category: "func_missing", Name: "A"},
 		{ImportPath: "b", File: "a.go", Category: "func_missing", Name: "A"},
 	}
-	if !reflect.DeepEqual(findings, want) {
-		t.Fatalf("sortFindings() = %+v\nwant %+v", findings, want)
+	testCases := []struct {
+		name  string
+		input []finding
+	}{
+		{
+			name: "shuffled",
+			input: []finding{
+				{ImportPath: "b", File: "a.go", Category: "func_missing", Name: "A"},
+				{ImportPath: "a", File: "b.go", Category: "func_missing", Name: "A"},
+				{ImportPath: "a", File: "a.go", Category: "type_missing", Name: "A"},
+				{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "B"},
+				{ImportPath: "a", File: "a.go", Category: "func_missing", Name: "A"},
+			},
+		},
+		{
+			name:  "already sorted",
+			input: slices.Clone(want),
+		},
+		{
+			name:  "exactly reversed",
+			input: reversedFindings(want),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := slices.Clone(tc.input)
+			sortFindings(got)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("sortFindings(%s) = %+v\nwant %+v", tc.name, got, want)
+			}
+		})
 	}
 }
 
@@ -911,9 +1153,10 @@ func TestCountBy_TalliesByKey(t *testing.T) {
 
 // TestRelativePath_CleansRelativePathsAndKeepsAbsoluteOnes verifies the
 // report's path column: a relative path is cleaned and slash-separated,
-// an empty path stays empty, and an absolute path is kept as-is, because
-// filepath.Rel refuses to relate an absolute path to the relative base "."
-// the helper passes it.
+// an empty path stays empty, a path that climbs out of the working
+// directory keeps its leading "..", and an absolute path is kept as-is,
+// because filepath.Rel refuses to relate an absolute path to the relative
+// base "." the helper passes it.
 func TestRelativePath_CleansRelativePathsAndKeepsAbsoluteOnes(t *testing.T) {
 	t.Parallel()
 
@@ -925,6 +1168,7 @@ func TestRelativePath_CleansRelativePathsAndKeepsAbsoluteOnes(t *testing.T) {
 		{name: "empty", path: "", want: ""},
 		{name: "relative", path: filepath.FromSlash("pkg/./file.go"), want: "pkg/file.go"},
 		{name: "dot-prefixed relative", path: filepath.FromSlash("./pkg/file.go"), want: "pkg/file.go"},
+		{name: "outside the working directory", path: filepath.FromSlash("../elsewhere/file.go"), want: "../elsewhere/file.go"},
 		{name: "absolute", path: filepath.FromSlash("/tmp/elsewhere/file.go"), want: "/tmp/elsewhere/file.go"},
 	}
 
