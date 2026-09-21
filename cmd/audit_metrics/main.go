@@ -371,6 +371,14 @@ func directoryHasGoFile(dir string) bool {
 	return false
 }
 
+// countCatalogDomains counts a catalog's actions per domain.
+//
+// The canonical ID is not consulted as a second source: a catalog normalizes
+// every action it holds, so the ID is always the domain, a dot and the action
+// name, and an action whose domain is empty carries an ID that begins with the
+// dot. Cutting that ID could only ever hand the guard below the same empty
+// string it already has, so the branch that did it decided nothing and is
+// gone.
 func countCatalogDomains(catalog *actioncatalog.Catalog) map[string]int {
 	domains := map[string]int{}
 	if catalog == nil {
@@ -378,9 +386,6 @@ func countCatalogDomains(catalog *actioncatalog.Catalog) map[string]int {
 	}
 	for _, action := range catalog.Actions() {
 		domain := action.Domain
-		if domain == "" {
-			domain, _, _ = strings.Cut(string(action.ID), ".")
-		}
 		if domain == "" {
 			domain = "unknown"
 		}
