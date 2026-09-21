@@ -60,7 +60,12 @@ type scanner struct {
 	// platformPackages are the packages a load left Go files out of, which is
 	// what a GOOS-constrained file looks like from the platform it is not for.
 	// They are re-read under the other platforms, since a constant read only
-	// by the Windows half of a package is read.
+	// by the Windows half of a package is read. Keyed by the plain import
+	// path, which is the one name a second load can be asked for and which
+	// the test variants share with the package they test: asking for it with
+	// Tests set brings the variants with it, and the go tool builds the
+	// external test package and the synthesized main fresh, so neither ever
+	// carries a left-out file of its own.
 	platformPackages map[string]struct{}
 }
 
@@ -76,10 +81,18 @@ func newScanner(root string) *scanner {
 }
 
 // observe records the declarations and the uses of one load.
+//
+// The test main the go tool synthesizes for a package (`p.test`) is passed
+// over: its one generated file is nobody's source, declares no constant and
+// reads none, and counting it put a package the repository never wrote in
+// the summary of every tested package.
 func (s *scanner) observe(loaded []*packages.Package) {
 	for _, pkg := range loaded {
+		if isTestMain(pkg.PkgPath) {
+			continue
+		}
 		s.packages[trimModulePath(variantName(pkg.PkgPath))] = struct{}{}
-		if importable(pkg.PkgPath) && hasIgnoredGoFile(pkg) {
+		if hasIgnoredGoFile(pkg) {
 			s.platformPackages[pkg.PkgPath] = struct{}{}
 		}
 		for _, file := range pkg.Syntax {
@@ -144,13 +157,18 @@ func (s *scanner) observeFile(pkg *packages.Package, file *ast.File) {
 
 // funcDeclName spells a function the way its file does: the bare name, or
 // `Type.Method` with the receiver's type stripped of its pointer.
+//
+// The receiver is read through its parentheses, as the type checker reads
+// it: `(w (walker))` and `(w *(walker))` declare methods of walker as much as
+// `(w walker)` does, and a key that dropped the receiver there would excuse
+// nothing a reader wrote for it.
 func funcDeclName(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) == 0 {
 		return fn.Name.Name
 	}
-	receiver := fn.Recv.List[0].Type
+	receiver := ast.Unparen(fn.Recv.List[0].Type)
 	if star, isPointer := receiver.(*ast.StarExpr); isPointer {
-		receiver = star.X
+		receiver = ast.Unparen(star.X)
 	}
 	switch generic := receiver.(type) {
 	case *ast.IndexExpr:
@@ -214,13 +232,11 @@ func hasIgnoredGoFile(pkg *packages.Package) bool {
 	return false
 }
 
-// importable reports whether a loaded package path is one a second load can be
-// asked for by name. The loader returns a package's test variants beside it,
-// and neither "p [p.test]", "p_test [p.test]" nor the synthesized "p.test"
-// names anything the go tool will resolve. Asking for the plain package is
-// enough, since Tests is set and its variants come with it.
-func importable(pkgPath string) bool {
-	return pkgPath == variantName(pkgPath) && !strings.HasSuffix(pkgPath, ".test")
+// isTestMain reports whether a loaded package path names the test main the
+// go tool synthesizes for a package under test, "p.test", which is neither
+// source of this repository nor a name a second load can be asked for.
+func isTestMain(pkgPath string) bool {
+	return strings.HasSuffix(pkgPath, ".test")
 }
 
 // variantName is a package's import path with the test-variant decoration the

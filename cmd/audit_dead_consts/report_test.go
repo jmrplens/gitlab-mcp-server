@@ -138,21 +138,39 @@ func TestReportWrite_CleanRun_SaysWhatItWasCleanOver(t *testing.T) {
 }
 
 // TestSortConstants_FileThenLine_IsTheOrderFindingsAreRead keeps two runs over
-// one tree printing the same report.
+// one tree printing the same report. The input holds a file out of order in
+// each direction, so both answers of the file comparison decide something.
 func TestSortConstants_FileThenLine_IsTheOrderFindingsAreRead(t *testing.T) {
 	found := []Constant{
 		{File: "b.go", Line: 1, Name: "second"},
+		{File: "c.go", Line: 1, Name: "third"},
 		{File: "a.go", Line: 9, Name: "later"},
 		{File: "a.go", Line: 2, Name: "first"},
 	}
 	sortConstants(found)
-	want := []string{"first", "later", "second"}
+	want := []string{"first", "later", "second", "third"}
 	for index, name := range want {
 		t.Run(name, func(t *testing.T) {
 			if found[index].Name != name {
 				t.Fatalf("order = %v, want %v", deadNames(found), want)
 			}
 		})
+	}
+}
+
+// TestReportWrite_VerboseAndClean_SetsTheSummaryApart: a verbose run writes
+// its progress on the same stream as the report, so the summary is preceded
+// by a blank line whether or not a finding stands above it.
+func TestReportWrite_VerboseAndClean_SetsTheSummaryApart(t *testing.T) {
+	report := buildReport(nil, 7, scannedSet("internal/tools/issues"))
+	var quiet, verbose strings.Builder
+	report.write(&quiet, false)
+	report.write(&verbose, true)
+	if strings.HasPrefix(quiet.String(), "\n") {
+		t.Fatalf("quiet clean report starts with a blank line:\n%q", quiet.String())
+	}
+	if verbose.String() != "\n"+quiet.String() {
+		t.Fatalf("verbose report = %q, want the quiet one behind a blank line %q", verbose.String(), quiet.String())
 	}
 }
 
