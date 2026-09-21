@@ -18,6 +18,13 @@ import (
 // way an endpoint can fail to be the instance the token belongs to, and every
 // refusal must also say why, because the version then comes back unknown and
 // the two causes are not equally interesting.
+//
+// The last two cases hold the two halves of "names no scheme and host" apart.
+// A string missing both reads the same whichever way that test is written, so
+// a value with one and not the other is the only thing that tells a demand for
+// both from a demand for either: a bare host would otherwise be reduced to an
+// origin of "://host" and compared as if it were one, which turns a refusal
+// into a mismatch and quietly changes what the operator is told.
 func TestCredentialFor_DecidesByInstance(t *testing.T) {
 	const token = "glpat-secret"
 
@@ -103,6 +110,20 @@ func TestCredentialFor_DecidesByInstance(t *testing.T) {
 			name:     "no token to withhold",
 			endpoint: "https://gitlab.gnome.org/api/graphql",
 			instance: "https://gitlab.com",
+		},
+		{
+			name:     "a scheme with no host behind it",
+			endpoint: "https:///api/graphql",
+			instance: "https://gitlab.example.com",
+			token:    token,
+			reason:   "is not a URL, so GITLAB_TOKEN was not sent",
+		},
+		{
+			name:     "a host with no scheme in front of it",
+			endpoint: "//gitlab.example.com/api/graphql",
+			instance: "https://gitlab.example.com",
+			token:    token,
+			reason:   "is not a URL, so GITLAB_TOKEN was not sent",
 		},
 	}
 

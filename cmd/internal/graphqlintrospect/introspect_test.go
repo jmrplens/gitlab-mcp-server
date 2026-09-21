@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v3/internal/graphqlschema"
 )
 
 // answering returns a target configured against a server that replies with
@@ -31,10 +34,18 @@ const tinySchema = `{"data":{"__schema":{
 
 // TestIntrospect_WellFormedAnswer_ReturnsTheSchema verifies the happy path and
 // that the token, when there is one, is sent as a bearer credential.
+//
+// The method and the content type are asserted beside it because they are
+// straight-line assignments no gate can be wrong about: GitLab serves GraphQL
+// on POST alone and reads the document out of a JSON body, so either of them
+// drifting turns every fetch into a refusal the operator has to diagnose from
+// an HTTP status.
 func TestIntrospect_WellFormedAnswer_ReturnsTheSchema(t *testing.T) {
-	var seenAuth, seenQuery string
+	var seenAuth, seenQuery, seenMethod, seenContentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenAuth = r.Header.Get("Authorization")
+		seenMethod = r.Method
+		seenContentType = r.Header.Get("Content-Type")
 		var body struct {
 			Query string `json:"query"`
 		}
@@ -55,8 +66,159 @@ func TestIntrospect_WellFormedAnswer_ReturnsTheSchema(t *testing.T) {
 	if seenAuth != "Bearer secret" {
 		t.Errorf("Authorization = %q, want the bearer credential", seenAuth)
 	}
+	if seenMethod != http.MethodPost {
+		t.Errorf("method = %q, want %q", seenMethod, http.MethodPost)
+	}
+	if seenContentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", seenContentType)
+	}
 	if !strings.Contains(seenQuery, "__schema") {
 		t.Errorf("the query sent does not ask for __schema:\n%s", seenQuery)
+	}
+}
+
+// gitLabShapedIntrospection is one introspection answer written the way an
+// instance writes one: every member spelled as GraphQL's own __schema spells
+// it, every kind in the specification's upper snake case, and every list in an
+// order the renderer is supposed to discard. The five scalars the prelude
+// already defines and one introspection type are in it because an instance
+// sends those too.
+const gitLabShapedIntrospection = `{"data":{"__schema":{
+  "queryType":{"name":"Query"},
+  "mutationType":{"name":"Mutation"},
+  "subscriptionType":{"name":"Subscription"},
+  "types":[
+    {"kind":"SCALAR","name":"Time"},
+    {"kind":"SCALAR","name":"ID"},
+    {"kind":"SCALAR","name":"Boolean"},
+    {"kind":"SCALAR","name":"String"},
+    {"kind":"SCALAR","name":"Int"},
+    {"kind":"SCALAR","name":"Float"},
+    {"kind":"OBJECT","name":"__Type","fields":[
+      {"name":"name","type":{"kind":"SCALAR","name":"String"}}]},
+    {"kind":"UNION","name":"Anything","possibleTypes":[{"name":"Thing"},{"name":"Query"}]},
+    {"kind":"ENUM","name":"Mood","enumValues":[{"name":"GOOD"},{"name":"BAD"}]},
+    {"kind":"INPUT_OBJECT","name":"TouchInput","inputFields":[
+      {"name":"note","type":{"kind":"SCALAR","name":"String"},"defaultValue":"\"none\""},
+      {"name":"id","type":{"kind":"NON_NULL","ofType":{"kind":"SCALAR","name":"ID"}},"defaultValue":null}]},
+    {"kind":"INPUT_OBJECT","name":"Window","inputFields":[
+      {"name":"after","type":{"kind":"SCALAR","name":"Time"}},
+      {"name":"before","type":{"kind":"SCALAR","name":"Time"}}]},
+    {"kind":"OBJECT","name":"Subscription","fields":[
+      {"name":"tick","args":[],"type":{"kind":"SCALAR","name":"Time"}}]},
+    {"kind":"OBJECT","name":"Mutation","fields":[
+      {"name":"touch","args":[
+        {"name":"after","type":{"kind":"SCALAR","name":"Time"}},
+        {"name":"input","type":{"kind":"NON_NULL","ofType":{"kind":"INPUT_OBJECT","name":"TouchInput"}}}],
+       "type":{"kind":"SCALAR","name":"Boolean"}}]},
+    {"kind":"OBJECT","name":"Thing","interfaces":[{"name":"Node"}],"fields":[
+      {"name":"id","type":{"kind":"NON_NULL","ofType":{"kind":"SCALAR","name":"ID"}}},
+      {"name":"name","type":{"kind":"SCALAR","name":"String"}}]},
+    {"kind":"INTERFACE","name":"Node","possibleTypes":[{"name":"Thing"},{"name":"Query"}],"fields":[
+      {"name":"id","type":{"kind":"NON_NULL","ofType":{"kind":"SCALAR","name":"ID"}}}]},
+    {"kind":"OBJECT","name":"Query","interfaces":[{"name":"Node"}],"fields":[
+      {"name":"things","args":[
+        {"name":"mood","type":{"kind":"ENUM","name":"Mood"},"defaultValue":"GOOD"},
+        {"name":"during","type":{"kind":"INPUT_OBJECT","name":"Window"}}],
+       "type":{"kind":"LIST","ofType":{"kind":"NON_NULL","ofType":{"kind":"OBJECT","name":"Thing"}}}},
+      {"name":"id","type":{"kind":"NON_NULL","ofType":{"kind":"SCALAR","name":"ID"}}}]}
+  ]}}}`
+
+// wantGitLabShapedSDL is the whole of what gitLabShapedIntrospection has to
+// render to: every nameable thing sorted, the prelude's scalars and the
+// introspection type left out, and one blank line between blocks.
+const wantGitLabShapedSDL = `union Anything = Query | Thing
+
+enum Mood {
+  BAD
+  GOOD
+}
+
+type Mutation {
+  touch(after: Time, input: TouchInput!): Boolean
+}
+
+interface Node {
+  id: ID!
+}
+
+type Query implements Node {
+  id: ID!
+  things(during: Window, mood: Mood = GOOD): [Thing!]
+}
+
+type Subscription {
+  tick: Time
+}
+
+type Thing implements Node {
+  id: ID!
+  name: String
+}
+
+scalar Time
+
+input TouchInput {
+  id: ID!
+  note: String = "none"
+}
+
+input Window {
+  after: Time
+  before: Time
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+`
+
+// TestIntrospect_AGitLabShapedAnswer_RendersTheWholeSchema holds the part of
+// this package neither coverage nor a flipped operator can reach: the JSON
+// tags binding these structs to GraphQL's own __schema spelling, and the kind
+// constants the renderer switches on. Both are data rather than branches, so a
+// tag that drifts to snake case, a pair of tags that trade places, or a kind
+// spelled wrong drops a whole dimension of the pin without failing anything —
+// defaults, type wrappers, implemented interfaces and union members all arrive
+// empty, and every gate reading that pin keeps passing on a schema that
+// promises less than GitLab serves.
+//
+// The fixture therefore travels the real route, from an instance's bytes
+// through [Introspect] to the SDL, and the rendering is compared whole: the
+// sort order is the other thing a fragment cannot hold, and the round trip
+// through gqlparser is what says the result is still a schema.
+func TestIntrospect_AGitLabShapedAnswer_RendersTheWholeSchema(t *testing.T) {
+	schema, err := Introspect(context.Background(), answering(t, http.StatusOK, gitLabShapedIntrospection))
+	if err != nil {
+		t.Fatalf("Introspect() error = %v, want nil", err)
+	}
+
+	sdl := RenderSDL(schema)
+
+	if sdl != wantGitLabShapedSDL {
+		t.Errorf("RenderSDL() rendered\n%s\nwant\n%s", sdl, wantGitLabShapedSDL)
+	}
+	if _, loadErr := graphqlschema.Load([]byte(sdl)); loadErr != nil {
+		t.Fatalf("the rendered SDL does not load:\n%v\n\n%s", loadErr, sdl)
+	}
+}
+
+// TestFetchTimeout_BoundsAWholeFetchWithRoomToSpare pins the one figure both
+// commands hand to an http.Client and to context.WithTimeout. It is held to a
+// range rather than to its literal because what has to be true of it is that
+// the bound is generous enough for an instance that takes minutes to produce
+// tens of megabytes of JSON, and still short enough to end a fetch nobody is
+// going to answer. Nothing inside this package reads the constant, so a value
+// that collapsed towards zero — canceling every introspection before it began
+// — would otherwise fail no test here and only surface as an empty pin.
+func TestFetchTimeout_BoundsAWholeFetchWithRoomToSpare(t *testing.T) {
+	if FetchTimeout < time.Minute {
+		t.Errorf("FetchTimeout = %v, too short for an instance that answers in minutes", FetchTimeout)
+	}
+	if FetchTimeout > time.Hour {
+		t.Errorf("FetchTimeout = %v, too long to end a fetch that will never be answered", FetchTimeout)
 	}
 }
 
@@ -225,6 +387,11 @@ func TestInstanceVersion_WhateverTheInstanceSays_NeverStopsTheRun(t *testing.T) 
 
 // TestSnippet_LongBody_IsShortened verifies that an HTML error page does not
 // take the whole terminal with it when an instance answers one.
+//
+// A body of exactly the limit is one of the cases because the two sides do not
+// agree there: shortening it would append an ellipsis promising a remainder
+// that does not exist, so the boundary decides whether an error line can lie
+// about how much it dropped.
 func TestSnippet_LongBody_IsShortened(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -232,6 +399,7 @@ func TestSnippet_LongBody_IsShortened(t *testing.T) {
 		want    string
 	}{
 		{name: "short enough to show whole", payload: "  gateway timeout  ", want: "gateway timeout"},
+		{name: "exactly the limit", payload: strings.Repeat("x", 200), want: strings.Repeat("x", 200)},
 		{name: "longer than the limit", payload: strings.Repeat("x", 260), want: strings.Repeat("x", 200) + "..."},
 	}
 	for _, testCase := range cases {
