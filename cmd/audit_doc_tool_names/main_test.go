@@ -6,6 +6,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -294,9 +296,15 @@ func rootBelowAFile(t *testing.T, root string) string {
 
 // TestScanRoot_Roots_ScansFilesAndTrees verifies one docRoots entry may be
 // a single file or a tree: a missing root is skipped, a tree yields every
-// .md and .mdx file below it while other extensions and node_modules are
-// ignored, and a root that cannot be stated or a file that cannot be read
-// fails the scan.
+// .md and .mdx file below it while other extensions, node_modules and
+// everything sourcewalk prunes are ignored, and a root that cannot be stated
+// or a file that cannot be read fails the scan.
+//
+// The pruning case plants both halves of that rule, because the walk asks for
+// both: a dot-directory is excluded by its name, and a directory holding a
+// .git is another checkout whatever it is called. A worktree of this
+// repository under docs/ would otherwise have its pages read as ours and its
+// tool names judged against a catalog built from this branch.
 func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -331,6 +339,19 @@ func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 			},
 			wantScanned: 2,
 			wantNames:   []string{"gitlab_list_issues", "gitlab_get_issue"},
+		},
+		{
+			name: "tree_root_prunes_dot_directories_and_nested_checkouts",
+			setup: func(t *testing.T, root string) string {
+				t.Helper()
+				writeDoc(t, root, "docs/kept.md", "gitlab_list_issues")
+				writeDoc(t, root, "docs/.cache/hidden.md", "gitlab_hidden_in_a_dot_directory")
+				writeDoc(t, root, "docs/worktree/.git", "gitdir: /elsewhere/.git/worktrees/one")
+				writeDoc(t, root, "docs/worktree/copy.md", "gitlab_hidden_in_a_nested_checkout")
+				return filepath.Join(root, "docs")
+			},
+			wantScanned: 1,
+			wantNames:   []string{"gitlab_list_issues"},
 		},
 		{
 			name:    "root_below_a_file_fails_stat",
@@ -377,6 +398,48 @@ func TestScanRoot_Roots_ScansFilesAndTrees(t *testing.T) {
 	}
 }
 
+// TestScanRoot_ADirectoryThatCannotBeListed_FailsRatherThanBeingSkipped
+// verifies a subtree the walk cannot list stops the scan instead of being read
+// as a subtree that holds nothing.
+//
+// It is the walk's own error argument rather than a file that would not read,
+// and the difference is what the case is for: everything else here fails
+// through scanFile, so nothing held the arm that answers a directory. What it
+// protects is the claim the command makes when it exits 0, which is that it
+// read the documentation and not that it read what it could.
+//
+// Directory permissions are a POSIX mechanism a sufficiently privileged
+// process ignores, so the case skips when the chmod did not in fact deny the
+// read.
+func TestScanRoot_ADirectoryThatCannotBeListed_FailsRatherThanBeingSkipped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory read permission is not a Windows file mode")
+	}
+	root := t.TempDir()
+	writeDoc(t, root, "docs/kept.md", "clean")
+	closed := filepath.Join(root, "docs", "closed")
+	if err := os.Mkdir(closed, 0o750); err != nil {
+		t.Fatalf("creating the directory: %v", err)
+	}
+	if err := os.Chmod(closed, 0); err != nil {
+		t.Skipf("this platform does not let the test close a directory: %v", err)
+	}
+	// Cleanups run in reverse, so this one gives the search bit back before
+	// t.TempDir's removal, which cannot descend into a closed directory.
+	t.Cleanup(func() { _ = os.Chmod(closed, 0o700) }) //#nosec G302 -- a directory needs its search bit back or t.TempDir cannot remove it
+	if _, err := os.ReadDir(closed); err == nil {
+		t.Skip("this process lists a directory with no permissions on it, so the walk cannot be made to fail")
+	}
+
+	err := newStubScan().scanRoot(filepath.Join(root, "docs"))
+	if err == nil {
+		t.Fatal("scanRoot walked past a directory it could not list")
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("scanRoot error = %v, want the permission failure the walk reported", err)
+	}
+}
+
 // TestScanDocs_Roots_AggregatesAcrossRoots verifies the top-level scan sums
 // the files of every root and merges the files naming one unregistered tool
 // into a single list, which is what the report groups by.
@@ -420,6 +483,94 @@ func TestScanDocs_OneDottedToken_MergesTheFilesThatSpellIt(t *testing.T) {
 	}
 	if len(scan.actions) != 1 {
 		t.Errorf("action findings = %v, want only the one wrong spelling", scan.actions)
+	}
+}
+
+// TestWriteIDFindings_AliasAndDeadID_CarryTheFixEachNeeds holds the two rows
+// apart, because a reader acts on them differently. An alias resolves when a
+// model follows it and appears in no listing, so its row names what it stands
+// for and offers no spelling suggestion; an ID that resolves nowhere gets the
+// nearest thing the catalog does publish, since the usual cause is a domain
+// the page invented for a real action.
+//
+// Offering a near spelling beside an alias would be the worse of the two:
+// it reads as a correction and would send a reader to rewrite a cross-link
+// that already works.
+func TestWriteIDFindings_AliasAndDeadID_CarryTheFixEachNeeds(t *testing.T) {
+	var out bytes.Buffer
+	writeIDFindings(&out, map[string]idFinding{
+		"issue.listt":   {Files: []string{"docs/b.md", "docs/a.md"}},
+		"project.fetch": {Canonical: "project.get", Files: []string{"docs/c.md"}},
+	}, stubIDs())
+
+	report := out.String()
+	for _, want := range []string{
+		"2 action ID(s) the catalog does not publish:\n",
+		"issue.listt names no action; closest: issue.list\n",
+		"project.fetch is a registered alias of project.get, not an action ID a listing publishes\n",
+		"      docs/a.md\n      docs/b.md\n",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("report = %q, want it to contain %q", report, want)
+		}
+	}
+	if got := strings.Count(report, "; closest: "); got != 1 {
+		t.Errorf("report names a nearest ID %d times, want it only where the ID resolves nowhere:\n%s", got, report)
+	}
+	if !inOrder(report, "issue.listt", "project.fetch") {
+		t.Errorf("report = %q, want the spelling that reached two pages first", report)
+	}
+}
+
+// TestReportOrder_MapIteration_DoesNotMoveTheReport holds the property both
+// sorted reports exist for: the same findings print the same bytes whichever
+// order the map hands them over in. A report that moves between runs cannot be
+// diffed, and a reader comparing two runs would read the movement as a change
+// in the documentation.
+//
+// It is asserted over repeated renders because that is the only way to observe
+// it: Go randomizes map iteration, so each pass enters the two comparators
+// from a different arrangement, and one pass proves nothing about the next.
+// The findings are shaped so both comparisons are reached — two spreads that
+// differ and two that tie, the tie resolved by name.
+func TestReportOrder_MapIteration_DoesNotMoveTheReport(t *testing.T) {
+	tools := map[string][]string{
+		"gitlab_wide":   {"docs/a.md", "docs/b.md"},
+		"gitlab_narrow": {"docs/c.md"},
+		"gitlab_middle": {"docs/d.md"},
+	}
+	actions := map[string]idFinding{
+		"issue.widest": {Files: []string{"docs/a.md", "docs/b.md"}},
+		"issue.narrow": {Files: []string{"docs/c.md"}},
+		"issue.middle": {Files: []string{"docs/d.md"}},
+	}
+	ids := stubIDs()
+
+	// Enough renders that every arrangement Go's randomization produces is
+	// seen; three findings admit three rotations of the map's own order.
+	const passes = 64
+	var wantTools, wantActions string
+	for pass := range passes {
+		var toolsOut, actionsOut bytes.Buffer
+		writeToolFindings(&toolsOut, tools)
+		writeIDFindings(&actionsOut, actions, ids)
+		if pass == 0 {
+			wantTools, wantActions = toolsOut.String(), actionsOut.String()
+			continue
+		}
+		if toolsOut.String() != wantTools {
+			t.Fatalf("pass %d printed the tool findings as\n%s\nwant\n%s", pass, toolsOut.String(), wantTools)
+		}
+		if actionsOut.String() != wantActions {
+			t.Fatalf("pass %d printed the action findings as\n%s\nwant\n%s", pass, actionsOut.String(), wantActions)
+		}
+	}
+
+	if !inOrder(wantTools, "gitlab_wide", "gitlab_middle", "gitlab_narrow") {
+		t.Errorf("tool findings = %q, want the widest spread first and the tie broken by name", wantTools)
+	}
+	if !inOrder(wantActions, "issue.widest", "issue.middle", "issue.narrow") {
+		t.Errorf("action findings = %q, want the widest spread first and the tie broken by name", wantActions)
 	}
 }
 
@@ -523,6 +674,95 @@ func TestRun_Findings_ReportsSortedAndReturnsExitCode(t *testing.T) {
 			}
 			if tc.wantErr == "" && errOut.Len() != 0 {
 				t.Errorf("stderr should stay empty, got %q", errOut.String())
+			}
+		})
+	}
+}
+
+// TestRun_Summary_CountsItsThreeInputsApart pins the header line to the three
+// places its numbers come from.
+//
+// They are three counts of the same kind on one line, so a transposition still
+// reads as a plausible report and no assertion that checks one of them can see
+// it. The fixture is what makes the line readable: a stub registry of four
+// names, a catalog of its own size, and two documentation files, no two of
+// which can take the same value.
+func TestRun_Summary_CountsItsThreeInputsApart(t *testing.T) {
+	ids, err := actionids.Build()
+	if err != nil {
+		t.Fatalf("build the action catalog: %v", err)
+	}
+	if len(stubRegistry) == ids.Count() || ids.Count() == 2 {
+		t.Fatalf("the three counts must differ for this case to say anything, got %d, %d and 2", len(stubRegistry), ids.Count())
+	}
+
+	root := t.TempDir()
+	writeDoc(t, root, "docs/a.md", "Call `gitlab_issue_list`.")
+	writeDoc(t, root, "docs/b.md", "Or `issue.list` on the dynamic surface.")
+
+	var out, errOut bytes.Buffer
+	code := run(false, []string{filepath.Join(root, "docs")}, func() map[string]struct{} { return stubRegistry }, &out, &errOut)
+	if code != 0 {
+		t.Fatalf("run = %d, want 0\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+
+	want := fmt.Sprintf("audit_doc_tool_names: %d registered tool names, %d catalog action IDs, %d documentation files scanned\n",
+		len(stubRegistry), ids.Count(), 2)
+	if !strings.HasPrefix(out.String(), want) {
+		t.Errorf("stdout = %q, want it to open with %q", out.String(), want)
+	}
+}
+
+// TestRun_NoRootPresent_ReportsEveryDeclarationStale holds the second claim a
+// declaration table makes at the level a reader meets it. staleAllowedIDs is
+// held to both its directions on its own below; what this adds is that run
+// asks it at all, that a stale entry suppresses the all-clear, and that its
+// count reaches the error line and the exit code.
+//
+// Every root is absent, which is the one arrangement in which the whole table
+// is stale at once and no later documentation edit can quietly make the case
+// stop exercising it.
+func TestRun_NoRootPresent_ReportsEveryDeclarationStale(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	var out, errOut bytes.Buffer
+	code := run(true, docRoots, func() map[string]struct{} { return stubRegistry }, &out, &errOut)
+	if code != 1 {
+		t.Fatalf("run(-check) = %d, want 1\nstdout:\n%s\nstderr:\n%s", code, out.String(), errOut.String())
+	}
+	if want := fmt.Sprintf("\n%d declaration(s) excuse nothing:\n", len(allowedIDs)); !strings.Contains(out.String(), want) {
+		t.Errorf("stdout = %q, want it to contain %q", out.String(), want)
+	}
+	for token := range allowedIDs {
+		if want := "  " + token + " is no longer spelled in any documentation file."; !strings.Contains(out.String(), want) {
+			t.Errorf("stdout = %q, want it to name the stale entry %q", out.String(), token)
+		}
+	}
+	if strings.Contains(out.String(), "no documentation names an unregistered tool") {
+		t.Errorf("stdout = %q, want no all-clear beside a stale declaration", out.String())
+	}
+
+	want := fmt.Sprintf("\nERROR: the documentation names 0 tool(s) the server does not register and 0 action ID(s) the catalog does not publish; %d declaration(s) excuse nothing\n", len(allowedIDs))
+	if errOut.String() != want {
+		t.Errorf("stderr = %q, want %q", errOut.String(), want)
+	}
+}
+
+// TestDocRoots_EveryDeclaredRoot_IsPresent holds the list of audited trees to
+// the repository it names. scanRoot passes over a root that is not there, so a
+// page moved out from under one of these entries stops being audited and
+// nothing says so: the run still prints a file count and an all-clear. The npm
+// launcher's README is the entry this matters most for, since a wrong name
+// there ships to a registry and is not fixable without republishing.
+func TestDocRoots_EveryDeclaredRoot_IsPresent(t *testing.T) {
+	root, err := cmdutil.RepositoryRoot(".")
+	if err != nil {
+		t.Fatalf("repository root: %v", err)
+	}
+	for _, docRoot := range docRoots {
+		t.Run(strings.ReplaceAll(docRoot, "/", "_"), func(t *testing.T) {
+			if _, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(docRoot))); statErr != nil {
+				t.Errorf("docRoots names %q, which this repository does not hold: %v", docRoot, statErr)
 			}
 		})
 	}
@@ -712,6 +952,21 @@ func TestSortedTokens_Findings_LeadWithTheWidestSpread(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("sortedTokens = %v, want %v", got, want)
 	}
+}
+
+// inOrder reports whether each token first appears in text after the one
+// before it, which is how a report's row order is asserted without repeating
+// the column widths the format string chose.
+func inOrder(text string, tokens ...string) bool {
+	at := -1
+	for _, token := range tokens {
+		next := strings.Index(text, token)
+		if next <= at {
+			return false
+		}
+		at = next
+	}
+	return true
 }
 
 // collectTokens adds every tool-name-shaped token one file carries to
